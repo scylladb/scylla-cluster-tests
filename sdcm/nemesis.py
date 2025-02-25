@@ -663,7 +663,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                          regex=".*Connection reset by peer.*",
                                          extra_time_to_expiration=30):
             self.log.info('Kill all scylla processes in %s', self.target_node)
-            self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
+            with NemesisDisruptionLogger(self, "kill all scylla processes"):
+                self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
             # Wait for the process to be down before waiting for service to be restarted
             self.target_node.wait_db_down(check_interval=2)
@@ -676,7 +677,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # Workaround for https://github.com/scylladb/scylla-manager/issues/2813
                 # When scylla take too long time to bring api port up
                 #  scylla-manager-agent fails to start and never go up
-                self.target_node.start_service(service_name='scylla-manager-agent', timeout=600, ignore_status=True)
+                with NemesisDisruptionLogger(self, "start scylla-manager-agent"):
+                    self.target_node.start_service(service_name='scylla-manager-agent', timeout=600, ignore_status=True)
             self.log.info('Waiting JMX services to be restarted after we killed them...')
             self.target_node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
@@ -684,19 +686,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @decorate_with_context(ignore_raft_topology_cmd_failing)
     @target_all_nodes
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):  # pylint: disable=invalid-name
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        with NemesisDisruptionLogger(self, "stop scylla server"):
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.log.info("Sleep for %s seconds", sleep_time)
         time.sleep(sleep_time)
         if self._is_it_on_kubernetes():
             # Kubernetes brings node up automatically, no need to start it up
             self.target_node.wait_node_fully_start(timeout=sleep_time)
             return
-        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+        with NemesisDisruptionLogger(self, "start scylla server",
+                                     additional_info=f"after {sleep_time} seconds"):
+            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_stop_start_scylla_server(self):  # pylint: disable=invalid-name
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
-        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+        with NemesisDisruptionLogger(self, "stop scylla server"):
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        with NemesisDisruptionLogger(self, "start scylla server"):
+            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @staticmethod
     def _handle_start_stop_compaction_results(trigger_and_watcher_futures: dict[str, ParallelObjectResult],
@@ -771,16 +778,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_major_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with NemesisDisruptionLogger(self, "start and stop major compaction",
+                                     additional_info=f"on {compaction_args.keyspace}.{compaction_args.columnfamily}"):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
-        self._handle_start_stop_compaction_results(
-            trigger_and_watcher_futures=results,
-            allow_trigger_exceptions=True
-        )
+            self._handle_start_stop_compaction_results(
+                trigger_and_watcher_futures=results,
+                allow_trigger_exceptions=True
+            )
 
     def clear_snapshots(self) -> None:
         self.log.info("Clear snapshots if there are some of them")
@@ -814,17 +823,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Scrubbing",
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_scrub_compaction)
+        with NemesisDisruptionLogger(self, "start and stop scrub compaction"):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
-
-        self._handle_start_stop_compaction_results(
-            trigger_and_watcher_futures=results,
-            allow_trigger_exceptions=True
-        )
+            self._handle_start_stop_compaction_results(
+                trigger_and_watcher_futures=results,
+                allow_trigger_exceptions=True
+            )
 
         self.clear_snapshots()
 
@@ -856,16 +865,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Cleaning",
                              stop_func=compaction_args.compaction_ops.stop_cleanup_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with NemesisDisruptionLogger(self, "start and stop cleanup compaction"):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
-        self._handle_start_stop_compaction_results(
-            trigger_and_watcher_futures=results,
-            allow_trigger_exceptions=True
-        )
+            self._handle_start_stop_compaction_results(
+                trigger_and_watcher_futures=results,
+                allow_trigger_exceptions=True
+            )
 
     def disrupt_start_stop_validation_compaction(self):
         """
@@ -896,16 +906,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_validation_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with NemesisDisruptionLogger(self, "start and stop validation compaction"):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
-        self._handle_start_stop_compaction_results(
-            trigger_and_watcher_futures=results,
-            allow_trigger_exceptions=True
-        )
+            self._handle_start_stop_compaction_results(
+                trigger_and_watcher_futures=results,
+                allow_trigger_exceptions=True
+            )
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
 
@@ -914,14 +925,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             line="Can't find a column family with UUID", node=self.target_node), \
             DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
                            line="Can't find a column family with UUID", node=self.target_node):
-            self.target_node.restart()
+            with NemesisDisruptionLogger(self, "restart node"):
+                self.target_node.restart()
 
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.repair_nodetool_repair()
 
     def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
         rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
-        self.target_node.run_nodetool("resetlocalschema")
+        with NemesisDisruptionLogger(self, "reset local schema"):
+            self.target_node.run_nodetool("resetlocalschema")
 
         assert wait_for(
             func=lambda: list(rlocal_schema_res),
@@ -1049,7 +1062,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with node.remote_scylla_yaml() as scylla_yaml:
                 scylla_yaml.internode_compression = new_value
             self.log.info(f"Restarting node {node}")
-            node.restart_scylla_server()
+            with NemesisDisruptionLogger(self, "restart scylla server", target_node=node):
+                node.restart_scylla_server()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_restart_with_resharding(self):
@@ -1066,8 +1080,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
                       f'{murmur3_partitioner_ignore_msb_bits}')
-        self.target_node.restart_node_with_resharding(
-            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+        with NemesisDisruptionLogger(self, "restart node with resharding",
+                                     additional_info="murmur3_partitioner_ignore_msb_bits is set to 15"):
+            self.target_node.restart_node_with_resharding(
+                murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.target_node.wait_node_fully_start()
 
         # Wait 5 minutes our before return back the default value
@@ -1075,7 +1091,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             'Wait 5 minutes our before return murmur3_partitioner_ignore_msb_bits back the default value (12)')
         time.sleep(360)
         self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
-        self.target_node.restart_node_with_resharding()
+        with NemesisDisruptionLogger(self, "restart node with resharding",
+                                     additional_info="murmur3_partitioner_ignore_msb_bits is set to 12 (default)"):
+            self.target_node.restart_node_with_resharding()
 
     def replace_full_file_name_to_prefix(self, one_file, ks_cf_for_destroy):
         # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
@@ -1160,7 +1178,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Chosen tables: %s", tables)
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        with NemesisDisruptionLogger(self, "stop scylla server"):
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
             # Remove data files
@@ -1179,7 +1198,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                                                         ks_cf_for_destroy=tables)):
                     continue
 
-                result = self.target_node.remoter.sudo('rm -f %s' % file_group_for_destroy)
+                with NemesisDisruptionLogger(self, "remove data", additional_info=file_group_for_destroy):
+                    result = self.target_node.remoter.sudo('rm -f %s' % file_group_for_destroy)
                 if result.stderr:
                     raise FilesNotCorrupted(
                         'Files were not removed. The nemesis can\'t be run. Error: {}'.format(result))
@@ -1188,7 +1208,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug('Files {} were destroyed'.format(file_for_destroy))
 
         finally:
-            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+            with NemesisDisruptionLogger(self, "start scylla server"):
+                self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
@@ -1215,7 +1236,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_nodetool_drain(self):
-        result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+        with NemesisDisruptionLogger(self, "nodetool drain"):
+            result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
                                       warning_event_on_exception=(Exception,))
 
@@ -1223,8 +1245,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # workaround for issue #7332: don't interrupt test and don't raise exception
             # for UnexpectedExit, Failure and CommandTimedOut if "scylla-server stop" failed
             # or scylla-server was stopped gracefully.
-            self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
-            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+            with NemesisDisruptionLogger(self, "stop scylla server"):
+                self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
+            with NemesisDisruptionLogger(self, "start scylla server"):
+                self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get('use_ldap_authorization'):
@@ -1259,7 +1283,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 for key in ldap_config:
                     ldap_config[key] = getattr(scylla_yaml, key)
                     setattr(scylla_yaml, key, None)
-            node.restart_scylla_server()
+            with NemesisDisruptionLogger(self, "restart scylla server", target_node=node):
+                node.restart_scylla_server()
 
         if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
@@ -1277,7 +1302,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.refresh_ip_address()
             with node.remote_scylla_yaml() as scylla_yaml:
                 scylla_yaml.update(ldap_config)
-            node.restart_scylla_server()
+            with NemesisDisruptionLogger(self, "restart scylla server", target_node=node):
+                node.restart_scylla_server()
 
         self.log.info('Will now resume the LDAP container')
         ContainerManager.unpause_container(self.tester.localhost, 'ldap')
@@ -1371,7 +1397,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def _terminate_cluster_node(self, node):
-        self.cluster.terminate_node(node)
+        with NemesisDisruptionLogger(self, "terminate node", target_node=node):
+            self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def _nodetool_decommission(self, add_node=True):
@@ -1380,7 +1407,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.set_target_node(allow_only_last_node_in_rack=True)
 
         target_is_seed = self.target_node.is_seed
-        dc_topology_rf_change = self.cluster.decommission(self.target_node)
+        with NemesisDisruptionLogger(self, "decommission node"):
+            dc_topology_rf_change = self.cluster.decommission(self.target_node)
         new_node = None
         if add_node:
             add_node_kwargs = {"count": 1, "rack": self.target_node.rack}
@@ -1550,7 +1578,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruption_method, node.pod_spec.node_name, node, old_uid,
             [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
              for neighbour_scylla_pod in neighbour_scylla_pods])
-        getattr(node, disruption_method)()
+        with NemesisDisruptionLogger(self, ' '.join(disruption_method.split('_')), target_node=node):
+            getattr(node, disruption_method)()
         node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
         old_uid = node.k8s_pod_uid
 
@@ -1598,10 +1627,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruption_method, node.pod_spec.node_name, node,
             [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
              for neighbour_scylla_pod in neighbour_scylla_pods])
-        getattr(node, disruption_method)()
+        with NemesisDisruptionLogger(self, ' '.join(disruption_method.split('_')), target_node=node):
+            getattr(node, disruption_method)()
 
         self.log.info('Decommission %s', node)
-        dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        with NemesisDisruptionLogger(self, "decommission node", target_node=node):
+            dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
         new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
         if dc_topology_rf_change:
@@ -1822,7 +1853,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(30)
         finally:
             no_space_errors = list(no_space_errors_in_log)
-            node.restart_scylla_server(verify_up_after=True)
+            with NemesisDisruptionLogger(self, "restart scylla server", target_node=node):
+                node.restart_scylla_server(verify_up_after=True)
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
     @target_data_nodes
@@ -1845,9 +1877,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         continue
 
                     try:
-                        reach_enospc_on_node(target_node=node)
+                        with NemesisDisruptionLogger(self, "fill disk space", target_node=node):
+                            reach_enospc_on_node(target_node=node)
                     finally:
-                        clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
+                        with NemesisDisruptionLogger(self, "clean disk space", target_node=node):
+                            clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
     @target_data_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
@@ -1886,7 +1920,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 write_data_to_reach_end_of_quota(node, quota_size)
             LOGGER.debug('Sleep 15 seconds before restart scylla-server')
             time.sleep(15)
-            node.restart_scylla_server()
+            with NemesisDisruptionLogger(self, "restart scylla server", target_node=node):
+                node.restart_scylla_server()
             node.wait_db_up()
 
     def disrupt_remove_service_level_while_load(self):
@@ -3203,7 +3238,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator(legend="Scylla-Manger repair")
     def _mgmt_repair_cli(self):
         mgr_cluster = self.cluster.get_cluster_manager()
-        mgr_task = mgr_cluster.create_repair_task()
+        with NemesisDisruptionLogger(self, "start scylla manager repair", target_node=mgr_cluster):
+            mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
         if task_final_status != TaskStatus.DONE:
             progress_full_string = mgr_task.progress_string(
@@ -3267,10 +3303,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                                line="Failed to repair",
                                node=self.target_node):
-                self.target_node.remoter.run(
-                    "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
-                    " http://127.0.0.1:10000/storage_service/force_terminate_repair"
-                )
+                with NemesisDisruptionLogger(self, "abort repair streaming"):
+                    self.target_node.remoter.run(
+                        "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                        " http://127.0.0.1:10000/storage_service/force_terminate_repair"
+                    )
                 thread.result(timeout=120)
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
@@ -3291,9 +3328,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
 
         start_time = time.time()
-        self.target_node.stop_scylla()
+        with NemesisDisruptionLogger(self, "stop scylla"):
+            self.target_node.stop_scylla()
         time.sleep(10)
-        self.target_node.start_scylla()
+        with NemesisDisruptionLogger(self, "start scylla"):
+            self.target_node.start_scylla()
 
         # Wait until all other nodes see the target node as UN
         # Only then we can expect that hint sending started on all nodes
@@ -3577,8 +3616,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             duration, rate_limit, limit)
                 experiment = NetworkBandwidthLimitExperiment(
                     self.target_node, duration, rate=rate_limit, limit=limit, buffer=10000)
-        experiment.start()
-        experiment.wait_until_finished()
+        with NemesisDisruptionLogger(self, f"network {interruptions} interruption"):
+            experiment.start()
+            experiment.wait_until_finished()
         self.cluster.wait_all_nodes_un()
 
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
@@ -3636,7 +3676,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             self.target_node.traffic_control(None)
             try:
-                self.target_node.traffic_control(selected_option)
+                with NemesisDisruptionLogger(self, f"network {option_name} interruption"):
+                    self.target_node.traffic_control(selected_option)
                 time.sleep(wait_time)
             finally:
                 self.target_node.traffic_control(None)
@@ -3645,7 +3686,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
-        experiment.start()
+        with NemesisDisruptionLogger(self, "block network traffic", additional_info=f"for {duration}sec"):
+            experiment.start()
         experiment.wait_until_finished()
         time.sleep(15)
         self.cluster.wait_all_nodes_un()
@@ -3675,7 +3717,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             self.target_node.traffic_control(None)
             try:
-                self.target_node.traffic_control(selected_option)
+                with NemesisDisruptionLogger(self, "block network traffic",
+                                             additional_info=f"for {wait_time}sec"):
+                    self.target_node.traffic_control(selected_option)
                 time.sleep(wait_time)
             finally:
                 self.target_node.traffic_control(None)
@@ -3720,7 +3764,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         with ignore_ycsb_connection_refused():
             # node stop and make sure its "DN"
-            node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
+            with NemesisDisruptionLogger(self, "stop scylla server", target_node=node_to_remove):
+                node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
 
             # terminate node
             self._terminate_cluster_node(node_to_remove)
@@ -3733,8 +3778,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
                           .format(rnd_node.ip_address, host_id))
             with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
-                res = rnd_node.run_nodetool("removenode {}".format(
-                    host_id), ignore_status=True, verbose=True, long_running=True, retry=0)
+                with NemesisDisruptionLogger(self, "remove node from cluster", target_node=rnd_node):
+                    res = rnd_node.run_nodetool("removenode {}".format(
+                        host_id), ignore_status=True, verbose=True, long_running=True, retry=0)
             if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
                 raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
@@ -3755,7 +3801,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # WORKAROUND: adding here the continuation of the nemesis to avoid the late filter messages above failing
             # the entire nemesis.
-
             exit_status = remove_node()
 
             # if remove node command failed by any reason,
@@ -3991,7 +4036,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ignore_ipv6_failure_to_assign,
         issue_refs=['https://github.com/scylladb/scylladb/issues/20387'])
     def reboot_node(self, target_node, hard=True, verify_ssh=True):
-        target_node.reboot(hard=hard, verify_ssh=verify_ssh)
+        with NemesisDisruptionLogger(self, "hard reboot node", target_node=target_node):
+            target_node.reboot(hard=hard, verify_ssh=verify_ssh)
         if self.tester.params.get('print_kernel_callstack'):
             save_kallsyms_map(node=target_node)
 
@@ -4004,10 +4050,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Taking down eth1 for %dsec", wait_time)
 
         try:
-            self.target_node.stop_network_interface()
+            with NemesisDisruptionLogger(self, "stop network interface", additional_info="eth1"):
+                self.target_node.stop_network_interface()
             time.sleep(wait_time)
         finally:
-            self.target_node.start_network_interface()
+            with NemesisDisruptionLogger(self, "start network interface", additional_info="eth1"):
+                self.target_node.start_network_interface()
             self.cluster.wait_all_nodes_un()
 
     def _call_disrupt_func_after_expression_logged(self,
@@ -4112,8 +4160,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 FailedDecommissionOperationMonitoring(target_node=self.target_node,
                                                       verification_node=verification_node,
                                                       timeout=full_operations_timeout):
-
-                ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
+                with NemesisDisruptionLogger(self, "start and interrupt decommission"):
+                    ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
                 new_node.run_nodetool("rebuild", long_running=True, retry=0)
@@ -4143,7 +4191,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=1
         )
-        ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+        with NemesisDisruptionLogger(self, "start and interrupt repair"):
+            ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
 
         self.target_node.wait_node_fully_start()
 
@@ -4176,7 +4225,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             timeout=timeout,
             delay=1
         )
-        ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
+        with NemesisDisruptionLogger(self, "start and interrupt rebuild"):
+            ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_node_fully_start(timeout=300)
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
@@ -4246,7 +4296,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         def _decommission(node):
             try:
                 InfoEvent(f'StartEvent - ShrinkCluster started decommissioning a node {node}').publish()
-                self.cluster.decommission(node)
+                with NemesisDisruptionLogger(self, "decommission node", target_node=node):
+                    self.cluster.decommission(node)
                 InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning a node {node}').publish()
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
@@ -4427,7 +4478,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         }
                         is_restart_needed = True
                 if is_restart_needed:
-                    node.restart_scylla()
+                    with NemesisDisruptionLogger(self, "restart scylla", target_node=node):
+                        node.restart_scylla()
 
         # Create table with encryption
         keyspace_name, table_name = self.cluster.get_test_keyspaces()[0], 'tmp_encrypted_table'
@@ -4629,13 +4681,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Try to allocate 90% available memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
                                             workers=1, size="90%", time_to_reach=f"{time_to_reach_secs}s")
-        experiment.start()
+        with NemesisDisruptionLogger(self, "start memory stress",
+                                     additional_info="allocate 90% of available memory"):
+            experiment.start()
         experiment.wait_until_finished()
 
         self.log.info('Try to allocate 100% total memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
                                             workers=1, size="100%", time_to_reach=f"{time_to_reach_secs}s")
-        experiment.start()
+        with NemesisDisruptionLogger(self, "start memory stress",
+                                     additional_info="allocate 100% of total memory"):
+            experiment.start()
         experiment.wait_until_finished()
 
     @decorate_with_context(ignore_reactor_stall_errors)
@@ -4664,8 +4720,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
 
         self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
-        self.target_node.remoter.run(
-            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
+        with NemesisDisruptionLogger(self, "start memory stress",
+                                     additional_info="allocate 90% of total memory"):
+            self.target_node.remoter.run(
+                "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
@@ -4852,7 +4910,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     with self.cluster.cql_connection_patient(node) as session:
                         session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
                     if node_added:
-                        self.cluster.decommission(new_node)
+                        with NemesisDisruptionLogger(self, "decommission node", target_node=node):
+                            self.cluster.decommission(new_node)
             context_manager.push(finalizer)
 
             with temporary_replication_strategy_setter(node) as replication_strategy_setter:
@@ -4883,7 +4942,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
 
-            self.cluster.decommission(new_node)
+            with NemesisDisruptionLogger(self, "decommission node", target_node=new_node):
+                self.cluster.decommission(new_node)
             node_added = False
 
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
@@ -5105,7 +5165,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
             try:
-                index_name = create_index(session, ks, cf, column)
+                with NemesisDisruptionLogger(self, "create index", additional_info=f"on {ks}.{cf}.{column}"):
+                    index_name = create_index(session, ks, cf, column)
             except InvalidRequest as exc:
                 LOGGER.warning(exc)
                 raise UnsupportedNemesis(  # pylint: disable=raise-missing-from
@@ -5117,7 +5178,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                               min_duration=300, max_duration=2400)
             finally:
-                drop_index(session, ks, index_name)
+                with NemesisDisruptionLogger(self, "drop_index", additional_info=f"index: {index_name}"):
+                    drop_index(session, ks, index_name)
 
     @target_data_nodes
     def disrupt_add_remove_mv(self):
@@ -5153,7 +5215,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         'A supported column for creating MV is not found. nemesis can\'t run')
                 column = f'"{column}"'
                 self.log.info("Stopping Scylla on node %s", self.target_node.name)
-                self.target_node.stop_scylla()
+                with NemesisDisruptionLogger(self, "stop scylla"):
+                    self.target_node.stop_scylla()
                 InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
                 try:
                     with EventsFilter(event_class=DatabaseLogEvent,
@@ -5164,11 +5227,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                              mv_columns=[column] + primary_key_columns)
                 except Exception as error:  # pylint: disable=broad-except
                     self.log.warning('Failed creating a materialized view: %s', error)
-                    self.target_node.start_scylla()
+                    with NemesisDisruptionLogger(self, "start scylla"):
+                        self.target_node.start_scylla()
                     raise
                 try:
                     self.log.info("Starting Scylla on node %s", self.target_node.name)
-                    self.target_node.start_scylla()
+                    with NemesisDisruptionLogger(self, "start scylla"):
+                        self.target_node.start_scylla()
                     self.target_node.run_nodetool(sub_cmd="repair -pr")
                     with adaptive_timeout(operation=Operations.CREATE_MV, node=self.target_node, timeout=14400) as timeout:
                         wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=timeout * 2)
@@ -5331,8 +5396,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
                     FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
                                                           timeout=monitoring_decommission_timeout):
-
-                self.cluster.decommission(new_node, timeout=decommission_timeout)
+                with NemesisDisruptionLogger(self, "decommission node", target_node=new_node):
+                    self.cluster.decommission(new_node, timeout=decommission_timeout)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
         with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
@@ -5354,7 +5419,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         except Exception:  # pylint: disable=broad-except
             # NOTE: restart the target node because it was the remedy for the problems with CQL workability
             self.log.warning("'%s' node will be restarted to make the CQL work again", self.target_node)
-            self.target_node.restart_scylla_server()
+            with NemesisDisruptionLogger(self, "restart scylla server"):
+                self.target_node.restart_scylla_server()
             raise
 
     @target_all_nodes
@@ -5392,14 +5458,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             elif coordinator_node != self.target_node:
                 self.switch_target_node(coordinator_node)
             self.log.debug("Coordinator node: %s, %s", coordinator_node, coordinator_node.name)
-            self.target_node.stop_scylla()
+            with NemesisDisruptionLogger(self, "stop scylla"):
+                self.target_node.stop_scylla()
             self.log.debug("Wait random timeout %s to new coordinator will be elected", election_wait_timeout)
             time.sleep(election_wait_timeout)
             with self.run_nemesis(node_list=self.cluster.nodes,
                                   nemesis_label="search coordinator") as verification_node:
                 new_coordinator_node = get_topology_coordinator_node(verification_node)
             self.log.debug("New coordinator node: %s, %s", new_coordinator_node, new_coordinator_node.name)
-            self.target_node.start_scylla()
+            with NemesisDisruptionLogger(self, "start scylla"):
+                self.target_node.start_scylla()
             assert self.target_node != new_coordinator_node, \
                 f"New coordinator node was not elected while old one {coordinator_node.name} was stopped"
 
@@ -7024,3 +7092,37 @@ class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_serial_restart_elected_topology_coordinator()
+
+
+class NemesisDisruptionLogger:
+    """A context manager for logging the start, end and duration of a disruption operation, on DB and loader nodes"""
+
+    def __init__(self, nemesis, operation_name, target_node=None, additional_info=None):
+        self.nemesis = nemesis
+        self.operation_name = operation_name
+        self.target_node = target_node or nemesis.target_node
+        self.additional_info = additional_info
+        self.start_time = None
+
+    def __enter__(self):
+        self.start_time = time.time()
+        message = f"[{self.nemesis.current_disruption} nemesis]: executing {self.operation_name}"
+        if self.target_node:
+            message += f" on {self.target_node.name}"
+        if self.additional_info:
+            message += f" - {self.additional_info}"
+
+        self.nemesis.cluster.log_message(message)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = time.time() - self.start_time
+        status = "failed" if exc_type else "completed"
+        message = f"[{self.nemesis.current_disruption} nemesis]: {self.operation_name} {status} after {duration:.2f}s"
+        if self.target_node:
+            message += f" on {self.target_node.name}"
+        if exc_val:
+            message += f" - Error: {exc_val}"
+
+        self.nemesis.cluster.log_message(message)
+        return False
