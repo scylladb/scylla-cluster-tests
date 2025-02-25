@@ -31,7 +31,7 @@ class DBCluster:  # pylint: disable=too-few-public-methods
 
 
 def test_01_gemini_thread(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy(params=params)
+    loader_set = LocalLoaderSetDummy()
     test_cluster = DBCluster([docker_scylla])
 
     cmd = " ".join(
@@ -70,7 +70,7 @@ def test_01_gemini_thread(request, docker_scylla, params):
 
 
 def test_gemini_thread_without_cluster(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy(params=params)
+    loader_set = LocalLoaderSetDummy()
     test_cluster = DBCluster([docker_scylla])
     cmd = " ".join(
         [
