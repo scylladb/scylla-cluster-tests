@@ -104,6 +104,7 @@ from sdcm.utils.common import (
     raise_exception_in_thread,
     get_sct_root_path,
 )
+from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.distro import Distro
@@ -811,7 +812,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             shutdown_interface_command = "/sbin/ifdown {}"
         else:
             shutdown_interface_command = "ip link set {} down"
-        self.remoter.sudo(shutdown_interface_command.format(interface_name))
+        with DbNodeLogger([self], "stop network interface", target_node=self, additional_info=interface_name):
+            self.remoter.sudo(shutdown_interface_command.format(interface_name))
 
     def start_network_interface(self, interface_name="eth1"):
         if self.distro.is_rhel_like:
@@ -821,7 +823,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             startup_interface_command = "networkctl reconfigure {}"
         else:
             startup_interface_command = "ip link set {} up"
-        self.remoter.sudo(startup_interface_command.format(interface_name))
+        with DbNodeLogger([self], "start network interface", target_node=self, additional_info=interface_name):
+            self.remoter.sudo(startup_interface_command.format(interface_name))
 
     @property
     def is_enterprise(self) -> bool:
@@ -1142,12 +1145,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         if hard:
             self.log.debug('Hardly rebooting node')
-            self.hard_reboot()
+            with DbNodeLogger([self], "hard reboot node", target_node=self):
+                self.hard_reboot()
         else:
             self.log.debug('Softly rebooting node')
             if not self.remoter.is_up(60):
                 raise RuntimeError('Target host is down')
-            self.soft_reboot()
+            with DbNodeLogger([self], "soft reboot node", target_node=self):
+                self.soft_reboot()
 
         # wait until the reboot is executed
         wait.wait_for(func=uptime_changed, step=10, timeout=60*45, throw_exc=True)
@@ -2448,13 +2453,16 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                                 timeout=timeout, ignore_status=True).return_code == 0
 
     def start_service(self, service_name: str, timeout: int = 500, ignore_status=False):
-        self._service_cmd(service_name=service_name, cmd='start', timeout=timeout, ignore_status=ignore_status)
+        with DbNodeLogger([self], f"start {service_name}", target_node=self):
+            self._service_cmd(service_name=service_name, cmd='start', timeout=timeout, ignore_status=ignore_status)
 
     def stop_service(self, service_name: str, timeout=500, ignore_status=False):
-        self._service_cmd(service_name=service_name, cmd='stop', timeout=timeout, ignore_status=ignore_status)
+        with DbNodeLogger([self], f"stop {service_name}", target_node=self):
+            self._service_cmd(service_name=service_name, cmd='stop', timeout=timeout, ignore_status=ignore_status)
 
     def restart_service(self, service_name: str, timeout=500, ignore_status=False):
-        self._service_cmd(service_name=service_name, cmd='restart', timeout=timeout, ignore_status=ignore_status)
+        with DbNodeLogger([self], f"restart {service_name}", target_node=self):
+            self._service_cmd(service_name=service_name, cmd='restart', timeout=timeout, ignore_status=ignore_status)
 
     @property
     def verify_up_timeout(self):
@@ -2668,8 +2676,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     runner = partial(run_long_running_cmd, self.remoter)
                 else:
                     runner = self.remoter.run
-                result = \
-                    runner(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
+                with DbNodeLogger([self], f"nodetool {cmd}", target_node=self):
+                    result = runner(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
 
                 self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
@@ -3162,7 +3170,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.remoter.sudo('systemctl disable firewalld', ignore_status=True)
 
     def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
-        self.remoter.run(f'logger -p {level} -t scylla {shlex.quote(message)}', verbose=verbose)
+        self.remoter.run(f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}', verbose=verbose)
 
     def query_metadata(self, url: str, headers: dict = None, token_url: str = None, token_header: str = None,
                        token_ttl_header: str = None, token_ttl: int = 21600) -> str:
@@ -3510,7 +3518,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
-        node.destroy()
+        with DbNodeLogger(self.nodes, "terminate node", target_node=node):
+            node.destroy()
 
     def get_db_auth(self):
         if self.params.get('use_ldap') and self.params.get('are_ldap_users_on_scylla'):
