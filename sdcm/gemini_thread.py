@@ -94,10 +94,11 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             "min-partition-keys": 2,
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
-            "partition-key-distribution": "normal",  # Distribution for hitting the partition
+            "partition-key-distribution": "zipf",  # Distribution for hitting the partition
             # These two are used to control the memory usage of Gemini
-            "token-range-slices": 512,  # Number of partitions
-            "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
+            "token-range-slices": 100,  # Number of partitions
+            "partition-key-buffer-reuse-size": 10000,  # Internal Channel Size per parittion value generation
+            "statement-log-file-compression": "zstd",
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
@@ -111,7 +112,6 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
-                --non-interactive \
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
@@ -142,11 +142,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
-        for key, value in self.gemini_default_flags.items():
-            if not key in stress_cmd:
-                cmd += f"--{key}={value} "
+        cmd += " " + " ".join(f"--{key}={value}"
+                              for key, value in self.gemini_default_flags.items()
+                              if key not in stress_cmd) + " " + stress_cmd
 
-        cmd += stress_cmd
         self.gemini_commands.append(cmd)
         return cmd
 
