@@ -32,6 +32,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
@@ -57,7 +58,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_ycsb_connection_refused,
 )
 from sdcm.utils import loader_utils
-from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
+from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE, is_tablets_feature_enabled
 from sdcm.wait import wait_for
 from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
@@ -160,6 +161,15 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # expected format version after upgrade and nodetool upgradesstables called
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = 'mc'
+
+    def should_do_complex_profile(self) -> bool:
+        """
+        since tablets doesn't support complex profiles with index, we need to replace them with simple profiles without index
+        """
+        if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            if SkipPerIssues('https://github.com/scylladb/scylladb/issues/22677', params=self.params):
+                return False
+        return True
 
     @retrying(n=5)
     def _query_from_one_table(self, session, query, table_name) -> list:
@@ -651,18 +661,25 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # shuffle it so we will upgrade the nodes in a random order
         random.shuffle(indexes)
 
-        InfoEvent(message='pre-test - Run stress workload before upgrade').publish()
-        # complex workload: prepare write
-        InfoEvent(message='Starting c-s complex workload (5M) to prepare data').publish()
-        stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
-        complex_cs_thread_pool = self.run_stress_thread(
-            stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
+        if self.should_do_complex_profile():
+            keyspace = "keyspace_complex"
+            table = "user_with_ck"
+        else:
+            keyspace = "keyspace_entire_test"
+            table = "standard1"
 
-        # wait for the complex workload to finish
-        self.verify_stress_thread(complex_cs_thread_pool)
+        InfoEvent(message='pre-test - Run stress workload before upgrade').publish()
+        if self.should_do_complex_profile():
+            # complex workload: prepare write
+            InfoEvent(message='Starting c-s complex workload (5M) to prepare data').publish()
+            stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
+            complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_prepare)
+
+            # wait for the complex workload to finish
+            self.verify_stress_thread(complex_cs_thread_pool)
 
         InfoEvent(message='Will check paged query before upgrading nodes').publish()
-        self.paged_query()
+        self.paged_query(keyspace=keyspace)
         InfoEvent(message='Done checking paged query before upgrading nodes').publish()
 
         # prepare write workload
@@ -793,8 +810,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # Verify sstabledump / scylla sstable dump-data
         InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
         first_node = self.db_cluster.nodes[0]
-        keyspace = "keyspace_complex"
-        table = "user_with_ck"
+
         dump_cmd = get_sstable_data_dump_command(first_node, keyspace, table)
         first_node.remoter.run(
             f'for i in `sudo find /var/lib/scylla/data/{keyspace}/ -type f |grep -v manifest.json |'
@@ -811,16 +827,16 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
 
-        # complex workload: verify data by simple read cl=ALL
-        InfoEvent(message='Starting c-s complex workload to verify data by simple read').publish()
-        stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
-        complex_cs_thread_pool = self.run_stress_thread(
-            stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
-        # wait for the read complex workload to finish
-        self.verify_stress_thread(complex_cs_thread_pool)
+        if self.should_do_complex_profile():
+            # complex workload: verify data by simple read cl=ALL
+            InfoEvent(message='Starting c-s complex workload to verify data by simple read').publish()
+            stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
+            complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_read)
+            # wait for the read complex workload to finish
+            self.verify_stress_thread(complex_cs_thread_pool)
 
         InfoEvent(message='Will check paged query after upgrading all nodes').publish()
-        self.paged_query()
+        self.paged_query(keyspace=keyspace)
         InfoEvent(message='Done checking paged query after upgrading nodes').publish()
 
         # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching
@@ -829,23 +845,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # complex workloads,and comment two complex workloads.
         #
         # TODO: retest commented workloads and decide to enable or delete them.
-        #
-        # complex workload: verify data by multiple ops
-        # self.log.info('Starting c-s complex workload to verify data by multiple ops')
-        # stress_cmd_complex_verify_more = self.params.get('stress_cmd_complex_verify_more')
-        # complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_more,
-        #                                                profile='data_dir/complex_schema.yaml')
+        # if self.should_do_complex_profile():
+        #   # complex workload: verify data by multiple ops
+        #   self.log.info('Starting c-s complex workload to verify data by multiple ops')
+        #   stress_cmd_complex_verify_more = self.params.get('stress_cmd_complex_verify_more')
+        #   stress_cmd_complex_verify_more = self.replace_complex_profile_if_needed(stress_cmd_complex_verify_more)
+        #   complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_more)
 
-        # wait for the complex workload to finish
-        # self.verify_stress_thread(complex_cs_thread_pool)
+        #   # wait for the complex workload to finish
+        #   self.verify_stress_thread(complex_cs_thread_pool)
 
-        # complex workload: verify data by delete 1/10 data
-        # self.log.info('Starting c-s complex workload to verify data by delete')
-        # stress_cmd_complex_verify_delete = self.params.get('stress_cmd_complex_verify_delete')
-        # complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_delete,
-        #                                                profile='data_dir/complex_schema.yaml')
-        # wait for the complex workload to finish
-        # self.verify_stress_thread(complex_cs_thread_pool)
+        #   # complex workload: verify data by delete 1/10 data
+        #   self.log.info('Starting c-s complex workload to verify data by delete')
+        #   stress_cmd_complex_verify_delete = self.params.get('stress_cmd_complex_verify_delete')
+        #   stress_cmd_complex_verify_delete = self.replace_complex_profile_if_needed(stress_cmd_complex_verify_delete)
+        #   complex_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_complex_verify_delete)
+        #   # wait for the complex workload to finish
+        #   self.verify_stress_thread(complex_cs_thread_pool)
 
         # During the test we filter and ignore some specific errors, but we want to allow only certain amount of them
         step = 'Step9 - Search for errors that we filter during the test '

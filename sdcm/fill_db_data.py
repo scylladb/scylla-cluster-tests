@@ -3384,7 +3384,7 @@ class FillDatabaseData(ClusterTester):
             session.default_timeout = 60 * 5
             self.run_db_queries(session, session.default_fetch_size)
 
-    def paged_query(self, keyspace='keyspace_complex'):
+    def paged_query(self, keyspace: str):
         # Prepare connection
         def create_table():
             session.execute('CREATE TABLE IF NOT EXISTS paged_query_test (k int PRIMARY KEY, v1 int, v2 int)')
