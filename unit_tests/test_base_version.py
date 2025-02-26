@@ -115,6 +115,12 @@ class TestBaseVersion(unittest.TestCase):
         version_list = general_test(scylla_repo, linux_distro)
         assert {'2024.1', '2024.2', '6.2'}.issubset(set(version_list))
 
+    def test_2025_1_release_centos(self):
+        scylla_repo = self.url_base + '/branch-2025.1/rpm/centos/2025-02-23T16:19:08Z/scylla.repo'
+        linux_distro = 'centos-9'
+        version_list = general_test(scylla_repo, linux_distro)
+        assert {'2024.1', '2024.2', '6.2'}.issubset(set(version_list))
+
 
 if __name__ == "__main__":
     unittest.main()
