@@ -19,8 +19,6 @@ prettytable==3.10.2
 pycryptodome==3.19.1
 pyzmq==26.2.0
 tenacity==9.0.0
-# this package isn't in pypi
-repodataParser@https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==8.3.4
 pytest-random-order==1.0.4
 tcconfig==0.29.1
