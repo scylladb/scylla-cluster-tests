@@ -13,9 +13,6 @@ root_disk_size_monitor: 64
 
 client_encrypt: true
 
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
 use_preinstalled_scylla: true
 
 user_prefix: manager-regression
