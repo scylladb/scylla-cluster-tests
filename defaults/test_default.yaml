@@ -56,10 +56,10 @@ seeds_num: 1
 instance_provision: "spot"
 
 execute_post_behavior: false
-post_behavior_db_nodes: "keep-on-failure"
+post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "keep-on-failure"
-post_behavior_k8s_cluster: "keep-on-failure"
+post_behavior_monitor_nodes: "destroy"
+post_behavior_k8s_cluster: "destroy"
 
 cloud_credentials_path: ''
 use_cloud_manager: false

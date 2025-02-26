@@ -33,10 +33,6 @@ scylla_version: 2021.1.15
 scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
 parallel_node_operations: false  # supported from Scylla 6.0
 
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
-
 scylla_network_config:
 - address: listen_address  # Address Scylla listens for connections from other nodes. See storage_port and ssl_storage_ports.
   ip_type: ipv4
