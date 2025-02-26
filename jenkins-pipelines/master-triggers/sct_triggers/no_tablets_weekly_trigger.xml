@@ -20,9 +20,9 @@
               <properties>scylla_version=master:latest
 new_scylla_repo=https://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand
-post_behavior_db_nodes=keep-on-failure
+post_behavior_db_nodes=destroy
 post_behavior_loader_nodes=destroy
-post_behavior_monitor_nodes=keep-on-failure
+post_behavior_monitor_nodes=destroy
 email_recipients=qa@scylladb.com,tablets@scylladb.com</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
