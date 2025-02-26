@@ -54,7 +54,8 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
 
     instance_definition = InstanceDefinition(name=f"{prefix}-db-node-eastus-1", image_id=env_config.SCT_AZURE_IMAGE_DB,
                                              type="Standard_L8s_v3", user_name="scyllaadm", root_disk_size=30,
-                                             tags=tags | {"NodeType": "scylla-db", "keep_action": "", 'NodeIndex': '1'},
+                                             tags=tags | {"NodeType": "scylla-db",
+                                                          "keep_action": "terminate", 'NodeIndex': '1'},
                                              ssh_key=ssh_key)
     assert len(region_definitions) == 2
     actual_region_definition = region_definitions[0]
