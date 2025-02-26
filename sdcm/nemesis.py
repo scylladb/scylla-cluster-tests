@@ -4310,7 +4310,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
-        self._grow_cluster(rack=None)
+
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        rack_idxs = [idx % self.cluster.racks_count for idx in range(add_nodes_number)]
+        parallel_obj = ParallelObject(
+            objects=rack_idxs, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, num_workers=add_nodes_number)
+        parallel_obj.run(self._grow_cluster, ignore_exceptions=False, unpack_objects=True)
 
     @target_data_nodes
     def grow_fill_cluster(self):
@@ -4319,16 +4324,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
 
-        stress_cmds = self.cluster.params.get('stress_cmd')
-        for stress_cmd in stress_cmds:
-            self._grow_cluster()
-            # self.tester.wait_no_compactions_running(n=240)
-            time.sleep(self.cluster.params.get('nemesis_interval') * 60)
-            write_thread = self.tester.run_stress_thread(
-                stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
-            self.tester.verify_stress_thread(write_thread)
-            self.log.info("Finish cluster fill")
-            time.sleep(self.interval)
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        rack_idxs = [idx % self.cluster.racks_count for idx in range(add_nodes_number)]
+        parallel_obj = ParallelObject(
+            objects=rack_idxs, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, num_workers=add_nodes_number)
+        parallel_obj.run(self._grow_cluster, ignore_exceptions=False, unpack_objects=True)
+
+        time.sleep(self.cluster.params.get('nemesis_interval') * 60)
+
+        @latency_calculator_decorator(legend="Fill cluster back to 90%")
+        def fill_cluster():
+            stress_cmds = self.cluster.params.get('stress_cmd')
+            stress_queue = []
+            for stress_cmd in stress_cmds:
+                stress_queue.append(self.tester.run_stress_thread(stress_cmd=stress_cmd,
+                                    stop_test_on_failure=False, stats_aggregate_cmds=False, round_robin=True))
+            for stress in stress_queue:
+                self.tester.verify_stress_thread(stress)
+
+        fill_cluster()
+        time.sleep(self.interval)
 
     @target_data_nodes
     def disrupt_grow_shrink_cluster(self):

@@ -3,7 +3,7 @@ keyspace: ks_ttl
 
 # Keyspace Configuration
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS ks_ttl WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 128};
+  CREATE KEYSPACE IF NOT EXISTS ks_ttl WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};
 
 # Table name and schema
 table: standard1

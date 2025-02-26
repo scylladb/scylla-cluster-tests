@@ -6,7 +6,13 @@ prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=ALL n=300000000 -schema keyspace=ks_drop 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1200000001..1500000000",
   ]
 
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};",
+  "CREATE KEYSPACE IF NOT EXISTS ks_drop WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};",
+]
+
 n_db_nodes: 3
+availability_zone: 'a,b,c'
 instance_type_db: 'i4i.2xlarge'
 
 n_loaders: 4
