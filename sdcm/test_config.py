@@ -154,8 +154,6 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:
-        if cls.TEST_DURATION >= 11 * 60:
-            return True
         if node_type is None:
             return False
         if "db" in node_type:
