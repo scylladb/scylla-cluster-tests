@@ -27,18 +27,5 @@ instance_provision: 'spot'
 
 use_preinstalled_scylla: true
 
-<<<<<<< HEAD
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
-||||||| parent of 3b570d4a5 (fix(post_behavior_*): set all of them to `destroy`)
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
-
 append_scylla_yaml:
   enable_tablets: false  # counters are not supported with tablets
-=======
-append_scylla_yaml:
-  enable_tablets: false  # counters are not supported with tablets
->>>>>>> 3b570d4a5 (fix(post_behavior_*): set all of them to `destroy`)

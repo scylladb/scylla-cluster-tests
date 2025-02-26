@@ -11,22 +11,10 @@ n_db_nodes: '2 1'
 n_loaders: 1
 n_monitor_nodes: 1
 
-<<<<<<< HEAD
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 
-||||||| parent of 3b570d4a5 (fix(post_behavior_*): set all of them to `destroy`)
-client_encrypt: true
-
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
-
-=======
-client_encrypt: true
-
->>>>>>> 3b570d4a5 (fix(post_behavior_*): set all of them to `destroy`)
 user_prefix: manager-regression
 space_node_threshold: 6442
 
