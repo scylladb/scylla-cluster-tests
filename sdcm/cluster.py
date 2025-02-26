@@ -562,10 +562,16 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         ContainerManager.set_all_containers_keep_alive(self)
         return True
 
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        raise NotImplementedError()
+
     def set_keep_alive(self):
         node_type = None if self.parent_cluster is None else self.parent_cluster.node_type
         if self.test_config.should_keep_alive(node_type) and self._set_keep_alive():
             self.log.info("Keep this node alive")
+        else:
+            # same extra time as in getJobTimeouts.groovy (collection + resources cleanup + sending email report)
+            self._set_keep_duration(self.test_config.TEST_DURATION + 125)
 
     @property
     def short_hostname(self):

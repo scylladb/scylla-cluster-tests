@@ -132,6 +132,13 @@ class GCENode(cluster.BaseNode):
                               zone=self.zone) and \
             super()._set_keep_alive()
 
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        gce_set_labels(instances_client=self._gce_service,
+                       instance=self._instance,
+                       new_labels={"keep": str(duration_in_minutes)},
+                       project=self.project,
+                       zone=self.zone)
+
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=self.log)
