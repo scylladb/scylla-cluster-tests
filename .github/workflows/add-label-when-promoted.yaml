@@ -7,9 +7,9 @@ on:
       - branch-*.*
       - branch-perf-v*
       - manager-*.*
-    pull_request_target:
-      types: [labeled]
-      branches: [master]
+  pull_request_target:
+    types: [labeled]
+    branches: [master]
 
 env:
   DEFAULT_BRANCH: 'master'
