@@ -694,6 +694,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @decorate_with_context(ignore_ycsb_connection_refused)
+    @target_all_nodes
     def disrupt_stop_start_scylla_server(self):  # pylint: disable=invalid-name
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -909,6 +910,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
 
+    @target_all_nodes
     def disrupt_restart_then_repair_node(self):  # pylint: disable=invalid-name
         with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
                             line="Can't find a column family with UUID", node=self.target_node), \
@@ -919,6 +921,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.repair_nodetool_repair()
 
+    @target_all_nodes
     def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
         rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
         self.target_node.run_nodetool("resetlocalschema")
@@ -935,10 +938,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Sleep for 60 sec: the other nodes should pull new version")
         time.sleep(60)
 
+    @target_all_nodes
     def disrupt_hard_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=True)
         self.target_node.wait_node_fully_start()
 
+    @target_all_nodes
     def disrupt_multiple_hard_reboot_node(self) -> None:
         cdc_expected_error_patterns = [
             "cdc - Could not update CDC description table with generation",
@@ -984,11 +989,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise CdcStreamsWasNotUpdated(
                 f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found")
 
+    @target_all_nodes
     def disrupt_soft_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=False)
         self.target_node.wait_node_fully_start()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
+    @target_all_nodes
     def disrupt_rolling_restart_cluster(self, random_order=False):
         self.cluster.restart_scylla(random_order=random_order)
 
@@ -1029,6 +1036,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.execute('DROP KEYSPACE keyspace_for_authenticator_switch')
 
     @decorate_with_context(ignore_ycsb_connection_refused)
+    @target_all_nodes
     def disrupt_rolling_config_change_internode_compression(self):
         def get_internode_compression_new_value_randomly(current_compression):
             self.log.debug(f"Current compression is {current_compression}")
@@ -1214,6 +1222,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.repair_nodetool_rebuild()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
+    @target_all_nodes
     def disrupt_nodetool_drain(self):
         result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
@@ -1226,6 +1235,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    @target_all_nodes
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
@@ -1242,6 +1252,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ContainerManager.unpause_container(self.tester.localhost, 'ldap')
         self.log.info('finished with nemesis')
 
+    @target_all_nodes
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
@@ -1403,9 +1414,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.unset_current_running_nemesis(new_node)
         return new_node
 
+    @target_all_nodes
     def disrupt_nodetool_decommission(self, add_node=True):
         return self._nodetool_decommission(add_node=add_node)
 
+    @target_all_nodes
     def disrupt_nodetool_seed_decommission(self, add_node=True):
         if len(self.cluster.seed_nodes) < 2:
             raise UnsupportedNemesis("To running seed decommission the cluster must contains at least 2 seed nodes")
@@ -1756,7 +1769,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
 
     # pylint: disable=too-many-statements
-    @target_data_nodes
+    @target_all_nodes
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
@@ -1825,7 +1838,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.restart_scylla_server(verify_up_after=True)
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
-    @target_data_nodes
+    @target_all_nodes
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
 
         if all_nodes:
@@ -1849,7 +1862,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     finally:
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
-    @target_data_nodes
+    @target_all_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
         """
         Nemesis flow
@@ -2061,6 +2074,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
         parallel_objects.run(_nodetool_cleanup)
 
+    @target_all_nodes
     def disrupt_nodetool_cleanup(self):
         self.nodetool_cleanup_on_all_nodes_parallel()
 
@@ -3189,11 +3203,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             mgr_task.stop()
             assert False, f'Backup task {mgr_task.id} timed out - while on status {status}'
 
+    @target_data_nodes
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         self._mgmt_repair_cli()
 
+    @target_data_nodes
     def disrupt_mgmt_corrupt_then_repair(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
@@ -3375,7 +3391,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                  f"Expected content: {sorted(keyspace_table)} \n "
                                  f"Actual snapshot content: {sorted(snapshot_content_list)}")
 
-    @target_data_nodes
+    @target_all_nodes
     def disrupt_snapshot_operations(self):  # pylint: disable=too-many-statements
         """
         Extend this nemesis to run 'nodetool snapshot' more options including multiple tables.
@@ -3483,6 +3499,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
     @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
+    @target_all_nodes
     def disrupt_show_toppartitions(self):
         # NOTE: new API is supported only starting with Scylla 4.6
         #       In Scylla 4.5 it exists but disabled.
@@ -3581,6 +3598,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         experiment.wait_until_finished()
         self.cluster.wait_all_nodes_un()
 
+    @target_all_nodes
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         list_of_timeout_options = [10, 60, 120, 300, 500]
@@ -3650,6 +3668,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(15)
         self.cluster.wait_all_nodes_un()
 
+    @target_all_nodes
     def disrupt_network_block(self):
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
@@ -3681,7 +3700,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.target_node.traffic_control(None)
                 self.cluster.wait_all_nodes_un()
 
-    @target_data_nodes
+    @target_all_nodes
     def disrupt_remove_node_then_add_node(self):  # pylint: disable=too-many-branches
         """
         https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
@@ -3804,6 +3823,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 self.unset_current_running_nemesis(new_node)
 
+    @target_all_nodes
     def disrupt_network_reject_inter_node_communication(self):
         """
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
@@ -3841,6 +3861,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 wait_time=wait_time
             )
 
+    @target_all_nodes
     def disrupt_network_reject_node_exporter(self):
         """
         Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
@@ -3866,6 +3887,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             wait_time=wait_time
         )
 
+    @target_all_nodes
     def disrupt_network_reject_thrift(self):
         """
         Generates random firewall rule to drop/reject packets for thrift connections, port 9100
@@ -3995,6 +4017,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self.tester.params.get('print_kernel_callstack'):
             save_kallsyms_map(node=target_node)
 
+    @target_all_nodes
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
@@ -4222,6 +4245,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.remoter.run('sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
             self.log.debug('File {} was corrupted by dd'.format(sstable_file))
 
+    @target_data_nodes
     def disrupt_corrupt_then_scrub(self):
         """
         Try to rebuild the sstables of all test keyspaces by scrub, the corrupted partitions
@@ -4385,11 +4409,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     # TODO: add support for the 'LocalFileSystemKeyProviderFactory' and 'KmipKeyProviderFactory' key providers
     # TODO: add encryption for a table with large partitions?
 
+    @target_all_nodes
     def disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation(self):
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=False,
             additional_scylla_encryption_options={'key_provider': 'KmsKeyProviderFactory'})
 
+    @target_all_nodes
     def disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation(self):
         self._enable_disable_table_encryption(
             enable_kms_key_rotation=True,
@@ -4397,7 +4423,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     @scylla_versions(("2023.1.1-dev", None))
-    @target_data_nodes
     def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):  # noqa: PLR0914
         if self.cluster.params.get("cluster_backend") != "aws":
             raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
@@ -4538,6 +4563,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
                 session.execute(f"DROP TABLE {table_name};")
 
+    @target_all_nodes
     def disrupt_hot_reloading_internode_certificate(self):
         """
         https://github.com/scylladb/scylla/issues/6067
@@ -4639,6 +4665,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         experiment.wait_until_finished()
 
     @decorate_with_context(ignore_reactor_stall_errors)
+    @target_all_nodes
     def disrupt_memory_stress(self):
         """
         Try to run stress-ng to preempt allocated memory of scylla process,
@@ -5087,6 +5114,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                   for error in error_events if error)
                                         )
 
+    @target_data_nodes
     def disrupt_create_index(self):
         """
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
