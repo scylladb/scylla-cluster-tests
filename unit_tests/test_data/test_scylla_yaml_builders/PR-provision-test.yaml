@@ -29,7 +29,3 @@ gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/globa
 
 scylla_version: 2021.1.15
 scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
-
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"

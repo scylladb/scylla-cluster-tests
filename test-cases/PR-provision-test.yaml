@@ -26,7 +26,3 @@ user_prefix: 'PR-provision-test'
 instance_provision: 'spot'
 
 use_preinstalled_scylla: true
-
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
