@@ -33,6 +33,7 @@ from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.wait import WaitForTimeoutError
+from sdcm.utils.common import is_ipv6_address, normalize_ipv6_address
 
 LOGGER = logging.getLogger(__name__)
 
@@ -873,9 +874,13 @@ class ManagerCluster(ScyllaManagerBase):
         return HealthcheckTask(task_id=healthcheck_id, cluster_id=self.id,
                                manager_node=self.manager_node)  # return the manager's health-check-task object with the found id
 
-    def get_hosts_health(self):  # noqa: PLR0914
-        """
-        Gets the Manager's Cluster Nodes status
+    def get_hosts_health(self, normalize_ipv6_addresses: bool = True) -> dict:  # noqa: PLR0914
+        """Gets the Manager's Cluster Nodes status
+
+        Args:
+            normalize_ipv6_addresses (bool): `sctool status` cmd returns IPv6 addresses with eliminated leading zeroes.
+                This parameter allows to control whether to normalize IPv6 addresses (add missing leading zeroes)
+                in resulting dictionary or keep them as in sctool output.
         """
         # pylint: disable=too-many-locals
 
@@ -911,6 +916,8 @@ class ManagerCluster(ScyllaManagerBase):
 
                 for line in hosts_table[1:]:
                     host = line[host_col_idx]
+                    if is_ipv6_address(host) and normalize_ipv6_addresses:
+                        host = normalize_ipv6_address(host)
                     list_cql = line[cql_status_col_idx].split()
                     status = list_cql[0]
                     rtt = self._extract_value_with_regex(string=list_cql[-1], regex_pattern=r"\(([^)]+ms)")

@@ -39,6 +39,7 @@ import tempfile
 import traceback
 import ctypes
 import shlex
+import ipaddress
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse
 from unittest.mock import Mock
@@ -2023,6 +2024,25 @@ def normalize_ipv6_url(ip_address):
     if ":" in ip_address:  # IPv6
         return "[%s]" % ip_address
     return ip_address
+
+
+def is_ipv6_address(address: str) -> bool:
+    try:
+        ipaddress.IPv6Address(address)
+        return True
+    except ipaddress.AddressValueError:
+        return False
+
+
+def normalize_ipv6_address(address: str) -> str:
+    """Normalize IPv6 address to full form - adding eliminated leading zeroes or zero sequence blocks.
+    For example, 2001:db8:85a3::121:8a2e:0370:7334 -> 2001:0db8:85a3:0000:0121:8a2e:0370:7334
+    """
+    try:
+        ip = ipaddress.IPv6Address(address)
+        return ip.exploded
+    except ipaddress.AddressValueError:
+        raise ValueError(f"Invalid IPv6 address: {address}")
 
 
 def rows_to_list(rows):
