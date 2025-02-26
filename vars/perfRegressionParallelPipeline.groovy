@@ -55,7 +55,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
-            string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
             string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
