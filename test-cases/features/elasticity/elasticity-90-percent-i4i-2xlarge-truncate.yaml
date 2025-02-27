@@ -11,6 +11,10 @@ pre_create_keyspace: [
   "CREATE KEYSPACE IF NOT EXISTS ks_truncate WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};",
 ]
 
+stress_cmd: [
+  "cassandra-stress read no-warmup cl=ONE  duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=1 fixed=10/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..400000000,200000000,4000000)'",
+]
+
 n_db_nodes: 3
 availability_zone: 'a,b,c'
 instance_type_db: 'i4i.2xlarge'

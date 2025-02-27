@@ -28,7 +28,7 @@ instance_type_loader: 'c6i.2xlarge'
 n_monitor_nodes: 1
 instance_type_monitor: 't3.large'
 
-nemesis_class_name: 'GrowClusterNemesis'
+nemesis_class_name: 'GrowClusterMonkey'
 nemesis_interval: 30
 nemesis_sequence_sleep_between_ops: 10
 

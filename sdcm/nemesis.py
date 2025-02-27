@@ -2111,7 +2111,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         keyspace_drop = 'ks_drop'
         table = 'standard1'
 
-        self._prepare_test_table(ks=keyspace_drop, table=True)
+        self._prepare_test_table(ks=keyspace_drop, table='standard1')
 
         # do the actual drop
         with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_drop) as session:
@@ -2121,7 +2121,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
 
-        self._prepare_test_table(ks=keyspace_truncate, table=True)
+        self._prepare_test_table(ks=keyspace_truncate, table='standard1')
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
@@ -4311,6 +4311,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
 
+        self.set_target_node(current_disruption="GrowClusterMonkey")
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         rack_idxs = [idx % self.cluster.racks_count for idx in range(add_nodes_number)]
         parallel_obj = ParallelObject(
@@ -4324,6 +4325,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
 
+        self.set_target_node(current_disruption="GrowFillMonkey")
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         rack_idxs = [idx % self.cluster.racks_count for idx in range(add_nodes_number)]
         parallel_obj = ParallelObject(
