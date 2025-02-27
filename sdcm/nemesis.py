@@ -2072,6 +2072,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         test_keyspaces = self.cluster.get_test_keyspaces()
         # if keyspace or table doesn't exist, create it by cassandra-stress
+        self.log.info(f"{ks_cfs=} {test_keyspaces=}")  # TODO: Remove debug log
         if ks not in test_keyspaces or not table_exist:
             stress_cmd = f"cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
                          f"-schema keyspace={ks} 'replication(strategy=NetworkTopologyStrategy," \
@@ -2115,7 +2116,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # do the actual drop
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
-            session.execute(f"DROP TABLE {keyspace_drop}.{table}", timeout=3600)
+            session.execute(f"DROP TABLE {keyspace_drop}.{table}", timeout=600)
 
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
