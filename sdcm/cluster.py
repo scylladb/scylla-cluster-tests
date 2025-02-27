@@ -4452,23 +4452,26 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
+        """
+        Checks via nodetool that nodes have joined the cluster and reached 'UN' state.
+
+        :param nodes: List of nodes to check. If None, checks all nodes in the cluster.
+        :param verification_node: Node to run the nodetool command on. If None, a random node is chosen.
+        :raises ClusterNodesNotReady: If any node is not in 'UN' state or not found in nodetool status.
+        """
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
             nodes = self.nodes
         status = self.get_nodetool_status(verification_node=verification_node)
-        up_statuses = []
         for node in nodes:
-            found_node_status = False
             for dc_status in status.values():
                 ip_status = dc_status.get(node.ip_address)
-                if ip_status:
-                    found_node_status = True
-                    up_statuses.append(ip_status["state"] == "UN")
-                    break
-            if not found_node_status:
-                up_statuses.append(False)
-        if not all(up_statuses):
-            raise ClusterNodesNotReady("Not all nodes joined the cluster")
+                if not ip_status:
+                    error_message = f"Not all nodes joined the cluster: node {node.ip_address} not found in nodetool status"
+                    raise ClusterNodesNotReady(error_message)
+                if ip_status["state"] != "UN":
+                    error_message = f"Not all nodes joined the cluster: node {node.ip_address} is not in 'UN' state: {ip_status['state']}"
+                    raise ClusterNodesNotReady(error_message)
 
     def get_nodes_up_and_normal(self, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
