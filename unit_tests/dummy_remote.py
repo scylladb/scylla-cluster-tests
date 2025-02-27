@@ -80,6 +80,9 @@ class LocalNode(BaseNode):
     def check_spot_termination(self):
         pass
 
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        pass
+
     def restart(self):
         pass
 
