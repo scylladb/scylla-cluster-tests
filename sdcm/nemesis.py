@@ -4313,10 +4313,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.has_steady_run = True
 
         self.set_target_node(current_disruption="GrowClusterMonkey")
-        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        rack_idxs = [idx % self.cluster.racks_count for idx in range(add_nodes_number)]
+        rack_idxs = list(range(self.cluster.racks_count))
         parallel_obj = ParallelObject(
-            objects=rack_idxs, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, num_workers=add_nodes_number)
+            objects=rack_idxs, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, num_workers=self.cluster.racks_count)
         parallel_obj.run(self._grow_cluster, ignore_exceptions=False, unpack_objects=True)
 
     @target_data_nodes

@@ -19,7 +19,7 @@ n_db_nodes: 3
 availability_zone: 'a,b,c'
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_add_node_cnt: 3
+nemesis_add_node_cnt: 1 # per rack
 nemesis_grow_shrink_instance_type: 'i4i.large'
 
 n_loaders: 4
