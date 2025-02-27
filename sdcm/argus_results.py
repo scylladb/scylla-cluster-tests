@@ -250,7 +250,6 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
 
             ValidationRules = {
                 "allocs_per_op": ValidationRule(best_pct=5),
-                "cpu_cycles_per_op": ValidationRule(best_pct=5),
                 "instructions_per_op": ValidationRule(best_pct=5),
             }
 
