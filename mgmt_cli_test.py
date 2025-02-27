@@ -46,6 +46,7 @@ from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.sct_events.system import InfoEvent
@@ -940,6 +941,12 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info('finishing test_enospc_during_backup')
 
     def test_enospc_before_restore(self):
+        if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            # TODO: Get back to this restriction after https://github.com/scylladb/scylla-manager/issues/4275 resolution
+            self.log.info('Skipping test_enospc_before_restore due to enabled tablets. '
+                          'For details https://github.com/scylladb/scylla-manager/issues/4276')
+            return
+
         self.log.info('starting test_enospc_before_restore')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
