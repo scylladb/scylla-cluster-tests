@@ -14,7 +14,7 @@
 from functools import cached_property
 from typing import Optional, Any, List
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LdapServerType
@@ -25,9 +25,10 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     Builds scylla yaml attributes that stays persistent across the cluster
     """
     cluster_name: str
-    test_config: Any = Field(as_dict=False)
-    msldap_server_info: dict = Field(as_dict=False, default=None)
+    test_config: Any = Field(exclude=True)
+    msldap_server_info: dict = Field(exclude=True, default=None)
 
+    @computed_field
     @property
     def hinted_handoff_enabled(self) -> Optional[str]:
         param_hinted_handoff = str(self.params.get('hinted_handoff')).lower()
@@ -37,6 +38,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
             return False
         return None
 
+    @computed_field
     @property
     def experimental_features(self) -> List[str]:
         features = self.params.get('experimental_features')
@@ -44,40 +46,48 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
             return []
         return features
 
+    @computed_field
     @property
     def authenticator(self) -> Optional[str]:
         if self._is_authenticator_valid:
             return self._authenticator
         return None
 
+    @computed_field
     @property
     def saslauthd_socket_path(self) -> Optional[str]:
         if self._is_authenticator_valid and self.params.get('prepare_saslauthd'):
             return '/run/saslauthd/mux'
         return None
 
+    @computed_field
     @property
     def authorizer(self) -> Optional[str]:
         if self._authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
             return self._authorizer
         return None
 
+    @computed_field
     @property
     def alternator_port(self) -> Optional[str]:
         return self.params.get('alternator_port')
 
+    @computed_field
     @property
     def alternator_write_isolation(self) -> Optional[str]:
         return "always_use_lwt" if self.params.get('alternator_port') else None
 
+    @computed_field
     @property
     def alternator_enforce_authorization(self) -> bool:
         return bool(self.params.get('alternator_enforce_authorization'))
 
+    @computed_field
     @property
     def internode_compression(self) -> Optional[str]:
         return self.params.get('internode_compression')
 
+    @computed_field
     @property
     def endpoint_snitch(self) -> Optional[str]:
         """
@@ -89,10 +99,12 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
             return self._default_endpoint_snitch
         return None
 
+    @computed_field
     @property
     def ldap_attr_role(self) -> Optional[str]:
         return 'cn' if self._is_ldap_authorization else None
 
+    @computed_field
     @property
     def ldap_bind_dn(self) -> Optional[str]:
         if self._is_msldap_authorization:
@@ -101,10 +113,12 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
             return self._open_ldap_bind_dn
         return None
 
+    @computed_field
     @property
     def role_manager(self) -> Optional[str]:
         return 'com.scylladb.auth.LDAPRoleManager' if self._is_ldap_authorization else None
 
+    @computed_field
     @property
     def ldap_bind_passwd(self) -> Optional[str]:
         if self._is_msldap_authorization:
@@ -113,6 +127,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
             return self._open_ldap_bind_passwd
         return None
 
+    @computed_field
     @property
     def ldap_url_template(self) -> Optional[str]:
         if self._is_msldap_authorization:

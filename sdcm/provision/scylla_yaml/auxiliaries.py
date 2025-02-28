@@ -109,7 +109,7 @@ EndPointSnitchType = Literal[
 
 
 class ScyllaYamlAttrBuilderBase(AttrBuilder):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: Union[SCTConfiguration, dict] = Field(exclude=True)
 
     @property
     def _cluster_backend(self) -> str:

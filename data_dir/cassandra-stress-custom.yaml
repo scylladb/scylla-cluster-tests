@@ -42,8 +42,7 @@ table_definition: |
         uid timeuuid,
         value blob,
         PRIMARY KEY((name,choice), date, address, dbl, lval, ival, uid)
-  ) WITH COMPACT STORAGE
-    AND compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_unit': 'DAYS', 'compaction_window_size': 1}
+  ) WITH compaction = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_unit': 'DAYS', 'compaction_window_size': 1}
     AND comment='A table of many types to test wide rows'
 
 #

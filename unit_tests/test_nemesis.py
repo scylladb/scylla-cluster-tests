@@ -321,6 +321,7 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_add_sisyphus_with_filter_in_parallel_nemesis_run(self, expected_schema_changes_methods, expected_topology_changes_methods):  # pylint: disable=too-many-locals
         tester = ClusterTesterForTests()
+        tester._init_params()
         tester.db_cluster = Cluster(nodes=[Node(), Node()])
         tester.db_cluster.params = tester.params
         tester.params["nemesis_class_name"] = "SisyphusMonkey:1 SisyphusMonkey:2"
