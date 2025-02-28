@@ -79,6 +79,9 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
 
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        pass
+
     def is_docker(self):
         return True
 
@@ -419,6 +422,9 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
         pass
 
     def disable_daily_triggered_services(self):
+        pass
+
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
         pass
 
 
