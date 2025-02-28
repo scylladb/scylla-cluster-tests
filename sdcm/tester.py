@@ -3366,6 +3366,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                               node_benchmarks=benchmarks_results,
                                               extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
         except Exception as exc:  # noqa: BLE001
+            # TODO: Remove debug log
+            self.log.info(f"{locals()=}")
+            self.log.exception(f"Error in check_regression; {exc=}")
             TestFrameworkEvent(
                 message='Failed to check regression',
                 source=self.__class__.__name__,

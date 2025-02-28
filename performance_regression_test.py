@@ -22,6 +22,7 @@ from enum import Enum
 import yaml
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from sdcm.utils import loader_utils
 from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
@@ -45,7 +46,7 @@ class PerformanceTestType(Enum):
     LATENCY = "latency"
 
 
-class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
+class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  # pylint: disable=too-many-public-methods
 
     """
     Test Scylla performance regression with cassandra-stress.
@@ -219,6 +220,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     @optional_stage('perf_preload_data')
     def preload_data(self, compaction_strategy=None):
+        # Check if the test keyspace should be pre-created
+        if self.params.get('pre_create_keyspace'):
+            self._pre_create_keyspace()
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
@@ -630,21 +634,21 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
     def test_latency_read_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
-        self.wait_no_compactions_running(n=160)
+        self.wait_no_compactions_running(n=240)
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get('stress_cmd_r'), nemesis=True, sub_type='read')
 
     def test_latency_write_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
-        self.wait_no_compactions_running(n=160)
+        self.wait_no_compactions_running(n=240)
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get('stress_cmd_w'), nemesis=True, sub_type='write')
 
     def test_latency_mixed_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
-        self.wait_no_compactions_running(n=160)
+        self.wait_no_compactions_running(n=240)
         self.run_fstrim_on_all_db_nodes()
         self.run_workload(stress_cmd=self.params.get('stress_cmd_m'), nemesis=True, sub_type='mixed')
 
