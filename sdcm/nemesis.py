@@ -4114,12 +4114,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                       timeout=full_operations_timeout):
 
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
+            is_rebuild_supported = SkipPerIssues('scylladb/scylladb#17575', params=self.tester.params)
+            should_workaround_rebuild = is_tablets_feature_enabled(self.target_node) and not is_rebuild_supported
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
-                new_node.run_nodetool("rebuild", long_running=True, retry=0)
+                # If tablets in use and rebuild is not supported, running a DC repair instead.
+                if should_workaround_rebuild:
+                    for node in [n for n in self.cluster.nodes if
+                                 n.dc_idx == new_node.dc_idx and n.db_up()]:
+                        node.run_nodetool(sub_cmd="repair", long_running=True, retry=0)
+                else:
+                    with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+                        new_node.run_nodetool("rebuild", long_running=True, retry=0)
             else:
                 self.target_node.wait_node_fully_start()
-                self.target_node.run_nodetool(sub_cmd="rebuild", long_running=True, retry=0)
+                if should_workaround_rebuild:
+                    for node in [n for n in self.cluster.nodes if
+                                 n.dc_idx == self.target_node.dc_idx and n.db_up()]:
+                        node.run_nodetool(sub_cmd="repair", long_running=True, retry=0)
+                else:
+                    self.target_node.run_nodetool(sub_cmd="rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_repair_streaming(self):
         """
@@ -4147,8 +4161,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.target_node.wait_node_fully_start()
 
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
+        is_rebuild_supported = SkipPerIssues('scylladb/scylladb#17575', params=self.tester.params)
+        # If tablets in use and rebuild is not supported, running a DC repair instead.
+        if is_tablets_feature_enabled(self.target_node) and not is_rebuild_supported:
+            for node in [n for n in self.cluster.nodes if
+                         n.dc_idx == self.target_node.dc_idx and n.db_up()]:
+                node.run_nodetool(sub_cmd="repair", long_running=True, retry=0)
+            with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+                self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_rebuild_streaming(self):
         """
@@ -4178,8 +4198,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_node_fully_start(timeout=300)
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
+        is_rebuild_supported = SkipPerIssues('scylladb/scylladb#17575', params=self.tester.params)
+        # If tablets in use and rebuild is not supported, running a DC repair instead.
+        if is_tablets_feature_enabled(self.target_node) and not is_rebuild_supported:
+            for node in [n for n in self.cluster.nodes if
+                         n.dc_idx == self.target_node.dc_idx and n.db_up()]:
+                node.run_nodetool(sub_cmd="repair", long_running=True, retry=0)
+            with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+                self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def disrupt_decommission_streaming_err(self):
         """
