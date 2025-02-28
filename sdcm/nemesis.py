@@ -2072,7 +2072,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         test_keyspaces = self.cluster.get_test_keyspaces()
         # if keyspace or table doesn't exist, create it by cassandra-stress
-        self.log.info(f"{ks_cfs=} {test_keyspaces=}")  # TODO: Remove debug log
+        # TODO: Remove debug log
+        self.log.info(f"{ks_cfs=} {test_keyspaces=}")
+        self.log.info(f"{table_exist=}, {ks=}, {table=}, {ks not in test_keyspaces or not table_exist}")
         if ks not in test_keyspaces or not table_exist:
             stress_cmd = f"cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
                          f"-schema keyspace={ks} 'replication(strategy=NetworkTopologyStrategy," \
