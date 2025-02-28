@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import json
+import logging
 import time
 from datetime import timezone, datetime
 
@@ -20,6 +21,9 @@ from argus.client.generic_result import GenericResultTable, ColumnMetadata, Resu
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
+
+
+LOGGER = logging.getLogger(__name__)
 
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
@@ -276,3 +280,53 @@ def send_manager_snapshot_details_to_argus(argus_client: ArgusClient, snapshot_d
     for key, value in snapshot_details.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
+
+
+def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node, params):
+    if not argus_client:
+        LOGGER.warning("Will not submit to argus - no client initialized")
+        return
+
+    class IOPropertiesResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} Disk Performance"
+            description = "io_properties.yaml generated from live disk"
+            Columns = [
+                ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+            ]
+
+    class IOPropertiesDeviationResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} Disk Performance Absolute deviation"
+            description = "io_properties.yaml absolute deviation from preset disk"
+            Columns = [
+                ColumnMetadata(name="read_iops_abs_deviation", unit="iops",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="read_bandwidth_abs_deviation", unit="bps",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_iops_abs_deviation", unit="iops",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_bandwidth_abs_deviation", unit="bps",
+                               type=ResultType.INTEGER, higher_is_better=False),
+            ]
+
+            ValidationRules = {
+                "read_iops_abs_deviation": ValidationRule(fixed_limit=results["limits"].get("read_iops")),
+                "read_bandwidth_abs_deviation": ValidationRule(fixed_limit=results["limits"].get("read_bandwidth")),
+                "write_iops_abs_deviation": ValidationRule(fixed_limit=results["limits"].get("write_iops")),
+                "write_bandwidth_abs_deviation": ValidationRule(fixed_limit=results["limits"].get("write_bandwidth")),
+            }
+
+    table = IOPropertiesResultsTable()
+    for key, value in results["active"].items():
+        table.add_result(column=key, row="active", value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, table)
+
+    table = IOPropertiesDeviationResultsTable()
+    for key, value in results["deviation"].items():
+        table.add_result(column=f"{key}_abs_deviation", row="deviation", value=value, status=Status.UNSET)
+
+    submit_results_to_argus(argus_client, table)
