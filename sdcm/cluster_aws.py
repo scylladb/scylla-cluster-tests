@@ -470,7 +470,35 @@ class AWSNode(cluster.BaseNode):
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
             self._dc_info_str())
 
+<<<<<<< HEAD
     @property
+||||||| parent of 2e6ae9df8 (fix(network interfaces): change network_configuration to be cached)
+    @property
+    def network_configuration(self):
+        # Output example:
+        #   0a:7b:18:de:f9:71: eth0
+        #   0a:7b:18:de:f9:72: eth1
+        ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+        network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+        network_devices = yaml.safe_load(network_config)
+        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
+    @property
+=======
+    @cached_property
+    def network_configuration(self):
+        # Output example:
+        #   0a:7b:18:de:f9:71: eth0
+        #   0a:7b:18:de:f9:72: eth1
+        ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+        network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+        network_devices = yaml.safe_load(network_config)
+        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
+    @property
+>>>>>>> 2e6ae9df8 (fix(network interfaces): change network_configuration to be cached)
     def network_interfaces(self):
         interfaces_tmp = []
         device_indexes = []
