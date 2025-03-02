@@ -477,7 +477,7 @@ class AWSNode(cluster.BaseNode):
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
             self._dc_info_str())
 
-    @property
+    @cached_property
     def network_configuration(self):
         # Output example:
         #   0a:7b:18:de:f9:71: eth0
