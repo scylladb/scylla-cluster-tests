@@ -38,6 +38,23 @@ def format_size(size_in_bytes):
             return f"{size_in_bytes:.2f} {unit}"
         size_in_bytes /= 1024
 
+def prepare_server_for_s3(node):
+
+    # prepare everything required:
+    # - pkcs11
+    # - add object_storage.yaml to scylla.yaml
+    # - populate object_storage.yaml with data
+    node.remoter.sudo(shell_script_cmd("""\
+    apt install p11-kit p11-kit-modules
+    mkdir /usr/lib64/pkcs11
+    ln -s /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so /usr/lib64/pkcs11/p11-kit-trust.so
+    echo 'object_storage_config_file: /etc/scylla/object_storage.yaml\n' >> /etc/scylla/scylla.yaml
+    echo 'endpoints:\n  - name: s3.us-east-1.amazonaws.com\n    port: 443\n    https: true\n    aws_region: us-east-1\n    iam_role_arn: arn:aws:iam::797456418907:instance-profile/qa-scylla-manager-backup-instance-profile\n' > /etc/scylla/object_storage.yaml
+        """))
+
+    # restart the node
+    node.restart_scylla_server()
+
 
 class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     snapshot_list_lock = threading.Lock()
@@ -238,14 +255,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         self.log.info("Executing test_backup_restore_benchmark...")
 
         for node in self.db_cluster.nodes:
-            node.remoter.sudo(shell_script_cmd("""\
-            apt install p11-kit p11-kit-modules
-            mkdir /usr/lib64/pkcs11
-            ln -s /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so /usr/lib64/pkcs11/p11-kit-trust.so
-            echo 'object_storage_config_file: /etc/scylla/object_storage.yaml\n' >> /etc/scylla/scylla.yaml
-            echo 'endpoints:\n  - name: s3.us-east-1.amazonaws.com\n    port: 443\n    https: true\n    aws_region: us-east-1\n    iam_role_arn: arn:aws:iam::797456418907:instance-profile/qa-scylla-manager-backup-instance-profile\n' > /etc/scylla/object_storage.yaml
-                """))
-            node.restart_scylla_server()
+            prepare_server_for_s3(node)
 
         self.log.info("Write data to table")
         self.run_prepare_write_cmd()
@@ -303,14 +313,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
 
     def test_native_backup_restore(self):
         for node in self.db_cluster.nodes:
-            node.remoter.sudo(shell_script_cmd("""\
-            apt install p11-kit p11-kit-modules
-            mkdir /usr/lib64/pkcs11
-            ln -s /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so /usr/lib64/pkcs11/p11-kit-trust.so
-            echo 'object_storage_config_file: /etc/scylla/object_storage.yaml\n' >> /etc/scylla/scylla.yaml
-            echo 'endpoints:\n  - name: s3.us-east-1.amazonaws.com\n    port: 443\n    https: true\n    aws_region: us-east-1\n    iam_role_arn: arn:aws:iam::797456418907:instance-profile/qa-scylla-manager-backup-instance-profile\n' > /etc/scylla/object_storage.yaml
-                """))
-            node.restart_scylla_server()
+            prepare_server_for_s3(node)
 
         self.log.info("Write data to table")
         self.run_prepare_write_cmd()
