@@ -4240,6 +4240,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         wait_no_tablets_migration_running(nodes[0])
         return nodes
 
+    @latency_calculator_decorator(legend="Adding new nodes to racks")
+    def add_new_nodes_to_racks(self, count, racks, instance_type: str = None) -> list[BaseNode]:
+        nodes = []
+        for rack in racks:
+            nodes += self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
+        wait_no_tablets_migration_running(nodes[0])
+        return nodes
+
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
     def decommission_nodes(self, nodes):
 
@@ -4341,6 +4349,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 rack_idx = rack if rack is not None else idx % self.cluster.racks_count
                 new_nodes += self.add_new_nodes(count=1, rack=rack_idx,
                                                 instance_type=self.tester.params.get('nemesis_grow_shrink_instance_type'))
+        self.log.info("Finish cluster grow")
+        time.sleep(self.interval)
+        return new_nodes
+
+    def _grow_cluster_by_rack(self):
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        instance_type = self.tester.params.get('nemesis_grow_shrink_instance_type')
+        InfoEvent(message=f"Start grow cluster by {add_nodes_number} data nodes to each rack").publish()
+        new_nodes = []
+
+        if self.cluster.parallel_node_operations:
+            new_nodes = self.add_new_nodes_to_racks(
+                count=add_nodes_number, racks=self.cluster.racks, instance_type=instance_type)
+        else:
+            for rack_idx in self.cluster.racks:
+                new_nodes += self.add_new_nodes(count=add_nodes_number, rack=rack_idx, instance_type=instance_type)
+
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
         return new_nodes
