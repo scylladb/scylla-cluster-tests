@@ -28,7 +28,7 @@ import dateutil.parser
 from mypy_boto3_s3 import S3Client
 from botocore import UNSIGNED
 from botocore.client import Config
-from repodataParser.RepoParser import Parser
+from sdcm.utils.repo_parser import Parser
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
@@ -73,7 +73,7 @@ ARGUS_VERSION_RE = re.compile(r'((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?
 SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r'(.*)_SSTABLE_FORMAT')
-PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
+PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
 
 # Example of output for `systemctl --version' command:
 #   $ systemctl --version
@@ -84,7 +84,7 @@ SYSTEMD_VERSION_RE = re.compile(r"^systemd (?P<version>\d+)")
 REPOMD_XML_PATH = "repodata/repomd.xml"
 
 SCYLLA_URL_RESPONSE_TIMEOUT = 30
-SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz")
+SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz", "xml.zst")
 SUPPORTED_FILE_EXTENSIONS = ("list", "repo", "Packages", "gz") + SUPPORTED_XML_EXTENSIONS
 VERSION_NOT_FOUND_ERROR = "The URL not supported, only Debian and Yum are supported"
 
@@ -336,7 +336,7 @@ def get_branch_version_from_debian_repository(urls, full_version: bool = False):
 def get_branch_version_from_centos_repository(urls, full_version: bool = False):
     def get_version(url):
         data = '\n'.join(get_url_content(url=url))
-        primary_path = PRIMARY_XML_GZ_REGEX.search(data).groups()[0]
+        primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
@@ -371,7 +371,7 @@ def get_all_versions_from_debian_repository(urls: set[str], full_version: bool =
 def get_all_versions_from_centos_repository(urls: set[str], full_version: bool = False) -> set[str]:
     def get_version(url: str) -> set[str]:
         data = '\n'.join(get_url_content(url=url))
-        primary_path = PRIMARY_XML_GZ_REGEX.search(data).groups()[0]
+        primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
