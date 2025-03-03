@@ -4329,10 +4329,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
 
     @retrying(n=3, sleep_time=5)
-    def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
+    def get_nodetool_status(self, verification_node: Optional[BaseNode] = None, dc_aware: bool = True) -> dict[str, dict]:  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
-            Status format:
+            Status format if dc_aware = True (default):
             status = {
                 "datacenter1": {
                     "ip1": {
@@ -4345,7 +4345,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     }
                 }
             }
+            Status format if dc_aware = False:
+            status = {
+                "ip1": {
+                        'state': state,
+                        'load': load,
+                        'tokens': tokens,
+                        'owns': owns,
+                        'host_id': host_id,
+                        'rack': rack
+                    }
+            }
         :param verification_node: node to run the nodetool on
+        :param dc_aware: return with dc if True, return without dc if False
         :return: dict
         """
         if not verification_node:
@@ -4385,6 +4397,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                             node_ip = node.ip_address
                 node_info["load"] = node_info["load"].replace(" ", "")
                 status[dc_name][node_ip] = node_info
+
+        if not dc_aware:
+            status = {key: value for dc_value in status.values() for key, value in dc_value.items()}
+
         return status
 
     @staticmethod
@@ -4447,35 +4463,28 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.debug('Schema agreement is reached')
         return True
 
-    def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
-        """Checks via nodetool that node joined the cluster and reached 'UN' state"""
+    def check_nodes_up_and_normal(self, nodes: Optional[list[BaseNode]] = None, verification_node: Optional[BaseNode] = None):
+        """Checks via nodetool executed on verification node that nodes joined the cluster and reached 'UN' state"""
         if not nodes:
             nodes = self.nodes
-        status = self.get_nodetool_status(verification_node=verification_node)
-        up_statuses = []
+        status = self.get_nodetool_status(verification_node=verification_node, dc_aware=False)
+        down_nodes = []
         for node in nodes:
-            found_node_status = False
-            for dc_status in status.values():
-                ip_status = dc_status.get(node.ip_address)
-                if ip_status:
-                    found_node_status = True
-                    up_statuses.append(ip_status["state"] == "UN")
-                    break
-            if not found_node_status:
-                up_statuses.append(False)
-        if not all(up_statuses):
-            raise ClusterNodesNotReady("Not all nodes joined the cluster")
+            ip_status = status.get(node.ip_address)
+            if not ip_status or ip_status["state"] != "UN":
+                down_nodes.append(node)
+        if down_nodes:
+            raise ClusterNodesNotReady("Nodes %s didn't join to the cluster",
+                                       ",".join([node.name for node in down_nodes]))
 
     def get_nodes_up_and_normal(self, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
-        status = self.get_nodetool_status(verification_node=verification_node)
+        status = self.get_nodetool_status(verification_node=verification_node, dc_aware=False)
         up_nodes = []
         for node in self.nodes:
-            for dc_status in status.values():
-                ip_status = dc_status.get(node.ip_address)
-                if ip_status:
-                    if ip_status["state"] == "UN":
-                        up_nodes.append(node)
+            ip_status = status.get(node.ip_address)
+            if ip_status and ip_status["state"] == "UN":
+                up_nodes.append(node)
         return up_nodes
 
     def get_node_status_dictionary(self, ip_address=None, verification_node=None):
@@ -4483,13 +4492,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node_status = None
         if ip_address is None:
             return node_status
-        status = self.get_nodetool_status(verification_node=verification_node)
-        for dc_status in status.values():
-            ip_status = dc_status.get(ip_address)
-            if ip_status:
-                node_status = ip_status
-                break
-        return node_status
+        status = self.get_nodetool_status(verification_node=verification_node, dc_aware=False)
+        return status.get(ip_address, None)
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):  # pylint: disable=too-many-arguments
         @retrying(n=iterations, sleep_time=sleep_time, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
