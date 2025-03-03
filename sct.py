@@ -1263,8 +1263,11 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     try:
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
-        for _, s3_links in logs.items():
+        for log_name, s3_links in logs.items():
             for link in s3_links:
+                if not link:
+                    LOGGER.warning("Link is missing for log %s", log_name)
+                    continue
                 file_name = link.split("/")[-1]
                 log_links.append(LogLink(log_name=file_name, log_link=link))
         argus_client.submit_sct_logs(log_links)
