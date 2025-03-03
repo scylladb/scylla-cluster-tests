@@ -468,7 +468,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             return
 
         for node in self.db_cluster.nodes:
-            scylla_doctor = ScyllaDoctor(node, self.test_config)
+            scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
             scylla_doctor.install_scylla_doctor()
             scylla_doctor.argus_collect_sd_package()
             scylla_doctor.run_scylla_doctor_and_collect_results()
