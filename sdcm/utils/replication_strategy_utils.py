@@ -156,7 +156,7 @@ class DataCenterTopologyRfControl:
 
     def _get_original_nodes_number(self, node: 'BaseNode') -> int:
         # Get the original number of nodes in the data center
-        return len([n for n in self.cluster.data_nodes if n.dc_idx == node.dc_idx])
+        return len([n for n in self.cluster.data_nodes if n.datacenter == node.datacenter])
 
     def _get_keyspaces_to_decrease_rf(self, session) -> list:
         """
@@ -225,8 +225,8 @@ class DataCenterTopologyRfControl:
             replication-factor value.
         """
         node = self.target_node
-        # Ensure that nodes_num is 2 or greater
-        if self.original_nodes_number > 1:
+
+        if self.original_nodes_number > 0:
             with self.cluster.cql_connection_patient(node) as session:
                 decreased_rf_keyspaces = self._get_keyspaces_to_decrease_rf(session=session)
             if decreased_rf_keyspaces:
@@ -242,6 +242,8 @@ class DataCenterTopologyRfControl:
                     LOGGER.error(
                         f"Decreasing keyspace replication factor failed with: ({error}), aborting operation")
                     raise error
+            else:
+                LOGGER.debug("No keyspaces found to decrease the replication factor")
         else:
             LOGGER.error(
                 f"DC {self.datacenter} has {self.original_nodes_number} nodes. Cannot alter replication factor")
