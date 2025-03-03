@@ -20,6 +20,7 @@ import random
 import logging
 import os
 import re
+import sys
 import time
 import traceback
 import unittest
@@ -3287,6 +3288,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             except Exception as exc:  # noqa: BLE001
                 TestFrameworkEvent(
                     message='Failed to check regression',
+                    trace=sys._getframe().f_back,
                     source=self.__class__.__name__,
                     source_method='check_regression',
                     exception=exc
@@ -3311,6 +3313,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(
                 message='Failed to check regression',
+                trace=sys._getframe().f_back,
                 source=self.__class__.__name__,
                 source_method='check_regression',
                 exception=exc
@@ -3334,6 +3337,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(
                 message='Failed to check regression',
+                trace=sys._getframe().f_back,
                 source=self.__class__.__name__,
                 source_method='check_regression',
                 exception=exc
@@ -3363,6 +3367,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(
                 message='Failed to check regression',
+                trace=sys._getframe().f_back,
                 source=self.__class__.__name__,
                 source_method='check_regression',
                 exception=exc
@@ -3379,6 +3384,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(
                 message='Failed to check regression',
+                trace=sys._getframe().f_back,
                 source=self.__class__.__name__,
                 source_method='check_regression',
                 exception=exc
