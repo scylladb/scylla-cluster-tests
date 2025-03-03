@@ -3,25 +3,35 @@ import json
 import logging
 import pprint
 from functools import cached_property
+from textwrap import dedent
+
+import boto3
 
 from argus.client.sct.types import Package
 
 from sdcm.cluster import BaseNode
+from sdcm.remote.remote_file import remote_file
 from sdcm.test_config import TestConfig
 
-LOGGING = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
+
+
+class ScyllaDoctorException(Exception):
+    pass
 
 
 class ScyllaDoctor:
-    SCYLLA_DOCTOR_LATEST_ON_AWS = "https://downloads.scylladb.com/downloads/scylla-doctor/latest"
-    SCYLLA_DOCTOR_EXECUTOR = "scylla_doctor.pyz"
-    SCYLLA_DOCTOR_CONF = "scylla_doctor.conf"
+    SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI = "https://downloads.scylladb.com/"
+    SCYLLA_DOCTOR_OFFLINE_BUCKET_NAME = "downloads.scylladb.com"
+    SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX = "downloads/scylla-doctor/tar/"
+    SCYLLA_DOCTOR_OFFLINE_BIN = "scylla_doctor.pyz"
+    SCYLLA_DOCTOR_OFFLINE_CONF = "scylla_doctor.conf"
 
-    def __init__(self, node: BaseNode, test_config: TestConfig):
+    def __init__(self, node: BaseNode, test_config: TestConfig, offline_install=False):
         self.node = node
         self.test_config = test_config
-        self.scylla_doctor_exec = ""
-        self.scylla_doctor_config = ""
+        self.offline_install = offline_install
+        self.scylla_doctor_exec = "scylla-doctor"
         self.json_result_file = ""
         self.scylla_logs_file = ""
         self.python3_path = ""
@@ -41,38 +51,72 @@ class ScyllaDoctor:
     @cached_property
     def version(self):
         version = self.run(f"{self.scylla_doctor_exec} --version")
-        LOGGING.info("Scylla doctor version: %s", version)
+        LOGGER.info("Scylla doctor version: %s", version)
         return version
+
+    def locate_newest_scylla_doctor_package(self):
+        s3 = boto3.client("s3")
+        packages = s3.list_objects(Bucket=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_NAME,
+                                   Prefix=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX,
+                                   MaxKeys=5000)
+        latest = next(
+            iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None)
+        return latest
+
+    def download_scylla_doctor(self):
+        self.node.install_package('curl')
+        latest_package = self.locate_newest_scylla_doctor_package()
+        if not latest_package:
+            raise ScyllaDoctorException("Unable to find latest scylla-doctor package for offline install")
+
+        package_path = latest_package["Key"]
+        package_filename = package_path.split("/")[-1]
+        LOGGER.info("Downloading %s...", package_filename)
+        self.node.remoter.run(f"curl -JL {self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path} | tar -xvz")
+        self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
+
+    def update_scylla_doctor_config(self, prefix: str):
+        with remote_file(self.node.remoter, f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF}") as f:
+            config = dedent(f"""
+                [DefaultPaths]
+                scylla_directory = {prefix}/scylladb
+                scylla_directory_config = {prefix}/scylladb/etc/scylla
+                scylla_directory_configs = {prefix}/scylladb/etc/scylla.d
+                scylla_directory_var = {prefix}/scylladb
+            """)
+            LOGGER.info("Updating scylla-doctor-config file...\n%s", config)
+
+            f.seek(0)
+            f.truncate()
+            f.write(config)
+        self.scylla_doctor_exec += f" -cf {self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF} "
 
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.run('apt update')
             self.node.install_package('ethtool')
 
-        self.node.install_package('wget')
-        self.node.remoter.run(f"wget {self.SCYLLA_DOCTOR_LATEST_ON_AWS}/{self.SCYLLA_DOCTOR_EXECUTOR}")
-        self.node.remoter.run(f"wget {self.SCYLLA_DOCTOR_LATEST_ON_AWS}/{self.SCYLLA_DOCTOR_CONF}")
-        self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_EXECUTOR}"
-        self.node.remoter.run(f"chmod 774 {self.scylla_doctor_exec}")
-        self.scylla_doctor_config = f"{self.current_dir}/{self.SCYLLA_DOCTOR_CONF}"
-
-        if self.node.is_nonroot_install:
-            self.python3_path = self.find_local_python3_binary(self.current_dir)
-            # TODO: update default paths
+        if self.offline_install:
+            self.download_scylla_doctor()
+            if self.node.is_nonroot_install:
+                self.python3_path = self.find_local_python3_binary(self.current_dir)
+                self.update_scylla_doctor_config(self.current_dir)
+        else:
+            self.node.install_package('scylla-doctor')
 
     def argus_collect_sd_package(self):
         try:
             sd_package = Package(name="scylla-doctor", date="", version=self.version, revision_id="", build_id="")
-            LOGGING.info("Saving Scylla doctor package in Argus...")
+            LOGGER.info("Saving Scylla doctor package in Argus...")
             self.test_config.argus_client().submit_packages([sd_package])
         except Exception:  # pylint: disable=broad-except
-            LOGGING.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
+            LOGGER.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
 
     def find_local_python3_binary(self, user_home: str):
         if not (python3_path := self.node.remoter.run(f"ls {user_home}/scylladb/python3/bin/python3", verbose=False).stdout.strip()):
             python3_path = self.node.remoter.run(
                 "for i in `find scylladb -name python3`;do [ -f $i ] && echo $i;done").stdout.strip()
-        LOGGING.debug("Local python3 binary path: %s", python3_path)
+        LOGGER.debug("Local python3 binary path: %s", python3_path)
         assert python3_path, f"Python3 binary is not found under local Scylla installation '{user_home}/scylladb'"
         return python3_path
 
@@ -99,9 +143,9 @@ class ScyllaDoctor:
                                            f"Scylla doctor version: {self.version}")
 
     def analyze_vitals(self):
-        LOGGING.info("Analyze vitals")
+        LOGGER.info("Analyze vitals")
         result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
-        LOGGING.debug(pprint.pformat(result))
+        LOGGER.debug(pprint.pformat(result))
 
     def filter_out_failed_collectors(self, collector):
         # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
@@ -120,9 +164,9 @@ class ScyllaDoctor:
         return False
 
     def analyze_and_verify_results(self):
-        scylla_doctor_result = json.loads(self.run(f"cat {self.json_result_file}"))
+        scylla_doctor_result = json.loads(self.node.remoter.run(f"cat {self.json_result_file}").stdout.strip())
 
-        LOGGING.debug("Scylla-doctor output: %s", pprint.pformat(scylla_doctor_result))
+        LOGGER.debug("Scylla-doctor output: %s", pprint.pformat(scylla_doctor_result))
 
         failed_collectors = {}
         for collector, value in scylla_doctor_result.items():
