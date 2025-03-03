@@ -20,7 +20,7 @@ from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
-from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
+from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder, ProvisionType
 from sdcm.provision.common.provisioner import TagsType
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
@@ -201,7 +201,8 @@ class ClusterBase(BaseModel):
             fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
             availability_zone=availability_zone,
-            spot_low_price=self._spot_low_price(region_id),
+            spot_low_price=self._spot_low_price(
+                region_id) if self._instance_provision == ProvisionType.SPOT_LOW_PRICE else None,
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 

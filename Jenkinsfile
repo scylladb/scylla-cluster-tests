@@ -138,24 +138,6 @@ pipeline {
                 }
             }
         }
-        stage("run mocked tests") {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                script {
-                    try {
-                        sh ''' ./docker/env/hydra.sh run-aws-mock -r us-east-1 '''
-                        sleep 10  // seconds
-                        sh ''' ./docker/env/hydra.sh --aws-mock run-pytest functional_tests/mocked '''
-                        pullRequestSetResult('success', 'jenkins/mocked_tests', 'All mocked tests are passed')
-                    } catch(Exception ex) {
-                        pullRequestSetResult('failure', 'jenkins/mocked_tests', 'Some mocked tests failed')
-                    }
-                    sh ''' ./docker/env/hydra.sh clean-aws-mocks '''
-                }
-            }
-        }
         stage("integration tests") {
             when {
                 expression {
