@@ -251,7 +251,7 @@ teardown_validators:
 kafka_backend: null
 kafka_connectors: []
 
-run_scylla_doctor: false
+run_scylla_doctor: true
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
