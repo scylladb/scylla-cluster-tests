@@ -3342,6 +3342,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                   node_benchmarks=benchmarks_results,
                                                   email_subject_postfix=self.params.get('email_subject_postfix'))
             except Exception as exc:  # noqa: BLE001
+                self.log.exception("Error while checking regression")
                 TestFrameworkEvent(
                     message='Failed to check regression',
                     source=self.__class__.__name__,
@@ -3366,6 +3367,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                               node_benchmarks=benchmarks_results,
                                               extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
         except Exception as exc:  # noqa: BLE001
+            self.log.exception("Error while checking regression")
             TestFrameworkEvent(
                 message='Failed to check regression',
                 source=self.__class__.__name__,
@@ -3389,6 +3391,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                     is_gce=is_gce,
                                                                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
         except Exception as exc:  # noqa: BLE001
+            self.log.exception("Error while checking regression")
             TestFrameworkEvent(
                 message='Failed to check regression',
                 source=self.__class__.__name__,
@@ -3418,6 +3421,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 subtests_info=subtests_info,
                 subject=email_subject)
         except Exception as exc:  # noqa: BLE001
+            self.log.exception("Error while checking regression")
             TestFrameworkEvent(
                 message='Failed to check regression',
                 source=self.__class__.__name__,
@@ -3434,6 +3438,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             perf_analyzer.check_regression(self._test_id, stats)
         except Exception as exc:  # noqa: BLE001
+            self.log.exception("Error while checking regression")
             TestFrameworkEvent(
                 message='Failed to check regression',
                 source=self.__class__.__name__,
