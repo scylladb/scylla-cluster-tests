@@ -1,5 +1,6 @@
 - AbortRepairMonkey
 - AddDropColumnMonkey
+- AddRemoveDCMonkey
 - AddRemoveDcNemesis
 - AddRemoveMvNemesis
 - AddRemoveRackNemesis
@@ -22,12 +23,14 @@
 - DrainKubernetesNodeThenDecommissionAndAddScyllaNode
 - DrainKubernetesNodeThenReplaceScyllaNode
 - DrainerMonkey
+- DropMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
 - EndOfQuotaNemesis
 - EnospcAllNodesMonkey
 - EnospcMonkey
 - GrowShrinkClusterNemesis
+- GrowShrinkZeroTokenNode
 - HardRebootNodeMonkey
 - LoadAndStreamMonkey
 - MajorCompactionMonkey
@@ -60,6 +63,7 @@
 - RestartThenRepairNodeMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
+- SerialRestartOfElectedTopologyCoordinatorNemesis
 - SlaDecreaseSharesDuringLoad
 - SlaIncreaseSharesByAttachAnotherSlDuringLoad
 - SlaIncreaseSharesDuringLoad
