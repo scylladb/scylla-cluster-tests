@@ -2467,6 +2467,10 @@ class SCTConfiguration(dict):
         self._validate_placement_group_required_values()
         self._instance_type_validation()
 
+        if ((teardown_validators := self.get("teardown_validators.rackaware")) and
+                teardown_validators.get("enabled", False)):
+            self._verify_rackaware_configuration()
+
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
         scylla_version = self.get('scylla_version')
@@ -2915,6 +2919,24 @@ class SCTConfiguration(dict):
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):
             raise ValueError("Scylla Manager is not supported for docker backend")
+
+    def _verify_rackaware_configuration(self):
+        if not self.get("rack_aware_loader"):
+            raise ValueError("'rack_aware_loader' must be set to True for rackaware validator.")
+
+        regions = self.get("simulated_regions") or len(self.region_names)
+        availability_zone = self.get("availability_zone")
+        racks_count = simulated_racks if (simulated_racks := self.get("simulated_racks")) else len(
+            availability_zone.split(",")) if availability_zone else 1
+        if racks_count == 1 and regions == 1:
+            raise ValueError(
+                "Rack-aware validation can only be performed in multi-availability zone or multi-region environments.")
+
+        loaders = sum(int(l) for l in n_loaders.split(" ")) if isinstance(
+            (n_loaders := self.get("n_loaders")), str) else n_loaders
+        zones = racks_count * regions
+        if loaders >= zones:
+            raise ValueError("Rack-aware validation requires zones without loaders.")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
