@@ -3908,6 +3908,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
         return False
 
+    @property
+    def is_rack_aware_validation_enabled(self) -> bool:
+        if not self.is_rack_aware_policy:
+            return False
+
+        count_loaders = sum(len(loaders.nodes) for loaders in self.loaders_multitenant)
+        return count_loaders == 1 and self.db_cluster.racks_count > 1
+
     def get_hdrhistogram(self, hdr_tags: list[str], stress_operation: str,
                          start_time: float, end_time: float) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
