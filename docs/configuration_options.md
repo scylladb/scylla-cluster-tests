@@ -2532,7 +2532,7 @@ Threads amount of c-s load for gradual performance test per sub-test. Example: {
 
 **default:** N/A
 
-**type:** dict
+**type:** dict_or_str
 
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
@@ -2541,7 +2541,16 @@ Used for gradual performance test. Define throttle for load step in ops. Example
 
 **default:** N/A
 
-**type:** dict
+**type:** dict_or_str
+
+
+## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
+
+Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m, 'write': None, 'mixed': '30m'}
+
+**default:** N/A
+
+**type:** dict_or_str
 
 
 ## **skip_download** / SCT_SKIP_DOWNLOAD
