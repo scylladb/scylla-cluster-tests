@@ -27,3 +27,24 @@ def cql_quote_if_needed(identifier: str) -> str:
     if not identifier_regex.match(identifier):
         return f'"{identifier}"'
     return identifier
+
+
+def cql_unquote_if_needed(identifier: str):
+    """
+    This function only removes the quotes if both the first and last characters
+    of the cql_response are double quotes. This ensures that any quotes inside the
+    cql_response remain intact.
+
+    For example:
+      - '"5gb_sizetiered_6_1"' becomes '5gb_sizetiered_6_1'
+      - '5gb_sizetiered_6_1' remains unchanged.
+
+    Args:
+        identifier (str): Raw CQL response that might be quoted.
+
+    Returns:
+        str: The unquoted identifier if the outer quotes are present, otherwise the original response.
+    """
+    if identifier and len(identifier) >= 2 and identifier.startswith('"') and identifier.endswith('"'):
+        return identifier[1:-1]
+    return identifier
