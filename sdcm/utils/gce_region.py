@@ -99,7 +99,7 @@ class GceRegion:
                      network=self.network.self_link),
             Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-node-cql',
                      direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['9042', '9142'])],
+                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['9042', '9142', '19042', '19142'])],
                      source_ranges=["0.0.0.0/0"],
                      network=self.network.self_link),
             Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-prometheus',
