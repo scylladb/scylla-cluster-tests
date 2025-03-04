@@ -1,0 +1,7 @@
+n_db_nodes: 4
+n_loaders: 1
+
+# teardown validators
+teardown_validators:
+  rackaware:
+    enabled: true
