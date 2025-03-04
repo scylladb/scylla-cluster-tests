@@ -39,9 +39,10 @@ post_prepare_cql_cmds: ["CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELE
                         "ALTER TABLE scylla_bench.test with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
                        ]
 
-n_db_nodes: 5
+n_db_nodes: 6
 n_loaders: 5 # Each loader will have 1 scylla-bench process at every step of the test (prepare, verify, stress & stress_read)
 n_monitor_nodes: 1
+simulated_racks: 3
 
 round_robin: true
 
