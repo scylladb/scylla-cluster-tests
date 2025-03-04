@@ -1294,8 +1294,11 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], u
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
         existing_links = [name for [name, _] in argus_client.get_run().get('logs', [])] if update else []
-        for _, s3_links in logs.items():
+        for log_name, s3_links in logs.items():
             for link in s3_links:
+                if not link:
+                    LOGGER.warning("Link is missing for log %s", log_name)
+                    continue
                 file_name = link.split("/")[-1]
                 if update and file_name not in existing_links:
                     LOGGER.info("Adding missing log link %s to Argus...", file_name)
