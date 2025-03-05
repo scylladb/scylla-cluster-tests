@@ -9,6 +9,7 @@ from invoke.exceptions import UnexpectedExit
 from sdcm.cluster import BaseNode
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -155,6 +156,8 @@ class RemoteDocker(BaseNode):
     @staticmethod
     @cache
     def pull_image(node, image):
+        # Login docker-hub before pull, in case node authentication is expired or not logged-in.
+        docker_hub_login(remoter=node.remoter)
         prefix = "sudo" if node.is_docker else ""
         node.remoter.run(
             f'{prefix} docker pull {image}', verbose=True, retry=3)
