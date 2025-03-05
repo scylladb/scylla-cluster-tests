@@ -22,8 +22,8 @@ from test_lib.sla import create_sla_auth
 class LongevitySlaTest(LongevityTest, loader_utils.LoaderUtilsMixin):
     FULLSCAN_SERVICE_LEVEL_SHARES = 600
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
         self.service_level_shares = self.params.get("service_level_shares")
         self.fullscan_role = None
         self.roles = []

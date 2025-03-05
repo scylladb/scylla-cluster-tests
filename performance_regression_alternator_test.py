@@ -20,8 +20,8 @@ from sdcm.utils.decorators import optional_stage
 
 
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
 
         # suppress YCSB client error and timeout to warnings for all the test in this class
         self.stack = contextlib.ExitStack()

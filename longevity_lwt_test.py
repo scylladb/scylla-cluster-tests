@@ -30,8 +30,8 @@ from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 class LWTLongevityTest(LongevityTest):
     BASE_TABLE_PARTITION_KEYS = ['domain', 'published_date']
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
         self.data_validator = None
 
     def run_prepare_write_cmd(self):
