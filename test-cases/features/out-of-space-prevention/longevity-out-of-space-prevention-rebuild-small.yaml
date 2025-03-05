@@ -1,0 +1,18 @@
+test_duration: 720
+# This will fill a 12 x i4i.large cluster to 90% disk usage
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=48000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..480000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=48000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=480000001..960000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=48000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1440000000",
+]
+
+n_db_nodes: 12
+simulated_racks: 3
+instance_type_db: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.large'
+instance_type_monitor: 't3.large'
+
+user_prefix: 'oos-test'
+round_robin: true
