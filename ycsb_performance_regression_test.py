@@ -48,8 +48,8 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
     ]
     records_size: int = 1_000_000
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
         self._create_prepare_cmds(self.ycsb_workloads[0])
 
     def _create_prepare_cmds(self, workload: YcsbWorkload):

@@ -41,8 +41,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
     Latency for every step is received from cassandra-stress HDR file and reported in Argus and email.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
+        super().setUp()
         self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
         self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
 

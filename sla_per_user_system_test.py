@@ -57,8 +57,8 @@ class SlaPerUserTest(LongevityTest):
     MIXED_LOAD = 'mixed'
     WORKLOAD_TYPES_INDEX = "workload_tests"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
+        super().setUp()
         self.prometheus_stats = None
         self.num_of_partitions = 50000000
         self.backgroud_task = None

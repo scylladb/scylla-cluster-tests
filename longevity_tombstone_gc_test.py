@@ -15,8 +15,8 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
     repair_date = None
     db_node = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
+        super().setUp()
         post_prepare_cql_cmds = self.params.get('post_prepare_cql_cmds')
         self.ttl = int(re.search(r'default_time_to_live = (\d+)', post_prepare_cql_cmds).group(1))
         self.propagation_delay = int(

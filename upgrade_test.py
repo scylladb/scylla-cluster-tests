@@ -139,8 +139,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     Test a Scylla cluster upgrade.
     """
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
 
         self.stack = contextlib.ExitStack()
         # ignoring those unsuppressed exceptions, till both ends of the upgrade would have https://github.com/scylladb/scylladb/pull/14681
