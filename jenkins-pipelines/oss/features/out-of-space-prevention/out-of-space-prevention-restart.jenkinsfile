@@ -1,0 +1,11 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: "aws",
+    region: 'eu-west-1',
+    test_name: 'longevity_oos_test.LongevityOutOfSpaceTest.test_oos_restart',
+    test_config: "test-cases/features/out-of-space-prevention/longevity-out-of-space-prevention-restart.yaml",
+)
