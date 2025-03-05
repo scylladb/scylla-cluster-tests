@@ -18,8 +18,8 @@ from sdcm.utils.time_utils import ExecutionTimer
 
 
 class ManagerReportType(Enum):
-    READ = 1
-    BACKUP = 2
+    READ_WRITE = 1
+    BACKUP_RESTORE = 2
 
 
 def parse_backup_size(mgr_cluster, task_id):
@@ -41,13 +41,9 @@ def format_size(size_in_bytes):
 def prepare_server_for_s3(node):
 
     # prepare everything required:
-    # - pkcs11
     # - add object_storage.yaml to scylla.yaml
     # - populate object_storage.yaml with data
     node.remoter.sudo(shell_script_cmd("""\
-    apt install p11-kit p11-kit-modules
-    mkdir /usr/lib64/pkcs11
-    ln -s /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so /usr/lib64/pkcs11/p11-kit-trust.so
     echo 'object_storage_config_file: /etc/scylla/object_storage.yaml\n' >> /etc/scylla/scylla.yaml
     echo 'endpoints:\n  - name: s3.us-east-1.amazonaws.com\n    port: 443\n    https: true\n    aws_region: us-east-1\n    iam_role_arn: arn:aws:iam::797456418907:instance-profile/qa-scylla-manager-backup-instance-profile\n' > /etc/scylla/object_storage.yaml
         """))
@@ -64,10 +60,10 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     base_prefix = ""
 
     def report_to_argus(self, report_type: ManagerReportType, data: dict, label: str):
-        if report_type == ManagerReportType.READ:
+        if report_type == ManagerReportType.READ_WRITE:
             table = ManagerBackupReadResult(sut_timestamp=mgmt.get_scylla_manager_tool(
                 manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
-        elif report_type == ManagerReportType.BACKUP:
+        elif report_type == ManagerReportType.BACKUP_RESTORE:
             table = ManagerBackupBenchmarkResult(sut_timestamp=mgmt.get_scylla_manager_tool(
                 manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
         else:
@@ -120,15 +116,24 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
                 raise ValueError("Unknown stress command")
 
         def get_stress_averages(queue):
+            # prepare the measures
             averages = {'op rate': 0.0, 'partition rate': 0.0, 'row rate': 0.0, 'latency 99th percentile': 0.0}
+
             num_results = 0
+
+            # for each stress result
             for stress in queue:
+                # get all results
                 results = self.get_stress_results(queue=stress)
                 num_results += len(results)
+
+                # sum of averages of all keys
                 for result in results:
                     for key in averages:
                         averages[key] += float(result[key])
+            # commpute average (of averages)
             stats = {key: averages[key] / num_results for key in averages}
+
             return stats
 
         with ExecutionTimer() as stress_timer:
@@ -202,11 +207,14 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         }
         self.report_to_argus(ManagerReportType.BACKUP, backup_report, label)
 
-    def restore(self, scylla_node: BaseNode):
+    def native_restore(self, scylla_node: BaseNode):
+        # take all sstables that were belong to the node
+        # and restore them
         sstables_list = []
         for toc in self.node_sstables[scylla_node.uuid]:
             sstables_list.append(os.path.basename(toc))
 
+        # split into command line allowed length
         chunks = []
         chunk = ""
         for toc in sstables_list:
@@ -218,6 +226,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         if chunk:
             chunks.append(chunk)
 
+        # notool restore
         for chunk in chunks:
             res = scylla_node.run_nodetool(
                 f"restore --endpoint s3.us-east-1.amazonaws.com --bucket manager-backup-tests-us-east-1 --scope node --prefix {self.base_prefix}/{self.snapshot_ids[scylla_node.uuid]} --keyspace keyspace1 --table standard1 {chunk}")
@@ -232,7 +241,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         restore_threads = []
         with ExecutionTimer() as restore_timer:
             for node in self.db_cluster.nodes:
-                thread = threading.Thread(target=self.restore, args=(node,))
+                thread = threading.Thread(target=self.native_restore, args=(node,))
                 restore_threads.append(thread)
                 thread.start()
             for thread in restore_threads:
