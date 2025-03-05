@@ -111,7 +111,7 @@ from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
-from sdcm.utils.context_managers import nodetool_context
+from sdcm.utils.context_managers import nodetool_context, DbNodeLogger
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.decorators import skip_on_capacity_issues
@@ -664,7 +664,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                          regex=".*Connection reset by peer.*",
                                          extra_time_to_expiration=30):
             self.log.info('Kill all scylla processes in %s', self.target_node)
-            self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
+            with DbNodeLogger(self.cluster.nodes, "kill all scylla processes", target_node=self.target_node):
+                self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
             # Wait for the process to be down before waiting for service to be restarted
             self.target_node.wait_db_down(check_interval=2)
@@ -773,11 +774,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_major_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with DbNodeLogger(self.cluster.nodes, "start and stop major compaction", target_node=self.target_node,
+                          additional_info=f"on {compaction_args.keyspace}.{compaction_args.columnfamily}"):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -816,12 +819,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Scrubbing",
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_scrub_compaction)
-
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with DbNodeLogger(self.cluster.nodes, "start and stop scrub compaction", target_node=self.target_node):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -858,11 +861,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Cleaning",
                              stop_func=compaction_args.compaction_ops.stop_cleanup_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with DbNodeLogger(self.cluster.nodes, "start and stop cleanup compaction", target_node=self.target_node):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -898,11 +902,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=compaction_args.timeout,
                              stop_func=compaction_args.compaction_ops.stop_validation_compaction)
 
-        results = ParallelObject.run_named_tasks_in_parallel(
-            tasks={"trigger": trigger_func, "watcher": watch_func},
-            timeout=compaction_args.timeout + 5,
-            ignore_exceptions=True
-        )
+        with DbNodeLogger(self.cluster.nodes, "start and stop validation compaction", target_node=self.target_node):
+            results = ParallelObject.run_named_tasks_in_parallel(
+                tasks={"trigger": trigger_func, "watcher": watch_func},
+                timeout=compaction_args.timeout + 5,
+                ignore_exceptions=True
+            )
 
         self._handle_start_stop_compaction_results(
             trigger_and_watcher_futures=results,
@@ -917,7 +922,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             line="Can't find a column family with UUID", node=self.target_node), \
             DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
                            line="Can't find a column family with UUID", node=self.target_node):
-            self.target_node.restart()
+            with DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node):
+                self.target_node.restart()
 
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.repair_nodetool_repair()
@@ -1188,7 +1194,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                                                         ks_cf_for_destroy=tables)):
                     continue
 
-                result = self.target_node.remoter.sudo('rm -f %s' % file_group_for_destroy)
+                with DbNodeLogger(self.cluster.nodes, "remove data",
+                                  target_node=self.target_node, additional_info=file_group_for_destroy):
+                    result = self.target_node.remoter.sudo('rm -f %s' % file_group_for_destroy)
                 if result.stderr:
                     raise FilesNotCorrupted(
                         'Files were not removed. The nemesis can\'t be run. Error: {}'.format(result))
@@ -1564,7 +1572,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruption_method, node.pod_spec.node_name, node, old_uid,
             [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
              for neighbour_scylla_pod in neighbour_scylla_pods])
-        getattr(node, disruption_method)()
+        with DbNodeLogger(self.cluster.nodes, ' '.join(disruption_method.split('_')), target_node=node):
+            getattr(node, disruption_method)()
         node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
         old_uid = node.k8s_pod_uid
 
@@ -1612,10 +1621,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruption_method, node.pod_spec.node_name, node,
             [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
              for neighbour_scylla_pod in neighbour_scylla_pods])
-        getattr(node, disruption_method)()
+        with DbNodeLogger(self.cluster.nodes, ' '.join(disruption_method.split('_')), target_node=node):
+            getattr(node, disruption_method)()
 
         self.log.info('Decommission %s', node)
-        dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        with DbNodeLogger(self.cluster.nodes, "decommission node", target_node=node):
+            dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
         new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
         if dc_topology_rf_change:
@@ -1859,9 +1870,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         continue
 
                     try:
-                        reach_enospc_on_node(target_node=node)
+                        with DbNodeLogger(self.cluster.nodes, "fill disk space", target_node=node):
+                            reach_enospc_on_node(target_node=node)
                     finally:
-                        clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
+                        with DbNodeLogger(self.cluster.nodes, "clean disk space", target_node=node):
+                            clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
     @target_all_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
@@ -3284,10 +3297,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                                line="Failed to repair",
                                node=self.target_node):
-                self.target_node.remoter.run(
-                    "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
-                    " http://127.0.0.1:10000/storage_service/force_terminate_repair"
-                )
+                with DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node):
+                    self.target_node.remoter.run(
+                        "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                        " http://127.0.0.1:10000/storage_service/force_terminate_repair"
+                    )
                 thread.result(timeout=120)
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
@@ -3567,7 +3581,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             interruptions.append("rate")
         duration = f"{random.choice(list_of_timeout_options)}s"
-        match random.choice(interruptions):
+        interruption = random.choice(interruptions)
+        match interruption:
             case "delay":
                 delay_in_msecs = random.randrange(50, 300)
                 jitter = delay_in_msecs * 0.2
@@ -3595,8 +3610,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             duration, rate_limit, limit)
                 experiment = NetworkBandwidthLimitExperiment(
                     self.target_node, duration, rate=rate_limit, limit=limit, buffer=10000)
-        experiment.start()
-        experiment.wait_until_finished()
+        with DbNodeLogger(self.cluster.nodes, f"network {interruption} interruption", target_node=self.target_node):
+            experiment.start()
+            experiment.wait_until_finished()
         self.cluster.wait_all_nodes_un()
 
     @target_all_nodes
@@ -3655,7 +3671,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             self.target_node.traffic_control(None)
             try:
-                self.target_node.traffic_control(selected_option)
+                with DbNodeLogger(self.cluster.nodes, f"network {option_name} interruption", target_node=self.target_node):
+                    self.target_node.traffic_control(selected_option)
                 time.sleep(wait_time)
             finally:
                 self.target_node.traffic_control(None)
@@ -3664,7 +3681,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
-        experiment.start()
+        with DbNodeLogger(self.cluster.nodes, "block network traffic",
+                          target_node=self.target_node, additional_info=f"for {duration}sec"):
+            experiment.start()
         experiment.wait_until_finished()
         time.sleep(15)
         self.cluster.wait_all_nodes_un()
@@ -3695,7 +3714,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             self.target_node.traffic_control(None)
             try:
-                self.target_node.traffic_control(selected_option)
+                with DbNodeLogger(self.cluster.nodes, "block network traffic",
+                                  target_node=self.target_node, additional_info=f"for {wait_time}sec"):
+                    self.target_node.traffic_control(selected_option)
                 time.sleep(wait_time)
             finally:
                 self.target_node.traffic_control(None)
@@ -4656,13 +4677,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Try to allocate 90% available memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
                                             workers=1, size="90%", time_to_reach=f"{time_to_reach_secs}s")
-        experiment.start()
+        with DbNodeLogger(self.cluster.nodes, "start memory stress",
+                          target_node=self.target_node, additional_info="allocate 90% of available memory"):
+            experiment.start()
         experiment.wait_until_finished()
 
         self.log.info('Try to allocate 100% total memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
                                             workers=1, size="100%", time_to_reach=f"{time_to_reach_secs}s")
-        experiment.start()
+        with DbNodeLogger(self.cluster.nodes, "start memory stress",
+                          target_node=self.target_node, additional_info="allocate 100% of total memory"):
+            experiment.start()
         experiment.wait_until_finished()
 
     @decorate_with_context(ignore_reactor_stall_errors)
@@ -4692,8 +4717,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
 
         self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
-        self.target_node.remoter.run(
-            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
+        with DbNodeLogger(self.cluster.nodes, "start memory stress",
+                          target_node=self.target_node, additional_info="allocate 90% of total memory"):
+            self.target_node.remoter.run(
+                "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
@@ -5134,7 +5161,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
             try:
-                index_name = create_index(session, ks, cf, column)
+                with DbNodeLogger(self.cluster.nodes, "create index",
+                                  target_node=self.target_node, additional_info=f"on {ks}.{cf}.{column}"):
+                    index_name = create_index(session, ks, cf, column)
             except InvalidRequest as exc:
                 LOGGER.warning(exc)
                 raise UnsupportedNemesis(  # pylint: disable=raise-missing-from
@@ -5146,7 +5175,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                               min_duration=300, max_duration=2400)
             finally:
-                drop_index(session, ks, index_name)
+                with DbNodeLogger(self.cluster.nodes, "drop_index",
+                                  target_node=self.target_node, additional_info=f"index: {index_name}"):
+                    drop_index(session, ks, index_name)
 
     @target_data_nodes
     def disrupt_add_remove_mv(self):
