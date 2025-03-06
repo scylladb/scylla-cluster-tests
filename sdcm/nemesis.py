@@ -5822,6 +5822,12 @@ class DecommissionMonkey(Nemesis):
     disruptive = True
     limited = True
     topology_changes = True
+<<<<<<< HEAD
+||||||| parent of 9fa5f825a (fix(90% utilization with nemesis): opt out DecommissionSeedNode)
+    supports_high_disk_utilization = False  # Decommissioning a node consumes disk space
+=======
+    supports_high_disk_utilization = False  # Decommissioning a node cause increase of disk space across rest of the nodes
+>>>>>>> 9fa5f825a (fix(90% utilization with nemesis): opt out DecommissionSeedNode)
 
     def disrupt(self):
         self.disrupt_nodetool_decommission()
@@ -5830,6 +5836,7 @@ class DecommissionMonkey(Nemesis):
 class DecommissionSeedNode(Nemesis):
     disruptive = True
     topology_changes = True
+    supports_high_disk_utilization = False  # Decommissioning a node cause increase of disk space across rest of the nodes
 
     def disrupt(self):
         self.disrupt_nodetool_seed_decommission()
