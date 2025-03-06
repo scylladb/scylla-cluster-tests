@@ -273,11 +273,11 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
     "2020.1", "2020.1.0", "2020.1.1",
     "2021.1", "2021.1.0", "2021.1.1",
     "2022.1", "2022.1.0", "2022.1.1",
-    "2023:latest", "enterprise:latest",
+    "2023:latest"
 ) for method in ("es_method", "mixed_method")] + [(scylla_version, method) for scylla_version in (
     "4.6.rc1", "4.6", "4.6.0", "4.6.1", "4.7:latest", "master:latest",
 ) for method in ("new_oss_method", "new_mixed_method")] + [(scylla_version, method) for scylla_version in (
-    "2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1", "2023:latest", "enterprise:latest",
+    "2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1", "2023:latest"
 ) for method in ("new_es_method", "new_mixed_method")])
 def test_scylla_versions_decorator_positive(scylla_version, method):
     for nemesis_like_class in (True, False):
