@@ -55,9 +55,9 @@ def find_latte_fn_names(stress_cmd):
 def get_latte_operation_type(stress_cmd):
     write_found, read_found = False, False
     for fn in find_latte_fn_names(stress_cmd):
-        if re.findall(r"(?:^|_)(write|insert|update)(?:_|$)", fn):
+        if re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
             write_found = True
-        elif re.findall(r"(?:^|_)(read|select|get)(?:_|$)", fn):
+        elif re.findall(r"(?:^|_)(read|select|get|count)(?:_|$)", fn):
             read_found = True
         else:
             return "user"
