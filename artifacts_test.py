@@ -463,13 +463,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.log.info("Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
             return
 
-        if self.db_cluster.nodes[0].is_nonroot_install and \
-                SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2254", self.params):
-            self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
-            return
-
         for node in self.db_cluster.nodes:
-            scylla_doctor = ScyllaDoctor(node, self.test_config)
+            scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
             scylla_doctor.install_scylla_doctor()
             scylla_doctor.argus_collect_sd_package()
             scylla_doctor.run_scylla_doctor_and_collect_results()
