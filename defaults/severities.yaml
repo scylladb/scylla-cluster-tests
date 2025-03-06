@@ -51,6 +51,7 @@ DatabaseLogEvent.RPC_CONNECTION: WARNING
 DatabaseLogEvent.DATABASE_ERROR: ERROR
 DatabaseLogEvent.STACKTRACE: ERROR
 DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR: WARNING
+DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR: WARNING
 IndexSpecialColumnErrorEvent: ERROR
 CassandraHarryEvent.failure: CRITICAL
 CassandraHarryEvent.error: ERROR
