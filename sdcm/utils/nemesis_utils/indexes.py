@@ -74,18 +74,19 @@ def wait_for_index_to_be_built(node: BaseNode, ks, index_name, timeout=300) -> N
 
 
 def wait_for_view_to_be_built(node: BaseNode, ks, view_name, timeout=300) -> None:
-    LOGGER.info('waiting for view/index %s to be built', view_name)
+    LOGGER.info(f"waiting {timeout} seconds for view/index {view_name} to be built")
     start_time = time.time()
     while time.time() - start_time < timeout:
         result = node.run_nodetool(f"viewbuildstatus {ks}.{view_name}",
                                    ignore_status=True, verbose=False, publish_event=False)
         if f"{ks}.{view_name}_index has finished building" in result.stdout:
             InfoEvent(message=f"Index {ks}.{view_name} was built").publish()
+            return
         if f"{ks}.{view_name} has finished building" in result.stdout:
             InfoEvent(message=f"View/index {ks}.{view_name} was built").publish()
             return
         time.sleep(30)
-    raise TimeoutError(f"Timeout error while creating view/index {view_name}. "
+    raise TimeoutError(f"Timeout error ({timeout} seconds) while creating view/index {view_name}.\n"
                        f"stdout\n: {result.stdout}\n"
                        f"stderr\n: {result.stderr}")
 
