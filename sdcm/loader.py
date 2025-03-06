@@ -176,6 +176,18 @@ class LatteKeyspaceHolder:
     def __str__(self):
         return self._value
 
+    def __repr__(self):
+        return f"LatteKeyspaceHolder({self._value!r})"
+
+    def __getitem__(self, index):
+        return self._value[index]
+
+    def __len__(self):
+        return len(self._value)
+
+    def __iter__(self):
+        return iter(self._value)
+
 
 class LatteExporter(StressExporter):
     def init(self):
@@ -209,8 +221,10 @@ class LatteExporter(StressExporter):
         )
 
     def skip_line(self, line: str) -> bool:
-        if not self.keyspace and 'Keyspace:' in line:
-            self.keyspace.set_value(self.keyspace_regex.match(line).groups()[0])
+        if not self.keyspace and self.keyspace_regex.match(line):
+            ks = self.keyspace_regex.match(line).groups()[0].strip()
+            LOGGER.debug("Found following keyspace in the latte command: '%s'", ks)
+            self.keyspace.set_value(ks)
             return True
 
         # NOTE: all latency data lines consist of digits only.
