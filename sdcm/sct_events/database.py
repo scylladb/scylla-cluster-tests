@@ -47,6 +47,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
     RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
+    RAFT_TOPOLOGY_SENDING_ERROR: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
     COMPACTION_STOPPED: Type[LogEventProtocol]
 
@@ -134,6 +135,20 @@ DatabaseLogEvent.add_subevent_type("RAFT_TRANSFER_SNAPSHOT_ERROR", severity=Seve
                                    regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
                                          r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)")
 
+# scylladb/scylladb#22980
+DatabaseLogEvent.add_subevent_type(
+    "RAFT_TOPOLOGY_SENDING_ERROR",
+    severity=Severity.ERROR,
+    # Feb 20 21:15:35.887314 long-5000-tables-2025-1-db-node-acc227de-2 scylla[5730]:  [shard  0: gms] \
+    #     raft_topology - send_raft_topology_cmd(stream_ranges) failed with exception (node state is bootstrapping): \
+    #     raft::request_aborted (Request aborted while performing action on leader, \
+    #     current leader: fccd43b5-4024-4c2a-853d-88bba7df9fd4, previous leader: unknown)
+    regex=(
+        r"raft_topology.* send_raft_topology_cmd.*"
+        r" failed with exception \(node state is bootstrapping\).*"
+        r" raft::request_aborted.*Request aborted while performing action on leader.*"
+        r"current leader\:.*previous leader\: unknown"))
+
 # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
 DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
                                    regex="Reactor stalled")
@@ -178,6 +193,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
     DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
+    DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
