@@ -1,143 +1,15 @@
 test_duration: 900
+n_monitor_nodes: 1
 n_db_nodes: 8
 n_loaders: 2
-n_monitor_nodes: 1
 
-prepare_write_cmd:
-  # NOTE: --duration in these commands is number of rows that will be written.
-  #       Time gets specified with 's', 'm' or 'h' letters.
-  - >-
-    latte run --tag latte --duration 82286400 --request-timeout 60 --retry-interval '2s,10s'
-    --threads 30 --connections 3 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
-    --function load -P row_count=82286400
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  - >-
-    latte run --tag latte --duration 82286400 --request-timeout 60 --retry-interval '2s,10s'
-    --threads 30 --connections 3 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
-    --function load -P row_count=82286400
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-stress_cmd:
-  # NOTE: 'latte' tag will be used by the log collector code.
-  # 01) T4F10 -> -r 51.5k (~1/2 from 103k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 51500
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F10\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 02) T4F10 -> -r 51.5k (~1/2 from 103k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 51500
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F10\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 03) T4F6 -> -r 29.5k (~1/2 from 59k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 29500
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F6\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 04) T4F6 -> -r 29.5k (~1/2 from 59k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 29500
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F6\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 05) T4F1 -> -r 15.5k (~1/2 from 31k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 60 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 15500
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F1\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 06) T4F1 -> -r 15.5k (~1/2 from 31k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 60 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 15500
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F1\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 07) T4F9  -> -r 11k (~1/2 from 22k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 11000
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F9\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 08) T4F9  -> -r 11k (~1/2 from 22k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 11000
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F9\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 09) T4F7  -> -r 3k (~1/2 from 6k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 3000
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F7\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 10) T4F7  -> -r 3k (~1/2 from 6k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 20 --retry-interval '500ms,5s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 3000
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F7\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 11) T4F2  -> -r 2k (~1/2 from 4k) - part1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 60 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 2000
-    --function custom -P row_count=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F2\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 12) T4F2  -> -r 2k (~1/2 from 4k) - part2
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 60 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 2000
-    --function custom -P row_count=82286400 -P offset=82286400
-    -P print_applied_func_names=2 -P codes="\"T4F2\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 13) T3F4, T3F1 , T5F1 , T5F3 -> -r 500 (= ~ 2k)
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 500
-    --function custom -P row_count=164572800
-    -P print_applied_func_names=2 -P codes="\"T3F1,T3F4 , T5F1,T5F3\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 14) T1F1-5 , T2F1-4 , T3F2-3,T3F5 , T4F3-5,T4F8 , T5F2 -> -r 90 (= ~1.5k)
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 120 --rate 90
-    --function custom -P row_count=164572800 -P print_applied_func_names=2
-    -P codes="\"T1F1-5 , T2F1-4 , T3F2-3,T3F5 , T4F3-5,T4F8 , T5F2\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 15) T4F12 -> -r 1k (2x500), deletion scenario 1 - by 1
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 90 --rate 500
-    --function custom -P row_count=1000000 -P offset=164572800 -P print_applied_func_names=2
-    -P codes="\"T4F12\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-  # 16) T4F13 -> -r 1k, deletion scenario 2 - by many
-  - >-
-    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
-    --sampling 5s --threads 30 --connections 3 --concurrency 90 --rate 1000
-    --function custom -P row_count=1000000 -P offset=165572800 -P print_applied_func_names=2
-    -P codes="\"T4F13\""
-    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
-round_robin: true
 
 gce_instance_type_db: 'n2-highmem-32'
 gce_instance_type_loader: 'e2-highcpu-32'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '029'
-nemesis_interval: 5
+nemesis_interval: 10
 nemesis_during_prepare: true
 
 user_prefix: 'long-custom-d1-wrkld1'
@@ -159,3 +31,184 @@ scylla_d_overrides_files: [
 
 append_scylla_yaml:
   reader_concurrency_semaphore_cpu_concurrency: 10
+
+round_robin: true
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+  - >-
+    latte run --tag latte-prepare-01 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
+    --function t1__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-02 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
+    --function t1__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-03 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
+    --function t2__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-04 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
+    --function t2__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-05 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
+    --function t3__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-06 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
+    --function t3__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-07 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
+    --function t4__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-08 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
+    --function t4__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-09 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
+    --function t5__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  - >-
+    latte run --tag latte-prepare-10 --duration 82286400 --request-timeout 30 --retry-interval '2s,10s'
+    --threads 30 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
+    --function t5__insert -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+
+stress_cmd:
+  # NOTE: 'latte' tag will be used by the log collector code.
+  # 01) T4F10 / t4__get_many_lte -> -r 51.5k (~1/2 from 103k) - part1
+  - >-
+    latte run --tag latte-main-01 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 180 --rate 51500
+    --function t4__get_many_lte -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 02) T4F10 / t4__get_many_lte -> -r 51.5k (~1/2 from 103k) - part2
+  - >-
+    latte run --tag latte-main-02 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 180 --rate 51500
+    --function t4__get_many_lte -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 03) T4F6 / t4__get -> -r 29.5k (~1/2 from 59k) - part1
+  - >-
+    latte run --tag latte-main-03 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 29500
+    --function t4__get -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 04) T4F6 / t4__get -> -r 29.5k (~1/2 from 59k) - part2
+  - >-
+    latte run --tag latte-main-04 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 29500
+    --function t4__get -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 05) T4F1 / t4__insert -> -r 15.5k (~1/2 from 31k) - part1
+  - >-
+    latte run --tag latte-main-05 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 15500
+    --function t4__insert -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 06) T4F1 / t4__insert -> -r 15.5k (~1/2 from 31k) - part2
+  - >-
+    latte run --tag latte-main-06 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 15500
+    --function t4__insert -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 07) T4F9 / t4__get_many_lt -> -r 11k (~1/2 from 22k) - part1
+  - >-
+    latte run --tag latte-main-07 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 11000
+    --function t4__get_many_lt -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 08) T4F9 / t4__get_many_lt -> -r 11k (~1/2 from 22k) - part2
+  - >-
+    latte run --tag latte-main-08 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 11000
+    --function t4__get_many_lt -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 09) T4F7 / t4__get_many_gt -> -r 3k (~1/2 from 6k) - part1
+  - >-
+    latte run --tag latte-main-09 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 3000
+    --function t4__get_many_gt -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 10) T4F7 / t4__get_many_gt -> -r 3k (~1/2 from 6k) - part2
+  - >-
+    latte run --tag latte-main-10 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 3000
+    --function t4__get_many_gt -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 11) T4F2 / t4__update -> -r 2k (~1/2 from 4k) - part1
+  - >-
+    latte run --tag latte-main-11 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 2000
+    --function t4__update -P row_count=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 12) T4F2 / t4__update -> -r 2k (~1/2 from 4k) - part2
+  - >-
+    latte run --tag latte-main-12 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 2000
+    --function t4__update -P row_count=82286400 -P offset=82286400 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 13) T3F4/t3__get -> -r 500
+  - >-
+    latte run --tag latte-main-13 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 500
+    --function t3__get -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 14) T5F3/t5__get -> -r 500
+  - >-
+    latte run --tag latte-main-14 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 500
+    --function t5__get -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 15) T3F1/t3__insert , T5F1/t5__insert -> -r 500 (= ~ 1k)
+  - >-
+    latte run --tag latte-main-15 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 1000
+    --function t3__insert,t5__insert -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 16) T1F1-2 , T2F1-2 , T3F2 , T4F3-5 , T5F2 -> -r 90 (= ~810)
+  - >-
+    latte run --tag latte-main-16 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 810
+    --function t1__insert,t1__update,t2__insert,t2__update,t3__update,t4__update_udt1,t4__update_udt2,t4__update_bool,t5__update
+    -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 17) T1F3-5 , T4F8 -> -r 90 (= ~360)
+  - >-
+    latte run --tag latte-main-17 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 360
+    --function t1__count,t1__get,t1__get_all,t4__get_many_gte
+    -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 18) T2F3-4 , T3F3 , T3F5 -> -r 90 (= ~360)
+  - >-
+    latte run --tag latte-main-18 --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --concurrency 120 --rate 360
+    --function t2__count,t2__get,t3__count,t3__get_all
+    -P row_count=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 19) T4F12/t4__insert_delete_by_1 -> -r 1k (2x500), deletion scenario 1 - by 1
+  - >-
+    latte run --tag latte-main-19 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 90 --rate 500
+    --function t4__insert_delete_by_1 -P row_count=1000000 -P offset=164572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+  # 20) T4F13/t4__insert_delete_by_many -> -r 1k, deletion scenario 2 - by many
+  - >-
+    latte run --tag latte-main-20 --duration 720m --request-timeout 30 --retry-interval '1s,5s'
+    --sampling 5s --threads 30 --concurrency 90 --rate 1000
+    --function t4__insert_delete_by_many -P row_count=1000000 -P offset=165572800 -P print_applied_func_names=2
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
