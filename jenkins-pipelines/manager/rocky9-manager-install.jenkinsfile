@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
-    test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_installed_and_functional',
+    test_name: 'mgmt_cli_test.ManagerInstallationTests.test_manager_installed_and_functional',
     test_config: '''["test-cases/manager/manager-installation-set-distro.yaml", "configurations/manager/rocky9.yaml"]''',
 
     post_behavior_db_nodes: 'destroy',
