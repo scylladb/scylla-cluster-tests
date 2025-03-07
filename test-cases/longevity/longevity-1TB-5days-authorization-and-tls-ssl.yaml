@@ -12,10 +12,11 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replicati
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
 round_robin: true
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 seeds_num: 2
+simulated_racks: 3
 
 instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
@@ -31,6 +32,7 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '031'
 nemesis_interval: 30
 nemesis_filter_seeds: false
+nemesis_add_node_cnt: 3
 
 
 user_prefix: 'longevity-tls-1tb-7d'
