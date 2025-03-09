@@ -46,12 +46,11 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     PARAMS = TestStatsMixin.STRESS_STATS
 
     # pylint: disable=too-many-arguments
-    def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
+    def __init__(self, es_index, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
                  events=None):
         self._es = ES()
         self._conf = self._es.conf  # pylint: disable=protected-access
         self._es_index = es_index
-        self._es_doc_type = es_doc_type
         self._limit = query_limit
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
@@ -70,10 +69,10 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         :param test_id: test id created by performance test
         :return: test results in json format
         """
-        if not self._es.exists(index=self._es_index, doc_type=self._es_doc_type, id=test_id):
+        if not self._es.exists(index=self._es_index, id=test_id):
             self.log.error('Test results not found: {}'.format(test_id))
             return None
-        return self._es.get(index=self._es_index, doc_type=self._es_doc_type, id=test_id)
+        return self._es.get(index=self._es_index, id=test_id)
 
     @staticmethod
     def _get_grafana_screenshot(test_doc):
@@ -252,8 +251,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+    def __init__(self, es_index, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
 
@@ -285,7 +284,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         LOGGER.debug("ES QUERY: %s", query)
         test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
             index=self._es_index,
-            doc_type=self._es_doc_type,
             q=query,
             filter_path=filter_path,
             size=self._limit)
@@ -541,8 +539,8 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get specified performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+    def __init__(self, es_index, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          email_template_fp="", logger=logger, events=events)
 
     def _test_stats(self, test_doc):
@@ -674,8 +672,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):  # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+    def __init__(self, es_index, email_recipients=(), logger=None, events=None):  # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          email_template_fp="results_performance.html", logger=logger, events=events)
 
     @staticmethod
@@ -1512,8 +1510,8 @@ class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceA
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+    def __init__(self, es_index, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          logger=logger, events=events)
         self._email_template_fp = "results_performance_predefined_steps.html"
         self.percentiles = ['percentile_95', 'percentile_99']
@@ -1569,8 +1567,8 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+    def __init__(self, es_index, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
 
     def check_regression(self, test_name, setup_details, test_results) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements

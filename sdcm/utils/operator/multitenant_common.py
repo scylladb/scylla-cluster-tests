@@ -37,7 +37,6 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self.params = copy.deepcopy(params)
         self.kafka_cluster = None
         self.log = logging.getLogger(self.__class__.__name__)
-        self._es_doc_type = "test_stats"
         self._stats = self._init_stats()
         self.test_config = test_config
         self._init_test_duration()

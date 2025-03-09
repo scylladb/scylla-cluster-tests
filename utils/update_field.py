@@ -91,7 +91,7 @@ def update_value(index_name, test_id, new_job_name):
         )
         test_data["test_details"]["job_name"] = new_job_name
         elastic_search.update(   # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
-            index=index_name, id=hit["_id"], doc_type="test_stats", doc=test_data
+            index=index_name, id=hit["_id"], doc=test_data
         )
         click.secho(f"updated {test_data['test_details']['test_id']}", fg="green")
 
