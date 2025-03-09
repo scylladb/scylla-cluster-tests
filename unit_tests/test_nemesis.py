@@ -225,7 +225,19 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_terminate_and_replace_node",
             "disrupt_decommission_streaming_err",
             "disrupt_remove_node_then_add_node",
+<<<<<<< HEAD
             "disrupt_bootstrap_streaming_error"]
+||||||| parent of 0c569b88a (feature(nemesis): node is banned if it was removed from cluster)
+            "disrupt_bootstrap_streaming_error",
+            "disrupt_serial_restart_elected_topology_coordinator"]
+=======
+            "disrupt_bootstrap_streaming_error",
+            "disrupt_serial_restart_elected_topology_coordinator",
+            "disrupt_refuse_connection_with_block_scylla_ports_on_banned_node",
+            "disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node"
+
+        ]
+>>>>>>> 0c569b88a (feature(nemesis): node is banned if it was removed from cluster)
 
     @pytest.fixture(autouse=True)
     def expected_schema_changes_methods(self):
