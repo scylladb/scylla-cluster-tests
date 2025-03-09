@@ -1269,6 +1269,9 @@ class SCTConfiguration(dict):
              help="jobs to compare performance results with, for example if running in staging, "
                   "we still can compare with official jobs"),
 
+        dict(name="perf_simple_query_extra_command", env="SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND", type=str,
+             help="extra command line options to pass to perf_simple_query"),
+
         # PerformanceRegressionUserProfilesTest
         dict(name="cs_user_profiles", env="SCT_CS_USER_PROFILES", type=str_or_list,
              help="cassandra-stress user-profiles list. Executed in test step"),
