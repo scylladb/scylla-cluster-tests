@@ -33,14 +33,14 @@ class AWSInstanceProfile(BaseModel):
 class AWSDiskMappingEbsInfo(BaseModel):
     VolumeType: Literal['standard', 'io1', 'io2', 'gp2', 'sc1', 'st1', 'gp3']
     VolumeSize: int
-    VirtualName: str = None
-    DeleteOnTermination: bool = None
-    Iops: int = None
-    SnapshotId: str = None
-    KmsKeyId: str = None
-    Throughput: int = None
-    OutpostArn: str = None
-    Encrypted: bool = None
+    VirtualName: Optional[str] = None
+    DeleteOnTermination: Optional[bool] = None
+    Iops: Optional[int] = None
+    SnapshotId: Optional[str] = None
+    KmsKeyId: Optional[str] = None
+    Throughput: Optional[int] = None
+    OutpostArn: Optional[str] = None
+    Encrypted: Optional[bool] = None
 
 
 class AWSDiskMapping(BaseModel):
