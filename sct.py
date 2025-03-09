@@ -961,7 +961,7 @@ def perf_regression_report(es_id, emails, es_index, extra_jobs_to_compare):
     if not emails:
         LOGGER.warning("No email recipients. Email will not be sent")
         sys.exit(1)
-    results_analyzer = PerformanceResultsAnalyzer(es_index=es_index, es_doc_type="test_stats",
+    results_analyzer = PerformanceResultsAnalyzer(es_index=es_index,
                                                   email_recipients=emails, logger=LOGGER)
     results_analyzer.check_regression(es_id, extra_jobs_to_compare=extra_jobs_to_compare)
 
@@ -1413,7 +1413,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         # figure out it's a perf tests with multiple emails in single file
         # based on the structure of file
         logs = list_logs_by_test_id(test_results.get('test_id', test_id))
-        reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats',
+        reporter = BaseResultsAnalyzer(es_index=test_id,
                                        email_recipients=email_recipients)
         send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
     else:
@@ -1706,14 +1706,13 @@ def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) 
 
 @cli.command("create-es-index", help="Create ElasticSearch index with mapping ")
 @click.option("-n", "--name", envvar='SCT_ES_INDEX_NAME', required=True, help="ES index name")
-@click.option("-dt", "--doc-type", envvar='SCT_ES_DOC_TYPE', default="")
 @click.option("-f", "--mapping-file", envvar='SCT_MAPPING_FILEPATH', type=click.Path(exists=True),
               required=True, help="Full path to es index mapping file")
-def create_es_index(name: str, doc_type: str, mapping_file: str) -> None:
+def create_es_index(name: str, mapping_file: str) -> None:
     add_file_logger()
 
     mapping_data = get_mapping(mapping_file)
-    create_index(index_name=name, doc_type=doc_type, mappings=mapping_data)
+    create_index(index_name=name, mappings=mapping_data)
 
 
 @cli.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")

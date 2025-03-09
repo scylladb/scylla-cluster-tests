@@ -37,7 +37,7 @@ class PerfSimpleQueryTest(ClusterTester):
                 doc_id_with_timestamp=True)
             if self.create_stats:
                 is_gce = self.params.get('cluster_backend') == 'gce'
-                PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
+                PerfSimpleQueryAnalyzer(self._test_index).check_regression(
                     self._test_id, is_gce=is_gce,
                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
             send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results)

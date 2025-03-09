@@ -107,5 +107,5 @@ class NemesisElasticSearchPublisher:
                 failure_message=data['error']
             ))
 
-        res = self.es.index(index=self.index_name, doc_type='nemesis', body=new_nemesis_data)
+        res = self.es.index(index=self.index_name, body=new_nemesis_data)
         LOGGER.debug(res)

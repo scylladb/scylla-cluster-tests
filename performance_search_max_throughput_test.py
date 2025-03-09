@@ -184,7 +184,6 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
         }
 
         analyzer = SearchBestThroughputConfigPerformanceAnalyzer(es_index=self._test_index,
-                                                                 es_doc_type=self._es_doc_type,
                                                                  email_recipients=self.params.get("email_recipients"))
         analyzer.check_regression(test_name, setup_details=setup_details, test_results=raw_results)
 
