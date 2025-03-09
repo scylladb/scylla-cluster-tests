@@ -470,7 +470,6 @@ class Stats:
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get("test_index")
         self._test_id = kwargs.get("test_id")
-        self._es_doc_type = "test_stats"
         self._stats = {}
         self.test_config = TestConfig()
 
@@ -494,7 +493,6 @@ class Stats:
         try:
             self.elasticsearch.create_doc(
                 index=self._test_index,
-                doc_type=self._es_doc_type,
                 doc_id=self._test_id,
                 body=self._stats,
             )
@@ -509,7 +507,6 @@ class Stats:
         try:
             self.elasticsearch.update_doc(
                 index=self._test_index,
-                doc_type=self._es_doc_type,
                 doc_id=self._test_id,
                 body=data,
             )
@@ -525,7 +522,6 @@ class Stats:
         try:
             return self.elasticsearch.exists(
                 index=self._test_index,
-                doc_type=self._es_doc_type,
                 id=self._test_id,
             )
         except Exception as exc:  # pylint: disable=broad-except
@@ -911,7 +907,6 @@ class TestStatsMixin(Stats):
             try:
                 result = self.elasticsearch.get_doc(
                     index=self._test_index,
-                    doc_type=self._es_doc_type,
                     doc_id=self._test_id,
                 )
             except Exception as exc:  # pylint: disable=broad-except

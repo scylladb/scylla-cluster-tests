@@ -64,7 +64,7 @@ def migrate(old_index_name, dry_run, new_index, days):  # pylint: disable=too-ma
     def post_to_new(doc):
         if dry_run:
             return
-        elastic_search.index(index=new_index, doc_type='nemesis', body=doc)
+        elastic_search.index(index=new_index, body=doc)
 
     res = scan(elastic_search, index=old_index_name, query={"query": {"range": {
         "test_details.start_time": {

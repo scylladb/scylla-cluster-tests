@@ -142,7 +142,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     **runner.benchmark_results
                 }
                 doc_id = f"{self._test_id}-{runner.node_name.split('-')[-1]}"
-                self._es.create_doc(index=ES_INDEX, doc_type=None, doc_id=doc_id, body=results)
+                self._es.create_doc(index=ES_INDEX, doc_id=doc_id, body=results)
             else:
                 LOGGER.debug("No benchmarks results for node: %s", runner.node_name)
 

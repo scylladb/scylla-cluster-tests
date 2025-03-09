@@ -84,7 +84,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
     def __init__(self, email_recipients, db_version=None, es_index=None):
         if not es_index:
             es_index = MICROBENCHMARK_INDEX_NAME
-        super().__init__(es_index=es_index, es_doc_type="microbenchmark", email_recipients=email_recipients,
+        super().__init__(es_index=es_index, email_recipients=email_recipients,
                          email_template_fp="results_microbenchmark.html", query_limit=10000, logger=LOGGER)
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
@@ -359,7 +359,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                                           'excluded': False
                                           })
                         if update_db:
-                            self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
+                            self._es.create_doc(index=self._es_index,
                                                 doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
                         results[test_type] = datastore
             if not results:
@@ -398,7 +398,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             self.log.info(res['_id'])
             self.log.info(res['_source']['test_run_date'])
             self._es.update_doc(index=self._es_index,
-                                doc_type=self._es_doc_type,
                                 doc_id=res['_id'],
                                 body={'excluded': True})
 
@@ -418,7 +417,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
         if doc:
             self._es.update_doc(index=self._es_index,
-                                doc_type=self._es_doc_type,
                                 doc_id=doc['_id'],
                                 body={'excluded': True})
         else:
@@ -472,7 +470,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
         for res in before_date_results:
             self._es.update_doc(index=self._es_index,
-                                doc_type=self._es_doc_type,
                                 doc_id=res['_id'],
                                 body={'excluded': True})
 
@@ -504,7 +501,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                           doc['_source']['versions']['scylla-server']['commit_id'],
                           doc['_source']['test_run_date'])
             self._es.update_doc(index=self._es_index,
-                                doc_type=self._es_doc_type,
                                 doc_id=doc['_id'],
                                 body={'excluded': True})
 

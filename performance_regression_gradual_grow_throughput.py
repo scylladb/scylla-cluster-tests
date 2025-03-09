@@ -257,7 +257,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
     def run_performance_analyzer(self, total_summary):
         perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
             es_index=self._test_index,
-            es_doc_type=self._es_doc_type,
             email_recipients=self.params.get('email_recipients'))
         # Keep next 2 lines for debug purpose
         self.log.debug("es_index: %s", self._test_index)
