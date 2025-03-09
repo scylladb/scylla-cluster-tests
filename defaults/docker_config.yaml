@@ -2,3 +2,4 @@ user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 logs_transport: docker
 use_preinstalled_scylla: true
 docker_image: ''
+scylla_linux_distro: 'centos'

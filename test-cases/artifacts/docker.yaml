@@ -4,6 +4,5 @@ n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
-scylla_linux_distro: 'ubuntu'
 test_duration: 60
 user_prefix: 'artifacts-docker'
