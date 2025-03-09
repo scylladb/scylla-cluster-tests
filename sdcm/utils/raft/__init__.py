@@ -441,6 +441,7 @@ class NoRaft(RaftFeatureOperations):
         ...
 
 
+
 def get_raft_mode(node) -> RaftFeature | NoRaft:
     with node.parent_cluster.cql_connection_patient(node) as session:
         return RaftFeature(node) if is_consistent_cluster_management_feature_enabled(session) else NoRaft(node)
