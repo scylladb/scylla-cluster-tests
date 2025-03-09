@@ -21,10 +21,10 @@ class PerfSimpleQueryTest(ClusterTester):
     @teardown_on_exception
     @log_run_info
     def setUp(self):
+        super().setUp()
+
         if es_index := self.params.get("custom_es_index"):
             self._test_index = es_index
-
-        super().setUp()
 
     def test_perf_simple_query(self):
         perf_simple_query_extra_command = self.params.get('perf_simple_query_extra_command')
