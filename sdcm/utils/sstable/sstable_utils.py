@@ -314,8 +314,19 @@ class SstableUtils:
             self.log.error("Failed to parse SSTable dump JSON for %s: %s", sstable, str(e))
             raise
 
-        self.log.debug("Found %s TTL-expired tombstones for SSTable %s", len(tombstones_deletion_info), sstable)
+        self.log.debug("Found %s TTL-expired tombstones for SSTable [%s] %s", len(
+            tombstones_deletion_info), self.get_sstable_creation_time(sstable), sstable)
         return tombstones_deletion_info
+
+    def get_sstable_creation_time(self, sstable_file_path: str) -> str:
+        try:
+            file_stat = Path(sstable_file_path).stat()
+            create_time = file_stat.st_ctime
+            return datetime.datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S')
+
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.error('Failed to get sstable %s creation date: %s', sstable_file_path, exc)
+            return "unknown"
 
     def verify_post_repair_sstable_tombstones(self, table_repair_date: datetime.datetime, sstable: str):
         """
