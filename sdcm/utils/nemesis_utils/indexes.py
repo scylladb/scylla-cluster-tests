@@ -41,8 +41,9 @@ def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
             return False
 
 
-def get_column_names(session, ks, cf, is_primary_key: bool = False, filter_out_collections: bool = False) -> list:
-    filter_kind = " kind in ('static', 'regular')" if not is_primary_key else "kind in ('partition_key', 'clustering')"
+def get_column_names(session, ks, cf, is_primary_key: bool = False, filter_out_collections: bool = False, filter_out_static_columns: bool = False) -> list:
+    column_types = "'regular'" if filter_out_static_columns else "'static', 'regular'"
+    filter_kind = f" kind in ({column_types})" if not is_primary_key else "kind in ('partition_key', 'clustering')"
     res = session.execute(f"SELECT column_name, type FROM system_schema.columns"
                           f" WHERE keyspace_name = '{ks}'"
                           f" AND table_name = '{cf}'"
@@ -56,8 +57,8 @@ def get_column_names(session, ks, cf, is_primary_key: bool = False, filter_out_c
     return column_names
 
 
-def get_random_column_name(session, ks, cf, filter_out_collections: bool = False) -> str | None:
-    if column_names := get_column_names(session=session, ks=ks, cf=cf, filter_out_collections=filter_out_collections):
+def get_random_column_name(session, ks, cf, filter_out_collections: bool = False, filter_out_static_columns: bool = False) -> str | None:
+    if column_names := get_column_names(session=session, ks=ks, cf=cf, filter_out_collections=filter_out_collections, filter_out_static_columns=filter_out_static_columns):
         return random.choice(column_names)
     return None
 
