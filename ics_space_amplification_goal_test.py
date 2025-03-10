@@ -204,7 +204,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
                 self._run_all_stress_cmds(stress_queue, params)
 
             for stress in stress_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
             InfoEvent(message="Wait for compactions to finish after over-write is done.").publish()
             self.wait_no_compactions_running()

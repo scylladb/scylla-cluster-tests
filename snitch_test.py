@@ -46,7 +46,7 @@ class SnitchTest(ClusterTester):
         stress_cmd = self.params.get('stress_cmd')
         if not skip_optional_stage('main_load'):
             cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd)
-            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.verify_stress_thread(cs_thread_pool)
 
     def check_nodetool_status_output_gce(self):
         result = self.db_cluster.nodes[0].get_nodes_status()

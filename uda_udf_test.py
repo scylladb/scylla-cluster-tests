@@ -51,7 +51,7 @@ class UDAUDFTest(ClusterTester):
         uda_udf_thread = self.run_uda_udf_thread()
 
         # wait for stress to complete
-        self.verify_stress_thread(cs_thread_pool=uda_udf_thread)
+        self.verify_stress_thread(uda_udf_thread)
         self.log.info("Test completed")
 
     def run_uda_udf_thread(self) -> CassandraStressThread:
@@ -67,7 +67,7 @@ class UDAUDFTest(ClusterTester):
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
         pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
-        self.verify_stress_thread(cs_thread_pool=pre_thread)
+        self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 
     def get_email_data(self):

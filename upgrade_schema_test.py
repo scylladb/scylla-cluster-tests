@@ -322,4 +322,4 @@ class UpgradeSchemaTest(ClusterTester):
             cql_client.shutdown()
             cql_client = None
         self.log.info("test_upgrade_schema completed without errors")
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+        self.verify_stress_thread(cs_thread_pool)

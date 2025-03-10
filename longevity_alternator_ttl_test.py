@@ -88,7 +88,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
             self._run_all_stress_cmds(stress_queue, params)
 
             for stress in stress_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
         self.count_sstables_and_partitions_after_major_compaction()
 
@@ -124,7 +124,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
             self.db_cluster.start_nemesis()
 
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
 
         # Enable TTL
         self.alternator.modify_alternator_ttl_spec(enabled=True, node=self.db_cluster.nodes[0])
@@ -137,7 +137,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
 
         self.count_sstables_and_partitions_after_major_compaction()
 
