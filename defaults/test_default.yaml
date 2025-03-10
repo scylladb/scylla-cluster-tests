@@ -40,7 +40,7 @@ reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
 nemesis_interval: 5
-nemesis_add_node_cnt: 1
+nemesis_add_node_cnt: 3
 
 nemesis_filter_seeds: false
 
