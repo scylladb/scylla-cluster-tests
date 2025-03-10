@@ -132,11 +132,11 @@ class GCENode(cluster.BaseNode):
                               zone=self.zone) and \
             super()._set_keep_alive()
 
-    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
         self._refresh_instance_state()
         gce_set_labels(instances_client=self._gce_service,
                        instance=self._instance,
-                       new_labels={"keep": str(duration_in_minutes)},
+                       new_labels={"keep": str(duration_in_hours)},
                        project=self.project,
                        zone=self.zone)
 
