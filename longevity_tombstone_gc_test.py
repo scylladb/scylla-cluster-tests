@@ -4,7 +4,7 @@ import time
 from functools import partial
 
 from longevity_twcs_test import TWCSLongevityTest
-from sdcm.utils.common import ParallelObject, skip_optional_stage
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
@@ -68,14 +68,30 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         self.create_tables_for_scylla_bench()
         self.db_node = self.db_cluster.nodes[0]
+        # ALTER TABLE scylla_bench.test with (according to yaml post_prepare_cql_cmds):
+        # 4 minutes load duration
+        # gc_grace_seconds = 240
+        # default_time_to_live = 240
+        # TimeWindowCompactionStrategy
+        # tombstone_gc 'disabled'
+        # propagation_delay_in_seconds 240
         self.run_post_prepare_cql_cmds()
-        stress_queue = []
-
         stress_cmd = self.params.get('stress_cmd')
-        params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
-        if not skip_optional_stage('main_load'):
-            self._run_all_stress_cmds(stress_queue, params)
 
+        params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
+
+        def _run_and_verify_stress():
+            self.log.info('Run and verify completion of stress command')
+            stress_queue = []
+            self._run_all_stress_cmds(stress_queue, params)
+            for stress in stress_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
+
+        def _wait_a_duration_of_propagation_delay():
+            self.log.info('Wait a duration of propagation_delay_in_seconds')
+            time.sleep(self.propagation_delay)
+
+        _run_and_verify_stress()
         self.log.info('Wait a duration of TTL + propagation_delay_in_seconds')
         time.sleep(self.propagation_delay + self.ttl)
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")
@@ -93,7 +109,8 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
             query = "ALTER TABLE scylla_bench.test with gc_grace_seconds = 864000 " \
                     f"and tombstone_gc = {{'mode': 'repair', 'propagation_delay_in_seconds':'{self.propagation_delay}'}};"
             session.execute(query)
-
+        _wait_a_duration_of_propagation_delay()
+        _run_and_verify_stress()
         self._run_repair_and_major_compaction(wait_propagation_delay=True)
 
         self.log.info("verify no tombstones exist in post-repair-created sstables")
@@ -111,13 +128,9 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         self.log.info('Wait a duration of schema-agreement and propagation_delay_in_seconds')
         self.db_cluster.wait_for_schema_agreement()
-        time.sleep(self.propagation_delay)
+        _wait_a_duration_of_propagation_delay()
         alter_gc_mode_immediate_time = datetime.datetime.now()  # from this point on, all compacted tombstones are GCed.
-        self.log.info('Wait for s-b load to finish')
-        for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
-        self.log.info('Wait a duration of propagation_delay_in_seconds')
-        time.sleep(self.propagation_delay)
+        _run_and_verify_stress()
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")
         self.log.info('Run a major compaction for user-table on node')
         self.db_node.run_nodetool("compact", args=f"{self.keyspace} {self.table}")
