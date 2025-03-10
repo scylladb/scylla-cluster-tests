@@ -122,7 +122,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         self.remoter.stop()
         self.remoter = Remoter(self.system_log)
 
-    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
 
     def _get_private_ip_address(self) -> str:
