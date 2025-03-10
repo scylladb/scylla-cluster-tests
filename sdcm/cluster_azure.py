@@ -90,8 +90,8 @@ class AzureNode(cluster.BaseNode):
         return super()._set_keep_alive()
 
     @retrying(n=6, sleep_time=1)
-    def _set_keep_duration(self, duration_in_minutes: int) -> None:
-        self._instance.add_tags({"keep": str(duration_in_minutes)})
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        self._instance.add_tags({"keep": str(duration_in_hours)})
 
     def _refresh_instance_state(self):
         ip_tuple = ([self._instance.public_ip_address], [self._instance.private_ip_address])
