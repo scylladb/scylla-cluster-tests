@@ -2835,9 +2835,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 compaction_properties = get_table_compaction_info(
                     keyspace=keyspace, table=table, session=session
                 )
+<<<<<<< HEAD
             default_min_ttl, default_max_ttl = calculate_allowed_twcs_ttl_borders(
                 compaction_properties, default_min_ttl
             )
+||||||| parent of e2464d2a9 (fix(nemesis): TTL setter workaround added for non TWCS tables)
+        ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
+=======
+            ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
+        else:
+            ttl_to_set = default_max_ttl
+>>>>>>> e2464d2a9 (fix(nemesis): TTL setter workaround added for non TWCS tables)
 
         value = random.randint(default_min_ttl, default_max_ttl)
 
