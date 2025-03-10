@@ -33,6 +33,7 @@ import itertools
 import json
 import ipaddress
 import shlex
+from decimal import Decimal, ROUND_UP
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime, timezone
@@ -559,10 +560,31 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         ContainerManager.set_all_containers_keep_alive(self)
         return True
 
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        raise NotImplementedError()
+
+=======
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        raise NotImplementedError()
+
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
     def set_keep_alive(self):
         node_type = None if self.parent_cluster is None else self.parent_cluster.node_type
         if self.test_config.should_keep_alive(node_type) and self._set_keep_alive():
             self.log.info("Keep this node alive")
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+        else:
+            # same extra time as in getJobTimeouts.groovy (collection + resources cleanup + sending email report)
+            self._set_keep_duration(self.test_config.TEST_DURATION + 125)
+=======
+        else:
+            # same extra time as in getJobTimeouts.groovy (collection + resources cleanup + sending email report)
+            self._set_keep_duration(
+                int(Decimal((self.test_config.TEST_DURATION + 125) / 60).quantize(Decimal("1"), ROUND_UP)))
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
 
     @property
     def short_hostname(self):

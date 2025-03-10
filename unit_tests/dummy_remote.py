@@ -80,6 +80,16 @@ class LocalNode(BaseNode):
     def check_spot_termination(self):
         pass
 
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        pass
+
+=======
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        pass
+
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
     def restart(self):
         pass
 

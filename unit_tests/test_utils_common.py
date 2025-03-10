@@ -125,6 +125,16 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         self.remoter.stop()
         self.remoter = Remoter(self.system_log)
 
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        pass
+
+=======
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        pass
+
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
     def _get_private_ip_address(self) -> str:
         return '127.0.0.1'
 

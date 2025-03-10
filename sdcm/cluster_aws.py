@@ -559,6 +559,18 @@ class AWSNode(cluster.BaseNode):
         self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": "alive"}])
         return super()._set_keep_alive()
 
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[
+                                      {"Key": "keep", "Value": str(duration_in_minutes)}])
+
+=======
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[
+                                      {"Key": "keep", "Value": str(duration_in_hours)}])
+
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
     @property
     def vm_region(self):
         return self._ec2_service.meta.client.meta.region_name

@@ -89,6 +89,18 @@ class AzureNode(cluster.BaseNode):
         self._instance.add_tags({"keep": "alive"})
         return super()._set_keep_alive()
 
+<<<<<<< HEAD
+||||||| parent of a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
+    @retrying(n=6, sleep_time=1)
+    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+        self._instance.add_tags({"keep": str(duration_in_minutes)})
+
+=======
+    @retrying(n=6, sleep_time=1)
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        self._instance.add_tags({"keep": str(duration_in_hours)})
+
+>>>>>>> a5b3d9bb6 (fix(keep_duration): pass along the keep:duration tags as hours)
     def _refresh_instance_state(self):
         ip_tuple = ([self._instance.public_ip_address], [self._instance.private_ip_address])
         return ip_tuple
