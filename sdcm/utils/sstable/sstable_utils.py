@@ -152,8 +152,7 @@ class SstableUtils:
             self.log.debug("Found %d tombstones in SSTable %s", num_tombstones, sstable)
             return num_tombstones
         else:
-            self.log.debug("Failed to count tombstones in %s dump: %s", sstable, result.stderr)
-            return 0
+            raise ValueError(f"Failed to count tombstones in {sstable} dump: {result.stderr}")
 
     def verify_a_live_normal_node_is_used(self):
         if not self.db_node:
@@ -190,10 +189,23 @@ class SstableUtils:
 
         table_repair_date = datetime.datetime.strptime(self.get_table_repair_date(), '%Y-%m-%d %H:%M:%S')
         now = datetime.datetime.now()
-        delta_repair_date_minutes = ((now - table_repair_date).seconds - self.propagation_delay_in_seconds) // 60
-        self.log.debug('Found table-repair-date: %s, Ended %s minutes ago',
-                       table_repair_date, delta_repair_date_minutes)
+        gross_delta_sec = (now - table_repair_date).seconds
+        propagation_delay_subtraction_delta_sec = gross_delta_sec - self.propagation_delay_in_seconds
+        delta_repair_date_minutes = propagation_delay_subtraction_delta_sec // 60
+        self.log.debug('The neto delta in minutes is: %s', delta_repair_date_minutes)
         return table_repair_date, delta_repair_date_minutes
+
+    def _does_sstable_exist(self, sstable: str) -> bool:
+        # Check if SSTable exists
+        check_cmd = f"sudo test -f {sstable}"
+        result = self.db_node.remoter.run(check_cmd, verbose=False, ignore_status=True)
+
+        if result.exit_status != 0:  # File does not exist
+            self.log.debug("SSTable %s does not exist on node: %s", sstable, self.db_node.name)
+            return False
+        else:
+            self.log.debug("SStable %s exists on node: %s", sstable, self.db_node.name)
+            return True
 
     def _run_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
         """
@@ -204,11 +216,7 @@ class SstableUtils:
         :return: True if dump command executed successfully, False if SSTable does not exist.
         """
         # Check if SSTable exists
-        check_cmd = f"sudo test -f {sstable}"
-        result = self.db_node.remoter.run(check_cmd, verbose=False, ignore_status=True)
-
-        if result.exit_status != 0:  # File does not exist
-            self.log.debug("SSTable %s does not exist. Skipping dump.", sstable)
+        if not self._does_sstable_exist(sstable=sstable):
             return False
 
         # Proceed with dump command
@@ -272,13 +280,10 @@ class SstableUtils:
         tombstones_deletion_info = []
         try:
             if dump_data := self._get_sstable_dump_data(sstable=sstable):
-
                 # Get the list of records for the given SSTable
                 sstable_data = dump_data['sstables'].get(sstable, [])
-
                 # Extract entries that contain a tombstone
                 tombstones_deletion_info = [entry for entry in sstable_data if 'tombstone' in entry]
-
         except json.JSONDecodeError as e:
             self.log.error("Failed to parse SSTable dump JSON for %s: %s", sstable, str(e))
             raise
@@ -295,6 +300,7 @@ class SstableUtils:
         """
         tombstones_deletion_info = []
         try:
+            sstable_creation_time = self.get_sstable_creation_time(sstable)
             if dump_data := self._get_sstable_dump_data(sstable=sstable):
                 # Iterate over all partitions in the given SSTable
                 for sstable_data in dump_data.get("sstables", {}).values():
@@ -314,8 +320,26 @@ class SstableUtils:
             self.log.error("Failed to parse SSTable dump JSON for %s: %s", sstable, str(e))
             raise
 
-        self.log.debug("Found %s TTL-expired tombstones for SSTable %s", len(tombstones_deletion_info), sstable)
+        self.log.debug("Found %s TTL-expired tombstones for SSTable [%s] %s", len(
+            tombstones_deletion_info), sstable_creation_time, sstable)
         return tombstones_deletion_info
+
+    def get_sstable_creation_time(self, sstable_file_path: str) -> str:
+        # Check if SSTable exists
+        if not self._does_sstable_exist(sstable=sstable_file_path):
+            return "unknown"
+        else:
+            try:
+                # "stat -c %W" gives the file creation time (birth time)
+                get_ctime_cmd = f"sudo stat -c %W {sstable_file_path}"
+                result = self.db_node.remoter.run(get_ctime_cmd, verbose=False)
+
+                create_time = int(result.stdout.strip())
+                return datetime.datetime.fromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S')
+
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                self.log.error('Failed to get sstable %s creation date: %s', sstable_file_path, exc)
+                return "unknown"
 
     def verify_post_repair_sstable_tombstones(self, table_repair_date: datetime.datetime, sstable: str):
         """
