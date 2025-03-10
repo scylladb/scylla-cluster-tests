@@ -3722,6 +3722,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("On K8S nodes get removed differently. Skipping.")
 
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/21815', params=self.tester.params):
+            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
+            context_manager = ignore_stream_mutation_fragments_errors
+        else:
+            context_manager = contextlib.nullcontext()
+
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
 
@@ -3747,7 +3753,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             host_id = remove_node_host_id
 
-        with ignore_ycsb_connection_refused():
+        with ignore_ycsb_connection_refused(), context_manager():
             # node stop and make sure its "DN"
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
 
