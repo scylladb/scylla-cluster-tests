@@ -26,9 +26,6 @@ round_robin: true
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['topology_changes']
-nemesis_interval: 5
-nemesis_filter_seeds: false
-nemesis_add_node_cnt: 3
 
 seeds_num: 3
 
