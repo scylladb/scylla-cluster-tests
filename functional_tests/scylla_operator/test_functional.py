@@ -1054,7 +1054,7 @@ def test_cloud_bundle_connectivity_scylla_bench(tester):
     )
 
     stress_obj = tester.run_stress_thread(cmd, stop_test_on_failure=False)
-    summaries, errors = stress_obj.verify_results()
+    summaries, errors = stress_obj.parse_results()
     assert not errors
     assert summaries[0]["Clustering row size"] == "Uniform(min=10, max=20)"
 

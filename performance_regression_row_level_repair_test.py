@@ -229,7 +229,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                                                                       node.private_ip_address)
             self.log.info("Run stress command of: {}".format(distinct_write_cmd))
             stress_thread = self.run_stress_thread(stress_cmd=distinct_write_cmd, round_robin=True)
-            self.verify_stress_thread(cs_thread_pool=stress_thread)
+            self.verify_stress_thread(stress_thread)
             self.start_all_nodes()
             sequence_current_index += sequence_range
 

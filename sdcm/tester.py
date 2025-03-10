@@ -2001,7 +2001,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
                                                 duration=duration)
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+        self.verify_stress_thread(cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
@@ -2327,23 +2327,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
             self.loaders.kill_stress_thread()
 
-    def verify_stress_thread(self, cs_thread_pool):
-        if isinstance(cs_thread_pool, dict):
-            results = self.get_stress_results_bench(queue=cs_thread_pool)
-            errors = []
-        else:
-            results, errors = cs_thread_pool.verify_results()
+    def verify_stress_thread(self, thread_pool, error_handler=None):
+        results, errors = thread_pool.parse_results()
         if results and self.create_stats:
             self.update_stress_results(results)
         if not results:
             self.log.warning('There is no stress results, probably stress thread has failed.')
-        # Sometimes, we might have an epic error messages list
-        # that will make small machines driving the test
-        # to run out of memory when writing the XML report. Since
-        # the error message is merely informational, let's simply
-        # use the last 5 lines for the final error message.
-        errors = errors[-5:]
-        if errors:
+
+        if error_handler:
+            error_handler(results, errors)
+        elif errors := errors[-5:]:
+            # Sometimes, we might have an epic error messages list
+            # that will make small machines driving the test
+            # to run out of memory when writing the XML report. Since
+            # the error message is merely informational, let's simply
+            # use the last 5 lines for the final error message.
             self.log.warning("cassandra-stress errors on nodes:\n%s", "\n".join(errors))
         return results and not errors
 
@@ -3190,7 +3188,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if blocking:
             for stress in write_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
         return write_queue
 

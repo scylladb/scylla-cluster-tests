@@ -227,7 +227,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
 
         if self.partitions_attrs and self.partitions_attrs.validate_partitions:
             self.partitions_attrs.validate_rows_per_partitions(ignore_limit_rows_number=True)
@@ -382,7 +382,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
             self._run_all_stress_cmds(stress_queue, params=batch_params)
             for stress in stress_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
         stress_queue = []
@@ -402,7 +402,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmds_with_all_ips,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
             for stress in stress_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
     @property
     def all_node_ips_for_stress_command(self):

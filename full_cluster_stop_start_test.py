@@ -15,10 +15,10 @@ class FullClusterStopStart(ClusterTester):
         if not skip_optional_stage('main_load'):
             stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
             self.get_stress_results(queue=stress_queue)
-            self.verify_stress_thread(cs_thread_pool=stress_queue)
+            self.verify_stress_thread(stress_queue)
             # verify read
             stress_read = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
-            self.verify_stress_thread(cs_thread_pool=stress_read)
+            self.verify_stress_thread(stress_read)
         # stop all nodes
         nodes = self.db_cluster.nodes
         for node in nodes:
@@ -37,5 +37,5 @@ class FullClusterStopStart(ClusterTester):
 
         if not skip_optional_stage('main_load'):
             stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
-            self.verify_stress_thread(cs_thread_pool=stress_queue)
+            self.verify_stress_thread(stress_queue)
         self.verify_no_drops_and_errors(starting_from=start_time)

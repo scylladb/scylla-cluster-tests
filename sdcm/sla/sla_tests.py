@@ -203,7 +203,7 @@ class SlaTests(Steps):
     def verify_stress_threads(tester, stress_queue):
         for stress in stress_queue:
             try:
-                tester.verify_stress_thread(cs_thread_pool=stress)
+                tester.verify_stress_thread(stress)
             except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error("Stress verifying failed. Error: %s", error)
 
