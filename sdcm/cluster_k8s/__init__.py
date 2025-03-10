@@ -1802,7 +1802,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def _init_port_mapping(self):
         pass
 
-    def _set_keep_duration(self, duration_in_minutes: int):
+    def _set_keep_duration(self, duration_in_hours: int):
         pass
 
     @property
