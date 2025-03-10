@@ -7,13 +7,13 @@ aws:
       expected_timeout: 1800  # 30 minutes
       snapshots:
         us-east-1:
-          sm_20240812150136UTC:
-            keyspace_name: "5gb_sizetiered_2024_2_0_rc1"
-            scylla_version: "2024.2.0~rc1"
+          sm_20250206093521UTC:
+            keyspace_name: "5gb_stcs_quorum_64_16_2024_2_4"
+            scylla_version: "2024.2.4"
             scylla_product: "enterprise"
             number_of_nodes: 3
             # Recording cluster_id which is required for snapshots cleanup from the bucket in the future
-            cluster_id: "36d35f0b-2f9c-4df4-8d24-3a5093cf07d3"
+            cluster_id: "baac78e2-4b60-4a5b-8d16-6bbf9d70321a"
           sm_20240812150350UTC:
             keyspace_name: "5gb_sizetiered_6_0"
             scylla_version: "6.0.2"
@@ -38,12 +38,12 @@ aws:
       expected_timeout: 3600  # 60 minutes
       snapshots:
         us-east-1:
-          sm_20241010102035UTC:
-            keyspace_name: "10gb_sizetiered_2024_2_0_rc3"
-            scylla_version: "2024.2.0~rc3"
+          sm_20250206093952UTC:
+            keyspace_name: "10gb_stcs_quorum_64_16_2024_2_4"
+            scylla_version: "2024.2.4"
             scylla_product: "enterprise"
             number_of_nodes: 3
-            cluster_id: "c5ae2ea7-72f3-4350-85d4-7956c1837b8a"
+            cluster_id: "064c2b1c-99ad-4e7d-b3ad-0fd9591edd39"
           sm_20240812150801UTC:
             keyspace_name: "10gb_sizetiered_6_0"
             scylla_version: "6.0.2"
@@ -68,12 +68,12 @@ aws:
       expected_timeout: 18000  # 300 minutes
       snapshots:
         us-east-1:
-          sm_20240812162646UTC:
-            keyspace_name: "100gb_sizetiered_2024_2_0_rc1"
-            scylla_version: "2024.2.0~rc1"
+          sm_20250206102841UTC:
+            keyspace_name: "100gb_stcs_quorum_64_16_2024_2_4"
+            scylla_version: "2024.2.4"
             scylla_product: "enterprise"
             number_of_nodes: 3
-            cluster_id: "ebeab8af-cde8-492c-a7ee-d71b88872e4c"
+            cluster_id: "4d9e8d6c-ffb5-4a13-83f0-adb4f5298e44"
           sm_20240812164539UTC:
             keyspace_name: "100gb_sizetiered_6_0"
             scylla_version: "6.0.2"
@@ -98,12 +98,12 @@ aws:
       expected_timeout: 132000  # 2200 minutes
       snapshots:
         us-east-1:
-          sm_20240904154553UTC:
-            keyspace_name: "2tb_sizetiered_2024_2_0_rc1"
-            scylla_version: "2024.2.0~rc1"
+          sm_20250206145422UTC:
+            keyspace_name: "2048gb_stcs_quorum_64_16_2024_2_4"
+            scylla_version: "2024.2.4"
             scylla_product: "enterprise"
             number_of_nodes: 3
-            cluster_id: "adb4afb6-27fe-4b26-914e-4f5cc3551955"
+            cluster_id: "f6c0b53d-100b-4410-aec9-07be11b3a224"
           sm_20240905214537UTC:
             keyspace_name: "2tb_sizetiered_6_0"
             scylla_version: "6.0.2"
