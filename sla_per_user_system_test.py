@@ -888,7 +888,7 @@ class SlaPerUserTest(LongevityTest):
                 **self._comparison_results
             }
         }
-        self._es.create_doc(index="workload_types", doc_type="test_stats",
+        self._es.create_doc(index="workload_types",
                             doc_id=self.test_id, body=es_body)
         self.log.info("C-s comparison uploaded to ES.")
 

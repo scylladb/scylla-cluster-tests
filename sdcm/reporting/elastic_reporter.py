@@ -49,7 +49,7 @@ class ElasticRunReporter:
             "build_number": build_number,
         }
 
-        self._es.create(index=index, document=document, id=run_id, doc_type="sct_test_run_short_v1")
+        self._es.create(index=index, document=document, id=run_id)
         return True
 
     def _check_index(self, index_name: str):

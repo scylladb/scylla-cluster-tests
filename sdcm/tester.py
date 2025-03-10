@@ -3313,7 +3313,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         end_time = time.time()
         analyzer = LatencyDuringOperationsPerformanceAnalyzer
         results_analyzer = analyzer(es_index=self._test_index,
-                                    es_doc_type=self._es_doc_type,
                                     email_recipients=self.params.get(
                                         'email_recipients'),
                                     events=get_events_grouped_by_category(
@@ -3352,7 +3351,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
-                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -3376,7 +3374,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_regression_with_baseline(self, subtest_baseline):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
-                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -3400,7 +3397,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_regression_multi_baseline(self, subtests_info=None,  # pylint: disable=inconsistent-return-statements
                                         metrics=None, email_subject=None):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
-                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -3428,7 +3424,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index,
-                                                          es_doc_type=self._es_doc_type,
                                                           email_recipients=self.params.get('email_recipients'),
                                                           events=get_events_grouped_by_category(
                                                               _registry=self.events_processes_registry))

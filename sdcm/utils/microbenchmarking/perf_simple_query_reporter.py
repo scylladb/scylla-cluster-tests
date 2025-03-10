@@ -26,8 +26,8 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
 
     collect_last_scylla_date_count = 10
 
-    def __init__(self, es_index, es_doc_type):
-        super().__init__(es_index, es_doc_type, query_limit=1000, logger=None)
+    def __init__(self, es_index):
+        super().__init__(es_index, query_limit=1000, logger=None)
 
     def _get_perf_simple_query_result(self, test_doc):
         if not keys_exists(test_doc, "_source", "results", "perf_simple_query_result"):

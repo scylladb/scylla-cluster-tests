@@ -2472,6 +2472,15 @@ jobs to compare performance results with, for example if running in staging, we 
 **type:** str_or_list_or_eval (appendable)
 
 
+## **perf_simple_query_extra_command** / SCT_PERF_SIMPLE_QUERY_EXTRA_COMMAND
+
+extra command line options to pass to perf_simple_query
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **cs_user_profiles** / SCT_CS_USER_PROFILES
 
 cassandra-stress user-profiles list. Executed in test step
