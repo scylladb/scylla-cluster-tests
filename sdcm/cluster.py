@@ -32,6 +32,7 @@ import itertools
 import json
 import ipaddress
 import shlex
+from decimal import Decimal, ROUND_UP
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime
@@ -541,7 +542,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         ContainerManager.set_all_containers_keep_alive(self)
         return True
 
-    def _set_keep_duration(self, duration_in_minutes: int) -> None:
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
         raise NotImplementedError()
 
     def set_keep_alive(self):
@@ -550,7 +551,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.log.info("Keep this node alive")
         else:
             # same extra time as in getJobTimeouts.groovy (collection + resources cleanup + sending email report)
-            self._set_keep_duration(self.test_config.TEST_DURATION + 125)
+            self._set_keep_duration(
+                int(Decimal((self.test_config.TEST_DURATION + 125) / 60).quantize(Decimal("1"), ROUND_UP)))
 
     @property
     def short_hostname(self):
