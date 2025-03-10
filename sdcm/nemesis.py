@@ -5134,7 +5134,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
             ks, cf = random.choice(ks_cf_list).split('.')
-            column = get_random_column_name(session, ks, cf)
+            column = get_random_column_name(session, ks, cf, filter_out_static_columns=True)
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
             try:
@@ -5180,7 +5180,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
                 # selecting a supported column for creating a materialized-view (not a collection type).
                 column = get_random_column_name(session=session, ks=ks_name,
-                                                cf=base_table_name, filter_out_collections=True)
+                                                cf=base_table_name, filter_out_collections=True, filter_out_static_columns=True)
                 if not column:
                     raise UnsupportedNemesis(
                         'A supported column for creating MV is not found. nemesis can\'t run')
