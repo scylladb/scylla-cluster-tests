@@ -314,6 +314,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 scylla_pkg = 'scylla'
                 scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
                 InfoEvent(message='Rollback mode is set to reinstall').publish()
+                self.upgrade_rollback_mode = "reinstall"
+
                 if self.params.get('use_preinstalled_scylla'):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image"
 
