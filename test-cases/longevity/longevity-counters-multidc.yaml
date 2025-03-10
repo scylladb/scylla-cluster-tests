@@ -18,7 +18,6 @@ space_node_threshold: 6442
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '011'
 nemesis_interval: 15
-nemesis_add_node_cnt: 3
 
 server_encrypt: true
 internode_encryption: 'dc'

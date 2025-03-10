@@ -14,7 +14,6 @@ pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication =
 
 n_db_nodes: 3
 simulated_racks: 3
-nemesis_add_node_cnt: 3
 n_loaders: 4
 n_monitor_nodes: 1
 nemesis_grow_shrink_instance_type: 'i4i.large'
@@ -26,7 +25,6 @@ instance_type_db: 'i4i.large'
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['supports_high_disk_utilization']
 nemesis_seed: '019'
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'elasticity-test-nemesis'
