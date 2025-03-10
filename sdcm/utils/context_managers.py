@@ -12,6 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 
 import os
+import time
 from contextlib import contextmanager
 
 
@@ -43,3 +44,52 @@ def nodetool_context(node, start_command, end_command):
         yield result
     finally:
         node.run_nodetool(end_command)
+
+
+class DbNodeLogger:
+    """A context manager for logging the start, end and duration of the given operation in system log of database nodes.
+
+    Example usage:
+        with DbNodeLogger([node1, node2], "create index", target_node=self.target_node,
+                          additional_info=f"on {ks}.{cf}.{column}"):
+            index_name = create_index(session, ks, cf, column)
+    """
+
+    def __init__(self, nodes, operation_name, target_node=None, additional_info=None):
+        """Initialize the logger with the operation details.
+
+        :param nodes (list): list of nodes to log messages to
+        :param operation_name (str): name of the operation being performed
+        :param target_node (BaseNode, optional): the node the operation is being performed on
+        :param additional_info (str, optional): additional information about the operation
+        """
+        self.nodes = nodes
+        self.operation_name = operation_name
+        self.target_node = target_node
+        self.additional_info = additional_info
+        self.start_time = None
+
+    def __enter__(self):
+        self.start_time = time.time()
+        message = f"executing {self.operation_name}"
+        if self.target_node:
+            message += f" on {self.target_node.name} [{self.target_node.private_ip_address}]"
+        if self.additional_info:
+            message += f" - {self.additional_info}"
+
+        for node in self.nodes:
+            node.log_message(message)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = time.time() - self.start_time
+        status = "failed" if exc_type else "completed"
+        message = f"{self.operation_name} {status} after {duration:.2f}s"
+        if self.target_node:
+            message += f" on {self.target_node.name} [{self.target_node.private_ip_address}]"
+        if exc_val:
+            message += f" - Error: {exc_val}"
+
+        for node in self.nodes:
+            node.log_message(message)
+        return False
