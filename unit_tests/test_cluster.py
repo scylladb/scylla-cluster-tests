@@ -345,6 +345,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
 
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
+        self.node.is_product_enterprise = True
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
