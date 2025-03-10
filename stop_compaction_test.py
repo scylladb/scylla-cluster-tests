@@ -395,7 +395,7 @@ class StopCompactionTestICS(ClusterTester):
                             "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native " \
                             "-rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
         prepare = self.run_stress_thread(stress_cmd=populate_data_cmd, round_robin=True)
-        self.verify_stress_thread(cs_thread_pool=prepare)
+        self.verify_stress_thread(prepare)
 
     def test_stop_major_compaction(self):
         """Verifying data loss on stopping compaction by reading inserted"""
@@ -409,4 +409,4 @@ class StopCompactionTestICS(ClusterTester):
                      " -rate threads=40 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
         verify = self.run_stress_thread(stress_cmd=verify_cmd, round_robin=True)
-        self.verify_stress_thread(cs_thread_pool=verify)
+        self.verify_stress_thread(verify)

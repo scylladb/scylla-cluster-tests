@@ -59,7 +59,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
 
     check_metrics()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -90,7 +90,7 @@ def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, par
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -150,7 +150,7 @@ def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_addre
 
     check_metrics()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 

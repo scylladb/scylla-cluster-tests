@@ -2002,7 +2002,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         stress_cmd = self._cs_add_node_flag(stress_cmd)
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
                                                 duration=duration)
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+        self.verify_stress_thread(cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
@@ -2328,24 +2328,42 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
             self.loaders.kill_stress_thread()
 
-    def verify_stress_thread(self, cs_thread_pool):
-        if isinstance(cs_thread_pool, dict):
-            results = self.get_stress_results_bench(queue=cs_thread_pool)
-            errors = []
+    def verify_stress_thread(self, thread_pool: list, error_handler: callable = None) -> bool:
+        """
+        Waits for all provided stress threads to be completed, parses their results, and determines whether
+        stress commands have completed successfully in ALL threads.
+
+        An optional error handler can be provided to execute a custom post-stress action if errors are detected.
+        For example, if a 'prepare test table' pre-condition stress command fails, the handler can be used to abort the
+        nemesis early and prevent proceeding with the main stress.
+
+        :param thread_pool: list, a pool of stress threads to wait for completion
+        :param error_handler: (optional) callable, a custom handler for stress errors
+
+        :return: bool, indication whether all stress threads have completed successfully
+        """
+        results, errors = thread_pool.parse_results()
+        if results:
+            if self.create_stats:
+                self.update_stress_results(results)
         else:
-            results, errors = cs_thread_pool.verify_results()
-        if results and self.create_stats:
-            self.update_stress_results(results)
-        if not results:
             self.log.warning('There is no stress results, probably stress thread has failed.')
-        # Sometimes, we might have an epic error messages list
-        # that will make small machines driving the test
-        # to run out of memory when writing the XML report. Since
-        # the error message is merely informational, let's simply
-        # use the last 5 lines for the final error message.
-        errors = errors[-5:]
+
+        if error_handler:
+            error_handler(thread_pool, errors)
         if errors:
-            self.log.warning("cassandra-stress errors on nodes:\n%s", "\n".join(errors))
+            # Sometimes, we might have an epic error messages list
+            # that will make small machines driving the test
+            # to run out of memory when writing the XML report. Since
+            # the error message is merely informational, let's simply
+            # use the last 5 lines for the final error message.
+            if isinstance(errors, dict):
+                filtered_errors = {k: v[-5:] for k, v in errors.items() if v}
+                errors_msg = "\n".join(
+                    f"{node}:\n  " + "\n  ".join(err_list) for node, err_list in filtered_errors.items())
+            elif isinstance(errors, list):
+                errors_msg = "\n  ".join(errors[-5:])  # Use last 5 entries from the list
+            self.log.warning("stress errors on nodes:\n%s", errors_msg)
         return results and not errors
 
     def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
@@ -3191,7 +3209,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if blocking:
             for stress in write_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_thread(stress)
 
         return write_queue
 

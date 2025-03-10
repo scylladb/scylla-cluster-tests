@@ -80,7 +80,7 @@ def test_01_kcl_with_ycsb(
     compare_sizes.run()
     compare_sizes.get_results()
 
-    output = ycsb_thread.get_results()
+    output, _ = ycsb_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 

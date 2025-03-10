@@ -253,7 +253,7 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         else:
             self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
         stress_run_time = datetime.now() - stress_start_time
         InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
 
@@ -268,7 +268,7 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
             stress_queue.append(_thread)
 
         for _thread in stress_queue:
-            assert self.verify_stress_thread(cs_thread_pool=_thread), "Stress thread verification failed"
+            assert self.verify_stress_thread(_thread), "Stress thread verification failed"
 
 
 class ClusterOperations(ClusterTester):
@@ -817,7 +817,7 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
             read_stress_list.append(stress_command)
         for stress in read_stress_list:
             read_thread = self.run_stress_thread(stress_cmd=stress, round_robin=False)
-            self.verify_stress_thread(cs_thread_pool=read_thread)
+            self.verify_stress_thread(read_thread)
 
     def test_restore_backup_with_task(self, ks_names: list = None):
         self.log.info('starting test_restore_backup_with_task')
@@ -1843,7 +1843,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
 
         with ExecutionTimer() as stress_timer:
             for stress in stress_queue:
-                assert self.verify_stress_thread(cs_thread_pool=stress), "Read stress command"
+                assert self.verify_stress_thread(stress), "Read stress command"
         InfoEvent(message=f'Read stress duration: {stress_timer.duration}s.').publish()
 
         read_stress_report = {

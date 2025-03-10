@@ -118,6 +118,3 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
 
             return loader, result, stress_event
-
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]

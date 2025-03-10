@@ -116,7 +116,7 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         alter_gc_mode_immediate_time = datetime.datetime.now()  # from this point on, all compacted tombstones are GCed.
         self.log.info('Wait for s-b load to finish')
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
         self.log.info('Wait a duration of propagation_delay_in_seconds')
         time.sleep(self.propagation_delay)
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")

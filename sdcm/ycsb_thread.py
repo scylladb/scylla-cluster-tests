@@ -323,6 +323,3 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 ycsb_finish_event.publish()
 
         return loader, result, ycsb_failure_event or ycsb_finish_event
-
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]

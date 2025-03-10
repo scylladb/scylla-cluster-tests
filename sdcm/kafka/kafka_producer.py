@@ -359,7 +359,7 @@ class KafkaProducerThread(KafkaThreadBase):
     def kill(self) -> None:
         self.stop()
 
-    def verify_results(self) -> (list[dict | None], list[str | None]):
+    def parse_results(self) -> (list[dict | None], list[str | None]):
         self.join(self.timeout)
         errors = []
         if self.undelivered_count > 0:
@@ -464,7 +464,7 @@ class KafkaValidatorThread(KafkaThreadBase):
     def stop(self) -> None:
         self.termination_event.set()
 
-    def verify_results(self) -> (list[dict | None], list[str | None]):
+    def parse_results(self) -> (list[dict | None], list[str | None]):
         self.join(self.timeout)
         errors = []
         if self.mismatches:

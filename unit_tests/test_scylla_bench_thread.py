@@ -56,7 +56,7 @@ def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
 
     bench_thread.run()
 
-    summaries, errors = bench_thread.verify_results()
+    summaries, errors = bench_thread.parse_results()
 
     assert not errors
     assert summaries[0]["Clustering row size"] == "Uniform(min=10, max=20)"

@@ -95,4 +95,4 @@ class ClusterConfigurationTests(ClusterTester):
         if not skip_optional_stage('main_load'):
             # run a workload
             cs_thread_pool = self.run_stress_thread(stress_cmd=base_cmd_w)
-            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.verify_stress_thread(cs_thread_pool)

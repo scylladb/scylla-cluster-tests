@@ -110,7 +110,7 @@ class GrowClusterTest(ClusterTester):
             self.db_cluster.start_nemesis()
 
         if not skip_optional_stage('main_load'):
-            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.verify_stress_thread(cs_thread_pool)
 
     def test_grow_x_to_y(self):
         """
@@ -182,5 +182,5 @@ class GrowClusterTest(ClusterTester):
             # Kill c-s when decommission is done
             self.kill_stress_thread()
 
-            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.verify_stress_thread(cs_thread_pool)
             self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
