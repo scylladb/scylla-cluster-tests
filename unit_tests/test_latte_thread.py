@@ -98,7 +98,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 
     check_metrics()
 
-    output = latte_thread.get_results()
+    output, _ = latte_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -130,7 +130,7 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
 
     latte_thread.run()
 
-    output = latte_thread.get_results()
+    output, _ = latte_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 

@@ -265,8 +265,8 @@ class TestStressThread(BaseSCTEventsTest):
         logging.info("killing")
         Node().remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}', ignore_status=True)
 
-        logging.info(cstress.verify_results())
-        logging.info(cstress1.verify_results())
+        logging.info(cstress.parse_results())
+        logging.info(cstress1.parse_results())
 
     @staticmethod
     def test_02():

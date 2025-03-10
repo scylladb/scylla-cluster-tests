@@ -97,13 +97,30 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
 
         return results
 
-    def verify_results(self):
+    def parse_results(self) -> tuple[list, dict]:
+        """
+        Parses the raw results from the finished stress threads
+
+        :returns: tuple of (results, errors) lists, where:
+            - results: list of results from the stress threads that finished successfully
+            - errors: dict of errors, where the key is the loader name and the value is a list of errors
+                occurred on that loader
+        """
         results = []
-        errors = []
-        timeout = self.hard_timeout + 120
-        LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
-            results.append(future.result())
+        errors = {}
+
+        stress_results = self.get_results()
+        for loader, result, event in stress_results:
+            if result:
+                if hasattr(self, '_parse_stress_summary'):
+                    output = result.stdout + result.stderr
+                    if stress_summary := self._parse_stress_summary(output.splitlines()):
+                        results.append(stress_summary)
+                else:
+                    results.append(result)
+
+            if event and getattr(event, 'errors', None):
+                errors.setdefault(loader.name, []).extend(event.errors)
 
         return results, errors
 

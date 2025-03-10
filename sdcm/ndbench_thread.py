@@ -175,6 +175,3 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                 ndbench_finish_event.publish()
 
         return loader, result, ndbench_failure_event or ndbench_finish_event
-
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]

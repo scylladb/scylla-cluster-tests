@@ -212,7 +212,7 @@ class LoaderUtilsMixin:
         self._run_all_stress_cmds(stress_queue, params=params)
 
         for queue in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=queue)
+            self.verify_stress_thread(queue)
 
         return stress_queue
 
@@ -282,7 +282,7 @@ class LoaderUtilsMixin:
         # Wait on the queue till all threads come back.
         # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
         for stress in write_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
 
         # Run nodetool flush on all nodes to make sure nothing left in memory
         # I decided to comment this out for now, when we found the data corruption bug, we wanted to be on the safe
@@ -299,7 +299,7 @@ class LoaderUtilsMixin:
                                                                 'keyspace_num': keyspace_num})
 
                 for stress in verify_queue:
-                    self.verify_stress_thread(cs_thread_pool=stress)
+                    self.verify_stress_thread(stress)
 
             self.run_post_prepare_cql_cmds()
 

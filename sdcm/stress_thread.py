@@ -22,7 +22,6 @@ from pathlib import Path
 
 from sdcm.db_stats import get_stress_cmd_params
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
-from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
@@ -249,7 +248,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         os.makedirs(loader.logdir, exist_ok=True)
 
         # This tag will be output in the header of c-stress result,
-        # we parse it to know the loader & cpu info in _parse_cs_summary().
+        # we parse it to know the loader & cpu info in _parse_stress_summary().
         stress_cmd_opt = self.stress_cmd.split("cassandra-stress", 1)[1].split(None, 1)[0]
 
         log_id = self._build_log_file_id(loader_idx, cpu_idx, keyspace_idx)
@@ -379,47 +378,76 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         return self
 
-    def get_results(self) -> list[dict | None]:
-        ret = []
-        results = super().get_results()
+    def _parse_stress_summary(self, lines: list) -> dict:
+        """
+        Parsing c-s results, only parse the summary results.
+        Collect results of all nodes and return a dictionaries' list,
+        the new structure data will be easy to parse, compare, display or save.
+        """
+        results = {}
+        enable_parse = False
 
-        for _, result, event in results:
-            if not result:
-                # Silently skip if stress command threw error, since it was already reported in _run_stress
+        for line in lines:
+            line = line.strip()  # noqa: PLW2901
+            if not line:
                 continue
-            output = result.stdout + result.stderr
-            try:
-                lines = output.splitlines()
-                node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
-                if node_cs_res:
-                    ret.append(node_cs_res)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                event.add_error([f"Failed to process stress summary due to {exc}"])
-                event.severity = Severity.CRITICAL
-                event.event_error()
-
-        return ret
-
-    def verify_results(self) -> (list[dict | None], list[str | None]):
-        cs_summary = []
-        errors = []
-
-        results = super().get_results()
-
-        for node, result, _ in results:
-            if not result:
-                # Silently skip if stress command threw error, since it was already reported in _run_stress
+            # Parse loader & cpu info
+            if line.startswith('TAG:'):
+                # TAG: loader_idx:1-cpu_idx:0-keyspace_idx:1
+                ret = re.findall(r"TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
+                results['loader_idx'] = ret[0][0]
+                results['cpu_idx'] = ret[0][1]
+                results['keyspace_idx'] = ret[0][2]
                 continue
-            output = result.stdout + result.stderr
-            lines = output.splitlines()
-            node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
-            if node_cs_res:
-                cs_summary.append(node_cs_res)
-            for line in lines:
-                if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
+            if line.startswith('Username:'):
+                # Mode:
+                # ...
+                #   Username: null
+                #   Password: null
+                results['username'] = line.split('Username:')[1].strip()
+            if line.startswith('Results:'):
+                # Results:
+                # Op rate                   :    9,999 op/s  [WRITE: 9,999 op/s]
+                # Partition rate            :    9,999 pk/s  [WRITE: 9,999 pk/s]
+                # Row rate                  :    9,999 row/s [WRITE: 9,999 row/s]
+                # ....
+                enable_parse = True
+                continue
+            if line == '':
+                continue
+            if line == 'END':
+                break
+            if not enable_parse:
+                continue
+            split_idx = line.find(':')
+            if split_idx < 0:
+                continue
+            # Op rate                   :    9,999 op/s  [WRITE: 9,999 op/s]
+            # Partition rate            :    9,999 pk/s  [WRITE: 9,999 pk/s]
+            # Row rate                  :    9,999 row/s [WRITE: 9,999 row/s]
+            # Latency mean              :    1.1 ms [WRITE: 1.1 ms]
+            # Latency median            :    0.6 ms [WRITE: 0.6 ms]
+            # Latency 95th percentile   :    2.3 ms [WRITE: 2.3 ms]
+            # Latency 99th percentile   :    5.4 ms [WRITE: 5.4 ms]
+            # Latency 99.9th percentile :   23.7 ms [WRITE: 23.7 ms]
+            # Latency max               : 15787.4 ms [WRITE: 15,787.4 ms]
+            # Total partitions          : 108,000,096 [WRITE: 108,000,096]
+            # Total errors              :          0 [WRITE: 0]
+            # Total GC count            : 0
+            # Total GC memory           : 0.000 KiB
+            # Total GC time             :    0.0 seconds
+            key = line[:split_idx].strip().lower()
+            value = line[split_idx + 1:].split()[0].replace(",", "")
+            results[key] = value
+            match = re.findall(r'\[READ:\s([\d,]+\.\d+)\sms,\sWRITE:\s([\d,]+\.\d)\sms\]', line)
+            if match:  # parse results for mixed workload
+                results['%s read' % key] = match[0][0]
+                results['%s write' % key] = match[0][1]
 
-        return cs_summary, errors
+        if not enable_parse:
+            LOGGER.warning('Cannot find summary in c-stress results: %s', lines[-10:])
+            return {}
+        return results
 
 
 stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')

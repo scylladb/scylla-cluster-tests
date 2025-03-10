@@ -142,7 +142,7 @@ class ThroughputLimitFunctionalTest(ClusterTester):
     def _measure_latency_and_ops(self, stress_cmd: str, conditions: str = ""):
         # investigate if we shouldn't aggregate results param or round robin when more loaders is added
         stress_thread: CassandraStressThread = self.run_stress_thread(stress_cmd=stress_cmd)
-        cs_summary, errors = stress_thread.verify_results()
+        cs_summary, errors = stress_thread.parse_results()
         LOGGER.debug(cs_summary)
         result = PerfResult(latency_99=float(cs_summary[0]["latency 99th percentile"]),
                             ops=float(cs_summary[0]["op rate"]))

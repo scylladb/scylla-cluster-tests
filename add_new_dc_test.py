@@ -57,8 +57,8 @@ class TestAddNewDc(LongevityTest):
 
         if not skip_optional_stage('main_load'):
             # wait for stress to complete
-            self.verify_stress_thread(cs_thread_pool=read_thread)
-            self.verify_stress_thread(cs_thread_pool=write_thread)
+            self.verify_stress_thread(read_thread)
+            self.verify_stress_thread(write_thread)
 
         self.verify_data_can_be_read_from_new_dc(new_node)
         self.log.info("Test completed.")
@@ -78,7 +78,7 @@ class TestAddNewDc(LongevityTest):
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
         pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
-        self.verify_stress_thread(cs_thread_pool=pre_thread)
+        self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 
     def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
@@ -107,7 +107,7 @@ class TestAddNewDc(LongevityTest):
         self.log.info("Veryfing if data has been transferred successfully to the new DC")
         stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"
         end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
-        self.verify_stress_thread(cs_thread_pool=end_stress)
+        self.verify_stress_thread(end_stress)
 
     def querying_new_node_should_return_no_data(self, new_node: BaseNode) -> None:
         self.log.info("Verifying if querying new node with RF=0 returns no data and does not crash the node. #8354")

@@ -219,7 +219,7 @@ class SlaPerUserTest(LongevityTest):
         self._run_all_stress_cmds(read_queue, params=params)
 
         for queue in read_queue:
-            self.verify_stress_thread(cs_thread_pool=queue)
+            self.verify_stress_thread(queue)
 
         return read_queue
 

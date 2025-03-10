@@ -42,4 +42,4 @@ def test_01_cassandra_harry(docker_scylla, params):
 
     harry_thread.run()
 
-    harry_thread.verify_results()
+    harry_thread.parse_results()

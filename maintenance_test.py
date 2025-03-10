@@ -42,7 +42,7 @@ class MaintainanceTest(ClusterTester):
         if not skip_optional_stage('main_load'):
             # Kill c-s when done
             self.kill_stress_thread()
-            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.verify_stress_thread(cs_thread_pool)
 
     def test_drain(self):
         """
