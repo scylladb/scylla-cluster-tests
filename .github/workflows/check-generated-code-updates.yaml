@@ -1,0 +1,112 @@
+name: Check generated code is up-to-date
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+
+jobs:
+  check_org_membership:
+    runs-on: ubuntu-latest
+    outputs:
+      isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
+    steps:
+      - name: Check user for team affiliation
+        uses: tspascoal/get-user-teams-membership@v3
+        id: teamAffiliation
+        with:
+          GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+          username: ${{ github.actor }}
+          team: 'dev'
+
+  run_validations:
+    runs-on: ubuntu-latest
+    needs: check_org_membership
+    if: needs.check_org_membership.outputs.isTeamMember == 'true'
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+
+      - name: generate nemesis list
+        id: generate_nemesis_list
+        run: |
+          bash ./docker/env/hydra.sh python -m pytest unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis
+          if  git diff --stat --exit-code; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "### identified changes in generated code" > pr_comment.txt
+            echo "diff found by running:" >> pr_comment.txt
+            echo '`bash ./docker/env/hydra.sh python -m pytest unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis`:' >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+            echo "$(git diff --stat)" >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+          fi
+
+      - name: Post comment on PR
+        uses: peter-evans/create-or-update-comment@v4
+        if: steps.generate_nemesis_list.outputs.success == 'false'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: pr_comment.txt
+
+      - name: generate configuration docs
+        id: generate_configuration_docs
+        run: |
+          git reset --hard
+          bash ./docker/env/hydra.sh update-conf-docs
+          if  git diff --stat --exit-code; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "### identified changes in generated code" > pr_comment.txt
+            echo "diff found by running:" >> pr_comment.txt
+            echo '`bash ./docker/env/hydra.sh update-conf-docs`' >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+            echo "$(git diff --stat)" >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+          fi
+
+      - name: Post comment on PR
+        uses: peter-evans/create-or-update-comment@v4
+        if: steps.generate_configuration_docs.outputs.success == 'false'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: pr_comment.txt
+
+      - name: generate individual nemesis pipelines
+        id: nemesis_pipelines
+        run: |
+          git reset --hard
+          bash ./docker/env/hydra.sh create-nemesis-pipelines
+          if  git diff --stat --exit-code; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "## identified changes in generated code" > pr_comment.txt
+            echo "diff found by running:" >> pr_comment.txt
+            echo '`bash ./docker/env/hydra.sh create-nemesis-pipelines`' >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+            echo "$(git diff --stat)" >> pr_comment.txt
+            echo '```' >> pr_comment.txt
+          fi
+
+      - name: Post comment on PR
+        uses: peter-evans/create-or-update-comment@v4
+        if: steps.nemesis_pipelines.outputs.success == 'false'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: pr_comment.txt
