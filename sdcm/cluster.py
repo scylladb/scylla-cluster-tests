@@ -3347,7 +3347,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
         os.makedirs(self.logdir, exist_ok=True)
 
-    def nodes_by_region(self, nodes=None) -> dict:
+    def nodes_by_region(self, nodes=None) -> dict[str, list[BaseNode]]:
         """:returns {region_name: [list of nodes]}"""
         nodes = nodes if nodes else self.nodes
         grouped_by_region = defaultdict(list)

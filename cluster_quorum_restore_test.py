@@ -2,176 +2,195 @@ import random
 import warnings
 from typing import Tuple, List
 
-from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement
-import pytest  # pylint: disable=no-name-in-module
 
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode, NodeSetupFailed, NodeSetupTimeout
+from sdcm.exceptions import ReadBarrierErrorException
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.decorators import optional_stage, skip_on_capacity_issues
 from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
-from sdcm.exceptions import ReadBarrierErrorException
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
+from sdcm.sct_events.system import InfoEvent
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 
 class TestClusterQuorum(LongevityTest):
     """Test for procedure:
-     https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
+     TODO: link to 'Preventing Quorum Loss in Symmetrical Multi-DC Clusters'
      """
 
-    def test_add_new_dc_with_zero_nodes(self):
-        self.log.info("Starting add new DC with zero nodes test...")
-        assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
-        system_keyspaces = ["system_distributed", "system_traces"]
-        # auth-v2 is used when consistent topology is enabled
+    def test_add_arbitor_dc_with_zero_node(self):
         if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
-            system_keyspaces.insert(0, "system_auth")
+            raise Exception("Raft consistent topology changes feature have to be enabled")
 
+        assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
+        arbiter_dcx = len(self.params.get('n_db_nodes').split()) - 1  # choose latest dc with 0 nodes as arbiter dc
+
+        InfoEvent("Prepare keyspace1 with cassandra-stress command").publish()
         self.prewrite_db_with_data()
 
-        status = self.db_cluster.get_nodetool_status()
+        region_dc_mapping = self.db_cluster.get_datacenter_name_per_region(db_nodes=self.db_cluster.data_nodes)
+        data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
 
+        InfoEvent("Reconfigure system and user-defined keyspaces").publish()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
-            keyspaces=system_keyspaces + ["keyspace1"],
-            replication_factors={dc: len(status[dc].keys()) for dc in status}
+            keyspaces=["system_distributed", "system_traces", "keyspace1"],
+            replication_factors={region_dc_mapping[region]: len(
+                data_nodes_per_region[region]) for region in data_nodes_per_region}
         )
 
-        self.log.info("Running repair on all nodes")
-        for node in self.db_cluster.nodes:
+        InfoEvent("Running repair on all data nodes").publish()
+        for node in self.db_cluster.data_nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        # Stop all nodes in 1st dc and check that raft quorum is lost
+        regions = list(region_dc_mapping.keys())
+        dead_region = regions[0]
+        alive_region = regions[1]
 
-        status = self.db_cluster.get_nodetool_status()
-        nodes_to_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
-        regions = list(nodes_to_region.keys())
-        target_dc_name = regions[0]
-        alive_dc_name = regions[1]
-        for node in nodes_to_region[target_dc_name]:
+        InfoEvent("Run backgroud workload")
+        read_thread, write_thread = self.start_background_stress_commands(
+            node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
+
+        InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
+        for node in data_nodes_per_region[dead_region]:
             node.stop_scylla()
 
-        node = nodes_to_region[alive_dc_name][0]
-        with pytest.raises(ReadBarrierErrorException):
-            node.raft.call_read_barrier()
+        InfoEvent("Validate raft quorom is lost").publish()
+        verification_node = data_nodes_per_region[alive_region][0]
+        assert not self.is_raft_quorum_exists(
+            verification_node), "Quorum is preserved. Cluster DC are not symmetric, not all nodes were stopped. Check logs for further investigation"
 
-        # Start all nodes in 1st dc
-        for node in nodes_to_region[target_dc_name]:
+        InfoEvent(f"Start all nodes in dc {region_dc_mapping[dead_region]}").publish()
+        for node in data_nodes_per_region[dead_region]:
             node.start_scylla()
-
         self.db_cluster.wait_all_nodes_un()
 
         # Add new dc with zero node only
-        new_node = self.add_zero_node_in_new_dc()
+        InfoEvent("Add arbitter dc with single zero node").publish()
+        arbitor_dc_node = self.add_zero_node_to_dc(dc_idx=arbiter_dcx)
+        assert arbitor_dc_node.region == self.params.region_names[
+            arbiter_dcx], f"Zero toke node {arbitor_dc_node.name} was added to region {arbitor_dc_node.dc_idx}:{arbitor_dc_node.region} but expected to {self.params.region_names[arbiter_dcx]}"
 
-        status = self.db_cluster.get_nodetool_status()
-        node_host_ids = []
-        node_for_termination = []
-
-        nodes_to_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
-        regions = list(nodes_to_region.keys())
-        target_dc_name = regions[0]
-        for node in nodes_to_region[target_dc_name]:
-            node_host_ids.append(node.host_id)
-            node_for_termination.append(node)
+        InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
+        hostid_dead_node_mapping = {}
+        for node in data_nodes_per_region[dead_region]:
+            hostid_dead_node_mapping[node.host_id] = node
             node.stop_scylla()
 
-        # check that raft quorum is not lost
-        new_node.raft.call_read_barrier()
-        # restore dc1
+        InfoEvent("Validate raft quorom is preserved").publish()
+        assert self.is_raft_quorum_exists(verification_node=arbitor_dc_node), "No raft quorum, Check the logs"
 
-        def remove_one_replace_other_nodes_in_DC1():
-            new_node.run_nodetool(
-                sub_cmd=f"removenode {node_host_ids[0]} --ignore-dead-nodes {','.join(node_host_ids[1:])}")
+        InfoEvent("Replace all data nodes").publish()
+        self.replace_nodes_by_host_id(dead_node_mapping=hostid_dead_node_mapping, verification_node=arbitor_dc_node)
 
-            self.replace_cluster_node(new_node,
-                                      node_host_ids[1],
-                                      nodes_to_region[target_dc_name][-1].dc_idx,
-                                      dead_node_hostids=node_host_ids[2])
+        InfoEvent("Rebuild and repair data on new nodes").publish()
+        data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
 
-            self.replace_cluster_node(new_node,
-                                      node_host_ids[2],
-                                      nodes_to_region[target_dc_name][-1].dc_idx)
+        self.log.info("Running rebuild  in restored DC")
+        for node in data_nodes_per_region[dead_region]:
+            node.run_nodetool(sub_cmd=f"rebuild -- {region_dc_mapping[alive_region]}", publish_event=True)
 
-            # bootstrap new node in 1st dc
-            new_data_node = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 3)
-            for node in node_for_termination:
-                self.db_cluster.terminate_node(node)
+        self.log.info("Running repair on all data nodes")
+        for node in self.db_cluster.data_nodes:
+            node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-            self.db_cluster.wait_all_nodes_un()
-            status = self.db_cluster.get_nodetool_status()
-            self.log.info("Running rebuild  in restored DC")
-            new_data_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+        InfoEvent("Verify data on restored DC nodes").publish()
+        self.verify_data_can_be_read_from_dc(verification_node=data_nodes_per_region[dead_region][0])
+        # wait for stress to complete
+        self.verify_stress_thread(cs_thread_pool=read_thread)
+        self.verify_stress_thread(cs_thread_pool=write_thread)
 
-            self.log.info("Running repair on all nodes")
-            for node in self.db_cluster.nodes:
-                node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+        self.log.info("Test completed.")
 
-            self.verify_data_can_be_read_from_new_dc(new_data_node)
-            self.log.info("Test completed.")
+        # def remove_one_replace_other_nodes_in_DC1():
+        #     arbitor_dc_node.run_nodetool(
+        #         sub_cmd=f"removenode {node_host_ids[0]} --ignore-dead-nodes {','.join(node_host_ids[1:])}")
 
-        def remove_all_add_new_in_DC1():
-            # remove all nodes from DC1
-            while node_host_ids:
-                remove_host_id = node_host_ids.pop(0)
-                if node_host_ids:
-                    dead_nodes_param = f" --ignore-dead-nodes {','.join(node_host_ids)}"
-                else:
-                    dead_nodes_param = ""
+        #     self.replace_cluster_node(arbitor_dc_node,
+        #                               node_host_ids[1],
+        #                               nodes_to_region[dead_region][-1].dc_idx,
+        #                               dead_node_hostids=node_host_ids[2])
 
-                new_node.run_nodetool(
-                    sub_cmd=f"removenode {remove_host_id}{dead_nodes_param}")
+        #     self.replace_cluster_node(arbitor_dc_node,
+        #                               node_host_ids[2],
+        #                               nodes_to_region[dead_region][-1].dc_idx)
 
-            # bootstrap new node in 1st dc
-            new_data_node1 = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 1)
-            new_data_node2 = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 2)
-            new_data_node3 = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 3)
+        #     # bootstrap new node in 1st dc
+        #     new_data_node = self.add_node_in_new_dc(nodes_to_region[dead_region][-1].dc_idx, 3)
+        #     for node in dead_nodes:
+        #         self.db_cluster.terminate_node(node)
 
-            for node in node_for_termination:
-                self.db_cluster.terminate_node(node)
+        #     self.db_cluster.wait_all_nodes_un()
+        #     status = self.db_cluster.get_nodetool_status()
+        #     self.log.info("Running rebuild  in restored DC")
+        #     new_data_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
 
-            self.db_cluster.wait_all_nodes_un()
-            status = self.db_cluster.get_nodetool_status()
-            self.log.info("Running rebuild  in restored DC")
-            new_data_node1.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
-            new_data_node2.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
-            new_data_node3.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+        #     self.log.info("Running repair on all nodes")
+        #     for node in self.db_cluster.nodes:
+        #         node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        def replace_all_nodes_in_DC1():
-            self.replace_cluster_node(new_node,
-                                      node_host_ids[0],
-                                      nodes_to_region[target_dc_name][-1].dc_idx,
-                                      dead_node_hostids=",".join(node_host_ids[1:]))
+        #     self.verify_data_can_be_read_from_new_dc(new_data_node)
+        #     self.log.info("Test completed.")
 
-            self.replace_cluster_node(new_node,
-                                      node_host_ids[1],
-                                      nodes_to_region[target_dc_name][-1].dc_idx,
-                                      dead_node_hostids=node_host_ids[2])
+        # def remove_all_add_new_in_DC1():
+        #     # remove all nodes from DC1
+        #     while node_host_ids:
+        #         remove_host_id = node_host_ids.pop(0)
+        #         if node_host_ids:
+        #             dead_nodes_param = f" --ignore-dead-nodes {','.join(node_host_ids)}"
+        #         else:
+        #             dead_nodes_param = ""
 
-            self.replace_cluster_node(new_node,
-                                      node_host_ids[2],
-                                      nodes_to_region[target_dc_name][-1].dc_idx)
+        #         arbitor_dc_node.run_nodetool(
+        #             sub_cmd=f"removenode {remove_host_id}{dead_nodes_param}")
 
-            # bootstrap new node in 1st dc
-            new_data_node = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 3)
-            for node in node_for_termination:
-                self.db_cluster.terminate_node(node)
+        #     # bootstrap new node in 1st dc
+        #     new_data_node1 = self.add_node_in_new_dc(nodes_to_region[dead_region][-1].dc_idx, 1)
+        #     new_data_node2 = self.add_node_in_new_dc(nodes_to_region[dead_region][-1].dc_idx, 2)
+        #     new_data_node3 = self.add_node_in_new_dc(nodes_to_region[dead_region][-1].dc_idx, 3)
 
-            self.db_cluster.wait_all_nodes_un()
-            status = self.db_cluster.get_nodetool_status()
-            self.log.info("Running rebuild  in restored DC")
-            new_data_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+        #     for node in dead_nodes:
+        #         self.db_cluster.terminate_node(node)
 
-            self.log.info("Running repair on all nodes")
-            for node in self.db_cluster.nodes:
-                node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+        #     self.db_cluster.wait_all_nodes_un()
+        #     status = self.db_cluster.get_nodetool_status()
+        #     self.log.info("Running rebuild  in restored DC")
+        #     new_data_node1.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+        #     new_data_node2.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+        #     new_data_node3.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
 
-            self.verify_data_can_be_read_from_new_dc(new_data_node)
-            self.log.info("Test completed.")
+        # def replace_all_nodes_in_DC1():
+        #     self.replace_cluster_node(arbitor_dc_node,
+        #                               node_host_ids[0],
+        #                               nodes_to_region[dead_region][-1].dc_idx,
+        #                               dead_node_hostids=",".join(node_host_ids[1:]))
 
-        remove_one_replace_other_nodes_in_DC1()
+        #     self.replace_cluster_node(arbitor_dc_node,
+        #                               node_host_ids[1],
+        #                               nodes_to_region[dead_region][-1].dc_idx,
+        #                               dead_node_hostids=node_host_ids[2])
+
+        #     self.replace_cluster_node(arbitor_dc_node,
+        #                               node_host_ids[2],
+        #                               nodes_to_region[dead_region][-1].dc_idx)
+
+        #     # bootstrap new node in 1st dc
+        #     new_data_node = self.add_node_in_new_dc(nodes_to_region[dead_region][-1].dc_idx, 3)
+
+        #     self.db_cluster.wait_all_nodes_un()
+        #     status = self.db_cluster.get_nodetool_status()
+        #     self.log.info("Running rebuild  in restored DC")
+        #     new_data_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+
+        #     self.log.info("Running repair on all nodes")
+        #     for node in self.db_cluster.nodes:
+        #         node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+
+        #     self.verify_data_can_be_read_from_new_dc(new_data_node)
+        #     self.log.info("Test completed.")
+
+        # remove_one_replace_other_nodes_in_DC1()
         # remove_all_add_new_in_DC1()
         # replace_all_nodes_in_DC1()
 
@@ -193,8 +212,8 @@ class TestClusterQuorum(LongevityTest):
 
         self.log.info("Assert that quorum is lost")
         node = random.choice(alive_nodes)
-        with pytest.raises(ReadBarrierErrorException):
-            node.raft.call_read_barrier()
+        InfoEvent("Validate raft quorom is lost").publish()
+        assert not self.is_raft_quorum_exists(verification_node=node), "Raft quorum preserved, Check the logs"
 
         # Start all nodes in 1st dc
         self.log.info("Start all nodes and restore cluster")
@@ -258,14 +277,6 @@ class TestClusterQuorum(LongevityTest):
         self.verify_stress_thread(cs_thread_pool=pre_thread)
         self.log.info("Database pre write completed")
 
-    def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
-        self.log.info("Running stress during adding new DC")
-        stress_cmds = self.params.get('stress_cmd')
-        read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], stats_aggregate_cmds=False, round_robin=False)
-        write_thread = self.run_stress_thread(stress_cmd=stress_cmds[1], stats_aggregate_cmds=False, round_robin=False)
-        self.log.info("Stress during adding DC started")
-        return read_thread, write_thread
-
     def add_node_in_new_dc(self, dc_idx: int = 0, num_of_dc: int = 2) -> BaseNode:
         self.log.info("Adding new node")
         new_node = self.db_cluster.add_nodes(1, dc_idx=dc_idx, enable_auto_bootstrap=True)[0]  # add node
@@ -279,19 +290,16 @@ class TestClusterQuorum(LongevityTest):
         self.log.info("New DC to cluster has been added")
         return new_node
 
-    def add_zero_node_in_new_dc(self) -> BaseNode:
+    def add_zero_node_to_dc(self, dc_idx: int = 0) -> BaseNode:
         if not self.params.get("use_zero_nodes"):
             raise Exception("Zero node support should be enabled")
         self.log.info("Adding new node")
-        new_node = self.db_cluster.add_nodes(1, dc_idx=2, enable_auto_bootstrap=True, is_zero_node=True)[0]  # add node
+        new_node = self.db_cluster.add_nodes(1, dc_idx=dc_idx, enable_auto_bootstrap=True, is_zero_node=True)[0]
         self.db_cluster.wait_for_init(node_list=[new_node], timeout=900,
                                       check_node_health=True)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitors.reconfigure_scylla_monitoring()
 
-        status = self.db_cluster.get_nodetool_status()
-        assert len(status.keys()) == 3, f"new datacenter was not registered. Cluster status: {status}"
-        self.log.info("New DC to cluster has been added")
         return new_node
 
     def add_zero_node(self) -> BaseNode:
@@ -304,29 +312,20 @@ class TestClusterQuorum(LongevityTest):
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitors.reconfigure_scylla_monitoring()
 
-        self.db_cluster.get_nodetool_status()
+        self.db_cluster.check_nodes_up_and_normal()
         return new_node
 
     @optional_stage('post_test_load')
-    def verify_data_can_be_read_from_new_dc(self, new_node: BaseNode) -> None:
+    def verify_data_can_be_read_from_dc(self, verification_node: BaseNode) -> None:
         self.log.info("Verifying if data has been transferred successfully to the new DC")
-        stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"
+        stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {verification_node.ip_address}"
         end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=end_stress)
-
-    def querying_new_node_should_return_no_data(self, new_node: BaseNode) -> None:
-        self.log.info("Verifying if querying new node with RF=0 returns no data and does not crash the node. #8354")
-        with self.db_cluster.cql_connection_exclusive(new_node) as session:
-            statement = SimpleStatement(
-                "select * from keyspace1.standard1 limit 1;", consistency_level=ConsistencyLevel.LOCAL_QUORUM,
-                fetch_size=10)
-            data = session.execute(statement).one()
-            assert not data, f"no data should be returned when querying with CL=LOCAL_QUORUM and RF=0. {data}"
 
     def replace_cluster_node(self, verification_node: BaseNode,
                              host_id: str | None = None,
                              dc_idx: int = 0,
-                             dead_node_hostids: str = "",
+                             ignore_dead_node_host_ids: str = "",
                              timeout: int | float = 3600 * 8) -> BaseNode:
         """When old_node_ip or host_id are not None then replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
@@ -334,7 +333,7 @@ class TestClusterQuorum(LongevityTest):
             count=1, dc_idx=dc_idx, enable_auto_bootstrap=True)[0]
         self.monitors.reconfigure_scylla_monitoring()
         with new_node.remote_scylla_yaml() as scylla_yaml:
-            scylla_yaml.ignore_dead_nodes_for_replace = dead_node_hostids
+            scylla_yaml.ignore_dead_nodes_for_replace = ignore_dead_node_host_ids
         # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
         # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
         # it should be up and with scylla executable available
@@ -359,3 +358,40 @@ class TestClusterQuorum(LongevityTest):
             scylla_yaml.ignore_dead_nodes_for_replace = ""
 
         return new_node
+
+    def replace_nodes_by_host_id(self, dead_node_mapping: dict[str, BaseNode], verification_node: BaseNode):
+        host_ids = list(dead_node_mapping.keys())
+        new_nodes = []
+        for i, host_id in enumerate(host_ids):
+            self.log.info("Replace node %s with host_id: %s", dead_node_mapping[host_id].name, host_id)
+            new_nodes.append(self.replace_cluster_node(verification_node,
+                                                       dc_idx=dead_node_mapping[host_id].dc_idx,
+                                                       host_id=host_id,
+                                                       ignore_dead_node_host_ids=",".join(host_ids[i+1:])))
+
+        for node in dead_node_mapping.values():
+            self.db_cluster.terminate_node(node)
+
+        self.db_cluster.wait_all_nodes_un()
+
+    def is_raft_quorum_exists(self, verification_node: BaseNode) -> bool:
+        try:
+            verification_node.raft.call_read_barrier()
+            return True
+        except ReadBarrierErrorException:
+            return False
+
+    def start_background_stress_commands(self, node_ips: list[str] | None = None) -> Tuple[CassandraStressThread, CassandraStressThread]:
+        self.log.info("Running stress during adding new DC")
+
+        stress_cmds = self.params.get('stress_cmd')
+        if node_ips:
+            node_param = f" -node {','.join(node_ips)}"
+        else:
+            node_param = ""
+        read_thread = self.run_stress_thread(
+            stress_cmd=stress_cmds[0] + node_param, stats_aggregate_cmds=False, round_robin=False)
+        write_thread = self.run_stress_thread(
+            stress_cmd=stress_cmds[1] + node_param, stats_aggregate_cmds=False, round_robin=False)
+        self.log.info("Stress during adding DC started")
+        return read_thread, write_thread

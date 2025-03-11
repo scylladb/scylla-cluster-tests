@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import random
-import json
 
 from enum import Enum
 from abc import ABC, abstractmethod
@@ -15,6 +14,7 @@ from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, 
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
 from sdcm.rest.raft_api import RaftApi
+from sdcm.exceptions import ReadBarrierErrorException
 
 
 LOGGER = logging.getLogger(__name__)
@@ -378,6 +378,7 @@ class RaftFeature(RaftFeatureOperations):
             LOGGER.debug("Api response %s", result)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
+            raise ReadBarrierErrorException("Read Barrier call failed %s", exc)
 
 
 class NoRaft(RaftFeatureOperations):
