@@ -1,5 +1,6 @@
 - AbortRepairMonkey
 - AddDropColumnMonkey
+- AddRemoveDCMonkey
 - AddRemoveDcNemesis
 - AddRemoveMvNemesis
 - AddRemoveRackNemesis
@@ -28,6 +29,7 @@
 - EnospcAllNodesMonkey
 - EnospcMonkey
 - GrowShrinkClusterNemesis
+- GrowShrinkZeroTokenNode
 - HardRebootNodeMonkey
 - IsolateNodeWithIptableRuleNemesis
 - IsolateNodeWithProcessSignalNemesis
@@ -62,6 +64,7 @@
 - RestartThenRepairNodeMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
+- SerialRestartOfElectedTopologyCoordinatorNemesis
 - SlaDecreaseSharesDuringLoad
 - SlaIncreaseSharesByAttachAnotherSlDuringLoad
 - SlaIncreaseSharesDuringLoad
