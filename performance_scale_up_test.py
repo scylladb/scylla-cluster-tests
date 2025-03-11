@@ -25,7 +25,7 @@ class ScaleUpTest(ClusterTester):
             raise AssertionError("stress_cmd_w should be a list of commands and be equal to number of loaders")
         for stress_cmd in base_cmd_w:
             stress_queue.append(self.run_stress_thread(
-                stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True))
+                stress_cmd=stress_cmd, round_robin=True))
         results = []
         for stress in stress_queue:
             results.append(self.get_stress_results(queue=stress, store_results=False)[0])

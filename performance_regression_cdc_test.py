@@ -37,7 +37,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            sub_type="cdc_enabled")
 
         self.wait_no_compactions_running()
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
     def test_write_with_cdc_preimage(self):
         write_cmd = self.params.get("stress_cmd_w")
@@ -56,8 +55,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_preimage_enabled")
 
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
-
     def test_write_with_cdc_postimage(self):
         write_cmd = self.params.get("stress_cmd_w")
 
@@ -74,8 +71,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            stress_num=2,
                            test_name="test_write",
                            sub_type="cdc_preimage_enabled")
-
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
     def test_write_throughput(self):
         self.cdc_workflow()
@@ -150,19 +145,11 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
 
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
-
     def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None,
                       save_stats=True, read_cdclog_cmd=None, update_cdclog_stats=False, enable_batching=True):
         cdc_stress_queue = None
 
-        if save_stats:
-            self.create_test_stats(sub_type=sub_type,
-                                   doc_id_with_timestamp=True,
-                                   append_sub_test_to_name=False)
-
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num,
-                                              stats_aggregate_cmds=False)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num)
 
         if read_cdclog_cmd:
             cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=read_cdclog_cmd,

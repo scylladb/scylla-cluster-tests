@@ -65,7 +65,6 @@ def bisect_test(test_func):
             # no bisect start date, no need to bisect
             return
         cluster = tester_obj.db_cluster
-        tester_obj.create_stats = False
 
         def update_binaries(node):
             node.stop_scylla()

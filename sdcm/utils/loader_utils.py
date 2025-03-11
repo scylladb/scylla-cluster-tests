@@ -134,7 +134,6 @@ class LoaderUtilsMixin:
             self.log.debug('stress cmd: {}'.format(stress_cmd))
             if stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
-                                                           stats_aggregate_cmds=False,
                                                            round_robin=self.params.get('round_robin')))
             else:
                 stress_queue.append(self.run_stress_thread(**stress_params))

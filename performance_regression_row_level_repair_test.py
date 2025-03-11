@@ -69,7 +69,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
-            self.create_test_stats(sub_type='write-prepare')
             stress_queue = []
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
@@ -89,7 +88,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                     })
 
                     # Run all stress commands
-                    params.update(dict(stats_aggregate_cmds=False))
                     self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
                     stress_queue.append(self.run_stress_thread(**params))
 
@@ -98,7 +96,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                 stress_cmd = prepare_write_cmd if not consistency_level else self._update_cl_in_stress_cmd(
                     str_stress_cmd=prepare_write_cmd, consistency_level=consistency_level)
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1,
-                                                           prefix='preload-', stats_aggregate_cmds=False))
+                                                           prefix='preload-'))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
@@ -149,7 +147,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.stop_all_nodes_except_for(node=node)
         self.log.info('Updating cluster data only for {}'.format(node.name))
         self.log.info("Run stress command of: {}".format(stress_cmd))
-        stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
+        stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd,
                                                     round_robin=True)
         self.get_stress_results_bench(queue=stress_queue)
         self.start_all_nodes()
@@ -274,7 +272,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             stress_cmd = " ".join(
                 [base_cmd, str_additional_args, str_offset])
             self.log.debug('Scylla-bench stress command to execute: {}'.format(stress_cmd))
-            write_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
+            write_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
                                                             round_robin=True))
             offset += partitions_per_loader
             time.sleep(0.2)
@@ -372,7 +370,6 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         for stress_cmd in background_stress_cmds:
             params.update({'stress_cmd': stress_cmd})
             # Run stress command
-            params.update(dict(stats_aggregate_cmds=False))
             self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
 

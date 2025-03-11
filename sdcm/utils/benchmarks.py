@@ -16,7 +16,6 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import NamedTuple
 
-from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.utils.parallel_object import ParallelObject
@@ -91,7 +90,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     def __init__(self, global_compare: bool = False):
         self._nodes: list["BaseNode"] = []  # noqa: F821
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
-        self._es = ES()
+        self._es = None  # this mean this code would be broken, we should consider completely removing it, or reporting to Argus
         self._comparison = {}
         self._global_compare = global_compare
         self._test_id = TestConfig().test_id()

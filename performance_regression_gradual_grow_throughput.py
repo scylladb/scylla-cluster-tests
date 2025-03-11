@@ -1,7 +1,7 @@
-import pathlib
 import time
 from enum import Enum
 from collections import defaultdict, Counter
+import pathlib
 
 import json
 from dataclasses import dataclass, replace
@@ -11,7 +11,6 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
@@ -206,7 +205,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 'duration': self.params.get('prepare_stress_duration'),
             })
             # Run all stress commands
-            params.update(dict(stats_aggregate_cmds=False))
             self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
 
@@ -255,7 +253,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         results = []
         stress_queue = []
         for stress_cmd in stress_cmds:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            params = {"round_robin": True}
             stress_cmd_to_run = stress_cmd.replace(
                 "$threads", f"{num_threads}").replace("$throttle", f"{current_throttle}")
             if step_duration is not None:
@@ -343,9 +341,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
-        if not self.exists():
-            self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=False)
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
@@ -392,7 +387,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
-        self.run_performance_analyzer(total_summary=total_summary)
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
@@ -403,27 +397,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         filename = f"{self.logdir}/result_gradual_increase.log"
         with open(filename, "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
-
-    def run_performance_analyzer(self, total_summary):
-        perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get('email_recipients'))
-        # Keep next 2 lines for debug purpose
-        self.log.debug("es_index: %s", self._test_index)
-        self.log.debug("total_summary: %s", total_summary)
-        is_gce = bool(self.params.get('cluster_backend') == 'gce')
-        try:
-            perf_analyzer.check_regression(test_id=self._test_id,
-                                           data=total_summary,
-                                           is_gce=is_gce,
-                                           email_subject_postfix=self.params.get('email_subject_postfix'))
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message='Failed to check regression',
-                source=self.__class__.__name__,
-                source_method='check_regression',
-                exception=exc
-            ).publish_or_dump()
 
     @staticmethod
     def _calculate_average_max_latency(results):
@@ -450,7 +423,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def warmup_cache(self, stress_cmd_templ, num_threads):
         stress_queue = []
         for stress_cmd in stress_cmd_templ:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            params = {"round_robin": True}
             stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
             params.update({'stress_cmd': stress_cmd_to_run})
             # Run all stress commands

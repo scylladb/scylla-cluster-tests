@@ -58,7 +58,6 @@ class UDAUDFTest(ClusterTester):
         self.log.info("Running mixed workload c-s thread alongside uda/udf stress thread...")
         uda_udf_cmd = self.params.get('stress_cmd')[0]
         uda_udf_thread = self.run_stress_thread(stress_cmd=uda_udf_cmd,
-                                                stats_aggregate_cmds=False,
                                                 round_robin=False)
         self.log.info("Stress threads started.")
         return uda_udf_thread
@@ -66,7 +65,7 @@ class UDAUDFTest(ClusterTester):
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
-        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=False)
         self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 

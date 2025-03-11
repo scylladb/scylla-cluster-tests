@@ -39,13 +39,11 @@ class TenantMixin:
         self._stats = self._init_stats()
         self.test_config = test_config
         self._init_test_duration()
-        self.create_stats = self.params.get(key='store_perf_results')
         self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
         self.status = "RUNNING"
         self.cluster_index = str(cluster_index)
         self._test_id = self.test_config.test_id() + f"--{cluster_index}"
         self._test_index = self.get_str_index()
-        self.create_test_stats()
         self.start_time = self.get_test_start_time() or time.time()
         self.timeout_thread = self._init_test_timeout_thread()
         self.test_config.reuse_cluster(False)
@@ -127,7 +125,6 @@ def get_tenants(test_class_instance):
 
 
 # TODO: support here other attrs/methods from 'Tester' class:
-#       - create_stats
 #       - update_test_with_errors
 #       - save_email_data
 #       - _check_if_db_log_time_consistency_looks_good

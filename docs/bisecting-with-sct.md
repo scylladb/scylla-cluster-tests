@@ -32,11 +32,10 @@ def test_write(self):
     if stress_multiplier_w := self.params.get("stress_multiplier_w"):
         stress_multiplier = stress_multiplier_w
 
-    self.create_test_stats(doc_id_with_timestamp=True)
     self.run_fstrim_on_all_db_nodes()
 
     stress_queue = self.run_stress_thread(
-        stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+        stress_cmd=base_cmd_w, stress_num=stress_multiplier)
     results = self.get_stress_results(queue=stress_queue)
 
     # set bisect_ref_value only for the first test run
@@ -46,5 +45,4 @@ def test_write(self):
     self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
     self.update_test_details(scylla_conf=True)
     self.display_results(results, test_name='test_write')
-    self.check_regression()
 ```

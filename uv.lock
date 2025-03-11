@@ -1050,36 +1050,6 @@ wheels = [
 ]
 
 [[package]]
-name = "elastic-transport"
-version = "9.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi", marker = "sys_platform != 'win32'" },
-    { name = "sniffio", marker = "sys_platform != 'win32'" },
-    { name = "urllib3", marker = "sys_platform != 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/0c/b48a9041e921a75e4c0d17e0dfe929f4d72c4e523084cbe5574101b7a40d/elastic_transport-9.2.0.tar.gz", hash = "sha256:0331466ca8febdb7d168c0fbf159294b0066492733b51da94f4dd28a0ee596cd", size = 77332, upload-time = "2025-10-17T16:12:49.906Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/4a/6a1cc529ec609dae4d681baddde9ad965b8952d1f56dadbb1d27fbb50ec9/elastic_transport-9.2.0-py3-none-any.whl", hash = "sha256:f52b961e58e6b76d488993286907f61a6ddccbdae8e0135ce8d369227b6282d8", size = 65317, upload-time = "2025-10-17T16:12:48.437Z" },
-]
-
-[[package]]
-name = "elasticsearch"
-version = "9.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio", marker = "sys_platform != 'win32'" },
-    { name = "elastic-transport", marker = "sys_platform != 'win32'" },
-    { name = "python-dateutil", marker = "sys_platform != 'win32'" },
-    { name = "sniffio", marker = "sys_platform != 'win32'" },
-    { name = "typing-extensions", marker = "sys_platform != 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/87/6e70b8dac9c781c53edba944b50545431e2bb937d21c06d6009ef18b5f91/elasticsearch-9.2.0.tar.gz", hash = "sha256:99656baa34b10130402b6c38429feddf7aee1c3247566e8f95f0d0267fe9f9ab", size = 875370, upload-time = "2025-10-28T16:57:25.437Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/21/f2/6b44ee99e90c9d9e183aafeea0c3af87176d4acef446c286223704ea8f2e/elasticsearch-9.2.0-py3-none-any.whl", hash = "sha256:87090fe98c515ec0fce82f633fe11d7e90e04d93581b6b3e05de29efe4cc8b74", size = 960522, upload-time = "2025-10-28T16:57:20.979Z" },
-]
-
-[[package]]
 name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3797,7 +3767,6 @@ dependencies = [
     { name = "confluent-kafka", extra = ["avro"], marker = "sys_platform != 'win32'" },
     { name = "deepdiff", marker = "sys_platform != 'win32'" },
     { name = "docker", marker = "sys_platform != 'win32'" },
-    { name = "elasticsearch", marker = "sys_platform != 'win32'" },
     { name = "fabric", marker = "sys_platform != 'win32'" },
     { name = "fastavro", marker = "sys_platform != 'win32'" },
     { name = "gimme-aws-creds", marker = "sys_platform != 'win32'" },
@@ -3869,7 +3838,6 @@ requires-dist = [
     { name = "confluent-kafka", extras = ["avro"], specifier = "==2.12.1" },
     { name = "deepdiff", specifier = "==8.6.1" },
     { name = "docker", specifier = "==7.1.0" },
-    { name = "elasticsearch", specifier = "==9.2.0" },
     { name = "fabric", specifier = "==3.2.2" },
     { name = "fastavro", specifier = "==1.11.1" },
     { name = "gimme-aws-creds", specifier = "==2.8.2" },

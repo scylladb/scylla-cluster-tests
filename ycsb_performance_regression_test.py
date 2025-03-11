@@ -75,8 +75,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
                 session.execute(cmd)
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
-        self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd)
         if nemesis:
             interval = self.params.get('nemesis_interval')
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
@@ -85,10 +84,6 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         results = self.get_stress_results(queue=stress_queue)
         LOGGER.info("Stress results: %s", str(results))
         self.update_test_details(scrap_metrics_step=60, scylla_conf=True)
-        if not nemesis:
-            self.check_regression()
-        else:
-            self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
 
     def test_latency(self):
         """
