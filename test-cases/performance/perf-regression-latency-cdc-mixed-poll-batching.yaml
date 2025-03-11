@@ -26,4 +26,3 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com']
 backtrace_decoding: false
-print_kernel_callstack: true

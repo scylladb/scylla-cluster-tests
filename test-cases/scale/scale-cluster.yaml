@@ -36,7 +36,6 @@ azure_instance_type_loader: 'Standard_F4s_v2'
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'cluster-base-scale-test'

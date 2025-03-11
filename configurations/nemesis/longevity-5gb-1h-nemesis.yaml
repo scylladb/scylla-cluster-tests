@@ -23,8 +23,6 @@ instance_type_loader: 'c5.large'
 azure_instance_type_loader: 'Standard_F2s_v2'
 
 nemesis_interval: 3
-nemesis_filter_seeds: false
-nemesis_during_prepare: true
 
 gce_n_local_ssd_disk_db: 1
 

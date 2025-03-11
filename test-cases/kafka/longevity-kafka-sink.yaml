@@ -9,7 +9,6 @@ instance_type_db: i4i.large
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_interval: 1
-nemesis_filter_seeds: false
 
 user_prefix: 'kafka'
 use_mgmt: false

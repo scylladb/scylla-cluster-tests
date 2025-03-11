@@ -16,7 +16,6 @@ gce_n_local_ssd_disk_db: 8
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '021'
-nemesis_interval: 5
 nemesis_during_prepare: false
 space_node_threshold: 64424
 

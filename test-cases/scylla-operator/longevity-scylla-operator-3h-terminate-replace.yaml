@@ -8,7 +8,6 @@ n_loaders: 2
 n_monitor_nodes: 1
 
 nemesis_class_name: 'DisruptKubernetesNodeThenReplaceScyllaNode'
-nemesis_interval: 5
 
 user_prefix: 'longevity-scylla-operator-3h'
 

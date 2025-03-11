@@ -19,7 +19,6 @@ instance_type_db: 'i4i.xlarge'
 nemesis_class_name: 'NoOpMonkey'
 nemesis_selector: ''
 nemesis_interval: 15
-nemesis_filter_seeds: false
 
 seeds_num: 4
 

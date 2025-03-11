@@ -15,7 +15,6 @@ n_db_nodes: 6
 n_loaders: 3
 n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
-nemesis_interval: 5
 user_prefix: 'longevity-50gb-4d-not-jenkins'
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'

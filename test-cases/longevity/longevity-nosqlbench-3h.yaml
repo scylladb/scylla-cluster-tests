@@ -12,8 +12,6 @@ instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 gce_instance_type_loader: 'e2-standard-4'
 
-ssh_transport: 'libssh2'
-
 nemesis_class_name: 'NonDisruptiveMonkey'
 nemesis_interval: 10
 

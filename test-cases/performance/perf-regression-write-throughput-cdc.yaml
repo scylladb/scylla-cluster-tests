@@ -22,4 +22,3 @@ experimental_features:
 
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com ']
 backtrace_decoding: false
-print_kernel_callstack: true

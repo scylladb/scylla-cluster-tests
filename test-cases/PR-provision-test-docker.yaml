@@ -11,7 +11,6 @@ instance_type_runner: c6i.2xlarge
 
 nemesis_class_name: NonDisruptiveMonkey
 nemesis_interval: 1
-nemesis_filter_seeds: false
 
 user_prefix: 'PR-provision-docker'
 

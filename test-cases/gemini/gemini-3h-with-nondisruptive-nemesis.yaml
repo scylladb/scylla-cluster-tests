@@ -8,7 +8,6 @@ instance_type_db: 'i4i.xlarge'
 user_prefix: 'gemini-basic-3h'
 
 nemesis_class_name: 'GeminiNonDisruptiveChaosMonkey'
-nemesis_interval: 5
 
 gemini_cmd: |
   --duration 3h

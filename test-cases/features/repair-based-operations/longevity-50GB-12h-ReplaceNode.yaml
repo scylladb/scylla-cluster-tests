@@ -6,7 +6,6 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=11h -schema 'replication
 stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=11h -mode cql3 native -rate threads=50 -pop seq=1..100000000 -log interval=5"]
 
 nemesis_class_name: 'NodeTerminateAndReplace'
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-rbno-12h-replace-node'

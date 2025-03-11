@@ -30,7 +30,6 @@ gce_instance_type_loader: 'c2-standard-16'
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '031'
 nemesis_interval: 30
-nemesis_filter_seeds: false
 
 
 user_prefix: 'longevity-tls-1tb-7d'

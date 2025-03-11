@@ -10,7 +10,6 @@ n_monitor_nodes: 1
 k8s_minio_storage_size: 300Gi
 
 nemesis_class_name: 'MgmtBackup'
-nemesis_interval: 5
 
 user_prefix: 'longevity-scylla-operator-3h'
 

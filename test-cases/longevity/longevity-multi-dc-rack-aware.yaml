@@ -15,8 +15,5 @@ instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 10
-nemesis_filter_seeds: false
-
-round_robin: false
 
 user_prefix: 'multi-dc-rackaware'

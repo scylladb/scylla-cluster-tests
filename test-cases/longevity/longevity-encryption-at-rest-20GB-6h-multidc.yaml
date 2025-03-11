@@ -18,8 +18,6 @@ instance_type_db: 'i4i.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '111'
-nemesis_interval: 5
-nemesis_filter_seeds: false
 nemesis_during_prepare: false
 
 user_prefix: 'long-encrypt-at-rest-20gb-6h-multidc'

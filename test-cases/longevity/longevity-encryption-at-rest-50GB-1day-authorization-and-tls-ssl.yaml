@@ -16,7 +16,6 @@ instance_type_loader: 'c6i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '111'
-nemesis_interval: 5
 
 user_prefix: 'longevity-encrypt-at-rest-50gb-1d'
 

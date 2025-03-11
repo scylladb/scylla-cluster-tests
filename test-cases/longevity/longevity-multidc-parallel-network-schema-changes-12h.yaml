@@ -18,8 +18,6 @@ instance_type_db: 'i3en.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 nemesis_selector: [["networking"],["!disruptive","schema_changes"]]
-nemesis_interval: 5
-nemesis_filter_seeds: false
 
 seeds_num: 2
 round_robin: true

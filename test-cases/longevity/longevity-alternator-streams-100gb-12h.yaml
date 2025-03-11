@@ -42,7 +42,6 @@ instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c6i.4xlarge'
 
 nemesis_class_name: 'NoOpMonkey'
-nemesis_interval: 5
 
 user_prefix: 'alternator-streams-4h'
 space_node_threshold: 64424

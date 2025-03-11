@@ -1,5 +1,4 @@
 nemesis_class_name: 'DecommissionMonkey'
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-rbno-cdc-100gb-4h-decommission'

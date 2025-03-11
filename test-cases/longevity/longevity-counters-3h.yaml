@@ -15,4 +15,3 @@ space_node_threshold: 6442
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '010'
-nemesis_interval: 5
