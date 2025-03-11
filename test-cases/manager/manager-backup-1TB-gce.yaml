@@ -25,7 +25,6 @@ gce_instance_type_loader: 'e2-standard-16'
 
 nemesis_class_name: 'MgmtBackup'
 nemesis_interval: 30
-nemesis_filter_seeds: false
 
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts'
 scylla_linux_distro: 'ubuntu-bionic'

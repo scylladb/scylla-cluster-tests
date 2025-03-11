@@ -1,6 +1,5 @@
 nemesis_class_name: 'NodeTerminateAndReplace'
 nemesis_interval: 2
-nemesis_filter_seeds: false
 seeds_num: 3
 
 user_prefix: 'longevity-rbno-4h-replace-node'

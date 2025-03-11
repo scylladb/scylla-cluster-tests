@@ -24,8 +24,6 @@ instance_type_loader: 'c6i.2xlarge'
 
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
 nemesis_class_name: 'SlaNemeses'
-nemesis_interval: 5
-nemesis_filter_seeds: false
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-sla-100gb-4h'

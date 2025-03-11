@@ -73,7 +73,6 @@ instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
 
 nemesis_class_name: 'NoOpMonkey'
-nemesis_interval: 5
 
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra

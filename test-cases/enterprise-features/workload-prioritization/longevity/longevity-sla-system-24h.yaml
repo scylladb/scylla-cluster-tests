@@ -22,7 +22,6 @@ nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 # There are SLA nemeses that uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
 # failures that is not a problem of Scylla. The option "!disruptive" is added to prevent irrelevant failures.
 nemesis_selector: [['sla', '!disruptive'], ['!sla']]
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 stop_test_on_stress_failure: false

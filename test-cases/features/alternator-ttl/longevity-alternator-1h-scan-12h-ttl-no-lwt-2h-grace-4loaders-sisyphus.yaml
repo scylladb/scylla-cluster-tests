@@ -45,7 +45,6 @@ n_db_nodes: 4
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '033'
 nemesis_interval: 10
-nemesis_during_prepare: true
 
 user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
 

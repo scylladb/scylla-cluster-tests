@@ -83,7 +83,6 @@ n_db_nodes: 4
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_seed: '033'
-nemesis_interval: 5
 
 user_prefix: 'longevity-alternator-multiple-ttl'
 

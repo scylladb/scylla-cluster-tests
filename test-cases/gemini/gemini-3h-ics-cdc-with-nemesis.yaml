@@ -9,7 +9,6 @@ user_prefix: 'ics-cdc-gemini-basic-3h'
 ami_db_scylla_user: 'centos'
 
 nemesis_class_name: 'GeminiChaosMonkey'
-nemesis_interval: 5
 
 gemini_cmd: |
   --duration 3h

@@ -28,8 +28,6 @@ n_db_nodes: 4
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '033'
-nemesis_interval: 5
-nemesis_during_prepare: true
 
 user_prefix: '4m-scan-36m-ttl-8m-grace-sisyphus'
 

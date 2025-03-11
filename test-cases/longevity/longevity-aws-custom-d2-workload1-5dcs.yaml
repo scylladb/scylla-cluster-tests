@@ -30,8 +30,6 @@ append_scylla_yaml:
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '007'
-nemesis_interval: 5
-nemesis_during_prepare: true
 # NOTE: enable health checks back when following bug gets fixed:
 #       https://github.com/scylladb/scylla-cluster-tests/issues/9547
 cluster_health_check: false

@@ -36,7 +36,6 @@ user_prefix: 'perf-regression-i4i'
 space_node_threshold: 644245094
 
 backtrace_decoding: false
-print_kernel_callstack: true
 
 store_perf_results: true
 use_mgmt: false

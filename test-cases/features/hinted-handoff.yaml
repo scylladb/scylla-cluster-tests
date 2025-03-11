@@ -19,4 +19,3 @@ server_encrypt: true
 # Nemesis
 nemesis_class_name: 'ValidateHintedHandoffShortDowntime'
 nemesis_interval: 20
-nemesis_during_prepare: true

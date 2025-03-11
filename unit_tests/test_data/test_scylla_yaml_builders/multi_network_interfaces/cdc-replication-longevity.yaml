@@ -15,7 +15,6 @@ instance_type_loader: 'c6i.large'
 n_monitor_nodes: 1
 
 nemesis_class_name: 'CategoricalMonkey'
-nemesis_interval: 5
 
 gemini_cmd: |
   --duration 30m

@@ -9,7 +9,6 @@ n_loaders: 2
 n_monitor_nodes: 1
 
 nemesis_class_name: 'MgmtRestore'
-nemesis_interval: 5
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-operator-3h-mgmt-restore'

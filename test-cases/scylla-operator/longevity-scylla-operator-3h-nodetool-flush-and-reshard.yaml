@@ -19,7 +19,6 @@ instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 
 nemesis_class_name: 'OperatorNodetoolFlushAndReshard'
-nemesis_interval: 5
 
 space_node_threshold: 100246000000
 user_prefix: 'longevity-operator-3h-nodetool-flush-and-reshard'

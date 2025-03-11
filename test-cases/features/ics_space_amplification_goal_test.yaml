@@ -21,9 +21,6 @@ instance_type_db: 'i4i.4xlarge'
 
 nemesis_class_name: 'NoOpMonkey'
 user_prefix: 'ics-space-amplification'
-server_encrypt: false
-client_encrypt: false
-
 
 use_mgmt: false
 nemesis_during_prepare: false

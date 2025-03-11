@@ -35,7 +35,6 @@ gce_instance_type_monitor: 'n2-highmem-8'
 user_prefix: 'perf-regression'
 
 backtrace_decoding: false
-print_kernel_callstack: true
 
 store_perf_results: true
 use_mgmt: false

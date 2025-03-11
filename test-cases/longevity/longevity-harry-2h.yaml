@@ -12,7 +12,6 @@ root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operat
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '001'
 nemesis_interval: 2
-ssh_transport: 'libssh2'
 
 user_prefix: 'longevity-harry-2h'
 space_node_threshold: 64424

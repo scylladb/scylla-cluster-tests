@@ -17,8 +17,6 @@ n_monitor_nodes: 1
 seeds_num: 3
 
 nemesis_interval: 3
-nemesis_filter_seeds: false
-nemesis_during_prepare: true
 
 # Instance type for the case when tests are executed on Docker backend in AWS
 instance_type_runner: 'i4i.xlarge'

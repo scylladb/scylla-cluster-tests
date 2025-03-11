@@ -20,7 +20,6 @@ nemesis_class_name: 'GrowShrinkClusterNemesis:1 SisyphusMonkey:1'
 nemesis_selector: [[],["!disruptive","schema_changes"]]
 nemesis_interval: 10
 
-seeds_num: 1
 round_robin: true
 
 user_prefix: 'raft-double-cluster-size-with-schema-changes-12h'

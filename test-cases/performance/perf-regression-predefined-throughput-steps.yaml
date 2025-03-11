@@ -51,7 +51,6 @@ use_preinstalled_scylla: true
 user_prefix: 'perf-regression-predefined-steps'
 
 backtrace_decoding: false
-print_kernel_callstack: true
 
 store_perf_results: true
 use_mgmt: false

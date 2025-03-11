@@ -19,12 +19,10 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['kubernetes']
 nemesis_during_prepare: false
 nemesis_seed: '013'
-nemesis_interval: 5
 
 user_prefix: 'long-eks-multidc-12h'
 space_node_threshold: 64424
 
-use_mgmt: true
 k8s_minio_storage_size: '500Gi'
 
 k8s_db_node_service_type: Headless

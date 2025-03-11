@@ -11,7 +11,6 @@ instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '017'
-nemesis_interval: 5
 space_node_threshold: 64424
 
 user_prefix: 'longevity-lwt-1loader-3h'
