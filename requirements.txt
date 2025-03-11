@@ -256,9 +256,9 @@ botocore==1.31.4 \
     #   awscli
     #   boto3
     #   s3transfer
-botocore-stubs==1.37.10 \
-    --hash=sha256:a7e9acc0085cb42332f55a5e99b7e06ee7b18b8be6ac9ef7ad8dbac2a5c44145 \
-    --hash=sha256:e6183ca37b7b3b5c36daae38d44040858cf7ce69d02797d4d3d4d800985c10b4
+botocore-stubs==1.37.11 \
+    --hash=sha256:9b89ba9a98eb9f088a5f82c52488013858092777c17b56265574bbf2d21da422 \
+    --hash=sha256:bec458a0d054892cdf82466b4d075f30a36fa03ce34f9becbcace5f36ec674bf
     # via boto3-stubs
 cachetools==5.5.2 \
     --hash=sha256:1a661caa9175d26759571b2e19580f9d6393969e5dfca11fdb1f947a23e640d4 \
@@ -552,9 +552,9 @@ decorator==5.2.1 \
     --hash=sha256:65f266143752f734b0a7cc83c46f4618af75b8c5911b00ccb61d0ac9b6da0360 \
     --hash=sha256:d316bb415a2d9e2d2b3abcc4084c6502fc09240e292cd76a76afc106a1c8e04a
     # via fabric
-deepdiff==8.1.1 \
-    --hash=sha256:b0231fa3afb0f7184e82535f2b4a36636442ed21e94a0cf3aaa7982157e7ebca \
-    --hash=sha256:dd7bc7d5c8b51b5b90f01b0e2fe23c801fd8b4c6a7ee7e31c5a3c3663fcc7ceb
+deepdiff==8.3.0 \
+    --hash=sha256:838acf1b17d228f4155bcb69bb265c41cbb5b2aba2575f07efa67ad9b9b7a0b5 \
+    --hash=sha256:92a8d7c75a4b26b385ec0372269de258e20082307ccf74a4314341add3d88391
     # via -r requirements.in
 deprecated==1.2.18 \
     --hash=sha256:422b6f6d859da6f2ef57857761bfb392480502a64c3028ca9bbe86085d72115d \
@@ -2088,9 +2088,9 @@ typepy==1.3.4 \
     #   sqliteschema
     #   tabledata
     #   tcconfig
-types-awscrt==0.23.10 \
-    --hash=sha256:7391bf502f6093221e68da8fb6a2af7ec67a98d376c58d5b76cc3938f449d121 \
-    --hash=sha256:965659260599b421564204b895467684104a2c0311bbacfd3c2423b8b0d3f3e9
+types-awscrt==0.24.1 \
+    --hash=sha256:f3f2578ff74a254a79882b95961fb493ba217cebc350b3eb239d1cd948d4d7fa \
+    --hash=sha256:fc6eae56f8dc5a3f8cc93cc2c7c332fa82909f8284fbe25e014c575757af397d
     # via botocore-stubs
 types-s3transfer==0.11.4 \
     --hash=sha256:05fde593c84270f19fd053f0b1e08f5a057d7c5f036b9884e68fb8cd3041ac30 \
