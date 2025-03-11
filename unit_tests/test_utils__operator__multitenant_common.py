@@ -23,9 +23,6 @@ class FakeTestBase:
     def _init_stats(self):
         pass
 
-    def create_test_stats(self):
-        pass
-
     def get_test_start_time(self):
         pass
 

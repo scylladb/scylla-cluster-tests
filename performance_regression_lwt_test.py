@@ -113,9 +113,8 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
         cmd = self.params.get(param_name)
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
-        self.create_test_stats(sub_type=subtype, doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=cmd, stress_num=1,
-                                              keyspace_num=keyspace_num, stats_aggregate_cmds=False)
+                                              keyspace_num=keyspace_num)
         results = self.get_stress_results(queue=stress_queue, store_results=True)
         self.update_test_details(scylla_conf=True)
         stat_results = PP.pformat(self._stats["results"])
@@ -129,10 +128,6 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
             self.run_compaction_on_all_nodes()
             for subtest in self.lwt_subtests:
                 self._run_workload(subtest['sct_param'], subtest['subtest_name'])
-            self.check_regression_multi_baseline(
-                subtests_info=self.lwt_subtests,
-                metrics=self.latency_report_metrics
-            )
 
     def test_throughput(self):
         with ignore_operation_errors():
@@ -140,8 +135,3 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
             self.run_compaction_on_all_nodes()
             for subtest in self.lwt_subtests:
                 self._run_workload(subtest['sct_param'], subtest['subtest_name'])
-
-            self.check_regression_multi_baseline(
-                subtests_info=self.lwt_subtests,
-                metrics=self.throughput_report_metrics
-            )

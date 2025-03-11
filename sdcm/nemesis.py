@@ -43,7 +43,6 @@ from cassandra import ConsistencyLevel, InvalidRequest, Unavailable
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.cluster import NoHostAvailable, OperationTimedOut  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
-from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed
@@ -70,7 +69,6 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
-from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
@@ -288,7 +286,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
-        self.es_publisher = NemesisElasticSearchPublisher(self.tester)
         self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
@@ -373,10 +370,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]['cnt'] += 1
         self.log.debug('Update nemesis info with: %s', data)
-        if self.tester.create_stats:
-            self.tester.update({'nemesis': self.stats})
-        if self.es_publisher:
-            self.es_publisher.publish(disrupt_name=disrupt, status=status, data=data)
 
     def publish_event(self, disrupt, status=True, data=None):
         if not data:
@@ -475,7 +468,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @raise_event_on_failure
     def run(self, interval=None, cycles_count: int = -1):
-        self.es_publisher.create_es_connection()
         if interval:
             self.interval = interval * 60
         self.log.info('Interval: %s s', self.interval)
@@ -4365,7 +4357,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         duration = 30
         self.log.info("Doubling the load on the cluster for %s minutes", duration)
         stress_queue = self.tester.run_stress_thread(
-            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration)
+            stress_cmd=self.tester.stress_cmd, stress_num=1, duration=duration)
         results, errors = stress_queue.parse_results()
         self._nemesis_stress_failure_handler(results, errors)
         self.log.info(f"Double load results: {results}")
@@ -5728,14 +5720,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     disrupt = args[0].get_disrupt_name()
                     del log_info['operation']
 
-                    try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                        args[0].update_stats(disrupt, status, log_info)
-                    except ElasticSearchConnectionTimeout as err:
-                        args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
-                                            f"{err}")
-                    except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
-                        args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
-                                            f"{err}")
+                    args[0].update_stats(disrupt, status, log_info)
                     args[0].log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
 

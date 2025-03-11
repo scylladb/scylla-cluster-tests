@@ -22,7 +22,6 @@ from typing import Any
 import yaml
 from cachetools import cached, TTLCache
 
-from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
@@ -205,7 +204,7 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
 
     @cached_property
     def _es(self):
-        return ES()
+        return None
 
     # pylint: disable=too-many-arguments
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
@@ -249,6 +248,19 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         }
         res = self._es.search(index=self._index, body=query)
         return [hit["_source"] for hit in res["hits"]["hits"]]
+
+
+class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
+    """
+    stub class, until we'll implement the Argus api for reporting those
+    """
+
+    def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
+              timeout_occurred: bool):
+        pass
+
+    def get(self, operation: str | None, timeout_occurred: bool | None = None):
+        pass
 
 
 class NodeLoadInfoServices(metaclass=Singleton):  # pylint: disable=too-few-public-methods
