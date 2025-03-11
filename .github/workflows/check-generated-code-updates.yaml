@@ -1,0 +1,53 @@
+name: Check generated code is up-to-date
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+
+jobs:
+  check_org_membership:
+    runs-on: ubuntu-latest
+    outputs:
+      isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
+    steps:
+      - name: Check user for team affiliation
+        uses: tspascoal/get-user-teams-membership@v3
+        id: teamAffiliation
+        with:
+          GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
+          username: ${{ github.actor }}
+          team: ${{ secrets.SCT_ACTION_GITHUB_TEAM }}
+
+  run_validations:
+    runs-on: ubuntu-latest
+    needs: check_org_membership
+    if: needs.check_org_membership.outputs.isTeamMember == 'true'
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+
+      - name: Run nemesis list validation
+        uses: ./.github/actions/run-validation
+        with:
+          script: python -m pytest unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run configuration docs validation
+        uses: ./.github/actions/run-validation
+        with:
+          script: update-conf-docs
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run nemesis pipelines validation
+        uses: ./.github/actions/run-validation
+        with:
+          script: create-nemesis-pipelines
+          github_token: ${{ secrets.GITHUB_TOKEN }}
