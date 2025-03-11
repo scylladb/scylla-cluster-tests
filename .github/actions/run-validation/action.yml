@@ -1,0 +1,40 @@
+name: Run Validation
+description: Run a validation script and post a comment if there are changes.
+
+inputs:
+  script:
+    description: The script to run for validation.
+    required: true
+  github_token:
+    description: GitHub token for posting comments.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run validation script
+      shell: bash
+      id: run_script
+      run: |
+        git reset --hard
+        bash ./docker/env/hydra.sh ${{ inputs.script }}
+        if git diff --stat --exit-code; then
+          echo "success=true" >> $GITHUB_OUTPUT
+        else
+          echo "success=false" >> $GITHUB_OUTPUT
+          echo "### identified changes in generated code" > pr_comment.txt
+          echo "diff found by running:" >> pr_comment.txt
+          echo '`bash ./docker/env/hydra.sh ${{ inputs.script }}`:' >> pr_comment.txt
+          echo '```' >> pr_comment.txt
+          echo "$(git diff --stat)" >> pr_comment.txt
+          echo '```' >> pr_comment.txt
+        fi
+
+    - name: Post comment on PR
+      if: steps.run_script.outputs.success == 'false'
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        token: ${{ inputs.github_token }}
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body-path: pr_comment.txt
