@@ -4,6 +4,8 @@
     "config:recommended"
   ],
   "schedule": ["every weekend"],
+  "assignees": ["scylladb/qa-maintainers"],
+  "reviewers": ["scylladb/qa-maintainers"],
   "labels": [
     "renovate",
     "dependencies",
@@ -43,13 +45,18 @@
     {
       "groupName": "All Helm values files",
       "matchManagers": ["helm-values"],
-      "enabled": true
+      "enabled": true,
+      "labels": ["renovate", "dependencies"]
     }
   ],
   "vulnerabilityAlerts": {
     "enabled": true
   },
   "osvVulnerabilityAlerts": true,
+  "github-actions": {
+    "enabled": true,
+    "labels": ["renovate", "dependencies"]
+  },
   "helm-values": {
     "fileMatch": ["(^|/)values_.*\\.ya?ml$"]
   },
