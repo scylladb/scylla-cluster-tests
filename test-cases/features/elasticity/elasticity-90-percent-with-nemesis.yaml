@@ -23,7 +23,7 @@ instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.large'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['supports_high_disk_utilization']
+nemesis_selector: 'supports_high_disk_utilization'
 nemesis_seed: '019'
 nemesis_during_prepare: false
 

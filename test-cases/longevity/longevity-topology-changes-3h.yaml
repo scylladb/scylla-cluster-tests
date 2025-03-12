@@ -25,7 +25,7 @@ gce_n_local_ssd_disk_db: 16
 round_robin: true
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['topology_changes']
+nemesis_selector: 'topology_changes'
 
 seeds_num: 3
 
