@@ -17,7 +17,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i3en.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
-nemesis_selector: [["networking"],["!disruptive","schema_changes"]]
+nemesis_selector: ["networking","schema_changes and not disruptive"]
 
 seeds_num: 2
 round_robin: true

@@ -8,4 +8,4 @@ server_encrypt: true
 internode_encryption: 'all'
 user_prefix: 'longevity-fips'
 test_duration: 400
-nemesis_selector: ["!disruptive"]
+nemesis_selector: "not disruptive"

@@ -8,7 +8,7 @@ n_loaders: 2
 n_monitor_nodes: 1
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['kubernetes']
+nemesis_selector: 'kubernetes'
 nemesis_seed: '026'
 
 user_prefix: 'longevity-scylla-operator-3h'
