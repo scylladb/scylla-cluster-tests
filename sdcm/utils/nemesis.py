@@ -6,7 +6,6 @@ from pathlib import Path
 import yaml
 from jinja2 import Template
 
-import sdcm.utils.nemesis_jobs_configs as config
 # To import all nemesis
 from sdcm.nemesis import *
 
@@ -116,10 +115,11 @@ class NemesisJobGenerator:
 
     def create_job_files_from_template(self) -> list[Path]:
         pipeline_files = []
-        backend_config = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(self.backend, [])
+        backend_config = self.BACKEND_CONFIGS.get(self.backend, [])
         for cls in self.nemesis_class_list:
-            additional_configs = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(cls, [])
-            additional_params = config.NEMESIS_ADDITIONAL_PIPELINE_PARAMS.get(cls, {})
+            clazz = globals()[cls]
+            additional_configs = clazz.additional_configs or []
+            additional_params = clazz.additional_params or {}
             config_name = [
                 str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
                 str(self.nemesis_test_config_dir / f"{cls}.yaml"),
