@@ -3153,7 +3153,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.log.info('Waiting JMX services to start after node boot or reboot')
         self.wait_jmx_up(verbose=verbose, timeout=timeout)
         self.log.info('Waiting for all nodes to be Up Normal')
-        self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
+        self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self], verification_node=self)
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
