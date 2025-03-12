@@ -217,7 +217,7 @@ def test_use_disabled_monkey():
     tester = FakeTester()
 
     tester.params["nemesis_exclude_disabled"] = False
-    tester.params["nemesis_selector"] = []
+    tester.params["nemesis_selector"] = ''
     sisyphus = SisyphusMonkey(tester, None)
 
     collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
@@ -284,7 +284,7 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_list_topology_changes_monkey(self, expected_topology_changes_methods):
         tester = FakeTester()
-        tester.params["nemesis_selector"] = ['topology_changes']
+        tester.params["nemesis_selector"] = 'topology_changes'
         sisyphus_nemesis = SisyphusMonkey(tester, None)
 
         collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
@@ -295,7 +295,7 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_list_schema_changes_monkey(self, expected_schema_changes_methods):
         tester = FakeTester()
-        tester.params["nemesis_selector"] = ['schema_changes']
+        tester.params["nemesis_selector"] = 'schema_changes'
         sisyphus_nemesis = SisyphusMonkey(tester, None)
         collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
@@ -305,7 +305,7 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_list_config_changes_monkey(self, expected_config_changes_methods):
         tester = FakeTester()
-        tester.params["nemesis_selector"] = ['config_changes']
+        tester.params["nemesis_selector"] = 'config_changes'
         sisyphus_nemesis = SisyphusMonkey(tester, None)
         collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
@@ -315,8 +315,8 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_list_config_and_schema_changes_monkey(self, expected_config_and_schema_changes_methods):
         tester = FakeTester()
-        tester.params["nemesis_selector"] = ['config_changes', 'schema_changes']
-        sisyphus_nemesis = SisyphusMonkey(tester, None, nemesis_selector=['config_changes', 'schema_changes'])
+        tester.params["nemesis_selector"] = 'config_changes and schema_changes'
+        sisyphus_nemesis = SisyphusMonkey(tester, None, nemesis_selector='config_changes and schema_changes')
         collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
         for disrupt_method in collected_disrupt_methods_names:
@@ -328,11 +328,14 @@ class TestSisyphusMonkeyNemesisFilter:
         tester.db_cluster = Cluster(nodes=[Node(), Node()])
         tester.db_cluster.params = tester.params
         tester.params["nemesis_class_name"] = "SisyphusMonkey:1 SisyphusMonkey:2"
-        tester.params["nemesis_selector"] = [["topology_changes"], ["schema_changes"], ["schema_changes"]]
+        tester.params["nemesis_selector"] = ["topology_changes",
+                                             "schema_changes and schema_changes",
+                                             "schema_changes and schema_changes"]
         tester.params["nemesis_multiply_factor"] = 1
         nemesises = tester.get_nemesis_class()
 
-        expected_selectors = [["topology_changes"], ["schema_changes"], ["schema_changes"]]
+        expected_selectors = ["topology_changes",
+                              "schema_changes and schema_changes",  "schema_changes and schema_changes"]
         for i, nemesis_settings in enumerate(nemesises):
             assert nemesis_settings['nemesis'] == SisyphusMonkey, \
                 f"Wrong instance of nemesis class {nemesis_settings['nemesis']} expected SisyphusMonkey"
