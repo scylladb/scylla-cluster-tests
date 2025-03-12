@@ -400,7 +400,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if re.findall(r'\d+.\d+', self.orig_ver)[0] == re.findall(r'\d+.\d+', self.new_ver)[0]:
             self.upgrade_rollback_mode = 'minor_release'
 
+<<<<<<< HEAD
         if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
+||||||| parent of 0ac53f533 (Revert "fix(upgrade_test): make rollback reinstall option work for centos")
+        if self.upgrade_rollback_mode == 'reinstall':
+            scylla_pkg_ver = node.scylla_pkg()
+
+            if self.params.get('use_preinstalled_scylla'):
+                scylla_pkg_ver += f" {scylla_pkg_ver}-machine-image"
+
+=======
+        if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
+            scylla_pkg_ver = node.scylla_pkg()
+
+            if self.params.get('use_preinstalled_scylla'):
+                scylla_pkg_ver += f" {scylla_pkg_ver}-machine-image"
+
+>>>>>>> 0ac53f533 (Revert "fix(upgrade_test): make rollback reinstall option work for centos")
             if node.distro.is_rhel_like:
                 node.remoter.run(r'sudo yum remove scylla\* -y')
                 node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
