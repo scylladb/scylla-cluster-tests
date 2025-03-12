@@ -1,3 +1,5 @@
+# this is generated please do not any changes this file manually
+# do the changes in `template-longevity-5gb-1h-base.yaml.j2`
 test_duration: 90
 
 prepare_write_cmd:
@@ -29,3 +31,7 @@ gce_n_local_ssd_disk_db: 1
 
 server_encrypt: true
 client_encrypt: true
+
+teardown_validators:
+  scrub:
+    enabled: true
