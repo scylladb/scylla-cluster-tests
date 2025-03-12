@@ -9,9 +9,9 @@ aexpect==1.6.2 \
     --hash=sha256:8625a75a93cc98073e54b745b63e035476aad4f1d121d546217c95eafc6c78a6 \
     --hash=sha256:f1e0c5d694e93bb71be4b3885531e77ec7a5821f826c86f1b1724bb7c3e48b37
     # via -r requirements.in
-aiohappyeyeballs==2.5.0 \
-    --hash=sha256:0850b580748c7071db98bffff6d4c94028d0d3035acc20fd721a0ce7e8cac35d \
-    --hash=sha256:18fde6204a76deeabc97c48bdd01d5801cfda5d6b9c8bbeb1aaaee9d648ca191
+aiohappyeyeballs==2.6.1 \
+    --hash=sha256:c3f9d0113123803ccadfdf3f0faa505bc78e6a72d1cc4806cbd719826e943558 \
+    --hash=sha256:f349ba8f4b75cb25c99c5c2d84e997e485204d2902a9597802b0371f09331fb8
     # via aiohttp
 aiohttp==3.11.13 \
     --hash=sha256:00c8ac69e259c60976aa2edae3f13d9991cf079aaa4d3cd5a49168ae3748dee3 \
@@ -116,9 +116,9 @@ async-timeout==5.0.1 \
     --hash=sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c \
     --hash=sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3
     # via aiohttp
-attrs==25.1.0 \
-    --hash=sha256:1c97078a80c814273a76b2a298a932eb681c87415c11dee0a6921de7f1b02c3e \
-    --hash=sha256:c75a69e28a550a7e93789579c22aa26b0f5b83b75dc4e08fe092980051e1090a
+attrs==25.2.0 \
+    --hash=sha256:18a06db706db43ac232cce80443fcd9f2500702059ecf53489e3c5a3f417acaf \
+    --hash=sha256:611344ff0a5fed735d86d7784610c84f8126b95e549bcad9ff61b4242f2d386b
     # via
     #   aiohttp
     #   jsonschema
