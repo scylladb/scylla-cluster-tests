@@ -3417,6 +3417,15 @@ Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate ra
 **type:** int
 
 
+## **rack_aware_loader** / SCT_RACK_AWARE_LOADER
+
+When enabled, loaders will look for nodes on the same rack.
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **use_dns_names** / SCT_USE_DNS_NAMES
 
 Use dns names instead of ip addresses for nodes in cluster

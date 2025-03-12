@@ -2831,7 +2831,6 @@ class SCTConfiguration(dict):
                    `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
             * **list:** can be appended by adding `++` as the first item of the list
                    `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
-
         """
 
         def strip_help_text(text):
@@ -2841,9 +2840,10 @@ class SCTConfiguration(dict):
             output = [l.strip() for l in text.splitlines()]
             return '\n'.join(output[1 if not output[0] else 0:-1 if not output[-1] else None])
 
-        ret = strip_help_text(header) + '\n'
+        ret = strip_help_text(header)
 
         for opt in self.config_options:
+            ret += '\n\n'
             if opt['help']:
                 help_text = '<br>'.join(strip_help_text(opt['help']).splitlines())
             else:
@@ -2851,7 +2851,7 @@ class SCTConfiguration(dict):
             appendable = ' (appendable)' if is_config_option_appendable(opt.get('name')) else ''
             default = self.get_default_value(opt['name'])
             default_text = default if default else 'N/A'
-            ret += f"""## **{opt['name']}** / {opt['env']}\n\n{help_text}\n\n**default:** {default_text}\n\n**type:** {opt.get('type').__name__}{appendable}\n\n\n"""
+            ret += f"""## **{opt['name']}** / {opt['env']}\n\n{help_text}\n\n**default:** {default_text}\n\n**type:** {opt.get('type').__name__}{appendable}\n"""
 
         return ret
 
