@@ -91,7 +91,7 @@ class NemesisRegistry:
         for subclass in self.get_subclasses():
             properties_list = {}
             for attribute in subclass.__dict__.keys():
-                if attribute[:2] != "__":
+                if attribute[:2] != "__" and attribute not in ("additional_params", "additional_configs"):
                     value = getattr(subclass, attribute)
                     if not callable(value):
                         properties_list[attribute] = value
