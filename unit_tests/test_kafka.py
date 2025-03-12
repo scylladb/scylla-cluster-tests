@@ -18,6 +18,7 @@ import pytest
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
+from sdcm.utils.issues import SkipPerIssues
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
@@ -54,8 +55,12 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
     # pylint: disable=unused-argument,unnecessary-lambda
     params['kafka_backend'] = 'localstack'
 
+    disable_tablets = ""
+    if SkipPerIssues("scylladb/scylladb#16317", params):
+        disable_tablets = "AND tablets = {'enabled': false}"
     docker_scylla.run_cqlsh(
-        "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"
+        "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = "
+        f"{{'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 }} {disable_tablets};"
     )
     docker_scylla.run_cqlsh(
         'CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, '
