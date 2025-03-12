@@ -413,7 +413,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if re.findall(r'\d+.\d+', self.orig_ver)[0] == re.findall(r'\d+.\d+', self.new_ver)[0]:
             self.upgrade_rollback_mode = 'minor_release'
 
-        if self.upgrade_rollback_mode == 'reinstall':
+        if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
             scylla_pkg_ver = node.scylla_pkg()
 
             if self.params.get('use_preinstalled_scylla'):
