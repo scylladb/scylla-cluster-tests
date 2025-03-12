@@ -54,6 +54,7 @@ from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_conf
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
     update_sct_runner_tags, list_sct_runners
+from sdcm.tools.nemesis.generate_nemesis_jobs import NemesisJobGenerator
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, get_argus_client
@@ -92,7 +93,6 @@ from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
 )
-from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
@@ -1483,15 +1483,10 @@ def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
 @click.option("--base-job", default=None, type=str)
 @click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
 def create_nemesis_pipelines(base_job: str, backend: list[str]):
-    for backend_name in backend:
-        if backend_name not in NemesisJobGenerator.BACKEND_TO_REGION.keys():
-            LOGGER.warning("## Unsupported backend: %s", backend_name)
-            continue
-        LOGGER.info("## Generating jobs for backend %s", backend_name)
-        gen = NemesisJobGenerator(base_job=base_job, backend=backend_name)
-        gen.render_base_job_config()
-        gen.create_test_cases_from_template()
-        gen.create_job_files_from_template()
+    gen = NemesisJobGenerator(base_job=base_job, backends=backend, base_dir="")
+    gen.render_base_job_config()
+    gen.create_test_cases_from_template()
+    gen.create_job_files_from_template()
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")

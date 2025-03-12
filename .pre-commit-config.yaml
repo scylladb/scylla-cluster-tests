@@ -51,6 +51,13 @@ repos:
         types: [python]
         exclude: ^argus/.*$
 
+    -   id: nemesis_jobs
+        name: Regenerate nemesis jobs
+        entry: python -m sdcm.tools.nemesis generate-all --verify --fix
+        pass_filenames: false
+        language: system
+        files: "(sdcm/nemesis.py|templates/.*)"
+
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v5.0.0
   hooks:
