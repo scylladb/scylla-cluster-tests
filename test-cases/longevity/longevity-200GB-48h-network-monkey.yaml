@@ -11,7 +11,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i4i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['networking']
+nemesis_selector: 'networking'
 nemesis_seed: '002'
 nemesis_interval: 10
 nemesis_multiply_factor: 15

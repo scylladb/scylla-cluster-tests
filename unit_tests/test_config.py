@@ -691,7 +691,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertListEqual(conf["nemesis_selector"], ["config_changes", "topology_changes"],
+        self.assertListEqual(conf["nemesis_selector"], ["config_changes and topology_changes"],
                              msg=f"Wrong value {conf['nemesis_selector']}")
 
     def test_23_2_nemesis_include_selector_list_of_list_config_file(self):
@@ -706,7 +706,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
         self.assertListEqual(conf["nemesis_selector"],
-                             [["config_changes", "topology_changes"], ["topology_changes"], ["disruptive"]],
+                             [["config_changes and topology_changes"], ["topology_changes"], ["disruptive"]],
                              msg=f"Wrong value {conf['nemesis_selector']}")
 
     def test_26_run_fullscan_params_validtion_positive(self):

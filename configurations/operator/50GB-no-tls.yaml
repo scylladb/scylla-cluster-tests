@@ -1,5 +1,5 @@
 user_prefix: 'longevity-operator-50gb-3d'
-nemesis_selector: ['kubernetes']
+nemesis_selector: 'kubernetes'
 nemesis_add_node_cnt: 1
 
 k8s_minio_storage_size: '1024Gi'

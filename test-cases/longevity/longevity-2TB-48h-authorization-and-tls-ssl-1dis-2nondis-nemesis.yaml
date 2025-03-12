@@ -30,7 +30,7 @@ instance_type_runner: 'r6i.2xlarge'
 
 cluster_health_check: false
 nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2'
-nemesis_selector: [[],[],["!manager_operation"]]
+nemesis_selector: ["", "", "not manager_operation"]
 nemesis_interval: 30
 nemesis_during_prepare: false
 seeds_num: 3

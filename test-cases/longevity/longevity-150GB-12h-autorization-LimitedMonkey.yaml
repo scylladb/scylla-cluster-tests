@@ -12,7 +12,7 @@ instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['limited']
+nemesis_selector: 'limited'
 nemesis_seed: '026'
 nemesis_interval: 30
 nemesis_during_prepare: false
