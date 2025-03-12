@@ -22,7 +22,7 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 nemesis_seed: '156'
 instance_type_loader: 'c5n.4xlarge'
 round_robin: true
@@ -42,4 +42,4 @@ data_validation: |
 
 
 run_fullscan: ['{"mode": "random", "ks_cf": "scylla_bench.test", "interval": 3600, "pk_name":"pk", "rows_count": 50000, "validate_data": true}']
-nemesis_selector: ["delete_rows", "disruptive"]
+nemesis_selector: [['delete_rows'], ['disruptive']]
