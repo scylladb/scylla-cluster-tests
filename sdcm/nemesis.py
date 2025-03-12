@@ -232,6 +232,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
 
+    additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
+    additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
+
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):  # pylint: disable=unused-argument
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
@@ -5621,6 +5624,8 @@ class PauseLdapNemesis(Nemesis):
     disruptive = False
     limited = True
 
+    additional_configs = ["configurations/ldap-authorization.yaml"]
+
     def disrupt(self):
         self.disrupt_ldap_connection_toggle()
 
@@ -5628,6 +5633,8 @@ class PauseLdapNemesis(Nemesis):
 class ToggleLdapConfiguration(Nemesis):
     disruptive = True
     limited = True
+
+    additional_configs = ["configurations/ldap-authorization.yaml"]
 
     def disrupt(self):
         self.disrupt_disable_enable_ldap_authorization()
@@ -6382,6 +6389,9 @@ class RandomInterruptionNetworkMonkey(Nemesis):
     run_with_gemini = False
     kubernetes = True
 
+    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
+    additional_params = {"ip_ssh_connections": "public"}
+
     def disrupt(self):
         self.disrupt_network_random_interruptions()
 
@@ -6391,6 +6401,9 @@ class BlockNetworkMonkey(Nemesis):
     networking = True
     run_with_gemini = False
     kubernetes = True
+
+    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
+    additional_params = {"ip_ssh_connections": "public"}
 
     def disrupt(self):
         self.disrupt_network_block()
@@ -6428,6 +6441,9 @@ class StopStartInterfacesNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+
+    additional_configs = ["configurations/network_config/two_interfaces.yaml"]
+    additional_params = {"ip_ssh_connections": "public"}
 
     def disrupt(self):
         self.disrupt_network_start_stop_interface()
@@ -6596,6 +6612,8 @@ class SlaIncreaseSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
 
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
+
     def disrupt(self):
         self.disrupt_sla_increase_shares_during_load()
 
@@ -6603,6 +6621,8 @@ class SlaIncreaseSharesDuringLoad(Nemesis):
 class SlaDecreaseSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
+
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.disrupt_sla_decrease_shares_during_load()
@@ -6615,6 +6635,8 @@ class SlaReplaceUsingDetachDuringLoad(Nemesis):
     disruptive = True
     sla = True
 
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
+
     def disrupt(self):
         self.disrupt_replace_service_level_using_detach_during_load()
 
@@ -6625,6 +6647,8 @@ class SlaReplaceUsingDropDuringLoad(Nemesis):
     #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
     disruptive = True
     sla = True
+
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.disrupt_replace_service_level_using_drop_during_load()
@@ -6637,6 +6661,8 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
     disruptive = True
     sla = True
 
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
+
     def disrupt(self):
         self.disrupt_increase_shares_by_attach_another_sl_during_load()
 
@@ -6644,6 +6670,8 @@ class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
 class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(Nemesis):
     disruptive = False
     sla = True
+
+    additional_configs = ["configurations/nemesis/additional_configs/sla_config.yaml"]
 
     def disrupt(self):
         self.disrupt_maximum_allowed_sls_with_max_shares_during_load()
