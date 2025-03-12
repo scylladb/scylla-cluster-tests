@@ -19,7 +19,7 @@ azure_instance_type_db: 'Standard_L16s_v3'
 gce_instance_type_db: 'n2-highmem-16'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['limited']
+nemesis_selector: 'limited'
 nemesis_seed: '003'
 nemesis_interval: 30
 nemesis_during_prepare: false

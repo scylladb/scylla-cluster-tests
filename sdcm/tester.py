@@ -1189,8 +1189,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if nemesis_selectors and isinstance(nemesis_selectors, str):
             nemesis_selectors = [nemesis_selectors]
-        if nemesis_selectors and isinstance(nemesis_selectors[0], str):
-            nemesis_selectors = [nemesis_selectors[:]]
+        if nemesis_selectors and isinstance(nemesis_selectors, list):
+            nemesis_selectors = nemesis_selectors[:]
 
         nemesis_class_names = []
         for i, klass in enumerate(list_class_name.split(' ')):
@@ -1206,7 +1206,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 nemesis_class_names.append(nemesis_name)
 
         for i, nemesis_name in enumerate(nemesis_class_names):
-            nemesis_selector = []
+            nemesis_selector = ''
             if nemesis_selectors:
                 try:
                     nemesis_selector = nemesis_selectors[i % len(nemesis_class_names)]

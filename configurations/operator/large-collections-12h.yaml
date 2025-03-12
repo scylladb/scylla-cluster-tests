@@ -1,5 +1,5 @@
 user_prefix: 'longevity-operator-large-collections-12h'
-nemesis_selector: ['kubernetes']
+nemesis_selector: 'kubernetes'
 
 n_db_nodes: 5
 k8s_n_scylla_pods_per_cluster: 4

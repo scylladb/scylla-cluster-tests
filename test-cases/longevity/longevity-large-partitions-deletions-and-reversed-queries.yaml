@@ -42,4 +42,4 @@ data_validation: |
 
 
 run_fullscan: ['{"mode": "random", "ks_cf": "scylla_bench.test", "interval": 3600, "pk_name":"pk", "rows_count": 50000, "validate_data": true}']
-nemesis_selector: [['delete_rows'], ['disruptive']]
+nemesis_selector: ['delete_rows', 'disruptive']

@@ -3165,7 +3165,7 @@ Flag for running db node benchmarks before the tests
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
+nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: ["disruptive and not sla"] # simple one<br>nemesis_selector: ["disruptive and not (sla or limited or manager_operation or config_changes)"] # complex one<br>```
 
 **default:** N/A
 
