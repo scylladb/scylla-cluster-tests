@@ -1,3 +1,5 @@
+# this is generated please do not any changes this file manually
+# do the changes in `template-longevity-5gb-1h-base.yaml.j2`
 test_duration: 90
 
 prepare_write_cmd:
@@ -19,7 +21,7 @@ instance_type_db: 'i4i.large'
 gce_instance_type_db: 'n2-highmem-2'
 gce_instance_type_loader: 'e2-standard-2'
 azure_instance_type_db: 'Standard_L8s_v3'
-instance_type_loader: 'c5.large'
+instance_type_loader: 'c6i.large'
 azure_instance_type_loader: 'Standard_F2s_v2'
 
 nemesis_interval: 3
