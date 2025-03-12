@@ -1,6 +1,8 @@
 test_duration: 60
+# CDC log cannot be created for a table if keyspace uses tablets (issue scylladb/scylladb#16317).
+# Creating keyspace with tablets disabled until the issues is fixed
 pre_create_keyspace: [
-  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };",
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 } AND tablets = {'enabled': false};",
   "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, \"C0\" blob, \"C1\" blob, \"C2\" blob, \"C3\" blob, \"C4\" blob) WITH  cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}"
 ]
 
