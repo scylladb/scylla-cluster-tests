@@ -315,8 +315,8 @@ class TestSisyphusMonkeyNemesisFilter:
 
     def test_list_config_and_schema_changes_monkey(self, expected_config_and_schema_changes_methods):
         tester = FakeTester()
-        tester.params["nemesis_selector"] = ['config_changes', 'schema_changes']
-        sisyphus_nemesis = SisyphusMonkey(tester, None, nemesis_selector=['config_changes', 'schema_changes'])
+        tester.params["nemesis_selector"] = ['config_changes and schema_changes']
+        sisyphus_nemesis = SisyphusMonkey(tester, None, nemesis_selector=['config_changes and schema_changes'])
         collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
 
         for disrupt_method in collected_disrupt_methods_names:
