@@ -28,7 +28,8 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from sdcm import sct_abs_path
 from sdcm.sct_events.group_common_events import \
     ignore_large_collection_warning, \
-    ignore_max_memory_for_unlimited_query_soft_limit
+    ignore_max_memory_for_unlimited_query_soft_limit, \
+    ignore_topology_change_coordinator_errors
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -53,8 +54,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         # creating SCT Events from these warnings.
         # During large collections test thousands of warnings are being created.
         self.validate_large_collections = self.params.get('validate_large_collections')
+        self.stack = contextlib.ExitStack()
+        self.stack.enter_context(ignore_topology_change_coordinator_errors())
         if self.validate_large_collections:
-            self.stack = contextlib.ExitStack()
             self.stack.enter_context(ignore_large_collection_warning())
             self.stack.enter_context(ignore_max_memory_for_unlimited_query_soft_limit())
 
