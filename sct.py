@@ -87,11 +87,11 @@ from sdcm.utils.common import (
     search_test_id_in_latest,
     get_latest_scylla_release,
 )
+from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
 )
-from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
@@ -114,6 +114,7 @@ from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
+from sdcm.utils.verify import Fix
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
@@ -194,7 +195,7 @@ class SctLoader(unittest.TestLoader):
 def cli(ctx):
     disable_loggers_during_startup()
     # Ugly way of filtering the few command that do not require OKTA verification
-    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list", "create-nemesis-pipelines"):
+    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list", "create-nemesis-pipelines", "create_nemesis_yaml"):
         try_auth_with_okta()
 
         key_store = KeyStore()
@@ -1467,19 +1468,22 @@ def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
                            create_freestyle_jobs=triggers, job_name_suffix='')
 
 
+@cli.command("create-nemesis-yaml")
+@click.option('--output-diff', is_flag=True, help='True, if the command should output diff')
+def create_nemesis_yaml(output_diff):
+    generate_nemesis_yaml(Fix if output_diff else open)
+
+
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
 @click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
-def create_nemesis_pipelines(base_job: str, backend: list[str]):
-    for backend_name in backend:
-        if backend_name not in NemesisJobGenerator.BACKEND_TO_REGION.keys():
-            LOGGER.warning("## Unsupported backend: %s", backend_name)
-            continue
-        LOGGER.info("## Generating jobs for backend %s", backend_name)
-        gen = NemesisJobGenerator(base_job=base_job, backend=backend_name)
-        gen.render_base_job_config()
-        gen.create_test_cases_from_template()
-        gen.create_job_files_from_template()
+@click.option('--output-diff', is_flag=True, help='True, if the command should output diff')
+def create_nemesis_pipelines(base_job: str, backend: list[str], output_diff: bool):
+    gen = NemesisJobGenerator(base_job=base_job, backends=backend, base_dir="",
+                              file_opener=Fix if output_diff else open)
+    gen.render_base_job_config()
+    gen.create_test_cases_from_template()
+    gen.create_job_files_from_template()
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
