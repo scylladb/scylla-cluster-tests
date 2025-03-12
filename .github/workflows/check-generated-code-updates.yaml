@@ -37,7 +37,7 @@ jobs:
       - name: Run nemesis list validation
         uses: ./.github/actions/run-validation
         with:
-          script: python -m pytest unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis
+          script: create-nemesis-yaml
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run configuration docs validation
