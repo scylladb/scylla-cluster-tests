@@ -34,6 +34,7 @@ from sdcm.sct_events.events_processes import \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
     EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.sct_events.group_common_events import ignore_topology_change_coordinator_errors
 
 
 EVENTS_DEVICE_START_DELAY = 1  # seconds
@@ -150,6 +151,13 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=DatabaseLogEvent.ABORTING_ON_SHARD,
                                 regex=r'.*Parent connection [\d]+ is aborting on shard').publish()
+
+    # As written in https://github.com/scylladb/scylladb/issues/20950#issuecomment-2411387784
+    # raft error messages with connection close could be ignored during topology operations,
+    # upgrades and any place where the race between raft global barrier and gossipier could
+    # take place. So ignore such messages globally for any sct test.
+    # TODO: this should be removed after gossiper will be removed.
+    ignore_topology_change_coordinator_errors().__enter__()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
