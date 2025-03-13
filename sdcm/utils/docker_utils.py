@@ -518,15 +518,22 @@ def get_docker_hub_credentials() -> dict:
     return KeyStore().get_docker_hub_credentials()
 
 
-def docker_hub_login(remoter: CommandRunner) -> None:
-    docker_info = remoter.run("docker info", ignore_status=True)
+def docker_hub_login(remoter: CommandRunner, use_sudo: bool = False) -> None:
+    """
+    Logs into Docker Hub (if not already logged in) using credentials from the KeyStore.
+
+    :param remoter: CommandRunner, command runner instance
+    :param use_sudo: bool, whether to use sudo for remote commands. Optional, defaults to False.
+    """
+    remote_cmd = remoter.sudo if use_sudo else remoter.run
+    docker_info = remote_cmd("docker info", ignore_status=True)
     if docker_info.failed:
         remoter.log.error("Can't get docker info, probably there is no running Docker daemon on the host")
         return
     if match := re.search(r"^\s+Username: (.+)$", docker_info.stdout, re.MULTILINE):
         remoter.log.debug("Docker daemon is already logged in as `%s'.", match.group(1))
         return
-    if "Podman Engine" in remoter.run("docker version", ignore_status=True).stdout:
+    if "Podman Engine" in remote_cmd("docker version", ignore_status=True).stdout:
         remoter.log.info("When Podman daemon is used we don't login")
         return
     if not os.environ.get('JENKINS_URL'):
@@ -537,5 +544,5 @@ def docker_hub_login(remoter: CommandRunner) -> None:
     with remote_file(remoter=remoter, remote_path=password_file) as fobj:
         fobj.write(docker_hub_creds["password"])
     remoter.log.debug("Login to Docker Hub as `%s'", docker_hub_creds["username"])
-    remoter.run(cmd=f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
+    remote_cmd(f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
     remoter.run(f"rm '{password_file}'")
