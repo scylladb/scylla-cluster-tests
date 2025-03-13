@@ -600,11 +600,11 @@ class TestNodetoolStatus(unittest.TestCase):
         status = db_cluster.get_nodetool_status()
 
         assert status == {'eu-north':
-                          {'2a05:d016:0cf8:de00:e07d:5832:c5c0:36a0':
+                          {'2a05:d016:cf8:de00:e07d:5832:c5c0:36a0':
                            {'state': 'UN', 'load': '774KB', 'tokens': '256', 'owns': '?',
                             'host_id': 'e2ed6943', 'rack': '1a'},
-                           '2a05:d016:0cf8:de00:339e:0d0d:9446:1980': {'state': 'UN', 'load': '1.04MB', 'tokens': '256', 'owns': '?',
-                                                                       'host_id': 'd67e8502', 'rack': '1a'}}}
+                           '2a05:d016:cf8:de00:339e:d0d:9446:1980': {'state': 'UN', 'load': '1.04MB', 'tokens': '256', 'owns': '?',
+                                                                     'host_id': 'd67e8502', 'rack': '1a'}}}
 
     def test_can_get_nodetool_status_azure(self):  # pylint: disable=no-self-use
         resp = "\n".join(["Datacenter: eastus",
