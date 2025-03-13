@@ -4,7 +4,7 @@ import time
 from functools import partial
 
 from longevity_twcs_test import TWCSLongevityTest
-from sdcm.utils.common import ParallelObject, skip_optional_stage
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
@@ -40,6 +40,13 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         self.db_node.run_nodetool("compact", args=f"{self.keyspace} {self.table}")
         self.wait_no_compactions_running()
 
+    def _drop_and_recreate_keyspace(self):
+        self.log.info("Dropping the s-b keyspace before continuing with next tombstone-gc-mode")
+        with self.db_cluster.cql_connection_patient(node=self.db_node) as session:
+            session.execute(f"DROP KEYSPACE {self.keyspace}")
+        self.log.info("Recreating the s-b keyspace and table after it was dropped")
+        self.create_tables_for_scylla_bench()
+
     def test_switch_tombstone_gc_modes(self):
         """
         Test the 4 modes of tombstones-gc.
@@ -68,43 +75,68 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         self.create_tables_for_scylla_bench()
         self.db_node = self.db_cluster.nodes[0]
+
+        # Testing gc mode 'disabled'
+        # ALTER TABLE scylla_bench.test with (according to yaml post_prepare_cql_cmds):
+        # 4 minutes load duration
+        # gc_grace_seconds = 240
+        # default_time_to_live = 240
+        # TimeWindowCompactionStrategy
+        # tombstone_gc 'disabled'
+        # propagation_delay_in_seconds 240
         self.run_post_prepare_cql_cmds()
-        stress_queue = []
-
         stress_cmd = self.params.get('stress_cmd')
-        params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
-        if not skip_optional_stage('main_load'):
-            self._run_all_stress_cmds(stress_queue, params)
 
-        self.log.info('Wait a duration of TTL + propagation_delay_in_seconds')
-        time.sleep(self.propagation_delay + self.ttl)
+        params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
+
+        def _run_and_verify_stress():
+            self.log.info('Run and verify completion of stress command')
+            stress_queue = []
+            self._run_all_stress_cmds(stress_queue, params)
+            for stress in stress_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
+
+        def _wait_a_duration_of_propagation_delay():
+            self.log.info('Wait a duration of propagation_delay_in_seconds')
+            time.sleep(self.propagation_delay)
+
+        def _wait_a_duration_of_ttl_and_propagation_delay():
+            _wait_a_duration_of_propagation_delay()
+            self.log.info('Wait a duration of TTL')
+            time.sleep(self.ttl + 60)  # Adding an extra minute sleep for table rows to finish expiry.
+
+        _run_and_verify_stress()
+        _wait_a_duration_of_ttl_and_propagation_delay()
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")
         sstable_utils = SstableUtils(db_node=self.db_node, propagation_delay_in_seconds=self.propagation_delay,
                                      ks_cf=self.ks_cf)
         self.log.info('Count the initial number of tombstones')
-        tombstone_num_pre_repair = sstable_utils.count_tombstones()
+        tombstone_num_pre_repair = sstable_utils.count_ttl_expired_tombstones()
         self._run_repair_and_major_compaction()
-        tombstone_num_post_repair = sstable_utils.count_tombstones()
+        tombstone_num_post_repair = sstable_utils.count_ttl_expired_tombstones()
         assert tombstone_num_post_repair >= tombstone_num_pre_repair, \
             f"Found unexpected fewer tombstones: {tombstone_num_post_repair} / {tombstone_num_pre_repair}"
 
-        self.log.info("change gc-grace-seconds back to default of 10 days and tombstone-gc mode to 'repair'")
+        # Testing gc mode 'repair'
+        self._drop_and_recreate_keyspace()
+        self.log.info("change gc-grace-seconds to default of 10 days and tombstone-gc mode to 'repair'")
         with self.db_cluster.cql_connection_patient(node=self.db_node) as session:
             query = "ALTER TABLE scylla_bench.test with gc_grace_seconds = 864000 " \
                     f"and tombstone_gc = {{'mode': 'repair', 'propagation_delay_in_seconds':'{self.propagation_delay}'}};"
             session.execute(query)
-
+        _wait_a_duration_of_propagation_delay()
+        _run_and_verify_stress()
+        _wait_a_duration_of_ttl_and_propagation_delay()
         self._run_repair_and_major_compaction(wait_propagation_delay=True)
-
         self.log.info("verify no tombstones exist in post-repair-created sstables")
-
         table_repair_date, delta_repair_date_minutes = sstable_utils.get_table_repair_date_and_delta_minutes()
         sstables = sstable_utils.get_sstables(from_minutes_ago=delta_repair_date_minutes)
-        self.log.debug('Starting sstabledump to verify correctness of tombstones for %s sstables',
+        self.log.debug('Starting sstable dump to verify correctness of tombstones for %s sstables',
                        len(sstables))
-        for sstable in sstables:
-            sstable_utils.verify_post_repair_sstable_tombstones(table_repair_date=table_repair_date, sstable=sstable)
+        sstable_utils.verify_post_repair_ttl_expired_tombstones(table_repair_date=table_repair_date, sstables=sstables)
 
+        # Testing gc mode 'immediate'
+        self._drop_and_recreate_keyspace()
         self.log.info("Change tombstone-gc mode to 'immediate'")
         with self.db_cluster.cql_connection_patient(node=self.db_node) as session:
             query = "ALTER TABLE scylla_bench.test with tombstone_gc = {'mode': 'immediate', 'propagation_delay_in_seconds':'300'};"
@@ -112,23 +144,20 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         self.log.info('Wait a duration of schema-agreement and propagation_delay_in_seconds')
         self.db_cluster.wait_for_schema_agreement()
-        time.sleep(self.propagation_delay)
-        alter_gc_mode_immediate_time = datetime.datetime.now()  # from this point on, all compacted tombstones are GCed.
-        self.log.info('Wait for s-b load to finish')
-        for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
-        self.log.info('Wait a duration of propagation_delay_in_seconds')
-        time.sleep(self.propagation_delay)
+        _wait_a_duration_of_propagation_delay()
+        # alter_gc_mode_immediate_time = datetime.datetime.now()  # from this point on, all compacted tombstones are GCed.
+        _run_and_verify_stress()
+        _wait_a_duration_of_ttl_and_propagation_delay()
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")
         self.log.info('Run a major compaction for user-table on node')
         self.db_node.run_nodetool("compact", args=f"{self.keyspace} {self.table}")
         self.wait_no_compactions_running()
         self.log.info('Verify no compacted tombstones in sstables')
         #  compaction_gc_delta_minutes = the time range where any compacted tombstone is GCed.
-        compaction_gc_delta_minutes = (datetime.datetime.now() - alter_gc_mode_immediate_time).seconds // 60
-        sstables = sstable_utils.get_sstables(from_minutes_ago=compaction_gc_delta_minutes)
+        # compaction_gc_delta_minutes = (datetime.datetime.now() - alter_gc_mode_immediate_time).seconds // 60
+        sstables = sstable_utils.get_sstables()  # from_minutes_ago=compaction_gc_delta_minutes)
         self.log.debug('Starting sstabledump to verify correctness of tombstones for %s sstables',
                        len(sstables))
         for sstable in sstables:
-            tombstone_deletion_info = sstable_utils.get_compacted_tombstone_deletion_info(sstable=sstable)
+            tombstone_deletion_info = sstable_utils.get_ttl_expired_tombstone_deletion_info(sstable=sstable)
             assert not tombstone_deletion_info, f"Found unexpected existing tombstones: {tombstone_deletion_info} for sstable: {sstable}"
