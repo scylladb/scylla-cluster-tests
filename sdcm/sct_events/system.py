@@ -334,3 +334,13 @@ class FailedResultEvent(InformationalEvent):
     @property
     def msgfmt(self) -> str:
         return super().msgfmt + ": message={0.message}"
+
+
+class TopologyFailureEvent(SctEvent):
+    def __init__(self, message: str, severity: Severity = Severity.CRITICAL):
+        super().__init__(severity)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
