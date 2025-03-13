@@ -1,0 +1,39 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description>Triggers tests without Tablets on weekly basis, every Saturday at 10:00
+</description>
+  <scm class="hudson.scm.NullSCM"/>
+  <disabled>false</disabled>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>00 10 * * 6</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders/>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=master:latest
+new_scylla_repo=https://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_loader_nodes=destroy
+post_behavior_monitor_nodes=destroy
+email_recipients=qa@scylladb.com,tablets@scylladb.com</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>no_tablets/longevity-100gb-4h-test,no_tablets/longevity-harry-2h-test,no_tablets/longevity-large-partition-8h-test,no_tablets/longevity-multidc-multirack-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers/>
+</project>

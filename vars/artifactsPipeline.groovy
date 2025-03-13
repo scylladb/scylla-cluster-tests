@@ -63,7 +63,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
-            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",

@@ -9,9 +9,6 @@ n_monitor_nodes: 1
 
 azure_image_monitor: 'OpenLogic:CentOS:7_9:latest'
 
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
 use_preinstalled_scylla: true
 
 user_prefix: manager-regression

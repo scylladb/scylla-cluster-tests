@@ -84,7 +84,7 @@ def call() {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
-            string(defaultValue: "keep-on-failure",
+            string(defaultValue: "destroy",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
 
@@ -92,7 +92,7 @@ def call() {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_loader_nodes')
 
-            string(defaultValue: "keep-on-failure",
+            string(defaultValue: "destroy",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
 

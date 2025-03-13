@@ -11,10 +11,6 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i4i.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
 
-post_behavior_db_nodes: "destroy"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "destroy"
-
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['limited']
 nemesis_interval: 30
