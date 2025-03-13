@@ -31,7 +31,6 @@ import time
 import traceback
 import itertools
 import json
-import ipaddress
 import shlex
 from decimal import Decimal, ROUND_UP
 from importlib import import_module
@@ -127,7 +126,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     SCYLLA_VERSION_RE, is_enterprise,
 )
-from sdcm.utils.net import get_my_ip
+from sdcm.utils.net import get_my_ip, to_inet_ntop_format
 from sdcm.utils.node import build_node_api_command
 from sdcm.wait import wait_for_log_lines
 from sdcm.sct_events import Severity
@@ -875,7 +874,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def _get_public_ip_address(self) -> Optional[str]:
         public_ips, _ = self._refresh_instance_state()
         if public_ips:
-            return public_ips[0]
+            return to_inet_ntop_format(public_ips[0])
         else:
             return None
 
@@ -883,13 +882,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def private_ip_address(self) -> Optional[str]:
         # Primary network interface private IP
         if self._private_ip_address_cached is None:
-            self._private_ip_address_cached = self._get_private_ip_address()
+            self._private_ip_address_cached = to_inet_ntop_format(self._get_private_ip_address())
         return self._private_ip_address_cached
 
     def _get_private_ip_address(self) -> Optional[str]:
         _, private_ips = self._refresh_instance_state()
         if private_ips:
-            return private_ips[0]
+            return to_inet_ntop_format(private_ips[0])
         else:
             return None
 
@@ -897,7 +896,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def ipv6_ip_address(self) -> Optional[str]:
         # Primary network interface public IPv6
         if self._ipv6_ip_address_cached is None:
-            self._ipv6_ip_address_cached = self._get_ipv6_ip_address()
+            self._ipv6_ip_address_cached = to_inet_ntop_format(self._get_ipv6_ip_address())
         return self._ipv6_ip_address_cached
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
@@ -905,7 +904,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def get_all_ip_addresses(self):
         public_ipv4_addresses, private_ipv4_addresses = self._refresh_instance_state()
-        return list(set(public_ipv4_addresses + private_ipv4_addresses + [self._get_ipv6_ip_address()]))
+        public_ipv4_addresses = [to_inet_ntop_format(address) for address in public_ipv4_addresses]
+        private_ipv4_addresses = [to_inet_ntop_format(address) for address in private_ipv4_addresses]
+        return list(set(public_ipv4_addresses + private_ipv4_addresses + [to_inet_ntop_format(self._get_ipv6_ip_address())]))
 
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
@@ -2795,8 +2796,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         for row in cql_results:
             peer = row.peer
             try:
-                # make sure we use ipv6 long format (some tools remove leading zeros)
-                peer = ipaddress.ip_address(row.peer).exploded
+                peer = to_inet_ntop_format(row.peer)
             except ValueError as exc:
                 current_err = f"Peer '{peer}' is not an IP address, err: {exc}\n"
                 LOGGER.warning(current_err)
@@ -2828,8 +2828,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             if line.startswith('SCHEMA:'):
                 schema = line.replace('SCHEMA:', '')
             elif line.startswith('RPC_ADDRESS:'):
-                # make sure we use ipv6 long format (some tools remove leading zeros)
-                ip = ipaddress.ip_address(line.replace('RPC_ADDRESS:', '')).exploded
+                ip = to_inet_ntop_format(line.replace('RPC_ADDRESS:', ''))
             elif line.startswith('STATUS:'):
                 status = line.replace('STATUS:', '').split(',')[0]
             elif line.startswith('DC:'):
@@ -4398,8 +4397,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 if not match:
                     continue
                 node_info = match.groupdict()
-                # make sure we use ipv6 long format (some tools remove leading zeros)
-                node_ip = ipaddress.ip_address(node_info.pop("ip")).exploded
+                node_ip = to_inet_ntop_format(node_info.pop("ip"))
                 # NOTE: following replacement is needed for the K8S case where
                 #       registered IP is different than the one used for network connections
                 if verification_node.is_kubernetes():
