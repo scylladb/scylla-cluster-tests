@@ -30,6 +30,7 @@ import traceback
 import json
 import itertools
 import enum
+import ast
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
@@ -166,6 +167,7 @@ from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
+from sdcm.utils.ast_utils import BooleanEvaluator
 
 
 LOGGER = logging.getLogger(__name__)
@@ -559,7 +561,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             manager_operation: Optional[bool] = None,
             zero_node_changes: Optional[bool] = None,
     ) -> List[str]:
-        subclasses_list = self._get_subclasses(
+        args = dict(
             disruptive=disruptive,
             supports_high_disk_utilization=supports_high_disk_utilization,
             run_with_gemini=run_with_gemini,
@@ -572,6 +574,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             free_tier_set=free_tier_set,
             sla=sla,
             manager_operation=manager_operation,
+            zero_node_changes=zero_node_changes
+        )
+        subclasses_list = self._get_subclasses(
+            *[key for key, val in args.items() if val]
         )
         disrupt_methods_list = []
         for subclass in subclasses_list:
@@ -583,9 +589,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return disrupt_methods_list
 
     def get_list_of_subclasses_by_property_name(self, list_of_properties_to_include):
-        flags = {flag_name.strip('!'): not flag_name.startswith(
-            '!') for flag_name in list_of_properties_to_include}
-        subclasses_list = self._get_subclasses(**flags)
+        subclasses_list = self._get_subclasses(*list_of_properties_to_include)
         return subclasses_list
 
     def get_list_of_disrupt_methods(self, subclasses_list, export_properties=False):
@@ -619,7 +623,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return disrupt_methods_objects_list, all_methods_with_properties, nemesis_classes
 
     @classmethod
-    def _get_subclasses(cls, **flags) -> List[Type['Nemesis']]:
+    def _get_subclasses(cls, *flags_list) -> List[Type['Nemesis']]:
         tmp = Nemesis.__subclasses__()
         subclasses = []
         while tmp:
@@ -627,12 +631,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 subclasses.append(nemesis)
                 tmp.remove(nemesis)
                 tmp.extend(nemesis.__subclasses__())
-        return cls._get_subclasses_from_list(subclasses, **flags)
+        return cls._get_subclasses_from_list(subclasses, *flags_list)
 
     @staticmethod
     def _get_subclasses_from_list(
             list_of_nemesis: List[Type['Nemesis']],
-            **flags) -> List[Type['Nemesis']]:
+            *flags_list) -> List[Type['Nemesis']]:
         """
         It apply 'and' logic to filter,
             if any value in the filter does not match what nemeses have,
@@ -640,20 +644,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         nemesis_subclasses = []
         nemesis_to_exclude = COMPLEX_NEMESIS + DEPRECATED_LIST_OF_NEMESISES
+        logical_phrase = " and ".join(flags_list)
+        evaluator = BooleanEvaluator()
+        if logical_phrase:
+            expression_ast = ast.parse(logical_phrase, mode="eval")
+
         for nemesis in list_of_nemesis:
             if nemesis in nemesis_to_exclude:
                 continue
-            matches = True
-            for filter_name, filter_value in flags.items():
-                if filter_value is None:
-                    continue
-                attr = getattr(nemesis, filter_name, False)
-                if attr != filter_value:
-                    matches = False
-                    break
-            if not matches:
-                continue
-            nemesis_subclasses.append(nemesis)
+            evaluator.context = dict(**nemesis.__dict__, **{nemesis.__name__: True})
+            if (logical_phrase and evaluator.visit(expression_ast)) or not logical_phrase:
+                nemesis_subclasses.append(nemesis)
         return nemesis_subclasses
 
     def __str__(self):
@@ -2030,7 +2031,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         nemesis_selector = self.cluster.params.get('nemesis_selector') or []
         if self.cluster.params.get('nemesis_exclude_disabled'):
-            nemesis_selector.append('!disabled')
+            nemesis_selector.append('not disabled')
         self._nemesis_selector_list = nemesis_selector
         return self._nemesis_selector_list
 
@@ -2038,7 +2039,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def nemesis_selector_list(self, value: list):
         self._nemesis_selector_list = value
         if value and self.cluster.params.get('nemesis_exclude_disabled'):
-            self._nemesis_selector_list.append('!disabled')
+            self._nemesis_selector_list.append('not disabled')
 
     @property
     def _disruption_list_names(self):
