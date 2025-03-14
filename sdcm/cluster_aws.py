@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 # pylint: disable=too-many-lines, too-many-public-methods
-import ipaddress
 import json
 import logging
 import os
@@ -51,6 +50,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
+from sdcm.utils.net import to_inet_ntop_format
 from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
@@ -498,13 +498,13 @@ class AWSNode(cluster.BaseNode):
             self.log.debug("Node %s devices: %s", self.name, devices)
 
         for interface in self._instance.network_interfaces:
-            private_ip_addresses = [private_address["PrivateIpAddress"]
+            private_ip_addresses = [to_inet_ntop_format(private_address["PrivateIpAddress"])
                                     for private_address in interface.private_ip_addresses]
-            # make sure we use ipv6 long format (some tools remove leading zeros)
-            ipv6_addresses = [ipaddress.ip_address(
-                ipv6_address['Ipv6Address']).exploded for ipv6_address in interface.ipv6_addresses]
+            ipv6_addresses = [to_inet_ntop_format(ipv6_address['Ipv6Address'])
+                              for ipv6_address in interface.ipv6_addresses]
             device_indexes.append(interface.attachment['DeviceIndex'])
-            ipv4_public_address = interface.association_attribute['PublicIp'] if interface.association_attribute else None
+            ipv4_public_address = to_inet_ntop_format(
+                interface.association_attribute['PublicIp']) if interface.association_attribute else None
             dns_public_name = interface.association_attribute['PublicDnsName'] if interface.association_attribute else None
             interfaces_tmp.append(NetworkInterface(ipv4_public_address=ipv4_public_address,
                                                    ipv6_public_addresses=ipv6_addresses,

@@ -47,3 +47,14 @@ def resolve_ip_to_dns(ip_address: str) -> str:
         return socket.gethostbyaddr(ip_address)[0]
     except socket.herror as e:
         raise ValueError(f"Unable to resolve IP: {e}")
+
+
+def to_inet_ntop_format(ip_address: str) -> str:
+    """Converts an IP address to a inet_ntop format if it is a valid IPv6 address.
+    Otherwise, it returns the input address.
+    """
+    try:
+        packed_ipv6 = ipaddress.IPv6Address(ip_address).packed
+        return socket.inet_ntop(socket.AF_INET6, packed_ipv6)
+    except ipaddress.AddressValueError:
+        return ip_address
