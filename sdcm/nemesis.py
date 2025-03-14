@@ -97,7 +97,7 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.system import InfoEvent, CoreDumpEvent
+from sdcm.sct_events.system import InfoEvent, CoreDumpEvent, TopologyFailureEvent
 from sdcm.sla.sla_tests import SlaTests
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.aws_kms import AwsKms
@@ -1682,7 +1682,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         is_old_node_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
-        assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
+        if state := get_node_state(old_node_ip) != "DN":
+            TopologyFailureEvent(
+                source=self.__class__.__name__,
+                message=f"Removed node state should be DN, but was {state}",
+                severity=Severity.CRITICAL
+            ).publish()
+
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self.replace_node(old_node_ip, host_id, rack=self.target_node.rack,
                                      is_zero_node=self.target_node._is_zero_token_node)
@@ -1697,12 +1703,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             @retrying(n=20, sleep_time=20, allowed_exceptions=(AssertionError,))
             def wait_for_old_node_to_removed():
                 state = get_node_state(old_node_ip)
-                if old_node_ip == new_node.ip_address:
-                    assert state == "UN", \
-                        f"New node with the same IP as removed one should be in UN state but was: {state}"
-                else:
-                    assert state is None, \
-                        f"Old node should have been removed from status but it wasn't. State was: {state}"
+                if old_node_ip == new_node.ip_address and state != "UN":
+                    TopologyFailureEvent(
+                        source=self.__class__.__name__,
+                        message=f"New node with the same IP as removed one should be in UN state but was: {state}",
+                        severity=Severity.CRITICAL
+                    ).publish()
+                if old_node_ip != new_node.ip_address and state is not None:
+                    TopologyFailureEvent(
+                        source=self.__class__.__name__,
+                        message=f"Old node should have been removed from status but it wasn't. State was: {state}",
+                        severity=Severity.CRITICAL
+                    ).publish()
 
             wait_for_old_node_to_removed()
 
