@@ -81,7 +81,7 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         self.wait_for_user_roles_update(are_roles_expected=False, username=new_test_user)
         self.wait_verify_user_no_permissions(username=new_test_user)
         for stress in stress_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
+            self.verify_stress_thread(stress)
 
         self.delete_ldap_role(ldap_role_name=superuser_role)
         with pytest.raises(Unauthorized):

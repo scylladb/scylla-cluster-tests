@@ -140,6 +140,3 @@ class CassandraHarryThread(DockerBasedStressThread):
         else:
             results['status'] = 'failed'
         return results
-
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]

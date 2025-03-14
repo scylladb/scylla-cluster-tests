@@ -106,6 +106,6 @@ class KafkaCDCReaderThread(Thread):  # pylint: disable=too-many-instance-attribu
     def kill(self):
         self.stop()
 
-    def verify_results(self) -> (list[dict | None], list[str | None]):
+    def parse_results(self) -> (list[dict | None], list[str | None]):
         self.join(self.duration)
         return [], []

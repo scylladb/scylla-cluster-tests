@@ -139,7 +139,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
     check_metrics()
 
-    output = ycsb_thread.get_results()
+    output, _ = ycsb_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 

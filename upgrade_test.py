@@ -1496,7 +1496,7 @@ class UpgradeCustomTest(UpgradeTest):
         stress_before_upgrade = self.run_cs_user_profiles(cs_profiles=user_profiles,
                                                           duration_per_cs_profile=duration_per_cs_profile)
         for queue in stress_before_upgrade:
-            self.verify_stress_thread(cs_thread_pool=queue)
+            self.verify_stress_thread(queue)
 
         # write workload during entire test
         if not (cs_user_profiles := self.params.get('cs_user_profiles')):
@@ -1599,7 +1599,7 @@ class UpgradeCustomTest(UpgradeTest):
         InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
 
         for queue in entire_write_thread_pool:
-            self.verify_stress_thread(cs_thread_pool=queue)
+            self.verify_stress_thread(queue)
 
         InfoEvent(message='Step7 - Upgrade sstables to latest supported version ').publish()
         # figure out what is the last supported sstable version

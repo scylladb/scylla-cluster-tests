@@ -1032,7 +1032,7 @@ def test_cloud_bundle_connectivity_cassandra_stress(tester):
     )
 
     stress_obj = tester.run_stress_thread(cmd, stop_test_on_failure=False)
-    output = stress_obj.get_results()
+    output, _ = stress_obj.parse_results()
 
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
@@ -1054,7 +1054,7 @@ def test_cloud_bundle_connectivity_scylla_bench(tester):
     )
 
     stress_obj = tester.run_stress_thread(cmd, stop_test_on_failure=False)
-    summaries, errors = stress_obj.verify_results()
+    summaries, errors = stress_obj.parse_results()
     assert not errors
     assert summaries[0]["Clustering row size"] == "Uniform(min=10, max=20)"
 

@@ -98,9 +98,6 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
         return loader, result, kcl_failure_event or kcl_finish_event
 
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]
-
 
 class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     def __init__(self, *args, **kwargs):

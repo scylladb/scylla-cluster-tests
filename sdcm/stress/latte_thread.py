@@ -261,9 +261,6 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             stress_event.severity = Severity.ERROR
         stress_event.add_error(errors=[error_msg])
 
-    def get_results(self) -> list:
-        return [result for _, result, _ in super().get_results()]
-
 
 def format_stress_cmd_error(exc: Exception) -> str:
     """Format nicely the exception from a stress command failure."""

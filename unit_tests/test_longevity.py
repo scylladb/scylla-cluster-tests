@@ -45,7 +45,7 @@ def test_test_user_batch_custom_time(params):
         def _run_all_stress_cmds(self, stress_queue, params):
             for _ in range(len(params['stress_cmd'])):
                 m = MagicMock()
-                m.verify_results.return_value = ('', [])
+                m.parse_results.return_value = ([], {})
                 stress_queue.append(m)
 
     test = DummyLongevityTest()

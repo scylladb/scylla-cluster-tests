@@ -44,7 +44,7 @@ def test_01_cassandra_stress(request, docker_scylla, params):
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -71,7 +71,7 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -106,7 +106,7 @@ def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -135,7 +135,7 @@ def test_04_cassandra_stress_multi_region(request, docker_scylla, params):
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
@@ -165,7 +165,7 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
 
     cs_thread.run()
 
-    output = cs_thread.get_results()
+    output, _ = cs_thread.parse_results()
     assert "latency mean" in output[0]
     assert float(output[0]["latency mean"]) > 0
 
