@@ -177,10 +177,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
             cmd_runner = cleanup_context = RemoteDocker(
-                loader, self.params.get('stress_image.scylla-bench'),
-                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} '
-                                  '--network=host '
-                                  '--security-opt seccomp=unconfined '
+                loader, self.params.get("stress_image.scylla-bench"), extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined '
             )
             cmd_runner_name = loader.ip_address
 
