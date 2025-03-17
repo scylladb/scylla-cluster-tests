@@ -3159,8 +3159,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.remoter.sudo('systemctl stop firewalld', ignore_status=True)
         self.remoter.sudo('systemctl disable firewalld', ignore_status=True)
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
-        self.remoter.run(f'logger -p {level} -t scylla {shlex.quote(message)}', verbose=verbose)
+    def log_message(self, message: str, level: str = 'info') -> None:
+        try:
+            self.remoter.run(
+                f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
+                ignore_status=True, verbose=False, retry=0, timeout=10)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
 
     def query_metadata(self, url: str, headers: dict = None, token_url: str = None, token_header: str = None,
                        token_ttl_header: str = None, token_ttl: int = 21600) -> str:
@@ -5173,9 +5178,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 enabled_features_state.append(feature in enabled_features)
         return all(enabled_features_state)
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+    def log_message(self, message: str, level: str = 'info') -> None:
         for node in self.nodes:
-            node.log_message(message, level, verbose)
+            node.log_message(message, level)
 
 
 class BaseLoaderSet():
@@ -5419,9 +5424,9 @@ class BaseLoaderSet():
             LOGGER.debug("Update rack info in Argus for loader '%s'", loader.name)
             loader.update_rack_info_in_argus(loader.datacenter, loader.node_rack)
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+    def log_message(self, message: str, level: str = 'info') -> None:
         for node in self.nodes:
-            node.log_message(message, level, verbose)
+            node.log_message(message, level)
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
