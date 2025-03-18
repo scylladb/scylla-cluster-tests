@@ -223,7 +223,7 @@ run_fullscan: []
 stress_step_duration: '15m'
 simulated_regions: 0
 simulated_racks: 0
-
+rack_aware_loader: false
 use_dns_names: false
 
 use_placement_group: false

@@ -3,7 +3,7 @@ n_monitor_nodes: 1
 n_db_nodes: '5 5'
 n_loaders: '1 1'
 simulated_regions: 2
-
+rack_aware_loader: true
 gce_instance_type_db: 'n2-highmem-32'
 gce_instance_type_loader: 'e2-highcpu-32'
 
