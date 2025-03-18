@@ -1700,6 +1700,8 @@ class SCTConfiguration(dict):
         dict(name="simulated_racks", env="SCT_SIMULATED_RACKS", type=int,
              help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
              Provide number of racks to simulate."""),
+        dict(name="rack_aware_loader", env="SCT_RACK_AWARE_LOADER", type=boolean,
+             help="When enabled, loaders will look for nodes on the same rack."),
 
         dict(name="use_dns_names", env="SCT_USE_DNS_NAMES", type=boolean,
              help="""Use dns names instead of ip addresses for nodes in cluster"""),

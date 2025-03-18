@@ -10,6 +10,7 @@ stress_cmd: >-
   readEnabled=true; numReaders=100; numWriters=100 ; cass.writeConsistencyLevel=LOCAL_QUORUM ; generateChecksum=true;
   cli.timeoutMillis=14400000; writeRateLimit=1350 ; readRateLimit=12000
 
+rack_aware_loader: true
 region_name: 'us-east-1 eu-west-1'
 n_db_nodes: '6 6'
 n_loaders: '2 2'

@@ -1,6 +1,7 @@
 stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
 region_name: 'eu-west-1 us-east-1'
 n_db_nodes: '2 1'
+rack_aware_loader: true
 n_loaders: 1
 n_monitor_nodes: 1
 monitor_branch: 'branch-2.1'
