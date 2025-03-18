@@ -64,7 +64,10 @@ class ScyllaDoctor:
         return latest
 
     def download_scylla_doctor(self):
-        self.node.install_package('curl')
+        if self.node.remoter.run("which curl", ignore_status=True).ok:
+            LOGGER.info("curl already installed, proceeding...")
+        else:
+            self.node.install_package('curl')
         latest_package = self.locate_newest_scylla_doctor_package()
         if not latest_package:
             raise ScyllaDoctorException("Unable to find latest scylla-doctor package for offline install")
