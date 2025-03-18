@@ -1,2 +1,3 @@
 n_db_nodes: '4 4'
 simulated_racks: 4
+rack_aware_loader: true

@@ -9,7 +9,7 @@ stress_cmd: [
   "cassandra-stress read  cl=QUORUM duration=360m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=30 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
 ]
 round_robin: true
-
+rack_aware_loader: true
 n_db_nodes: '3 3'
 n_loaders: '1 1'
 n_monitor_nodes: 1
