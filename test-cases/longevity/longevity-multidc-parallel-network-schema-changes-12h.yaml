@@ -8,7 +8,7 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=720m -schema 'replicatio
              "cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
              "cassandra-stress user profile=/tmp/cs_multidc_mv_lcs.yaml ops'(write=1,read=1,mv_read1=1,mv_read2=1)' -port jmx=6868 -mode cql3 native -rate threads=40 duration=700m -log interval=5",
              ]
-
+rack_aware_loader: true
 n_db_nodes: '4 4'
 n_loaders: '2 1'
 region_aware_loader: true
