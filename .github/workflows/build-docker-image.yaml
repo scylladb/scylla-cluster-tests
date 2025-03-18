@@ -21,6 +21,7 @@ jobs:
     steps:
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
+        if: github.actor != 'renovate[bot]'
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
@@ -29,7 +30,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-    if: needs.check_org_membership.outputs.isTeamMember == 'true' && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
+    if: github.actor == 'renovate[bot]' || (needs.check_org_membership.outputs.isTeamMember == 'true' && contains(github.event.pull_request.labels.*.name, 'New Hydra Version'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
