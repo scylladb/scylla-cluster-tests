@@ -41,7 +41,7 @@ We should be able to override the default in the test configuration:
 stress_image:
   ycsb: scylladb/hydra-loaders:ycsb-jdk8-20211104
   cassandra-stress: scylladb/scylla:5.0.0
-  scylla-bench: scylladb/hydra-loaders:scylla-bench-v0.1.8
+  scylla-bench: scylladb/scylla-bench:0.2.0
 ```
 
 or via environment variables :
@@ -49,7 +49,7 @@ or via environment variables :
 ```bash
 export SCT_STRESS_IMAGE='{"ycsb": "scylladb/hydra-loaders:ycsb-jdk8-20211104"}'
 export SCT_STRESS_IMAGE.cassandra-stress="scylladb/scylla:5.0.0"
-export SCT_STRESS_IMAGE.scylla-bench="scylladb/hydra-loaders:scylla-bench-v0.1.8"
+export SCT_STRESS_IMAGE.scylla-bench="scylladb/scylla-bench:0.2.0"
 ```
 
 for using multiple versions, we should be able to define the image as part of the stress command:
