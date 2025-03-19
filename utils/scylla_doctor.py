@@ -96,7 +96,6 @@ class ScyllaDoctor:
 
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
-            self.run('apt update')
             self.node.install_package('ethtool')
 
         if self.offline_install:
