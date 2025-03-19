@@ -523,7 +523,7 @@ When define true, will install scylla management
 
 When defined true, will run node operations in parallel. Supported operations: startup
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
@@ -568,7 +568,7 @@ A local directory of rpms to install a custom version on top of<br>the scylla in
 
 The port of scylla management
 
-**default:** branch-4.8
+**default:** branch-4.9
 
 **type:** str (appendable)
 
@@ -998,18 +998,18 @@ Run nemesis during prepare stage of the test
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
 
-A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
+A seed number in order to repeat nemesis sequence as part of SisyphusMonkey.<br>Can provide a list of seeds for multiple nemesis
 
 **default:** N/A
 
-**type:** int
+**type:** int_or_space_separated_ints
 
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
 
 Add/remove nodes during GrowShrinkCluster nemesis
 
-**default:** 1
+**default:** 3
 
 **type:** int
 
@@ -1029,7 +1029,7 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
-**type:** int
+**type:** int_or_space_separated_ints
 
 
 ## **space_node_threshold** / SCT_SPACE_NODE_THRESHOLD
@@ -1084,6 +1084,15 @@ Seed number for gemini command
 **default:** N/A
 
 **type:** int
+
+
+## **gemini_log_cql_statements** / SCT_GEMINI_LOG_CQL_STATEMENTS
+
+Log CQL statements to file
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **gemini_table_options** / SCT_GEMINI_TABLE_OPTIONS
@@ -2337,6 +2346,15 @@ number of tables to create for template user c-s
 **type:** int
 
 
+## **add_cs_user_profiles_extra_tables** / SCT_ADD_CS_USER_PROFILES_EXTRA_TABLES
+
+extra tables to create for template user c-s, in addition to pre-created tables
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **scylla_mgmt_upgrade_to_repo** / SCT_SCYLLA_MGMT_UPGRADE_TO_REPO
 
 Url to the repo of scylla manager version to upgrade to for management tests
@@ -2393,11 +2411,20 @@ Nodetool refresh extra options like --load-and-stream or --primary-replica-only
 
 ## **mgmt_prepare_snapshot_size** / SCT_MGMT_PREPARE_SNAPSHOT_SIZE
 
-Size of backup snapshot in Gb to be prepared to be prepared for backup
+Size of backup snapshot in Gb to be prepared for backup
 
 **default:** N/A
 
 **type:** int
+
+
+## **mgmt_snapshots_preparer_params** / SCT_MGMT_SNAPSHOTS_PREPARER_PARAMS
+
+Custom parameters of c-s write operation used in snapshots preparer
+
+**default:** {'cs_cmd_template': "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}", 'operation': 'write', 'cl': 'QUORUM', 'replication': 'NetworkTopologyStrategy', 'rf': 3, 'compaction': 'IncrementalCompactionStrategy', 'threads_num': 500, 'col_size': 1024, 'col_n': 1, 'ks_name': '', 'num_of_rows': '', 'sequence_start': '', 'sequence_end': ''}
+
+**type:** dict_or_str
 
 
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
@@ -2555,7 +2582,7 @@ Used for gradual performance test. Define throttle for load step in ops. Example
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
 
-Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m, 'write': None, 'mixed': '30m'}
+Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m', 'write': None, 'mixed': '30m'}
 
 **default:** N/A
 
@@ -2660,13 +2687,15 @@ By default, the tablets feature is disabled. With this parameter, created for th
 
 **type:** boolean
 
+
 ## **enable_views_with_tablets_on_upgrade** / SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE
 
-Enables creating materialized views in keyspaces using tablets by adding an experimental feature. It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades where we create such views. In particular, in 6.2 tablets are enabled by default, so for the 6.2 -> 2025.1 upgrade, it should also be enabled when using defaults.
+Enables creating materialized views in keyspaces using tablets by adding an experimental feature.It should not be used when upgrading to versions before 2025.1 and it should be used for upgradeswhere we create such views.
 
-**default:** False
+**default:** N/A
 
 **type:** boolean
+
 
 ## **upgrade_node_packages** / SCT_UPGRADE_NODE_PACKAGES
 
@@ -2861,7 +2890,7 @@ Run post behavior actions in sct teardown step
 
 Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2879,7 +2908,7 @@ Failure/post test behavior, i.e. what to do with the loader cloud instances at t
 
 Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2888,7 +2917,7 @@ Failure/post test behavior, i.e. what to do with the monitor cloud instances at 
 
 Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.<br><br>'destroy' - Destroy k8s cluster and credentials (default)<br>'keep' - Keep k8s cluster running and leave credentials alone<br>'keep-on-failure' - Keep k8s cluster if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -3183,7 +3212,7 @@ Flag for running db node benchmarks before the tests
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: ["disruptive and not sla"] # simple one<br>nemesis_selector: ["disruptive and not (sla or limited or manager_operation or config_changes)"] # complex one<br>```
+nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: "disruptive and not sla" # simple one<br>nemesis_selector: "disruptive and not (sla or limited or manager_operation or config_changes)" # complex one<br>```
 
 **default:** N/A
 
@@ -3473,7 +3502,7 @@ configuration for setup up kafka connectors
 
 Run scylla-doctor in artifact tests
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
