@@ -147,3 +147,4 @@ ScrubValidationErrorEvent: ERROR
 PartitionRowsValidationEvent: CRITICAL
 FailedResultEvent: ERROR
 HDRFileMissed: ERROR
+TopologyFailureEvent: CRITICAL
