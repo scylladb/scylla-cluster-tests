@@ -12,17 +12,14 @@
     "New Hydra Version"
   ],
   "enabledManagers": [
-    "pip_requirements",
-    "pip_setup",
-    "pipenv",
-    "poetry",
+    "pip-compile",
     "github-actions",
     "helm-values"
   ],
   "packageRules": [
     {
       "groupName": "All pip dependencies",
-      "matchManagers": ["pip_requirements", "pip_setup", "pipenv", "poetry"],
+      "matchManagers": ["pip-compile"],
       "packageNames": ["!scylla-driver"],
       "enabled": true
     },
@@ -60,7 +57,7 @@
   "helm-values": {
     "fileMatch": ["(^|/)values_.*\\.ya?ml$"]
   },
-  "pip_requirements": {
-    "fileMatch": ["requirements\\.txt", "requirements\\.in"]
+  "pip-compile": {
+    "fileMatch": ["(^|/)requirements\\.txt$"]
   }
 }
