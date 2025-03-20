@@ -1,19 +1,6 @@
+# Scylla Bench Image
 
-### build release
-```
-export SCYLLA_BENCH_VERSION=tags/v0.1.24
-export NAME=`echo $SCYLLA_BENCH_VERSION | cut -d "/" -f 2`
-export SCYLLA_BENCH_DOCKER_IMAGE=scylladb/hydra-loaders:scylla-bench-${NAME}
-docker build . -t ${SCYLLA_BENCH_DOCKER_IMAGE} --build-arg version=$SCYLLA_BENCH_VERSION
-docker push ${SCYLLA_BENCH_DOCKER_IMAGE}
-```
+## Locations
 
-### build from fork
-```
-export SCYLLA_BENCH_BRANCH=heads/some_fixes
-export SCYLLA_BENCH_FORK=fruch/scylla-bench
-export NAME=`echo $SCYLLA_BENCH_BRANCH | cut -d "/" -f 2`
-export SCYLLA_BENCH_DOCKER_IMAGE=scylladb/hydra-loaders:scylla-bench-${NAME}
-docker build . -t ${SCYLLA_BENCH_DOCKER_IMAGE} --build-arg version=${SCYLLA_BENCH_BRANCH} --build-arg fork=${SCYLLA_BENCH_FORK}
-docker push ${SCYLLA_BENCH_DOCKER_IMAGE}
-```
+- [DockerHub](https://hub.docker.com/r/scylladb/scylla-bench)
+- [Scylla Bench GitHub](https://github.com/scylladb/scylla-bench)
