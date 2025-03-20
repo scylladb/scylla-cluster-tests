@@ -113,7 +113,7 @@ class FakeCategoricalMonkey(CategoricalMonkey):
         return self.runs
 
 
-class AddRemoveDCMonkey(FakeNemesis):
+class AddRemoveDCMonkey(ChaosMonkey):
     @Nemesis.add_disrupt_method
     def disrupt_add_remove_dc(self):  # pylint: disable=no-self-use
         return 'Worked'
