@@ -4,10 +4,7 @@ import json
 from collections import defaultdict
 from typing import Any
 
-# from sdcm.send_email import Email
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.results_analyze import SearchBestThroughputConfigPerformanceAnalyzer
-from sdcm.utils.common import format_timestamp
 
 
 class MaximumPerformanceSearchTest(PerformanceRegressionTest):
@@ -97,8 +94,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
                                                     duration=stress_step_duration)
             self.log.debug("Run c-s command %s", stress_cmd)
             stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                                  stress_num=stress_num,
-                                                  stats_aggregate_cmds=False,)
+                                                  stress_num=stress_num)
             results = self.get_stress_results(queue=stress_queue, store_results=False)
             self.log.debug("Current results %s", results)
             current_result = self._calculate_average_stats(results)
@@ -169,23 +165,6 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
         filename = f"{self.logdir}/best_stat_result.json"
         with open(filename, "w", encoding="utf-8") as fp_json:
             json.dump(best_result, fp_json, indent=4)
-
-        raw_results = {
-            "best_stat": best_result,
-            "all_stats": all_results
-        }
-
-        setup_details = {
-            "scylla_version": self.db_cluster.nodes[0].scylla_version_detailed,
-            "start_time": format_timestamp(self.start_time),
-            "instance_type_db": self.params.get("instance_type_db"),
-            "instance_type_loader": self.params.get("instance_type_loader"),
-            "prepare_cs_cmd": self.params.get("prepare_write_cmd")
-        }
-
-        analyzer = SearchBestThroughputConfigPerformanceAnalyzer(es_index=self._test_index,
-                                                                 email_recipients=self.params.get("email_recipients"))
-        analyzer.check_regression(test_name, setup_details=setup_details, test_results=raw_results)
 
     def _get_stress_parameters(self) -> dict[Any, Any]:
         return {

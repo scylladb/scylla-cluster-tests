@@ -77,15 +77,15 @@ class TestAddNewDc(LongevityTest):
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
-        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=False)
         self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 
     def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
         self.log.info("Running stress during adding new DC")
         stress_cmds = self.params.get('stress_cmd')
-        read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], stats_aggregate_cmds=False, round_robin=False)
-        write_thread = self.run_stress_thread(stress_cmd=stress_cmds[1], stats_aggregate_cmds=False, round_robin=False)
+        read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], round_robin=False)
+        write_thread = self.run_stress_thread(stress_cmd=stress_cmds[1], round_robin=False)
         self.log.info("Stress during adding DC started")
         return read_thread, write_thread
 
@@ -106,7 +106,7 @@ class TestAddNewDc(LongevityTest):
     def verify_data_can_be_read_from_new_dc(self, new_node: BaseNode) -> None:
         self.log.info("Veryfing if data has been transferred successfully to the new DC")
         stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"
-        end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        end_stress = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=False)
         self.verify_stress_thread(end_stress)
 
     def querying_new_node_should_return_no_data(self, new_node: BaseNode) -> None:

@@ -1,7 +1,5 @@
-import pathlib
 import time
 from enum import Enum
-from collections import defaultdict
 
 import json
 from typing import NamedTuple
@@ -10,9 +8,7 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
-from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
 
 class CSPopulateDistribution(Enum):
@@ -160,7 +156,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         for stress_cmd in population_commands:
             params.update({'stress_cmd': stress_cmd})
             # Run all stress commands
-            params.update(dict(stats_aggregate_cmds=False))
             self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
 
@@ -174,20 +169,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             latency_results = json.load(file)
         self.log.debug('Step %s: latency_results were loaded from file %s and its result is %s',
                        step, self.latency_results_file, latency_results)
-        if latency_results and self.create_stats:
-            latency_results[step]["step"] = step
-            latency_results[step] = calculate_latency(latency_results[step])
-            latency_results = analyze_hdr_percentiles(latency_results)
-            pathlib.Path(self.latency_results_file).unlink()
-            self.log.debug('collected latency values are: %s', latency_results)
-            self.update({"latency_during_ops": latency_results})
-            return latency_results
 
     def run_step(self, stress_cmds, current_throttle, num_threads, step_duration):
         results = []
         stress_queue = []
         for stress_cmd in stress_cmds:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            params = {"round_robin": True}
             stress_cmd_to_run = stress_cmd.replace(
                 "$threads", f"{num_threads}").replace("$throttle", f"{current_throttle}")
             if step_duration is not None:
@@ -215,9 +202,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
-        if not self.exists():
-            self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=True)
         total_summary = {}
 
         for throttle_step in workload.throttle_steps:
@@ -225,13 +209,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
-            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
-                                  num_threads=workload.num_threads, step_duration=workload.step_duration)
+            run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
+                     num_threads=workload.num_threads, step_duration=workload.step_duration)
 
-            calculate_result = self._calculate_average_max_latency(results)
-            self.update_test_details(scylla_conf=True)
             summary_result = self.check_latency_during_steps(step=throttle_step)
-            summary_result[throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
             if workload.drop_keyspace:
                 self.drop_keyspace()
@@ -242,7 +223,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                 time.sleep(180 - wait_time)
 
         self.save_total_summary_in_file(total_summary)
-        self.run_performance_analyzer(total_summary=total_summary)
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
@@ -254,53 +234,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         with open(filename, "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
 
-    def run_performance_analyzer(self, total_summary):
-        perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get('email_recipients'))
-        # Keep next 2 lines for debug purpose
-        self.log.debug("es_index: %s", self._test_index)
-        self.log.debug("total_summary: %s", total_summary)
-        is_gce = bool(self.params.get('cluster_backend') == 'gce')
-        try:
-            perf_analyzer.check_regression(test_id=self.test_id,
-                                           data=total_summary,
-                                           is_gce=is_gce,
-                                           email_subject_postfix=self.params.get('email_subject_postfix'))
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message='Failed to check regression',
-                source=self.__class__.__name__,
-                source_method='check_regression',
-                exception=exc
-            ).publish_or_dump()
-
-    @staticmethod
-    def _calculate_average_max_latency(results):
-        status = defaultdict(float).fromkeys(results[0].keys(), 0.0)
-        max_latency = defaultdict(list)
-
-        for result in results:
-            for key in status:
-                try:
-                    status[key] += float(result.get(key, 0.0))
-                    if key in ["latency 95th percentile", "latency 99th percentile"]:
-                        max_latency[f"{key} max"].append(float(result.get(key, 0.0)))
-                except ValueError:
-                    continue
-
-        for key in status:
-            status[key] = round(status[key] / len(results), 2)
-
-        for key, latency in max_latency.items():
-            status[key] = max(latency)
-
-        return status
-
     def warmup_cache(self, stress_cmd_templ, num_threads):
         stress_queue = []
         for stress_cmd in stress_cmd_templ:
-            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            params = {"round_robin": True}
             stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
             params.update({'stress_cmd': stress_cmd_to_run})
             # Run all stress commands
