@@ -99,8 +99,8 @@ class FakeCategoricalMonkey(CategoricalMonkey):
         return object.__new__(cls)
 
     def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
-        setattr(CategoricalMonkey, 'disrupt_m1', self.disrupt_m1)
-        setattr(CategoricalMonkey, 'disrupt_m2', self.disrupt_m2)
+        setattr(CategoricalMonkey, 'disrupt_m1', FakeCategoricalMonkey.disrupt_m1)
+        setattr(CategoricalMonkey, 'disrupt_m2', FakeCategoricalMonkey.disrupt_m2)
         super().__init__(tester_obj, termination_event, dist, default_weight=default_weight)
 
     def disrupt_m1(self):
@@ -113,7 +113,7 @@ class FakeCategoricalMonkey(CategoricalMonkey):
         return self.runs
 
 
-class AddRemoveDCMonkey(FakeNemesis):
+class AddRemoveDCMonkey(ChaosMonkey):
     @Nemesis.add_disrupt_method
     def disrupt_add_remove_dc(self):  # pylint: disable=no-self-use
         return 'Worked'
@@ -125,7 +125,8 @@ class AddRemoveDCMonkey(FakeNemesis):
 @pytest.mark.usefixtures('events')
 def test_list_nemesis_of_added_disrupt_methods():
     nemesis = ChaosMonkey(FakeTester(), None)
-    assert 'disrupt_add_remove_dc' in nemesis.get_list_of_methods_by_flags(disruptive=False)
+    assert 'disrupt_add_remove_dc' in [
+        method.__name__ for method in nemesis.nemesis_registry.get_disrupt_methods("disruptive")]
     assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
 
 
