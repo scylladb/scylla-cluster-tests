@@ -1,2 +1,8 @@
 scylla-bench:
+<<<<<<< HEAD
   image: 'scylladb/hydra-loaders:scylla-bench-v0.1.24'
+||||||| parent of 63846a077 (feature(images): use offical images for cql-stress and scylla-bench)
+  image: scylladb/hydra-loaders:scylla-bench-v0.1.24
+=======
+  image: scylladb/scylla-bench:0.2.0
+>>>>>>> 63846a077 (feature(images): use offical images for cql-stress and scylla-bench)
