@@ -429,10 +429,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
           otherwise it will act as if is_seed is None
         """
-        # first give up the current target node
-        self.unset_current_running_nemesis(self.target_node)
-
         with NEMESIS_TARGET_SELECTION_LOCK:
+            # first give up the current target node
+            if self.target_node:
+                self.target_node.running_nemesis = None
+
             nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
             if not nodes:
                 dc_str = '' if dc_idx is None else f'dc {dc_idx} '
