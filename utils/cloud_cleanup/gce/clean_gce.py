@@ -49,7 +49,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                 LOGGER.info("keeping instance %s, keep: %s, creation time: %s ", instance.name,
                             instance_metadata.get('keep', 'not set'), vm_creation_time)
                 continue
-            if instance_metadata.get('keep_action', 'terminate') == 'terminate':  # terminate by default if not set
+            if instance_metadata.get('keep_action', 'terminate') in ('terminate', ''):  # terminate by default if not set
                 if not dry_run:
                     LOGGER.info("terminating instance %s, creation time: %s", instance.name, vm_creation_time)
                     try:
