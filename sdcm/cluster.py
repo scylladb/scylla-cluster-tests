@@ -3079,8 +3079,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
-        self.remoter.run(f'logger -p {level} -t scylla {shlex.quote(message)}', verbose=verbose)
+    def log_message(self, message: str, level: str = 'info') -> None:
+        try:
+            self.remoter.run(
+                f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
+                ignore_status=True, verbose=False, retry=0, timeout=10)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -4917,9 +4922,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.info("DB nodes CPU modes: %s", results)
         return results
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+    def log_message(self, message: str, level: str = 'info') -> None:
         for node in self.nodes:
-            node.log_message(message, level, verbose)
+            node.log_message(message, level)
 
 
 class BaseLoaderSet():
@@ -5154,9 +5159,9 @@ class BaseLoaderSet():
             return {}
         return results
 
-    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+    def log_message(self, message: str, level: str = 'info') -> None:
         for node in self.nodes:
-            node.log_message(message, level, verbose)
+            node.log_message(message, level)
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
