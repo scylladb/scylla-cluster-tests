@@ -17,7 +17,19 @@ n_monitor_nodes: 1
 nemesis_class_name: 'CategoricalMonkey'
 nemesis_interval: 5
 
-gemini_cmd: "gemini --duration 30m --warmup 0s -c 4 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps --test-host-selection-policy token-aware"
+gemini_cmd: |
+  --duration 30m
+  --warmup 0s
+  --concurrency 4
+  --mode write
+  --cql-features basic
+  --max-mutation-retries 100
+  --max-mutation-retries-backoff 100ms
+  --use-server-timestamps
+  --test-host-selection-policy token-aware
+
+gemini_table_options:
+  - "cdc={'enabled':true,'ttl':0}"
 
 # Required by SCT, although not used:
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
