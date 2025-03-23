@@ -28,7 +28,6 @@ stress_cmd: [
 ]
 
 round_robin: true
-rack_aware_loader: true
 n_db_nodes: '3 3'
 instance_type_db: 'i4i.4xlarge'
 n_loaders: '2 2'
