@@ -4992,7 +4992,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
             self.log.debug("'%s' restarted.", node.name)
-            self.wait_all_nodes_un()  # wait for all nodes to be up due to issue https://github.com/scylladb/scylladb/issues/18647
 
     @retrying(n=15, sleep_time=5, allowed_exceptions=ClusterNodesNotReady)
     def wait_all_nodes_un(self):
