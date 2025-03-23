@@ -40,7 +40,7 @@ V20190618
 p21
 sVversion
 p22
-V3.1.0.rc2
+V6.1.0.rc2
 p23
 sVrun_date_time
 p24
@@ -52,7 +52,7 @@ S'0-256.1'
 p27
 sS'hostname'
 p28
-S'godzilla.cloudius-systems.com'
+S'monster'
 p29
 sVresults
 p30
@@ -187,7 +187,7 @@ V20190618
 p87
 sVversion
 p88
-V3.1.0.rc2
+V6.1.0.rc2
 p89
 sVrun_date_time
 p90
@@ -323,7 +323,7 @@ V20190618
 p144
 sVversion
 p145
-V3.1.0.rc2
+V6.1.0.rc2
 p146
 sVrun_date_time
 p147
@@ -458,7 +458,7 @@ V20190618
 p200
 sVversion
 p201
-V3.1.0.rc2
+V6.1.0.rc2
 p202
 sVrun_date_time
 p203
