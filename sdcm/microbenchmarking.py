@@ -98,6 +98,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         query = f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*"
         if additional_filter:
             query += " AND " + additional_filter
+        print(query)
         output = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
             index=self._es_index,
             q=query,
@@ -117,7 +118,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.test_args",  # [64-32.1)
             "hits.hits.test_group_properties.name",  # large-partition-skips
-            "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
+            "hits.hits._source.hostname",  # 'monster'
             "hits.hits._source.test_run_date",
             "hits.hits._source.test_group_properties.name",  # large-partition-skips
             "hits.hits._source.results.stats.aio",
@@ -384,7 +385,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         self.log.info('Exclude testrun {} from results'.format(testrun_id))
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
-            "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
+            "hits.hits._source.hostname",  # 'monster'
             "hits.hits._source.test_run_date",
         )
 

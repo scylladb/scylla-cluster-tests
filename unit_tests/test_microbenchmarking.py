@@ -67,10 +67,10 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=(
             'alex.bykov@scylladb.com', ), es_index="microbenchmarking")
-        self.mbra.hostname = 'godzilla.cloudius-systems.com'
+        self.mbra.hostname = 'monster'
         self.cwd = os.path.join(os.path.dirname(__file__), '..', 'sdcm')
         self.mbra.test_run_date = "2019-06-27_11:39:40"
-        self.es_index = "microbenchmarking"
+        self.es_index = "microbenchmarkingv3"
 
     @staticmethod
     def get_result_obj(path):
@@ -87,7 +87,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def test_object_exists(self):
         # pylint: disable=protected-access
         self.assertIsInstance(self.mbra, MicroBenchmarkingResultsAnalyzer)
-        self.assertEqual(self.mbra.hostname, 'godzilla.cloudius-systems.com')
+        self.assertEqual(self.mbra.hostname, 'monster')
         self.assertEqual(self.mbra._email_recipients, ('alex.bykov@scylladb.com', ))
 
     def test_get_result_with_avg_aio(self):
@@ -95,7 +95,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         results = self.mbra.get_results(results_path=result_path, update_db=False)
         self.assertTrue(results)
         expected_obj = self.get_result_obj(result_path)
-        self.assertDictEqual(results, expected_obj)
+        assert results == expected_obj
 
     def test_get_result_without_avg_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_without_AVGAIO')
