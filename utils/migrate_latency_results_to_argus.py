@@ -52,7 +52,8 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
         document_id = hit['_id']
         print(f"Document ID: {document_id}")
         workload = hit['_source']['test_details']['sub_type']
-        client = ArgusSCTClient(document_id, auth_token=creds["token"], base_url=creds["baseUrl"])
+        client = ArgusSCTClient(
+            document_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
         try:
             latency_during_ops = hit['_source']['latency_during_ops']
         except KeyError:
