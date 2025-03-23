@@ -14,19 +14,23 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import cached_property
 import re
 from typing import Any
+from itertools import count
+from dataclasses import dataclass
 
 import yaml
 from cachetools import cached, TTLCache
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
+from sdcm.argus_results import submit_results_to_argus
 
 LOGGER = logging.getLogger(__name__)
 
@@ -247,6 +251,77 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         }
         res = self._es.search(index=self._index, body=query)
         return [hit["_source"] for hit in res["hits"]["hits"]]
+
+
+@dataclass
+class ArgusAdaptiveTimeoutResult:
+    """Dataclass to hold adaptive timeout results for Argus submission."""
+    operation: str
+    duration: int
+    timeout: int
+    timeout_occurred: bool
+    end_time: str
+    metrics: dict[str, Any]
+
+
+class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
+    """
+    Report adaptive timeout results to Argus.
+    """
+
+    def __init__(self):
+        self.test_config = TestConfig()
+        self.cycle_counters = defaultdict(count)
+
+    def send_adaptive_timeout_results_to_argus(self, result: ArgusAdaptiveTimeoutResult):
+        """
+        Send adaptive timeout results to Argus.
+        """
+        argus_client = self.test_config.argus_client()
+        if not argus_client:
+            LOGGER.warning("Will not submit to argus - no client initialized")
+            return
+
+        class AdaptiveTimeoutResultsTable(GenericResultTable):
+            class Meta:
+                name = f"{result.operation} - Timeout Statistics"
+                description = "measurement of specific operation timeouts (ex. decommission, adding nodes etc.)"
+                Columns = [
+                    ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+                    ColumnMetadata(name="timeout", unit="HH:MM:SS", type=ResultType.DURATION),
+                    ColumnMetadata(name="end_time", unit="", type=ResultType.TEXT),
+                ]
+        cycle = next(self.cycle_counters[result.operation]) + 1
+        table = AdaptiveTimeoutResultsTable()
+        table.add_result(column="duration", row=f"#{cycle}", value=result.duration,
+                         status=Status.PASS if not result.timeout_occurred else Status.ERROR)
+        table.add_result(column="timeout", row=f"#{cycle}", value=result.timeout, status=Status.UNSET)
+        table.add_result(column="end_time", row=f"#{cycle}", value=result.end_time, status=Status.UNSET)
+        logging.debug("Submitting adaptive timeout results to Argus: %s", table.as_dict())
+        submit_results_to_argus(argus_client, table)
+
+    def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
+              timeout_occurred: bool):
+        result = ArgusAdaptiveTimeoutResult(
+            operation=operation,
+            duration=int(duration),
+            timeout=int(timeout),
+            timeout_occurred=timeout_occurred,
+            end_time="N/A",
+            metrics=metrics.copy()
+        )
+        try:
+            result.end_time = datetime.fromtimestamp(time.time(), tz=timezone.utc).strftime("%H:%M:%S")
+        except ValueError:
+            pass
+
+        self.send_adaptive_timeout_results_to_argus(result)
+
+    def get(self, operation: str | None, timeout_occurred: bool | None = None):
+
+        # TODO: we don't have yet API to get measurements from Argus
+        # TODO: also adaptive_timeout decorator isn't reading measurements yet...
+        pass
 
 
 class NodeLoadInfoServices(metaclass=Singleton):
