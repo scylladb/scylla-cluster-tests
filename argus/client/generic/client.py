@@ -7,8 +7,12 @@ LOGGER = logging.getLogger(__name__)
 class ArgusGenericClient(ArgusClient):
     test_type = "generic"
     schema_version: None = "v1"
-    def __init__(self, auth_token: str, base_url: str, api_version="v1") -> None:
-        super().__init__(auth_token, base_url, api_version)
+
+    class Routes(ArgusClient.Routes):
+        TRIGGER_JOBS = "/planning/plan/trigger"
+
+    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
+        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers)
 
     def submit_generic_run(self, build_id: str, run_id: str, started_by: str, build_url: str, scylla_version: str | None = None):
         request_body = {
