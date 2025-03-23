@@ -27,7 +27,7 @@ class PerfSimpleQueryTest(ClusterTester):
         super().setUp()
 
     def test_perf_simple_query(self):
-        perf_simple_query_extra_command = self.params.get('perf_simple_query_extra_command')
+        perf_simple_query_extra_command = self.params.get('perf_simple_query_extra_command') or ""
         result = self.db_cluster.nodes[0].remoter.run(
             f"scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G {perf_simple_query_extra_command}")
         if result.ok:
