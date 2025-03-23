@@ -27,8 +27,8 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_EVENTS = "/sct/$id/events/submit"
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
 
-    def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1") -> None:
-        super().__init__(auth_token, base_url, api_version)
+    def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
+        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers)
         self.run_id = run_id
 
     def submit_sct_run(self, job_name: str, job_url: str, started_by: str, commit_id: str,
@@ -56,7 +56,7 @@ class ArgusSCTClient(ArgusClient):
         response = super().set_status(run_type=self.test_type, run_id=self.run_id, new_status=new_status)
         self.check_response(response)
 
-    def set_sct_runner(self, public_ip: str, private_ip: str, region: str, backend: str) -> None:
+    def set_sct_runner(self, public_ip: str, private_ip: str, region: str, backend: str, name: str = None) -> None:
         """
             Sets runner information for an SCT run.
         """
@@ -69,6 +69,7 @@ class ArgusSCTClient(ArgusClient):
                 "private_ip": private_ip,
                 "region": region,
                 "backend": backend,
+                "name": name,
             }
         )
         self.check_response(response)

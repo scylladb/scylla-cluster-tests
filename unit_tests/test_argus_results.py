@@ -36,7 +36,6 @@ def test_send_latency_decorator_result_to_argus():
     expected_calls = [
         call(LatencyCalculatorMixedResult(
             sut_timestamp=0,
-            sut_details='',
             results=[
                 Cell(column='P90 write', row='Cycle #1', value=2.15, status=Status.PASS),
                 Cell(column='P99 write', row='Cycle #1', value=3.62, status=Status.PASS),
@@ -57,7 +56,6 @@ def test_send_latency_decorator_result_to_argus():
         )),
         call(ReactorStallStatsResult(
             sut_timestamp=0,
-            sut_details='',
             results=[
                 Cell(column='total', row='Cycle #1', value=18, status=Status.PASS),
                 Cell(column='10ms', row='Cycle #1', value=18, status=Status.PASS)
