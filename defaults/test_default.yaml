@@ -299,3 +299,5 @@ latency_decorator_error_thresholds:
           fixed_limit: 10
       P99 read:
           fixed_limit: 10
+
+adaptive_timeout_store_metrics: true
