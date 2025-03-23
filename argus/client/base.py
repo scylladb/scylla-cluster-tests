@@ -34,14 +34,19 @@ class ArgusClient:
         FETCH_RESULTS = "/testrun/$type/$id/fetch_results"
         FINALIZE = "/testrun/$type/$id/finalize"
 
-    def __init__(self, auth_token: str, base_url: str, api_version="v1") -> None:
+    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
         self._auth_token = auth_token
         self._base_url = base_url
         self._api_ver = api_version
+        self._extra_headers = extra_headers or {}
 
     @property
     def auth_token(self) -> str:
         return self._auth_token
+
+    @property
+    def extra_headers(self) -> dict:
+        return self._extra_headers
 
     def verify_location_params(self, endpoint: str, location_params: dict[str, str]) -> bool:
         required_params: list[str] = re.findall(r"\$[\w_]+", endpoint)
@@ -88,6 +93,7 @@ class ArgusClient:
             "Authorization": f"token {self.auth_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            **self.extra_headers,
         }
 
     def get(self, endpoint: str, location_params: dict[str, str] = None, params: dict = None) -> requests.Response:
