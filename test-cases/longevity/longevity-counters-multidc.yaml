@@ -4,7 +4,6 @@ pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 
 stress_cmd:      "scylla-bench -workload=uniform -mode=counter_update -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 1024 -duration 360m -validate-data"
 stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 512 -duration 360m -validate-data"
 
-rack_aware_loader: true
 availability_zone: 'a,b,c'
 n_db_nodes: '3 3 3'
 n_loaders:  '1 1 1'

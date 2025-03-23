@@ -2,7 +2,6 @@ test_duration: 1440
 n_monitor_nodes: 1
 n_db_nodes: '12 12 12 12 12'
 n_loaders: '5 1 1 1 1'
-rack_aware_loader: true
 instance_type_db: 'i3en.large'
 instance_type_loader: 'c6i.2xlarge'
 
