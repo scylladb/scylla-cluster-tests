@@ -117,4 +117,4 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)
+            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc, exc_info=True)

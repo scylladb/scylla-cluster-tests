@@ -14,18 +14,20 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import cached_property
 import re
 from typing import Any
 
 import yaml
 from cachetools import cached, TTLCache
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
 
 from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
+from sdcm.argus_results import submit_results_to_argus
 
 LOGGER = logging.getLogger(__name__)
 
@@ -252,14 +254,49 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
 
 class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
     """
-    stub class, until we'll implement the Argus api for reporting those
+    Report adaptive timeout results to Argus.
     """
+
+    def __init__(self):
+        self.test_config = TestConfig()
+
+    def send_adaptive_timeout_results_to_argus(self, results: dict):
+        argus_client = self.test_config.argus_client()
+        if not argus_client:
+            LOGGER.warning("Will not submit to argus - no client initialized")
+            return
+
+        class AdaptiveTimeoutResultsTable(GenericResultTable):
+            class Meta:
+                name = f"{results['operation']} - Timeout Statistics"
+                description = "measurement of specific operation timeouts (ex. decommission, adding nodes etc.)"
+                Columns = [
+                    ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+                    ColumnMetadata(name="timeout", unit="HH:MM:SS", type=ResultType.DURATION),
+                    ColumnMetadata(name="end_time", unit="", type=ResultType.TEXT),
+                ]
+
+        table = AdaptiveTimeoutResultsTable()
+        table.add_result(column="duration", row="#1", value=results['duration'], status=Status.UNSET)
+        table.add_result(column="timeout", row="#1", value=results["timeout"], status=Status.UNSET)
+        table.add_result(column="end_time", row="#1", value=results["end_time"], status=Status.UNSET)
+        submit_results_to_argus(argus_client, table)
 
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
               timeout_occurred: bool):
-        pass
+        results = metrics
+        results["end_time"] = datetime.fromtimestamp(time.time(), tz=timezone.utc)
+        results["operation"] = operation
+        results["duration"] = duration
+        results["timeout"] = timeout
+        results["timeout_occurred"] = timeout_occurred
+
+        self.send_adaptive_timeout_results_to_argus(results)
 
     def get(self, operation: str | None, timeout_occurred: bool | None = None):
+
+        # TODO: we don't have yet API to get measurements from Argus
+        # TODO: also adaptive_timeout decorator isn't reading measurements yet...
         pass
 
 
