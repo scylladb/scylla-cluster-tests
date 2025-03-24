@@ -1856,7 +1856,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                         package_version: str = None,
                         ignore_status: bool = False) -> None:
         if self.distro.is_rhel_like:
-            pkg_cmd = 'yum'
+            pkg_cmd = next(mgr for mgr in ["microdnf", "yum", "dnf"] if self.remoter.run(
+                f"test -e /usr/bin/{mgr}", ignore_status=True).ok)
             package_name = f"{package_name}-{package_version}*" if package_version else package_name
         elif self.distro.is_sles:
             pkg_cmd = 'zypper'
