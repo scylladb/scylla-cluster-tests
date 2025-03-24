@@ -21,6 +21,7 @@ def call(Map pipelineParams) {
             SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce|azure|docker',
                name: 'backend')
@@ -38,6 +39,8 @@ def call(Map pipelineParams) {
                description: 'Availability zone',
                name: 'availability_zone')
 
+            // Stress Test Configuration
+            separator(name: 'STRESS_TEST', sectionHeader: 'Stress Test Configuration')
             string(defaultValue: "",
                description: 'Duration in minutes for stress commands(gemini, c-s, s-b)',
                name: 'stress_duration')
@@ -47,19 +50,17 @@ def call(Map pipelineParams) {
                              'Prepare commands could finish earlier and have not to run full prepare_stress_duration time'),
                name: 'prepare_stress_duration')
 
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'gce_image_db')
-            string(defaultValue: '', description: '', name: 'azure_image_db')
+            // ScyllaDB Configuration
+	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
+	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
+	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
+            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
+            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
 
-            string(defaultValue: '',
-                   description: 'cloud path for RPMs, s3:// or gs://',
-                   name: 'update_db_packages')
-            string(defaultValue: '', description: '', name: 'scylla_version')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
-            string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_version')
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
-                   description: 'If empty - the default scylla manager agent repo will be taken',
-                   name: 'scylla_mgmt_agent_address')
+            // Provisioning Configuration
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -67,6 +68,8 @@ def call(Map pipelineParams) {
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
 
+            // Post Behavior Configuration
+            separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -80,10 +83,14 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
 
+            // SSH Configuration
+            separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
+            // Manager Configuration
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
                    description: 'master_latest|3.2|3.1',
                    name: 'manager_version')
@@ -92,6 +99,13 @@ def call(Map pipelineParams) {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_address')
 
+            string(defaultValue: '', description: 'Version of Management Agent', name: 'scylla_mgmt_agent_version')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
+                   description: 'If empty - the default scylla manager agent repo will be taken',
+                   name: 'scylla_mgmt_agent_address')
+            // Email and Test Configuration
+            separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
@@ -116,6 +130,8 @@ def call(Map pipelineParams) {
                         'Example: "--maxfail=1" - it will stop test run after first failure.'),
                    name: 'pytest_addopts')
 
+            // Kubernetes Configuration
+            separator(name: 'K8S_CONFIG', sectionHeader: 'Kubernetes Configuration')
             string(defaultValue: "${pipelineParams.get('k8s_version', '')}",
                    description: 'K8S version to be used. Suitable for EKS and GKE, but not local K8S (KinD). '
                    + 'In case of K8S platform upgrade it will be base one, target one will be automatically incremented. Example: "1.28"',
@@ -144,6 +160,8 @@ def call(Map pipelineParams) {
                    description: 'if true, install haproxy ingress controller and use it',
                    name: 'k8s_enable_sni')
 
+            // Miscellaneous Configuration
+            separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
@@ -162,7 +180,8 @@ def call(Map pipelineParams) {
                         '\tSCT_USE_MGMT=false'
                         ),
                     name: 'extra_environment_variables')
-            // NOTE: Optional parameters for BYO ScyllaDB stage
+            // BYO ScyllaDB Configuration
+            separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
             string(defaultValue: '',
                    description: (
                        'Custom "scylladb" repo to use. Leave empty if byo is not needed. \n' +
@@ -180,7 +199,7 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
-        }
+	 }
         options {
             timestamps()
             disableConcurrentBuilds()
