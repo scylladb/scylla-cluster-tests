@@ -13,19 +13,19 @@ nemesis_selector: ['run_with_gemini']
 nemesis_interval: 5
 nemesis_seed: '023'
 
-# gemini
-# cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
-# the below cmd runs about 3 hours
-gemini_cmd: "gemini -d --duration 7h --warmup 1h \
--c 10 -m mixed -f --non-interactive \
---cql-features normal --async-objects-stabilization-backoff 500ms \
---replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" \
---max-mutation-retries 10 --max-mutation-retries-backoff 500ms \
---max-partition-keys 12 --min-partition-keys 8 \
---max-clustering-keys 20 --min-clustering-keys 12 \
---max-columns 100 --min-columns 80 --verbose"
-
+gemini_cmd: |
+  --duration 7h
+  --warmup 1h
+  --concurrency 10
+  --mode mixed
+  --max-partition-keys 12
+  --min-partition-keys 8
+  --max-clustering-keys 20
+  --min-clustering-keys 12
+  --max-columns 100 --min-columns 80
+  --verbose
 
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_log_cql_statements: false
 
 db_type: scylla
