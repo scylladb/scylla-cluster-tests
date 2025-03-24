@@ -3004,6 +3004,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.save_cqlsh_output_in_file(node=node, cmd="desc schema", log_file="schema.log")
             self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system_schema.tables",
                                            log_file="system_schema_tables.log")
+            self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system.truncated",
+                                           log_file="system_truncated.log")
             break
 
         if not found_live_node:
