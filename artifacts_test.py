@@ -488,6 +488,10 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
             return
 
+        if self.node.parent_cluster.cluster_backend == "docker":
+            self.log.info("Scylla Doctor check in SCT isn't yet support for docker backend")
+            return
+
         for node in self.db_cluster.nodes:
             scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
             scylla_doctor.install_scylla_doctor()
