@@ -64,7 +64,7 @@ class ScyllaDoctor:
         return latest
 
     def download_scylla_doctor(self):
-        if self.node.remoter.run("which curl", ignore_status=True).ok:
+        if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package('curl')
@@ -97,8 +97,9 @@ class ScyllaDoctor:
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package('ethtool')
+            self.node.install_package('tar')
 
-        if self.offline_install:
+        if self.offline_install or self.node.parent_cluster.cluster_backend == "docker":
             self.download_scylla_doctor()
             if self.node.is_nonroot_install:
                 self.python3_path = self.find_local_python3_binary(self.current_dir)
