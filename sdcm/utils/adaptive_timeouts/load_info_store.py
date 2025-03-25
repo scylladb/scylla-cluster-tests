@@ -276,10 +276,11 @@ class ArgusAdaptiveTimeoutStore(AdaptiveTimeoutStore):
                     ColumnMetadata(name="end_time", unit="", type=ResultType.TEXT),
                 ]
 
+        end_time = results["end_time"].strftime('%H:%M:%S')
         table = AdaptiveTimeoutResultsTable()
         table.add_result(column="duration", row="#1", value=results['duration'], status=Status.UNSET)
         table.add_result(column="timeout", row="#1", value=results["timeout"], status=Status.UNSET)
-        table.add_result(column="end_time", row="#1", value=results["end_time"], status=Status.UNSET)
+        table.add_result(column="end_time", row="#1", value=end_time, status=Status.UNSET)
         submit_results_to_argus(argus_client, table)
 
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
