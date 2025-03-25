@@ -1,2 +1,2 @@
 scylla-bench:
-  image: scylladb/scylla-bench:0.2.0
+  image: scylladb/scylla-bench:0.1.25
