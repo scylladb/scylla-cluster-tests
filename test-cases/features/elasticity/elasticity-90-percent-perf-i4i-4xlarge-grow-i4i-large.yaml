@@ -1,0 +1,32 @@
+# Test case for ScyllaDB elasticity at 90% utilization
+# The test writes approximately 3 TB of data to fill the cluster at around 90% utilization.
+# After the cluster is filled, a mixed workload is run at approximately 50% load.
+# The cluster is the scaled out then in with smaller nodes.
+test_duration: 800
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..960000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1920000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1920000001..2880000000",
+]
+
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=30000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..1440000000,720000000,14400000)'"
+
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.4xlarge'
+
+nemesis_add_node_cnt: 3
+nemesis_grow_shrink_instance_type: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+
+nemesis_class_name: 'GrowShrinkClusterNemesis'
+
+user_prefix: 'elasticity-test'
+round_robin: true
+use_hdrhistogram: true
+email_recipients: ["scylla-perf-results@scylladb.com"]
+email_subject_postfix: 'elasticity test'
