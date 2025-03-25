@@ -112,7 +112,6 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
-                --non-interactive \
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
