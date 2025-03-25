@@ -698,6 +698,9 @@ class SCTConfiguration(dict):
         dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int_or_space_separated_ints,
              help="""Used for scale test: max size of the cluster"""),
 
+        dict(name="cluster_target_instance_type", env="SCT_CLUSTER_TARGET_INSTANCE_TYPE", type=str,
+             help="""The type of instances added to reach `cluster_target_size`"""),
+
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD",
              type=int, k8s_multitenancy_supported=True,
              help="""
