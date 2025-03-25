@@ -164,6 +164,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             add_node_cnt = self.params.get('add_node_cnt')
             nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
             current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+            instance_type = self.params.get('cluster_target_instance_type') or self.params.get('instance_type_db')
 
             InfoEvent(
                 message=f"Starting to grow cluster from {self.params.get('n_db_nodes')} to {cluster_target_size}").publish()
@@ -176,7 +177,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                             target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
                         InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
                         added_nodes.extend(self.db_cluster.add_nodes(
-                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx))
+                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx, instance_type=instance_type))
 
                 self.monitors.reconfigure_scylla_monitoring()
                 up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP

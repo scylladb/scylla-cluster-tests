@@ -1032,6 +1032,15 @@ Used for scale test: max size of the cluster
 **type:** int_or_space_separated_ints
 
 
+## **cluster_target_instance_type** / SCT_CLUSTER_TARGET_INSTANCE_TYPE
+
+The type of instances added to reach `cluster_target_size`
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **space_node_threshold** / SCT_SPACE_NODE_THRESHOLD
 
 Space node threshold before starting nemesis (bytes)<br>The default value is 6GB (6x1024^3 bytes)<br>This value is supposed to reproduce<br>https://github.com/scylladb/scylla/issues/1140
