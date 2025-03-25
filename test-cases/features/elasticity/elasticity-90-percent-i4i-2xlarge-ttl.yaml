@@ -1,0 +1,32 @@
+# Test case for ScyllaDB elasticity at 90% utilization
+# The test writes approximately 1.5 TB of data to fill the cluster at around 90% utilization.
+# A 3rd of the data is written to a keyspace with a 12,000 seconds TTL (chosen to be more than the time it takes to write the data).
+test_duration: 720
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS ks_90percent_ttl WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
+  "CREATE TABLE IF NOT EXISTS ks_90percent_ttl.standard1 (key blob PRIMARY KEY, \"C0\" blob, \"C1\" blob, \"C2\" blob, \"C3\" blob, \"C4\" blob, \"C5\" blob, \"C6\" blob, \"C7\" blob) WITH default_time_to_live = 12000 AND compaction = { 'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1, 'compaction_window_unit': 'HOURS' };",
+]
+
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=480000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..480000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=480000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=480000001..960000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=480000000 -schema keyspace=ks_90percent_ttl 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1440000000",
+]
+
+stress_cmd: [
+  "cassandra-stress mixed no-warmup cl=QUORUM duration=420m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=30000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..720000000,360000000,7200000)'"
+]
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.2xlarge'
+
+n_loaders: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+
+# since the nemesis only compacts on one node, run 3 in parallel each will pick a different node
+nemesis_class_name: 'MajorCompactionMonkey:1 MajorCompactionMonkey:1 MajorCompactionMonkey:1'
+
+user_prefix: 'elasticity-test'
+round_robin: true
