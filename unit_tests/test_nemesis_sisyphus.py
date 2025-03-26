@@ -46,9 +46,6 @@ class FakeTester:
     def __post_init__(self):
         self.db_cluster.params = self.params
 
-    def create_stats(self):
-        pass
-
     def update(self, *args, **kwargs):
         pass
 

@@ -36,14 +36,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if debug_message:
             self.log.debug(debug_message)
 
-        if save_stats:
-            self.create_test_stats(test_name=test_name, sub_type=sub_type,
-                                   doc_id_with_timestamp=True, append_sub_test_to_name=False)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
-                                              prefix=prefix, stats_aggregate_cmds=False)
+                                              prefix=prefix)
         self.get_stress_results(queue=stress_queue, store_results=True)
-        if save_stats:
-            self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_alternator_table(self, schema, alternator_write_isolation):
         node = self.db_cluster.nodes[0]
@@ -74,9 +69,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
-            # create new document in ES with doc_id = test_id + timestamp
-            # allow to correctly save results for future compare
-            self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
             stress_queue = []
             params = {'prefix': 'preload-'}
             for stress_type in ['dynamodb', 'cassandra-cql']:
@@ -91,14 +83,13 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         params.update({'stress_cmd': stress_cmd.replace('dynamodb', stress_type)})
 
                         # Run all stress commands
-                        params.update(dict(stats_aggregate_cmds=False))
                         self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd.replace('dynamodb', stress_type)))
                         stress_queue.append(self.run_stress_thread(**params))
 
                 # One stress cmd command
                 else:
                     stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd.replace('dynamodb', stress_type), stress_num=1,
-                                                               prefix='preload-', stats_aggregate_cmds=False))
+                                                               prefix='preload-'))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
@@ -136,8 +127,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             schema=schema, alternator_write_isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_w, stress_num=stress_multiplier, keyspace_num=1)
 
-        self.check_regression_with_baseline('cql')
-
     def test_read(self):
         """
         Test steps:
@@ -170,8 +159,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier, keyspace_num=1)
-
-        self.check_regression_with_baseline('cql')
 
     def test_mixed(self):
         """
@@ -206,8 +193,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1)
-
-        self.check_regression_with_baseline('cql')
 
     def test_latency(self):
         """
@@ -259,7 +244,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self._workload(
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1)
-        self.check_regression_with_baseline('cql')
 
         stress_multiplier = 1
         self.run_fstrim_on_all_db_nodes()
@@ -282,7 +266,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self._workload(
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000",
             stress_num=stress_multiplier, keyspace_num=1)
-        self.check_regression_with_baseline('cql')
 
         stress_multiplier = 1
         self.wait_no_compactions_running(n=120)
@@ -303,5 +286,3 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(test_name=self.id() + '_mixed', sub_type='with-lwt',
                        stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1)
-
-        self.check_regression_with_baseline('cql')

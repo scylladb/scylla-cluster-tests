@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent
-from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
+from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ArgusAdaptiveTimeoutStore, \
     NodeLoadInfoServices
 
 LOGGER = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class TestInfoServices:  # pylint: disable=too-few-public-methods
 
 @contextmanager
 def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
-                     stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+                     stats_storage: AdaptiveTimeoutStore = ArgusAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.
@@ -117,4 +117,4 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)
+            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc, exc_info=True)

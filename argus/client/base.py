@@ -212,6 +212,7 @@ class ArgusClient:
         self.check_response(response)
 
     def submit_results(self, result: GenericResultTable) -> None:
+        LOGGER.info("Submitting results: %s", result.as_dict())
         response = self.post(
             endpoint=self.Routes.SUBMIT_RESULTS,
             location_params={"type": self.test_type, "id": str(self.run_id)},
