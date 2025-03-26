@@ -186,3 +186,42 @@ class LatteRustDriverVersionReporter(ToolReporterBase):
 
     def _collect_version_info(self) -> None:
         pass
+
+
+class ScyllaBenchVersionReporter(ToolReporterBase):
+    """
+    Reports scylla-bench and scylla gocql driver versions used in SCT.
+    """
+    TOOL_NAME = "scylla-bench"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} -version-json")
+        LOGGER.debug("%s: Collected scylla-bench version output:\n%s", self, output.stdout)
+        version_info = json.loads(output.stdout)
+        LOGGER.debug("Result:\n%s", version_info)
+
+        s_b_info = version_info.get("scylla-bench", {})
+        self.version = f"{s_b_info.get('version', '#FAILED_CHECK_LOGS')}"
+        self.date = s_b_info.get('commit_date')
+        self.revision_id = s_b_info.get('commit_sha')
+
+        if driver_details := version_info.get("scylla-driver", {}):
+            ScyllaBenchGoCqlDriverVersionReporter(
+                driver_version=driver_details.get('version'),
+                date=driver_details.get("commit_date"),
+                revision_id=driver_details.get("commit_sha"),
+                argus_client=self.argus_client
+            ).report()
+
+
+class ScyllaBenchGoCqlDriverVersionReporter(ToolReporterBase):
+    TOOL_NAME = "scylla-bench-gocql-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
+
+    def _collect_version_info(self) -> None:
+        pass

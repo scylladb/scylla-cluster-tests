@@ -23,6 +23,7 @@ from enum import Enum
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
+from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
@@ -209,6 +210,13 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
         stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
+        try:
+            prefix, *_ = stress_cmd.split("scylla-bench", maxsplit=1)
+            reporter = ScyllaBenchVersionReporter(cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
+
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
