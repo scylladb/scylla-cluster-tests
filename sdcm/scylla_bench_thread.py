@@ -23,6 +23,7 @@ from enum import Enum
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
+from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
@@ -184,6 +185,13 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         if self.connection_bundle_file:
             cmd_runner.send_files(str(self.connection_bundle_file), self.target_connection_bundle_file)
+
+        try:
+            reporter = ScyllaBenchVersionReporter(
+                cmd_runner, "", loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
             loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
