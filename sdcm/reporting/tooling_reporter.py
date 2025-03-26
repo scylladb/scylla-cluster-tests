@@ -1,3 +1,4 @@
+import json
 import logging
 from functools import lru_cache
 
@@ -11,14 +12,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 @lru_cache
-def report_package_to_argus(client: ArgusSCTClient, tool_name: str, package_version: str, additional_data: str = None):
+def report_package_to_argus(client: ArgusSCTClient, tool_name: str, package_version: str, additional_data: str = None,
+                            date: str = None, revision_id: str = None) -> None:
     package = Package(name=f"{tool_name}", version=package_version,
-                      date=None, revision_id=None, build_id=additional_data)
+                      date=date, revision_id=revision_id, build_id=additional_data)
     client.submit_packages([package])
 
 
 class ToolReporterBase():
-
     TOOL_NAME = None
 
     def __init__(self, runner: CommandRunner, command_prefix: str = None, argus_client: ArgusSCTClient = None) -> None:
@@ -27,6 +28,8 @@ class ToolReporterBase():
         self.argus_client = argus_client
         self.additional_data = None
         self.version: str | None = None
+        self.date: str | None = None
+        self.revision_id: str | None = None
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -39,7 +42,8 @@ class ToolReporterBase():
             LOGGER.warning("%s: Skipping reporting to argus, client not initialized.", self)
             return
         try:
-            report_package_to_argus(self.argus_client, self.TOOL_NAME, self.version, self.additional_data)
+            report_package_to_argus(client=self.argus_client, tool_name=self.TOOL_NAME, package_version=self.version,
+                                    additional_data=self.additional_data, date=self.date, revision_id=self.revision_id)
         except Exception:  # pylint: disable=broad-except # noqa: BLE001
             LOGGER.warning("Failed reporting tool version to Argus", exc_info=True)
 
@@ -98,6 +102,30 @@ class CassandraStressVersionReporter(ToolReporterBase):
                 driver_version=driver_version, command_prefix=None, runner=None, argus_client=self.argus_client).report()
 
 
+class CqlStressCassandraStressVersionReporter(ToolReporterBase):
+    # pylint: disable=too-few-public-methods
+    TOOL_NAME = "cql-stress-cassandra-stress"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} version_json")
+        LOGGER.debug("%s: Collected cql-stress-cassandra-stress output:\n%s", self, output.stdout)
+        result = json.loads(output.stdout)
+
+        LOGGER.debug("Result:\n%s", result)
+        cql_stress_details = result.get('cql-stress', {})
+        self.version = f"{cql_stress_details.get('version', '#FAILED_CHECK_LOGS')}"
+        self.date = cql_stress_details.get('commit_date')
+        self.revision_id = cql_stress_details.get('commit_sha')
+
+        if driver_details := result.get("scylla-driver", {}):
+            driver_version = driver_details.get('version')
+            driver_date = driver_details.get("commit_date")
+            driver_revision_id = driver_details.get("commit_sha")
+            CqlStressRustDriverVersionReporter(
+                driver_version=driver_version, date=driver_date, revision_id=driver_revision_id, command_prefix=None, runner=None,
+                argus_client=self.argus_client).report()
+
+
 class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
     # pylint: disable=too-few-public-methods
     TOOL_NAME = "java-driver"
@@ -105,6 +133,21 @@ class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
     def __init__(self, driver_version: str, runner: CommandRunner, command_prefix: str = None, argus_client: ArgusSCTClient = None) -> None:
         super().__init__(runner, command_prefix, argus_client)
         self.version = driver_version
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class CqlStressRustDriverVersionReporter(ToolReporterBase):
+    # pylint: disable=too-few-public-methods
+    TOOL_NAME = "cql-stress-rust-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str, runner: CommandRunner, command_prefix: str = None,
+                 argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(runner, command_prefix, argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
 
     def _collect_version_info(self) -> None:
         pass
