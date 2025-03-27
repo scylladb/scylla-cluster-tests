@@ -13,7 +13,6 @@
 
 import json
 import time
-import atexit
 import logging
 from typing import Union, Optional
 from pathlib import Path
@@ -61,8 +60,6 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     start_events_counter(_registry=_registry)
 
     time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
-
-    atexit.register(stop_events_device, _registry=_registry)
 
 
 def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> None:
