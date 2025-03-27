@@ -16,6 +16,7 @@ import re
 import typing
 from functools import cached_property
 import json
+from unittest import SkipTest
 
 import yaml
 import requests
@@ -331,6 +332,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
             with self.subTest("check Scylla IO Params"):
                 try:
+                    if self.node.db_node_instance_type in ["t3.micro"]:
+                        self.skipTest(
+                            f"{self.node.db_node_instance_type} is not a supported instance - skipping this test.")
                     validator = IOTuneValidator(self.node)
                     validator.validate()
                     send_iotune_results_to_argus(
@@ -339,6 +343,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                         self.node,
                         self.params
                     )
+                except SkipTest as exc:
+                    self.log.info("Skipping IOTuneValidation due to %s", exc.args)
                 except Exception:  # pylint: disable=broad-except # noqa: BLE001
                     self.log.error("IOTuneValidator failed", exc_info=True)
                     TestFrameworkEvent(source={self.__class__.__name__},
