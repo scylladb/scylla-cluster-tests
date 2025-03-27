@@ -30,7 +30,7 @@ backtrace_decoding: false
 
 store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
-use_prepared_loaders: true
+use_prepared_loaders: false
 use_hdrhistogram: true
 email_subject_postfix: 'elasticity test'
 nemesis_double_load_during_grow_shrink_duration: 30
