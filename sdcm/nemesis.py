@@ -2091,10 +2091,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.execute_disrupt_method(disrupt_method=next(self.disruptions_cycle))
 
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
-    def repair_nodetool_repair(self, node=None, publish_event=True):
-        node = node if node else self.target_node
-        with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
-            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+    def repair_nodetool_repair(self, node=None, publish_event=True, all_nodes=False):
+        if all_nodes:
+            for node in self.cluster.data_nodes:
+                with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
+                    node.run_nodetool(sub_cmd="repair", publish_event=publish_event, ignore_status=True)
+        else:
+            node = node if node else self.target_node
+            with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
+                node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
@@ -4273,7 +4278,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_repair_streaming_err(self):
         """
         Stop repair in middle to trigger some streaming fails, then rebuild the data on the node.
+        Repair call before streaming is needed to avoid c-s data validation error.
+        Ref: https://github.com/scylladb/scylladb/issues/21428
         """
+        self.repair_nodetool_repair(all_nodes=True)
         with ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_repair_streaming()
 
