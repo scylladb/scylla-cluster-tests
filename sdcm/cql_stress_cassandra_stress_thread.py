@@ -19,6 +19,7 @@ import contextlib
 from typing import Any
 from sdcm.loader import CqlStressCassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.reporting.tooling_reporter import CqlStressCassandraStressVersionReporter
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
@@ -148,6 +149,13 @@ class CqlStressCassandraStressThread(CassandraStressThread):
             node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
         node_cmd = f'echo {tag}; {node_cmd}'
 
+        try:
+            prefix,  *_ = stress_cmd.split("cql-stress-cassandra-stress", maxsplit=1)
+            reporter = CqlStressCassandraStressVersionReporter(
+                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.info("Failed to collect cql-stress-cassandra-stress version information", exc_info=True)
         result = None
         with cleanup_context, \
                 CqlStressCassandraStressExporter(instance_name=cmd_runner_name,
