@@ -13,7 +13,7 @@
 
 import re
 import logging
-import multiprocessing
+import threading
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,12 +99,12 @@ EventStatHandleMapper = {
 }
 
 
-class EventsCounter(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Process):
+class EventsCounter(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
 
     def __init__(self, _registry: EventsProcessesRegistry):
         base_dir: Path = get_events_main_device(_registry=_registry).events_log_base_dir
         self.events_stat_dir = base_dir / Path(EVENT_COUNTER_DIR)
-        self.counters_register = multiprocessing.Manager().dict()
+        self.counters_register = dict()
         super().__init__(_registry=_registry)
 
     def run(self) -> None:
