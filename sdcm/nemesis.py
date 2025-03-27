@@ -30,7 +30,6 @@ import traceback
 import json
 import itertools
 import enum
-import ast
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial, lru_cache
@@ -45,6 +44,7 @@ from cassandra.cluster import NoHostAvailable, OperationTimedOut  # pylint: disa
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
+from sdcm.nemesis_registry import NemesisRegistry
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm import wait
@@ -166,7 +166,6 @@ from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
-from sdcm.utils.ast_utils import BooleanEvaluator
 
 
 LOGGER = logging.getLogger(__name__)
@@ -247,6 +246,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
+        self.nemesis_registry = NemesisRegistry(base_class=Nemesis,
+                                                kubernetes=self._is_it_on_kubernetes(),
+                                                excluded_list=COMPLEX_NEMESIS + DEPRECATED_LIST_OF_NEMESISES)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
@@ -529,19 +531,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             manager_operation: Optional[bool] = None,
             zero_node_changes: Optional[bool] = None,
     ) -> List[str]:
-        return self.get_list_of_methods_by_flags(
-            disruptive=disruptive,
-            supports_high_disk_utilization=supports_high_disk_utilization,
-            run_with_gemini=run_with_gemini,
-            networking=networking,
-            kubernetes=self._is_it_on_kubernetes() or None,
-            limited=limited,
-            topology_changes=topology_changes,
-            schema_changes=schema_changes,
-            config_changes=config_changes,
-            free_tier_set=free_tier_set,
-            manager_operation=manager_operation,
-            zero_node_changes=zero_node_changes
+        return self.nemesis_registry.get_list_of_methods_compatible_with_backend(
+            disruptive, supports_high_disk_utilization, run_with_gemini, networking, limited, topology_changes, schema_changes, config_changes, free_tier_set, manager_operation, zero_node_changes
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -564,34 +555,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             manager_operation: Optional[bool] = None,
             zero_node_changes: Optional[bool] = None,
     ) -> List[str]:
-        args = dict(
-            disruptive=disruptive,
-            supports_high_disk_utilization=supports_high_disk_utilization,
-            run_with_gemini=run_with_gemini,
-            networking=networking,
-            kubernetes=kubernetes,
-            limited=limited,
-            topology_changes=topology_changes,
-            schema_changes=schema_changes,
-            config_changes=config_changes,
-            free_tier_set=free_tier_set,
-            sla=sla,
-            manager_operation=manager_operation,
-            zero_node_changes=zero_node_changes
+        return self.nemesis_registry.get_list_of_methods_by_flags(
+            disruptive, supports_high_disk_utilization, run_with_gemini, networking, kubernetes, limited, topology_changes, schema_changes, config_changes, free_tier_set, sla, manager_operation, zero_node_changes
         )
-        logical_phrase = " and ".join([key for key, val in args.items() if val])
-        subclasses_list = self._get_subclasses(logical_phrase=logical_phrase)
 
-        disrupt_methods_list = []
-        for subclass in subclasses_list:
-            if method_name := self.get_disrupt_method_from_class(subclass):
-                disrupt_methods_list.append(method_name)
-        self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
-        return disrupt_methods_list
-
-    def get_list_of_subclasses_by_property_name(self, filter_logical_phrase: str | None):
-        subclasses_list = self._get_subclasses(logical_phrase=filter_logical_phrase)
-        return subclasses_list
+    def get_list_of_subclasses_by_property_name(self, filter_logical_phrase):
+        return self.nemesis_registry.get_list_of_subclasses_by_property_name(filter_logical_phrase)
 
     @staticmethod
     @lru_cache
@@ -601,76 +570,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return method_name.group("method_name")
 
     def get_list_of_disrupt_methods(self, subclasses_list, export_properties=False):
-        disrupt_methods_objects_list = []
-        disrupt_methods_names_list = []
-        nemesis_classes = []
-        all_methods_with_properties = []
-        for subclass in subclasses_list:
-            properties_list = []
-            per_method_properties = {}
+        return self.nemesis_registry.get_list_of_disrupt_methods(subclasses_list, export_properties)
 
-            for attribute in subclass.__dict__.keys():
-                if attribute[:2] != '__':
-                    value = getattr(subclass, attribute)
-                    if not callable(value):
-                        properties_list.append(f"{attribute} = {value}")
+    def _get_subclasses(self, **flags) -> List[Type['Nemesis']]:
+        return self.nemesis_registry.get_subclasses(**flags)
 
-            if method_name_str := self.get_disrupt_method_from_class(subclass):
-                disrupt_methods_names_list.append(method_name_str)
-                nemesis_classes.append(subclass.__name__)
-                if export_properties:
-                    per_method_properties[method_name_str] = properties_list
-                    all_methods_with_properties.append(per_method_properties)
-                    all_methods_with_properties = sorted(all_methods_with_properties, key=lambda d: list(d.keys()))
-        nemesis_classes.sort()
-        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_names_list))
-        for _ in disrupt_methods_names_list:
-            disrupt_methods_objects_list = [attr[1] for attr in inspect.getmembers(self) if
-                                            attr[0] in disrupt_methods_names_list and callable(attr[1])]
-        return disrupt_methods_objects_list, all_methods_with_properties, nemesis_classes
-
-    @classmethod
-    def _get_subclasses(cls, logical_phrase: str | None = None) -> List[Type['Nemesis']]:
-        tmp = Nemesis.__subclasses__()
-        subclasses = []
-        while tmp:
-            for nemesis in tmp.copy():
-                subclasses.append(nemesis)
-                tmp.remove(nemesis)
-                tmp.extend(nemesis.__subclasses__())
-        return cls._get_subclasses_from_list(subclasses, logical_phrase=logical_phrase)
-
-    @classmethod
-    def _get_subclasses_from_list(cls,
-                                  list_of_nemesis: List[Type['Nemesis']],
-                                  logical_phrase: str | None) -> List[Type['Nemesis']]:
+    def _get_subclasses_from_list(
+            self,
+            list_of_nemesis: List[Type['Nemesis']],
+            **flags) -> List[Type['Nemesis']]:
         """
         It apply 'and' logic to filter,
             if any value in the filter does not match what nemeses have,
             nemeses will be filtered out.
         """
-        nemesis_subclasses = []
-        nemesis_to_exclude = COMPLEX_NEMESIS + DEPRECATED_LIST_OF_NEMESISES
-
-        evaluator = BooleanEvaluator()
-        if logical_phrase:
-            expression_ast = ast.parse(logical_phrase, mode="eval")
-
-        for nemesis in list_of_nemesis:
-            if nemesis in nemesis_to_exclude:
-                continue
-            evaluator.context = dict(**nemesis.__dict__,
-                                     **{nemesis.__name__: True})
-            if (logical_phrase and 'disrupt_' in logical_phrase and
-                    (method_name := cls.get_disrupt_method_from_class(nemesis))):
-                # if the `logical_phrase` has a method name of any disrupt method
-                # we look it up for the specific class and add it to the context
-                # so we can match on those as well
-                # example: 'disrupt_create_index or disrupt_drop_index'
-                evaluator.context[method_name] = True
-            if (logical_phrase and evaluator.visit(expression_ast)) or not logical_phrase:
-                nemesis_subclasses.append(nemesis)
-        return nemesis_subclasses
+        return self.nemesis_registry.filter_subclasses(list_of_nemesis, **flags)
 
     def __str__(self):
         try:
