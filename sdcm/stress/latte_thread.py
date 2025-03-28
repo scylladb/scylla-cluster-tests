@@ -34,6 +34,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
+LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
 LOGGER = logging.getLogger(__name__)
 
 
@@ -50,6 +51,18 @@ def find_latte_fn_names(stress_cmd):
                 # 'write' and 'read'
                 fn_names.append(sub_item.split(":")[0].strip())
     return fn_names
+
+
+def find_latte_tags(stress_cmd):
+    tags = []
+    matches = re.findall(LATTE_TAG_RE, stress_cmd)
+    for item in matches:
+        if not item.strip():
+            continue
+        sub_items = item.split(",")
+        for sub_item in sub_items:
+            tags.append(sub_item.strip())
+    return tags
 
 
 def get_latte_operation_type(stress_cmd):
@@ -169,13 +182,15 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
+
+        stress_operation = get_latte_operation_type(self.stress_cmd)
+        first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [stress_operation])[0]
         log_file_name = os.path.join(
-            loader.logdir, 'latte-l%s-c%s-%s.log' % (loader_idx, cpu_idx, uuid.uuid4()))
+            loader.logdir, 'latte%s-l%s-c%s-%s.log' % (first_tag_or_op, loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('latte benchmarking tool local log: %s', log_file_name)
 
         # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
         log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
-        stress_operation = get_latte_operation_type(self.stress_cmd)
         remote_hdr_file_name = f"hdrh-latte-{stress_operation}-{log_id}.hdr"
         LOGGER.debug("latte remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
