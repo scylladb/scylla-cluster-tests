@@ -17,14 +17,14 @@ import os
 import time
 import contextlib
 from typing import Any
-from sdcm.loader import CqlStressCassandraStressExporter
+from sdcm.loader import CqlStressCassandraStressExporter, CqlStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.reporting.tooling_reporter import CqlStressCassandraStressVersionReporter
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
 from sdcm.utils.docker_remote import RemoteDocker
-
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,13 +83,6 @@ class CqlStressCassandraStressThread(CassandraStressThread):
             stress_cmd = re.sub(r' (\'?)n=[\s]*fixed\(([0-9]+)\)(\'?)', r' \1n=\2\3',
                                 stress_cmd, flags=re.IGNORECASE)
 
-        if '-rate' in stress_cmd:
-            # In cassandra-stress either '-rate throttle=' or '-rate fixed=' parameter is accepted.
-            # In cql-stress we decided to change it so 'fixed' is a boolean flag
-            # specifying whether the tool should display coordination-omission fixed latencies.
-            stress_cmd = re.sub(r' fixed=[\s]*([0-9]+/s)',
-                                r' throttle=\1 fixed', stress_cmd)
-
         if '-pop' in stress_cmd and "seq=" in stress_cmd:
             # '-pop seq=x..y' syntax is not YET supported by cql-stress.
             # TODO remove when seq=x..y syntax is supported.
@@ -108,7 +101,7 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements  # noqa: PLR0914
         # TODO:
         # - Add support for profile yaml once cql-stress supports 'user' command.
         # - Adjust metrics collection once cql-stress displays the metrics grouped by operation (mixed workload).
@@ -123,8 +116,14 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         log_file_name = os.path.join(
             loader.logdir, f'cql-stress-cassandra-stress-{stress_cmd_opt}-{log_id}.log')
 
-        LOGGER.debug('cassandra-stress local log: %s', log_file_name)
-
+        LOGGER.debug('cql-stress-cassandra-stress local log: %s', log_file_name)
+        remote_hdr_file_name = f"hdrh-cscs-{stress_cmd_opt}-{log_id}.hdr"
+        LOGGER.debug("cql-stress-cassandra-stress remote HDR histogram log file: %s", remote_hdr_file_name)
+        local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
+        LOGGER.debug("cql-stress-cassandra-stress HDR local file %s", local_hdr_file_name)
+        loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
+        remote_hdr_file_name_full_path = loader.remoter.run(
+            f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False).stdout.strip()
         cmd_runner_name = loader.ip_address
 
         cpu_options = ""
@@ -137,8 +136,21 @@ class CqlStressCassandraStressThread(CassandraStressThread):
                                                     '--network=host '
                                                     '--security-opt seccomp=unconfined '
                                                     f'--label shell_marker={self.shell_marker}'
-                                                    f' --entrypoint /bin/bash')
+                                                    f' --entrypoint /bin/bash'
+                                                    f' -w /'
+                                                    f' -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}'
+                                                    )
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
+
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
+            hdrh_logger_context = HDRHistogramFileLogger(
+                node=loader,
+                remote_log_file=remote_hdr_file_name_full_path,
+                target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
+            )
+        else:
+            hdrh_logger_context = contextlib.nullcontext()
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
         tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
@@ -165,7 +177,14 @@ class CqlStressCassandraStressThread(CassandraStressThread):
                                                  loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 CqlStressCassandraStressEventsPublisher(node=loader, log_filename=log_file_name) as publisher, \
                 CqlStressCassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
-                                              log_file_name=log_file_name) as cs_stress_event:
+                                              log_file_name=log_file_name) as cs_stress_event, \
+                CqlStressHDRExporter(instance_name=cmd_runner_name,
+                                     hdr_tags=self.hdr_tags,
+                                     metrics=nemesis_metrics_obj(),
+                                     stress_operation=stress_cmd_opt,
+                                     stress_log_filename=local_hdr_file_name,
+                                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
+                hdrh_logger_context:
             publisher.event_id = cs_stress_event.event_id
             try:
                 # prolong timeout by 5% to avoid killing cassandra-stress process
