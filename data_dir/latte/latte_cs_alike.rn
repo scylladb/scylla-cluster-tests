@@ -36,6 +36,7 @@ const COMPRESSION = latte::param!("compression", "");
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "");
 const KEYSPACE = latte::param!("keyspace", "keyspace1");
 const TABLE = latte::param!("table", "standard1");
+const COUNTER_TABLE = latte::param!("counter_table", "counter1");
 const KEY_SIZE = latte::param!("key_size", 16);
 const COLUMN_SIZE = latte::param!("column_size", 128);
 const COLUMN_COUNT = latte::param!("column_count", 8);
@@ -44,8 +45,10 @@ const OFFSET = latte::param!("offset", 0);
 const GAUSS_MEAN = latte::param!("gauss_mean", 0);
 const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
 
-const P_STMT_WRITE = "latte_prep_stmt___write";
+const P_STMT_WRITE = "latte_prep_stmt__write";
 const P_STMT_READ = "latte_prep_stmt__read";
+const P_STMT_COUNTER_WRITE = "latte_prep_stmt__counter_write";
+const P_STMT_COUNTER_READ = "latte_prep_stmt__counter_read";
 
 //////////////////////////////
 // LATTE-SPECIFIC FUNCTIONS //
@@ -58,13 +61,15 @@ pub async fn schema(db) {
         AND durable_writes = true
     `).await?;
 
-    // Create tables
+    // Prepare tables params
     if COLUMN_COUNT < 1 {
         return Err("'column_count' cannot be less than '1'")
     }
     let columns_def = "";
+    let counter_columns_def = "";
     for i in 0..=COLUMN_COUNT-1 {
-        columns_def += ", \"C" + `${i}` + "\" blob"
+        columns_def += ", \"C" + `${i}` + "\" blob";
+        counter_columns_def += ", \"C" + `${i}` + "\" counter";
     }
     let compression = ") WITH compression = {";
     if COMPRESSION.is_empty() { // This is the default like in the C-S case
@@ -79,15 +84,24 @@ pub async fn schema(db) {
         // Result: WITH COMPACTION = { 'class': 'IncrementalCompactionStrategy' }
         compaction += " AND COMPACTION = { 'class' : '" + COMPACTION_STRATEGY + "' }"
     }
+    let comment = " AND comment='Created by latte'";
+
+    // Create blob table
     db.execute(
         `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE}` +
-        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}`
+        `(key blob PRIMARY KEY${columns_def}${compression}${compaction}${comment}`
     ).await?;
-    // TODO: add creation of the 'counter1' table?
+
+    // Create counter table
+    db.execute(
+        `CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${COUNTER_TABLE}` +
+        `(key blob PRIMARY KEY${counter_columns_def}${compression}${compaction}${comment}`
+    ).await?;
 }
 
 pub async fn erase(db) {
     db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?;
+    db.execute(`TRUNCATE TABLE ${KEYSPACE}.${COUNTER_TABLE}`).await?;
 }
 
 pub async fn prepare(db) {
@@ -99,15 +113,30 @@ pub async fn prepare(db) {
 
     let columns_keys = "";
     let columns_values = "";
+    let counter_columns = "";
     for i in 0..=COLUMN_COUNT-1 {
         columns_keys += ", \"C" + `${i}` + "\"";
         columns_values += `, :C${i}`;
+        let counter_prefix = "";
+        if i > 0 {
+            counter_prefix = ", ";
+        }
+        counter_columns += `${counter_prefix}` + "\"C" + `${i}` + "\" = \"C" + `${i}` + "\" + " + `:C${i}`;
     }
+
     db.prepare(
         P_STMT_WRITE,
         `INSERT INTO ${KEYSPACE}.${TABLE}(key${columns_keys}) VALUES (:key${columns_values})`
     ).await?;
     db.prepare(P_STMT_READ, `SELECT * FROM ${KEYSPACE}.${TABLE} WHERE key = :key`).await?;
+
+    db.prepare(
+        P_STMT_COUNTER_WRITE,
+        `UPDATE ${KEYSPACE}.${COUNTER_TABLE}` +
+        ` SET ${counter_columns}` +
+        " WHERE key = :key"
+    ).await?;
+    db.prepare(P_STMT_COUNTER_READ, `SELECT * FROM ${KEYSPACE}.${COUNTER_TABLE} WHERE key = :key`).await?;
 
     prepare_gauss_distribution(db).await
 }
@@ -152,11 +181,21 @@ async fn get_partition_idx(db, i) {
 }
 
 /// Utility function to be used by the 'write' public function
-async fn get_columns_data(key, idx) {
+async fn get_blob_columns_data(key, idx) {
     let columns = [key];
     for current_column_idx in 0..=COLUMN_COUNT-1 {
         columns.push(blob(idx + current_column_idx * ROW_COUNT, COLUMN_SIZE));
     }
+    return columns
+}
+
+/// Utility function to be used by the 'counter_write' public function
+async fn get_counter_columns_data(key, idx) {
+    let columns = [];
+    for current_column_idx in 0..=COLUMN_COUNT-1 {
+        columns.push(1);
+    }
+    columns.push(key);
     return columns
 }
 
@@ -167,11 +206,23 @@ async fn get_columns_data(key, idx) {
 pub async fn write(db, i) {
     let partition_idx = get_partition_idx(db, i).await;
     let key = blob(partition_idx, KEY_SIZE);
-    db.execute_prepared(P_STMT_WRITE, get_columns_data(key, partition_idx).await).await?
+    db.execute_prepared(P_STMT_WRITE, get_blob_columns_data(key, partition_idx).await).await?
 }
 
 pub async fn read(db, i) {
     let partition_idx = get_partition_idx(db, i).await;
     let key = blob(partition_idx, KEY_SIZE);
     db.execute_prepared(P_STMT_READ, [key]).await?
+}
+
+pub async fn counter_write(db, i) {
+    let partition_idx = get_partition_idx(db, i).await;
+    let key = blob(partition_idx, KEY_SIZE);
+    db.execute_prepared(P_STMT_COUNTER_WRITE, get_counter_columns_data(key, partition_idx).await).await?
+}
+
+pub async fn counter_read(db, i) {
+    let partition_idx = get_partition_idx(db, i).await;
+    let key = blob(partition_idx, KEY_SIZE);
+    db.execute_prepared(P_STMT_COUNTER_READ, [key]).await?
 }
