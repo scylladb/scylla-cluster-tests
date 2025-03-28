@@ -194,6 +194,7 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %sdelete -q -r 500", "write"),
         ("latte run /foo/bar.rn %sinsert_delete -q -r 500", "write"),
         ("latte run /foo/bar.rn %sinsert_delete_by_one -q -r 500", "write"),
+        ("latte run /foo/bar.rn %scounter_write -q -r 500", "counter_write"),
 
         ("latte run /foo/bar.rn %sread -q -r 500", "read"),
         ("latte run /foo/bar.rn %sread_all -q -r 500", "read"),
@@ -209,10 +210,15 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %smulti_get -q -r 500", "read"),
         ("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read"),
         ("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read"),
+        ("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read"),
 
         ("latte run /foo/bar.rn %sread,write -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %sbatch_insert:1,read_all:2,get_bar:0.5 -q -r 500", "mixed"),
+        ("latte run /foo/bar.rn %sread,counter_write -q -r 500", "mixed"),
+        ("latte run /foo/bar.rn %sread,counter_read -q -r 500", "mixed"),
+        ("latte run /foo/bar.rn %swrite,counter_read -q -r 500", "mixed"),
+        ("latte run /foo/bar.rn %swrite,counter_write -q -r 500", "mixed"),
 
         ("latte run /foo/bar.rn %scustom -q -r 500", "user"),
         ("latte run /foo/bar.rn %suser_profile -q -r 500", "user"),
