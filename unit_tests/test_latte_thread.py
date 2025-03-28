@@ -19,6 +19,7 @@ import requests
 from sdcm.stress.latte_thread import (
     LatteStressThread,
     find_latte_fn_names,
+    find_latte_tags,
     get_latte_operation_type,
 )
 from sdcm.utils.decorators import timeout
@@ -210,3 +211,22 @@ def test_get_latte_operation_type(cmd, expected_operation_type):
     for fn_param in fn_params:
         result = get_latte_operation_type(cmd % fn_param)
         assert expected_operation_type == result
+
+
+@pytest.mark.parametrize(
+    "cmd,items", (
+        ("%s --tag=latte-prepare-01 -q -r 500", ["latte-prepare-01"]),
+        ("%s --tag latte-main-01 -q -r 500", ["latte-main-01"]),
+        ("%s --tag  latte-prepare-01,write  -q -r 500", ["latte-prepare-01", "write"]),
+        ("%s --tag=latte-main-01,read    -q -r 500", ["latte-main-01", "read"]),
+        ("%s  --tag=latte-main-01  --tag   write,table1    -q -r 500", ["latte-main-01", "write", "table1"]),
+        ("%s --tag=latte-main-01,read  --tag table2  -q -r 500", ["latte-main-01", "read", "table2"]),
+        ("%s --tag=latte-main-01,read -q -r 500 --tag table2", ["latte-main-01", "read", "table2"]),
+    )
+)
+def test_find_latte_tags(cmd, items):
+    result = find_latte_tags(cmd % 'latte run /foo/bar.rn')
+    assert len(result) > 0
+    assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
+    for item in items:
+        assert item in result
