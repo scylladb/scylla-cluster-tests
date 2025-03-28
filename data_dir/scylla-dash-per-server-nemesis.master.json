@@ -822,18 +822,25 @@
             "refId": "C"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_latte_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "D"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "E"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "F"
           }
         ],
         "title": "WRITE P95 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
@@ -914,18 +921,25 @@
             "refId": "C"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_latte_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "D"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "E"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "F"
           }
         ],
         "title": "WRITE P95 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
@@ -1616,18 +1630,25 @@
             "refId": "C"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_latte_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "D"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "E"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "F"
           }
         ],
         "title": "WRITE P99 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
@@ -1708,18 +1729,25 @@
             "refId": "C"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_latte_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "D"
           },
           {
-            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "E"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "F"
           }
         ],
         "title": "WRITE P99 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",

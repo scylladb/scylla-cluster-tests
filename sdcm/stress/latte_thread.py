@@ -53,20 +53,28 @@ def find_latte_fn_names(stress_cmd):
 
 
 def get_latte_operation_type(stress_cmd):
-    write_found, read_found = False, False
+    write_found, counter_write, read_found, counter_read = False, False, False, False
     for fn in find_latte_fn_names(stress_cmd):
-        if re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
+        if fn == "counter_write":
+            counter_write = True
+        elif fn == "counter_read":
+            counter_read = True
+        elif re.findall(r"(?:^|_)(write|insert|update|delete)(?:_|$)", fn):
             write_found = True
         elif re.findall(r"(?:^|_)(read|select|get|count)(?:_|$)", fn):
             read_found = True
         else:
             return "user"
-    if write_found and read_found:
-        return "mixed"
-    elif write_found:
+    if write_found and not (counter_write or counter_read or read_found):
         return "write"
-    else:
+    elif read_found and not (counter_write or counter_read or write_found):
         return "read"
+    elif counter_write and not (write_found or read_found or counter_read):
+        return "counter_write"
+    elif counter_read and not (write_found or read_found or counter_write):
+        return "counter_read"
+    else:
+        return "mixed"
 
 
 class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
