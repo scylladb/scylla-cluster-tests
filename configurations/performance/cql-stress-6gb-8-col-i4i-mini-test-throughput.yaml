@@ -6,7 +6,6 @@ prepare_write_cmd: [ "cql-stress-cassandra-stress write no-warmup cl=ALL n=65000
 stress_cmd_w: "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=6000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6500000,3250000,97500)' "
 stress_cmd_r: "cql-stress-cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=5000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6500000,3250000,97500)' "
 stress_cmd_m: "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=4000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6500000,3250000,65000)' "
-use_hdrhistogram: false  # https://github.com/scylladb/cql-stress/issues/95
 use_prepared_loaders: false  # no need for that - using docker anyway
 n_db_nodes: 3
 n_loaders: 1
