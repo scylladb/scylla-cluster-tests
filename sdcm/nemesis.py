@@ -2867,7 +2867,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 compaction_properties = get_table_compaction_info(
                     keyspace=keyspace, table=table, session=session
                 )
-        ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
+            ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
+        else:
+            ttl_to_set = default_max_ttl
 
         InfoEvent(f'New default time to live to be set: {ttl_to_set}, for table: {keyspace_table}').publish()
         self._modify_table_property(name="default_time_to_live", val=ttl_to_set,
