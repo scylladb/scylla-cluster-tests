@@ -367,10 +367,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     break
                 try:
                     client.sct_heartbeat()
+                    fail_count = 0  # Reset fail_count on success
                 except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.warning("Failed to submit heartbeat to argus, Try #%s", fail_count + 1)
                     fail_count += 1
-                time.sleep(30.0)
+                stop_signal.wait(timeout=30.0)
 
         thread_stop_signal = threading.Event()
         thread = threading.Thread(name="argus-heartbeat",
