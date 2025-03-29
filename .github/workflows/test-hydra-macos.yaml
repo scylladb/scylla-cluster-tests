@@ -9,7 +9,7 @@ on:
 
 jobs:
     test:
-        runs-on: macos-13
+        runs-on: macos-14
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
