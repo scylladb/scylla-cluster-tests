@@ -4366,8 +4366,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Doubling the load on the cluster for %s minutes", duration)
         stress_queue = self.tester.run_stress_thread(
             stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration)
-        results, errors = stress_queue.parse_results()
-        self._nemesis_stress_failure_handler(results, errors)
+        results = self.tester.verify_stress_thread(thread_pool=stress_queue,
+                                                   error_handler=self._nemesis_stress_failure_handler)
         self.log.info(f"Double load results: {results}")
 
     @target_data_nodes
