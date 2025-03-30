@@ -1,11 +1,12 @@
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - 'docker/env/Dockerfile'
       - 'docker/env/build_n_push.sh'
       - 'requirements.in'
       - 'requirements.txt'
+      - '.github/workflows/test-hydra-macos.yaml'
 
 jobs:
     test:
