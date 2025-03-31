@@ -3050,6 +3050,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_resources()
         self.get_test_failures()
 
+        with silence(parent=self, name='closing decoding queue as needed'):
+            if self.test_config.BACKTRACE_DECODING:
+                self.test_config.DECODING_QUEUE.close()
+
         # NOTE: running on K8S we need to gather logs otherwise a lot of
         # debugging info is lost
         if self.k8s_clusters:
