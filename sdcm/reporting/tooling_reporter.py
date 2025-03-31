@@ -1,3 +1,4 @@
+import json
 import logging
 from functools import lru_cache
 
@@ -108,3 +109,21 @@ class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
 
     def _collect_version_info(self) -> None:
         pass
+
+
+class ScyllaBenchVersionReporter(ToolReporterBase):
+    """
+    Reports scylla-bench and scylla gocql driver versions used in SCT.
+    """
+    TOOL_NAME = "scylla-bench"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} -version-json")
+        LOGGER.info("%s: Collected scylla-bench version output:\n%s", self, output.stdout)
+        try:
+            version_info = json.loads(output.stdout)
+            self.version = version_info["scylla-bench"]["version"]
+            self.additional_data = f"scylla-gocql-driver: {version_info['scylla-driver']['version']}"
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.warning("Failed to parse scylla-bench version info", exc_info=True)
+            self.version = "#FAILED_CHECK_LOGS"
