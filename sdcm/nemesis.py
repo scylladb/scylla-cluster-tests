@@ -31,6 +31,7 @@ import json
 import itertools
 import enum
 import ast
+import sys
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial, lru_cache
@@ -605,23 +606,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         disrupt_methods_names_list = []
         nemesis_classes = []
         all_methods_with_properties = []
+
+        class_regex = re.compile(r'^class\s+(?P<class_name>\w+).*?:\n(?:\s{4}.*\n)*', re.MULTILINE)
+        method_regex = re.compile(r'(?m)^\s*(?!#)self\.(disrupt_[0-9A-Za-z_]+)\([^)]*\)')
+        current_module = sys.modules[__name__]
+        module_source = inspect.getsource(current_module)
+        class_sources = {m.group(1): m.group(0) for m in class_regex.finditer(module_source)}
+        subclass_methods = {}
+        for class_name, source_code in class_sources.items():
+            method_names = method_regex.findall(source_code)
+            if method_names:
+                subclass_methods[class_name] = method_names
         for subclass in subclasses_list:
             properties_list = []
             per_method_properties = {}
-
             for attribute in subclass.__dict__.keys():
                 if attribute[:2] != '__':
                     value = getattr(subclass, attribute)
                     if not callable(value):
                         properties_list.append(f"{attribute} = {value}")
-
-            if method_name_str := self.get_disrupt_method_from_class(subclass):
-                disrupt_methods_names_list.append(method_name_str)
+            class_name = subclass.__name__
+            method_names = subclass_methods[class_name] if class_name in subclass_methods else []
+            for method_name in method_names:
+                disrupt_methods_names_list.append(method_name)
                 nemesis_classes.append(subclass.__name__)
                 if export_properties:
-                    per_method_properties[method_name_str] = properties_list
+                    per_method_properties[method_name] = properties_list
                     all_methods_with_properties.append(per_method_properties)
                     all_methods_with_properties = sorted(all_methods_with_properties, key=lambda d: list(d.keys()))
+
         nemesis_classes.sort()
         self.log.debug("list of matching disrupions: {}".format(disrupt_methods_names_list))
         for _ in disrupt_methods_names_list:
