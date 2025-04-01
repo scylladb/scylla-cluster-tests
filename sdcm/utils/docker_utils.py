@@ -541,9 +541,12 @@ def docker_hub_login(remoter: CommandRunner, use_sudo: bool = False) -> None:
         remoter.log.debug("not in jenkins, skipping login to docker hub")
         return
     docker_hub_creds = get_docker_hub_credentials()
-    password_file = remoter.run("mktemp").stdout.strip()
-    with remote_file(remoter=remoter, remote_path=password_file) as fobj:
+    password_file = remote_cmd("mktemp").stdout.strip()
+    if use_sudo:
+        remote_cmd(f"chmod 644 '{password_file}'")
+
+    with remote_file(remoter=remoter, remote_path=password_file, sudo=use_sudo) as fobj:
         fobj.write(docker_hub_creds["password"])
     remoter.log.debug("Login to Docker Hub as `%s'", docker_hub_creds["username"])
     remote_cmd(f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
-    remoter.run(f"rm '{password_file}'")
+    remote_cmd(f"rm '{password_file}'")
