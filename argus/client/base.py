@@ -20,6 +20,7 @@ class ArgusClientError(Exception):
 
 class ArgusClient:
     schema_version: str | None = None
+    api_prefix: str = "/client"
 
     class Routes():
         # pylint: disable=too-few-public-methods
@@ -74,7 +75,7 @@ class ArgusClient:
         if self.verify_location_params(endpoint, location_params):
             for param, value in location_params.items():
                 endpoint = endpoint.replace(f"${param}", str(value))
-        return f"{self._base_url}/api/{self._api_ver}/client{endpoint}"
+        return f"{self._base_url}/api/{self._api_ver}{self.api_prefix}{endpoint}"
 
     @property
     def generic_body(self) -> dict:
