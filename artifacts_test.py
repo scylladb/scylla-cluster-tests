@@ -392,10 +392,11 @@ class ArtifactsTest(ClusterTester):
         with self.logged_subtest("check cqlsh installation"):
             self.check_cqlsh()
 
-        with self.logged_subtest("check node_exporter liveness"):
-            node_info_service = NodeLoadInfoServices().get(self.node)
-            assert node_info_service.cpu_load_5
-            assert node_info_service.get_node_boot_time_seconds()
+        if backend != 'docker':
+            with self.logged_subtest("check node_exporter liveness"):
+                node_info_service = NodeLoadInfoServices().get(self.node)
+                assert node_info_service.cpu_load_5
+                assert node_info_service.get_node_boot_time_seconds()
 
         if self.params.get("run_scylla_doctor"):
             with self.logged_subtest("check scylla_doctor results"):
@@ -464,7 +465,7 @@ class ArtifactsTest(ClusterTester):
             # So we don't need to stop and to start it again
             self.check_scylla()
 
-            if not self.node.is_nonroot_install:
+            if not self.node.is_nonroot_install and backend != 'docker':
                 self.log.info("Validate version after stop/start")
                 with self.actions_log.action_scope("Validate version after stop/start"):
                     self.check_housekeeping_service_status(backend=backend)
@@ -478,7 +479,7 @@ class ArtifactsTest(ClusterTester):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
 
-            if not self.node.is_nonroot_install:
+            if not self.node.is_nonroot_install and backend != 'docker':
                 self.log.info("Validate version after restart")
                 self.check_housekeeping_service_status(backend=backend)
                 self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
