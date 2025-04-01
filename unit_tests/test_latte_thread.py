@@ -32,6 +32,7 @@ pytestmark = [
 
 @pytest.mark.integration
 def test_01_latte_schema(request, docker_scylla, params):
+    params['enable_argus'] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = ("latte schema docker/latte/workloads/workload.rn")
@@ -52,8 +53,8 @@ def test_01_latte_schema(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_02_latte_load(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy()
-    loader_set.params = params
+    params['enable_argus'] = False
+    loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = ("latte load docker/latte/workloads/workload.rn")
 
@@ -73,6 +74,7 @@ def test_02_latte_load(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_03_latte_run(request, docker_scylla, prom_address, params):
+    params['enable_argus'] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = ("latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report")
@@ -114,6 +116,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
     params['client_encrypt'] = True
+    params['enable_argus'] = False
 
     loader_set = LocalLoaderSetDummy(params=params)
 
