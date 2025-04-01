@@ -490,7 +490,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             return
 
         if self.db_cluster.nodes[0].is_nonroot_install and \
-                SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2254", self.params):
+                SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/10540", self.params):
             self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
             return
 
