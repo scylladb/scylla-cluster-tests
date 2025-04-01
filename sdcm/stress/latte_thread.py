@@ -26,6 +26,7 @@ from sdcm.loader import (
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import Failure
+from sdcm.reporting.tooling_reporter import LatteVersionReporter
 from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.sct_events import Severity
 from sdcm.stress.base import DockerBasedStressThread
@@ -222,9 +223,17 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             hdrh_logger_context = contextlib.nullcontext()
         stress_cmd += f" -- {hosts} "
 
-        LOGGER.debug("running: %s", stress_cmd)
+        try:
+            LatteVersionReporter(
+                runner=cmd_runner,
+                command_prefix=stress_cmd.split("latte", maxsplit=1)[0],
+                argus_client=loader.parent_cluster.test_config.argus_client(),
+            ).report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect latte version information", exc_info=True)
 
-        keyspace_holder = {}, LatteKeyspaceHolder()
+        LOGGER.debug("running: %s", stress_cmd)
+        keyspace_holder = LatteKeyspaceHolder()
         with cleanup_context, \
                 hdrh_logger_context, \
                 LatteExporter(
