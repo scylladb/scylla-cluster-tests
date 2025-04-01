@@ -7,10 +7,9 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+    // Upgrade from the latest patch release
+    manager_version: '3.4',
     target_manager_version: 'master_latest',
-
-    // Upgrade from latest patch release
-    manager_version: '3.4.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu24.yaml", "configurations/disable_client_encrypt.yaml"]''',
