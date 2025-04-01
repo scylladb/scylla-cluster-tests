@@ -19,6 +19,7 @@ from functools import cached_property
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
+from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
@@ -40,7 +41,7 @@ class ScyllaDockerRequirementError(cluster.ScyllaRequirementError, DockerExcepti
 class NodeContainerMixin:
     @cached_property
     def node_container_image_tag(self):
-        return self.parent_cluster.node_container_image_tag
+        return self.parent_cluster.source_image
 
     def node_container_image_dockerfile_args(self):
         return dict(path=self.parent_cluster.node_container_context_path)
@@ -87,10 +88,19 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
 
+    def _init_remoter(self, ssh_login_info):
+        self.remoter = DockerCmdRunner(self)
+
+    def _init_port_mapping(self):
+        pass
+
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
 
     def wait_for_cloud_init(self):
+        pass
+
+    def wait_ssh_up(self, verbose=True, timeout=500):
         pass
 
     @property
@@ -106,7 +116,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         #                          device_index=0
         #                          )]
 
-    def is_docker(self):
+    @staticmethod
+    def is_docker():
         return True
 
     @cached_property
@@ -140,21 +151,27 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         ContainerManager.get_container(self, "node").restart()
 
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
-        return self.remoter.sudo('sh -c "{0} || {0}.service"'.format(f"supervisorctl status {service_name}"),
-                                 timeout=timeout, ignore_status=ignore_status)
+        container_status = ContainerManager.get_container(self, "node").attrs['State']['Status']
+        # return similar interface to what supervisorctl would return
+        return type('ServiceStatus', (), {
+            'stdout': f"{service_name} {container_status}",
+            'stderr': "",
+            'ok': container_status in ['running', 'active', 'RUNNING']
+        })
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=None):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
-                          timeout=timeout)
+
+        container = ContainerManager.get_container(self, "node")
+        if container.status != 'running':
+            self.log.info("Starting Docker container %s", container.name)
+            container.start()
+            ContainerManager.wait_for_status(self, "node", status="running")
+
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
-
-        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
@@ -163,24 +180,15 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
+
+        container = ContainerManager.get_container(self, "node")
+        self.log.info(f"Stopping Docker container {container.name}")
         # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
         with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
-            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
-                              timeout=timeout)
+            container.stop(timeout=timeout)
+
         if verify_down:
             self.wait_db_down(timeout=timeout)
-
-        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.stop_scylla_housekeeping_service(timeout=timeout)
-
-    def stop_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
-                          timeout=timeout)
-
-    def start_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
-                          timeout=timeout)
 
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
@@ -192,15 +200,15 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         if verify_up_before:
             self.wait_db_up(timeout=verify_up_timeout)
 
-        # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.stop_scylla_housekeeping_service(timeout=timeout)
+        container = ContainerManager.get_container(self, "node")
+        self.log.info(f"Restarting Docker container {container.name}")
         # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
         with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
-            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
+            container.restart(timeout=timeout)
+            ContainerManager.wait_for_status(self, "node", status="running")
+
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
-        self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800) -> None:
@@ -218,6 +226,28 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     def region(self):
         return "docker"
 
+    def do_default_installations(self):
+        self.install_sudo()
+        self.install_package("tar")
+        super().do_default_installations()
+
+    def install_sudo(self, user: str = 'scylla', verbose=False):
+        """Install and configure passwordless sudo"""
+        pkg_mgr = 'microdnf' if self.distro.is_rhel_like else 'apt'
+        self.remoter.run(f'{pkg_mgr} install -y sudo', verbose=verbose, ignore_status=True, user='root')
+
+        self.remoter.run("mkdir -p /etc/sudoers.d", user='root', ignore_status=True, verbose=verbose)
+        sudoers_file = f"/etc/sudoers.d/{user}-nopasswd"
+        sudoers_content = f"{user} ALL=(ALL) NOPASSWD: ALL"
+        self.remoter.run(f"echo '{sudoers_content}' > {sudoers_file}", user='root', verbose=verbose, ignore_status=True)
+        self.remoter.run(f"chmod 440 {sudoers_file}", user='root', verbose=verbose, ignore_status=True)
+
+        verify_result = self.remoter.run("sudo -n true", ignore_status=True, verbose=verbose)
+        if verify_result.ok:
+            self.log.debug("Passwordless sudo configured successfully for user %s", user)
+        else:
+            self.log.warning("Passwordless sudo verification failed: %s", verify_result.stderr)
+
 
 class DockerCluster(cluster.BaseCluster):
     node_container_user = "scylla-test"
@@ -232,7 +262,6 @@ class DockerCluster(cluster.BaseCluster):
                  n_nodes: Union[list, int] = 3,
                  params: dict = None) -> None:
         self.source_image = f"{docker_image}:{docker_image_tag}"
-        self.node_container_image_tag = f"scylla-sct:{node_type}-{str(self.test_config.test_id())[:8]}"
         self.node_container_key_file = node_key_file
 
         super().__init__(cluster_prefix=cluster_prefix,
@@ -259,11 +288,9 @@ class DockerCluster(cluster.BaseCluster):
                           node_index=node_index)
 
         if container is None:
-            ContainerManager.build_container_image(node, "node")
-
-        ContainerManager.run_container(node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None)
-        ContainerManager.wait_for_status(node, "node", status="running")
-        ContainerManager.ssh_copy_id(node, "node", self.node_container_user, self.node_container_key_file)
+            ContainerManager.run_container(
+                node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None)
+            ContainerManager.wait_for_status(node, "node", status="running")
 
         node.init()
 
@@ -317,23 +344,19 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                          params=params)
 
     def node_setup(self, node, verbose=False, timeout=3600):
-        node.wait_ssh_up(verbose=verbose)
-
         node.is_scylla_installed(raise_if_not_installed=True)
-
         self.check_aio_max_nr(node)
-
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
+        node.install_package("procps-ng")
         node.config_setup(append_scylla_args=self.get_scylla_args())
-
-        node.stop_scylla_server(verify_down=False)
-        node.remoter.sudo('rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
+        node.restart_scylla(verify_up_before=True)
 
     def node_startup(self, node, verbose=False, timeout=3600):
-        node.start_scylla_server(verify_up=False)
-
+        if not ContainerManager.is_running(node, "node"):
+            container = ContainerManager.get_container(node, "node")
+            container.start()
         node.wait_db_up(verbose=verbose, timeout=timeout)
         for event in check_nodes_status(nodes_status=node.get_nodes_status(),
                                         current_node=node,
@@ -389,14 +412,49 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
                                params=params)
 
     def node_setup(self, node: DockerNode, verbose=False, **kwargs):
-        node.wait_ssh_up(verbose=verbose)
         node.remoter.sudo("apt update", verbose=True, ignore_status=True)
         node.remoter.sudo("apt install -y openjdk-8-jre", verbose=True, ignore_status=True)
         node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
                           verbose=True, ignore_status=True)
 
+        self._install_docker_cli(node, verbose=verbose)
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
+
+    def _install_docker_cli(self, node, verbose=False):
+        result = node.remoter.run("docker --version", ignore_status=True, verbose=False)
+        if result.ok:
+            self.log.debug("Docker CLI already installed on loader node: %s", result.stdout.strip())
+            return
+
+        self.log.debug("Installing Docker CLI on loader node")
+
+        commands = (
+            [
+                'apt update',
+                'apt install -y gnupg2 software-properties-common lsb-release',
+                'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -',
+                'add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
+                'apt update',
+                'apt install -y docker-ce-cli'
+            ]
+            if node.distro.is_debian_like
+            else [
+                'curl -L https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo',
+                'microdnf -y update',
+                'microdnf -y install docker-ce-cli'
+            ])
+
+        for cmd in commands:
+            result = node.remoter.run(cmd, timeout=300, verbose=verbose, ignore_status=True, retry=3, user='root')
+            if not result.ok:
+                raise RuntimeError(f"Command {cmd} failed with error: {result.stderr.strip()}")
+
+        verify = node.remoter.run("docker --version", ignore_status=True)
+        if verify.ok:
+            self.log.info("Docker CLI installed successfully: %s", verify.stdout.strip())
+        else:
+            raise RuntimeError("Docker CLI installation verification failed")
 
 
 class DockerMonitoringNode(cluster.BaseNode):
@@ -430,9 +488,6 @@ class DockerMonitoringNode(cluster.BaseNode):
         self.remoter = LOCALRUNNER
 
     def _init_port_mapping(self):
-        pass
-
-    def wait_ssh_up(self, verbose=True, timeout=500):
         pass
 
     def update_repo_cache(self):
