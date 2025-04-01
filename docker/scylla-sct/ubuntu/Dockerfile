@@ -37,6 +37,9 @@ RUN apt-get update && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
     echo "user=scylla" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
 
+COPY docker-entrypoint.py /docker-entrypoint.py
+RUN chmod +x /docker-entrypoint.py
+
 COPY ./etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
 COPY ./etc/sshd.conf /etc/supervisord.conf.d/sshd.conf
 COPY ./etc/sshd-service.sh /sshd-service.sh
