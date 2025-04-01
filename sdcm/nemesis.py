@@ -71,7 +71,6 @@ from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
-from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
@@ -650,7 +649,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nemeses will be filtered out.
         """
         nemesis_subclasses = []
-        nemesis_to_exclude = COMPLEX_NEMESIS + DEPRECATED_LIST_OF_NEMESISES
+        nemesis_to_exclude = COMPLEX_NEMESIS
 
         evaluator = BooleanEvaluator()
         if logical_phrase:
@@ -6279,121 +6278,6 @@ class MdcChaosMonkey(Nemesis):
                              'disrupt_nodetool_decommission'])
 
 
-class UpgradeNemesis(Nemesis):
-
-    # # upgrade a single node
-    # def upgrade_node(self, node):
-    #     repo_file = self.cluster.params.get('repo_file', None,  'scylla.repo.upgrade')
-    #     new_version = self.cluster.params.get('new_version', None,  '')
-    #     upgrade_node_packages = self.cluster.params.get('upgrade_node_packages')
-    #     self.log.info('Upgrading a Node')
-    #
-    #     # We assume that if update_db_packages is not empty we install packages from there.
-    #     # In this case we don't use upgrade based on repo_file(ignored sudo yum update scylla...)
-    #     orig_ver = node.remoter.run('rpm -qa scylla-server')
-    #     if upgrade_node_packages:
-    #         # update_scylla_packages
-    #         node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
-    #         # node.remoter.run('sudo yum update -y --skip-broken', connect_timeout=900)
-    #         node.remoter.run('sudo yum install python34-PyYAML -y')
-    #         # replace the packages
-    #         node.remoter.run('rpm -qa scylla\*')
-    #         node.run_nodetool("snapshot")
-    #         # update *development* packages
-    #         node.remoter.run('sudo rpm -UvhR --oldpackage /tmp/scylla/*development*', ignore_status=True)
-    #         # and all the rest
-    #         node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm | true')
-    #         node.remoter.run('rpm -qa scylla\*')
-    #     elif repo_file:
-    #         scylla_repo = get_data_dir_path(repo_file)
-    #         node.remoter.send_files(scylla_repo, '/tmp/scylla.repo', verbose=True)
-    #         node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-    #         node.remoter.run('sudo cp /tmp/scylla.repo /etc/yum.repos.d/scylla.repo')
-    #         # backup the data
-    #         node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
-    #         node.run_nodetool("snapshot")
-    #         node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
-    #         node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-    #         node.remoter.run('sudo yum clean all')
-    #         ver_suffix = '-{}'.format(new_version) if new_version else ''
-    #         node.remoter.run('sudo yum install scylla{0} scylla-server{0} scylla-jmx{0} scylla-tools{0}'
-    #                          ' scylla-conf{0} scylla-kernel-conf{0} scylla-debuginfo{0} -y'.format(ver_suffix))
-    #     # flush all memtables to SSTables
-    #     node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
-    #     node.remoter.run('sudo systemctl restart scylla-server.service')
-    #     node.wait_db_up(verbose=True)
-    #     new_ver = node.remoter.run('rpm -qa scylla-server')
-    #     if orig_ver == new_ver:
-    #         self.log.error('scylla-server version isn\'t changed')
-
-    def disrupt(self):
-        self.log.info('Upgrade Nemesis begin')
-        # get the number of nodes
-        nodes_num = len(self.cluster.nodes)
-        # prepare an array containing the indexes
-        indexes = list(range(nodes_num))
-        # shuffle it so we will upgrade the nodes in a
-        # random order
-        random.shuffle(indexes)
-
-        # upgrade all the nodes in random order
-        for i in indexes:
-            node = self.cluster.nodes[i]
-            self.upgrade_node(node)  # pylint: disable=no-member
-
-        self.log.info('Upgrade Nemesis end')
-
-
-class UpgradeNemesisOneNode(UpgradeNemesis):
-
-    def disrupt(self):
-        self.log.info('UpgradeNemesisOneNode begin')
-        self.upgrade_node(self.cluster.node_to_upgrade)  # pylint: disable=no-member
-
-        self.log.info('UpgradeNemesisOneNode end')
-
-
-class RollbackNemesis(Nemesis):
-
-    def rollback_node(self, node):
-        self.log.info('Rollbacking a Node')
-        orig_ver = node.remoter.run('rpm -qa scylla-server')
-        node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
-        # backup the data
-        node.run_nodetool("snapshot")
-        node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
-        node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
-        node.remoter.run('sudo yum clean all')
-        node.remoter.run(
-            'sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
-        # flush all memtables to SSTables
-        node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
-        node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
-        node.remoter.run('sudo systemctl restart scylla-server.service')
-        node.wait_db_up(verbose=True)
-        new_ver = node.remoter.run('rpm -qa scylla-server')
-        self.log.debug('original scylla-server version is %s, latest: %s' % (orig_ver, new_ver))
-        if orig_ver == new_ver:
-            raise ValueError('scylla-server version isn\'t changed')
-
-    def disrupt(self):
-        self.log.info('Rollback Nemesis begin')
-        # get the number of nodes
-        nodes_num = len(self.cluster.nodes)
-        # prepare an array containing the indexes
-        indexes = list(range(nodes_num))
-        # shuffle it so we will rollback the nodes in a
-        # random order
-        random.shuffle(indexes)
-
-        # rollback all the nodes in random order
-        for i in indexes:
-            node = self.cluster.nodes[i]
-            self.rollback_node(node)
-
-        self.log.info('Rollback Nemesis end')
-
-
 class ModifyTableMonkey(Nemesis):
     disruptive = False
     kubernetes = True
@@ -6940,8 +6824,6 @@ class RepairStreamingErrMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_repair_streaming_err()
 
-
-DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
 
 COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    LimitedChaosMonkey,
