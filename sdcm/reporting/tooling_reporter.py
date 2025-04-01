@@ -126,6 +126,27 @@ class CqlStressCassandraStressVersionReporter(ToolReporterBase):
                 argus_client=self.argus_client).report()
 
 
+class LatteVersionReporter(ToolReporterBase):
+    TOOL_NAME = "latte"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} version -j")
+        LOGGER.debug("%s: Collected latte version output:\n%s", self, output.stdout)
+        result = json.loads(output.stdout)
+        LOGGER.debug("Result:\n%s", result)
+        latte_details = result.get('latte', {})
+        self.version = latte_details.get('version', '#FAILED_CHECK_LOGS')
+        self.date = latte_details.get('commit_date')
+        self.revision_id = latte_details.get('commit_sha')
+        if driver_details := result.get("scylla-driver", {}):
+            LatteRustDriverVersionReporter(
+                driver_version=driver_details.get('version'),
+                date=driver_details.get("commit_date"),
+                revision_id=driver_details.get("commit_sha"),
+                argus_client=self.argus_client,
+            ).report()
+
+
 class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
     # pylint: disable=too-few-public-methods
     TOOL_NAME = "java-driver"
@@ -145,6 +166,20 @@ class CqlStressRustDriverVersionReporter(ToolReporterBase):
     def __init__(self, driver_version: str, date: str, revision_id: str, runner: CommandRunner, command_prefix: str = None,
                  argus_client: ArgusSCTClient = None) -> None:
         super().__init__(runner, command_prefix, argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class LatteRustDriverVersionReporter(ToolReporterBase):
+    TOOL_NAME = "latte-rust-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str,
+                 argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
         self.version = driver_version
         self.date = date
         self.revision_id = revision_id
