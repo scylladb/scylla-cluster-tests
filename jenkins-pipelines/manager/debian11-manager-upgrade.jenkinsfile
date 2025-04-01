@@ -7,10 +7,8 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
-    manager_version: '3.3',
+    manager_version: '3.4',
     target_manager_version: 'master_latest',
-
-    scylla_version: '2024.1',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian11.yaml"]''',
