@@ -48,6 +48,31 @@ class SCTDedicatedHosts:
                 and params.get('use_dedicated_host') is True
                 and params.get('instance_provision') == 'on_demand')
 
+    @staticmethod
+    def _get_supported_availability_zones(ec2, instance_types: list[str], initial_az: str) -> list[str]:
+        response = ec2.describe_instance_type_offerings(
+            LocationType='availability-zone',
+            Filters=[
+                {
+                    'Name': 'instance-type',
+                    'Values': instance_types
+                },
+            ]
+        )
+        offerings = response['InstanceTypeOfferings']
+        azs = set.intersection(
+            *[{offering['Location'] for offering in offerings if offering['InstanceType'] == instance_type}
+              for instance_type in instance_types]
+        )
+        azs = list(azs)
+        try:  # put initial az as first one to try
+            azs.remove(initial_az)
+            azs.insert(0, initial_az)
+        except ValueError:
+            LOGGER.warning("Initial availability zone %s does not support required instances", initial_az)
+        LOGGER.info("Supported availability zones for instance types %s: %s", instance_types, azs)
+        return azs
+
     @classmethod
     def reserve(cls, params) -> None:
 
@@ -88,6 +113,7 @@ class SCTDedicatedHosts:
             host = response['Hosts'][0]
             instance_type = host.get('HostProperties').get('InstanceType')
             cls.hosts[host.get('AvailabilityZone')] = {instance_type: host.get('HostId')}
+            params["availability_zone"] = host.get('AvailabilityZone')[-1]
             return
         else:
             tags = TestConfig.common_tags()
@@ -95,10 +121,17 @@ class SCTDedicatedHosts:
                 tags['keep'] = 'alive'
             tags['TestId'] = test_id
             region = params.region_names[0]
-            host_id = cls.allocate(region_name=region, availability_zone=region+params.get("availability_zone"),
-                                   instance_type=params.get('instance_type_db'), quantity=1, tags=tags)
+            for availability_zone in cls._get_supported_availability_zones(ec2=ec2, instance_types=[params.get('instance_type_db'),],
+                                                                           initial_az=region+params.get("availability_zone")):
+                host_id = cls.allocate(region_name=region, availability_zone=availability_zone,
+                                       instance_type=params.get('instance_type_db'), quantity=1, tags=tags)
 
-            cls.hosts[region+params.get("availability_zone")] = {params.get('instance_type_db'): host_id}
+                if host_id:
+                    params["availability_zone"] = availability_zone[-1]
+                    cls.hosts[availability_zone] = {params.get('instance_type_db'): host_id}
+                    return
+
+            raise EnvironmentError("Failed to get dedicated host in any availability zone.")
 
     @staticmethod
     def allocate(region_name: str, availability_zone: str, instance_type: str, quantity: int, tags: dict):
