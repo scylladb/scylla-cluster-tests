@@ -9,7 +9,7 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerInstallationTests.test_manager_installed_and_functional',
     test_config: '''["test-cases/manager/manager-installation-set-distro.yaml", "configurations/manager/debian11.yaml"]''',
 
-    scylla_version: '2024.1',
+    scylla_version: '2024.2',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
