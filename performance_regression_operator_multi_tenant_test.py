@@ -18,11 +18,10 @@ from sdcm.utils.common import ParallelObject
 from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
 
 
-# pylint: disable=too-many-public-methods
 class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, PerformanceRegressionTest):
     load_iteration_timeout_sec = 7200
 
-    def create_test_stats(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def create_test_stats(self, *args, **kwargs):
         self.log.info(
             "Suppress the test class stats creation. "
             "Leave it for the per-DB classes.")

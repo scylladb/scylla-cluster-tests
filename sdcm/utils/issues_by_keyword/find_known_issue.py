@@ -15,7 +15,6 @@ class MapKeywords(NamedTuple):
     issue: str
 
 
-# pylint: disable=too-few-public-methods
 class FindIssuePerBacktrace(metaclass=Singleton):
 
     MAPPING_FILE = Path(__file__).parent / "issue_by_keyword.yaml"

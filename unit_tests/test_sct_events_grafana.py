@@ -33,8 +33,6 @@ from sdcm.wait import wait_for
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
-# pylint: disable=protected-access
-
 
 class TestGrafana(unittest.TestCase, EventsUtilsMixin):
     @classmethod

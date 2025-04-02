@@ -10,8 +10,8 @@ from sdcm.utils.common import list_elastic_ips_aws, aws_tags_to_dict, list_stati
 LOGGER = getLogger(__name__)
 
 
-class StaticIP:  # pylint: disable=too-few-public-methods
-    def __init__(self, cloud, name, address, region, used_by, owner):  # pylint: disable=too-many-arguments
+class StaticIP:
+    def __init__(self, cloud, name, address, region, used_by, owner):
         self.cloud = cloud
         self.name = name
         self.address = address
@@ -26,7 +26,7 @@ class StaticIP:  # pylint: disable=too-few-public-methods
         return False
 
 
-class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
+class AwsElasticIP(StaticIP):
     def __init__(self, eip, region):
         tags = eip.get('Tags')
         tags_dict = {}
@@ -42,7 +42,7 @@ class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
         )
 
 
-class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
+class GceStaticIP(StaticIP):
     def __init__(self, static_ip: compute_v1.Address):
         used_by = static_ip.users
         super().__init__(
@@ -55,7 +55,7 @@ class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
         )
 
 
-class AzureStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
+class AzureStaticIP(StaticIP):
     def __init__(self, static_ip, resource_group):
         super().__init__(
             cloud="azure",

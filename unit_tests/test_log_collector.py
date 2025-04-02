@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-# pylint: disable=redefined-outer-name
+
 import uuid
 
 import pytest

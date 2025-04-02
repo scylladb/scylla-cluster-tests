@@ -65,7 +65,7 @@ class TopPartitionCmd(ABC):
         Returns:
             dict -- result of parsing
         """
-        pattern1 = r"(?P<sampler>[A-Z]+)\sSampler:\W+Cardinality:\s~(?P<cardinality>[0-9]+)\s\((?P<capacity>[0-9]+)\scapacity\)\W+Top\s(?P<toppartitions>[0-9]+)\spartitions:"  # pylint: disable=line-too-long
+        pattern1 = r"(?P<sampler>[A-Z]+)\sSampler:\W+Cardinality:\s~(?P<cardinality>[0-9]+)\s\((?P<capacity>[0-9]+)\scapacity\)\W+Top\s(?P<toppartitions>[0-9]+)\spartitions:"
         pattern2 = r"(?P<partition>\([\w:]+\)\s[\w:]+)\s+(?P<count>[\d]+)\s+(?P<margin>[\d]+)"
         toppartitions = {}
         for out in output.strip().split('\n\n'):

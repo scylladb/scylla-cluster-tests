@@ -23,7 +23,7 @@ def cut_addresses_from_log_line_kernel_callstack(line):
 
 def get_lines_from_log(file_path):
     file_content = {}
-    with open(file_path, 'r') as file:  # pylint: disable=unspecified-encoding
+    with open(file_path, 'r') as file:
         for line in file:
             if ('kernel callstack' in line and '0x' in line) or 'Reactor stalled for' in line:
                 file_content[line] = cut_addresses_from_log_line_kernel_callstack(line)
@@ -31,7 +31,7 @@ def get_lines_from_log(file_path):
 
 
 def get_kallsyms(path_to_kallsyms):
-    with open(path_to_kallsyms, 'r') as file:  # pylint: disable=unspecified-encoding
+    with open(path_to_kallsyms, 'r') as file:
         file_content = file.readlines()
     return file_content
 
@@ -44,10 +44,10 @@ def decode_kernel_callstacks(results_file='results.log', input_file='system.log'
                              clear_output_file=True):
     file_content = get_kallsyms(kallsyms_file)
     if clear_output_file:
-        with open(results_file, 'w'):  # pylint: disable=unspecified-encoding
+        with open(results_file, 'w'):
             print(f'clearing file {results_file}')
 
-    with open(results_file, 'a') as file:  # pylint: disable=unspecified-encoding
+    with open(results_file, 'a') as file:
         for full_line, stall in get_lines_from_log(input_file).items():
             append_content_to_file(file, '#' * 76)
             append_content_to_file(file, full_line)
@@ -66,4 +66,4 @@ def decode(input_file, kallsyms_file, results_file):
 
 
 if __name__ == "__main__":
-    decode()  # pylint: disable=no-value-for-parameter
+    decode()

@@ -3,10 +3,10 @@ from typing import Literal
 from sdcm.cluster import BaseNode
 
 
-class ScyllaMetricsController:  # pylint: disable=too-few-public-methods
+class ScyllaMetricsController:
     """Class to control Scylla metrics using API. Ref: https://github.com/scylladb/scylladb/pull/12670
     issue about missing docs: https://github.com/scylladb/scylla-monitoring/issues/2196"""
-    curl_cmd = "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"  # pylint: disable=line-too-long
+    curl_cmd = "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
     endpoint = "http://localhost:10000/v2/metrics-config/"
 
     @classmethod

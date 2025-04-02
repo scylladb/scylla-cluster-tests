@@ -21,7 +21,7 @@ class ES(elasticsearch.Elasticsearch):
         return KeyStore().get_elasticsearch_token()
 
     def _create_index(self, index):
-        self.indices.create(index=index, ignore=400)  # pylint: disable=unexpected-keyword-arg
+        self.indices.create(index=index, ignore=400)
 
     def create_doc(self, index, doc_id, body):
         """
@@ -48,13 +48,13 @@ class ES(elasticsearch.Elasticsearch):
         """
         Search for documents for the certain index
         """
-        return self.search(index=index, size=limit)  # pylint: disable=unexpected-keyword-arg
+        return self.search(index=index, size=limit)
 
     def get_doc(self, index, doc_id):
         """
         Get document by id
         """
-        doc = self.get(index=index, id=doc_id, ignore=[  # pylint: disable=unexpected-keyword-arg
+        doc = self.get(index=index, id=doc_id, ignore=[
                        400, 404])
         if not doc['found']:
             LOGGER.warning('Document not found: %s', doc_id)
