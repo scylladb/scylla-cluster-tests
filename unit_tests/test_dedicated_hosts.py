@@ -62,7 +62,13 @@ def test_allocate_success_existing(mock_ec2, params):
 
 def test_allocate_success(mock_ec2, params):
     mock_ec2.allocate_hosts.side_effect = [{'HostIds': ['h-0867aada366f84ff1']}]
-
+    mock_ec2.describe_instance_type_offerings.return_value = {
+        "InstanceTypeOfferings": [
+            {"Location": "us-east-1a", "InstanceType": "i4i.4xlarge"},
+            {"Location": "us-east-1b", "InstanceType": "i4i.4xlarge"},
+            {"Location": "us-east-1d", "InstanceType": "i4i.4xlarge"},
+        ]
+    }
     SCTDedicatedHosts.reserve(params)
     hosts = SCTDedicatedHosts.hosts
     assert len(hosts.keys()) == 1
