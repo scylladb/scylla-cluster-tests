@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
-    scylla_version: '2023.1',
+    scylla_version: '2024.1',
 
     manager_version: '3.4',
     target_manager_version: 'master_latest',
