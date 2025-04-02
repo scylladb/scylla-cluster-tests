@@ -25,3 +25,7 @@ max-args = 12
 max-statements = 100
 max-branches = 24
 max-locals = 15
+
+[tool.autopep8]
+max_line_length = 120
+ignore = "E226,E24,W50,W690,E402,E731"
