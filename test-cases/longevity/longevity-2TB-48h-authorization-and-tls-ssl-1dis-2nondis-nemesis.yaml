@@ -29,8 +29,8 @@ instance_type_loader: 'c6i.2xlarge'
 instance_type_runner: 'r6i.2xlarge'
 
 cluster_health_check: false
-nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2'
-nemesis_selector: ["", "", "not manager_operation"]
+nemesis_class_name: 'SisyphusMonkey:3'
+nemesis_selector: ["disruptive", "not disruptive", "not disruptive and not manager_operation"]
 nemesis_interval: 30
 nemesis_during_prepare: false
 nemesis_filter_seeds: false
