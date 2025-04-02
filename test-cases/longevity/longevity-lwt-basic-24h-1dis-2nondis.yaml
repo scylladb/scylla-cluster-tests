@@ -9,8 +9,8 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2'
-nemesis_selector: ["", "", "not manager_operation"]
+nemesis_class_name: 'SisyphusMonkey:3'
+nemesis_selector: ["disruptive", "not disruptive", "not disruptive and not manager_operation"]
 nemesis_during_prepare: false
 space_node_threshold: 64424
 

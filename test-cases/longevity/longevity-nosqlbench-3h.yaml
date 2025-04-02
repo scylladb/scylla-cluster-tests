@@ -12,7 +12,8 @@ instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 gce_instance_type_loader: 'e2-standard-4'
 
-nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive"
 nemesis_interval: 10
 
 user_prefix: 'longevity-nosqlbench-3h'
