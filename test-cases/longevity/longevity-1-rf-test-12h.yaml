@@ -26,7 +26,8 @@ round_robin: true
 instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c6i.4xlarge'
 
-nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive"
 nemesis_interval: 5
 
 user_prefix: 'longevity-1-rf-test-4h'

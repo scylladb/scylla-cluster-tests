@@ -28,7 +28,8 @@ k8s_n_loader_pods_per_cluster: 2
 
 k8s_n_auxiliary_nodes: 3
 
-nemesis_class_name: ['FreeTierSetMonkey', 'K8sSetMonkey']
+nemesis_class_name: ['SisyphusMonkey', 'K8sSetMonkey']
+nemesis_selector: ["free_tier_set", ""]
 nemesis_interval: [5, 6]
 nemesis_seed: ['385', '543']
 nemesis_during_prepare: false
