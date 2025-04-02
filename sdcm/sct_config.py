@@ -651,7 +651,7 @@ class SCTConfiguration(dict):
                       parallel threads on different nodes. Ex.: "ChaosMonkey:2"
                     - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
                       <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
-                      parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+                      parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
             """),
 
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",
