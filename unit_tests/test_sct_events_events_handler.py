@@ -23,9 +23,8 @@ from sdcm.test_config import TestConfig
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-# pylint: disable=too-few-public-methods
 class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
-    # pylint: disable=invalid-name
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
@@ -34,7 +33,7 @@ class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
     def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
-    def test_events_handler(self):  # pylint: disable=no-self-use
+    def test_events_handler(self):
         with unittest.mock.patch("sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True) as mock:
             start_events_handler(_registry=self.events_processes_registry)
             events_handler = get_events_process(name=EVENTS_HANDLER_ID, _registry=self.events_processes_registry)
@@ -45,8 +44,8 @@ class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
 
             try:
                 assert events_handler.is_alive()
-                assert events_handler._registry == self.events_main_device._registry  # pylint: disable=protected-access
-                assert events_handler._registry == self.events_processes_registry  # pylint: disable=protected-access
+                assert events_handler._registry == self.events_main_device._registry
+                assert events_handler._registry == self.events_processes_registry
                 event1 = CassandraStressLogEvent.SchemaDisagreement()
                 with self.wait_for_n_events(events_handler, count=1, timeout=1):
                     self.events_main_device.publish_event(event1)

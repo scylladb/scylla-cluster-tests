@@ -44,7 +44,7 @@ LINE_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")  # date in YYYY-MM-DD format
 LOGGER = logging.getLogger(__name__)
 
 
-class head(list):  # pylint: disable=invalid-name
+class head(list):
     def __init__(self, maxlen: Optional[int] = None):
         super().__init__()
         if maxlen is None:
@@ -134,7 +134,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                             event.append(line)
                 if event:
                     events_bucket.append("\n".join(event))
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 error_msg = f"{self}: failed to read {log_file}: {exc}"
                 LOGGER.error(error_msg)
                 if not events_bucket:

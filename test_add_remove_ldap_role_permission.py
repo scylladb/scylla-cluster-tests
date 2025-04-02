@@ -11,7 +11,7 @@ from sdcm.utils.ldap import LdapServerType, LDAP_USERS, LDAP_PASSWORD, LdapUtils
 
 class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
 
-    def test_add_remove_ldap_role_permission(self):  # pylint: disable=too-many-statements
+    def test_add_remove_ldap_role_permission(self):
         """
         Test adding a new user with Ldap permissions,
         and run some load for it.

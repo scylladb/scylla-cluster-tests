@@ -75,7 +75,6 @@ class HydraTestCaseParams:
         pass
 
 
-# pylint: disable=too-many-public-methods
 class LongevityPipelineTest:
     """
     This class takes pipeline parameters and produces hydra test cases parameters as a tuple in hydra_test_cases
@@ -135,11 +134,11 @@ class LongevityPipelineTest:
         return not_expected
 
     @cached_property
-    def pattern_remove_known_key(self):  # pylint: disable=no-self-use
+    def pattern_remove_known_key(self):
         return 'ssh-keygen -R "1.1.1.1" || true'
 
     @cached_property
-    def pattern_rsync_aws_token(self):  # pylint: disable=no-self-use
+    def pattern_rsync_aws_token(self):
         return "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.aws ubuntu@1.1.1.1:/home/ubuntu/"
 
     @cached_property
@@ -180,7 +179,7 @@ class LongevityPipelineTest:
         return self.collect_logs_cmd_docker
 
     @cached_property
-    def collect_logs_cmd_docker(self):  # pylint: disable=no-self-use
+    def collect_logs_cmd_docker(self):
         # Command line that should be run in the docker
         return 'collect-logs'
 
@@ -204,7 +203,7 @@ class LongevityPipelineTest:
         return self.send_email_cmd_docker
 
     @cached_property
-    def send_email_cmd_docker(self):  # pylint: disable=no-self-use
+    def send_email_cmd_docker(self):
         # Command line that should be run in the docker
         return 'send-email --test-status SUCCESS --start-time 1627268929 --email-recipients qa@scylladb.com'
 

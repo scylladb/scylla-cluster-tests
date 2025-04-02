@@ -44,7 +44,7 @@ class ToolReporterBase():
         try:
             report_package_to_argus(client=self.argus_client, tool_name=self.TOOL_NAME, package_version=self.version,
                                     additional_data=self.additional_data, date=self.date, revision_id=self.revision_id)
-        except Exception:  # pylint: disable=broad-except # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.warning("Failed reporting tool version to Argus", exc_info=True)
 
     def _collect_version_info(self) -> None:
@@ -60,7 +60,7 @@ class ToolReporterBase():
 
 
 class PythonDriverReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     """
         Reports python-driver version used for SCT operations.
     """
@@ -75,7 +75,7 @@ class PythonDriverReporter(ToolReporterBase):
 
 
 class CassandraStressVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cassandra-stress"
 
     def _collect_version_info(self) -> None:
@@ -103,7 +103,7 @@ class CassandraStressVersionReporter(ToolReporterBase):
 
 
 class CqlStressCassandraStressVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cql-stress-cassandra-stress"
 
     def _collect_version_info(self) -> None:
@@ -148,7 +148,7 @@ class LatteVersionReporter(ToolReporterBase):
 
 
 class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "java-driver"
 
     def __init__(self, driver_version: str, runner: CommandRunner, command_prefix: str = None, argus_client: ArgusSCTClient = None) -> None:
@@ -160,7 +160,7 @@ class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
 
 
 class CqlStressRustDriverVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cql-stress-rust-driver"
 
     def __init__(self, driver_version: str, date: str, revision_id: str, runner: CommandRunner, command_prefix: str = None,
