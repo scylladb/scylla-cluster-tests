@@ -190,16 +190,19 @@ class SctLoader(unittest.TestLoader):
               type=click.Path(),
               expose_value=False,
               help="Install paths for extra python packages to install, scylla-cluster-plugins for example")
-def cli():
+@click.pass_context
+def cli(ctx):
     disable_loggers_during_startup()
-    try_auth_with_okta()
+    # Ugly way of filtering the few command that do not require OKTA verification
+    if ctx.invoked_subcommand not in ("update-conf-docs", "nemesis-list", "create-nemesis-pipelines"):
+        try_auth_with_okta()
 
-    key_store = KeyStore()
-    # TODO: still leaving old keys, until we'll rebuild runner images - and reconfigure jenkins
-    key_store.sync(keys=['scylla-qa-ec2', 'scylla-test', 'scylla_test_id_ed25519'],
-                   local_path=Path('~/.ssh/').expanduser(), permissions=0o0600)
+        key_store = KeyStore()
+        # TODO: still leaving old keys, until we'll rebuild runner images - and reconfigure jenkins
+        key_store.sync(keys=['scylla-qa-ec2', 'scylla-test', 'scylla_test_id_ed25519'],
+                       local_path=Path('~/.ssh/').expanduser(), permissions=0o0600)
 
-    docker_hub_login(remoter=LOCALRUNNER)
+        docker_hub_login(remoter=LOCALRUNNER)
 
 
 @cli.command('provision-resources', help="Provision resources for the test")
