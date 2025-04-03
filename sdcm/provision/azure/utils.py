@@ -20,8 +20,11 @@ from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImage
 
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.version_utils import SCYLLA_VERSION_GROUPED_RE, is_enterprise
-
+from sdcm.utils.version_utils import (
+    SCYLLA_VERSION_GROUPED_RE,
+    is_enterprise,
+    ComparableScyllaVersion,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -96,7 +99,7 @@ def get_released_scylla_images(  # pylint: disable=unused-argument
 
 ) -> list[CommunityGalleryImageVersion]:
     branch_version = '.'.join(scylla_version.split('.')[:2])
-    if is_enterprise(branch_version):
+    if is_enterprise(branch_version) and ComparableScyllaVersion(branch_version) < '2025.1.0':
         gallery_image_name = f'scylla-enterprise-{branch_version}'
     else:
         gallery_image_name = f'scylla-{branch_version}'
