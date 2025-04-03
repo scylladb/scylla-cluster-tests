@@ -76,7 +76,7 @@ def call(Map pipelineParams) {
 
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '2024.1')}", description: '', name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.1')}", description: '', name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}",
@@ -107,7 +107,7 @@ def call(Map pipelineParams) {
                    name: 'ip_ssh_connections')
 
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
-                   description: 'master_latest|3.2|3.1',
+                   description: 'master_latest|3.5|3.4',
                    name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
