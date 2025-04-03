@@ -143,11 +143,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
-        for key, value in self.gemini_default_flags.items():
-            if not key in stress_cmd:
-                cmd += f"--{key}={value} "
+        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if
+                              key not in stress_cmd) + " " + stress_cmd
 
-        cmd += stress_cmd
         self.gemini_commands.append(cmd)
         return cmd
 
