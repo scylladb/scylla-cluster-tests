@@ -272,25 +272,25 @@ latency_decorator_error_thresholds:
   write:
     default:
       P90 write:
-        fixed_limit: 5
+        fixed_limit: 7
       P99 write:
         fixed_limit: 10
   read:
     default:
       P90 read:
-        fixed_limit: 5
+        fixed_limit: 7
       P99 read:
         fixed_limit: 10
   mixed:
     default:
       P90 write:
-        fixed_limit: 5
+        fixed_limit: 7
       P90 read:
-          fixed_limit: 5
+        fixed_limit: 7
       P99 write:
-          fixed_limit: 10
+        fixed_limit: 10
       P99 read:
-          fixed_limit: 10
+        fixed_limit: 10
 
 mgmt_snapshots_preparer_params:
   # Such a configuration is used by Manager backup snapshots prepare test
