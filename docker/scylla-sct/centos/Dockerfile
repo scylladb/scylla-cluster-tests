@@ -18,7 +18,7 @@ USER root
 
 RUN curl -L https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo
 
-RUN microdnf update && \
+RUN microdnf -y update && \
 	microdnf -y install \
         iproute \
         sudo \

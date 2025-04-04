@@ -1871,7 +1871,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                         package_version: str = None,
                         ignore_status: bool = False) -> None:
         if self.distro.is_rhel_like:
-            pkg_cmd = 'yum'
+            if not self.parent_cluster.cluster_backend == "docker":
+                pkg_cmd = 'yum'
+            else:
+                pkg_cmd = 'microdnf'
             package_name = f"{package_name}-{package_version}*" if package_version else package_name
         elif self.distro.is_sles:
             pkg_cmd = 'zypper'
