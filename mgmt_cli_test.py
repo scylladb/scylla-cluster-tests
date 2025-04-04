@@ -312,6 +312,22 @@ class ClusterOperations(ClusterTester):
             dcs_names.add(data_center)
         return dcs_names
 
+    def get_rf_based_on_nodes_number(self) -> dict[str, int]:
+        """Define replication factor based on a number of nodes per DC(s).
+
+        Note: replication factor per DC will be equal to the number of nodes in that DC.
+              Adjust the method if you need a custom value to be put there.
+
+        Example of return value:
+            {
+                "eu-west-2scylla_node_west": 2,
+                "us-eastscylla_node_east": 1
+            }
+        """
+        nodetool_status = self.db_cluster.get_nodetool_status(self.db_cluster.nodes[0])
+        rf = {dc_name: len(nodes) for dc_name, nodes in nodetool_status.items()}
+        return rf
+
 
 class BucketOperations(ClusterTester):
     backup_azure_blob_service = None
@@ -1120,7 +1136,10 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
-        self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=2)
+
+        rf = self.get_rf_based_on_nodes_number() if len(self.params.region_names) > 1 else 2
+        self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=rf)
+
         self.create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)

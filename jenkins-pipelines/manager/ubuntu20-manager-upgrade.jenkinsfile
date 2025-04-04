@@ -7,10 +7,10 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+    // Upgrade from previous minor release (choose non-last patch release which is still used in production)
+    // Use Metabase to check it (https://scylladb.metabaseapp.com/question/1685-manager-version)
+    manager_version: '3.4.1',
     target_manager_version: 'master_latest',
-
-    // Upgrade from previous minor release (the first one)
-    manager_version: '3.3.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu20.yaml"]''',
