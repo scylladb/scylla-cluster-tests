@@ -2368,7 +2368,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return results and not errors
 
     def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
-        results = queue.get_results()
+        results = queue.parse_results()[0]
         if store_results and self.create_stats:
             self.update_stress_results(results)
         return results
