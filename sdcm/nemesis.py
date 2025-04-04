@@ -5478,15 +5478,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             target_host_id = self.target_node.host_id
             stack.callback(self._remove_node_add_node, verification_node=working_node, node_to_remove=self.target_node,
                            remove_node_host_id=target_host_id)
-
+            stack.enter_context(node_operations.block_loaders_payload_for_scylla_node(
+                self.target_node, loader_nodes=self.loaders.nodes))
             self.tester.create_keyspace(keyspace_name, replication_factor=3)
             self.tester.create_table(name=table_name, keyspace_name=keyspace_name, key_type="bigint",
                                      columns={"name": "text"})
-            stack.callback(drop_keyspace, node=working_node)
 
             with simulate_node_unavailability(self.target_node):
                 # target node stopped by Contextmanger. Wait while its status will be updated
-                wait_for(node_operations.is_node_seen_as_down, timeout=600, throw_exc=True,
+                wait_for(node_operations.is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
                          down_node=self.target_node, verification_node=working_node, text=f"Wait other nodes see {self.target_node.name} as DOWN...")
                 self.log.debug("Remove node %s : hostid: %s with blocked scylla from cluster",
                                self.target_node.name, target_host_id)
@@ -5513,11 +5513,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             with self.cluster.cql_connection_patient(working_node) as session:
                 LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
-                result = list(session.execute(f"SELECT * from {keyspace_name}.{table_name}"))
+                stmt = SimpleStatement(f"SELECT * from {keyspace_name}.{table_name}",
+                                       consistency_level=ConsistencyLevel.QUORUM)
+                result = list(session.execute(stmt))
                 LOGGER.debug("Query result %s", result)
                 assert not result, f"New rows were added from banned node, {result}"
-
-            drop_keyspace(working_node)
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
