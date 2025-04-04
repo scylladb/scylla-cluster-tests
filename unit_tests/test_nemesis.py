@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey
+from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey, COMPLEX_NEMESIS
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
@@ -12,6 +12,7 @@ from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
+from sdcm.nemesis_registry import NemesisRegistry
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 from unit_tests.test_tester import ClusterTesterForTests
 
@@ -89,7 +90,12 @@ class FakeNemesis(Nemesis):
 
 
 class ChaosMonkey(FakeNemesis):
-    ...
+
+    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
+        super().__init__(tester_obj, termination_event, *args, nemesis_selector=nemesis_selector,
+                         nemesis_seed=nemesis_seed, **kwargs)
+        self.nemesis_registry = NemesisRegistry(base_class=ChaosMonkey,
+                                                excluded_list=COMPLEX_NEMESIS)
 
 
 class FakeCategoricalMonkey(CategoricalMonkey):
@@ -114,23 +120,27 @@ class FakeCategoricalMonkey(CategoricalMonkey):
 
 
 class AddRemoveDCMonkey(ChaosMonkey):
-    @Nemesis.add_disrupt_method
-    def disrupt_add_remove_dc(self):  # pylint: disable=no-self-use
-        return 'Worked'
+    @ChaosMonkey.add_disrupt_method
+    def disrupt_rnd_method(self):  # pylint: disable=no-self-use
+        print("It Works!")
 
     def disrupt(self):
-        self.disrupt_add_remove_dc()
+        self.disrupt_rnd_method()
 
 
 @pytest.mark.usefixtures('events')
-def test_list_nemesis_of_added_disrupt_methods():
-    nemesis = ChaosMonkey(FakeTester(), None)
-    assert 'disrupt_add_remove_dc' in [
-        method.__name__ for method in nemesis.nemesis_registry.get_disrupt_methods("disruptive")]
-    assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
-
+def test_list_nemesis_of_added_disrupt_methods(capsys):
+    with capsys.disabled():
+        nemesis = ChaosMonkey(FakeTester(), None)
+        assert 'disrupt_rnd_method' in [
+            method.__name__ for method in nemesis.nemesis_registry.get_disrupt_methods()]
+    assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_rnd_method']) is None
+    captured = capsys.readouterr()
+    assert "It Works!" in captured.out
 
 # pylint: disable=super-init-not-called,too-many-ancestors
+
+
 def test_is_it_on_kubernetes():
     class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
         def __init__(self, params: dict = None):
