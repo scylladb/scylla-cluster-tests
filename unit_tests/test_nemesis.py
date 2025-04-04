@@ -134,7 +134,8 @@ def test_list_nemesis_of_added_disrupt_methods(capsys):
         nemesis = ChaosMonkey(FakeTester(), None)
         assert 'disrupt_rnd_method' in [
             method.__name__ for method in nemesis.nemesis_registry.get_disrupt_methods()]
-    assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_rnd_method']) is None
+    nemesis.disruptions_list = nemesis.build_disruptions_by_name(['disrupt_rnd_method'])
+    nemesis.call_next_nemesis()
     captured = capsys.readouterr()
     assert "It Works!" in captured.out
 

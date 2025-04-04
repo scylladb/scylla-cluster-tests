@@ -12,5 +12,5 @@ user_prefix: 'longevity-2mv-backpressure-4d'
 instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c6i.2xlarge'
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
 nemesis_during_prepare: false
