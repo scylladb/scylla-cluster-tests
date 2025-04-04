@@ -413,7 +413,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             key_option = '-i %s' % os.path.expanduser(self.key_file)
         command = ("scp -r -o StrictHostKeyChecking=no -o BatchMode=yes "
                    "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
-                   "-o UserKnownHostsFile=%s -P %d %s %s %s '%s'")
+                   "-o UserKnownHostsFile=%s -P %d %s %s %s %s")
         proxy_cmd = ''
         if self.proxy_host:
             proxy_cmd = self._make_proxy_cmd()
