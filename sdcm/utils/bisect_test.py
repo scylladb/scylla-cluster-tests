@@ -44,7 +44,7 @@ def get_repo_urls(start_date: datetime, end_date: datetime, is_enterprise: bool 
     return repos
 
 
-def bisect_test(test_func):  # pylint: disable=too-many-statements
+def bisect_test(test_func):
     """
     decorator for bisecting tests.
 
@@ -57,7 +57,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
     """
 
     @wraps(test_func)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-locals, too-many-statements  # noqa: PLR0914
+    def wrapper(*args, **kwargs):  # noqa: PLR0914
         tester_obj = args[0]
         start_date = tester_obj.params.get('bisect_start_date')
         test_func(*args, **kwargs)
@@ -69,7 +69,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
 
         def update_binaries(node):
             node.stop_scylla()
-            cluster._scylla_install(node)  # pylint: disable=protected-access
+            cluster._scylla_install(node)
 
         end_date = tester_obj.params.get('bisect_end_date')
         bisect_start_date = datetime.strptime(start_date, '%Y-%m-%d')
@@ -82,7 +82,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
         version = 'unknown'
         while low <= high:
             tester_obj.stop_timeout_thread()
-            tester_obj._init_test_timeout_thread()  # pylint: disable=protected-access
+            tester_obj._init_test_timeout_thread()
             mid = (low + high) // 2
             repo_url = repo_urls[mid]
             tester_obj.params['scylla_repo'] = repo_url
@@ -111,7 +111,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
                         raise ValueError('failed to get version from node: ', node.name)
                     logger.info('successfully updated binaries to version: %s', version)
 
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 logger.warning('error during upgrade: %s \n verifying next closest version.', exc)
                 del repo_urls[mid]
                 high -= 1

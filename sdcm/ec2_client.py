@@ -69,7 +69,7 @@ class EC2ClientWrapper():
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
 
-    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # noqa: PLR0913
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
                                aws_instance_profile=None, placement_group_name=None):
         """
@@ -77,7 +77,6 @@ class EC2ClientWrapper():
         :return: list of request id-s
         """
 
-        # pylint: disable=too-many-locals
         params = dict(DryRun=False,
                       InstanceCount=count,
                       Type=request_type,
@@ -108,7 +107,7 @@ class EC2ClientWrapper():
         LOGGER.debug('Spot requests: %s', request_ids)
         return request_ids
 
-    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+    def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                             block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
 
         spot_price = self._get_spot_price(instance_type)
@@ -147,7 +146,7 @@ class EC2ClientWrapper():
         :return: spot bid price
         """
         LOGGER.info('Calculating spot price based on OnDemand price')
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
+        from sdcm.utils.pricing import AWSPricing
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
 
@@ -259,7 +258,7 @@ class EC2ClientWrapper():
         tags += tags_as_ec2_tags(TestConfig().common_tags())
         self._client.create_tags(Resources=instance_ids, Tags=tags)
 
-    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
+    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
                               count=1, duration=0, block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
         """
         Create spot instances
@@ -277,8 +276,6 @@ class EC2ClientWrapper():
 
         :return: list of instance id-s
         """
-
-        # pylint: disable=too-many-locals
 
         spot_price = self._get_spot_price(instance_type)
 
@@ -301,7 +298,7 @@ class EC2ClientWrapper():
         instances = [self.get_instance(instance_id) for instance_id in instance_ids]
         return instances
 
-    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
+    def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                           block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
         """
         Create spot fleet
@@ -318,7 +315,6 @@ class EC2ClientWrapper():
 
         :return: list of instance id-s
         """
-        # pylint: disable=too-many-locals
 
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
                                               user_data, count, block_device_mappings=block_device_mappings,

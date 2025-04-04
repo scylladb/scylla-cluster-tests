@@ -15,15 +15,15 @@ from gc import collect as gc_collect
 from select import select
 from threading import Lock
 
-from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND  # pylint: disable=no-name-in-module
-from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
-from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
-from ssh2.channel import Channel  # pylint: disable=no-name-in-module
+from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND
+from ssh2.exceptions import SocketRecvError
+from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
+from ssh2.channel import Channel
 
 from .timings import NullableTiming
 
 
-class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
+class Session(LibSSH2Session):
     """Custom SSH2 Session class with Lock in it, to make it thread safe where it is needed """
 
     # Libssh2 is currently not thread safe, we have work it around by having separete session for each thread
@@ -53,7 +53,7 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
         except (ValueError, SocketRecvError):  # under high load it can throw these errors, on next try it will be ok
             pass
 
-    def eagain(self, func, args=(), kwargs={},  # pylint: disable=dangerous-default-value  # noqa: B006
+    def eagain(self, func, args=(), kwargs={},  # noqa: B006
                timeout: NullableTiming = None) -> int:
         """Running function followed by simple_select up until it return anything but `LIBSSH2_ERROR_EAGAIN`"""
         with self.lock:
@@ -74,11 +74,11 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
             self.channels.remove(channel)
         try:
             channel.close()
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         try:
             channel.wait_closed()
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         del channel
 

@@ -24,7 +24,7 @@ def get_parser():
     return parser.parse_args()
 
 
-def main():  # pylint: disable=too-many-locals  # noqa: PLR0914
+def main():  # noqa: PLR0914
     args = get_parser()
     github = Github(github_token)
     repo = github.get_repo(args.repository, lazy=False)
@@ -44,7 +44,7 @@ def main():  # pylint: disable=too-many-locals  # noqa: PLR0914
         }
         response = requests.get(search_url, headers=headers, params=params)
         prs = response.json().get("items", [])
-        for pr in prs:  # pylint: disable=invalid-name
+        for pr in prs:
             match = re.findall(r'Parent PR: #(\d+)', pr["body"])
             if match:
                 pr_number = int(match[0])

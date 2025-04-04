@@ -14,8 +14,6 @@
 from textwrap import dedent
 
 
-# pylint: disable=anomalous-backslash-in-string
-
 def configure_syslogng_target_script(hostname: str = "") -> str:
     return dedent("""
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \

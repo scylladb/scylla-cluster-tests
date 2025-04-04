@@ -39,9 +39,8 @@ class NodetoolEventEncoder(JSONEncoder):
             return super().default(o)
 
 
-# pylint: disable=too-many-instance-attributes
 class NodetoolEvent(ContinuousEvent):
-    def __init__(self,  # pylint: disable=too-many-arguments
+    def __init__(self,
                  nodetool_command,
                  severity=Severity.NORMAL,
                  node=None,

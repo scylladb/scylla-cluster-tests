@@ -13,8 +13,7 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-# TODO: this test seem to be broken, hence disabling all pylint checks
-# pylint: disable=all
+# TODO: this test seem to be broken, hence disabling all ruff checks
 # ruff: noqa: F821
 
 from sdcm.tester import ClusterTester

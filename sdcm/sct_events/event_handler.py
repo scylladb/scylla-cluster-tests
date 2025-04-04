@@ -53,7 +53,7 @@ class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
                     LOGGER.debug("Found handler %s for %s event. Running it.",
                                  handler.__class__.__name__, full_class_name)
                     handler.handle(event=event, tester_obj=tester_obj)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:
                     LOGGER.exception("failed to handle event using event handler: %s", exc)
 
 

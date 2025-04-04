@@ -31,7 +31,7 @@ def get_git_current_branch() -> str:
 
 
 def get_git_status_info() -> GitStatus:
-    # pylint: disable=too-many-locals
+
     try:
         #    Example output:
         #    # branch.oid 0748e3a512b7e698bc4b2e3e8ec8d46d0b3244ae
@@ -90,7 +90,7 @@ def get_git_status_info() -> GitStatus:
 
 
 def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_root=True, branch=None):
-    # pylint: disable=broad-except
+
     try:
         LOGGER.debug("Cloning from %s...", repo_url)
         rm_cmd = f"rm -rf ./{repo_url.split('/')[-1].split('.')[0]}"

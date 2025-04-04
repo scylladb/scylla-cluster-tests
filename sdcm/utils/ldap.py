@@ -51,7 +51,7 @@ class LdapServerType(str, Enum):
     OPENLDAP = "openldap"
 
 
-class LdapContainerMixin:  # pylint: disable=too-few-public-methods
+class LdapContainerMixin:
     ldap_server = None
     ldap_conn = None
     ldap_server_port = None

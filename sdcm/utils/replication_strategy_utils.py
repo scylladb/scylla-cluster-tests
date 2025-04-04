@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class ReplicationStrategy:  # pylint: disable=too-few-public-methods
+class ReplicationStrategy:
 
     @classmethod
     def from_string(cls, replication_string):
@@ -47,7 +47,7 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
             session.execute(cql, timeout=300)
 
     @property
-    def replication_factors(self) -> list:  # pylint: disable=no-self-use
+    def replication_factors(self) -> list:
         return [0]
 
 
@@ -99,7 +99,7 @@ class LocalReplicationStrategy(ReplicationStrategy):
 replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, LocalReplicationStrategy]
 
 
-class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disable=invalid-name
+class temporary_replication_strategy_setter(ContextDecorator):
     """Context manager that allows to set replication strategy
      and preserves all modified keyspaces for automatic rollback on exit."""
 
