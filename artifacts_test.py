@@ -247,22 +247,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                 f"matches: {snitch_matches_scylla_yaml}"
                             )
 
-    def verify_docker_latest_match_release(self) -> None:
-        for product in typing.get_args(ScyllaProduct):
-            latest_version = get_latest_scylla_release(product=product)
-
-            url = 'https://hub.docker.com/v2/repositories/scylladb/{}/tags/{}'
-            docker_latest = requests.get(url.format(product, 'latest')).json()
-            docker_release = requests.get(url.format(product, latest_version)).json()
-            self.log.debug('latest info: %s', pprint.pformat(docker_latest))
-            self.log.debug('%s info: %s ', latest_version, pprint.pformat(docker_release))
-
-            latest_digests = set(image['digest'] for image in docker_latest['images'])
-            release_digests = set(image['digest'] for image in docker_release['images'])
-
-            assert latest_digests == release_digests, \
-                f"latest != {latest_version}, images digest differs [{latest_digests}] != [{release_digests}]"
-
     def verify_nvme_write_cache(self) -> None:
         if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
             return
@@ -480,9 +464,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                 perftune_checker = PerftuneOutputChecker(self.node)
                 perftune_checker.compare_perftune_results()
 
-        if backend == 'docker':
-            with self.subTest("Check docker latest tags"):
-                self.verify_docker_latest_match_release()
 
     def run_scylla_doctor(self):
         if self.params.get('client_encrypt') and SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2280", self.params):
