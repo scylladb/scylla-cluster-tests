@@ -33,7 +33,7 @@ class CQLTypeBuilder:
         return target_class(self_type, *args, **kwargs)
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
+    def get_random(cls, already_created_info: dict, avoid_types: list = None,
                    allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False) -> 'CQLColumnType':
         return CQLColumnType.get_random(
             already_created_info,
@@ -50,7 +50,7 @@ class CQLColumnType:
     def __init_subclass__(cls, **__):
         if cls.self_type is None:
             raise ValueError(f"<{str(cls)}> self_type should be defined")
-        CQLTypeBuilder._register_class(cls)  # pylint: disable=protected-access
+        CQLTypeBuilder._register_class(cls)
 
     def __init__(self, self_type=None):
         self.self_type = self_type
@@ -71,7 +71,7 @@ class CQLColumnType:
         return [e for e in allowed_types if e not in excluded_types]
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
+    def get_random(cls, already_created_info: dict, avoid_types: list = None,
                    allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False):
         """
         Randomly generates CQLColumnType instance
@@ -85,7 +85,7 @@ class CQLColumnType:
         return:
             Will return randomly generated instance of CQLColumnType
         """
-        # pylint: disable=protected-access
+
         while True:
             calculated_available_types = cls._get_available_variants(already_created_info, avoid_types, allowed_types,
                                                                      allow_levels)
@@ -93,7 +93,7 @@ class CQLColumnType:
                 self_type = random.choice(calculated_available_types)
                 self_bucket = already_created_info.get(self_type, {})
                 instance = CQLTypeBuilder._create_instance(self_type)
-                if instance._get_random_embedded(self_bucket, avoid_types, allow_levels,  # pylint: disable=protected-access
+                if instance._get_random_embedded(self_bucket, avoid_types, allow_levels,
                                                  allowed_types):
                     return instance
                 #  It could reach this point only if collection type ran out of choice for subtypes
@@ -103,8 +103,8 @@ class CQLColumnType:
                 return None
             already_created_info.clear()
 
-    def _get_random_embedded(self,  # pylint: disable=no-self-use
-                             already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):  # pylint: disable=unused-argument
+    def _get_random_embedded(self,
+                             already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):
         return True
 
     def remember_variant(self, stored_variants):
@@ -128,7 +128,6 @@ class CQLColumnType:
 
 class CQLColumnTypeMap(CQLColumnType):
     self_type = 'map'
-    # pylint: disable=unused-argument
 
     def __new__(cls, self_type=None, key_type=None, value_type=None):
         return super().__new__(cls)
@@ -200,7 +199,7 @@ class CQLColumnTypeMap(CQLColumnType):
 class CQLColumnTypeList(CQLColumnType):
     self_type = 'list'
 
-    def __new__(cls, self_type=None, element_type=None):  # pylint: disable=unused-argument
+    def __new__(cls, self_type=None, element_type=None):
         return super().__new__(cls)
 
     def __init__(self, self_type=None, element_type=None):

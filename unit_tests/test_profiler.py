@@ -30,7 +30,7 @@ from unit_tests.lib.test_profiler.lib2 import LibProfileableProcessCustomClass, 
     LibProfileableProcessCustomClassWithRun, LibProfileableThreadCustomClass, LibProfileableThreadCustomClassWithRun, \
     LibProfileableThread, LibProfileableProcess
 
-from sdcm.utils.profiler import ProfilerFactory, ProfileableProcess as pp, ProfileableThread as pt  # pylint: disable=ungrouped-imports
+from sdcm.utils.profiler import ProfilerFactory, ProfileableProcess as pp, ProfileableThread as pt
 
 
 def function_sleep():
@@ -125,7 +125,7 @@ class TestProfileFactory(unittest.TestCase):
             'main',
         ]
         for sub in self._subroutines:
-            dirs_to_expect.append(sub._name)  # pylint: disable=protected-access
+            dirs_to_expect.append(sub._name)
 
         not_found = []
         for directory in dirs_to_expect:
@@ -182,7 +182,7 @@ class TestProfileFactory(unittest.TestCase):
                     break
         tmp.stop()
 
-    def _add_tests(self):  # pylint: disable=too-many-statements
+    def _add_tests(self):
         self._subroutines.append(Thread(target=thread_body, name="Thread.daemon", daemon=True))
         self._subroutines.append(LibThread(target=thread_body, name="lib.Thread.daemon", daemon=True))
         self._subroutines.append(ThreadCustomClass(target=thread_body, name="Thread.CustomClass.daemon", daemon=True))

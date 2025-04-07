@@ -57,7 +57,6 @@ class SstableLoadUtils:
         return map_files_to_node
 
     @staticmethod
-    # pylint: disable=too-many-arguments,too-many-locals
     def upload_sstables(node, test_data: TestDataInventory, keyspace_name: str = 'keyspace1', table_name=None,
                         create_schema: bool = False, is_cloud_cluster=False, **kwargs):
         key_store = KeyStore()
@@ -106,7 +105,7 @@ class SstableLoadUtils:
         node.remoter.sudo(f'rm -f {table_folder}/upload/manifest.json')
 
     @classmethod
-    def run_load_and_stream(cls, node,  # pylint: disable=too-many-arguments
+    def run_load_and_stream(cls, node,
                             keyspace_name: str = 'keyspace1', table_name: str = 'standard1',
                             start_timeout=60, end_timeout=300):
         """runs load and stream using API request and waits for it to finish"""

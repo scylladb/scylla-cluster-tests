@@ -30,7 +30,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class JenkinsPipelines:
-    def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):  # pylint: disable=too-many-arguments
+    def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):
         if not username and not password:
             creds = KeyStore().get_json("jenkins.json")
             username, password = creds.get('username'), creds.get('password')
@@ -195,7 +195,7 @@ class JenkinsPipelines:
 
         return description
 
-    def create_job_tree(self, local_path: str | Path,  # pylint: disable=too-many-arguments
+    def create_job_tree(self, local_path: str | Path,
                         create_freestyle_jobs: bool = True,
                         create_pipelines_jobs: bool = True,
                         template_context: dict | None = None,

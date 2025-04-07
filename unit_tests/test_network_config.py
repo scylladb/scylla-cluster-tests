@@ -22,7 +22,6 @@ class RegionAZSubnets(NamedTuple):
     subnets: list[str]
 
 
-# pylint: disable=too-few-public-methods
 class RegionsData:
     UsEast1Region = [RegionAZSubnets(region="us-east-1", availability_zone="a", subnets=['subnet-0a09ba4421ec6aaa8',
                                                                                          'subnet-03d8900174e00a73d']),
@@ -48,7 +47,7 @@ class RegionsData:
 
 
 class FakeEC2NetworkConfiguration(EC2NetworkConfiguration):
-    # pylint: disable=super-init-not-called
+
     def __init__(self, regions: list[str], availability_zones: list[str], network_interfaces_count: int,
                  params: dict = None):
         self.regions = regions

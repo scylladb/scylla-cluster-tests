@@ -96,7 +96,7 @@ class DefinitionBuilder(abc.ABC):
                                   use_public_ip=use_public_ip,
                                   )
 
-    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,  # pylint: disable=too-many-arguments
+    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,
                                 n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []

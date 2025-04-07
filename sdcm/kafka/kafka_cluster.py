@@ -173,5 +173,5 @@ class LocalKafkaCluster(cluster.BaseCluster):
         rack=0,
         enable_auto_bootstrap=False,
         instance_type=None,
-    ):  # pylint: disable=too-many-arguments
+    ):
         raise NotImplementedError

@@ -104,7 +104,7 @@ def write_data_to_reach_end_of_quota(node, quota_size):
         try:
             LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
             node.remoter.sudo(occupy_space_cmd, Verbose=True)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("We should have reached the expected I/O error and quota has exceeded\n"
                            "Message: {}".format(str(exc)))
         return bool(list(quota_exceeded_appearances))

@@ -166,7 +166,7 @@ class LoaderUtilsMixin:
         duration_per_cs_profile = None if len(user_profiles_def) == 1 else list(user_profiles_def[1])
         return user_profiles, duration_per_cs_profile
 
-    def run_cs_user_profiles(self, cs_profiles: str | int | list, duration_per_cs_profile: str | list = None, stress_queue: list = None):  # pylint: disable=too-many-locals
+    def run_cs_user_profiles(self, cs_profiles: str | int | list, duration_per_cs_profile: str | list = None, stress_queue: list = None):
         """
          :param duration_per_cs_profile: if duration of cassandra-stress command is parameterized, it is expected to get needed value for
                                          duration
@@ -227,7 +227,6 @@ class LoaderUtilsMixin:
             cmds = [cmds]
 
         for cmd in cmds:
-            # pylint: disable=no-member
             with self.db_cluster.cql_connection_patient(node) as session:
                 session.execute(cmd)
 

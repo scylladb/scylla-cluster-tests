@@ -28,7 +28,7 @@ class RemoteCurlClient(RestClient):
         self._node = node
         self._remoter = self._node.remoter
 
-    def run_remoter_curl(self, method: Literal["GET", "POST"],  # pylint: disable=too-many-arguments
+    def run_remoter_curl(self, method: Literal["GET", "POST"],
                          path: str,
                          params: dict[str, str] | None,
                          timeout: int = 120,

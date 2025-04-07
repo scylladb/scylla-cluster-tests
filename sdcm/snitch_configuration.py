@@ -15,7 +15,7 @@ import re
 from typing import List
 
 
-class SnitchConfig:  # pylint: disable=too-few-public-methods
+class SnitchConfig:
     """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
     def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: List[str]):  # noqa: F821

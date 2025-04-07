@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class Result:  # pylint: disable=too-many-instance-attributes
+class Result:
     """
     A copy-cat from invoke.runners.Result
 

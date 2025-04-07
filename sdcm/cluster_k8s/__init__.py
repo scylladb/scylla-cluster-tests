@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-arguments
-# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
@@ -96,7 +94,7 @@ from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
 
-ANY_KUBERNETES_RESOURCE = Union[  # pylint: disable=invalid-name
+ANY_KUBERNETES_RESOURCE = Union[
     Resource, ResourceField, ResourceInstance, ResourceList, Subresource,
 ]
 NAMESPACE_CREATION_LOCK = Lock()
@@ -159,7 +157,7 @@ SCYLLA_MANAGER_AGENT_RESOURCES = {
 LOGGER = logging.getLogger(__name__)
 
 
-class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-instance-attributes
+class CloudK8sNodePool(metaclass=abc.ABCMeta):
     def __init__(
             self,
             k8s_cluster: 'KubernetesCluster',
@@ -246,7 +244,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
     def nodes(self):
         try:
             return self.k8s_cluster.k8s_core_v1_api.list_node(label_selector=f'{self.pool_label_name}={self.name}')
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.k8s_cluster.log.debug("Failed to get nodes list: %s", str(details))
             return {}
 
@@ -271,7 +269,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
         wait_nodes_are_ready()
 
 
-class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods,too-many-instance-attributes
+class KubernetesCluster(metaclass=abc.ABCMeta):
     AUXILIARY_POOL_NAME = 'auxiliary-pool'
     SCYLLA_POOL_NAME = 'scylla-pool'
     MONITORING_POOL_NAME = 'monitoring-pool'
@@ -819,7 +817,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                             continue
                         self.apply_file(
                             os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
             self.log.info("Upgrade Scylla Operator CRDs: END")
 
@@ -1378,7 +1376,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def prometheus_port(self) -> int:
         return 9090
 
-    def register_sct_grafana_dashboard(self, cluster_name: str, namespace: str) -> str:  # pylint: disable=too-many-locals
+    def register_sct_grafana_dashboard(self, cluster_name: str, namespace: str) -> str:
         # TODO: make it work for EKS by using ingress LB IP when it is enabled
         sct_dashboard_file = sct_abs_path("data_dir/scylla-dash-per-server-nemesis.master.json")
         sct_dashboard_file_data_str = ""
@@ -1655,7 +1653,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 config_map = self.k8s_core_v1_api.read_namespaced_config_map(
                     name=SCYLLA_CONFIG_NAME, namespace=namespace).data or {}
                 exists = True
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 config_map = {}
                 exists = False
             original_config_map = deepcopy(config_map)
@@ -1738,7 +1736,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 self.log.warning("K8S SCYLLA_YAML, not applied options: %s", kwargs)
 
 
-class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
+class BasePodContainer(cluster.BaseNode):
     parent_cluster: PodCluster
 
     pod_readiness_delay = 30  # seconds
@@ -1898,7 +1896,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def k8s_pod_uid(self) -> str:
         try:
             return str(self._pod.metadata.uid)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return ''
 
     @property
@@ -2022,7 +2020,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return True
 
 
-class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-method,too-many-public-methods
+class BaseScyllaPodContainer(BasePodContainer):
     @cached_property
     def node_type(self) -> str:
         return 'db'
@@ -2108,7 +2106,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
     @property
-    def node_name(self) -> str:  # pylint: disable=invalid-overridden-method
+    def node_name(self) -> str:
         return self._pod.spec.node_name
 
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=1800,
@@ -2175,7 +2173,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def is_seed(self) -> bool:
         try:
             return 'scylla/seed' in self._svc.metadata.labels
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return False
 
     @is_seed.setter
@@ -2428,7 +2426,7 @@ class PodCluster(cluster.BaseCluster):
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
     def wait_sts_rollout_restart(self, pods_to_wait: int, dc_idx: int = 0):
@@ -2494,7 +2492,7 @@ class PodCluster(cluster.BaseCluster):
         raise RuntimeError("No available namespace was found")
 
 
-class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
+class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def __init__(self,
                  k8s_clusters: List[KubernetesCluster],
                  scylla_cluster_name: Optional[str] = None,
@@ -2563,7 +2561,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return 'app=scylla'
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None,
-                                     sleep_time=None, timeout=None):  # pylint: disable=too-many-arguments
+                                     sleep_time=None, timeout=None):
         dc_node_mapping, nodes = {}, (nodes or self.nodes)
         for node in nodes:
             dc_idx = node.dc_idx
@@ -2582,7 +2580,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, wait_for_db_logs=False, **__):  # pylint: disable=arguments-differ
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, wait_for_db_logs=False, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list, timeout=timeout)
         if wait_for_db_logs:
@@ -2739,7 +2737,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         pass
 
     @cached_property
-    def scylla_manager_cluster_name(self):  # pylint: disable=invalid-overridden-method
+    def scylla_manager_cluster_name(self):
         return f"{self.namespace}/{self.scylla_cluster_name}"
 
     @property
@@ -2757,7 +2755,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         raise NotImplementedError('Scylla manager should not be manipulated on kubernetes manually')
 
     def node_config_setup(self,
-                          client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
+                          client_encrypt=None):
         if client_encrypt is None:
             client_encrypt = self.params.get("client_encrypt")
 
@@ -2789,7 +2787,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return sorted(
             [node for node in self.nodes if node.rack == rack and node.dc_idx == dc_idx], key=lambda n: n.name)
 
-    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches  noqa: PLR0913
+    def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
@@ -2967,7 +2965,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                         cluster_name=self.scylla_cluster_name, namespace=self.namespace)
                     PrometheusDBStats(host=prometheus_ip, port=k8s_cluster.prometheus_port, protocol='https')
                     kmh_event.message = "Kubernetes monitoring health checks have successfully been finished"
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     ClusterHealthValidatorEvent.MonitoringStatus(
                         error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
                               f'{prometheus_ip}:{k8s_cluster.prometheus_port}, due to the: \n'
@@ -3018,7 +3016,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         node = self.nodes[0]
         test_keyspaces = self.get_test_keyspaces()
         # If 'keyspace1' does not exist, create a schema and load a data.
-        create_schema = not (test_keyspace_name in test_keyspaces)  # pylint: disable=superfluous-parens
+        create_schema = not (test_keyspace_name in test_keyspaces)
         if not create_schema:
             # NOTE: if keyspace exists and has data then just exit
             if int(SstableLoadUtils.validate_data_count_after_upload(node=node)) > 0:
@@ -3042,7 +3040,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         assert int(result) == test_data[0].keys_num, "Data was not inserted"
 
 
-class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
+class ManagerPodCluser(PodCluster):
     @property
     def pod_selector(self):
         return 'app.kubernetes.io/name=scylla-manager'
@@ -3067,9 +3065,9 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         cluster.BaseLoaderSet.__init__(self, params=params)
         self.k8s_loader_run_type = self.params.get("k8s_loader_run_type")
         if self.k8s_loader_run_type == "static":
-            self.PodContainerClass = LoaderStsContainer  # pylint: disable=invalid-name
+            self.PodContainerClass = LoaderStsContainer
         elif self.k8s_loader_run_type == "dynamic":
-            self.PodContainerClass = LoaderPodContainer  # pylint: disable=invalid-name
+            self.PodContainerClass = LoaderPodContainer
         else:
             raise ValueError(
                 "'k8s_loader_run_type' has unexpected value: %s" % self.k8s_loader_run_type)

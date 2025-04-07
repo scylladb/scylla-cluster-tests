@@ -21,7 +21,7 @@ Delays = Iterable[float]
 
 
 @dataclass
-class Timings:  # pylint: disable=too-many-instance-attributes
+class Timings:
     """A store for timeouts and delays
     """
     keepalive_timeout: Timing = 30
