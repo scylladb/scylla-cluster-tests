@@ -207,3 +207,152 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=_get_status_based_on_previous_results(key))
     submit_results_to_argus(argus_client, result_table)
+<<<<<<< HEAD
+||||||| parent of 09f87bb71 (fix(sdcm/iotune): Do not submit results if test doesn't exist)
+
+
+def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: dict, sut_timestamp: int,
+                                            row_name: str = None) -> None:
+    if not row_name:
+        row_name = "#1"
+
+    result_table = ManagerRestoreBanchmarkResult(sut_timestamp=sut_timestamp)
+    for key, value in result.items():
+        result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_manager_snapshot_details_to_argus(argus_client: ArgusClient, snapshot_details: dict) -> None:
+    result_table = ManagerSnapshotDetails()
+    for key, value in snapshot_details.items():
+        result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node, params):
+    if not argus_client:
+        LOGGER.warning("Will not submit to argus - no client initialized")
+        return
+
+    class IOPropertiesResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance"
+            description = "io_properties.yaml generated from live measured disk"
+            Columns = [
+                ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+            ]
+
+    class IOPropertiesDeviationResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance Percent deviation"
+            description = "io_properties.yaml percent deviation from pre-configured disk"
+            Columns = [
+                ColumnMetadata(name="read_iops_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_iops_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+            ]
+
+            ValidationRules = {
+                "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
+                "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+                "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
+                "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+            }
+
+    table = IOPropertiesResultsTable()
+    for key, value in results["active"].items():
+        table.add_result(column=key, row="measured", value=value, status=Status.UNSET)
+        table.add_result(column=key, row="pre-configured", value=results["preset"][key], status=Status.UNSET)
+    submit_results_to_argus(argus_client, table)
+
+    table = IOPropertiesDeviationResultsTable()
+    for key, value in results["deviation_pct"].items():
+        table.add_result(column=f"{key}_pct_deviation", row="deviation_percent",
+                         value=value, status=Status.PASS if value < 15 else Status.WARNING)
+
+    submit_results_to_argus(argus_client, table)
+=======
+
+
+def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: dict, sut_timestamp: int,
+                                            row_name: str = None) -> None:
+    if not row_name:
+        row_name = "#1"
+
+    result_table = ManagerRestoreBanchmarkResult(sut_timestamp=sut_timestamp)
+    for key, value in result.items():
+        result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_manager_snapshot_details_to_argus(argus_client: ArgusClient, snapshot_details: dict) -> None:
+    result_table = ManagerSnapshotDetails()
+    for key, value in snapshot_details.items():
+        result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node, params):
+    if not argus_client:
+        LOGGER.warning("Will not submit to argus - no client initialized")
+        return
+
+    run = argus_client.get_run()
+    if not run["test_id"]:
+        LOGGER.warning("No test exists for this run, skipping submitting results")
+        return
+
+    class IOPropertiesResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance"
+            description = "io_properties.yaml generated from live measured disk"
+            Columns = [
+                ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+                ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+            ]
+
+    class IOPropertiesDeviationResultsTable(GenericResultTable):
+        class Meta:
+            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance Percent deviation"
+            description = "io_properties.yaml percent deviation from pre-configured disk"
+            Columns = [
+                ColumnMetadata(name="read_iops_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_iops_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+                ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
+                               type=ResultType.INTEGER, higher_is_better=False),
+            ]
+
+            ValidationRules = {
+                "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
+                "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+                "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
+                "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+            }
+
+    table = IOPropertiesResultsTable()
+    for key, value in results["active"].items():
+        table.add_result(column=key, row="measured", value=value, status=Status.UNSET)
+        table.add_result(column=key, row="pre-configured", value=results["preset"][key], status=Status.UNSET)
+    submit_results_to_argus(argus_client, table)
+
+    table = IOPropertiesDeviationResultsTable()
+    for key, value in results["deviation_pct"].items():
+        table.add_result(column=f"{key}_pct_deviation", row="deviation_percent",
+                         value=value, status=Status.PASS if value < 15 else Status.WARNING)
+
+    submit_results_to_argus(argus_client, table)
+>>>>>>> 09f87bb71 (fix(sdcm/iotune): Do not submit results if test doesn't exist)
