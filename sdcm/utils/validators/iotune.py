@@ -98,4 +98,5 @@ class IOTuneValidator:
     def _format_results_to_console(self):
         LOGGER.info("Disk performance values validation - testing %s", self.results["mountpoint"])
         for key, val in self.results["active"].items():
-            LOGGER.info("[%s] %s: %s (%.0f%)", self.results["mountpoint"], key, val, self.results["deviation_pct"][key])
+            LOGGER.info("[%s] %s: %s (%.0f%%)", self.results["mountpoint"],
+                        key, val, self.results["deviation_pct"][key])
