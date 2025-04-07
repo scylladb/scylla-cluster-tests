@@ -286,6 +286,11 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         LOGGER.warning("Will not submit to argus - no client initialized")
         return
 
+    run = argus_client.get_run()
+    if not run["test_id"]:
+        LOGGER.warning("No test exists for this run, skipping submitting results")
+        return
+
     class IOPropertiesResultsTable(GenericResultTable):
         class Meta:
             name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance"
