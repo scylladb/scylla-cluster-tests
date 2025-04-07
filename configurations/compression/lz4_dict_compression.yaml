@@ -1,0 +1,1 @@
+post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compression = {'sstable_compression': 'LZ4WithDictsCompressor'}"
