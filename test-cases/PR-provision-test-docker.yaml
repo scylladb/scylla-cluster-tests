@@ -16,3 +16,7 @@ nemesis_filter_seeds: false
 user_prefix: 'PR-provision-docker'
 
 use_mgmt: false
+
+append_scylla_yaml:
+  enable_tablets: false  # counters are not supported with tablets
+  tablets_mode_for_new_keyspaces: 'disabled'  # counters are not supported with tablets
