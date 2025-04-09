@@ -28,3 +28,14 @@ user_prefix: 'PR-provision-test'
 instance_provision: 'spot'
 
 use_preinstalled_scylla: true
+<<<<<<< HEAD
+||||||| parent of 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
+
+append_scylla_yaml:
+  enable_tablets: false  # counters are not supported with tablets
+=======
+
+append_scylla_yaml:
+  enable_tablets: false  # counters are not supported with tablets
+  tablets_mode_for_new_keyspaces: 'disabled'  # counters are not supported with tablets
+>>>>>>> 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
