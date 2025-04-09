@@ -31,3 +31,4 @@ use_preinstalled_scylla: true
 
 append_scylla_yaml:
   enable_tablets: false  # counters are not supported with tablets
+  tablets_mode_for_new_keyspaces: 'disabled'  # counters are not supported with tablets
