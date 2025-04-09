@@ -19,5 +19,6 @@ client_encryption_options:
 EOM
 
 sed -e '/enable_tablets:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
+sed -e '/tablets_mode_for_new_keyspaces:.*/s/enabled/disabled/g' -i /etc/scylla/scylla.yaml
 
 /docker-entrypoint.py $*
