@@ -235,6 +235,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         if self.params.get("enable_tablets_on_upgrade"):
             scylla_yaml_updates.update({"enable_tablets": True})
+            scylla_yaml_updates.update({"tablets_mode_for_new_keyspaces": "enabled"})
         if self.params.get("enable_views_with_tablets_on_upgrade"):
             scylla_yaml_updates.update({"experimental_features": ["views-with-tablets"]})
 
