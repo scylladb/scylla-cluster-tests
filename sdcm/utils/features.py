@@ -79,5 +79,7 @@ def is_tablets_feature_enabled(node) -> bool:
             return True
         if scylla_yaml.dict().get("enable_tablets"):
             return True
+        if scylla_yaml.dict().get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
+            return True
 
     return False

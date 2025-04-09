@@ -1,2 +1,3 @@
 append_scylla_yaml:
   enable_tablets: false
+  tablets_mode_for_new_keyspaces: 'disabled'
