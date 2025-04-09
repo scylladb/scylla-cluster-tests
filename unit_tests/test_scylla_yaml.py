@@ -409,6 +409,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'workdir': None,
                 'write_request_timeout_in_ms': None,
                 'enable_tablets': None,
+                'tablets_mode_for_new_keyspaces': None,
                 'force_gossip_topology_changes': None,
                 'reader_concurrency_semaphore_cpu_concurrency': None,
             }

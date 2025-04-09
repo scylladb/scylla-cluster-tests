@@ -27,6 +27,7 @@ append_scylla_yaml:
   # See: https://github.com/scylladb/scylladb/pull/21207
   enable_small_table_optimization_for_rbno: true
   enable_tablets: false
+  tablets_mode_for_new_keyspaces: 'disabled'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '007'
