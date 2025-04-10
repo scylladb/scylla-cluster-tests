@@ -1,3 +1,4 @@
 append_scylla_yaml:
   enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
   tablets_initial_scale_factor: 4

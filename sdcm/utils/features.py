@@ -79,4 +79,26 @@ def is_tablets_feature_enabled(session: Session) -> bool:
     """ Check whether tablets enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
+<<<<<<< HEAD
     return TABLETS_FEATURE in get_enabled_features(session)
+||||||| parent of 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
+    with node.remote_scylla_yaml() as scylla_yaml:
+        # for backward compatibility of 2024.1 and earlier
+        if "tablets" in scylla_yaml.experimental_features:
+            return True
+        if scylla_yaml.dict().get("enable_tablets"):
+            return True
+
+    return False
+=======
+    with node.remote_scylla_yaml() as scylla_yaml:
+        # for backward compatibility of 2024.1 and earlier
+        if "tablets" in scylla_yaml.experimental_features:
+            return True
+        if scylla_yaml.dict().get("enable_tablets"):
+            return True
+        if scylla_yaml.dict().get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
+            return True
+
+    return False
+>>>>>>> 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
