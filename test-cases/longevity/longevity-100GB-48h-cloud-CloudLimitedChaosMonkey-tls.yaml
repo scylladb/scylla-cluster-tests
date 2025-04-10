@@ -5,7 +5,7 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=2860m  -schema 'replicat
 stress_read_cmd: ["cassandra-stress read cl=ONE duration=2860m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100100150 -log interval=5"]
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
 

@@ -10,11 +10,11 @@ stress_cmd_no_mv_profile: 'data_dir/cs_no_mv_basic_profile.yaml'
 #  - cmd: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_firstname_id.yaml ops'(insert=1)' cl=QUORUM duration=5m -pop seq=20000000..30000000 -mode cql3 native -rate threads=100"
 #    profile: 'data_dir/cs_mv_basic_profile_by_firstname_id.yaml'
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.4xlarge'
+instance_type_db: 'i3.2xlarge'
 instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.small'
 

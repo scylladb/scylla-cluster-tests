@@ -33,7 +33,7 @@ post_prepare_cql_cmds: [
                         "ALTER TABLE scylla_bench.test with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
                         ]
 
-n_db_nodes: 5
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 

@@ -3,6 +3,6 @@ stress_during_entire_upgrade: cassandra-stress write no-warmup cl=QUORUM n=20100
 stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=30200400 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..30200400 -log interval=5
 
 
-n_db_nodes: 4
+n_db_nodes: 6
 
 enable_tablets_on_upgrade: true
