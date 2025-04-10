@@ -215,10 +215,21 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_yaml_updates.update({"consistent_cluster_management": True})
 
         if self.params.get("enable_tablets_on_upgrade"):
+<<<<<<< HEAD
             scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
 
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
+||||||| parent of 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
+            scylla_yaml_updates.update({"enable_tablets": True})
+        if self.params.get("enable_views_with_tablets_on_upgrade"):
+            scylla_yaml_updates.update({"experimental_features": ["views-with-tablets"]})
+=======
+            scylla_yaml_updates.update({"enable_tablets": True})
+            scylla_yaml_updates.update({"tablets_mode_for_new_keyspaces": "enabled"})
+        if self.params.get("enable_views_with_tablets_on_upgrade"):
+            scylla_yaml_updates.update({"experimental_features": ["views-with-tablets"]})
+>>>>>>> 452e94855 (fix(ScyllaYaml): add `tablets_mode_for_new_keyspaces` configuration option)
 
         InfoEvent(message='Upgrading a Node').publish()
         # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround

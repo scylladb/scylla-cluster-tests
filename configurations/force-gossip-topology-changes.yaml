@@ -1,3 +1,4 @@
 append_scylla_yaml:
   force_gossip_topology_changes: true
   enable_tablets: false
+  tablets_mode_for_new_keyspaces: 'disabled'
