@@ -9,12 +9,12 @@ cs_user_profiles:
 prepare_cs_user_profiles:
     - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,30m
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 2
 n_monitor_nodes: 1
 
-gce_instance_type_db: 'n2-highmem-8'
-gce_instance_type_loader: 'n2-highmem-8'
+gce_instance_type_db: 'n2-highmem-4'
+gce_instance_type_loader: 'n2-highmem-4'
 gce_n_local_ssd_disk_db: 2
 gce_pd_ssd_disk_size_db: 750
 gce_setup_hybrid_raid: true
