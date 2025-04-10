@@ -615,7 +615,9 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --location {} ".format(locations_names)
         if snapshot_tag:
             cmd += f" --snapshot-tag {snapshot_tag}"
-        if dc_mapping:
+        if dc_mapping and restore_data:
+            # --dc-mapping flag is applicable only for --restore-tables mode
+            # https://manager.docs.scylladb.com/stable/sctool/restore.html#dc-mapping
             cmd += f" --dc-mapping {dc_mapping}"
         if extra_params:
             cmd += f" {extra_params}"
