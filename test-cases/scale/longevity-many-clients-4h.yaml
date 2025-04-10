@@ -6,7 +6,7 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replicatio
              "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=500 -rate threads=4 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
              ]
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 50
 n_monitor_nodes: 1
 
