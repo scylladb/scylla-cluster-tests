@@ -3,7 +3,7 @@ stress_cmd: [
 "JVM_OPTION='-Xms8033M -Xmx8033M -Xmn400M' cassandra-stress user profile=/tmp/large_collections.yaml ops'(insert=3,read1=1,update1=1)' cl=QUORUM duration=720m -mode cql3 native -rate threads=20"
              ]
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
 
