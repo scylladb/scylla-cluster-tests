@@ -1,7 +1,7 @@
 {
   "broadcast_address": "__NODE_IPV6_ADDRESS__",
   "listen_address": "__NODE_IPV6_ADDRESS__",
-  "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
+  "endpoint_snitch": "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
   "rpc_address": "__NODE_IPV6_ADDRESS__",
   "cluster_name": "dummy_cluster",
   "seed_provider": [

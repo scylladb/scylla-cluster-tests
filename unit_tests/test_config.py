@@ -296,6 +296,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_14_check_rackaware_config_false_loader(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_RACK_AWARE_LOADER'] = 'false'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
         os.environ['SCT_REGION_NAME'] = "eu-west-1"
         os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
         os.environ['SCT_N_DB_NODES'] = '2'
@@ -315,6 +316,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
         os.environ['SCT_REGION_NAME'] = "eu-west-1"
         os.environ['SCT_AVAILABILITY_ZONE'] = 'a'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'

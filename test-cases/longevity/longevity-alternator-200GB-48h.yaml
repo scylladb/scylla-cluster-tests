@@ -32,10 +32,11 @@ round_robin: true
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 n_loaders: 4
-n_db_nodes: 4
+n_monitor_nodes: 1
+n_db_nodes: 6
 
 # Instance types
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 azure_instance_type_db: 'Standard_L16s_v3'
 gce_instance_type_db: 'n2-highmem-32'
 gce_n_local_ssd_disk_db: 16

@@ -3358,7 +3358,7 @@ Defines how many regions must be simulated on the Scylla config side. If set the
 
 Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.<br>Provide number of racks to simulate.
 
-**default:** N/A
+**default:** 3
 
 **type:** int
 
