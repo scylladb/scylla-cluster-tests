@@ -3017,8 +3017,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             res_file.write(result.strip())
 
     def save_schema(self):
+        """
+        Saves the node's schema including internal metadata.
+        """
         if self.db_cluster is None:
-            self.log.error("Didn't find the nodes in the cluster for saving the schema.")
+            self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
 
         self.log.info("Save nodes user schema in the files")
@@ -3033,6 +3036,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            log_file="system_schema_tables.log")
             self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system.truncated",
                                            log_file="system_truncated.log")
+            self.save_cqlsh_output_in_file(node=node,
+                                           cmd="desc schema with internals",
+                                           log_file="schema_with_internals.log")
             break
 
         if not found_live_node:
