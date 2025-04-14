@@ -5076,11 +5076,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             verification_node = random.choice(undecommission_nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
-        missing_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
-
-        if not missing_host_ids:
-            self.log.debug("Node %s returned to tokenring, but stay non-voter. Add its host-id for remove")
-            missing_host_ids = verification_node.raft.get_group0_non_voters()
+        missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
 
         decommission_done = list(node.follow_system_log(
             patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
