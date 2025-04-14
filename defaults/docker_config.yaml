@@ -3,3 +3,4 @@ logs_transport: docker
 use_preinstalled_scylla: true
 docker_image: ''
 scylla_linux_distro: 'centos'
+print_kernel_callstack: false
