@@ -12,6 +12,7 @@ from sdcm.sct_events.group_common_events import decorate_with_context, \
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
 
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -138,6 +139,23 @@ class NodeBootstrapAbortManager:
         # stop scylla if it was started by scylla-manager-client during setup
         self.bootstrap_node.stop_scylla_server(ignore_status=True, timeout=600)
         # Clean garbage from group 0 and scylla data and restart setup
+<<<<<<< HEAD
+||||||| parent of 67c34d2e3 (fix(limited_voters): validate non-voters as failed for scylla <=2025.1)
+        if self.verification_node.raft.get_diff_group0_token_ring_members() or \
+                self.verification_node.raft.get_group0_non_voters():
+            self.verification_node.raft.clean_group0_garbage(raise_exception=True)
+        if not self.is_bootstrapped_successfully():
+            LOGGER.debug("Clean old scylla data and restart scylla service")
+            self.bootstrap_node.clean_scylla_data()
+        watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
+=======
+        if self.verification_node.raft.search_inconsistent_host_ids():
+            self.verification_node.raft.clean_group0_garbage(raise_exception=True)
+        if not self.is_bootstrapped_successfully():
+            LOGGER.debug("Clean old scylla data and restart scylla service")
+            self.bootstrap_node.clean_scylla_data()
+        watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
+>>>>>>> 67c34d2e3 (fix(limited_voters): validate non-voters as failed for scylla <=2025.1)
         try:
             if self.verification_node.raft.get_diff_group0_token_ring_members():
                 self.verification_node.raft.clean_group0_garbage(raise_exception=True)
