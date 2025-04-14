@@ -59,9 +59,14 @@ class TestClusterQuorum(LongevityTest):
         read_thread, write_thread = self.start_background_stress_commands(
             node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
 
+        node = data_nodes_per_region[alive_region][0]
+        InfoEvent(f"Voters nodes: {node.raft.get_group0_members()}").publish()
+
         InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
         for node in data_nodes_per_region[dead_region]:
             node.stop_scylla()
+
+        InfoEvent(f"Voters nodes: {node.raft.get_group0_members()}").publish()
 
         InfoEvent("Validate raft quorum is lost").publish()
         verification_node = data_nodes_per_region[alive_region][0]
