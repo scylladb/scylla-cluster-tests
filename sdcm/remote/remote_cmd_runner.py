@@ -107,7 +107,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             )
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
-        self.log.error(exc)
+        self.log.error(exc, exc_info=exc)
         self.ssh_is_up.clear()
         if self._is_error_retryable(str(exc)):
             raise RetryableNetworkException(str(exc), original=exc)
