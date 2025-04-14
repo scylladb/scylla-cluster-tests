@@ -56,6 +56,7 @@ class NodeContainerMixin:
         smp = 1
         if self.node_type == 'db':
             scylla_args = self.parent_cluster.params.get('append_scylla_args')
+            privileged = bool(self.parent_cluster.params.get('print_kernel_callstack'))
             smp_match = re.search(r'--smp\s(\d+)', scylla_args)
             smp = int(smp_match.group(1)) if smp_match else 1
 
@@ -63,6 +64,7 @@ class NodeContainerMixin:
                     image=self.node_container_image_tag,
                     command=f'--seeds="{seed_ip}"' if seed_ip else None,
                     volumes=volumes,
+                    privileged=privileged,
                     network=self.parent_cluster.params.get('docker_network'),
                     nano_cpus=smp*10**9)  # Same as `docker run --cpus=N ...' CLI command.
 
