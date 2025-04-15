@@ -194,7 +194,7 @@ class SctLoader(unittest.TestLoader):
 def cli(ctx):
     disable_loggers_during_startup()
     # Ugly way of filtering the few command that do not require OKTA verification
-    if ctx.invoked_subcommand not in ("update-conf-docs", "nemesis-list", "create-nemesis-pipelines"):
+    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list", "create-nemesis-pipelines"):
         try_auth_with_okta()
 
         key_store = KeyStore()
@@ -925,28 +925,16 @@ def conf(config_file, backend):
 @cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
 @click.option('-o', '--output-format', type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output")
 def conf_docs(output_format):
-    add_file_logger()
-
-    os.environ['SCT_CLUSTER_BACKEND'] = "aws"  # just to pass SCTConfiguration() verification.
-
-    config_logger = logging.getLogger('sdcm.sct_config')
-    config_logger.setLevel(logging.ERROR)
     if output_format == 'markdown':
-        click.secho(SCTConfiguration().dump_help_config_markdown())
+        click.secho(SCTConfiguration.dump_help_config_markdown())
     elif output_format == 'yaml':
-        click.secho(SCTConfiguration().dump_help_config_yaml())
+        click.secho(SCTConfiguration.dump_help_config_yaml())
 
 
 @cli.command('update-conf-docs', help="Update the docs configuration markdown")
 def update_conf_docs():
-    add_file_logger()
-
-    os.environ['SCT_CLUSTER_BACKEND'] = "aws"  # just to pass SCTConfiguration() verification.
-
-    config_logger = logging.getLogger('sdcm.sct_config')
-    config_logger.setLevel(logging.ERROR)
     markdown_file = Path(__name__).parent / 'docs' / 'configuration_options.md'
-    markdown_file.write_text(SCTConfiguration().dump_help_config_markdown())
+    markdown_file.write_text(SCTConfiguration.dump_help_config_markdown())
     click.secho(f"docs written into {markdown_file}")
 
 

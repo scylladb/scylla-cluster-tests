@@ -2817,7 +2817,8 @@ class SCTConfiguration(dict):
         """
         return anyconfig.dumps(self.dict(), ac_parser="yaml")
 
-    def dump_help_config_markdown(self):
+    @classmethod
+    def dump_help_config_markdown(cls):
         """
         Dump all configuration options with their defaults and help to string in markdown format
 
@@ -2832,6 +2833,7 @@ class SCTConfiguration(dict):
             * **list:** can be appended by adding `++` as the first item of the list
                    `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
         """
+        defaults = anyconfig.load(sct_abs_path('defaults/test_default.yaml'))
 
         def strip_help_text(text):
             """
@@ -2842,32 +2844,34 @@ class SCTConfiguration(dict):
 
         ret = strip_help_text(header)
 
-        for opt in self.config_options:
+        for opt in cls.config_options:
             ret += '\n\n'
             if opt['help']:
                 help_text = '<br>'.join(strip_help_text(opt['help']).splitlines())
             else:
                 help_text = ''
             appendable = ' (appendable)' if is_config_option_appendable(opt.get('name')) else ''
-            default = self.get_default_value(opt['name'])
+            default = defaults.get(opt['name'], None)
             default_text = default if default else 'N/A'
             ret += f"""## **{opt['name']}** / {opt['env']}\n\n{help_text}\n\n**default:** {default_text}\n\n**type:** {opt.get('type').__name__}{appendable}\n"""
 
         return ret
 
-    def dump_help_config_yaml(self):
+    @classmethod
+    def dump_help_config_yaml(cls):
         """
         Dump all configuration options with their defaults and help to string in yaml format
 
         :return: str
         """
+        defaults = anyconfig.load(sct_abs_path('defaults/test_default.yaml'))
         ret = ""
-        for opt in self.config_options:
+        for opt in cls.config_options:
             if opt['help']:
-                help_text = '\n'.join(["# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()]) + '\n'
+                help_text = '\n'.join("# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()) + '\n'
             else:
                 help_text = ''
-            default = self.get_default_value(opt['name'])
+            default = defaults.get(opt['name'], None)
             default = default if default else 'N/A'
             ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, **opt)
 
