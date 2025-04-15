@@ -16,11 +16,15 @@
 import os
 import re
 import logging
+import shutil
+from pathlib import Path
 from typing import Optional, Union, Dict
 from functools import cached_property
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
+from sdcm.utils.docker_api_client import DockerAPIClient
+from sdcm.utils.docker_service_manager import create_service_manager, DockerServiceManager
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.net import get_my_public_ip
@@ -42,6 +46,12 @@ class NodeContainerMixin:
         return self.parent_cluster.node_container_image_tag
 
     def node_container_image_dockerfile_args(self):
+        # copy SCT-dedicated docker-entrypoint script to the context directory
+        context_path = Path(self.parent_cluster.node_container_context_path)
+        entrypoint_src = context_path.parent / 'docker-entrypoint.py'
+        entrypoint_dst = context_path / 'docker-entrypoint.py'
+        shutil.copy2(entrypoint_src, entrypoint_dst, follow_symlinks=True)
+
         return dict(path=self.parent_cluster.node_container_context_path)
 
     def node_container_image_build_args(self):
@@ -67,7 +77,50 @@ class NodeContainerMixin:
                     nano_cpus=smp*10**9)  # Same as `docker run --cpus=N ...' CLI command.
 
 
-class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstract-method
+class ContainerServiceManagerMixin:
+    """Mixin to add Docker container specific service management capabilities to Node classes"""
+
+    _docker_api_client = None
+    _docker_cmd_executor = None
+    _docker_service_manager = None
+    _container = None
+
+    def setup_docker_management(self, container: Container | None = None):
+        if not self._docker_api_client:
+            self._docker_api_client = DockerAPIClient()
+
+            if not container and hasattr(self, '_containers') and 'node' in self._containers:
+                container = self._containers['node']
+            elif not container:
+                self._docker_api_client = DockerAPIClient()
+                container = self._docker_api_client.get_container(self.name)
+
+            self._container = container
+            if container:
+                self._docker_service_manager = create_service_manager(container, self._docker_api_client)
+
+    @cached_property
+    def docker_service_manager(self) -> DockerServiceManager | None:
+        self.setup_docker_management()
+        return self._docker_service_manager
+
+    def start_container_service(self, service_name: str, timeout: int = 60) -> bool:
+        return self.docker_service_manager.start_service(service_name, timeout)
+
+    def stop_container_service(self, service_name: str, timeout: int = 60) -> bool:
+        return self.docker_service_manager.stop_service(service_name, timeout)
+
+    def restart_container_service(self, service_name: str, timeout: int = 120) -> bool:
+        return self.docker_service_manager.restart_service(service_name, timeout)
+
+    def get_container_service_status(self, service_name: str) -> str:
+        return self.docker_service_manager.get_service_status(service_name)
+
+    def list_container_services(self) -> list[dict[str, str]]:
+        return self.docker_service_manager.list_services()
+
+
+class DockerNode(cluster.BaseNode, NodeContainerMixin, ContainerServiceManagerMixin):  # pylint: disable=abstract-method
     def __init__(self,  # pylint: disable=too-many-arguments
                  parent_cluster: "DockerCluster",
                  container: Optional[Container] = None,
@@ -139,6 +192,14 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         ContainerManager.get_container(self, "node").restart()
 
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
+        if self._docker_service_manager:
+            status = self.get_container_service_status(service_name)
+            # format similar to supervisorctl status output for compatibility
+            return type('ServiceStatus', (), {
+                'stdout': f"{service_name} {status}",
+                'stderr': "",
+                'ok': status in ['running', 'active', 'RUNNING']
+            })
         return self.remoter.sudo('sh -c "{0} || {0}.service"'.format(f"supervisorctl status {service_name}"),
                                  timeout=timeout, ignore_status=ignore_status)
 
@@ -146,8 +207,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
-                          timeout=timeout)
+        if self._docker_service_manager:
+            self.start_container_service('scylla', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
+                              timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -162,8 +226,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
-                          timeout=timeout)
+        if self._docker_service_manager:
+            self.stop_container_service('scylla', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
+                              timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -172,12 +239,18 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         self.stop_scylla_housekeeping_service(timeout=timeout)
 
     def stop_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
-                          timeout=timeout)
+        if self._docker_service_manager:
+            self.stop_container_service('scylla-housekeeping', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
+                              timeout=timeout)
 
     def start_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
-                          timeout=timeout)
+        if self._docker_service_manager:
+            self.start_container_service('scylla-housekeeping', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
+                              timeout=timeout)
 
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
@@ -192,7 +265,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
         # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
         self.stop_scylla_housekeeping_service(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
+
+        if self._docker_service_manager:
+            self.restart_container_service('scylla', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
         self.start_scylla_housekeeping_service(timeout=timeout)
@@ -259,6 +336,9 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         ContainerManager.run_container(node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None)
         ContainerManager.wait_for_status(node, "node", status="running")
         ContainerManager.ssh_copy_id(node, "node", self.node_container_user, self.node_container_key_file)
+
+        container = ContainerManager.get_container(node, "node")
+        node.setup_docker_management(container)
 
         node.init()
 

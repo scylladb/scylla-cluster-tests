@@ -38,6 +38,9 @@ RUN microdnf update && \
     sudo -Hu $USER sh -c "echo 'sudo test -f /root/.cqlshrc && sudo cp /root/.cqlshrc /home/$USER/.cassandra/cqlshrc' >> ~/.ssh/rc" && \
     sudo -Hu $USER sh -c "echo 'sudo test -f /root/.cassandra/cqlshrc && sudo cp /root/.cassandra/cqlshrc /home/$USER/.cassandra/cqlshrc' >> ~/.ssh/rc"
 
+COPY docker-entrypoint.py /docker-entrypoint.py
+RUN chmod +x /docker-entrypoint.py
+
 COPY ./etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
 COPY ./etc/sshd.conf /etc/supervisord.conf.d/sshd.conf
 COPY ./etc/sshd-service.sh /sshd-service.sh
