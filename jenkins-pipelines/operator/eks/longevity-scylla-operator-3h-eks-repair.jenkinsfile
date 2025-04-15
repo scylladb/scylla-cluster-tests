@@ -6,7 +6,7 @@ longevityPipeline(
     backend: 'k8s-eks',
     region: 'eu-north-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/scylla-operator/longevity-scylla-operator-3h-repair.yaml',
+    test_config: '''["test-cases/scylla-operator/longevity-scylla-operator-3h-repair.yaml", "configurations/operator/expose-pod-ips.yaml"]''',
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
     availability_zone: 'a,b',
     post_behavior_db_nodes: 'destroy',
