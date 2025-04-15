@@ -10,7 +10,7 @@ k8s_loader_cluster_name: 'sct-loaders'
 
 n_monitor_nodes: 0
 
-scylla_version: '4.6.3'
+scylla_version: '6.2.3'
 
 k8s_cert_manager_version: '1.8.0'
 # Possible values for the 'k8s_scylla_operator_helm_repo' option are following:

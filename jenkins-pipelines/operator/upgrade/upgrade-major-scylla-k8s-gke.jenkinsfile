@@ -6,8 +6,8 @@ rollingOperatorUpgradePipeline(
     backend: 'k8s-gke',
     region: 'us-east1',
     availability_zone: 'c',
-    base_versions: '["2022.1.6"]',
-    new_version: '2022.2.7',
+    base_versions: '["2023.1.11"]',
+    new_version: '2024.2.7',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
     test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml',
 )
