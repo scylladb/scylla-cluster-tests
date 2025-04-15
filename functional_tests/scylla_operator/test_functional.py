@@ -767,7 +767,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     """
 
     target_chart_name, namespace = ("t-default-values",) * 2
-    expected_capacity = '10Gi'
+    expected_capacity = '120Gi'
     need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_helm_with_default_values')}"
 
@@ -792,6 +792,10 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
 
         pods_name_and_status = get_pods_and_statuses(
             db_cluster, namespace=namespace, label=db_cluster.pod_selector)
+
+        # Sometimes the get_pods_and_statuses method incorrectly includes cleanup pods.
+        # The line below filters out these pods from our pod list.
+        pods_name_and_status = [pod for pod in pods_name_and_status if 'cleanup' not in pod['name'].lower()]
 
         assert len(pods_name_and_status) == 3, (
             f"Expected 3 pods to be created in {namespace} namespace "

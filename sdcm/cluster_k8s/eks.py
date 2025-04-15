@@ -118,6 +118,9 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
         instance_type=params.get('instance_type_db'),
         role_arn=params.get('eks_nodegroup_role_arn'),
         disk_size=params.get('root_disk_size_db'),
+        labels={
+            "scylla.scylladb.com/node-type": "scylla"
+        },
         k8s_cluster=k8s_cluster)
     k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
