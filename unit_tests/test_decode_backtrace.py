@@ -32,11 +32,6 @@ class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
         return "scylla_debug_info_file"
 
 
-class DummyDbLogReader(DbLogReader):
-    def get_scylla_debuginfo_file(self):
-        return "scylla_debug_info_file"
-
-
 class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls):
@@ -76,7 +71,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     @cached_property
     def _db_log_reader(self):
-        return DummyDbLogReader(
+        return DbLogReader(
             system_log=self.node.system_log,
             node_name=str(self),
             remoter=self.node.remoter,
@@ -87,7 +82,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     @cached_property
     def _db_log_reader_no_decoding(self):
-        return DummyDbLogReader(
+        return DbLogReader(
             system_log=self.node.system_log,
             node_name=str(self),
             remoter=self.node.remoter,
