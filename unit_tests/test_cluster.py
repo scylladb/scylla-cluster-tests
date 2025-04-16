@@ -69,11 +69,6 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
         pass
 
 
-class DummyDbLogReader(DbLogReader):
-    def get_scylla_debuginfo_file(self):
-        return "scylla_debug_info_file"
-
-
 class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls):
@@ -94,7 +89,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     @cached_property
     def _db_log_reader(self):
-        return DummyDbLogReader(
+        return DbLogReader(
             system_log=self.node.system_log,
             remoter=self.node.remoter,
             node_name=str(self),
