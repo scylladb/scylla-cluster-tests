@@ -6,6 +6,7 @@ stress_cmd:
   - "cassandra-stress write cl=ONE duration=240m  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=250  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=400200300..600200300 -log interval=15"
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
 
-nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: "not disruptive"
 nemesis_seed: '24325345'
 user_prefix: 'longevity-200gb-48h-rf1'
