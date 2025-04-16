@@ -15,6 +15,10 @@ n_db_nodes: '96 96'
 n_loaders: '32 32'
 n_monitor_nodes: 1
 
+rack_aware_loader: true
+region_aware_loader: true
+simulated_racks: 0
+
 instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c6i.4xlarge'
 
