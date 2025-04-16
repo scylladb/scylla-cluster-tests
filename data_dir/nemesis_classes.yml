@@ -64,6 +64,7 @@
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
 - SerialRestartOfElectedTopologyCoordinatorNemesis
+- ScyllaDiagnosisReport
 - SlaDecreaseSharesDuringLoad
 - SlaIncreaseSharesByAttachAnotherSlDuringLoad
 - SlaIncreaseSharesDuringLoad
