@@ -9,11 +9,13 @@ stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'repl
              "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native -rate threads=40 -log interval=5",
              ]
 
-rack_aware_loader: true
 availability_zone: 'a,b,c'
 n_db_nodes: '6 6'
 n_loaders: '2 1'
+
+rack_aware_loader: true
 region_aware_loader: true
+simulated_racks: 0
 
 instance_type_db: 'i3en.2xlarge'
 
