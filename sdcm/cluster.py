@@ -1543,18 +1543,15 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self._decoding_backtraces_thread.start()
 
     def decode_backtrace(self):
-        scylla_debug_file = None
         while True:
             event = None
-            obj = None
             try:
                 obj = self.test_config.DECODING_QUEUE.get(timeout=5)
                 if obj is None:
                     break
                 event = obj["event"]
                 self.log.debug("Event origin severity: %s", event.severity)
-                if not scylla_debug_file:
-                    scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
+                scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["build_id"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
                 event.backtrace = output.stdout
                 the_map = FindIssuePerBacktrace()
@@ -1577,6 +1574,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 pass
             except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error("failed to decode backtrace %s", details)
+                if "is closed" in details:
+                    break
             finally:
                 if event:
                     event.ready_to_publish()
@@ -1585,38 +1584,60 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
                 break
 
-    def copy_scylla_debug_info(self, node_name: str, debug_file: str):
-        """Copy scylla debug file from db-node to monitor-node
+    def copy_scylla_debug_info(self, node_name: str, build_id: str):
+        """Copy scylla debug file from db-node to monitor-node.
+
+        Skip if debug file already exists on monitor node.
 
         Copy via builder
         :param node_name: db node name
         :type node_name: str
-        :param scylla_debug_file: path to scylla_debug_file on db-node
-        :type scylla_debug_file: str
+        :param build_id: build id of scylla binary
+        :type build_id: str
         :returns: path on monitor node
         :rtype: {str}
         """
-
+        final_scylla_debug_file = os.path.join("/tmp", f"debug_{build_id}")
+        res = self.remoter.run(
+            "test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
+        if res.exited == 0:
+            return final_scylla_debug_file
         db_nodes = self.parent_cluster.targets['db_cluster'].nodes
         db_node = next(iter([n for n in db_nodes if n.name == node_name]), None)
         assert db_node, f"Node named: {node_name} wasn't found"
 
+        debug_file = db_node.get_scylla_debuginfo_file(build_id)
+        LOGGER.debug("Debug info file %s", debug_file)
         base_scylla_debug_file = os.path.basename(debug_file)
-        transit_scylla_debug_file = os.path.join(db_node.parent_cluster.logdir,
-                                                 base_scylla_debug_file)
-        final_scylla_debug_file = os.path.join("/tmp", base_scylla_debug_file)
-
-        if not os.path.exists(transit_scylla_debug_file):
-            db_node.remoter.receive_files(debug_file, transit_scylla_debug_file)
-        res = self.remoter.run(
-            "test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
-        if res.exited != 0:
-            self.remoter.send_files(transit_scylla_debug_file,  # pylint: disable=not-callable
-                                    final_scylla_debug_file)
+        transit_scylla_debug_file = os.path.join(db_node.parent_cluster.logdir, base_scylla_debug_file)
+        db_node.remoter.receive_files(debug_file, transit_scylla_debug_file)
+        self.remoter.send_files(transit_scylla_debug_file, final_scylla_debug_file)
         self.log.info("File on monitor node %s: %s", self, final_scylla_debug_file)
         self.log.info("Remove transit file: %s", transit_scylla_debug_file)
         os.remove(transit_scylla_debug_file)
         return final_scylla_debug_file
+
+    def get_scylla_debuginfo_file(self, build_id: str):
+        """Lookup the scylla debug information for a given build_id."""
+        # first try default location
+        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
+        results = self.remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
+        if results.ok:
+            return scylla_debug_info
+
+        # then try the relocatable location
+        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug', ignore_status=True)
+        if results.stdout.strip():
+            return results.stdout.strip()
+
+        # then look it up based on the build id
+        if build_id:
+            scylla_debug_info = f"/usr/lib/debug/.build-id/{build_id[:2]}/{build_id[2:]}.debug"
+            results = self.remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
+            if results.ok:
+                return scylla_debug_info
+
+        raise Exception("Couldn't find scylla debug information")
 
     def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
         """run decode backtrace on monitor node
