@@ -5,6 +5,7 @@ stress_cmd: cassandra-stress write cl=QUORUM duration=20m -schema 'replication(s
 gce_datacenter: 'us-east1 us-west1'
 n_db_nodes: "3 3"
 n_loaders: 2
+simulated_racks: 0
 
 user_prefix: 'google-snitch'
 
