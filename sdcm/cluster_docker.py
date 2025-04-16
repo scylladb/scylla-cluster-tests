@@ -21,6 +21,8 @@ from functools import cached_property
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.net import get_my_public_ip
@@ -162,8 +164,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
-                          timeout=timeout)
+        # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
+        with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
+                              timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -192,7 +196,9 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
         # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
         self.stop_scylla_housekeeping_service(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
+        # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
+        with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
         self.start_scylla_housekeeping_service(timeout=timeout)
