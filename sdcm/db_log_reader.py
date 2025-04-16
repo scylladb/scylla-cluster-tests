@@ -191,11 +191,9 @@ class DbLogReader(Process):
                 backtrace["event"].publish()
                 continue
             try:
-                scylla_debug_info = self.get_scylla_debuginfo_file()
-                LOGGER.debug("Debug info file %s", scylla_debug_info)
                 self._decoding_queue.put({
                     "node": self._node_name,
-                    "debug_file": scylla_debug_info,
+                    "build_id": self._build_id,
                     "event": backtrace["event"],
                 })
             except Exception:  # pylint: disable=broad-except
@@ -237,33 +235,6 @@ class DbLogReader(Process):
 
     def get_scylla_build_id(self) -> str | None:
         return self._build_id
-
-    def get_scylla_debuginfo_file(self):
-        """
-        Lookup the scylla debug information, in various places it can be.
-
-        :return the path to the scylla debug information
-        :rtype str
-        """
-        # first try default location
-        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
-        results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-        if results.ok:
-            return scylla_debug_info
-
-        # then try the relocatable location
-        results = self._remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug', ignore_status=True)
-        if results.stdout.strip():
-            return results.stdout.strip()
-
-        # then look it up base on the build id
-        if build_id := self.get_scylla_build_id():
-            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-            results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-            if results.ok:
-                return scylla_debug_info
-
-        raise Exception("Couldn't find scylla debug information")
 
     def stop(self):
         self._terminate_event.set()
