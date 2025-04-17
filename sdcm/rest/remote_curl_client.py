@@ -11,9 +11,10 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 
-from sdcm.cluster import BaseNode
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 from sdcm.rest.rest_client import RestClient
 
 
@@ -22,7 +23,7 @@ class ScyllaApiException(Exception):
 
 
 class RemoteCurlClient(RestClient):
-    def __init__(self, host: str, endpoint: str, node: BaseNode):
+    def __init__(self, host: str, endpoint: str, node: 'BaseNode'):
         super().__init__(host=host, endpoint=endpoint)
         self._node = node
         self._remoter = self._node.remoter
