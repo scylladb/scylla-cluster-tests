@@ -378,6 +378,24 @@ class RaftFeature(RaftFeatureOperations):
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
 
+    def search_inconsistent_host_ids(self) -> list[str]:
+        """ Search inconsistent hosts in group zero and token ring
+
+        Find difference between group0 and tokenring and return hostid
+        of nodes which should be removed for restoring consistency
+                """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            limited_voters_feature_enabled = is_group0_limited_voters_enabled(session)
+        host_ids = self.get_diff_group0_token_ring_members()
+
+        LOGGER.debug("Difference between group0 and token ring: %s", host_ids)
+        # Starting from 2025.2 not all alive nodes are voters. get
+        # non voters node only for older versions < 2025.2
+        if not host_ids and not limited_voters_feature_enabled:
+            LOGGER.debug("Get non-voter member hostids")
+            host_ids = self.get_group0_non_voters()
+        return host_ids
+
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
