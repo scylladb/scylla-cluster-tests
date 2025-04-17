@@ -394,7 +394,7 @@ class RaftFeature(RaftFeatureOperations):
         LOGGER.debug("Difference between group0 and token ring: %s", host_ids)
         # Starting from 2025.2 not all alive nodes are voters. get
         # non voters node only for older versions < 2025.2
-        if not host_ids and limited_voters_feature_enabled:
+        if not host_ids and not limited_voters_feature_enabled:
             LOGGER.debug("Get non-voter member hostids")
             host_ids = self.get_group0_non_voters()
         return host_ids
