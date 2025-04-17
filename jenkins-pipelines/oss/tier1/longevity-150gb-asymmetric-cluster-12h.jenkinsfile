@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey.yaml", "configurations/db-nodes-shards-random.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey-cql-stress.yaml", "configurations/db-nodes-shards-random.yaml"]'''
 )
