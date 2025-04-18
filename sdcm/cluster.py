@@ -397,14 +397,18 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.set_keep_alive()
         if self.node_type == "db" and not self.is_kubernetes() \
                 and self.parent_cluster.params.get("print_kernel_callstack"):
-            try:
-                self.remoter.sudo(shell_script_cmd("""\
-                echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
-                sysctl -p
-                """), verbose=True)
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.error("Encountered an unhadled exception while changing 'perf_event_paranoid' value",
-                             exc_info=True)
+            if self.is_docker():
+                LOGGER.warning("Enabling the 'print_kernel_callstack' on docker backend is not supported")
+            else:
+                try:
+                    self.remoter.sudo(shell_script_cmd("""\
+                    echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
+                    sysctl -p
+                    """), verbose=True)
+                except Exception:
+                    LOGGER.error(
+                        "Encountered an unhadled exception while changing 'perf_event_paranoid' value",
+                        exc_info=True)
         self._add_node_to_argus()
 
     def _add_node_to_argus(self):
