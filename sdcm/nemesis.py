@@ -30,14 +30,12 @@ import traceback
 import json
 import itertools
 import enum
-import ast
 from contextlib import ExitStack, contextmanager
-from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
-from functools import wraps, partial, lru_cache
+from typing import Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
+from functools import wraps, partial, cached_property
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from types import MethodType  # pylint: disable=no-name-in-module
 
 from cassandra import ConsistencyLevel, InvalidRequest, Unavailable
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -45,6 +43,7 @@ from cassandra.cluster import NoHostAvailable, OperationTimedOut  # pylint: disa
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
+from sdcm.nemesis_registry import NemesisRegistry
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm import wait
@@ -165,7 +164,6 @@ from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
-from sdcm.utils.ast_utils import BooleanEvaluator
 
 
 LOGGER = logging.getLogger(__name__)
@@ -214,7 +212,6 @@ def target_all_nodes(func: Callable) -> Callable:
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
-    DISRUPT_NAME_PREF: str = "disrupt_"
 
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
@@ -236,22 +233,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     zero_node_changes: bool = False
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):  # pylint: disable=unused-argument
-        for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
-            if not name.startswith(self.DISRUPT_NAME_PREF):
-                continue
-            is_exclusive = name in EXCLUSIVE_NEMESIS_NAMES
-            # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
-            setattr(self, name,
-                    MethodType(disrupt_method_wrapper(member, is_exclusive=is_exclusive), self))
-
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
+        self.nemesis_registry = NemesisRegistry(base_class=Nemesis,
+                                                excluded_list=COMPLEX_NEMESIS)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
         self.target_node: BaseNode = None
         self.disruptions_list = []
-        self.disruptions_cycle: Iterable[Callable] | None = None
         self.termination_event = termination_event
         self.operation_log = []
         self.current_disruption = None
@@ -273,7 +263,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get('nemesis_filter_seeds')
         self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
-        self._random_sequence = None
         self._add_drop_column_max_per_drop = 5
         self._add_drop_column_max_per_add = 5
         self._add_drop_column_max_column_name_size = 10
@@ -513,163 +502,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for operation in self.operation_log:
             self.log.info(operation)
 
-    # pylint: disable=too-many-arguments,unused-argument
-    def get_list_of_methods_compatible_with_backend(
-            self,
-            disruptive: Optional[bool] = None,
-            supports_high_disk_utilization: Optional[bool] = None,
-            run_with_gemini: Optional[bool] = None,
-            networking: Optional[bool] = None,
-            limited: Optional[bool] = None,
-            topology_changes: Optional[bool] = None,
-            schema_changes: Optional[bool] = None,
-            config_changes: Optional[bool] = None,
-            free_tier_set: Optional[bool] = None,
-            manager_operation: Optional[bool] = None,
-            zero_node_changes: Optional[bool] = None,
-    ) -> List[str]:
-        return self.get_list_of_methods_by_flags(
-            disruptive=disruptive,
-            supports_high_disk_utilization=supports_high_disk_utilization,
-            run_with_gemini=run_with_gemini,
-            networking=networking,
-            kubernetes=self._is_it_on_kubernetes() or None,
-            limited=limited,
-            topology_changes=topology_changes,
-            schema_changes=schema_changes,
-            config_changes=config_changes,
-            free_tier_set=free_tier_set,
-            manager_operation=manager_operation,
-            zero_node_changes=zero_node_changes
-        )
-
     def _is_it_on_kubernetes(self) -> bool:
         return isinstance(getattr(self.tester, "db_cluster", None), PodCluster)
-
-    # pylint: disable=too-many-arguments,unused-argument
-    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals  # noqa: PLR0913
-            self,
-            disruptive: Optional[bool] = None,
-            supports_high_disk_utilization: Optional[bool] = None,
-            run_with_gemini: Optional[bool] = None,
-            networking: Optional[bool] = None,
-            kubernetes: Optional[bool] = None,
-            limited: Optional[bool] = None,
-            topology_changes: Optional[bool] = None,
-            schema_changes: Optional[bool] = None,
-            config_changes: Optional[bool] = None,
-            free_tier_set: Optional[bool] = None,
-            sla: Optional[bool] = None,
-            manager_operation: Optional[bool] = None,
-            zero_node_changes: Optional[bool] = None,
-    ) -> List[str]:
-        args = dict(
-            disruptive=disruptive,
-            supports_high_disk_utilization=supports_high_disk_utilization,
-            run_with_gemini=run_with_gemini,
-            networking=networking,
-            kubernetes=kubernetes,
-            limited=limited,
-            topology_changes=topology_changes,
-            schema_changes=schema_changes,
-            config_changes=config_changes,
-            free_tier_set=free_tier_set,
-            sla=sla,
-            manager_operation=manager_operation,
-            zero_node_changes=zero_node_changes
-        )
-        logical_phrase = " and ".join([key for key, val in args.items() if val])
-        subclasses_list = self._get_subclasses(logical_phrase=logical_phrase)
-
-        disrupt_methods_list = []
-        for subclass in subclasses_list:
-            if method_name := self.get_disrupt_method_from_class(subclass):
-                disrupt_methods_list.append(method_name)
-        self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
-        return disrupt_methods_list
-
-    def get_list_of_subclasses_by_property_name(self, filter_logical_phrase: str | None):
-        subclasses_list = self._get_subclasses(logical_phrase=filter_logical_phrase)
-        return subclasses_list
-
-    @staticmethod
-    @lru_cache
-    def get_disrupt_method_from_class(nemesis_cls):
-        method_name = DISRUPT_METHOD_IDENTIFY_REGEX.search(inspect.getsource(nemesis_cls))
-        if method_name:
-            return method_name.group("method_name")
-
-    def get_list_of_disrupt_methods(self, subclasses_list, export_properties=False):
-        disrupt_methods_objects_list = []
-        disrupt_methods_names_list = []
-        nemesis_classes = []
-        all_methods_with_properties = []
-        for subclass in subclasses_list:
-            properties_list = []
-            per_method_properties = {}
-
-            for attribute in subclass.__dict__.keys():
-                if attribute[:2] != '__':
-                    value = getattr(subclass, attribute)
-                    if not callable(value):
-                        properties_list.append(f"{attribute} = {value}")
-
-            if method_name_str := self.get_disrupt_method_from_class(subclass):
-                disrupt_methods_names_list.append(method_name_str)
-                nemesis_classes.append(subclass.__name__)
-                if export_properties:
-                    per_method_properties[method_name_str] = properties_list
-                    all_methods_with_properties.append(per_method_properties)
-                    all_methods_with_properties = sorted(all_methods_with_properties, key=lambda d: list(d.keys()))
-        nemesis_classes.sort()
-        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_names_list))
-        for _ in disrupt_methods_names_list:
-            disrupt_methods_objects_list = [attr[1] for attr in inspect.getmembers(self) if
-                                            attr[0] in disrupt_methods_names_list and callable(attr[1])]
-        return disrupt_methods_objects_list, all_methods_with_properties, nemesis_classes
-
-    @classmethod
-    def _get_subclasses(cls, logical_phrase: str | None = None) -> List[Type['Nemesis']]:
-        tmp = Nemesis.__subclasses__()
-        subclasses = []
-        while tmp:
-            for nemesis in tmp.copy():
-                subclasses.append(nemesis)
-                tmp.remove(nemesis)
-                tmp.extend(nemesis.__subclasses__())
-        return cls._get_subclasses_from_list(subclasses, logical_phrase=logical_phrase)
-
-    @classmethod
-    def _get_subclasses_from_list(cls,
-                                  list_of_nemesis: List[Type['Nemesis']],
-                                  logical_phrase: str | None) -> List[Type['Nemesis']]:
-        """
-        It apply 'and' logic to filter,
-            if any value in the filter does not match what nemeses have,
-            nemeses will be filtered out.
-        """
-        nemesis_subclasses = []
-        nemesis_to_exclude = COMPLEX_NEMESIS
-
-        evaluator = BooleanEvaluator()
-        if logical_phrase:
-            expression_ast = ast.parse(logical_phrase, mode="eval")
-
-        for nemesis in list_of_nemesis:
-            if nemesis in nemesis_to_exclude:
-                continue
-            evaluator.context = dict(**nemesis.__dict__,
-                                     **{nemesis.__name__: True})
-            if (logical_phrase and 'disrupt_' in logical_phrase and
-                    (method_name := cls.get_disrupt_method_from_class(nemesis))):
-                # if the `logical_phrase` has a method name of any disrupt method
-                # we look it up for the specific class and add it to the context
-                # so we can match on those as well
-                # example: 'disrupt_create_index or disrupt_drop_index'
-                evaluator.context[method_name] = True
-            if (logical_phrase and evaluator.visit(expression_ast)) or not logical_phrase:
-                nemesis_subclasses.append(nemesis)
-        return nemesis_subclasses
 
     def __str__(self):
         try:
@@ -1972,84 +1806,43 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
 
-    def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
-        # pylint: disable=too-many-branches
+    # Nemesis running code
 
-        if disrupt_methods is None:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0].startswith('disrupt_') and
-                               callable(attr[1])]
-        else:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0] in disrupt_methods and
-                               callable(attr[1])]
-        if not disrupt_methods:
-            self.log.warning("No monkey to run")
-            return
-        if not predefined_sequence:
-            disrupt_method = random.choice(disrupt_methods)
-        else:
-            if not self._random_sequence:
-                # Generate random sequence, every method has same chance to be called.
-                # Here we use multiple original methods list, it will increase the chance
-                # to call same method continuously.
-                #
-                # Adjust the rate according to the test duration. Try to call more unique
-                # methods and don't wait to long time to meet the balance if the test
-                # duration is short.
-                test_duration = self.cluster.params.get('test_duration')
-                if test_duration < 600:  # less than 10 hours
-                    rate = 1
-                elif test_duration < 4320:  # less than 3 days
-                    rate = 2
-                else:
-                    rate = 3
-                multiple_disrupt_methods = disrupt_methods * rate
-                random.shuffle(multiple_disrupt_methods)
-                self._random_sequence = multiple_disrupt_methods
-            # consume the random sequence
-            disrupt_method = self._random_sequence.pop()
-
-        self.execute_disrupt_method(disrupt_method)
+    @cached_property
+    def all_disrupt_methods(self):
+        return self.nemesis_registry.get_disrupt_methods()
 
     def execute_disrupt_method(self, disrupt_method):
+        """Runs selected disrupt method"""
         disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
         self.metrics_srv.event_start(disrupt_method_name)
         try:
-            disrupt_method()
+            disrupt_method(self)
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
 
-    def build_list_of_disruptions_to_execute(self, nemesis_selector: str | None = None, nemesis_multiply_factor=1):
-        """
-        Builds the list of disruptions that should be excuted during a test.
+    def build_disruptions_by_name(self, disrupt_methods: List[str]):
+        """Builds list of available disruptions according to function names"""
+        filtered = [func for func in self.all_disrupt_methods if func.__name__ in disrupt_methods]
+        names = [func.__name__ for func in filtered]
+        assert names == disrupt_methods, f"Unable to find these disrupt methods: {set(disrupt_methods).difference(names)}"
+        return filtered
 
-        nemesis_selector: should be retrived from the test yaml by using the "nemesis_selector".
-        Here it kept for future usages and unit testing ability.
-        more about nemesis_selector behaviour in sct_config.py
-
-        nemesis_multiply_factor: should be retrived from the test yaml by using the "nemesis_multiply_factor".
-        Here it kept for future usages and unit testing ability.
-        more about nemesis_selector behaviour in sct_config.py
+    def build_disruptions_by_selector(self, nemesis_selector: str | None = None):
         """
-        nemesis_selector = nemesis_selector or self.nemesis_selector
-        nemesis_multiply_factor = self.cluster.params.get('nemesis_multiply_factor') or nemesis_multiply_factor
-        if nemesis_selector:
-            subclasses = self.get_list_of_subclasses_by_property_name(
-                filter_logical_phrase=nemesis_selector)
-            if subclasses:
-                disruptions, _, _ = self.get_list_of_disrupt_methods(subclasses_list=subclasses)
+        Filter available disruptions according to the logical phrase
+
+        nemesis_selector: Logical phrase selector to filter available disruption methods.
+        To be able to be filtered, method needs to have corresponding class.
+        Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
+        """
+        if self._is_it_on_kubernetes():
+            if nemesis_selector:
+                nemesis_selector = nemesis_selector + " and kubernetes"
             else:
-                disruptions = []
-        else:
-            disruptions = [attr[1] for attr in inspect.getmembers(self)
-                           if attr[0].startswith('disrupt_') and callable(attr[1])]
-
-        if nemesis_multiply_factor:
-            disruptions = disruptions * nemesis_multiply_factor
-
-        self.disruptions_list.extend(disruptions)
-        return self.disruptions_list
+                nemesis_selector = "kubernetes"
+        disruptions = self.nemesis_registry.get_disrupt_methods(nemesis_selector)
+        return disruptions
 
     @property
     def nemesis_selector(self) -> str:
@@ -2073,22 +1866,34 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @property
     def _disruption_list_names(self):
+        """Returns name of all collected nemesis"""
         return [nemesis.__name__ for nemesis in self.disruptions_list]
 
-    def shuffle_list_of_disruptions(self):
-        self.log.debug(f'nemesis_seed to be used is {self.nemesis_seed}')
+    def shuffle_list_of_disruptions(self, disruption_list: List, nemesis_multiply_factor: int | None = None):
+        """
+        Randomizes list of disruptions
 
+        nemesis_multiply_factor: How many times to multiply the original list before shuffle
+        Useful for increasing probability of the same nemesis twice in a row
+        Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
+        """
+        self.log.debug(f'nemesis_seed to be used is {self.nemesis_seed}')
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self._disruption_list_names}")
-        random.Random(self.nemesis_seed).shuffle(self.disruptions_list)
+        nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get('nemesis_multiply_factor') or 1
+        random.Random(self.nemesis_seed).shuffle(disruption_list * nemesis_multiply_factor)
         self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
 
-    def call_next_nemesis(self):
-        assert self.disruptions_list, "no nemesis were selected"
-        if not self.disruptions_cycle:
-            self.disruptions_cycle = itertools.cycle(self.disruptions_list)
-        self.log.debug(f'Selecting the next nemesis out of stack {self._disruption_list_names[10:]}')
-        self.execute_disrupt_method(disrupt_method=next(self.disruptions_cycle))
+    @cached_property
+    def infinite_cycle(self):
+        """Returns infinite cycle of all nemesis"""
+        return itertools.cycle(self.disruptions_list)
 
+    def call_next_nemesis(self):
+        """Calls next nemesis in the order"""
+        assert self.disruptions_list, "no nemesis were selected"
+        self.execute_disrupt_method(disrupt_method=next(self.infinite_cycle))
+
+    # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
@@ -5686,7 +5491,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 nemesis_info = argus_create_nemesis_info(nemesis=args[0], class_name=class_name,
                                                          method_name=method_name, start_time=start_time)
                 try:
-                    result = method(*args[1:], **kwargs)
+                    result = method(*args, **kwargs)
                 except (UnsupportedNemesis, MethodVersionNotFound) as exp:
                     skip_reason = str(exp)
                     log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
@@ -5782,6 +5587,25 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
         return result
 
     return wrapper
+
+
+DISRUPT_NAME_PREF = "disrupt_"
+for name, member in inspect.getmembers(Nemesis, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
+    if not name.startswith(DISRUPT_NAME_PREF):
+        continue
+    is_exclusive = name in EXCLUSIVE_NEMESIS_NAMES
+    # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
+    setattr(Nemesis, name, disrupt_method_wrapper(member, is_exclusive=is_exclusive))
+
+
+class SisyphusMonkey(Nemesis):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
+        self.shuffle_list_of_disruptions(self.disruptions_list)
+
+    def disrupt(self):
+        self.call_next_nemesis()
 
 
 class SslHotReloadingNemesis(Nemesis):
@@ -5889,13 +5713,14 @@ class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disrupt_methods_list = [
+        self.disruptions_list = self.build_disruptions_by_name([
             'disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation',
             'disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation',
-        ]
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
+        self.call_next_nemesis()
 
 
 class RestartThenRepairNodeMonkey(Nemesis):
@@ -6123,12 +5948,6 @@ class DeleteOverlappingRowRangesMonkey(Nemesis):
         self.disrupt_delete_overlapping_row_ranges()
 
 
-class ChaosMonkey(Nemesis):
-
-    def disrupt(self):
-        self.call_random_disrupt_method()
-
-
 class CategoricalMonkey(Nemesis):
     """Randomly picks disruptions to execute using the given categorical distribution.
 
@@ -6210,38 +6029,42 @@ class CategoricalMonkey(Nemesis):
         assert len(population) == len(weights) and population
 
         method = random.choices(population, weights=weights)[0]
-        bound_method = method.__get__(self, CategoricalMonkey)
-        self.execute_disrupt_method(bound_method)
-
-
-CLOUD_LIMITED_CHAOS_MONKEY = ['disrupt_nodetool_cleanup',
-                              'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
-                              'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
-                              'disrupt_modify_table', 'disrupt_nodetool_enospc',
-                              'disrupt_stop_wait_start_scylla_server',
-                              'disrupt_soft_reboot_node',
-                              'disrupt_truncate']
+        self.execute_disrupt_method(method)
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.build_disruptions_by_name([
+            'disrupt_nodetool_cleanup',
+            'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
+            'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
+            'disrupt_modify_table', 'disrupt_nodetool_enospc',
+            'disrupt_stop_wait_start_scylla_server',
+            'disrupt_soft_reboot_node',
+            'disrupt_truncate'
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
+
     def disrupt(self):
         # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
-        self.call_random_disrupt_method(disrupt_methods=CLOUD_LIMITED_CHAOS_MONKEY)
-
-
-class AllMonkey(Nemesis):
-
-    def disrupt(self):
-        self.call_random_disrupt_method(predefined_sequence=True)
+        self.call_next_nemesis()
 
 
 class MdcChaosMonkey(Nemesis):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disruptions_list = self.build_disruptions_by_name([
+            'disrupt_destroy_data_then_repair',
+            'disrupt_no_corrupt_repair',
+            'disrupt_nodetool_decommission'
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
+
     def disrupt(self):
-        self.call_random_disrupt_method(
-            disrupt_methods=['disrupt_destroy_data_then_repair', 'disrupt_no_corrupt_repair',
-                             'disrupt_nodetool_decommission'])
+        self.call_next_nemesis()
 
 
 class ModifyTableMonkey(Nemesis):
@@ -6389,13 +6212,14 @@ class DisruptKubernetesNodeThenReplaceScyllaNode(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disrupt_methods_list = [
+        self.disruptions_list = self.build_disruptions_by_name([
             'disrupt_drain_kubernetes_node_then_replace_scylla_node',
             'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
-        ]
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+        self.call_next_nemesis()
 
 
 class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
@@ -6420,13 +6244,14 @@ class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disrupt_methods_list = [
+        self.disruptions_list = self.build_disruptions_by_name([
             'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
             'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
-        ]
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+        self.call_next_nemesis()
 
 
 class K8sSetMonkey(Nemesis):
@@ -6435,16 +6260,16 @@ class K8sSetMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disrupt_methods_list = [
+        self.disruptions_list = self.build_disruptions_by_name([
             'disrupt_drain_kubernetes_node_then_replace_scylla_node',
             'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
             'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
             'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
-        ]
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_random_disrupt_method(
-            disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
+        self.call_next_nemesis()
 
 
 class OperatorNodeReplace(Nemesis):
@@ -6616,7 +6441,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disrupt_methods_list = [
+        self.disruptions_list = self.build_disruptions_by_name([
             'disrupt_nodetool_flush_and_reshard_on_kubernetes',
             'disrupt_rolling_restart_cluster',
             'disrupt_grow_shrink_cluster',
@@ -6631,10 +6456,11 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_mgmt_repair_cli',
             'disrupt_mgmt_backup_specific_keyspaces',
             'disrupt_mgmt_backup',
-        ]
+        ])
+        self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
+        self.call_next_nemesis()
 
 
 class NemesisSequence(Nemesis):
@@ -6657,17 +6483,6 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_remove_node_then_add_node()
-
-
-class SisyphusMonkey(Nemesis):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.build_list_of_disruptions_to_execute()
-        self.shuffle_list_of_disruptions()
-
-    def disrupt(self):
-        self.call_next_nemesis()
 
 
 class ToggleCDCMonkey(Nemesis):
@@ -6713,8 +6528,8 @@ class RepairStreamingErrMonkey(Nemesis):
         self.disrupt_repair_streaming_err()
 
 
-COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey, ScyllaCloudLimitedChaosMonkey,
-                   AllMonkey, MdcChaosMonkey, SisyphusMonkey,
+COMPLEX_NEMESIS = [NoOpMonkey, ScyllaCloudLimitedChaosMonkey,
+                   MdcChaosMonkey, SisyphusMonkey,
                    DisruptKubernetesNodeThenReplaceScyllaNode,
                    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
                    CategoricalMonkey]
