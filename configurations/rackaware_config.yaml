@@ -1,0 +1,6 @@
+rack_aware_loader: true
+
+# teardown validators
+teardown_validators:
+  rackaware:
+    enabled: true
