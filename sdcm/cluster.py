@@ -41,7 +41,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import packaging.version
 
@@ -3366,6 +3366,16 @@ class BaseCluster:
     def get_ip_to_node_map(self) -> dict[str, BaseNode]:
         """returns {ip: node} map for all nodes in cluster to get node by ip"""
         return {ip: node for node in self.nodes for ip in node.get_all_ip_addresses()}
+
+    def get_hostid_to_node_map(self) -> dict[str, BaseNode]:
+        """build map hostid -> node for all UN nodes in cluster"""
+        hostid_node_map = {}
+        for node in self.nodes:
+            with suppress(Exception):
+                if host_id := node.host_id:
+                    hostid_node_map[host_id] = node
+        self.log.debug("HostID -> Node map: %s", hostid_node_map)
+        return hostid_node_map
 
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ

@@ -1,6 +1,6 @@
+from contextlib import ExitStack
 import random
-import warnings
-from typing import Tuple, List
+from typing import DefaultDict, Tuple, List
 
 
 from longevity_test import LongevityTest
@@ -11,8 +11,7 @@ from sdcm.utils.decorators import optional_stage, skip_on_capacity_issues
 from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.sct_events.system import InfoEvent
-
-warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+from sdcm.utils.nemesis_utils.node_operations import pause_scylla_with_sigstop
 
 
 class TestClusterQuorum(LongevityTest):
@@ -26,19 +25,21 @@ class TestClusterQuorum(LongevityTest):
         assert zero_token_nodes_config == [0, 0, 0], f"Zero node configuration is incorrect: {zero_token_nodes_config}"
         assert data_nodes_config[0] == data_nodes_config[1], f"Data node config is not symmetric: {data_nodes_config}"
         assert data_nodes_config[-1] == 0, f"Arbiter DC should not contain data node: {data_nodes_config[-1]}"
+        return data_nodes_config
 
     def test_raft_quorum_after_add_arbitor_dc_with_zero_node(self):
         if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
             raise Exception("Raft consistent topology changes feature have to be enabled")
 
-        self.assert_multidc_config()
-        arbiter_dcx = len(self.params.get('n_db_nodes').split()) - 1  # choose latest dc with 0 nodes as arbiter dc
+        n_db_nodes = self.assert_multidc_config()
+        arbiter_dcx = n_db_nodes[-1]  # choose latest dc with 0 nodes as arbiter dc
 
         InfoEvent("Prepare keyspace1 with cassandra-stress command").publish()
         self.prewrite_db_with_data()
 
         region_dc_mapping = self.db_cluster.get_datacenter_name_per_region(db_nodes=self.db_cluster.data_nodes)
         data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
+        voters_per_region = self.get_voters_by_region(self.db_cluster.data_nodes)
 
         InfoEvent("Reconfigure system and user-defined keyspaces").publish()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
@@ -51,31 +52,35 @@ class TestClusterQuorum(LongevityTest):
         for node in self.db_cluster.data_nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        regions = list(region_dc_mapping.keys())
-        dead_region = regions[0]
-        alive_region = regions[1]
+        # sort by length. Latest region has the highest number of voters
+        sorted_region_by_voters = sorted(voters_per_region, key=lambda region: len(voters_per_region[region]))
+
+        dead_region = sorted_region_by_voters[-1]
+        alive_region = sorted_region_by_voters[0]
 
         InfoEvent("Run backgroud workload")
         read_thread, write_thread = self.start_background_stress_commands(
             node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
 
-        node = data_nodes_per_region[alive_region][0]
-        InfoEvent(f"Voters nodes: {node.raft.get_group0_members()}").publish()
-
-        InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
+        # need to stop nodes simultaneoslly
+        stack = ExitStack()
         for node in data_nodes_per_region[dead_region]:
-            node.stop_scylla()
+            stack.enter_context(pause_scylla_with_sigstop(node))
 
-        InfoEvent(f"Voters nodes: {node.raft.get_group0_members()}").publish()
+        # InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
+        # for node in data_nodes_per_region[dead_region]:
+        #     node.stop_scylla()
 
         InfoEvent("Validate raft quorum is lost").publish()
         verification_node = data_nodes_per_region[alive_region][0]
         assert not self.is_raft_quorum_exists(
             verification_node), "Quorum is preserved. Cluster DC are not symmetric, not all nodes were stopped. Check logs for further investigation"
+        InfoEvent(f"Voters nodes: {verification_node.raft.get_group0_members()}").publish()
 
-        InfoEvent(f"Start all nodes in dc {region_dc_mapping[dead_region]}").publish()
-        for node in data_nodes_per_region[dead_region]:
-            node.start_scylla()
+        stack.close()
+        # InfoEvent(f"Start all nodes in dc {region_dc_mapping[dead_region]}").publish()
+        # for node in data_nodes_per_region[dead_region]:
+        #     node.start_scylla()
         self.db_cluster.wait_all_nodes_un()
 
         # Add new dc with zero node only
@@ -86,9 +91,10 @@ class TestClusterQuorum(LongevityTest):
 
         InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
         hostid_dead_node_mapping = {}
+        stack = ExitStack()
         for node in data_nodes_per_region[dead_region]:
             hostid_dead_node_mapping[node.host_id] = node
-            node.stop_scylla()
+            stack.enter_context(pause_scylla_with_sigstop(node))
 
         InfoEvent("Validate raft quorum is preserved").publish()
         assert self.is_raft_quorum_exists(verification_node=arbitor_dc_node), "No raft quorum, Check the logs"
@@ -276,3 +282,13 @@ class TestClusterQuorum(LongevityTest):
             stress_cmd=stress_cmds[1] + node_param, stats_aggregate_cmds=False, round_robin=False)
         self.log.info("Stress during adding DC started")
         return read_thread, write_thread
+
+    def get_voters_by_region(self, data_nodes: list[BaseNode]) -> dict[str, list[BaseNode]]:
+        voters_per_region = DefaultDict()
+        group0_members = data_nodes[0].raft.get_group0_members()
+        hostid_node_map = self.db_cluster.get_hostid_to_node_map()
+        for member in filter(lambda m: m["voter"], group0_members):
+            if node := hostid_node_map.get(member['host_id']):
+                voters_per_region.setdefault(node.region, []).append(node)
+        self.log.debug("Voters per region: %s", voters_per_region)
+        return voters_per_region
