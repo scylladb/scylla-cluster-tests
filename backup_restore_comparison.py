@@ -6,7 +6,6 @@ import uuid
 from enum import Enum
 
 from argus.client.generic_result import Status
-from mgmt_cli_test import ManagerTestFunctionsMixIn
 from sdcm import mgmt
 from sdcm.argus_results import ManagerBackupReadResult, ManagerBackupBenchmarkResult, submit_results_to_argus
 from sdcm.cluster import BaseNode
