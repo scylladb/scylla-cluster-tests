@@ -54,6 +54,7 @@ from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.exceptions import FilesNotCorrupted
+from sdcm.cluster import BaseNode
 
 @dataclass
 class ManagerTestMetrics:
