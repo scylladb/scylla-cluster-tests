@@ -1183,7 +1183,7 @@ class AzureSctRunner(SctRunner):
             }
         )
         LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
-        resource_mgmt_client.tags.update_at_scope(scope=instance.id, parameters=params)
+        resource_mgmt_client.tags.begin_update_at_scope(scope=instance.id, parameters=params)
         LOGGER.info("SCT runner tags set to: %s", tags_to_create)
 
 
