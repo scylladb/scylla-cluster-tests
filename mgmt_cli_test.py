@@ -55,6 +55,8 @@ from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.exceptions import FilesNotCorrupted
 
+from backup_restore_comparison import ManagerBackupRestoreConcurrentTests
+
 
 @dataclass
 class ManagerTestMetrics:
