@@ -13,7 +13,6 @@
 import datetime
 import pprint
 import re
-import typing
 from functools import cached_property
 import json
 
@@ -25,7 +24,7 @@ from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
-from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
+from sdcm.utils.common import get_latest_scylla_release
 from sdcm.utils.decorators import retrying
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
@@ -67,8 +66,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         assert self.node.uuid, "Node UUID wasn't created"
 
         row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
-                                                             f"FROM {self.CHECK_VERSION_TABLE} "
-                                                             f"WHERE uuid = %s", args=(self.node.uuid,))
+                                                       f"FROM {self.CHECK_VERSION_TABLE} "
+                                                       f"WHERE uuid = %s", args=(self.node.uuid,))
         self.log.debug("Last row in %s for uuid '%s': %s", self.CHECK_VERSION_TABLE, self.node.uuid, row)
 
         public_ip_address = self.node.host_public_ip_address if backend == 'docker' else self.node.public_ip_address
@@ -224,30 +223,29 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         with self.subTest('verify snitch against describecluster output'):
             self.assertTrue(any(snitch_matches_describecluster),
                             msg=f"Expected snitch matches for describecluster to not be empty, but was. Snitch "
-                                f"matches: {snitch_matches_describecluster}"
+                            f"matches: {snitch_matches_describecluster}"
                             )
 
         with self.subTest('verify snitch against scylla.yaml configuration'):
             self.assertTrue(any(snitch_matches_scylla_yaml),
                             msg=f"Expected snitch matches for scylla yaml to not be empty, but was. Snitch "
-                                f"matches: {snitch_matches_scylla_yaml}"
+                            f"matches: {snitch_matches_scylla_yaml}"
                             )
 
     def verify_docker_latest_match_release(self) -> None:
-        for product in typing.get_args(ScyllaProduct):
-            latest_version = get_latest_scylla_release(product=product)
+        latest_version = get_latest_scylla_release(product='scylla')
 
-            url = 'https://hub.docker.com/v2/repositories/scylladb/{}/tags/{}'
-            docker_latest = requests.get(url.format(product, 'latest')).json()
-            docker_release = requests.get(url.format(product, latest_version)).json()
-            self.log.debug('latest info: %s', pprint.pformat(docker_latest))
-            self.log.debug('%s info: %s ', latest_version, pprint.pformat(docker_release))
+        url = 'https://hub.docker.com/v2/repositories/scylladb/{}/tags/{}'
+        docker_latest = requests.get(url.format('scylla', 'latest')).json()
+        docker_release = requests.get(url.format('scylla', latest_version)).json()
+        self.log.debug('latest info: %s', pprint.pformat(docker_latest))
+        self.log.debug('%s info: %s ', latest_version, pprint.pformat(docker_release))
 
-            latest_digests = set(image['digest'] for image in docker_latest['images'])
-            release_digests = set(image['digest'] for image in docker_release['images'])
+        latest_digests = set(image['digest'] for image in docker_latest['images'])
+        release_digests = set(image['digest'] for image in docker_release['images'])
 
-            assert latest_digests == release_digests, \
-                f"latest != {latest_version}, images digest differs [{latest_digests}] != [{release_digests}]"
+        assert latest_digests == release_digests, \
+            f"latest != {latest_version}, images digest differs [{latest_digests}] != [{release_digests}]"
 
     def verify_nvme_write_cache(self) -> None:
         if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
