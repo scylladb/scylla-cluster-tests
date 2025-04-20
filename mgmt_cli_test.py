@@ -1513,6 +1513,7 @@ class ManagerSanityTests(
     ManagerHealthCheckTests,
     ManagerSuspendTests,
     ManagerEncryptionTests,
+    ManagerBackupRestoreConcurrentTests,
 ):
 
     def test_manager_sanity(self, prepared_ks: bool = False, ks_names: list = None):
