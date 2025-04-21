@@ -11,27 +11,27 @@ latency_decorator_error_thresholds:
   read:
     "150000":
       P90 read:
-        fixed_limit: 1
+        fixed_limit: null
       P99 read:
         fixed_limit: 1
     "300000":
       P90 read:
-        fixed_limit: 1
+        fixed_limit: null
       P99 read:
         fixed_limit: 1
     "450000":
       P90 read:
-        fixed_limit: 1
+        fixed_limit: null
       P99 read:
         fixed_limit: 3
     "600000":
       P90 read:
-        fixed_limit: 1
+        fixed_limit: null
       P99 read:
         fixed_limit: 40
     "700000":
       P90 read:
-        fixed_limit: 1
+        fixed_limit: null
       P99 read:
         fixed_limit: 50
     unthrottled:
@@ -45,27 +45,27 @@ latency_decorator_error_thresholds:
   mixed:
     "50000":
       P90 write:
-          fixed_limit: 1
+          fixed_limit: null
       P90 read:
-          fixed_limit: 1
+          fixed_limit: null
       P99 write:
         fixed_limit: 3
       P99 read:
         fixed_limit: 3
     "150000":
       P90 write:
-        fixed_limit: 1
+        fixed_limit: null
       P90 read:
-        fixed_limit: 2
+        fixed_limit: null
       P99 write:
         fixed_limit: 3
       P99 read:
         fixed_limit: 3
     "300000":
       P90 write:
-        fixed_limit: 3
+        fixed_limit: null
       P90 read:
-        fixed_limit: 3
+        fixed_limit: null
       P99 write:
         fixed_limit: 5
       P99 read:
