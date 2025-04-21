@@ -34,8 +34,7 @@ from invoke import exceptions
 
 from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus,
-                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult)
+from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
@@ -1906,3 +1905,4 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
 
         backup_thread.join()
         read_stress_thread.join()
+
