@@ -58,25 +58,25 @@ class TestClusterQuorum(LongevityTest):
 
         dead_region = sorted_region_by_voters[-1]
         alive_region = sorted_region_by_voters[0]
-
+        verification_node = data_nodes_per_region[alive_region][0]
         InfoEvent("Run backgroud workload")
         read_thread, write_thread = self.start_background_stress_commands(
             node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
 
         # need to stop nodes simultaneoslly
-        nodes_status = self.display_current_voters_states(self.db_cluster.nodes)
+        nodes_status = self.display_current_voters_states(self.db_cluster.nodes, verification_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
         stack = ExitStack()
         for node in data_nodes_per_region[dead_region]:
             stack.enter_context(pause_scylla_with_sigstop(node))
 
         InfoEvent("Validate raft quorum is lost").publish()
-        verification_node = data_nodes_per_region[alive_region][0]
+
         for node in data_nodes_per_region[dead_region]:
             wait_for(is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
                      down_node=node, verification_node=verification_node, text=f"Wait other nodes see {node.name} as DOWN...")
 
-        nodes_status = self.display_current_voters_states(self.db_cluster.nodes)
+        nodes_status = self.display_current_voters_states(self.db_cluster.nodes, verification_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
         assert not self.is_raft_quorum_exists(
@@ -95,7 +95,7 @@ class TestClusterQuorum(LongevityTest):
         assert arbitor_dc_node.region == self.params.region_names[
             arbiter_dcx], f"Zero toke node {arbitor_dc_node.name} was added to region {arbitor_dc_node.dc_idx}:{arbitor_dc_node.region} but expected to {self.params.region_names[arbiter_dcx]}"
 
-        nodes_status = self.display_current_voters_states(self.db_cluster.nodes)
+        nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
         InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
@@ -117,7 +117,7 @@ class TestClusterQuorum(LongevityTest):
             wait_for(is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
                      down_node=node, verification_node=verification_node, text=f"Wait other nodes see {node.name} as DOWN...")
 
-        nodes_status = self.display_current_voters_states(self.db_cluster.nodes)
+        nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
         InfoEvent("Validate raft quorum is preserved").publish()
@@ -143,7 +143,7 @@ class TestClusterQuorum(LongevityTest):
         self.verify_stress_thread(thread_pool=read_thread)
         self.verify_stress_thread(thread_pool=write_thread)
 
-        nodes_status = self.display_current_voters_states(self.db_cluster.nodes)
+        nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
         self.log.info("Test completed.")
@@ -320,9 +320,9 @@ class TestClusterQuorum(LongevityTest):
         self.log.debug("Voters per region: %s", voters_per_region)
         return voters_per_region
 
-    def display_current_voters_states(self, nodes: list[BaseNode]):
+    def display_current_voters_states(self, nodes: list[BaseNode], verification_node: BaseNode):
         voters_per_region = DefaultDict()
-        group0_members = nodes[0].raft.get_group0_members()
+        group0_members = verification_node.raft.get_group0_members()
         hostid_node_map = self.db_cluster.get_hostid_to_node_map()
         for member in group0_members:
             if node := hostid_node_map.get(member['host_id']):
