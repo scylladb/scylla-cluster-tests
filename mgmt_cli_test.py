@@ -28,6 +28,7 @@ from dataclasses import dataclass
 
 import boto3
 import yaml
+import uuid
 from docker.errors import InvalidArgument
 
 from invoke import exceptions
@@ -56,8 +57,6 @@ from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.exceptions import FilesNotCorrupted
 from sdcm.cluster import BaseNode
 
-from uuid import uuid4
-from uuid import UUID
 
 @dataclass
 class ManagerTestMetrics:
