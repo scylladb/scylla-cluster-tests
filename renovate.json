@@ -3,9 +3,15 @@
   "extends": [
     "config:recommended"
   ],
-  "schedule": ["every weekend"],
-  "assignees": ["scylladb/qa-maintainers"],
-  "reviewers": ["scylladb/qa-maintainers"],
+  "schedule": [
+    "every weekend"
+  ],
+  "assignees": [
+    "scylladb/qa-maintainers"
+  ],
+  "reviewers": [
+    "scylladb/qa-maintainers"
+  ],
   "labels": [
     "renovate",
     "dependencies",
@@ -19,8 +25,12 @@
   "packageRules": [
     {
       "groupName": "All pip dependencies",
-      "matchManagers": ["pip-compile"],
-      "packageNames": ["!scylla-driver"],
+      "matchManagers": [
+        "pip-compile"
+      ],
+      "matchPackageNames": [
+        "!scylla-driver"
+      ],
       "enabled": true
     },
     {
@@ -36,14 +46,21 @@
       "enabled": false
     },
     {
-      "packageNames": ["scylla-driver"],
+      "matchPackageNames": [
+        "scylla-driver"
+      ],
       "enabled": true
     },
     {
       "groupName": "All Helm values files",
-      "matchManagers": ["helm-values"],
+      "matchManagers": [
+        "helm-values"
+      ],
       "enabled": true,
-      "labels": ["renovate", "dependencies"]
+      "labels": [
+        "renovate",
+        "dependencies"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
@@ -52,12 +69,19 @@
   "osvVulnerabilityAlerts": true,
   "github-actions": {
     "enabled": true,
-    "labels": ["renovate", "dependencies"]
+    "labels": [
+      "renovate",
+      "dependencies"
+    ]
   },
   "helm-values": {
-    "fileMatch": ["(^|/)values_.*\\.ya?ml$"]
+    "fileMatch": [
+      "(^|/)values_.*\\.ya?ml$"
+    ]
   },
   "pip-compile": {
-    "fileMatch": ["(^|/)requirements\\.txt$"]
+    "fileMatch": [
+      "(^|/)requirements\\.txt$"
+    ]
   }
 }
