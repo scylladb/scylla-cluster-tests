@@ -313,7 +313,7 @@ class TestClusterQuorum(LongevityTest):
     def get_voters_by_region(self, data_nodes: list[BaseNode]) -> dict[str, list[BaseNode]]:
         voters_per_region = DefaultDict()
         group0_members = data_nodes[0].raft.get_group0_members()
-        hostid_node_map = self.db_cluster.get_hostid_to_node_map()
+        hostid_node_map = {node.host_id: node for node in self.db_cluster.get_nodes_up_and_normal(data_nodes[0])}
         for member in filter(lambda m: m["voter"], group0_members):
             if node := hostid_node_map.get(member['host_id']):
                 voters_per_region.setdefault(node.region, []).append(node)
@@ -323,7 +323,7 @@ class TestClusterQuorum(LongevityTest):
     def display_current_voters_states(self, nodes: list[BaseNode], verification_node: BaseNode):
         voters_per_region = DefaultDict()
         group0_members = verification_node.raft.get_group0_members()
-        hostid_node_map = self.db_cluster.get_hostid_to_node_map()
+        hostid_node_map = {node.host_id: node for node in self.db_cluster.get_nodes_up_and_normal(verification_node)}
         for member in group0_members:
             if node := hostid_node_map.get(member['host_id']):
                 voters_per_region.setdefault(node.region, []).append(
