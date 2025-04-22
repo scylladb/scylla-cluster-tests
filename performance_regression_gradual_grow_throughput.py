@@ -158,7 +158,10 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             params['compaction_strategy'] = compaction_strategy
 
         for stress_cmd in population_commands:
-            params.update({'stress_cmd': stress_cmd})
+            params.update({
+                'stress_cmd': stress_cmd,
+                'duration': self.params.get('prepare_stress_duration'),
+            })
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
             self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))

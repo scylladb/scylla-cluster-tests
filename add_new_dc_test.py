@@ -77,7 +77,12 @@ class TestAddNewDc(LongevityTest):
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
-        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        pre_thread = self.run_stress_thread(
+            stress_cmd=stress_cmd,
+            duration=self.params.get('prepare_stress_duration'),
+            stats_aggregate_cmds=False,
+            round_robin=False,
+        )
         self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 
