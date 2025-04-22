@@ -40,11 +40,6 @@ class PerformanceTestWorkload(Enum):
     MIXED = "mixed"
 
 
-class PerformanceTestType(Enum):
-    THROUGHPUT = "throughput"
-    LATENCY = "latency"
-
-
 class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
     """
@@ -296,7 +291,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(
-            PerformanceTestWorkload.READ, PerformanceTestType.LATENCY,
+            PerformanceTestWorkload.READ,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details()
         self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
@@ -314,7 +309,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
         self.build_histogram(
-            PerformanceTestWorkload.WRITE, PerformanceTestType.LATENCY,
+            PerformanceTestWorkload.WRITE,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
@@ -332,7 +327,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
         self.build_histogram(
-            PerformanceTestWorkload.MIXED, PerformanceTestType.LATENCY,
+            PerformanceTestWorkload.MIXED,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
@@ -542,7 +537,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(
-            PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT,
+            PerformanceTestWorkload.WRITE,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')
@@ -576,7 +571,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(
-            PerformanceTestWorkload.READ, PerformanceTestType.THROUGHPUT,
+            PerformanceTestWorkload.READ,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read')
@@ -609,7 +604,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(
-            PerformanceTestWorkload.MIXED, PerformanceTestType.THROUGHPUT,
+            PerformanceTestWorkload.MIXED,
             hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_mixed')
@@ -801,8 +796,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.check_regression()
         self.kill_stress_thread()
 
-    def build_histogram(self, workload: PerformanceTestWorkload, test_type: PerformanceTestType,
-                        hdr_tags: list):
+    def build_histogram(self, workload: PerformanceTestWorkload, hdr_tags: list):
         if not self.params["use_hdrhistogram"]:
             return
 
