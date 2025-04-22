@@ -151,5 +151,12 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
                                 event_class=DatabaseLogEvent.ABORTING_ON_SHARD,
                                 regex=r'.*Parent connection [\d]+ is aborting on shard').publish()
 
+    # As per discussion in https://github.com/scylladb/scylladb/issues/9862, the fix in
+    # https://github.com/scylladb/scylladb/pull/17910 will not be backported in 2024.2
+    # so this error will be reduced to a warning
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                regex=r'.*auth_service - Unexpected exception while revoking all permissions on dropped table: service::group0_concurrent_modification.*').publish()
+
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
