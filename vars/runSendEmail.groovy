@@ -20,12 +20,17 @@ def call(Map params, RunWrapper currentBuild){
     env
     echo "Start send email ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
-    if [[ -n "\${RUNNER_IP}" ]] ; then
-        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} send-email ${test_status} ${start_time} \
-        --runner-ip \${RUNNER_IP} --email-recipients "${email_recipients}"
+
+    if [[ -z "${email_recipients}" ]]; then
+        echo "Email was not sent because no recipient addresses were provided"
     else
-        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+        if [[ -n "\${RUNNER_IP}" ]] ; then
+            ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} send-email ${test_status} ${start_time} \
+            --runner-ip \${RUNNER_IP} --email-recipients "${email_recipients}"
+        else
+            ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+        fi
+        echo "Email sent."
     fi
-    echo "Email sent."
     """
 }
