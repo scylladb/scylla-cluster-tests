@@ -83,7 +83,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                     if consistency_level:
                         stress_cmd = self._update_cl_in_stress_cmd(  # noqa: PLW2901
                             str_stress_cmd=stress_cmd, consistency_level=consistency_level)
-                    params.update({'stress_cmd': stress_cmd})
+                    params.update({
+                        'stress_cmd': stress_cmd,
+                        'duration': self.params.get('prepare_stress_duration'),
+                    })
 
                     # Run all stress commands
                     params.update(dict(stats_aggregate_cmds=False))

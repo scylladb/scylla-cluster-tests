@@ -243,13 +243,21 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                 for stress_cmd in prepare_write_cmd:
                     params.update({'stress_cmd': stress_cmd})
                     # Run all stress commands
-                    params.update(dict(stats_aggregate_cmds=False))
+                    params.update(dict(
+                        stats_aggregate_cmds=False,
+                        duration=self.params.get('prepare_stress_duration'),
+                    ))
                     self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
                     stress_queue.append(self.run_stress_thread(**params))
             # One stress cmd command
             else:
-                stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
-                                                           prefix='preload-', stats_aggregate_cmds=False))
+                stress_queue.append(self.run_stress_thread(
+                    stress_cmd=prepare_write_cmd,
+                    duration=self.params.get('prepare_stress_duration'),
+                    stress_num=1,
+                    prefix='preload-',
+                    stats_aggregate_cmds=False,
+                ))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)

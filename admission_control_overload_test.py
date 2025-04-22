@@ -27,8 +27,13 @@ class AdmissionControlOverloadTest(ClusterTester):
     def run_load(self, job_num, job_cmd, is_prepare=False):
         is_ever_triggered = False
         if is_prepare and not skip_optional_stage('prepare_write'):
-            prepare_stress_queue = self.run_stress_thread(stress_cmd=job_cmd, stress_num=job_num, prefix='preload-',
-                                                          stats_aggregate_cmds=False)
+            prepare_stress_queue = self.run_stress_thread(
+                stress_cmd=job_cmd,
+                duration=self.params.get('prepare_stress_duration'),
+                stress_num=job_num,
+                prefix='preload-',
+                stats_aggregate_cmds=False,
+            )
             self.get_stress_results(prepare_stress_queue)
         elif not is_prepare and not skip_optional_stage('main_load'):
             stress_queue = []
