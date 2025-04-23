@@ -142,3 +142,11 @@ hydra upload --test-id <uuid> path/to/file
 ```
 
 In case you don't want to report to Argus / Argus is missing the test run for this id you can use `--no-use-argus` to skip that part.
+
+
+## How to open a coredump from sct test run (python) ?
+
+first download the file to the SCT folder, and execute the following command:
+```bash
+./docker/env/hydra.sh 'bash -c "sudo pip install pystack; pystack core core.python3.1000.bd43fbcd0c4b44488ce7e97e25fe1a28.1804.1745768005000000"'
+```
