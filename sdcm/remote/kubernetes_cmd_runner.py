@@ -304,7 +304,7 @@ class KubernetesPodWatcher(KubernetesRunner):
     def _read_from_stream(self, num_bytes: int) -> str:
         pod_name = self.context.config.k8s_pod_name
         with self._ws_lock:
-            if self.process.closed:
+            if not self.process or self.process.closed:
                 self.pod_counter_to_live -= 1
                 if self.pod_counter_to_live < 1:
                     LOGGER.warning(
@@ -482,7 +482,9 @@ class KubernetesPodWatcher(KubernetesRunner):
 
     @property
     def process_is_finished(self) -> bool:
-        if not self.process.closed:
+        if self.process is None:
+            return True
+        elif not self.process.closed:
             return False
         return self._is_pod_failed_or_completed()
 
@@ -512,10 +514,10 @@ class KubernetesPodWatcher(KubernetesRunner):
                 LOGGER.warning(
                     "'stop()' method is called for the '%s' pod as part of the 'tearDown'. "
                     "'log reader' socket is '%s'.",
-                    pod_name, "closed" if self.process.closed else "open")
+                    pod_name, "closed" if not self.process or self.process.closed else "open")
                 self._stop_pod()
                 return
-            if self.process.closed:
+            if not self.process or self.process.closed:
                 LOGGER.warning(
                     "'stop()' method is called for the '%s' pod, which is running "
                     "having closed 'log reader' socket. Which is probably the cause for "
