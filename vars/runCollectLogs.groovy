@@ -34,4 +34,6 @@ def call(Map params, String region){
     fi
     echo "end collect logs"
     """
+
+    collectTestCoredumps()
 }

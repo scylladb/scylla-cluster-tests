@@ -275,6 +275,8 @@ function run_in_docker () {
         --env CHANGE_TARGET \
         --env TERM \
         --net=host \
+        --ulimit core=-1 \
+        -v /var/lib/systemd/coredump:/var/lib/systemd/coredump \
         --name="${SCT_TEST_ID}_$(date +%s)" \
         ${DOCKER_REPO}:${VERSION} \
         /bin/bash -c "${PREPARE_CMD}; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"

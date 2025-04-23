@@ -132,3 +132,10 @@ ssh -i ~/.ssh/scylla_test_id_ed25519 ubuntu@44.192.58.53
 # this would clear all of the dockers used by monitoring stack that are currently running
 docker rm -f -v $(docker ps --filter name=agraf\|aprom\|aalert -a -q)
 ```
+
+## How to open a coredump from sct test run (python) ?
+
+first download the file to the SCT folder, and execute the following command:
+```bash
+./docker/env/hydra.sh 'bash -c "sudo pip install pystack; pystack core core.python3.1000.bd43fbcd0c4b44488ce7e97e25fe1a28.1804.1745768005000000"'
+```
