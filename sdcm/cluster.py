@@ -1060,7 +1060,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         elif not isinstance(self.parent_cluster.params, SCTConfiguration):
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"The 'params' attribute expected to by 'SCTConfiguration`, "
-                                       f"but actually it is a `{type(self.parent_cluster.params)}`",
+                               f"but actually it is a `{type(self.parent_cluster.params)}`",
                                trace=sys._getframe().f_back,  # pylint: disable=protected-access
                                severity=Severity.ERROR).publish()
 
@@ -1691,7 +1691,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 )
             )
             ScyllaYamlUpdateEvent(node_name=self.name, message=f"ScyllaYaml has been changed on node: {self.name}. "
-                                                               f"Diff: {diff}").publish()
+                                  f"Diff: {diff}").publish()
 
     def remote_manager_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)
@@ -2154,13 +2154,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.install_package(package_name=package_name, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
-        if self.distro.is_rhel_like or self.distro.is_sles:
-            result = self.remoter.run(f'rpm -q {self.scylla_pkg()}', verbose=False, ignore_status=True)
-        elif self.distro.is_ubuntu or self.distro.is_debian:
-            result = self.remoter.run(f'dpkg-query --status {self.scylla_pkg()}', verbose=False, ignore_status=True)
-        else:
-            raise ValueError(f"Unsupported Linux distribution: {self.distro}")
-        if result.exit_status == 0:
+        if self.get_scylla_binary_version():
             return True
         elif raise_if_not_installed:
             raise Exception(f"There is no pre-installed ScyllaDB on {self}")
@@ -4793,7 +4787,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
             if not (gce_n_local_ssd_disk_db > 0 and gce_pd_ssd_disk_size_db > 0):
                 msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
-                      f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
+                    f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
                 raise ValueError(msg)
 
             # The script to configure a hybrid RAID is named "hybrid_raid.py" and located on the private repository.
