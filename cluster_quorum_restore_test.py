@@ -33,7 +33,7 @@ class TestClusterQuorum(LongevityTest):
             raise Exception("Raft consistent topology changes feature have to be enabled")
 
         n_db_nodes = self.assert_multidc_config()
-        arbiter_dcx = n_db_nodes[-1]  # choose latest dc with 0 nodes as arbiter dc
+        arbiter_dcx = len(n_db_nodes) - 1  # choose latest dc with 0 nodes as arbiter dc
 
         InfoEvent("Prepare keyspace1 with cassandra-stress command").publish()
         self.prewrite_db_with_data()
