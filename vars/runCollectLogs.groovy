@@ -36,4 +36,5 @@ def call(Map params, String region){
     """
 
     collectBuilderLogs()
+    collectTestCoredumps()
 }
