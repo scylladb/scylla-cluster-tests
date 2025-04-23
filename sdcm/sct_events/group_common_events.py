@@ -100,12 +100,6 @@ def ignore_topology_change_coordinator_errors():
             ))
             stack.enter_context(DbEventsFilter(
                 db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
-                     r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_erro"
-                     r"r \(connection is closed\)\)"
-            ))
-            stack.enter_context(DbEventsFilter(
-                db_event=DatabaseLogEvent.RUNTIME_ERROR,
                 line=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*connection is closed",
             ))
         yield
