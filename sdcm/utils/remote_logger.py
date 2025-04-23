@@ -22,7 +22,7 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
-from threading import Thread, Event as ThreadEvent
+from threading import Lock, Thread, Event as ThreadEvent
 from typing import TYPE_CHECKING
 from multiprocessing import Process, Event
 from textwrap import dedent
@@ -141,21 +141,29 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self.target_log_file = target_log_file
         self._child_thread = ThreadPoolExecutor(max_workers=1)
         self._thread = None
+        self._lock = Lock()
+        self._started = False
 
     def start(self) -> None:
-        LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
-        self._termination_event.clear()
-        self._thread = self._child_thread.submit(self._journal_thread)
-        LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
+        with self._lock:
+            if self._started:
+                return
+            LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
+            self._termination_event.clear()
+            self._thread = self._child_thread.submit(self._journal_thread)
+            self._started = True
+            LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
 
     def stop(self, timeout: float | None = None) -> None:
-        self._termination_event.set()
-        thread_cancelled = self._thread.cancel()
-        LOGGER.debug("Is thread cancelled?: %s, target_log_file: %s", thread_cancelled, self.target_log_file)
-        self._child_thread.shutdown(wait=False, cancel_futures=True)
-        LOGGER.debug("Is thread shutdown?: %s, target_log_file: %s", self._thread.running(), self.target_log_file)
-        if self._thread.running():
-            self._thread.cancel()  # pylint: disable=no-member
+        with self._lock:
+            self._termination_event.set()
+            thread_cancelled = self._thread.cancel()
+            LOGGER.debug("Is thread cancelled?: %s, target_log_file: %s", thread_cancelled, self.target_log_file)
+            self._child_thread.shutdown(wait=False, cancel_futures=True)
+            LOGGER.debug("Is thread shutdown?: %s, target_log_file: %s", self._thread.running(), self.target_log_file)
+            self._started = False
+            if self._thread.running():
+                self._thread.cancel()  # pylint: disable=no-member
 
     @cached_property
     def _logger_cmd_template(self) -> str:
