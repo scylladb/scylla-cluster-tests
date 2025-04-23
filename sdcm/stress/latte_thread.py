@@ -219,6 +219,12 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 remote_log_file=remote_hdr_file_name_full_path,
                 target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
             )
+            # NOTE: running dozens of commands in parallel on a single SCT runner
+            #       it is easy to get stress command to run earlier than the HDRH file
+            #       starts being read.
+            #       So, to avoid data loss by time mismatch we start reading earlier
+            #       to make sure we do not race with stress threads start time.
+            hdrh_logger_context.start()
         else:
             hdrh_logger_context = contextlib.nullcontext()
         stress_cmd += f" -- {hosts} "
