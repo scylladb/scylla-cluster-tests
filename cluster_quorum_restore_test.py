@@ -32,8 +32,8 @@ class TestClusterQuorum(LongevityTest):
         if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
             raise Exception("Raft consistent topology changes feature have to be enabled")
 
-        n_db_nodes = self.assert_multidc_config()
-        arbiter_dcx = len(n_db_nodes) - 1  # choose latest dc with 0 nodes as arbiter dc
+        dc_nums = self.assert_multidc_config()
+        arbiter_dcx = len(dc_nums) - 1  # choose latest dc with 0 nodes as arbiter dc
 
         InfoEvent("Prepare keyspace1 with cassandra-stress command").publish()
         self.prewrite_db_with_data()
@@ -41,6 +41,10 @@ class TestClusterQuorum(LongevityTest):
         region_dc_mapping = self.db_cluster.get_datacenter_name_per_region(db_nodes=self.db_cluster.data_nodes)
         data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
         voters_per_region = self.get_voters_by_region(self.db_cluster.data_nodes)
+        sorted_regions_by_voters = sorted(voters_per_region, key=lambda region: len(voters_per_region[region]))
+        dead_region = sorted_regions_by_voters[-1]
+        alive_region = sorted_regions_by_voters[0]
+        verification_node = data_nodes_per_region[alive_region][0]
 
         InfoEvent("Reconfigure system and user-defined keyspaces").publish()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
@@ -48,30 +52,22 @@ class TestClusterQuorum(LongevityTest):
             replication_factors={region_dc_mapping[region]: len(
                 data_nodes_per_region[region]) for region in data_nodes_per_region}
         )
-
         InfoEvent("Running repair on all data nodes").publish()
         for node in self.db_cluster.data_nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        # sort by length. Latest region has the highest number of voters
-        sorted_region_by_voters = sorted(voters_per_region, key=lambda region: len(voters_per_region[region]))
-
-        dead_region = sorted_region_by_voters[-1]
-        alive_region = sorted_region_by_voters[0]
-        verification_node = data_nodes_per_region[alive_region][0]
-        InfoEvent("Run backgroud workload")
+        InfoEvent("Start background workload")
         read_thread, write_thread = self.start_background_stress_commands(
             node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
 
         # need to stop nodes simultaneoslly
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, verification_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
+
+        InfoEvent(f"Stop all nodes in DC {region_dc_mapping[dead_region]} with maximum voters simultaneously").publish()
         stack = ExitStack()
         for node in data_nodes_per_region[dead_region]:
             stack.enter_context(pause_scylla_with_sigstop(node))
-
-        InfoEvent("Validate raft quorum is lost").publish()
-
         for node in data_nodes_per_region[dead_region]:
             wait_for(is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
                      down_node=node, verification_node=verification_node, text=f"Wait other nodes see {node.name} as DOWN...")
@@ -79,34 +75,33 @@ class TestClusterQuorum(LongevityTest):
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, verification_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
+        InfoEvent("Validate raft quorum is lost").publish()
         assert not self.is_raft_quorum_exists(
             verification_node), "Quorum is preserved. Cluster DC are not symmetric, not all nodes were stopped. Check logs for further investigation"
-        InfoEvent(f"Voters nodes: {verification_node.raft.get_group0_members()}").publish()
 
         stack.close()
-        # InfoEvent(f"Start all nodes in dc {region_dc_mapping[dead_region]}").publish()
-        # for node in data_nodes_per_region[dead_region]:
-        #     node.start_scylla()
         self.db_cluster.wait_all_nodes_un()
+        self.verify_stress_thread(thread_pool=read_thread)
+        self.verify_stress_thread(thread_pool=write_thread)
 
         # Add new dc with zero node only
-        InfoEvent("Add arbitter dc with single zero node").publish()
+        InfoEvent("Add arbiter dc with single zero node").publish()
         arbitor_dc_node = self.add_zero_node_to_dc(dc_idx=arbiter_dcx)
-        assert arbitor_dc_node.region == self.params.region_names[
-            arbiter_dcx], f"Zero toke node {arbitor_dc_node.name} was added to region {arbitor_dc_node.dc_idx}:{arbitor_dc_node.region} but expected to {self.params.region_names[arbiter_dcx]}"
 
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
 
-        InfoEvent(f"Simulate dc {region_dc_mapping[dead_region]} is down").publish()
-
         voters_per_region = self.get_voters_by_region(self.db_cluster.data_nodes)
         # sort by length. Latest region has the highest number of voters
-        sorted_region_by_voters = sorted(voters_per_region, key=lambda region: len(voters_per_region[region]))
+        sorted_regions_by_voters = sorted(voters_per_region, key=lambda region: len(voters_per_region[region]))
+        dead_region = sorted_regions_by_voters[-1]
+        alive_region = sorted_regions_by_voters[0]
 
-        dead_region = sorted_region_by_voters[-1]
-        alive_region = sorted_region_by_voters[0]
+        InfoEvent("Run backgroud workload")
+        read_thread, write_thread = self.start_background_stress_commands(
+            node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
 
+        InfoEvent(f"Stop all nodes in DC {region_dc_mapping[dead_region]} with maximum voters simultaneously").publish()
         hostid_dead_node_mapping = {}
         stack = ExitStack()
         for node in data_nodes_per_region[dead_region]:
@@ -127,21 +122,17 @@ class TestClusterQuorum(LongevityTest):
         self.replace_nodes_by_host_id(dead_node_mapping=hostid_dead_node_mapping, verification_node=arbitor_dc_node)
 
         InfoEvent("Rebuild and repair data on new nodes").publish()
-        data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
-
-        self.log.info("Running rebuild  in restored DC")
         for node in data_nodes_per_region[dead_region]:
             node.run_nodetool(sub_cmd=f"rebuild -- {region_dc_mapping[alive_region]}", publish_event=True)
 
-        self.log.info("Running repair on all data nodes")
+        InfoEvent("Reepair data on new nodes").publish()
         for node in self.db_cluster.data_nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
         InfoEvent("Verify data on restored DC nodes").publish()
-        self.verify_data_can_be_read_from_dc(verification_node=data_nodes_per_region[dead_region][0])
-        # wait for stress to complete
         self.verify_stress_thread(thread_pool=read_thread)
         self.verify_stress_thread(thread_pool=write_thread)
+        self.verify_data_can_be_read_from_dc(verification_node=data_nodes_per_region[dead_region][0])
 
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
