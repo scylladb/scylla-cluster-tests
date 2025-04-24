@@ -292,7 +292,8 @@ class GkeCleaner(GcloudContainerMixin):
         disks_per_zone = {}
         try:
             disks = json.loads(self.gcloud.run(
-                'compute disks list --format="json(name,zone)" --filter="name~^gke-.*-pvc-.* AND -users:*"'))
+                'compute disks list --format="json(name,zone)" --filter="(name~^gke-.*-pvc-.* OR name~^pvc-.*) '
+                'AND -users:*"'))
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("`gcloud compute disks list' failed to run: %s", exc)
         else:
