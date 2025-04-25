@@ -45,6 +45,7 @@ from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.aws_utils import AwsIAM
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.loader_utils import LoaderUtilsMixin
@@ -68,8 +69,8 @@ class ManagerTestMetrics:
 class SnapshotData:
     """Describes the backup snapshot:
 
-    - bucket: S3 bucket name
-    - tag: snapshot tag, for example 'sm_20240816185129UTC'
+    - locations: backup locations
+    - tag: snapshot tag, for example, 'sm_20240816185129UTC'
     - exp_timeout: expected timeout for the restore operation
     - dataset: dict with snapshot dataset details such as cl, replication, schema, etc.
     - keyspaces: list of keyspaces presented in backup
@@ -78,7 +79,7 @@ class SnapshotData:
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
     """
-    bucket: str
+    locations: list[str]
     tag: str
     exp_timeout: int
     dataset: dict[str, str | int | dict]
@@ -436,7 +437,7 @@ class SnapshotOperations(ClusterTester):
         try:
             snapshot_dict = all_snapshots_dict["sizes"][snapshot_name]
         except KeyError:
-            raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
+            raise ValueError(f"Snapshot data for '{snapshot_name}' was not found in the {snapshots_config} file")
 
         ks_tables_map = {}
         for ks, ts in snapshot_dict["dataset"]["schema"].items():
@@ -444,7 +445,7 @@ class SnapshotOperations(ClusterTester):
             ks_tables_map[ks] = t_names
 
         snapshot_data = SnapshotData(
-            bucket=all_snapshots_dict["bucket"],
+            locations=snapshot_dict["locations"],
             tag=snapshot_dict["tag"],
             exp_timeout=snapshot_dict["exp_timeout"],
             dataset=snapshot_dict["dataset"],
@@ -1677,6 +1678,14 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
 
 class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
+    def tearDown(self):
+        """Unlock EaR key used by Cloud cluster to reuse it in the future
+        Otherwise, if not unlocked, the key will be deleted together with the cluster
+        """
+        if self.params.get("use_cloud_manager"):
+            self.db_cluster.unlock_ear_key()
+        super().tearDown()
+
     def get_restore_extra_parameters(self) -> str:
         extra_params = self.params.get('mgmt_restore_extra_params')
         return extra_params if extra_params else None
@@ -1701,6 +1710,18 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             sut_timestamp=manager_version_timestamp,
             row_name=dataset_label,
         )
+
+    def _adjust_aws_restore_policy(self, snapshot: SnapshotData, cluster_id: str) -> None:
+        assert self.params.get("use_cloud_manager"), "Should be applied to Cloud-managed clusters only"
+
+        iam_client = AwsIAM()
+        policies = iam_client.get_policy_by_name_prefix(f"s3-scylla-cloud-backup-{cluster_id}")
+        for policy_arn in policies:
+            for location in snapshot.locations:
+                iam_client.add_resource_to_iam_policy(
+                    policy_arn=policy_arn,
+                    resource_to_add=f"arn:aws:s3:::{location.split(':')[-1]}",
+                )
 
     def test_backup_and_restore_only_data(self):
         """The test is extensively used for restore benchmarking purposes and consists of the following steps:
@@ -1750,17 +1771,28 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                            All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
             restore_outside_manager: set True to restore outside of Manager via nodetool refresh
         """
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        self.log.info("Initialize Scylla Manager")
         mgr_cluster = self.db_cluster.get_cluster_manager()
 
+        self.log.info("Define snapshot details and location")
         snapshot_data = self.get_snapshot_data(snapshot_name)
+        locations = snapshot_data.locations
+
+        if self.params.get("use_cloud_manager"):
+            self.log.info("Delete scheduled backup task to not interfere")
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            mgr_cluster.delete_task(auto_backup_task)
+
+            self.log.info("Adjust restore cluster backup policy")
+            if self.params.get("cluster_backend") == "aws":
+                self._adjust_aws_restore_policy(snapshot_data, cluster_id=self.db_cluster.cloud_cluster_id)
+
+            self.log.info("Grant admin permissions to scylla_manager user")
+            self.db_cluster.nodes[0].run_cqlsh(cmd="grant scylla_admin to scylla_manager")
 
         self.log.info("Restoring the schema")
-        location = [f"s3:{snapshot_data.bucket}"]
         self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag, timeout=600,
-                                      restore_schema=True, location_list=location)
-        for ks_name in snapshot_data.keyspaces:
-            self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
+                                      restore_schema=True, location_list=locations)
 
         if restore_outside_manager:
             self.log.info("Restoring the data outside the Manager")
@@ -1769,18 +1801,18 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                     mgr_cluster=mgr_cluster,
                     snapshot_tag=snapshot_data.tag,
                     ks_tables_list=snapshot_data.ks_tables_map,
-                    location=location[0],
+                    location=locations[0],
                     precreated_backup=True,
                 )
             restore_time = timer.duration
         else:
-            self.log.info("Restoring the data with Manager task")
+            self.log.info("Restoring the data with standard L&S approach")
             extra_params = self.get_restore_extra_parameters()
             task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
                                                  timeout=snapshot_data.exp_timeout, restore_data=True,
-                                                 location_list=location, extra_params=extra_params)
+                                                 location_list=locations, extra_params=extra_params)
             restore_time = task.duration
-            manager_version_timestamp = manager_tool.sctool.client_version_timestamp
+            manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
             self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
 
         self.manager_test_metrics.restore_time = restore_time
