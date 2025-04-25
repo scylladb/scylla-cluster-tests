@@ -5342,6 +5342,18 @@ class BaseScyllaCluster:
         for node in self.nodes:
             node.log_message(message, level)
 
+    def unlock_ear_key(self, ignore_status: bool = False) -> None:
+        """Unlock EaR key from Cloud cluster.
+
+        Key unlock after test execution makes it reusable with the same backup snapshot, for example,
+        while testing Scylla Manager 1-1-restore. If not unlocked, the key is deleted together with cluster.
+        """
+        raise NotImplementedError("The method should come from siren-tests sct_plugin module")
+
+    def get_ear_key(self):
+        """Get EaR key of Cloud cluster"""
+        raise NotImplementedError("The method should come from siren-tests sct_plugin module")
+
 
 class BaseLoaderSet():
 
