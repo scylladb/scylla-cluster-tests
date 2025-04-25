@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import functools
+import json
 import socket
 import time
 import logging
@@ -564,3 +565,54 @@ def aws_check_instance_type_supported(instance_type: str, region_name: str) -> b
             return False
         raise
     return True
+
+
+class AwsIAM:
+    def __init__(self):
+        self.account_id = boto3.client("sts").get_caller_identity()["Account"]
+        self._policy_format = f"arn:aws:iam::{self.account_id}:policy/" + "{}"
+        self._role_format = f"arn:aws:iam::{self.account_id}:role/" + "{}"
+
+    @cached_property
+    def iam_client(self):
+        return boto3.client('iam')
+
+    def get_full_arn(self, policy_name, policy_type):
+        if policy_type == "policy":
+            arn_format = self._policy_format
+        elif policy_type == "role":
+            arn_format = self._role_format
+        else:
+            raise TypeError(f"Unsupported policy type: {policy_type}")
+        return arn_format.format(policy_name)
+
+    def get_policy_by_name_prefix(self, prefix: str) -> list[str]:
+        policies = []
+        paginator = self.iam_client.get_paginator('list_policies')
+        for page in paginator.paginate():
+            for policy in page['Policies']:
+                policy_name = policy['PolicyName']
+                if policy_name.startswith(prefix):
+                    policies.append(self.get_full_arn(policy_name=policy_name, policy_type="policy"))
+        return policies
+
+    def add_resource_to_iam_policy(self, policy_arn: str, resource_to_add: str) -> None:
+        policy = self.iam_client.get_policy(PolicyArn=policy_arn)
+        policy_version = self.iam_client.get_policy_version(
+            PolicyArn=policy_arn,
+            VersionId=policy['Policy']['DefaultVersionId']
+        )
+        policy_document = policy_version['PolicyVersion']['Document']
+
+        for statement in policy_document['Statement']:
+            if statement['Effect'] == 'Allow':
+                if "/*" in statement['Resource'][0]:
+                    statement['Resource'].append(resource_to_add + "/*")
+                else:
+                    statement['Resource'].append(resource_to_add)
+
+        self.iam_client.create_policy_version(
+            PolicyArn=policy_arn,
+            PolicyDocument=json.dumps(policy_document),
+            SetAsDefault=True
+        )
