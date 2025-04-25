@@ -19,6 +19,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   500gb_1t_ics:
     tag: "sm_20240813112034UTC"
     locations:
@@ -38,6 +39,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   500gb_1t_ics_tablets:
     tag: "sm_20240813114617UTC"
     locations:
@@ -57,6 +59,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   500gb_2t_ics:
     tag: "sm_20240819203428UTC"
     locations:
@@ -78,6 +81,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   1tb_1t_ics:
     tag: "sm_20240814180009UTC"
     locations:
@@ -97,6 +101,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   1tb_4t_twcs:
     tag: "sm_20240821145503UTC"
     locations:
@@ -119,6 +124,7 @@ sizes:  # size of backed up dataset in GB
       col_n:
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   1tb_2t_twcs:
     tag: "sm_20240827191125UTC"
     locations:
@@ -139,6 +145,7 @@ sizes:  # size of backed up dataset in GB
       col_n:
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   1.5tb_2t_ics:
     tag: "sm_20240820180152UTC"
     locations:
@@ -160,6 +167,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
   2tb_1t_ics:
     tag: "sm_20240816185129UTC"
     locations:
@@ -179,6 +187,7 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params: None
 
   ### Cloud(Siren) cluster backups
 
@@ -201,3 +210,6 @@ sizes:  # size of backed up dataset in GB
       col_n: 1
       replication: "NetworkTopologyStrategy"
       rf: 3
+    one_one_restore_params:
+      account_credential_id: 1001
+      sm_cluster_id: "37299ddb-66af-4d5f-8b52-4d3b44872520"
