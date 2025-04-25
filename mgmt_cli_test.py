@@ -390,7 +390,21 @@ class BucketOperations(ClusterTester):
     def sync_gs_buckets(source: str, destination: str) -> None:
         LOCALRUNNER.run(f"gsutil -m rsync -r gs://{source} gs://{destination}")
 
-    def copy_backup_snapshot_bucket(self, source: str, destination: str) -> None:
+    def get_region_from_bucket_location(self, location: str) -> str:
+        cluster_backend = self.params.get("cluster_backend")
+
+        if cluster_backend == "aws":
+            # extract region name from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53 to us-east-1
+            return location.split(":")[0].split("_", 1)[1].replace("_", "-").lower()
+        elif cluster_backend == "gce":
+            # extract region name from GCE_US_EAST_1:gcs:scylla-cloud-backup-23-29-6q0i5q to us-east1
+            parts = location.split(":")[0].split("_")[1:]
+            assert len(parts) == 3, f"Can't extract region from location {location}"
+            return f"{parts[0].lower()}-{parts[1].lower()}{parts[2]}"
+        else:
+            raise ValueError(f"Unsupported cluster backend - {cluster_backend}, should be either aws or gce")
+
+    def copy_backup_snapshot_bucket(self, source: str, destination: str, region: str) -> None:
         """Copy bucket with Manager backup snapshots.
         The process consists of two stages - new bucket creation and data sync (original bucket -> newly created).
         The main use case is to make a copy of a bucket created in a test with Cloud (siren) cluster since siren
@@ -400,7 +414,6 @@ class BucketOperations(ClusterTester):
         Only AWS and GCE backends are supported.
         """
         cluster_backend = self.params.get("cluster_backend")
-        region = next(iter(self.params.region_names), '')
 
         if cluster_backend == "aws":
             self.create_s3_bucket(name=destination, region=region)
@@ -1415,7 +1428,21 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
 
 class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
-    def test_prepare_backup_snapshot(self):
+    def _unlock_cloud_key(self) -> str | None:
+        """The operation is required to make the particular Cloud cluster key reusable.
+        For that, the key should be unlocked from the original cluster.
+        """
+        self.log.info("Unlock the EaR key used by cluster to reuse it while restoring to a new cluster (1-1 restore)")
+        ear_key = self.db_cluster.get_ear_key()
+
+        if not ear_key:
+            self.log.warning("No EaR key found, skipping unlock")
+            return None
+
+        self.db_cluster.unlock_ear_key()
+        return ear_key.get("keyid")
+
+    def test_prepare_backup_snapshot(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
         """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
 
         Steps:
@@ -1427,23 +1454,26 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         """
         is_cloud_manager = self.params.get("use_cloud_manager")
 
+        self.log.info("Initialize Scylla Manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Define backup location")
+        if is_cloud_manager:
+            # Extract location from an automatically scheduled backup task
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            location_list = [auto_backup_task.get_task_info_dict()["location"]]
+
+            self.log.info("Delete scheduled backup task to not interfere")
+            mgr_cluster.delete_task(auto_backup_task)
+        else:
+            location_list = self.locations
+
         self.log.info("Populate the cluster with data")
         backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
         assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
 
         ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
-
-        self.log.info("Initialize Scylla Manager")
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-
-        self.log.info("Define backup location")
-        if is_cloud_manager:
-            # Extract location from automatically scheduled backup task
-            auto_backup_task = mgr_cluster.backup_task_list[0]
-            location_list = [auto_backup_task.get_task_info_dict()["location"]]
-        else:
-            location_list = self.locations
 
         self.log.info("Run backup and wait for it to finish")
         backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=["0"])
@@ -1453,21 +1483,35 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
-            # from ["'AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53'"] to scylla-cloud-backup-8072-7216-v5dn53
-            original_bucket_name = location_list[0].split(":")[-1].rstrip("'")
-            bucket_name = original_bucket_name + "-manager-tests"
-            self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name)
+            # can be several locations for multiDC cluster, for example,
+            # 'AWS_EU_SOUTH_1:s3:scylla-cloud-backup-170-176-15c7bm,AWS_EU_WEST_1:s3:scylla-cloud-backup-170-175-9dy2w4'
+            location_list = location_list[0].split(",")
+            for location in location_list:
+                # from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53' to scylla-cloud-backup-8072-7216-v5dn53
+                original_bucket_name = location.split(":")[-1].strip("'")
+                bucket_name = original_bucket_name + "-manager-tests"
+                region = self.get_region_from_bucket_location(location)
+                self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name, region=region)
+
+        if is_cloud_manager:
+            cluster_id = self.db_cluster.cloud_cluster_id
+            key_id = self._unlock_cloud_key()
+            manager_cluster_id = self.db_cluster.get_manager_cluster_id()
         else:
-            bucket_name = location_list[0]
+            cluster_id = mgr_cluster.id
+            key_id = "N/A"
+            manager_cluster_id = "N/A"
 
         self.log.info("Send snapshot details to Argus")
         snapshot_details = {
             "tag": backup_task.get_snapshot_tag(),
             "size": backup_size,
-            "bucket": bucket_name,
+            "locations": ",".join(location_list),
             "ks_name": ks_name,
             "scylla_version": self.params.get_version_based_on_conf()[0],
-            "cluster_id": mgr_cluster.id,
+            "cluster_id": cluster_id,
+            "ear_key_id": key_id,
+            "manager_cluster_id": manager_cluster_id,
         }
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
