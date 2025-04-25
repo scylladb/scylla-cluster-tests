@@ -1,8 +1,9 @@
-bucket: "manager-backup-tests-permanent-snapshots-us-east-1"
 cs_read_cmd_template: "cassandra-stress read cl={cl} n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads=500 -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}"
 sizes:  # size of backed up dataset in GB
   1gb_1t_ics:
     tag: "sm_20240812100424UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 1200  # 20 minutes (timeout for restore data operation)
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -20,6 +21,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   500gb_1t_ics:
     tag: "sm_20240813112034UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -37,6 +40,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   500gb_1t_ics_tablets:
     tag: "sm_20240813114617UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -54,6 +59,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   500gb_2t_ics:
     tag: "sm_20240819203428UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -73,6 +80,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   1tb_1t_ics:
     tag: "sm_20240814180009UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -90,6 +99,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   1tb_4t_twcs:
     tag: "sm_20240821145503UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -110,6 +121,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   1tb_2t_twcs:
     tag: "sm_20240827191125UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 9
@@ -128,6 +141,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   1.5tb_2t_ics:
     tag: "sm_20240820180152UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 43200  # 12 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -147,6 +162,8 @@ sizes:  # size of backed up dataset in GB
       rf: 3
   2tb_1t_ics:
     tag: "sm_20240816185129UTC"
+    locations:
+      - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 57600  # 16 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
@@ -158,6 +175,28 @@ sizes:  # size of backed up dataset in GB
       num_of_rows: 2147483648
       compaction: "IncrementalCompactionStrategy"
       cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
+
+  ### Cloud(Siren) cluster backups
+
+  50gb_1t_ics_cloud_single:
+    tag: "sm_20250404103340UTC"
+    locations:
+      - "AWS_US_EAST_1:s3:scylla-cloud-backup-74-89-1ph7p0-manager-tests"
+    exp_timeout: 3600  # 1 hour
+    scylla_version: "2024.2.5"
+    number_of_nodes: 3
+    prohibit_verification_read: false
+    dataset:
+      schema:
+        "50gb_ics_quorum_1024_1_2024_2_5":
+          - standard1: 50
+      num_of_rows: 52428800
+      compaction: "IncrementalCompactionStrategy"
+      cl: "QUORUM"
       col_size: 1024
       col_n: 1
       replication: "NetworkTopologyStrategy"
