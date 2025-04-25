@@ -76,6 +76,7 @@ class SnapshotData:
     - prohibit_verification_read: if True, the verification read will be prohibited. Most likely, such a backup was
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
+    - one_one_restore_params: dict with parameters for 1-1 restore ('account_credential_id' and 'sm_cluster_id')
     """
     locations: list[str]
     tag: str
@@ -86,6 +87,7 @@ class SnapshotData:
     cs_read_cmd_template: str
     prohibit_verification_read: bool
     node_ids: list[str]
+    one_one_restore_params: dict[str, str | int] | None
 
 
 class DatabaseOperations(ClusterTester):
@@ -452,6 +454,7 @@ class SnapshotOperations(ClusterTester):
             cs_read_cmd_template=all_snapshots_dict["cs_read_cmd_template"],
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
             node_ids=snapshot_dict.get("node_ids"),
+            one_one_restore_params=snapshot_dict.get("one_one_restore_params"),
         )
         return snapshot_data
 
@@ -1848,6 +1851,73 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                                "Please provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
 
         self.test_restore_from_precreated_backup(snapshot_name, restore_outside_manager=True)
+
+
+class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
+    """The class contains tests and test methods for one-to-one restore functionality.
+    In current shape, 1-1 restore is supposed to be used for Scylla Cloud clusters only.
+    So, the test is not applicable for on-prem clusters used for regular Manager SCT tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        if not self.params.get("use_cloud_manager"):
+            raise ValueError("The test is applicable only for Scylla Cloud clusters")
+
+    def tearDown(self):
+        """Unlock EaR key used by Cloud cluster to reuse it in the future
+        Otherwise, if not unlocked, the key will be deleted together with the cluster
+        """
+        self.db_cluster.unlock_ear_key(ignore_status=True)
+        super().tearDown()
+
+    def _define_cloud_provider_id(self) -> int:
+        cluster_backend = self.params.get("cluster_backend")
+        if cluster_backend == "aws":
+            return 1
+        elif cluster_backend == "gce":
+            return 2
+        else:
+            raise ValueError("Unsupported cloud provider")
+
+    def test_one_to_one_restore(self):
+        self.log.info("Get snapshot details")
+        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
+        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
+                               "Please, provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
+        snapshot_data = self.get_snapshot_data(snapshot_name)
+
+        self.log.info("Initialize Scylla Manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Delete scheduled backup task to not interfere")
+        auto_backup_task = mgr_cluster.backup_task_list[0]
+        mgr_cluster.delete_task(auto_backup_task)
+
+        self.log.info("Run 1-1 restore")
+        # Siren cli requires locations to be sent in a format different from the one used in the Manager
+        # Thus, all locations should be reformatted from "AWS_US_EAST_1:s3:bucket_name" to "us-east-1:s3:bucket_name"
+        locations = []
+        for location in snapshot_data.locations:
+            dc_prefix = "-".join(location.split(":")[0].split("_")[1:]).lower()
+            locations.append(dc_prefix + ":" + location.split(":", 1)[1])
+
+        with ExecutionTimer() as timer:
+            self.db_cluster.run_one_to_one_restore(
+                sm_cluster_id=snapshot_data.one_one_restore_params["sm_cluster_id"],
+                buckets=",".join(locations),
+                snapshot_tag=snapshot_data.tag,
+                account_credential_id=snapshot_data.one_one_restore_params["account_credential_id"],
+                provider_id=self._define_cloud_provider_id(),
+            )
+        self.log.info(f"1-1 restore took {timer.duration} seconds")
+
+        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
+            self.log.info("Running verification read stress")
+            cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
+            self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
+        else:
+            self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
 
 class ManagerReportType(Enum):
