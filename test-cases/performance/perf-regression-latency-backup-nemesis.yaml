@@ -1,0 +1,47 @@
+test_duration: 1200
+
+# Note: the running test MUST be supplied with a dataset file
+# that contains at least these two fields
+# prepare_write_cmd
+# stress_cmd_m
+
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c6i.8xlarge'
+n_db_nodes: 6
+n_loaders: 4
+n_monitor_nodes: 1
+region_name: us-east-1
+backup_bucket_location: 'manager-backup-tests-us-east-1'
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: s3.us-east-1.amazonaws.com
+      port: 443
+      https: true
+      aws_region: us-east-1
+aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
+user_prefix: 'manager-backup-benchmark'
+use_hdrhistogram: true
+
+ami_id_db_scylla_desc: 'VERSION_DESC'
+nemesis_interval: 1
+round_robin: true
+# Calculate stream_io_throughput_mb_per_sec for i4i.2xlarge:
+# It has Network bandwidth = 6.25 GiB/s
+# GiB/s to Mib/s
+# 6.25 GiB/s = 6250 Mib/s
+# Mib/s to MB/s (disk-wise)
+# Divide by 10 (not 8) → 6250 / 10 = 625 MB/s
+# Convert to "disk MB/s" using 1000/1024: 625 * 1000 / 1024 = ~610.35 MB/s
+# Take 75% of that: 0.75 * 610.35 = ~457.76 MB/s
+append_scylla_args: '--stream_io_throughput_mb_per_sec 458 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+
+store_perf_results: false
+use_prepared_loaders: false
+use_placement_group: true
+use_capacity_reservation: false
+email_subject_postfix: 'latency during operations'
+cluster_health_check: false
+hinted_handoff: 'enabled'
+workload_name: 'mixed'
