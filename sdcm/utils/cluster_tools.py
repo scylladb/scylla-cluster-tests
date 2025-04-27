@@ -10,7 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
+import logging
 from collections import defaultdict
+from functools import partial
+
+from sdcm.utils.common import ParallelObject
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def group_nodes_by_dc_idx(nodes: list['BaseNode']) -> dict[int, list['BaseNode']]:  # noqa: F821
@@ -19,3 +26,24 @@ def group_nodes_by_dc_idx(nodes: list['BaseNode']) -> dict[int, list['BaseNode']
     for node in nodes:
         nodes_by_dc_idx[node.dc_idx].append(node)
     return nodes_by_dc_idx
+
+
+def flush_nodes(cluster, keyspace: str):
+    LOGGER.debug("Run a flush on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {keyspace}", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+
+
+def major_compaction_nodes(cluster, keyspace: str, table: str):
+    LOGGER.debug("Run a major compaction on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="compact", args=f"{keyspace} {table}", ) for
+                node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=3000).call_objects()
+
+
+def clear_snapshot_nodes(cluster):
+    LOGGER.debug("Run a clear-snapshot command on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="clearsnapshot", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
