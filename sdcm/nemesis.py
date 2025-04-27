@@ -29,6 +29,7 @@ import traceback
 import json
 import itertools
 from contextlib import ExitStack
+from datetime import timedelta
 from typing import Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial, cached_property
 from collections import defaultdict, Counter, namedtuple
@@ -42,11 +43,12 @@ from cassandra.cluster import NoHostAvailable, OperationTimedOut
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
+from sdcm.mgmt.cli import BackupTask
 from sdcm.nemesis_registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
 from sdcm.utils.cql_utils import cql_unquote_if_needed, cql_quote_if_needed
-from sdcm import wait
+from sdcm import wait, mgmt
 from sdcm.audit import Audit, AuditConfiguration, AuditStore
 from sdcm.cluster import (
     BaseCluster,
@@ -68,7 +70,9 @@ from sdcm.cluster_k8s import (
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
-from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
+from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots, ObjectStorageUploadMode
+from sdcm.mgmt.operations import run_manager_backup
+from sdcm.mgmt.argus_report import report_manager_backup_results_to_argus
 from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.prometheus import nemesis_metrics_obj
@@ -2850,6 +2854,45 @@ class Nemesis(NemesisFlags):
         disrupt_func_name = random.choice([dm for dm in dir(self) if dm.startswith("modify_table")])
         disrupt_func = getattr(self, disrupt_func_name)
         disrupt_func()
+
+    def _run_manager_backup(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int) -> BackupTask:
+        task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
+        return task
+
+    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> BackupTask:
+        """
+        Run a backup using Scylla Manager and report the result to Argus.
+
+        :param object_storage_upload_mode: The upload mode for object storage (e.g., RCLONE or NATIVE).
+        :param label: A label for reporting.
+        :return: BackupTask object representing the backup operation.
+        """
+        timeout = int(timedelta(hours=14).total_seconds())
+        manager_tool = self.get_manager_tool()
+        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
+        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
+            self._run_manager_backup)
+        task = decorated(mgr_cluster, object_storage_upload_mode, timeout)
+        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
+        return task
+
+    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
+        """
+        Perform a Manager backup as a nemesis.
+        Deletes created snapshot at end.
+        Args:
+            object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
+            label: Label for reporting to Argus.
+        """
+
+        time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
+        label_with_time = f"{label}{time_postfix}"
+        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
+        self.log.info("Delete Manager backup snapshot")
+        task.delete_backup_snapshot()
+
+    def get_manager_tool(self):
+        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
 
     @target_data_nodes
     def disrupt_mgmt_backup_specific_keyspaces(self):
@@ -6590,11 +6633,29 @@ class RepairStreamingErrMonkey(Nemesis):
         self.disrupt_repair_streaming_err()
 
 
+class ManagerRcloneBackup(Nemesis):
+    manager_operation = True
+    disruptive = False
+    supports_high_disk_utilization = False
+
+    def disrupt(self):
+        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label='rclone_backup')
+
+
+class ManagerNativeBackup(Nemesis):
+    manager_operation = True
+    disruptive = False
+    supports_high_disk_utilization = False
+
+    def disrupt(self):
+        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label='native_backup')
+
+
 COMPLEX_NEMESIS = [NoOpMonkey, ScyllaCloudLimitedChaosMonkey,
                    MdcChaosMonkey, SisyphusMonkey,
                    DisruptKubernetesNodeThenReplaceScyllaNode,
                    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-                   CategoricalMonkey, NemesisSequence]
+                   CategoricalMonkey, NemesisSequence, ManagerNativeBackup, ManagerRcloneBackup]
 
 
 class CorruptThenScrubMonkey(Nemesis):
