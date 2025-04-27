@@ -15,7 +15,9 @@ latency_decorator_error_thresholds:
     replace_node:
       duration:
         fixed_limit: 3600
-
+    _run_manager_backup:
+      duration:
+        fixed_limit: 18000
   read:
     _mgmt_repair_cli:
       duration:
@@ -32,7 +34,9 @@ latency_decorator_error_thresholds:
     replace_node:
       duration:
         fixed_limit: 3000
-
+    _run_manager_backup:
+      duration:
+        fixed_limit: 18000
   mixed:
     _mgmt_repair_cli:
       duration:
@@ -49,3 +53,6 @@ latency_decorator_error_thresholds:
     replace_node:
       duration:
         fixed_limit: 3000
+    _run_manager_backup:
+      duration:
+        fixed_limit: 18000

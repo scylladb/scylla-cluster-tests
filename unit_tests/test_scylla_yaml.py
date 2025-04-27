@@ -402,6 +402,15 @@ class ScyllaYamlTest(unittest.TestCase):
                 'enable_tablets': None,
                 'tablets_mode_for_new_keyspaces': None,
                 'force_gossip_topology_changes': None,
+<<<<<<< HEAD
+||||||| parent of 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
+                'reader_concurrency_semaphore_cpu_concurrency': None,
+                'vector_store_uri': None
+=======
+                'reader_concurrency_semaphore_cpu_concurrency': None,
+                'vector_store_uri': None,
+                'object_storage_endpoints': None,
+>>>>>>> 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
             }
         )
 
