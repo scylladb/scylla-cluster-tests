@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 import logging
 import datetime
@@ -180,3 +181,19 @@ class AgentBackupParameters(BaseModel):
     low_level_retries: Optional[int] = 20
 
     model_config = ConfigDict(arbitrary_types_allowed=False)
+
+
+BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
+
+
+def get_backup_size(mgr_cluster, task_id):
+    """
+    Returns the generated backup size of a given Manager backup Task.
+    """
+    res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}",
+                                 parse_table_res=False)
+    match = BACKUP_SIZE_REGEX.search(res.stdout)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(f"Backup size not found in the output in {res.stdout}")
