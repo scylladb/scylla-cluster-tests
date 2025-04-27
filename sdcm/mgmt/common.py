@@ -1,3 +1,5 @@
+import re
+from datetime import datetime
 from enum import Enum
 import logging
 import datetime
@@ -10,9 +12,16 @@ from pydantic import BaseModel, ConfigDict
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
 
-
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
+# Regex to extract the backup size from the `sctool progress` command output
+# Example output line:
+# ╭─────────────┬──────────┬────────────┬────────────┬──────────────┬────────╮
+# │ Host        │ Progress │       Size │    Success │ Deduplicated │ Failed │
+# ├─────────────┼──────────┼────────────┼────────────┼──────────────┼────────┤
+# │ 10.12.4.125 │     100% │ 422.434GiB │ 422.434GiB │           0B │     0B │
+# │ 10.12.4.25  │     100% │ 422.413GiB │ 422.413GiB │           0B │     0B │
+BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
 
 
 def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
@@ -180,3 +189,22 @@ class AgentBackupParameters(BaseModel):
     low_level_retries: Optional[int] = 20
 
     model_config = ConfigDict(arbitrary_types_allowed=False)
+
+
+def get_backup_size(mgr_cluster, task_id):
+    """
+    Returns the generated backup size of a given Manager backup Task.
+    """
+    res = mgr_cluster.sctool.run(cmd=f"progress {task_id} -c {mgr_cluster.id}",
+                                 parse_table_res=False)
+    match = BACKUP_SIZE_REGEX.search(res.stdout)
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(f"Backup size not found in the output in {res.stdout}")
+
+
+class ObjectStorageUploadMode(str, Enum):
+    AUTO = "auto"
+    RCLONE = "rclone"
+    NATIVE = "native"
