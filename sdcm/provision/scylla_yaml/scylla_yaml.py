@@ -358,6 +358,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     force_gossip_topology_changes: bool = None  # False
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
+    object_storage_endpoints: list[dict] = None
 
     def model_dump(  # pylint: disable=arguments-differ
         self,
