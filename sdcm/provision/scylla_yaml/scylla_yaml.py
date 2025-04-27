@@ -361,6 +361,7 @@ class ScyllaYaml(BaseModel):
     force_gossip_topology_changes: bool = None  # False
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
+    object_storage_endpoints: list[dict] = None
 
     vector_store_uri: str = None
 
