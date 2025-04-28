@@ -225,12 +225,14 @@ function run_in_docker () {
          -v /var/run/docker.sock:/var/run/docker.sock
          -v /dev:/dev:rw
          --tmpfs "${HOME_DIR}/.docker:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER})"
+         --tmpfs "${HOME_DIR}/.local:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER}),size=256m"
          -e HOME="${HOME_DIR}"
        )
     elif [ -z "$is_podman" ]; then
         docker_common_args+=(
            -v /var/run:/run
            -v /dev:/dev:rw
+           --tmpfs "${HOME_DIR}/.local:exec,mode=1777"
            -u ${USER_ID}
            )
     else
@@ -254,7 +256,6 @@ function run_in_docker () {
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
         -v "${HOME_DIR}:${HOME_DIR}" \
-        --tmpfs "${HOME_DIR}/.local:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER}),size=256m" \
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
