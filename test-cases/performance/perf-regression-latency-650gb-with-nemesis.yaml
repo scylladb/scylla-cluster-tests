@@ -37,6 +37,7 @@ use_hdrhistogram: true
 use_placement_group: true
 use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
+cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.3'
 hinted_handoff: 'enabled'
