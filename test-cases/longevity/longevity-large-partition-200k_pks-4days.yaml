@@ -18,20 +18,20 @@ prepare_verify_cmd: ["scylla-bench -workload=sequential -mode=read -replication-
 
 stress_cmd: [
               # Write additional 750 partitions with 200k rows each (on top of what was written in prepare_write_cmd) - test total partitions is 2000
-             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s",
              # due to increasing of amount deleted rows/partitions (delete nemeses) we need to insert back the part (from 251 to 750 partitions) of the rows. Otherwise, the table may become empty after few deletions.
              # Partition range from 751 to 1250 won't be re-written, remains as tombstones
              # Also, the first 250 partitions (as defined in partition_range_with_data_validation) won't be deleted. So it is not needed to be re-written
-             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=500 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m"
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=500 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s"
             ]
 
 stress_read_cmd: [
                    # Read the first 250 paritions with validate-data flag (Partitions we don't delete during the test)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=250 -partition-offset=1 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=50 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -validate-data",
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=250 -partition-offset=1 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=50 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -validate-data -retry-number=30 -retry-interval=500ms,5s",
                   # Read partitions 251-1250 (1000 partitions)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=200 -connection-count=100 -iterations=0 -duration=6420m",
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=200 -connection-count=100 -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s",
                   # Read partitions 1251-2000 (750 partitions) that are being written during the test (different row size)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=150 -connection-count=100 -iterations=0 -duration=6420m"
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=150 -connection-count=100 -iterations=0 -duration=6420m -retry-number=30 -retry-interval=500ms,5s"
                  ]
 
 post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND v is not null PRIMARY KEY (v, pk, ck) with comment = 'TEST VIEW'"
