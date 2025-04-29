@@ -168,7 +168,7 @@ class GceRegion:
         backup_service_account = None
 
         try:
-            backup_service_account = self.iam.projects().serviceAccounts().create(  # pylint: disable=no-member
+            backup_service_account = self.iam.projects().serviceAccounts().create(
                 name='projects/' + self.project,
                 body={
                     'accountId': self.SCT_BACKUP_SERVICE_ACCOUNT,
@@ -180,7 +180,7 @@ class GceRegion:
         except googleapiclient.errors.HttpError as exc:
             if not exc.status_code == 409:
                 raise
-            service_accounts = self.iam.projects().serviceAccounts().list(  # pylint: disable=no-member
+            service_accounts = self.iam.projects().serviceAccounts().list(
                 name=f'projects/{self.project}', pageSize=100).execute()
             for service in service_accounts['accounts']:
                 if self.SCT_BACKUP_SERVICE_ACCOUNT in service['name']:

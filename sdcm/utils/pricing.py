@@ -101,7 +101,7 @@ class AWSPricing:
             return 0
 
 
-class GCEPricing:  # pylint: disable=too-few-public-methods
+class GCEPricing:
     # TODO: use https://github.com/googleapis/python-billing
     prices = {
         InstanceLifecycle.ON_DEMAND: {
@@ -252,7 +252,7 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
         },
     }
 
-    def get_instance_price(self, region, instance_type, state, lifecycle):  # pylint: disable=unused-argument
+    def get_instance_price(self, region, instance_type, state, lifecycle):
         """Using us-east1 to estimate"""
         if state == "running":
             price = self.prices[lifecycle].get(instance_type, 0)
@@ -264,7 +264,7 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
             return 0
 
 
-class AzurePricing:  # pylint: disable=too-few-public-methods
+class AzurePricing:
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":

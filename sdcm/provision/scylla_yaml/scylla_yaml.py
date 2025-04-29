@@ -15,7 +15,7 @@ from typing import List, Literal, Union, Any
 
 import logging
 import yaml
-from pydantic import validator, BaseModel, ConfigDict  # pylint: disable=no-name-in-module
+from pydantic import validator, BaseModel, ConfigDict
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
@@ -24,7 +24,7 @@ from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndP
 logger = logging.getLogger(__name__)
 
 
-class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+class ScyllaYaml(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -50,7 +50,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     disk_failure_policy: Literal["die", "stop_paranoid", "stop", "best_effort", "ignore"] = None  # "stop"
     endpoint_snitch: EndPointSnitchType | None = None
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("endpoint_snitch", pre=True, always=True)
     def set_endpoint_snitch(cls, endpoint_snitch: str):
         if endpoint_snitch is None:
@@ -189,7 +188,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     ] | None = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("request_scheduler", pre=True, always=True)
     def set_request_scheduler(cls, request_scheduler: str):
         if request_scheduler is None:
@@ -209,7 +207,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthenticator"
     ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("authenticator", pre=True, always=True)
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
@@ -230,7 +227,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthorizer"
     ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("authorizer", pre=True, always=True)
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
@@ -359,7 +355,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
 
-    def model_dump(  # pylint: disable=arguments-differ
+    def model_dump(
         self,
         *,
         explicit: List[str] = None,

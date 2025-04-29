@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, date
 from typing import Literal, Optional, List
 
-from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
+from cassandra.util import uuid_from_time, datetime_from_uuid1
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import decorate_with_context, ignore_ycsb_connection_refused
@@ -45,7 +45,7 @@ class AuditConfiguration:
 
 
 @dataclass
-class AuditLogRow:  # pylint: disable=too-many-instance-attributes
+class AuditLogRow:
     date: date
     node: str
     event_time: datetime
@@ -59,7 +59,7 @@ class AuditLogRow:  # pylint: disable=too-many-instance-attributes
     username: str
 
 
-class AuditLogReader:  # pylint: disable=too-few-public-methods
+class AuditLogReader:
 
     def __init__(self, cluster):
         self._cluster = cluster
@@ -72,7 +72,7 @@ class AuditLogReader:  # pylint: disable=too-few-public-methods
         raise NotImplementedError()
 
 
-class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class TableAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: Optional[datetime] = None,
              category: Optional[AuditCategory] = None,
@@ -109,7 +109,7 @@ class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-met
         return rows
 
 
-def get_audit_log_rows(node,  # pylint: disable=too-many-locals
+def get_audit_log_rows(node,
                        from_datetime: Optional[datetime] = None,
                        category: Optional[AuditCategory] = None,
                        operation: Optional[str] = None,
@@ -153,7 +153,7 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
                     break
 
 
-class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class SyslogAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
              operation: Optional[str] = None,

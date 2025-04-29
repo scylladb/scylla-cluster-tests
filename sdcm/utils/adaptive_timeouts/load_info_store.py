@@ -81,7 +81,7 @@ class NodeLoadInfoService:
             load_5 = float(metrics['node_load5'])
             load_15 = float(metrics['node_load15'])
             return load_1, load_5, load_15
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Couldn't get node load from prometheus metrics. Error: %s", exc)
             # fallback to uptime
             load_1, load_5, load_15 = self.remoter.run('uptime').stdout.split("load average: ")[1].split(",")
@@ -188,7 +188,6 @@ class AdaptiveTimeoutStore(metaclass=Singleton):
 
     Used for future reference/node operations time tracking and calculations optimization."""
 
-    # pylint: disable=too-many-arguments
     def store(self, metrics: dict[str, Any], operation: str, duration: int | float, timeout: int,
               timeout_occurred: bool) -> None:
         pass
@@ -207,7 +206,6 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
     def _es(self):
         return ES()
 
-    # pylint: disable=too-many-arguments
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
               timeout_occurred: bool):
         body = metrics
@@ -222,7 +220,7 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         if not self._es:
             LOGGER.debug("ESAdaptiveTimeoutStore is not initialized, skipping store")
             return
-        # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
+
         self._es.create(index=self._index, id=load_id, document=body)
 
     def get(self, operation: str | None, timeout_occurred: bool | None = None):
@@ -251,7 +249,7 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         return [hit["_source"] for hit in res["hits"]["hits"]]
 
 
-class NodeLoadInfoServices(metaclass=Singleton):  # pylint: disable=too-few-public-methods
+class NodeLoadInfoServices(metaclass=Singleton):
     """Cache for NodeLoadInfoService instances."""
 
     def __init__(self):

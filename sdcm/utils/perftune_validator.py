@@ -101,11 +101,11 @@ class PerftuneExecutor:
 
     def create_temp_perftune_yaml(self, yaml_dict) -> None:
         self.node.remoter.run(f"touch {TEMP_PERFTUNE_YAML_PATH}")
-        with self.node._remote_yaml(path=TEMP_PERFTUNE_YAML_PATH, sudo=False) as temp_yaml:  # pylint: disable=protected-access
+        with self.node._remote_yaml(path=TEMP_PERFTUNE_YAML_PATH, sudo=False) as temp_yaml:
             temp_yaml.update(yaml_dict)
 
 
-class PerftuneOutputChecker:  # pylint: disable=too-few-public-methods
+class PerftuneOutputChecker:
     def __init__(self, node):
         self.log = logging.getLogger(self.__class__.__name__)
         self.node = node
@@ -121,7 +121,7 @@ class PerftuneOutputChecker:  # pylint: disable=too-few-public-methods
         try:
             systemd_version = get_systemd_version(self.node.remoter.run(
                 "systemctl --version", ignore_status=True).stdout)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
 
@@ -232,7 +232,7 @@ class PerftuneOutputChecker:  # pylint: disable=too-few-public-methods
                 self.executor.create_temp_perftune_yaml(yaml_dict=option_file_dict)
                 self.compare_option_file_yaml_with_temp_yaml_copy(option_file_dict)
                 self.compare_option_file_with_overridden_irq_cpu_mask_param(option_file_dict)
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             PerftuneResultEvent(
                 message=f"Unexpected error when verifying the output of Perftune: {error}",
                 severity=Severity.ERROR, trace=traceback.format_exc()).publish()

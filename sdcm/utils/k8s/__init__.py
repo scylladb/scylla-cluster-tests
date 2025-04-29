@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-arguments,too-many-lines
+
 import abc
 import json
 import os
@@ -77,7 +77,7 @@ logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 class ApiLimiterClient(k8s.client.ApiClient):
     _api_rate_limiter: 'ApiCallRateLimiter' = None
 
-    def call_api(self, *args, **kwargs):  # pylint: disable=signature-differs
+    def call_api(self, *args, **kwargs):
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
         return super().call_api(*args, **kwargs)
@@ -89,7 +89,7 @@ class ApiLimiterClient(k8s.client.ApiClient):
 class ApiLimiterRetry(Retry):
     _api_rate_limiter: 'ApiCallRateLimiter' = None
 
-    def sleep(self, *args, **kwargs):  # pylint: disable=signature-differs
+    def sleep(self, *args, **kwargs):
         super().sleep(*args, **kwargs)
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
@@ -141,7 +141,7 @@ class ApiCallRateLimiter(threading.Thread):
             LOGGER.error("k8s API call rate limiter queue size limit has been reached")
             raise queue.Full
 
-    def _api_test(self, kluster):  # pylint: disable=no-self-use
+    def _api_test(self, kluster):
         logging.getLogger('urllib3.connectionpool').disabled = True
         try:
             KubernetesOps.core_v1_api(
@@ -179,7 +179,7 @@ class ApiCallRateLimiter(threading.Thread):
             try:
                 self._api_test(kluster)
                 passed += 1
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 time.sleep(1 / self.rate_limit)
         return passed < num_requests * 0.8
 
@@ -225,7 +225,7 @@ class CordonNodes:
         self.kubectl(f"un{self.cordon_cmd}")
 
 
-class KubernetesOps:  # pylint: disable=too-many-public-methods
+class KubernetesOps:
 
     @staticmethod
     def create_k8s_configuration(kluster) -> k8s.client.Configuration:
@@ -325,7 +325,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals,too-many-branches
+    def apply_file(cls, kluster, config_path, namespace=None,
                    timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
                    modifiers: List[Callable] = None, server_side=False):
         if environ:
@@ -553,7 +553,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             #   Error: destination directory "%logdir_path%/must-gather" is not empty
             LOCALRUNNER.run(f"mkdir -p {logdir_path}/must-gather && rm -rf {logdir_path}/must-gather/*")
             LOCALRUNNER.run(gather_logs_cmd)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
                 "Failed to run scylla-operator's 'must gather' command: %s", exc,
                 extra={'prefix': kluster.region_name})
@@ -563,13 +563,13 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 extra={'prefix': kluster.region_name})
         try:
             LOCALRUNNER.run(f"rm {operator_bin_path}")
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
                 "Failed to delete the the scylla-operator binary located at '%s': %s",
                 operator_bin_path, exc, extra={'prefix': kluster.region_name})
 
     @classmethod
-    def gather_k8s_logs(cls, logdir_path, kubectl=None, namespaces=None) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def gather_k8s_logs(cls, logdir_path, kubectl=None, namespaces=None) -> None:
         # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
         LOGGER.info("K8S-LOGS: starting logs gathering")
         logdir = Path(logdir_path)
@@ -690,7 +690,7 @@ class HelmContainerMixin:
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
+    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:
         cmd = [
             f"HELM_CONFIG_HOME={kluster.helm_dir_path}",
             "helm",
@@ -709,7 +709,7 @@ class HelmContainerMixin:
         cmd.extend(command)
 
         if values:
-            helm_values_file = NamedTemporaryFile(mode='tw')  # pylint: disable=consider-using-with
+            helm_values_file = NamedTemporaryFile(mode='tw')
             helm_values_file.write(yaml.safe_dump(values.as_dict()))
             helm_values_file.flush()
             cmd.extend(("-f", helm_values_file.name))
@@ -784,7 +784,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
                 self._check_token_validity_in_temporary_location()
                 self._replace_active_token_by_token_from_temporary_location()
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug('Failed to update cloud token: %s', exc)
                 wait_time = 5
             else:
@@ -800,7 +800,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
         try:
             if os.path.exists(self._temporary_token_path):
                 os.unlink(self._temporary_token_path)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug('Failed to cleanup temporary token: %s', exc)
 
     def _check_token_validity_in_temporary_location(self):
@@ -870,7 +870,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_kluster.region_name})
 
     @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
-    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value  # noqa: B006
+    def _open_stream(self, cache={}) -> None:  # noqa: B006
         try:
             now = time.time()
             if cache.get("last_call_at", 0) + 5 > now:
@@ -909,7 +909,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             try:
                 for line in self._read_stream():
                     self._process_line(line)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 if not self._termination_event.wait(0.01):
                     raise
                 self.log.info("Scylla pods IP change tracker thread has been stopped")
@@ -921,7 +921,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             self.watcher.close()
         self.join(timeout)
 
-    def _process_line(self, line: str) -> None:  # pylint: disable=too-many-branches,inconsistent-return-statements
+    def _process_line(self, line: str) -> None:
         # NOTE: line is expected to have following structure:
         # {"type": "ADDED",
         #  "object": {
@@ -983,7 +983,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                     break
                 else:
                     break
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.warning(
                 "Failed to parse following line: %s\nerr: %s", line, exc)
 
@@ -1001,7 +1001,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             self.log.debug("Calling '%s' callback %s", func.__name__, suffix)
             try:
                 func(*args, **kwargs)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.warning("Callback call failed %s: %s", suffix, str(exc))
 
         data = self.mapper_dict.get(namespace, {})
@@ -1258,7 +1258,7 @@ class HelmValues:
             last = int(last[1:-1])
         try:
             del parent[last]
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     def as_dict(self):

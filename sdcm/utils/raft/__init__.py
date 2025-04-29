@@ -185,7 +185,7 @@ class RaftFeature(RaftFeatureOperations):
         try:
             row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
             return row.value
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
             return ""
@@ -202,7 +202,7 @@ class RaftFeature(RaftFeatureOperations):
                 for row in rows:
                     group0_members.append({"host_id": str(row.server_id),
                                            "voter": row.can_vote})
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
 
@@ -378,7 +378,7 @@ class RaftFeature(RaftFeatureOperations):
             api = RaftApi(self._node)
             result = api.read_barrier(group_id=raft_group0_id)
             LOGGER.debug("Api response %s", result)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
 
     def search_inconsistent_host_ids(self) -> list[str]:

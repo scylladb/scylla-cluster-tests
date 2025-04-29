@@ -34,7 +34,6 @@ class SlaUtils:
     VALID_DEVIATION_PRC = 10
 
     @staticmethod
-    # pylint: disable=too-many-arguments, too-many-locals
     def define_read_cassandra_stress_command(role: Role,
                                              load_type: str,
                                              c_s_workload_type: str,
@@ -56,10 +55,10 @@ class SlaUtils:
         def latency():
             return '%d throttle=%d/s' % (threads, throttle)
 
-        def throughput():  # pylint: disable=unused-variable
+        def throughput():
             return threads
 
-        def cache_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def cache_only(max_rows_for_read):
             # Select part of the records to warm the cache (that was read before start this stress command) and all this
             # data exists in the cache (rows from 1 to max_rows_for_read).
             # This data will be read during the test from cache
@@ -68,7 +67,7 @@ class SlaUtils:
             return 'seq=1..%d' % max_rows_for_read
 
         # Read from cache and disk
-        def mixed(max_rows_for_read):  # pylint: disable=unused-variable
+        def mixed(max_rows_for_read):
             # Select part of the records (rows from 1 to max_rows_for_read) for the test.
             # This amount of data will be read during the test. Part of this will be read from a cache (during run the
             # data will be loaded into a cache) and part - from a disk
@@ -78,7 +77,7 @@ class SlaUtils:
                                                     int(max_rows_for_read / 2),
                                                     int(max_rows_for_read * 0.05))
 
-        def disk_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def disk_only(max_rows_for_read):
             # Select part of the record to warm the cache (that was read before start this stress command) -
             # from 1 to max_rows_for_read - all this data will be in the cache.
             # cassandra-stress "-pop" parameter will start from more than "max_key_for_cache" row number -
@@ -139,7 +138,6 @@ class SlaUtils:
 
         return results
 
-    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def validate_io_queue_operations(self, start_time, end_time, read_users, prometheus_stats, db_cluster,
                                      expected_ratio=None, load_high_enough=None, publish_wp_error_event=False,
                                      possible_issue=None):
@@ -234,7 +232,6 @@ class SlaUtils:
                 result.insert(0, "\nProbably the issue https://github.com/scylladb/scylla-enterprise/issues/2572")
             raise SchedulerRuntimeUnexpectedValue("".join(result))
 
-    # pylint: disable=too-many-branches
     @staticmethod
     def validate_io_queue_operations_relatively_to_share(roles_full_info: dict, node_ip: str,
                                                          load_high_enough: bool = None, node_cpu: float = None,
@@ -330,7 +327,7 @@ class SlaUtils:
         return error_message
 
     @staticmethod
-    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):  # pylint: disable=invalid-name
+    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):
         """
         :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops for example).
                         If metrics name is not defined - ration will be calculated for service_shares
@@ -383,7 +380,7 @@ class SlaUtils:
                 if auth:
                     try:
                         auth.drop()
-                    except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as error:  # noqa: BLE001
                         LOGGER.error("Failed to drop '%s'. Error: %s", auth.name, error)
 
     @staticmethod

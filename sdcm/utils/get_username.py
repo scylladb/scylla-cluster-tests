@@ -24,7 +24,7 @@ def get_email_user(email_addr: str) -> str:
     return email_addr.strip().split("@")[0]
 
 
-def get_username() -> str:  # pylint: disable=too-many-return-statements  # noqa: PLR0911
+def get_username() -> str:  # noqa: PLR0911
     # First we check if user is being impersonated by an api call
     actual_user_from_request = os.environ.get('BUILD_USER_REQUESTED_BY')
     if actual_user_from_request:

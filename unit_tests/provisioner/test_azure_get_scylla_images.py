@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-# pylint: disable=redefined-outer-name
+
 
 import json
 import logging
@@ -24,7 +24,7 @@ from unit_tests.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture
-def azure_service():  # pytest: disable=redefined-outer-name
+def azure_service():
     return FakeAzureService(Path(__file__).parent / "test_data")
 
 
