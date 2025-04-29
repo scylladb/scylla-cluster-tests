@@ -194,7 +194,7 @@ class ClusterBase(BaseModel):
         return self.params.get('test_duration')
 
     def _spot_low_price(self, region_id: int) -> float:
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
+        from sdcm.utils.pricing import AWSPricing
 
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(
@@ -216,7 +216,7 @@ class ClusterBase(BaseModel):
         ).provision_plan
 
     def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,
@@ -272,7 +272,7 @@ class DBCluster(ClusterBase):
         ).to_string()
 
     def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,

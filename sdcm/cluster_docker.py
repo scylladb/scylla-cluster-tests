@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-arguments; looks like we need to increase DESIGN.max_args to 10 in our pylintrc
-# pylint: disable=invalid-overridden-method; pylint doesn't know that cached_property is property
 import os
 import re
 import logging
@@ -69,8 +67,8 @@ class NodeContainerMixin:
                     nano_cpus=smp*10**9)  # Same as `docker run --cpus=N ...' CLI command.
 
 
-class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstract-method
-    def __init__(self,  # pylint: disable=too-many-arguments
+class DockerNode(cluster.BaseNode, NodeContainerMixin):
+    def __init__(self,
                  parent_cluster: "DockerCluster",
                  container: Optional[Container] = None,
                  node_prefix: str = "node",
@@ -220,7 +218,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         return "docker"
 
 
-class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
+class DockerCluster(cluster.BaseCluster):
     node_container_user = "scylla-test"
 
     def __init__(self,
@@ -297,7 +295,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         return self._get_nodes() if self.test_config.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
 
 
-class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: disable=abstract-method
+class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
     def __init__(self,
                  docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
                  docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
@@ -359,7 +357,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     def get_scylla_args(self):
-        # pylint: disable=no-member
+
         append_scylla_args = self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
         return re.sub(r'--blocked-reactor-notify-ms[ ]+[0-9]+', '', append_scylla_args)
@@ -399,7 +397,7 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
             node.config_client_encrypt()
 
 
-class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
+class DockerMonitoringNode(cluster.BaseNode):
     log = LOGGER
 
     def __init__(self,
@@ -426,10 +424,10 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
     def tags(self) -> dict[str, str]:
         return {**super().tags, "NodeIndex": str(self.node_index), }
 
-    def _init_remoter(self, ssh_login_info):  # pylint: disable=no-self-use
+    def _init_remoter(self, ssh_login_info):
         self.remoter = LOCALRUNNER
 
-    def _init_port_mapping(self):  # pylint: disable=no-self-use
+    def _init_port_mapping(self):
         pass
 
     def wait_ssh_up(self, verbose=True, timeout=500):
@@ -459,7 +457,7 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
         pass
 
 
-class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
+class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
     def __init__(self,
                  targets: dict,
                  user_prefix: Optional[str] = None,
@@ -495,7 +493,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         return self._create_nodes(count, enable_auto_bootstrap)
 
     @staticmethod
-    def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
+    def install_scylla_monitoring_prereqs(node):
         pass  # since running local, don't install anything, just the monitor
 
     def get_backtraces(self):
@@ -506,11 +504,11 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
             try:
                 self.stop_scylla_monitoring(node)
                 self.log.error("Stopping scylla monitoring succeeded")
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.error(f"Stopping scylla monitoring failed with {str(exc)}")
             try:
                 node.remoter.sudo(f"rm -rf '{self.monitor_install_path_base}'")
                 self.log.error("Cleaning up scylla monitoring succeeded")
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")
             node.destroy()
