@@ -3125,13 +3125,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             - When backup snapshot has the same DC name as the current cluster's DC name -
             restore schema using the Manager (sctool restore --restore-schema ...)
             """
-            ks_statements, table_statements = get_schema_create_statements_from_snapshot(
+            ks_statements, other_statements = get_schema_create_statements_from_snapshot(
                 bucket=locations[0].split(':')[-1],
                 mgr_cluster_id=cluster_id,
+                snapshot_tag=tag,
             )
 
-            dc_under_test_name = list(self.cluster.get_nodetool_status().keys())[0]
-            dc_from_backup_name = get_dc_name_from_ks_statement(ks_statements[0])
+            dc_under_test_name = next(iter(self.cluster.get_nodetool_status()))
+            # Test is supposed to work with single DC setups only, so we can take the first DC name
+            dc_from_backup_name = get_dc_name_from_ks_statement(ks_statements[0])[0]
             self.log.debug("DC name from backup: %s, DC name under test: %s", dc_from_backup_name, dc_under_test_name)
 
             if dc_under_test_name != dc_from_backup_name:
@@ -3142,7 +3144,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_dc_block = f"'{dc_under_test_name}':"
                 ks_statements = [stmt.replace(old_dc_block, new_dc_block) for stmt in ks_statements]
                 # Apply cql statements one by one to restore schema
-                for cql_stmt in ks_statements + table_statements:
+                for cql_stmt in ks_statements + other_statements:
                     self.target_node.run_cqlsh(cql_stmt)
             else:
                 self.log.info("Restoring the schema using the Scylla Manager")
