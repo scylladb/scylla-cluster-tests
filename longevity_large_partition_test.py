@@ -14,7 +14,6 @@ class LargePartitionLongevityTest(LongevityTest):
         node = self.db_cluster.nodes[0]
         create_table_query = create_scylla_bench_table_query(compaction_strategy=compaction_strategy)
         with self.db_cluster.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
             session.execute("""
                     CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}
             """)

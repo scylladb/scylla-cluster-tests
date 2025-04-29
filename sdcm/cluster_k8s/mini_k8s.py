@@ -178,10 +178,9 @@ class MinimalK8SOps:
         node.remoter.sudo(f'bash -cxe "{script}"')
 
 
-class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods
+class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     POOL_LABEL_NAME = POOL_LABEL_NAME
 
-    # pylint: disable=too-many-arguments
     def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
                  cluster_uuid: str = None, **_):
         self.software_version = mini_k8s_version
@@ -252,7 +251,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         self._mini_k8s_version = value
 
     @cached_property
-    def local_kubectl_version(self):  # pylint: disable=no-self-use
+    def local_kubectl_version(self):
         # Example of kubectl command output:
         #   $ kubectl version --client --short
         #   Client Version: v1.18.5
@@ -345,7 +344,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                     continue
                 try:
                     return doc["spec"]["template"]["spec"]["containers"][0]["image"]
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     self.log.warning(
                         "Could not read the static local volume provisioner image: %s", exc)
         return ""
@@ -377,7 +376,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                         for container in doc["spec"]["template"]["spec"]["containers"]:
                             try:
                                 ingress_images.add(container["image"])
-                            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                            except Exception as exc:  # noqa: BLE001
                                 self.log.warning(
                                     "Could not read the ingress controller related image: %s", exc)
         return ingress_images
@@ -424,7 +423,6 @@ class LocalMinimalClusterBase(MinimalClusterBase):
             region_name="local-dc-1",
             params=params)
 
-    # pylint: disable=invalid-overridden-method
     @cached_property
     def host_node(self):
         node = LocalK8SHostNode(
@@ -589,7 +587,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {image}", ignore_status=True)
 
-    def on_deploy_completed(self):  # pylint: disable=too-many-branches
+    def on_deploy_completed(self):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         # first setup CNI plugin, otherwise everything else might get broken
@@ -688,7 +686,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
                     f"docker cp kind-control-plane:{src_container_path} {self.logdir} "
                     f"&& mkdir -p {self.logdir}/{dst_subdir} "
                     f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.warning(
                     "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
                     src_container_path, exc)
@@ -722,22 +720,21 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
         raise NotImplementedError("Not supported on local K8S backends")
 
 
-# pylint: disable=too-many-ancestors
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """Represents scylla cluster hosted on locally running minimal k8s clusters such as k3d, minikube or kind"""
     PodContainerClass = LocalMinimalScyllaPodContainer
 
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):  # pylint: disable=too-many-arguments
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):
         @retrying(n=iterations, sleep_time=sleep_time,
                   allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
-        def _wait_for_nodes_up_and_normal(self):  # pylint: disable=unused-argument
+        def _wait_for_nodes_up_and_normal(self):
             super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
         _wait_for_nodes_up_and_normal(self)
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=unused-argument
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 

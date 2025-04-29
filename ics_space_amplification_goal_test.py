@@ -135,7 +135,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
             node.stop_scylla_server()
             node.start_scylla_server()
 
-    def test_ics_space_amplification_goal(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
+    def test_ics_space_amplification_goal(self):  # noqa: PLR0914
         """
         (1) writing new data. wait for compactions to finish.
         (2) over-writing existing data.

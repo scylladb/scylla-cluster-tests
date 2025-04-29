@@ -75,7 +75,7 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class ScyllaBenchThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.scylla-bench"
     _SB_STATS_MAPPING = {
@@ -116,7 +116,6 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         'mean': (int, 'latency mean'),
     }
 
-    # pylint: disable=too-many-arguments
     def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False,
                  stop_test_on_failure=False, stress_num=1, credentials=None, params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout, stress_num=stress_num,
@@ -168,7 +167,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         return stress_cmd
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
+    def _run_stress(self, loader, loader_idx, cpu_idx):
         cmd_runner = None
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
@@ -214,7 +213,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             prefix, *_ = stress_cmd.split("scylla-bench", maxsplit=1)
             reporter = ScyllaBenchVersionReporter(cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
             reporter.report()
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
@@ -235,7 +234,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     log_file=log_file_name,
                     retry=0,
                 )
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)
 
         return loader, result, scylla_bench_event
@@ -253,7 +252,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         for line in lines:
             line.strip()
             # Parse load params
-            # pylint: disable=too-many-boolean-expressions
+
             if line.startswith('Results'):
                 continue
             if 'c-o fixed latency' in line:

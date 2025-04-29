@@ -18,7 +18,7 @@ def create_index(index_name: str, mappings: dict, **kwargs):
         raise Exception(f"Mappings configuration is empty {mappings}")
     es_client = ES()
     es_client.indices.create(index=index_name)
-    es_client.indices.put_mapping(index=index_name, body=mappings,  # pylint: disable=unexpected-keyword-arg
+    es_client.indices.put_mapping(index=index_name, body=mappings,
                                   include_type_name=True)
 
 

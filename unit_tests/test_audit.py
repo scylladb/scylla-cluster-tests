@@ -5,7 +5,7 @@ from sdcm.audit import get_audit_log_rows
 from sdcm.cluster import BaseNode
 
 
-class DummyAuditNode(BaseNode):  # pylint: disable=abstract-method
+class DummyAuditNode(BaseNode):
 
     system_log = Path(__file__).parent.resolve() / 'test_data' / 'test_audit.log'
 

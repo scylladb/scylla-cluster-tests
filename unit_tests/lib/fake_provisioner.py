@@ -76,8 +76,8 @@ class FakeProvisioner(Provisioner):
 
     def run_command(self, name: str, command: str) -> Result:
         """Runs command on instance."""
-        return subprocess.run(command, shell=True, capture_output=True, text=True, check=False)  # pylint: disable=subprocess-run-check
+        return subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
 
     @classmethod
-    def discover_regions(cls, test_id: str, **kwargs) -> List[Provisioner]:  # pylint: disable=unused-argument
+    def discover_regions(cls, test_id: str, **kwargs) -> List[Provisioner]:
         return list(cls._provisioners.get(test_id, {}).values())

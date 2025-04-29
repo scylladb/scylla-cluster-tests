@@ -26,10 +26,8 @@ RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstab
           '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
           '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
 
-# pylint: disable=no-self-use
 
-
-class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
+class ConfigurationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         logging.basicConfig(level=logging.ERROR)
@@ -78,7 +76,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_03_dump_help_config_yaml(self):
         logging.debug(self.conf.dump_help_config_yaml())
 
-    def test_03_dump_help_config_markdown(self):  # pylint: disable=invalid-name
+    def test_03_dump_help_config_markdown(self):
         logging.debug(self.conf.dump_help_config_markdown())
 
     @pytest.mark.integration
@@ -196,7 +194,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         assert len(amis) == 2
         assert all(ami.startswith('ami-') for ami in amis)
 
-    def test_12_scylla_version_ami_case1(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_ami_case1(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
@@ -205,7 +203,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_ami_case2(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_ami_case2(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
@@ -222,7 +220,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_repo_case1(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_case1(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
@@ -230,14 +228,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_repo_case2(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_case2(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
         self.assertRaisesRegex(
             ValueError, r"AMIs for scylla_version='99.0.3' not found in eu-west-1 arch=x86_64", sct_config.SCTConfiguration)
 
-    def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_ubuntu(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
@@ -257,7 +255,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo_loader'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list")
 
-    def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_ubuntu_loader_centos(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
@@ -278,7 +276,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo_loader'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo")
 
-    def test_12_k8s_scylla_version_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+    def test_12_k8s_scylla_version_ubuntu_loader_centos(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
@@ -292,7 +290,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo')
 
     @pytest.mark.integration
-    def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
+    def test_13_scylla_version_ami_branch_latest(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.2:latest'
@@ -304,7 +302,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         assert len(amis) == 2
         assert all(ami.startswith('ami-') for ami in amis)
 
-    def test_conf_check_required_files(self):  # pylint: disable=no-self-use
+    def test_conf_check_required_files(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         ami_id = get_ssm_ami(
             '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')
@@ -316,7 +314,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         conf.check_required_files()
 
-    def test_conf_check_required_files_negative(self):  # pylint: disable=no-self-use
+    def test_conf_check_required_files_negative(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/stress_cmd_with_bad_profile.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)'\
@@ -334,7 +332,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         def get_dupes(c):
             '''sort/tee/izip'''
 
-            # pylint: disable=invalid-name
             a, b = itertools.tee(sorted(c))
             next(b, None)
             r = None
@@ -398,7 +395,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value='2019.1.1', clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
 
     def test_15a_new_scylla_repo_by_scylla_version(self):
@@ -416,7 +413,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                 unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=resolved_repo_link, clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
 
         self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
@@ -437,7 +434,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with unittest.mock.patch.object(sct_config, 'get_branched_gce_images', return_value=[image], clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
 
         self.assertEqual(conf.get('gce_image_db'), resolved_image_link)
 
