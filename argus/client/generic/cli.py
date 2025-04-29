@@ -1,12 +1,6 @@
-<<<<<<< HEAD
-||||||| parent of 6e4e1fbc0 (feature(argus): call client with extra headers)
-import json
-from pathlib import Path
-=======
 import json
 from json.decoder import JSONDecodeError
 from pathlib import Path
->>>>>>> 6e4e1fbc0 (feature(argus): call client with extra headers)
 import click
 import logging
 
@@ -79,6 +73,7 @@ def trigger_jobs(api_key: str, base_url: str, job_info_file: str, version: str, 
 
 cli.add_command(submit_run)
 cli.add_command(finish_run)
+cli.add_command(trigger_jobs)
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ class ArgusSCTClient(ArgusClient):
         response = super().set_status(run_type=self.test_type, run_id=self.run_id, new_status=new_status)
         self.check_response(response)
 
-    def set_sct_runner(self, public_ip: str, private_ip: str, region: str, backend: str) -> None:
+    def set_sct_runner(self, public_ip: str, private_ip: str, region: str, backend: str, name: str = None) -> None:
         """
             Sets runner information for an SCT run.
         """
@@ -69,6 +69,7 @@ class ArgusSCTClient(ArgusClient):
                 "private_ip": private_ip,
                 "region": region,
                 "backend": backend,
+                "name": name,
             }
         )
         self.check_response(response)
