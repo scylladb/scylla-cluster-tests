@@ -6,7 +6,7 @@ stress_cmd: ["cassandra-stress read cl=TWO duration=20m -mode cql3 native -rate 
              ]
 verify_data_after_entire_test: "cassandra-stress read cl=QUORUM n=20900 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
-n_db_nodes: 4  # make n_db_nodes configured as multi-dc with last dc set to 0 (so later easily new node can be added)
+n_db_nodes: 4
 n_loaders: 1
 n_monitor_nodes: 1
 
