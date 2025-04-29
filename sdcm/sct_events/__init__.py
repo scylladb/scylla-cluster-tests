@@ -35,7 +35,6 @@ class SctEventProtocol(Protocol):
     event_timestamp: Optional[float]
     severity: Severity
 
-    # pylint: disable=super-init-not-called
     def __init__(self, *args, **kwargs):
         ...
 
@@ -74,7 +73,7 @@ class SctEventProtocol(Protocol):
 _SAVED_DEFAULT = json.JSONEncoder().default  # save default method.
 
 
-def _new_default(self, obj):  # pylint: disable=unused-argument
+def _new_default(self, obj):
     if isinstance(obj, enum.Enum):
         return obj.name  # could also be obj.value
     else:

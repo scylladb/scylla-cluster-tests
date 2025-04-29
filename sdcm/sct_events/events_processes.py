@@ -43,15 +43,14 @@ LOGGER = logging.getLogger(__name__)
 
 StopEvent = Union[multiprocessing.Event, threading.Event]
 
-T_inbound_event = TypeVar("T_inbound_event")  # pylint: disable=invalid-name
-T_outbound_event = TypeVar("T_outbound_event")  # pylint: disable=invalid-name
-T_outbound_events_protocol = TypeVar("T_outbound_events_protocol")  # pylint: disable=invalid-name
+T_inbound_event = TypeVar("T_inbound_event")
+T_outbound_event = TypeVar("T_outbound_event")
+T_outbound_events_protocol = TypeVar("T_outbound_events_protocol")
 
 InboundEventsGenerator = Generator[T_inbound_event, None, None]
 OutboundEventsGenerator = Generator[T_outbound_event, None, None]
 
 
-# pylint: disable=too-few-public-methods
 class OutboundEventsProtocol(Protocol[T_outbound_events_protocol]):
     def outbound_events(self,
                         stop_event: StopEvent,
@@ -85,7 +84,6 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
                         get_events_process(name=self.inbound_events_process, _registry=self._registry)) \
             .outbound_events(stop_event=self.stop_event, events_counter=self._events_counter)
 
-    # pylint: disable=unused-argument,no-self-use
     def outbound_events(self, stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> OutboundEventsGenerator:
         yield from []
@@ -98,8 +96,8 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
         LOGGER.debug("Stopping events process %s", events_process_class_name)
         self.terminate()
         LOGGER.debug("Waiting for events process %s to stop", events_process_class_name)
-        self.join(timeout)  # pylint: disable=no-member; both threading.Thread and multiprocessing.Process have it
-        if self.is_alive():  # pylint: disable=no-member;
+        self.join(timeout)
+        if self.is_alive():
             LOGGER.error("Events process %s is still alive after timeout", events_process_class_name)
             assert False, f"Events process {events_process_class_name} is still alive after timeout"
         else:
@@ -166,7 +164,7 @@ _EVENTS_PROCESSES: Optional[EventsProcessesRegistry] = None
 
 
 def create_default_events_process_registry(log_dir: Union[str, Path]):
-    global _EVENTS_PROCESSES  # pylint: disable=global-statement  # noqa: PLW0603
+    global _EVENTS_PROCESSES  # noqa: PLW0603
 
     with _EVENTS_PROCESSES_LOCK:
         if _EVENTS_PROCESSES is None:
@@ -197,7 +195,7 @@ def get_events_process(name: str, _registry: Optional[EventsProcessesRegistry] =
 def verbose_suppress(*args, **kwargs):
     try:
         yield
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         LOGGER.exception(*args, **kwargs)
 
 

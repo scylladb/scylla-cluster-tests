@@ -12,7 +12,7 @@
 #
 import logging
 
-from cassandra.cluster import Session  # pylint: disable=no-name-in-module
+from cassandra.cluster import Session
 
 CONSISTENT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
 CONSISTENT_CLUSTER_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"

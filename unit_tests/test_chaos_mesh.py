@@ -12,7 +12,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-# pylint: skip-file
 
 from dataclasses import dataclass, field
 from typing import Dict

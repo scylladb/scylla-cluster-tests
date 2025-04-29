@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
 
 import json
 import logging
@@ -37,7 +36,7 @@ LOG_LINE_MAX_PROCESSING_SIZE = 1024 * 5
 
 
 class DbLogReader(Process):
-    # pylint: disable=too-many-instance-attributes
+
     EXCLUDE_FROM_LOGGING = [
         ' | sshd[',
         ' | systemd:',
@@ -54,7 +53,7 @@ class DbLogReader(Process):
         '] stream_session - [Stream ',
         '] storage_proxy - Exception when communicating with',
     ]
-    # pylint: disable=too-many-arguments
+
     BUILD_ID_REGEX = re.compile(r'build-id\s(.*?)\sstarting\s\.\.\.')
 
     def __init__(self,
@@ -87,8 +86,6 @@ class DbLogReader(Process):
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
 
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-
         backtraces = []
         index = 0
 
@@ -114,7 +111,7 @@ class DbLogReader(Process):
                     if line[0] == '{':
                         try:
                             json_log = json.loads(line)
-                        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                        except Exception:  # noqa: BLE001
                             pass
 
                     if self._log_lines:
@@ -175,7 +172,7 @@ class DbLogReader(Process):
 
                     if one_line_backtrace and backtraces:
                         backtraces[-1]['backtrace'] = one_line_backtrace
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
                                      index, self._system_log, line)
 
@@ -204,7 +201,7 @@ class DbLogReader(Process):
                     "build_id": self._build_id,
                     "event": backtrace["event"],
                 })
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 backtrace["event"].publish()
                 raise
 
@@ -222,7 +219,7 @@ class DbLogReader(Process):
                 self._read_and_publish_events()
             except (SystemExit, KeyboardInterrupt) as ex:
                 LOGGER.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 LOGGER.exception("failed to read db log")
 
     def filter_backtraces(self, backtrace):

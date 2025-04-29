@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-# pylint: disable=W,C,R
+
 from functools import partial
 
 from sdcm.remote.libssh2_client import Result

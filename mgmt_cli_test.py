@@ -12,9 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-# pylint: disable=too-many-lines
 
-# pylint: disable=too-many-lines
 import random
 import threading
 from enum import Enum
@@ -533,7 +531,6 @@ class ManagerTestFunctionsMixIn(
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]
 
-    # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
                               truncate=True, restore_data_with_task=False, timeout=None):
         if ks_names is None:
@@ -655,7 +652,7 @@ class ManagerTestFunctionsMixIn(
 
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
-    def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
+    def test_restore_multiple_backup_snapshots(self):  # noqa: PLR0914
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
         cluster_backend = self.params.get('cluster_backend')
@@ -987,7 +984,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         load_results = stress_read_thread.get_results()
         self.log.info('load={}'.format(load_results))
 
-    def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
+    def test_repair_multiple_keyspace_types(self):
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)

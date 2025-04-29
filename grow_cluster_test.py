@@ -122,7 +122,7 @@ class GrowClusterTest(ClusterTester):
         self.grow_cluster(cluster_target_size=self._cluster_target_size,
                           stress_cmd=self.get_stress_cmd())
 
-    def test_grow_3_to_4_large_partition(self):  # pylint: disable=invalid-name
+    def test_grow_3_to_4_large_partition(self):
         """
         Shorter version of the cluster growth test.
 

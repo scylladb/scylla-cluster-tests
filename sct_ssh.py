@@ -364,7 +364,6 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     return question.ask()
 
 
-# pylint: disable=too-many-arguments
 @click.command("ssh", help="Connect to any SCT machine on AWS")
 @click.option("-u", "--user", default=None,
               help="User to search for (RunByUser tag)")
@@ -596,7 +595,6 @@ class ScyllaDBCluster(BaseScyllaCluster, BaseCluster):
     """
     nodes: list[BaseNode]
 
-    # pylint: disable=super-init-not-called
     def __init__(self, test_id, *args, **kwargs):
         self.uuid = test_id
         self.nodes = []

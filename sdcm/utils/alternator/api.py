@@ -94,7 +94,7 @@ class Alternator:
         ]
         dynamodb_api.client.tag_resource(ResourceArn=arn, Tags=tags)
 
-    def create_table(self, node,  # pylint: disable=too-many-arguments
+    def create_table(self, node,
                      schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
                      wait_until_table_exists=True, tablets_enabled: bool = False, **kwargs) -> Table:
         if isinstance(schema, enums.YCSBSchemaTypes):
@@ -158,7 +158,7 @@ class Alternator:
             return list(chain(*scan_result)) if len(scan_result) > 1 else scan_result
         return _scan_table()
 
-    def batch_write_actions(self, node,  # pylint:disable=too-many-arguments,dangerous-default-value
+    def batch_write_actions(self, node,
                             table_name=consts.TABLE_NAME, new_items=None, delete_items=None,
                             schema=schemas.HASH_SCHEMA):
         dynamodb_api = self.get_dynamodb_api(node=node)

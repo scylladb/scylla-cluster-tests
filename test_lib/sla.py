@@ -59,10 +59,9 @@ class ServiceLevelAttributes:
         self.query_string = "".join(attr_strings)
 
 
-# pylint: disable=too-many-instance-attributes
 class ServiceLevel:
     # The class provide interface to manage SERVICE LEVEL
-    # pylint: disable=too-many-arguments
+
     def __init__(self, session,
                  name: str,
                  shares: Optional[int] = 1000,
@@ -197,8 +196,6 @@ class ServiceLevel:
         for res in res_list:
             output.append(ServiceLevel.from_row(self.session, res))
         return output
-
-# pylint: disable=too-many-arguments, too-many-instance-attributes, unused-argument
 
 
 class UserRoleBase:
