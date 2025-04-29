@@ -147,15 +147,15 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _ms_ldap_bind_dn(self) -> str:
-        return self._msldap_server_info['ldap_bind_dn']  # pylint: disable=unsubscriptable-object
+        return self._msldap_server_info['ldap_bind_dn']
 
     @property
     def _ms_ldap_bind_passwd(self) -> str:
-        return self._msldap_server_info['admin_password']  # pylint: disable=unsubscriptable-object
+        return self._msldap_server_info['admin_password']
 
     @property
     def _ms_ldap_server_address_port(self) -> str:
-        return f'{self._msldap_server_info["server_address"]}:389'  # pylint: disable=unsubscriptable-object
+        return f'{self._msldap_server_info["server_address"]}:389'
 
     @property
     def _open_ldap_bind_dn(self) -> str:
@@ -175,7 +175,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @cached_property
     def _openldap_server_address_port(self) -> str:
-        ldap_address = self.test_config.LDAP_ADDRESS   # pylint: disable=no-member
+        ldap_address = self.test_config.LDAP_ADDRESS
         if not ldap_address or not ldap_address[0] or not ldap_address[1]:
             raise RuntimeError("OPENLDAP has not been started")
         return str(ldap_address[0]) + ':' + str(ldap_address[1])
@@ -184,7 +184,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     def _msldap_server_info(self) -> dict:
         if not self.msldap_server_info:
             raise RuntimeError('MSLDAP is configured, but not `msldap_server_info` is provided')
-        msldap_server_info_keys = set(self.msldap_server_info.keys())  # pylint: disable=no-member
+        msldap_server_info_keys = set(self.msldap_server_info.keys())
         if missing_keys := {'ldap_bind_dn', 'admin_password', 'server_address'} - msldap_server_info_keys:
             raise RuntimeError("MSLDAP is configured, but `msldap_server_info` lack of following keys: "
                                f"{','.join(missing_keys)}")
