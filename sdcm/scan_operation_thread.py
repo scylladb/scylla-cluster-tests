@@ -14,8 +14,8 @@ from typing import Optional, Type, NamedTuple, TYPE_CHECKING
 
 from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
-from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.cluster import ResponseFuture, ResultSet
+from cassandra.query import SimpleStatement
 
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
@@ -50,7 +50,6 @@ class FullscanException(Exception):
     ...
 
 
-# pylint: disable=too-many-instance-attributes
 class ScanOperationThread(OperationThread):
     """
     Runs fullscan operations according to the parameters specified in the test
@@ -119,7 +118,6 @@ class FullscanOperationBase:
             self, session, cmd: str,
             event: Type[FullScanEvent | FullPartitionScanEvent
                         | FullPartitionScanReversedOrderEvent]) -> ResultSet:
-        # pylint: disable=unused-argument
         self.log.debug('Will run command %s', cmd)
         return session.execute(SimpleStatement(
             cmd,
@@ -155,7 +153,7 @@ class FullscanOperationBase:
                         self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
                     if not scan_op_event.message:
                         scan_op_event.message = f"{type(self).__name__} operation ended successfully"
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     self.log.error(traceback.format_exc())
                     msg = repr(exc)
                     self.current_operation_stat.exceptions.append(repr(exc))
@@ -176,7 +174,7 @@ class FullscanOperationBase:
                     # success is True if there were no exceptions
                     self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
                     self.update_stats(self.current_operation_stat)
-                    return self.current_operation_stat  # pylint: disable=lost-exception
+                    return self.current_operation_stat
 
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
@@ -231,9 +229,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
                                                'no_filter': {'count': 0, 'total_scan_duration': 0}}
         self.ck_filter = ''
         self.limit = ''
-        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                  encoding='utf-8')
-        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                encoding='utf-8')
 
     def get_table_clustering_order(self) -> str:
@@ -244,14 +242,14 @@ class FullPartitionScanOperation(FullscanOperationBase):
                 session.default_consistency_level = ConsistencyLevel.ONE
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
                                                   ck_name=self.fullscan_params.ck_name, session=session)
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             self.log.error(traceback.format_exc())
             self.log.error('Failed getting table %s clustering order through node %s : %s',
                            self.fullscan_params.ks_cf, node.name,
                            error)
         raise Exception('Failed getting table clustering order from all db nodes')
 
-    def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:  # pylint: disable=too-many-branches
+    def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:
         """
         The purpose of this method is to form a random reversed-query out of all options, like:
             select * from scylla_bench.test where pk = 1234 and ck < 4721 and ck > 2549 order by ck desc
@@ -356,9 +354,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
     def reset_output_files(self):
         self.normal_query_output.close()
         self.reversed_query_output.close()
-        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                  encoding='utf-8')
-        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                encoding='utf-8')
 
     def _compare_output_files(self) -> bool:
@@ -406,7 +404,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
         self.reset_output_files()
         return result
 
-    def run_scan_operation(self, cmd: str = None):  # pylint: disable=too-many-locals
+    def run_scan_operation(self, cmd: str = None):
         self.table_clustering_order = self.get_table_clustering_order()
         queries = self.randomly_form_cql_statement()
 

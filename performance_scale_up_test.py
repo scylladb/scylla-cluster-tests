@@ -57,7 +57,7 @@ class ScaleUpTest(ClusterTester):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:
             self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
 
         email_data.update({

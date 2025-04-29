@@ -28,7 +28,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult:  # pylint: disable=too-few-public-methods
+class NotGeminiErrorResult:
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -58,11 +58,11 @@ class GeminiEventsPublisher(FileFollowerThread):
                     break
 
 
-class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class GeminiStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
+    def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -132,7 +132,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                                     )
                 # sleep to gather all latest log messages
                 time.sleep(5)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error(details)
                 result = getattr(details, "result", NotGeminiErrorResult(details))
 
@@ -189,7 +189,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         try:
             results = json.loads(json_str)
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Invalid json document {}".format(details))
 
         return results.get('result')

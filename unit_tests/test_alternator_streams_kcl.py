@@ -29,7 +29,7 @@ pytestmark = [
 @pytest.mark.skip("test isn't yet fully working")
 def test_01_kcl_with_ycsb(
     request, docker_scylla, events, params
-):  # pylint: disable=too-many-locals
+):
     params.update(dict(
         dynamodb_primarykey_type="HASH_AND_RANGE",
         alternator_use_dns_routing=True,

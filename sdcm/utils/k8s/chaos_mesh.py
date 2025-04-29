@@ -51,7 +51,7 @@ class ChaosMeshTimeout(ChaosMeshExperimentException):
     pass
 
 
-class ChaosMesh:  # pylint: disable=too-few-public-methods
+class ChaosMesh:
     NAMESPACE = "chaos-mesh"
     VERSION = "2.5.0"
     HELM_SETTINGS = {
@@ -164,7 +164,6 @@ class ChaosMeshExperiment:
         self.log.info("'%s' experiment '%s' has started", self.CHAOS_KIND, self._name)
         self._end_time = time.time() + self._timeout
 
-    # pylint: disable=too-many-return-statements
     def get_status(self) -> ExperimentStatus:  # noqa: PLR0911
         """Gets status of chaos-mesh experiment."""
         result = self._k8s_cluster.kubectl(
@@ -241,7 +240,6 @@ class MemoryStressExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "StressChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,  # noqa: F821
                  workers: int, size: str, time_to_reach: str | None = None):
         """Stresses memory on scylla pod using https://github.com/chaos-mesh/memStress
@@ -306,7 +304,6 @@ class IOFaultChaosExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "IOChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, error: DiskError,  # noqa: F821
                  error_probability: int, methods: list[DiskMethod], volume_path: str, path: str | None = None):
         """Induces disk fault (programatically) using IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
@@ -410,7 +407,6 @@ class NetworkDelayExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, latency: str,  # noqa: F821
                  correlation: int = 0, jitter: str = "0"):
         """Simulate network delay fault into a specified Pod for a period of time.
@@ -444,7 +440,6 @@ class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,  # noqa: F821
                  rate: str, limit: int, buffer: int):
         """Simulate network bandwidth limit fault into a specified Pod for a period of time.

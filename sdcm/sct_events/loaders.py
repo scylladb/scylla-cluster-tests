@@ -28,7 +28,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GeminiStressEvent(BaseStressEvent):
-    # pylint: disable=too-many-arguments, too-many-instance-attributes
     def __init__(self, node: Any,
                  cmd: str,
                  log_file_name: Optional[str] = None,
@@ -295,7 +294,7 @@ CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]]
     [(re.compile(event.regex), event) for event in CASSANDRA_HARRY_ERROR_EVENTS]
 
 
-class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: disable=too-many-instance-attributes
+class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):
     SEVERITY_MAPPING = {
         "INFO": "NORMAL",
         "DEBUG": "NORMAL",

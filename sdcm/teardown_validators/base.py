@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class TeardownValidator:  # pylint: disable=too-few-public-methods
+class TeardownValidator:
     validator_name = None  # must be defined by child classes
 
     def __init__(self, params: SCTConfiguration, tester: ClusterTester):
@@ -21,5 +21,5 @@ class TeardownValidator:  # pylint: disable=too-few-public-methods
         if not self.is_enabled:
             self.validate = lambda: LOGGER.info("%s validator is disabled", self.validator_name)
 
-    def validate(self):  # pylint: disable=method-hidden
+    def validate(self):
         raise NotImplementedError()
