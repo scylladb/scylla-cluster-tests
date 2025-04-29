@@ -38,24 +38,20 @@ def is_builtin(inst):
     return inst.__module__ == __builtin__
 
 
-# pylint: disable=too-few-public-methods
 class FakeCluster:
     seed_nodes_addresses = ['1.1.1.1']
 
 
-# pylint: disable=too-few-public-methods
 class TestConfigWithLdap:
     LDAP_ADDRESS = '1.1.1.1', '389'
     IP_SSH_CONNECTIONS = "private"
 
 
-# pylint: disable=too-few-public-methods
 class TestConfigWithoutLdap:
     LDAP_ADDRESS = None
     IP_SSH_CONNECTIONS = "private"
 
 
-# pylint: disable=too-few-public-methods
 class FakeNode:
     parent_cluster = FakeCluster()
     public_ip_address = '2.2.2.2'
@@ -377,7 +373,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
 BASE_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data/test_scylla_yaml_builders')
 
 
-class FakeRemoter:  # pylint: disable=too-few-public-methods
+class FakeRemoter:
     def send_file(self, *_, **__):
         pass
 
@@ -402,10 +398,10 @@ class ObjectDict(dict):
         raise AttributeError(f"There no {item} attribute")
 
 
-class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-public-methods
+class DummyCluster(BaseScyllaCluster, BaseCluster):
     nodes: List['DummyNode']
 
-    def __init__(self, params):  # pylint: disable=super-init-not-called
+    def __init__(self, params):
         self.nodes = []
         self.params = params
         self.name = 'dummy_cluster'
@@ -420,12 +416,11 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
         for node in self.nodes:
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         pass
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
+class DummyNode(BaseNode):
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -513,7 +508,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
         return self._system_log
 
     @property
-    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
+    def is_nonroot_install(self):
         return False
 
     @system_log.setter

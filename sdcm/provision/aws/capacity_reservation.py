@@ -191,7 +191,6 @@ class SCTCapacityReservation:
         return cls.reservations[availability_zone][instance_type]
 
     @staticmethod
-    # pylint: disable=too-many-arguments
     def _create(ec2, test_id, availability_zone, instance_type, instance_count, duration, placement_group_arn=None) -> str | None:
         additional_params = {}
         if placement_group_arn:
@@ -229,7 +228,7 @@ class SCTCapacityReservation:
                 **additional_params
             )
             return response['CapacityReservation']['CapacityReservationId']
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to create capacity reservation for %s. Error: %s", instance_type, exc)
             return None
 

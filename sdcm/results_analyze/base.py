@@ -1,7 +1,7 @@
 from test_lib.utils import get_data_by_path
 
 
-class __DEFAULT__:  # pylint: disable=invalid-name,too-few-public-methods
+class __DEFAULT__:
     pass
 
 
@@ -21,7 +21,7 @@ class ClassBase:
     def load_kwargs(self, kwargs):
         errors = []
         for data_name, value in kwargs.items():
-            data_type = self.__annotations__.get(data_name, None)  # pylint: disable=no-member
+            data_type = self.__annotations__.get(data_name, None)
             if data_type is None:
                 errors.append(f'Wrong {data_name} attribute was provided')
                 continue
@@ -42,7 +42,7 @@ class ClassBase:
         if not isinstance(es_data, dict):
             raise ValueError(f"Class {self.__class__.__name__} can be loaded only from dict")
         data_mapping = self._es_data_mapping
-        for data_name, data_type in self.__annotations__.items():  # pylint: disable=no-member
+        for data_name, data_type in self.__annotations__.items():
             data_path = data_mapping.get(data_name, __DEFAULT__)
             if data_path is __DEFAULT__:
                 value = es_data.get(data_name, __DEFAULT__)
@@ -74,7 +74,7 @@ class ClassBase:
         setattr(self, data_name, data_type(value))
 
     def is_valid(self):
-        for data_name in self.__annotations__.keys():  # pylint: disable=no-member
+        for data_name in self.__annotations__.keys():
             default = getattr(self.__class__, data_name)
             value = getattr(self, data_name, None)
             if value is default:
@@ -93,7 +93,7 @@ class ClassBase:
         if max_level == 0:
             return {}
         output = {}
-        for data_name, data_type in cls.__annotations__.items():  # pylint: disable=no-member
+        for data_name, data_type in cls.__annotations__.items():
             data_path = cls._es_data_mapping.get(data_name, __DEFAULT__)
             if data_path is __DEFAULT__:
                 data_path = data_name
@@ -103,7 +103,7 @@ class ClassBase:
                     # No mapping if custom loader defined
                     child_data_mapping = {}
                 else:
-                    child_data_mapping = data_type._get_all_es_data_mapping(  # pylint: disable=protected-access
+                    child_data_mapping = data_type._get_all_es_data_mapping(
                         max_level=max_level-1)
                 if not child_data_mapping:
                     output[data_name] = data_path
@@ -129,9 +129,9 @@ class ClassBase:
         while instances:
             current_instance, data_path, es_data_path = instances.pop()
             for data_name, data_instance in current_instance.__dict__.items():
-                if current_instance.__annotations__.get(data_name, None) is None:  # pylint: disable=no-member
+                if current_instance.__annotations__.get(data_name, None) is None:
                     continue
-                es_data_name = current_instance._es_data_mapping.get(  # pylint: disable=protected-access
+                es_data_name = current_instance._es_data_mapping.get(
                     data_name, None)
                 if es_data_name is None:
                     es_data_name = es_data_path + [data_name]
@@ -158,7 +158,7 @@ class ClassBase:
 
         output = {}
 
-        def data_cb(data_instance, current_instance, data_path, es_data_path, is_edge):  # pylint: disable=too-many-branches, too-many-locals
+        def data_cb(data_instance, current_instance, data_path, es_data_path, is_edge):
             final_return = False
             for data_pattern_split in data_patterns_split:
                 to_add = len(data_pattern_split) == len(data_path)

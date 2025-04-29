@@ -20,7 +20,7 @@ import time
 from enum import Enum
 
 import yaml
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm.utils import loader_utils
 from upgrade_test import UpgradeTest
@@ -41,7 +41,7 @@ class PerformanceTestWorkload(Enum):
     MIXED = "mixed"
 
 
-class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  # pylint: disable=too-many-public-methods
+class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     """
     Test Scylla performance regression with cassandra-stress.
@@ -172,11 +172,11 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w', encoding="utf-8") as pref_file:
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
                 pref_file.write(content)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
-    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments
+    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',
                   save_stats=True):
         if debug_message:
             self.log.debug(debug_message)
@@ -267,7 +267,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             cmds = [cmds]
 
         for cmd in cmds:
-            # pylint: disable=no-member
+
             with self.db_cluster.cql_connection_patient(node) as session:
                 session.execute(cmd)
 
@@ -746,7 +746,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
         self._mixed_with_mv(on_populated=False)
 
     # Counter Tests
-    def test_uniform_counter_update_bench(self):  # pylint: disable=invalid-name
+    def test_uniform_counter_update_bench(self):
         """
         Test steps:
 
@@ -812,8 +812,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
                                   histogram_data=histogram_data_by_interval)
 
 
-class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):  # pylint: disable=too-many-ancestors
-    def get_email_data(self):  # pylint: disable=no-self-use
+class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
+    def get_email_data(self):
         return PerformanceRegressionTest.get_email_data(self)
 
     @latency_calculator_decorator(legend="Upgrade Node")
@@ -823,7 +823,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
         self._upgrade_node(node)
         InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
 
-    def _stop_stress_when_finished(self):  # pylint: disable=no-self-use
+    def _stop_stress_when_finished(self):
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
@@ -847,9 +847,9 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
 
     def run_workload_and_upgrade(self, stress_cmd, sub_type=None):
         # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
-        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
-        self.tester = self  # pylint: disable=attribute-defined-outside-init
-        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+        self.cluster = self.db_cluster
+        self.tester = self
+        self.monitoring_set = self.monitors
 
         if sub_type is None:
             sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'

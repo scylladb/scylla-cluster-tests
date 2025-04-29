@@ -113,7 +113,7 @@ class SkipPerIssues:
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"couldn't parse issue: {issue}",
                                severity=Severity.WARNING,
-                               trace=sys._getframe().f_back).publish()  # pylint: disable=protected-access
+                               trace=sys._getframe().f_back).publish()
             return None
         try:
             if issue_details := self.cache.get_issue(owner=issue_parsed.user_id, repo_id=issue_parsed.repo_id, issue_id=issue_parsed.issue_id):
@@ -139,7 +139,7 @@ class SkipPerIssues:
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"couldn't find issue: {issue}",
                                severity=Severity.WARNING,
-                               trace=sys._getframe().f_back).publish()  # pylint: disable=protected-access
+                               trace=sys._getframe().f_back).publish()
             return None
         except RateLimitExceededException as exc:
             logging.debug('RateLimitExceededException raise: %s', str(exc))
@@ -147,7 +147,7 @@ class SkipPerIssues:
             # this would mean that we would assume issue is open, and enable the skips needed, without having the
             # actual data of the issue
             return github.Issue.Issue(requester=None, headers={}, attributes=dict(state='open'), completed=True)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             logging.warning("failed to get issue: %s", issue)
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"failed to get issue {issue}",

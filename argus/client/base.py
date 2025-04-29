@@ -22,7 +22,7 @@ class ArgusClient:
     schema_version: str | None = None
 
     class Routes():
-        # pylint: disable=too-few-public-methods
+        
         SUBMIT = "/testrun/$type/submit"
         GET = "/testrun/$type/$id/get"
         HEARTBEAT = "/testrun/$type/$id/heartbeat"

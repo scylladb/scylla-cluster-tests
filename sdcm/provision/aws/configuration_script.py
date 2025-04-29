@@ -15,7 +15,7 @@ from sdcm.provision.aws.utils import network_config_ipv6_workaround_script, conf
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 
 
-class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):  # pylint: disable=too-few-public-methods
+class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     """
     A class that builds instance initialization script from parameters
     """

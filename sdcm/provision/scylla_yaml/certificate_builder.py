@@ -42,7 +42,7 @@ def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = Fals
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
-# pylint: disable=no-member
+
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption

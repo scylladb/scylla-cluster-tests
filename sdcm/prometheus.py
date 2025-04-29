@@ -61,14 +61,14 @@ def start_metrics_server():
         ip = get_my_ip()
         LOGGER.info('prometheus API server running on port: %s', port)
         return '{}:{}'.format(ip, port)
-    except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as ex:  # noqa: BLE001
         LOGGER.error('Cannot start local http metrics server: %s', ex)
 
     return None
 
 
 def nemesis_metrics_obj(metric_name_suffix=''):
-    global NM_OBJ  # pylint: disable=global-statement,global-variable-not-assigned  # noqa: PLW0602
+    global NM_OBJ  # noqa: PLW0602
     if not NM_OBJ.get(metric_name_suffix):
         NM_OBJ[metric_name_suffix] = NemesisMetrics(metric_name_suffix)
     return NM_OBJ[metric_name_suffix]
@@ -97,7 +97,7 @@ class NemesisMetrics:
     def create_counter(name, desc, param_list):
         try:
             return prometheus_client.Counter(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             LOGGER.error('Cannot create metrics counter: %s', ex)
         return None
 
@@ -105,22 +105,22 @@ class NemesisMetrics:
     def create_gauge(name, desc, param_list):
         try:
             return prometheus_client.Gauge(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             LOGGER.error('Cannot create metrics gauge: %s', ex)
         return None
 
     def event_start(self, disrupt):
         try:
-            self._disrupt_counter.labels(disrupt, START).inc()  # pylint: disable=no-member
-            self._disrupt_gauge.labels(disrupt).inc()  # pylint: disable=no-member
-        except Exception as ex:  # pylint: disable=broad-except
+            self._disrupt_counter.labels(disrupt, START).inc()
+            self._disrupt_gauge.labels(disrupt).inc()
+        except Exception as ex:
             LOGGER.exception('Cannot start metrics event: %s', ex)
 
     def event_stop(self, disrupt):
         try:
-            self._disrupt_counter.labels(disrupt, STOP).inc()  # pylint: disable=no-member
-            self._disrupt_gauge.labels(disrupt).dec()  # pylint: disable=no-member
-        except Exception as ex:  # pylint: disable=broad-except
+            self._disrupt_counter.labels(disrupt, STOP).inc()
+            self._disrupt_gauge.labels(disrupt).dec()
+        except Exception as ex:
             LOGGER.exception('Cannot stop metrics event: %s', ex)
 
 
@@ -138,7 +138,7 @@ class PrometheusAlertManagerListener(threading.Thread):
     def is_alert_manager_up(self):
         try:
             return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()['cluster']['status'] == 'ready'
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return False
 
     @log_run_info
@@ -168,7 +168,7 @@ class PrometheusAlertManagerListener(threading.Thread):
             return response.json()
         return None
 
-    def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
+    def _publish_new_alerts(self, alerts: dict):
         for alert in alerts.values():
             PrometheusAlertManagerEvent(raw_alert=alert).begin_event()
 
@@ -284,7 +284,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
-    # pylint: disable=too-many-arguments
+
     def __init__(self,
                  alert_manager: PrometheusAlertManagerListener,
                  alert_name: str,
