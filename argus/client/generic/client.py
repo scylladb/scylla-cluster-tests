@@ -26,6 +26,24 @@ class ArgusGenericClient(ArgusClient):
         response = self.submit_run(run_type=self.test_type, run_body=request_body)
         self.check_response(response)
 
+    def trigger_jobs(self, common_params: dict[str, str], params: list[dict[str, str]], version: str = None, release: str = None, plan_id: str = None):
+        request_body = {
+            "common_params": common_params,
+            "params": params,
+            "version": version,
+            "release": release,
+            "plan_id": plan_id,
+        }
+        response = self.post(
+            endpoint=self.Routes.TRIGGER_JOBS,
+            location_params={},
+            body={
+                **self.generic_body,
+                **request_body,
+            }
+        )
+        self.check_response(response)
+        return response.json()
 
     def finalize_generic_run(self, run_id: str, status: str, scylla_version: str | None = None):
         response = self.finalize_run(run_type=self.test_type, run_id=run_id, body={
