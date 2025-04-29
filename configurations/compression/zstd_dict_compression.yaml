@@ -1,0 +1,9 @@
+# Disabled speculative_retry to match the configuration of
+# scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,
+# allowing this test to be used as a comparable benchmark.
+post_prepare_cql_cmds: >-
+  ALTER TABLE keyspace1.standard1
+  WITH compression = {
+    'sstable_compression': 'ZstdWithDictsCompressor'
+  }
+  AND speculative_retry = 'NONE';
