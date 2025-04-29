@@ -49,10 +49,9 @@ class HWPerforanceEvent(SctEvent):
         return super().msgfmt + ": message={0.message}"
 
 
-class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instance-attributes
+class TestFrameworkEvent(InformationalEvent):
     __test__ = False  # Mark this class to be not collected by pytest.
 
-    # pylint: disable=too-many-arguments
     def __init__(self,
                  source: Any,
                  source_method: Optional = None,
@@ -156,7 +155,7 @@ class TestStepEvent(ContinuousEvent):
     def __init__(self,
                  step,
                  severity=Severity.NORMAL,
-                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+                 publish_event=True):
         self.step = step
         self.duration = None
         self.full_traceback = ""
@@ -215,7 +214,7 @@ class AwsKmsEvent(ThreadFailedEvent):
 
 
 class CoreDumpEvent(InformationalEvent):
-    # pylint: disable=too-many-arguments
+
     def __init__(self,
                  node: Any,
                  corefile_url: str,

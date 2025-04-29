@@ -41,7 +41,7 @@ AnnotationKey = NewType("AnnotationKey", Tuple[str, ...])
 
 class GrafanaAnnotator(EventsProcessPipe[Tuple[str, Any], Annotation]):
     def run(self) -> None:
-        for event_tuple in self.inbound_events():  # pylint: disable=no-member; pylint doesn't understand generics
+        for event_tuple in self.inbound_events():
             with verbose_suppress("GrafanaAnnotator failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
                 if not event.publish_to_grafana:
@@ -70,7 +70,7 @@ class GrafanaEventAggregator(EventsProcessPipe[Annotation, Annotation]):
         time_window_counters: Dict[AnnotationKey, int] = defaultdict(int)
         time_window_end = time.perf_counter()
 
-        for annotation in self.inbound_events():  # pylint: disable=no-member; pylint doesn't understand generics
+        for annotation in self.inbound_events():
             with verbose_suppress("GrafanaEventAggregator failed to process an annotation %s", annotation):
                 annotation_key = self.unique_key(annotation)
                 time_diff = time.perf_counter() - time_window_end

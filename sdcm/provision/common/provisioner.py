@@ -2,13 +2,13 @@
 import abc
 from typing import Dict, Any, List, Union
 
-from pydantic import BaseModel  # pylint: disable=no-name-in-module
+from pydantic import BaseModel
 
 
 TagsType = Dict[str, str]
 
 
-class ProvisionParameters(BaseModel):  # pylint: disable=too-few-public-methods
+class ProvisionParameters(BaseModel):
     name: str  # Name of the parameter needed only to make distinction between the parameter instances
     region_name: str
     availability_zone: str
@@ -17,18 +17,18 @@ class ProvisionParameters(BaseModel):  # pylint: disable=too-few-public-methods
     price: float = None  # Requested price for instance
 
 
-class InstanceParamsBase(BaseModel):  # pylint: disable=too-few-public-methods
+class InstanceParamsBase(BaseModel):
     """
     Base class for instance parameters
     """
 
 
-class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):  # pylint: disable=too-few-public-methods
+class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):
     """
     Base class for provisioner - a class that provide API to provision instances
     """
     @abc.abstractmethod
-    def provision(  # pylint: disable=too-many-arguments
+    def provision(
             self,
             provision_parameters: ProvisionParameters,
             instance_parameters: InstanceParamsBase | List[InstanceParamsBase],

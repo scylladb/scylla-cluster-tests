@@ -10,9 +10,9 @@ from typing import Any
 LOGGER = logging.getLogger(__name__)
 
 
-def get_thread_stacktrace(thread):  # pylint: disable=no-self-use
+def get_thread_stacktrace(thread):
     try:
-        frame = sys._current_frames().get(thread.ident, None)  # pylint: disable=protected-access
+        frame = sys._current_frames().get(thread.ident, None)
         output = []
         for filename, lineno, name, line in traceback.extract_stack(frame):
             output.append('File: "%s", line %d, in %s' % (filename,
@@ -20,7 +20,7 @@ def get_thread_stacktrace(thread):  # pylint: disable=no-self-use
             if line:
                 output.append("  %s" % (line.strip()))
         return '\n'.join(output)
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.error('Failed to get stack trace due to the: %s', exc)
         return 'FAILED TO GET STACKTRACE'
 
@@ -28,7 +28,7 @@ def get_thread_stacktrace(thread):  # pylint: disable=no-self-use
 def get_source(source: Any):
     try:
         return inspect.getsource(source)
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.error('Failed to source due to the: %s', exc)
         return 'NO SOURCE AVAILABLE'
 
@@ -50,8 +50,8 @@ def gather_live_threads_and_dump_to_file(dump_file_path: str) -> bool:
                     module = thread.run.__module__
                     source = get_source(thread.run)
                 elif getattr(thread, '_target', None):
-                    module = thread._target.__module__  # pylint: disable=protected-access
-                    source = get_source(thread._target)  # pylint: disable=protected-access
+                    module = thread._target.__module__
+                    source = get_source(thread._target)
             else:
                 module = thread.__module__
                 source = get_source(thread.__class__)

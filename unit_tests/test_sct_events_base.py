@@ -26,8 +26,6 @@ from sdcm.sct_events.base import \
 Y = None  # define a global name for pickle.
 
 
-# pylint: disable=protected-access,invalid-name,abstract-method,redefined-outer-name,global-statement
-
 class TestSctEventDefaultRegistry(unittest.TestCase):
     def test_sct_event_is_in_registry(self):
         self.assertIn("SctEvent", SctEvent._sct_event_types_registry)
@@ -93,7 +91,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertIsInstance(y, SctEventProtocol)
 
     def test_subclass_twice_with_same_name(self):
-        # pylint: disable=unused-variable
+
         class Y(SctEvent):
             pass
 
@@ -137,7 +135,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertNotEqual(z, y)
 
     def test_equal_pickle_unpickle(self):
-        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition  # noqa: PLW0603
+        global Y  # noqa: PLW0603
 
         class Y(SctEvent):
             pass
@@ -305,7 +303,6 @@ class TestSctEvent(SctEventTestCase):
         class Y(SctEvent):
             T: Type[YT]
 
-        # pylint: disable=too-few-public-methods
         class Mixin:
             severity = Severity.WARNING
 
@@ -360,7 +357,6 @@ class TestSctEvent(SctEventTestCase):
                 self.attr1 = attr1
                 super().__init__(severity=Severity.ERROR)
 
-        # pylint: disable=too-few-public-methods
         class Mixin:
             severity = Severity.WARNING
 
@@ -372,7 +368,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertEqual(yt.attr1, "value1")
 
     def test_add_subevent_type_pickle(self):
-        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition  # noqa: PLW0603
+        global Y  # noqa: PLW0603
 
         class Y(SctEvent):
             T: Type[SctEvent]
@@ -493,7 +489,7 @@ class TestLogEvent(SctEventTestCase):
         self.assertTrue(y._ready_to_publish)
 
     def test_clone_fresh(self):
-        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition  # noqa: PLW0603
+        global Y  # noqa: PLW0603
 
         class Y(LogEvent):
             pass
@@ -516,7 +512,7 @@ class TestLogEvent(SctEventTestCase):
         self.assertIsInstance(y, SctEventProtocol)
 
     def test_clone_with_info(self):
-        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition  # noqa: PLW0603
+        global Y  # noqa: PLW0603
 
         class Y(LogEvent):
             pass

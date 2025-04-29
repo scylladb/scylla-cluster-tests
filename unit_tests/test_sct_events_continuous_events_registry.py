@@ -1,4 +1,4 @@
-# pylint: disable=no-self-use
+
 
 import uuid
 from pathlib import Path

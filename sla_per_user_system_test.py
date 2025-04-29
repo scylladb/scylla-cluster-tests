@@ -24,7 +24,6 @@ from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
 from test_lib.sla import ServiceLevel, Role, User
 
 
-# pylint: disable=too-many-public-methods
 class SlaPerUserTest(LongevityTest):
     """
     Test SLA per user feature using cassandra-stress.
@@ -188,7 +187,7 @@ class SlaPerUserTest(LongevityTest):
         return None
 
     @staticmethod
-    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):  # pylint: disable=invalid-name
+    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):
         """
         :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops, scheduler_runtime etc..).
                         If metrics name is not defined - ration will be calculated for service_shares
@@ -252,7 +251,7 @@ class SlaPerUserTest(LongevityTest):
 
         return results
 
-    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):  # pylint: disable=invalid-name
+    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):
         end_time = int(time.time())
         scylla_load = self.prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time)
 
@@ -288,7 +287,6 @@ class SlaPerUserTest(LongevityTest):
                      ]
         self.run_stress_and_verify_threads(params={'stress_cmd': read_cmds})
 
-    # pylint: disable=too-many-arguments, too-many-locals
     def define_read_cassandra_stress_command(self,
                                              role: Role, load_type: str,
                                              c_s_workload_type: str,
@@ -306,23 +304,23 @@ class SlaPerUserTest(LongevityTest):
         def latency():
             return '%d throttle=%d/s' % (threads, throttle)
 
-        def throughput():  # pylint: disable=unused-variable
+        def throughput():
             return threads
 
-        def cache_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def cache_only(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=1..%d' % max_rows_for_read
 
         # Read from cache and disk
-        def mixed(max_rows_for_read):  # pylint: disable=unused-variable
+        def mixed(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = self.num_of_partitions
             return "'dist=gauss(1..%d, %d, %d)'" % (max_rows_for_read,
                                                     int(max_rows_for_read / 2),
                                                     int(max_rows_for_read * 0.05))
 
-        def disk_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def disk_only(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=%d..%d' % (max_rows_for_read, max_rows_for_read+int(self.num_of_partitions*0.25))
@@ -428,7 +426,7 @@ class SlaPerUserTest(LongevityTest):
         finally:
             self.clean_auth(entities_list_of_dict=read_users)
 
-    def test_read_throughput_vs_latency_cache_and_disk(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_cache_and_disk(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the full data set (that is read from both the cache and the disk)
@@ -493,7 +491,7 @@ class SlaPerUserTest(LongevityTest):
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds,
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
-    def test_read_throughput_vs_latency_cache_only(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_cache_only(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -559,7 +557,7 @@ class SlaPerUserTest(LongevityTest):
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds,
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
-    def test_read_throughput_vs_latency_disk_only(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_disk_only(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -707,7 +705,6 @@ class SlaPerUserTest(LongevityTest):
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
     def _throughput_latency_tests_run(self, read_cmds, read_users, latency_user, improvement_expected):
-        # pylint: disable=too-many-locals
 
         # Wait that service levels are propagated to all nodes
         time.sleep(10)
@@ -883,7 +880,7 @@ class SlaPerUserTest(LongevityTest):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         email_data.update({
@@ -894,7 +891,6 @@ class SlaPerUserTest(LongevityTest):
 
         return email_data
 
-    # pylint: disable=inconsistent-return-statements
     def get_test_status(self) -> str:
         if self._comparison_results:
             try:

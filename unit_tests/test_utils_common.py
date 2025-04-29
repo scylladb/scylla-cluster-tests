@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class TestUtils(unittest.TestCase):
-    def test_scylla_bench_metrics_conversion(self):  # pylint: disable=no-self-use
+    def test_scylla_bench_metrics_conversion(self):
         metrics = {"4ms": 4.0, "950µs": 0.95, "30ms": 30.0, "8.592961906s": 8592.961905999999,
                    "18.120703ms": 18.120703, "5.963775µs": 0.005963775, "9h0m0.024080491s": 32400024.080491,
                    "1m0.024080491s": 60024.080491, "546431": 546431.0}
@@ -52,7 +52,7 @@ class TestDownloadDir(unittest.TestCase):
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
 
-        def touch_file(client, bucket, key, local_file_path):  # pylint: disable=unused-argument
+        def touch_file(client, bucket, key, local_file_path):
             Path(local_file_path).touch()
 
         with unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file):
@@ -63,7 +63,7 @@ class TestDownloadDir(unittest.TestCase):
     def test_update_db_packages_gce(self):
         sct_update_db_packages = 'gs://scratch.scylladb.com/sct_test/'
 
-        class FakeObject:  # pylint: disable=too-few-public-methods
+        class FakeObject:
             def __init__(self, name):
                 self.name = name
 
@@ -86,11 +86,11 @@ class TestDownloadDir(unittest.TestCase):
         assert update_db_packages is None
 
 
-class Remoter:  # pylint: disable=too-few-public-methods
+class Remoter:
     def __init__(self, system_log):
         self.system_log = system_log
 
-    def run(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def run(self, *args, **kwargs):
         lines = ["[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
                  "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, "
                  "primary_replica_only=false, status=succeeded"
@@ -100,8 +100,8 @@ class Remoter:  # pylint: disable=too-few-public-methods
                 file.write(f"{line}\n")
 
 
-class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstract-method
-    # pylint: disable=super-init-not-called
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):
+
     def __init__(self, nodes):
         self.nodes = nodes
         self.params = sct_config.SCTConfiguration()
@@ -115,7 +115,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
         pass
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
+class DummyNode(BaseNode):
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -163,7 +163,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         pass
 
     @property
-    def is_nonroot_install(self) -> bool:  # pylint: disable=invalid-overridden-method
+    def is_nonroot_install(self) -> bool:
         return False
 
     @property
