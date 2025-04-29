@@ -67,6 +67,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
+from sdcm.mgmt.helpers import get_dc_name_from_ks_statement, get_schema_create_statements_from_snapshot
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
@@ -2908,6 +2909,42 @@ class Nemesis:
                 stress_queue.append(read_thread)
             return stress_queue
 
+        def _restore_schema(locations: list, cluster_id: str, tag: str) -> None:
+            """Introduced to cover two flows:
+
+            - When a backup snapshot has different DC name than the current cluster's DC name -
+            restore schema out of the Manager applying CQL statements saved in schema.json file
+
+            - When backup snapshot has the same DC name as the current cluster's DC name -
+            restore schema using the Manager (sctool restore --restore-schema ...)
+            """
+            ks_statements, other_statements = get_schema_create_statements_from_snapshot(
+                bucket=locations[0].split(':')[-1],
+                mgr_cluster_id=cluster_id,
+                snapshot_tag=tag,
+            )
+
+            dc_under_test_name = next(iter(self.cluster.get_nodetool_status()))
+            # Test is supposed to work with single DC setups only, so we can take the first DC name
+            dc_from_backup_name = get_dc_name_from_ks_statement(ks_statements[0])[0]
+            self.log.debug("DC name from backup: %s, DC name under test: %s", dc_from_backup_name, dc_under_test_name)
+
+            if dc_under_test_name != dc_from_backup_name:
+                self.log.info("DC names mismatch - restoring the schema manually altering cql statements and "
+                              "applying them one by one")
+                # Alter the dc_name in keyspace cql statements to match the current cluster's dc_name
+                old_dc_block = f"'{dc_from_backup_name}':"  # Include quotes and colon to avoid unintended replacements
+                new_dc_block = f"'{dc_under_test_name}':"
+                ks_statements = [stmt.replace(old_dc_block, new_dc_block) for stmt in ks_statements]
+                # Apply cql statements one by one to restore schema
+                for cql_stmt in ks_statements + other_statements:
+                    self.target_node.run_cqlsh(cql_stmt)
+            else:
+                self.log.info("Restoring the schema using the Scylla Manager")
+                task = mgr_cluster.create_restore_task(restore_schema=True, location_list=locations, snapshot_tag=tag)
+                task.wait_and_get_final_status(step=10, timeout=6 * 60)  # 6 giving minutes to restore the schema
+                assert task.status == TaskStatus.DONE, f'Schema restoration failed: snapshot tag - {tag}'
+
         skip_issues = [
             "https://github.com/scylladb/scylla-manager/issues/3829",
             "https://github.com/scylladb/scylla-manager/issues/4049"
@@ -2939,16 +2976,12 @@ class Nemesis:
         test_keyspaces = [keyspace.replace('"', '') for keyspace in self.cluster.get_test_keyspaces()]
         # Keyspace names that start with a digit are surrounded by quotation marks in the output of a describe query
         if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
-            self.log.info("Restoring the schema of the keyspace '%s'",
-                          chosen_snapshot_info["keyspace_name"])
-            restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
-                                                           snapshot_tag=chosen_snapshot_tag)
-
-            restore_task.wait_and_get_final_status(step=10,
-                                                   timeout=6*60)  # giving 6 minutes to restore the schema
-            assert restore_task.status == TaskStatus.DONE, \
-                f'Schema restoration of {chosen_snapshot_tag} has failed!'
-
+            self.log.info("Restoring the schema of the keyspace '%s'", chosen_snapshot_info["keyspace_name"])
+            _restore_schema(
+                locations=location_list,
+                cluster_id=chosen_snapshot_info["cluster_id"],
+                tag=chosen_snapshot_tag,
+            )
             with ignore_ycsb_connection_refused():
                 self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
