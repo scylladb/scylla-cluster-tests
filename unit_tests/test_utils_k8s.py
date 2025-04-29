@@ -109,7 +109,7 @@ def test_helm_values_try_set_by_list_index():
     assert False, "expected 'ValueError' exception was not raised"
 
 
-class FakeK8SKluster:  # pylint: disable=too-few-public-methods
+class FakeK8SKluster:
     def __init__(self):
         self.get_api_client = mock.MagicMock()
         self.region_name = 'fake-region-1'
@@ -167,8 +167,7 @@ ns2_eachpod_callbacks_as_list = [
 ]
 
 
-# pylint: disable=protected-access
-def test_scylla_pods_ip_change_tracker_01_positive_scenario():  # pylint: disable=too-many-statements
+def test_scylla_pods_ip_change_tracker_01_positive_scenario():
     # Init objects
     core_v1_api_mock, k8s_kluster, ip_mapper = mock.Mock(), FakeK8SKluster(), {}
     namespace1, pod_names1 = 'scylla', ("pod-name-1", "pod-name-2", "pod-name-3")

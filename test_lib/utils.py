@@ -3,11 +3,11 @@ import functools
 import collections
 
 
-class __DEFAULT__:  # pylint: disable=invalid-name,too-few-public-methods
+class __DEFAULT__:
     pass
 
 
-class __DEFAULT2__:  # pylint: disable=invalid-name,too-few-public-methods
+class __DEFAULT2__:
     pass
 
 

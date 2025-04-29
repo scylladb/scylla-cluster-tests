@@ -66,7 +66,7 @@ class BaseEventsTest(unittest.TestCase, EventsUtilsMixin):
         return get_logger_event_summary(_registry=self.events_processes_registry)
 
 
-class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
+class SctEventsTests(BaseEventsTest):
     # increase the max length to see the full strings in the AssertionError which precedes the diff
     maxDiff = None
 
@@ -516,7 +516,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
                                             name=count_condition_name,
                                             _registry=self.events_processes_registry) as counter_manager:
-                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                assert counter_manager._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, )
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
@@ -542,7 +542,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                                              name=count_condition_name,
                                              _registry=self.events_processes_registry)
 
-        assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED, )  # pylint: disable=protected-access
+        assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED, )
         counter.start_event_counter()
         with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
             DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
@@ -571,7 +571,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
                                             name=count_condition_name,
                                             _registry=self.events_processes_registry) as counter_manager:
-                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                assert counter_manager._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, )
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13ms", 111).publish()
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33ms", 111).publish()
@@ -590,7 +590,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
                                             name=count_condition_name,
                                             _registry=self.events_processes_registry) as counter_manager:
-                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                assert counter_manager._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
 
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
@@ -621,7 +621,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
                                             name=count_condition_name,
                                             _registry=self.events_processes_registry) as counter_manager:
-                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                assert counter_manager._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
 
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
@@ -661,9 +661,9 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
                                            name=count_condition_name2,
                                            _registry=self.events_processes_registry) as counter_manager2:
-                assert counter_manager1._event_type == (  # pylint: disable=protected-access
+                assert counter_manager1._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
-                assert counter_manager2._event_type == (  # pylint: disable=protected-access
+                assert counter_manager2._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
 
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
@@ -718,7 +718,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
                                             name=count_condition_name1,
                                             _registry=self.events_processes_registry) as counter_manager1:
-                assert counter_manager1._event_type == (  # pylint: disable=protected-access
+                assert counter_manager1._event_type == (
                     DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
                 DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
                 DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22,
@@ -727,7 +727,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
                                                 name=count_condition_name2,
                                                 _registry=self.events_processes_registry) as counter_manager2:
-                    assert counter_manager2._event_type == (  # pylint: disable=protected-access
+                    assert counter_manager2._event_type == (
                         DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
 
                     DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 499 ms", 111).publish()
@@ -793,7 +793,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 nemesis_event.duration = 15
                 raise
 
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pytest.fail("we shouldn't reach this code path")
 
         assert nemesis_event.errors_formatted == ''

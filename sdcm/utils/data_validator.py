@@ -157,7 +157,6 @@ class DataForValidation(NamedTuple):
     after_update_rows: Optional[list]
 
 
-# pylint: disable=too-many-instance-attributes, too-many-public-methods
 class LongevityDataValidator:
     SUFFIX_FOR_VIEW_AFTER_UPDATE = '_after_update'
     SUFFIX_EXPECTED_DATA_TABLE = '_expect'
@@ -572,7 +571,6 @@ class LongevityDataValidator:
 
         return logdir
 
-    # pylint: disable=too-many-locals,too-many-branches
     def analyze_updated_data_and_save_in_file(self, data_for_validation: DataForValidation, session, logdir: str):
         actual_data_set = {tuple(item) for item in sorted(data_for_validation.actual_data)}
         expected_data_set = {tuple(item) for item in sorted(data_for_validation.expected_data)}
@@ -619,7 +617,7 @@ class LongevityDataValidator:
 
                 try:
                     row_data.update({key: list(session.execute(query % (select_columns, table)))})
-                except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as error:  # noqa: BLE001
                     LOGGER.error("Query %s failed. Error: %s", query % table, error)
 
             row_data.update({'source_all_columns': list(session.execute(query % (columns_for_validation,
@@ -647,7 +645,7 @@ class LongevityDataValidator:
                       encoding='utf8') as json_file:
                 try:
                     json.dump(result, json_file)
-                except:   # pylint: disable=bare-except
+                except:
                     json_file.write(str(result))
                 LOGGER.info("analyze_result_debug json: %s", json_file.name)
 

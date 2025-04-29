@@ -17,7 +17,7 @@ from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class BaseStressEvent(ContinuousEvent, abstract=True):
-    # pylint: disable=too-many-arguments
+
     @classmethod
     def add_stress_subevents(cls,
                              failure: Optional[Severity] = None,
@@ -52,7 +52,7 @@ class StressEventProtocol(SctEventProtocol, Protocol):
 
 
 class StressEvent(BaseStressEvent, abstract=True):
-    # pylint: disable=too-many-arguments
+
     def __init__(self,
                  node: Any,
                  stress_cmd: Optional[str] = None,

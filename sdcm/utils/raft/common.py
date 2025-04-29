@@ -111,7 +111,7 @@ class NodeBootstrapAbortManager:
             self.bootstrap_node.parent_cluster.node_setup(self.bootstrap_node, verbose=True)
             self.bootstrap_node.parent_cluster.node_startup(self.bootstrap_node, verbose=True)
             LOGGER.debug("Node %s was bootstrapped", self.bootstrap_node.name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Setup failed for node %s with err %s", self.bootstrap_node.name, exc)
         finally:
             self._set_wait_stop_event()
@@ -130,7 +130,7 @@ class NodeBootstrapAbortManager:
                 return
             abort_action()
             LOGGER.info("Scylla was stopped successfully on node %s", self.bootstrap_node.name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Abort was failed on node %s with error %s", self.bootstrap_node.name, exc)
         finally:
             self._set_wait_stop_event()
@@ -243,7 +243,7 @@ class NodeBootstrapAbortManager:
                 LOGGER.info("Clean node")
                 self.clean_unbootstrapped_node()
 
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Scylla service restart failed: %s", exc)
             self.clean_unbootstrapped_node()
             raise BootstrapStreamErrorFailure(f"Rebootstrap failed with error: {exc}") from exc

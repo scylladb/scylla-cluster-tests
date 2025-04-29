@@ -16,14 +16,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Steps(SlaUtils):
-    # pylint: disable=too-many-arguments
+
     def run_stress_and_validate_scheduler_io_queue_operations_during_load(self, tester, read_cmds, prometheus_stats, read_roles,
                                                                           stress_queue, sleep=600):
-        # pylint: disable=not-context-manager
+
         with TestStepEvent(step="Run stress command and validate io_queue_operations during load") as wp_event:
             try:
                 start_time = time.time() + 60
-                # pylint: disable=protected-access
+
                 tester._run_all_stress_cmds(stress_queue, params={'stress_cmd': read_cmds, 'round_robin': True})
                 time.sleep(sleep)
                 end_time = time.time()
@@ -36,16 +36,15 @@ class Steps(SlaUtils):
                                                   possible_issue={'less resources': 'scylla-enterprise#2717'}
                                                   )
                 return None
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
                 return wp_event
 
-    # pylint: disable=too-many-arguments
     def alter_sl_and_validate_io_queue_operations(self, tester, service_level, new_shares, read_roles, prometheus_stats,
                                                   sleep=600):
-        # pylint: disable=not-context-manager
+
         with TestStepEvent(step=f"Alter shares from {service_level.shares} to {new_shares} Service "
                                 f"Level {service_level.name} and validate io_queue_operations "
                                 f"during load") as wp_event:
@@ -66,45 +65,42 @@ class Steps(SlaUtils):
                                                   db_cluster=tester.db_cluster,
                                                   possible_issue={'less resources': "scylla-enterprise#949"})
                 return None
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
                 return wp_event
 
-    # pylint: disable=too-many-arguments
     @staticmethod
     def detach_service_level_and_run_load(sl_for_detach, role_with_sl_to_detach, sleep=600):
-        # pylint: disable=not-context-manager
+
         with TestStepEvent(step=f"Detach service level {sl_for_detach.name} with {sl_for_detach.shares} shares from "
                                 f"{role_with_sl_to_detach.name}.") as wp_event:
             try:
                 role_with_sl_to_detach.detach_service_level()
                 time.sleep(sleep)
                 return None
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
                 return wp_event
 
-    # pylint: disable=too-many-arguments
     @staticmethod
     def drop_service_level_and_run_load(sl_for_drop, role_with_sl_to_drop, sleep=600):
-        # pylint: disable=not-context-manager
+
         with TestStepEvent(step=f"Drop service level {sl_for_drop.name} with {role_with_sl_to_drop.name}.") as wp_event:
             try:
                 sl_for_drop.drop()
                 role_with_sl_to_drop.reset_service_level()
                 time.sleep(sleep)
                 return None
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
                 return wp_event
 
-    # pylint: disable=too-many-arguments
     def attach_sl_and_validate_io_queue_operations(self, tester, new_service_level, role_for_attach,
                                                    read_roles, prometheus_stats, sleep=600):
         @retrying(n=15, sleep_time=1, message="Wait for service level has been attached to the role",
@@ -112,7 +108,6 @@ class Steps(SlaUtils):
         def validate_role_service_level_attributes_against_db():
             role_for_attach.validate_role_service_level_attributes_against_db()
 
-        # pylint: disable=not-context-manager
         with TestStepEvent(step=f"Attach service level {new_service_level.name} with "
                                 f"{new_service_level.shares} shares to {role_for_attach.name}. "
                                 f"Validate io_queue_operations during load") as wp_event:
@@ -158,7 +153,7 @@ class Steps(SlaUtils):
                                                                   'scylla-enterprise#2572 or scylla-enterprise#2717'}
                                                   )
                 return None
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -173,7 +168,6 @@ class SlaTests(Steps):
     def unique_subsrtr_for_name():
         return str(uuid.uuid1()).split("-", maxsplit=1)[0]
 
-    # pylint: disable=too-many-arguments
     def _create_sla_auth(self, session, db_cluster, shares: int, index: str, superuser: bool = True) -> Role:
         role = None
         try:
@@ -182,14 +176,13 @@ class SlaTests(Steps):
                                   service_level_for_test_step="INITIAL_FOR_TEST"):
                 self.wait_for_service_level_propagated(cluster=db_cluster, service_level=role.attached_service_level)
             return role
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             if role and role.attached_service_level:
                 role.attached_service_level.drop()
             if role:
                 role.drop()
             raise
 
-    # pylint: disable=too-many-arguments
     def _create_new_service_level(self, session, auth_entity_name_index, shares, db_cluster, service_level_for_test_step: str = None):
         new_sl = ServiceLevel(session=session,
                               name=SERVICE_LEVEL_NAME_TEMPLATE % (shares, auth_entity_name_index),
@@ -204,7 +197,7 @@ class SlaTests(Steps):
         for stress in stress_queue:
             try:
                 tester.verify_stress_thread(cs_thread_pool=stress)
-            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001
                 LOGGER.error("Stress verifying failed. Error: %s", error)
 
     @staticmethod
@@ -213,7 +206,6 @@ class SlaTests(Steps):
             if role["role"] == role_to_refresh:
                 read_roles[i]["service_level"] = role_to_refresh.attached_service_level
 
-    # pylint: disable=too-many-locals
     def test_increase_shares_by_attach_another_sl_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                               cassandra_stress_column_definition=None):
         low_share = 20
@@ -278,9 +270,8 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events  # pylint: disable=lost-exception
+                return error_events
 
-    # pylint: disable=too-many-locals
     def test_increase_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                          cassandra_stress_column_definition=None):
         low_share = 20
@@ -331,9 +322,8 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events  # pylint: disable=lost-exception
+                return error_events
 
-    # pylint: disable=too-many-locals
     def test_decrease_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                          cassandra_stress_column_definition=None):
         low_share = 800
@@ -385,9 +375,8 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events  # pylint: disable=lost-exception
+                return error_events
 
-    # pylint: disable=too-many-locals
     def test_replace_service_level_using_detach_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                             cassandra_stress_column_definition=None):
         low_share = 250
@@ -460,9 +449,8 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events  # pylint: disable=lost-exception
+                return error_events
 
-    # pylint: disable=too-many-locals
     def test_replace_service_level_using_drop_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                           cassandra_stress_column_definition=None):
         low_share = 250
@@ -536,9 +524,8 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events  # pylint: disable=lost-exception
+                return error_events
 
-    # pylint: disable=too-many-locals,too-many-arguments
     def test_maximum_allowed_sls_with_max_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                              cassandra_stress_column_definition=None,
                                                              service_levels_amount=7):
@@ -581,4 +568,4 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events  # pylint: disable=lost-exception
+                return error_events

@@ -15,7 +15,7 @@ import re
 
 import pytest
 import requests
-from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
+from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 
 from sdcm.utils import alternator

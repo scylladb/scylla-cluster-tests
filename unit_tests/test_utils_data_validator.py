@@ -28,7 +28,7 @@ def test_view_names_for_updated_data(params):
     data_validator = LongevityDataValidator(longevity_self_object=MockLongevityTest(params=params),
                                             user_profile_name='c-s_lwt',
                                             base_table_partition_keys=['domain', 'published_date'])
-    data_validator._validate_updated_per_view = [True, True]  # pylint: disable=protected-access
+    data_validator._validate_updated_per_view = [True, True]
     views_list = data_validator.list_of_view_names_for_update_test()
     assert views_list == [('blogposts_update_one_column_lwt_indicator',
                            'blogposts_update_one_column_lwt_indicator_after_update',
@@ -44,6 +44,6 @@ def test_view_names_for_updated_data_not_found(params):
     data_validator = LongevityDataValidator(longevity_self_object=MockLongevityTest(params=params),
                                             user_profile_name='c-s_lwt',
                                             base_table_partition_keys=['domain', 'published_date'])
-    data_validator._validate_updated_per_view = [True, True]  # pylint: disable=protected-access
+    data_validator._validate_updated_per_view = [True, True]
     views_list = data_validator.list_of_view_names_for_update_test()
     assert views_list == []

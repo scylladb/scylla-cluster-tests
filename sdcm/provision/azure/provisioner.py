@@ -34,7 +34,7 @@ from sdcm.utils.azure_utils import AzureService
 LOGGER = logging.getLogger(__name__)
 
 
-class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attributes
+class AzureProvisioner(Provisioner):
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
 
     def __init__(self, test_id: str, region: str, availability_zone: str,
@@ -88,7 +88,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     @classmethod
     def discover_regions(cls, test_id: str = "", regions: list = None,
                          azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
-        # pylint: disable=arguments-differ,unused-argument
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
