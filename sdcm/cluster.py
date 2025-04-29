@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-# pylint: disable=too-many-lines
 from __future__ import annotations
 
 import contextlib
@@ -55,11 +54,11 @@ from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
-from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
+from cassandra.cluster import Cluster as ClusterDriver
+from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
 from sdcm.node_exporter_setup import NodeExporterSetup
@@ -241,7 +240,7 @@ class UserRemoteCredentials():
         pass
 
 
-class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class BaseNode(AutoSshContainerMixin):
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
     MANAGER_AGENT_PORT = 10001
@@ -260,7 +259,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     SYSTEM_EVENTS_PATTERNS = SYSTEM_ERROR_EVENTS_PATTERNS + INSTANCE_STATUS_EVENTS_PATTERNS
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):  # pylint: disable=too-many-arguments,unused-argument
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):
         self.name = name
         self.rack = rack
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
@@ -404,7 +403,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
                 sysctl -p
                 """), verbose=True)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 LOGGER.error("Encountered an unhadled exception while changing 'perf_event_paranoid' value",
                              exc_info=True)
         self._add_node_to_argus()
@@ -425,7 +424,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 shards_amount=shards,
                 state=ResourceState.RUNNING,
             )
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
     def update_shards_in_argus(self):
@@ -434,7 +433,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             shards = self.scylla_shards if "db" in self.node_type else self.cpu_cores
             shards = int(shards) if shards else 0
             client.update_shards_for_resource(name=self.name, new_shards=shards)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
     def update_rack_info_in_argus(self, dc_name: str, rack_name: str):
@@ -442,7 +441,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             client = self.test_config.argus_client()
             client.update_resource(name=self.name, update_data={"instance_info": {
                                    "rack_name": rack_name, "dc_name": dc_name}})
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             LOGGER.error("Encountered an unhandled exception while updating resource in Argus", exc_info=True)
 
     def _terminate_node_in_argus(self):
@@ -450,7 +449,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             client = self.test_config.argus_client()
             reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
             client.terminate_resource(name=self.name, reason=reason)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
     def _init_remoter(self, ssh_login_info):
@@ -577,7 +576,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not self._short_hostname:
             try:
                 self._short_hostname = self.remoter.run('hostname -s').stdout.strip()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 return "no_booted_yet"
         return self._short_hostname
 
@@ -636,7 +635,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         try:
             result = self.remoter.run("nproc", ignore_status=True)
             return int(result.stdout)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error("Failed to get number of cores due to the %s", details)
         return None
 
@@ -652,7 +651,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         shards = self.smp or self.cpuset or self.cpu_cores
         try:
             return int(shards)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.log.error("Failed to convert to integer shards value: %s", shards)
             return 0
 
@@ -678,7 +677,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             #   'CPUSET="--cpuset 1-7,9-15,17-23,25-31 "'
             # And so on...
             cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/cpuset.conf").stdout
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
@@ -716,7 +715,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         try:
             grep_result = self.remoter.sudo(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
             return ''
 
@@ -795,7 +794,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def file_exists(self, file_path: str) -> Optional[bool]:
         try:
             return self.remoter.sudo(f"test -e '{file_path}'", ignore_status=True).ok
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error("Error checking if file %s exists: %s", file_path, details)
             return None
 
@@ -1041,14 +1040,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not hasattr(self.parent_cluster, "params"):
             TestFrameworkEvent(source=self.__class__.__name__,
                                message="The parent cluster has not 'params' attribute",
-                               trace=sys._getframe().f_back,  # pylint: disable=protected-access
+                               trace=sys._getframe().f_back,
                                severity=Severity.ERROR).publish()
         # We want to figure out all places where "params" attribute has type that not consistent
         elif not isinstance(self.parent_cluster.params, SCTConfiguration):
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"The 'params' attribute expected to by 'SCTConfiguration`, "
                                        f"but actually it is a `{type(self.parent_cluster.params)}`",
-                               trace=sys._getframe().f_back,  # pylint: disable=protected-access
+                               trace=sys._getframe().f_back,
                                severity=Severity.ERROR).publish()
 
         elif len(self.parent_cluster.params.region_names) > 1 and self.datacenter:
@@ -1075,14 +1074,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
 
-    def hard_reboot(self):  # pylint: disable=no-self-use
+    def hard_reboot(self):
         # Need to re-implement this method if the backend supports hard reboot.
         raise Exception("The backend doesn't support hard_reboot")
 
-    def soft_reboot(self):  # pylint: disable=no-self-use
+    def soft_reboot(self):
         try:
             self.remoter.run('sudo reboot', ignore_status=True, retry=0)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     def restart_binary_protocol(self, verify_up=True):
@@ -1125,7 +1124,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             except SSHException as ex:
                 self.log.debug("Network isn't available, reboot might already start, %s" % ex)
                 return False
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 self.log.debug('Failed to get uptime during reboot, %s' % ex)
                 return False
 
@@ -1241,7 +1240,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         try:
             result = self.remoter.run(cmd, verbose=False)
             return result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error('Error retrieving installed packages: %s',
                            details)
             return None
@@ -1265,7 +1264,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             return True
         except OSError:
             return False
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
@@ -1384,7 +1383,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             if self.uuid and not mark_exists:
                 self.remoter.run(cmd % self.uuid, ignore_status=True)
                 self.remoter.sudo('touch %s' % mark_path, verbose=False, user='scylla')
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
     def wait_db_up(self, verbose=True, timeout=3600):
@@ -1572,7 +1571,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
             except queue.Empty:
                 pass
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 self.log.error("failed to decode backtrace %s", details)
                 if "is closed" in details:
                     break
@@ -1734,7 +1733,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 'ldap_bind_dn': ldap_bind_dn,
                 'ldap_bind_pw': ldap_bind_pw}
 
-    # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-statements,unused-argument,too-many-branches
     def config_setup(self,
                      append_scylla_args='',
                      debug_install=False,
@@ -2004,7 +2002,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 self.remoter.sudo('apt-get clean all')
                 self.remoter.sudo('rm -rf /var/cache/apt/')
                 self.remoter.sudo('apt-get update', retry=3)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.error('Failed to update repo cache: %s', ex)
 
     def upgrade_system(self):
@@ -2324,7 +2322,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 self.remoter.sudo("systemctl restart scylla-manager.service")
             time.sleep(5)
 
-    # pylint: disable=too-many-branches
     def install_mgmt(self, package_url: Optional[str] = None) -> None:
         self.log.debug("Install scylla-manager")
 
@@ -2354,7 +2351,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if self.is_docker():
             try:
                 self.remoter.run("echo no | sudo scyllamgr_setup")
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 self.log.warning(ex)
         else:
             self.remoter.run("echo yes | sudo scyllamgr_setup")
@@ -2507,7 +2504,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.wait_db_up(timeout=timeout)
         try:
             self.stop_service(service_name='scylla-server', timeout=timeout, ignore_status=ignore_status)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             if isinstance(details, RetryableNetworkException):
                 details = details.original
             if details.__class__.__name__.endswith("CommandTimedOut"):
@@ -2645,7 +2642,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             options += "-u {} -pw '{}' ".format(*credentials)
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
-    # pylint: disable=inconsistent-return-statements
     def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,  # noqa: PLR0913
                      ignore_status: bool = False, verbose: bool = True, coredump_on_timeout: bool = False,
                      warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1,
@@ -2691,7 +2687,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
                 nodetool_event.duration = result.duration
                 return result
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 if isinstance(details, RetryableNetworkException):
                     details = details.original
                 if coredump_on_timeout and details.__class__.__name__.endswith("CommandTimedOut"):
@@ -2778,7 +2774,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                         if node_ip:
                             LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.WARNING,
                 node=self.name,
@@ -2912,7 +2908,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 cqlsh_out = self.remoter.run(cmd, timeout=timeout + 120,  # we give 30 seconds to cqlsh timeout mechanism to work
                                              verbose=verbose)
                 break
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 num_retry_on_failure -= 1
                 if not num_retry_on_failure:
                     raise
@@ -2933,7 +2929,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp_file:
             tmp_file.write(self.test_config.get_startup_script())
             tmp_file.flush()
-            self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)  # pylint: disable=not-callable
+            self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)
 
         cmds = dedent("""
                 chmod +x {0}
@@ -2984,7 +2980,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             if verbose:
                 self.log.debug(f'{config_param_name} parameter value: {request_out.stdout}')
             return request_out.stdout
-        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self.log.error(f'Failed to retreive value of {config_param_name} parameter. Error: {e}')
             return None
 
@@ -3138,7 +3134,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             return []
         try:
             result_json = json.loads(result.stdout)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.warning("Error getting token-ring data: %s", exc)
             return []
 
@@ -3170,7 +3166,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.run(
                 f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
                 ignore_status=True, verbose=False, retry=0, timeout=10)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
 
@@ -3186,22 +3182,18 @@ class FlakyRetryPolicy(RetryPolicy):
             return self.RETRY, None
         return self.RETHROW, None
 
-    # pylint: disable=too-many-arguments
     def on_read_timeout(self, query, consistency, required_responses,
                         received_responses, data_retrieved, retry_num):
         return self._retry_message(msg="Retrying read after timeout", retry_num=retry_num)
 
-    # pylint: disable=too-many-arguments
     def on_write_timeout(self, query, consistency, write_type,
                          required_responses, received_responses, retry_num):
         return self._retry_message(msg="Retrying write after timeout", retry_num=retry_num)
 
-    # pylint: disable=too-many-arguments
     def on_unavailable(self, query, consistency, required_replicas, alive_replicas, retry_num):
         return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class DeadNode:
     name: str
@@ -3219,12 +3211,11 @@ class DeadNode:
             self.ip = f"{self.public_ip} | {self.private_ip}{f' | {self.ipv6_ip}' if self.ipv6_ip else ''}"
 
 
-class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class BaseCluster:
     """
     Cluster of Node objects.
     """
 
-    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
                  region_names=None, node_type=None, extra_network_interface=False, add_nodes=True):
         self.extra_network_interface = extra_network_interface
@@ -3294,7 +3285,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         super().__init__()
 
     @lru_cache(maxsize=None)
-    def get_keyspace_info(self, keyspace_name: str, db_node: BaseNode):  # pylint: disable=no-self-use
+    def get_keyspace_info(self, keyspace_name: str, db_node: BaseNode):
         replication_strategy = ReplicationStrategy.get(db_node, keyspace_name)
         logging.debug("Replication strategy for keyspace %s: %s", keyspace_name, replication_strategy)
         return replication_strategy
@@ -3303,7 +3294,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         return f"{self.__class__.__name__}:{self.name}"
 
     @cached_property
-    def test_config(self) -> TestConfig:  # pylint: disable=no-self-use
+    def test_config(self) -> TestConfig:
         return TestConfig()
 
     @property
@@ -3410,7 +3401,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 node.get_backtraces()
                 if node.n_coredumps > 0:
                     self.coredumps[node.name] = node.n_coredumps
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:
                 self.log.exception("Unable to get coredump status from node {node}: {ex}".format(node=node, ex=ex))
 
     def node_setup(self, node, verbose=False, timeout=3600):
@@ -3497,7 +3488,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                            storage_dir=os.path.join(self.logdir, "collected_logs"),
                                            params=self.params).collect_logs()
             self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
         node.destroy()
 
@@ -3597,7 +3588,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
-    def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
+    def cql_connection(self, node, keyspace=None, user=None,
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_context=None, connect_timeout=100, verbose=True):
         if connection_bundle_file := node.parent_cluster.connection_bundle_file:
@@ -3611,7 +3602,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                     node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
                                     connection_bundle_file=connection_bundle_file)
 
-    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments,too-many-locals
+    def cql_connection_exclusive(self, node, keyspace=None, user=None,
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
                                  ssl_context=None, connect_timeout=100, verbose=True):
@@ -3624,7 +3615,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             assert node_domain, f"didn't found nodeDomain in bundle [{connection_bundle_file}]"
 
             def host_filter(host):
-                return str(host.host_id) == str(node.host_id) or node_domain == host.endpoint._server_name  # pylint: disable=protected-access
+                return str(host.host_id) == str(node.host_id) or node_domain == host.endpoint._server_name
             wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
             node_ips = []
         else:
@@ -3637,7 +3628,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-                               # pylint: disable=too-many-arguments,unused-argument
+
                                user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_context=None, connect_timeout=100, verbose=True):
@@ -3652,7 +3643,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,
-                                         # pylint: disable=invalid-name,too-many-arguments,unused-argument
+
                                          user=None, password=None,
                                          compression=True,
                                          protocol_version=None,
@@ -3662,17 +3653,17 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         If the timeout is exceeded, the exception is raised.
         """
-        # pylint: disable=unused-argument
+
         kwargs = locals()
         del kwargs["self"]
         return self.cql_connection_exclusive(**kwargs)
 
-    def is_ks_rf_one(self, keyspace_name: str, node: BaseNode, **kwarg) -> bool:  # pylint: disable=unused-argument
+    def is_ks_rf_one(self, keyspace_name: str, node: BaseNode, **kwarg) -> bool:
         ks_rf = self.get_keyspace_info(keyspace_name, node)
         self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
         return set(ks_rf.replication_factors) == {1}
 
-    def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
+    def get_non_system_ks_cf_list(self, db_node,
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                                   filter_by_keyspace: list = None,
                                   filter_func: Callable[[...], bool] = None) -> List[str]:
@@ -3681,7 +3672,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                        filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace,
                                        filter_func=filter_func)
 
-    def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments,too-many-statements
+    def get_any_ks_cf_list(self, db_node,
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
                            filter_by_keyspace: list = None, filter_func: Callable[[...], bool] = None) -> List[str]:
@@ -3740,16 +3731,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                                    warning_event_on_exception=(
                                                        Failure, UnexpectedExit, Libssh2_UnexpectedExit,),
                                                    publish_event=False, retry=3)
-                        cf_stats = db_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
+                        cf_stats = db_node._parse_cfstats(res.stdout)
                         has_data = bool(cf_stats['Number of partitions (estimate)'])
-                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
                         self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
 
                     if not has_data:
                         result.discard(table_name)
 
             if filter_func is not None:
-                self.get_keyspace_info.cache_clear()  # pylint: disable=no-member
+                self.get_keyspace_info.cache_clear()
             return result
 
         with self.cql_connection_patient(db_node, connect_timeout=600) as session:
@@ -3772,7 +3763,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             result = session.execute(SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10))
             return result and bool(len(result.one())), None
 
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
             return False, exc
 
@@ -3865,14 +3856,14 @@ class NodeSetupTimeout(Exception):
     pass
 
 
-def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
+def wait_for_init_wrap(method):
     """
     Wraps wait_for_init class method.
     Run setup of nodes simultaneously and wait for all the setups finished.
     Raise exception if setup failed or timeout expired.
     """
     @wraps(method)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals
+    def wrapper(*args, **kwargs):
         cl_inst = args[0]
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
@@ -3896,13 +3887,13 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             exception_details = None
             try:
                 cl_inst.node_setup(_node, **setup_kwargs)
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 exception_details = (str(ex), traceback.format_exc())
             try:
                 _node.update_shards_in_argus()
                 LOGGER.info("DC: %s | Rack: %s", _node.datacenter, _node.node_rack)
                 _node.update_rack_info_in_argus(_node.datacenter, _node.node_rack)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
                 LOGGER.debug("Exception details:\n", exc_info=True)
             task_queue.put((_node, exception_details))
@@ -3913,7 +3904,7 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             exception_details = None
             try:
                 cl_inst.node_startup(_node, **setup_kwargs)
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 exception_details = (str(ex), traceback.format_exc())
             task_queue.put((_node, exception_details))
             task_queue.task_done()
@@ -3991,7 +3982,7 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             for node in node_list:
                 try:
                     node.update_rack_info_in_argus(node.datacenter, node.node_rack)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
                     LOGGER.debug("Exception details:\n", exc_info=True)
 
@@ -4006,7 +3997,7 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
-class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes, too-many-statements
+class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
     log: logging.Logger
@@ -4029,7 +4020,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return 'db_nodes_public_ip' if public_ip else 'db_nodes_private_ip'
 
     def get_scylla_args(self):
-        # pylint: disable=no-member
+
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
 
@@ -4199,16 +4190,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         start_time = time.time()
 
         # First, stop *all* non seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=self.non_seed_nodes)
         # First, stop *all* seed nodes
-        self.run_func_parallel(func=stop_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=self.seed_nodes)
         # Then, update bin only on requested nodes
-        self.run_func_parallel(func=update_scylla_bin, node_list=node_list)  # pylint: disable=no-member
+        self.run_func_parallel(func=update_scylla_bin, node_list=node_list)
         if start_service:
             # Start all seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)
             # Start all non seed nodes
-            self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
+            self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB binary duration -> %s s', int(time_elapsed))
@@ -4267,10 +4258,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         start_time = time.time()
 
-        self.run_func_parallel(func=stop_scylla, node_list=node_list)  # pylint: disable=no-member
-        self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=node_list)
+        self.run_func_parallel(func=update_scylla_packages, node_list=node_list)
         if start_service:
-            self.run_func_parallel(func=start_scylla, node_list=node_list)  # pylint: disable=no-member
+            self.run_func_parallel(func=start_scylla, node_list=node_list)
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
@@ -4296,7 +4287,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
 
     @retrying(n=3, sleep_time=5)
-    def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
+    def get_nodetool_status(self, verification_node=None):
         """
             Runs nodetool status and generates status structure.
             Status format:
@@ -4458,7 +4449,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 break
         return node_status
 
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):  # pylint: disable=too-many-arguments
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):
         @retrying(n=iterations, sleep_time=sleep_time, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
         def _wait_for_nodes_up_and_normal():
@@ -4545,7 +4536,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
         self.nemesis_termination_event.set()
         threads_tracebacks = []
-        # pylint: disable=protected-access
+
         current_thread_frames = sys._current_frames()
         for nemesis_thread in self.nemesis_threads:
             raise_exception_in_thread(nemesis_thread, KillNemesis)
@@ -4574,7 +4565,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 time.sleep(kms_key_rotation_interval * 60)
                 try:
                     aws_kms.rotate_kms_key(kms_key_alias_name=kms_key_alias_name)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     AwsKmsEvent(
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
@@ -4593,7 +4584,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                 sub_cmd='cfstats', args=ks_cf, timeout=300, retry=3, publish_event=False,
                                 warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit))
                             if res:
-                                cf_stats = target_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
+                                cf_stats = target_node._parse_cfstats(res.stdout)
                                 if int(cf_stats["SSTable count"]) > chosen_ks_cf_sstables_num:
                                     chosen_ks_cf, chosen_ks_cf_sstables_num = ks_cf, int(cf_stats["SSTable count"])
                             else:
@@ -4605,7 +4596,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     AwsKmsEvent(
                         message="Failed to get any table for the KMS key rotation thread",
                         traceback=traceback.format_exc()).publish()
-                except Exception:  # pylint: disable=broad-except # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     AwsKmsEvent(
                         message="Failed to check the fact of encryption (KMS) for sstables",
                         traceback=traceback.format_exc()).publish()
@@ -4630,7 +4621,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                          verbose=True, ignore_status=True)
         # simple config
         node.remoter.run(
-            f"echo 'cluster_name: \"{self.name}\"' >> {node.offline_install_dir}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
+            f"echo 'cluster_name: \"{self.name}\"' >> {node.offline_install_dir}/etc/scylla/scylla.yaml")
         node.remoter.run(
             f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
         node.remoter.run(
@@ -4638,7 +4629,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.remoter.run(
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals  # noqa: PLR0912, PLR0914
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         if node.distro.is_rhel_like:
             node.remoter.sudo('systemctl stop iptables', ignore_status=True)
@@ -4691,9 +4682,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.test_config.MULTI_REGION or simulated_regions_num > 1 or self.params.get('simulated_racks') > 1:
             if simulated_regions_num > 1:
                 datacenters = [
-                    f"{self.datacenter[0]}-s{i}" for i in range(1, simulated_regions_num + 1)]  # pylint: disable=no-member
+                    f"{self.datacenter[0]}-s{i}" for i in range(1, simulated_regions_num + 1)]
             else:
-                datacenters = self.datacenter  # pylint: disable=no-member
+                datacenters = self.datacenter
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
         if any([self.params.get('server_encrypt'), self.params.get('client_encrypt')]):
@@ -4768,7 +4759,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if jmx_memory := self.params.get("jmx_heap_memory"):
             node.increase_jmx_heap_memory(jmx_memory)
 
-        if self.params.get('use_mgmt') and self.node_type == "scylla-db":  # pylint: disable=no-member
+        if self.params.get('use_mgmt') and self.node_type == "scylla-db":
             self.install_scylla_manager(node)
 
     def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
@@ -4780,7 +4771,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.restart_scylla_jmx()
             self.log.debug(
                 'io.conf right after reboot: %s', node.remoter.sudo(f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
-            if self.params.get('use_mgmt') and self.node_type == "scylla-db":  # pylint: disable=no-member
+            if self.params.get('use_mgmt') and self.node_type == "scylla-db":
                 node.remoter.sudo(shell_script_cmd("""\
                     systemctl restart scylla-manager-agent
                     systemctl enable scylla-manager-agent
@@ -4876,7 +4867,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=unused-argument
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list or self.nodes
         wait.wait_for(
             func=self.verify_logging_from_nodes,
@@ -4975,7 +4966,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 for nodes_ips in status.values():
                     ip_node_list.extend(nodes_ips.keys())
                 return ip_node_list
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error(str(details))
                 return None
 
@@ -5020,7 +5011,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 raise NodeStayInClusterAfterDecommission(error_msg)
             node.stop_scylla(verify_down=False)
             LOGGER.debug("Terminate node %s", node.name)
-            self.terminate_node(node)  # pylint: disable=no-member
+            self.terminate_node(node)
             self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
             self.log.debug("Node %s was terminated", node.name)
             verification_node.raft.clean_group0_garbage(raise_exception=True)
@@ -5028,7 +5019,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
 
         LOGGER.info('Decommission %s PASS', node)
-        self.terminate_node(node)  # pylint: disable=no-member
+        self.terminate_node(node)
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
@@ -5058,7 +5049,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
         LOGGER.debug("sctool version is : {}".format(manager_tool.sctool.version))
-        cluster_name = self.scylla_manager_cluster_name  # pylint: disable=no-member
+        cluster_name = self.scylla_manager_cluster_name
         mgr_cluster = manager_tool.get_cluster(cluster_name)
         if not mgr_cluster and create_cluster_if_not_exists:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
@@ -5070,7 +5061,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
         if host_ip is None:
             host_ip = self.nodes[0].scylla_listen_address
-        credentials = self.get_db_auth()  # pylint: disable=no-member
+        credentials = self.get_db_auth()
         return manager_tool.add_cluster(
             name=cluster_name,
             host=host_ip,
@@ -5140,7 +5131,7 @@ class BaseLoaderSet():
                                                    f'gemini --version', ignore_status=True)
                 if result.ok:
                     self._gemini_version = get_gemini_version(result.stdout)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
 
@@ -5148,8 +5139,7 @@ class BaseLoaderSet():
     def parallel_startup(self):
         return False
 
-    def node_setup(self, node, verbose=False, **kwargs):  # pylint: disable=unused-argument
-        # pylint: disable=too-many-statements,too-many-branches
+    def node_setup(self, node, verbose=False, **kwargs):
 
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
@@ -5274,7 +5264,7 @@ class BaseLoaderSet():
                     wait.wait_for(kill_cs_process, text="Search and kill c-s processes", timeout=30, throw_exc=False,
                                   loader=loader, filter_cmd=search_cmd)
 
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 self.log.warning("failed to kill stress-command on [%s]: [%s]",
                                  str(loader), str(ex))
 
@@ -5283,7 +5273,7 @@ class BaseLoaderSet():
             try:
                 loader.remoter.run(cmd='docker ps -a -q | xargs docker rm -f', verbose=True, ignore_status=True)
                 self.log.info("Killed docker loader on node: %s", loader.name)
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]",
                                  str(loader), str(ex))
 
@@ -5369,7 +5359,7 @@ class BaseLoaderSet():
             node.log_message(message, level)
 
 
-class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
+class BaseMonitorSet:
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = 'ip_address'
     json_file_params_for_replace = {"$test_name": get_test_name()}
@@ -5477,13 +5467,13 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         with open(json_file, 'w', encoding="utf-8") as file:
             json.dump(json.loads(json_data), file, indent=2)
 
-    def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
+    def node_setup(self, node, **kwargs):
         self.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
         node.disable_daily_triggered_services()
         # update repo cache and system after system is up
         node.update_repo_cache()
-        self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init
+        self.mgmt_auth_token = self.monitor_id
 
         if self.test_config.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
@@ -5508,7 +5498,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if self.params.get("use_mgmt"):
             self.install_scylla_manager(node)
 
-    def node_startup(self, node, **kwargs):  # pylint: disable=unused-argument
+    def node_startup(self, node, **kwargs):
         pass
 
     def install_scylla_manager(self, node):
@@ -5558,7 +5548,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def wait_for_init(self, *args, **kwargs):
         pass
 
-    def install_scylla_monitoring_prereqs(self, node):  # pylint: disable=invalid-name
+    def install_scylla_monitoring_prereqs(self, node):
         prepared_image = node.remoter.run('test -e ~/PREPARED-MONITOR', ignore_status=True)
         if prepared_image.ok or self.is_formal_monitor_image:
             node.log.debug('Skip monitor `install_scylla_monitoring_prereqs` for using a prepared AMI')
@@ -5648,7 +5638,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
 
-    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals,too-many-branches  # noqa: PLR0914
+    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # noqa: PLR0914
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
 
         if sct_metrics and not self.params.get("reuse_cluster"):
@@ -5820,7 +5810,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {scylla_targets}
             """), verbose=True)
 
-            with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml', sudo=False) as exporter_yaml:  # pylint: disable=protected-access
+            with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml', sudo=False) as exporter_yaml:
                 exporter_yaml.clear()
                 for dc_data in node_export_targets_per_dc.values():
                     exporter_yaml.append(dc_data)
@@ -5860,7 +5850,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         # clear alert manager configuration to the minimal need config
         with node._remote_yaml(f'{self.monitor_install_path}/prometheus/rule_config.yml', sudo=False) \
-                as alert_manager_config:  # pylint: disable=protected-access
+                as alert_manager_config:
             alert_manager_config.clear()
             alert_manager_config['global'] = dict(resolve_timeout='5m')
             alert_manager_config['route'] = dict(receiver="null", group_by=["job"],
@@ -5944,7 +5934,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                                                           grafana_port=self.grafana_port))
             if res.ok:
                 return res.content
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
         return ""
 
@@ -6006,7 +5996,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 response = requests.put(annotations_url, data=annotations, headers={
                                         'Content-type': 'application/json; charset=utf-8'})
                 response.raise_for_status()
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.exception("failed to upload annotations to S3")
 
         return annotations_url
@@ -6019,7 +6009,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
                 return upload_archive_to_s3(snapshot_archive, self.monitor_id)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.error("Error downloading prometheus data dir: %s", details)
         return ""
 
@@ -6055,7 +6045,7 @@ class NoMonitorSet():
     def collect_logs(self, storage_dir):
         pass
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
+    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
         return {}
 
     def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
@@ -6063,7 +6053,7 @@ class NoMonitorSet():
 
 
 class LocalNode(BaseNode):
-    def __init__(self, name, parent_cluster,   # pylint: disable=too-many-arguments,unused-argument
+    def __init__(self, name, parent_cluster,
                  ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):
 
         super().__init__(name=name, parent_cluster=parent_cluster, ssh_login_info=ssh_login_info,
