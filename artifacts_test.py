@@ -48,7 +48,7 @@ BACKENDS = {
 }
 
 
-class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
+class ArtifactsTest(ClusterTester):
     REPO_TABLE = "housekeeping.repo"
     CHECK_VERSION_TABLE = "housekeeping.checkversion"
 
@@ -329,7 +329,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                   scylla_encryption_options=scylla_encryption_options,
                                   compaction=compaction_strategy, sstable_size=sstable_size)
 
-    # pylint: disable=too-many-statements,too-many-branches
     def test_scylla_service(self):  # noqa: PLR0915
 
         self.run_pre_create_schema()
@@ -357,7 +356,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                 except SkipTest as exc:
                     self.log.info("Skipping IOTuneValidation due to %s", exc.args)
                     self.actions_log.info("Skipped IOTuneValidation", target=self.node.name)
-                except Exception:  # pylint: disable=broad-except # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     self.log.error("IOTuneValidator failed", exc_info=True)
                     TestFrameworkEvent(source={self.__class__.__name__},
                                        message="Error during IOTune params validation.",

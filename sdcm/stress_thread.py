@@ -69,14 +69,14 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
-class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class CassandraStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = 'stress_image.cassandra-stress'
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # noqa: PLR0913
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
                  params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
-                         stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
+                         stress_num=stress_num, node_list=node_list,
                          round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params)
         self.keyspace_num = keyspace_num
         self.keyspace_name = keyspace_name
@@ -175,7 +175,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
 
         stress_cmd = self.append_no_warmup_to_cmd(stress_cmd)
@@ -223,7 +223,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             return stress_cmd
         return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
 
-    def _get_available_suboptions(self, loader, option, _cache={}):  # pylint: disable=dangerous-default-value  # noqa: B006
+    def _get_available_suboptions(self, loader, option, _cache={}):  # noqa: B006
         if cached_value := _cache.get(option):
             return cached_value
         try:
@@ -231,14 +231,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cmd=f'cassandra-stress help {option} | grep "^Usage:"',
                 timeout=self.timeout,
                 ignore_status=True).stdout
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return []
         findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
         _cache[option] = findings
         return findings
 
     @staticmethod
-    def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # pylint: disable=dangerous-default-value  # noqa: B006
+    def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # noqa: B006
         if not (node.is_kubernetes() or node.name in _cache):
             cmd_runner.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
             _cache[node.name] = 'done'
@@ -262,7 +262,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements  # noqa: PLR0914
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # noqa: PLR0914
         cleanup_context = contextlib.nullcontext()
         os.makedirs(loader.logdir, exist_ok=True)
 
@@ -355,7 +355,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             reporter = CassandraStressVersionReporter(
                 cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
             reporter.report()
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect cassandra-stress version information", exc_info=True)
         with cleanup_context, \
                 CassandraStressExporter(instance_name=cmd_runner_name,
@@ -378,7 +378,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             try:
                 with SoftTimeoutContext(timeout=self.soft_timeout, operation="cassandra-stress"):
                     result = cmd_runner.run(cmd=node_cmd, timeout=self.hard_timeout, log_file=log_file_name, retry=0)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 
         return loader, result, cs_stress_event

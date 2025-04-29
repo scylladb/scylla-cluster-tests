@@ -48,6 +48,6 @@ def wait_no_tablets_migration_running(node, timeout: int = 3600):
             client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
                                     params={}, timeout=4*3600)
         LOGGER.info("All ongoing tablets topology operations are done")
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         InfoEvent(f"Failed to wait for having no ongoing tablets topology operations. Exception: {exc.__repr__()}",
                   severity=Severity.ERROR).publish()

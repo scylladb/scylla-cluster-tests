@@ -31,7 +31,7 @@ SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 BOTO3_CLIENT_CREATION_LOCK = threading.Lock()
 
 
-class KeyStore:  # pylint: disable=too-many-public-methods
+class KeyStore:
     @property
     def s3(self) -> S3ServiceResource:
         return boto3.resource("s3")

@@ -29,13 +29,13 @@ from sdcm.wait import wait_for
 LOGGER = logging.getLogger(__name__)
 
 
-class KafkaCDCReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
+class KafkaCDCReaderThread(Thread):
     """
     thread that listen on kafka topic, and list all the unique key
     received, so we can validate how many unique key we got
     """
 
-    def __init__(self, tester, params: SCTConfiguration, kafka_addresses: list | None = None,  # pylint: disable=too-many-arguments
+    def __init__(self, tester, params: SCTConfiguration, kafka_addresses: list | None = None,
                  connector_index: int = 0, group_id: str = None, duration: int | None = None, **kwargs):
         self.keys = set()
         self.termination_event = Event()

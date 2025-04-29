@@ -15,10 +15,10 @@
 import time
 import threading
 from threading import Thread as LibThread
-from threading import Thread  # pylint: disable=reimported
+from threading import Thread
 import multiprocessing
 from multiprocessing import Process as LibProcess
-from multiprocessing import Process  # pylint: disable=reimported
+from multiprocessing import Process
 
 
 __all__ = [

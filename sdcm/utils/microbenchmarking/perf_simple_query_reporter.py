@@ -45,7 +45,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         keys.sort(reverse=True)
         return [results[key] for key in keys]
 
-    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False, extra_jobs_to_compare=None  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
+    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False, extra_jobs_to_compare=None  # noqa: PLR0914
                          ) -> dict:
         doc = self.get_test_by_id(test_id)
         if not doc:
@@ -71,7 +71,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
                        '.'.join([es_source_path, 'test_details']),
                        '.'.join([es_source_path, 'versions'])]
 
-        tests_filtered = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        tests_filtered = self._es.search(
             index=self._es_index,
 
             size=self._limit,
