@@ -23,7 +23,7 @@ from typing import List, Dict
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm import sct_abs_path
 from sdcm.sct_events.group_common_events import \
@@ -119,7 +119,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
@@ -183,7 +182,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
                 with open(cs_profile, encoding="utf-8") as pconf:
                     cont = pconf.readlines()
-                    user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+                    user_profile_table_count = self.params.get(
                         'user_profile_table_count')
                     for _ in range(user_profile_table_count):
                         for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
@@ -313,7 +312,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         :param stress_params_list: the list of all stress commands
         :return:
         """
-        # pylint: disable=too-many-locals
 
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
@@ -417,8 +415,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                               compaction=compaction_strategy, sstable_size=sstable_size)
 
     def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
-        # pylint: disable=too-many-locals
-        user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+        user_profile_table_count = self.params.get(
             'user_profile_table_count') or 0
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
@@ -492,8 +489,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
         return email_data
 
-    def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:  # pylint: disable=invalid-name
-        # pylint: disable=too-many-locals
+    def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:
         params_list = []
         cs_duration = self.params.get('cs_duration')
 

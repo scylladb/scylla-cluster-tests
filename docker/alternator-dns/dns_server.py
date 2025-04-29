@@ -34,7 +34,7 @@ def livenodes_update():
             # If we're successful, replace livenodes by the new list
             livenodes = a
             print(livenodes)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             # TODO: contacting this ip was unsuccessful, maybe we should
             # remove it from the list of live nodes.
             pass

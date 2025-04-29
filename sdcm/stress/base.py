@@ -27,10 +27,10 @@ from sdcm.remote.libssh2_client.exceptions import Failure
 LOGGER = logging.getLogger(__name__)
 
 
-class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
+class DockerBasedStressThread:
     DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,
                  round_robin=False, params=None, stop_test_on_failure=True):
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
@@ -74,7 +74,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
-        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_workers)
 
     def run(self):

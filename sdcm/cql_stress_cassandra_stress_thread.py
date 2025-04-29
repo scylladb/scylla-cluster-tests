@@ -57,16 +57,16 @@ class CqlStressCassandraStressEventsPublisher(FileFollowerThread):
 class CqlStressCassandraStressThread(CassandraStressThread):
     DOCKER_IMAGE_PARAM_NAME = 'stress_image.cql-stress-cassandra-stress'
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # noqa: PLR0913
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
                  params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
-                         stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
+                         stress_num=stress_num, node_list=node_list,
                          round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params,
                          keyspace_num=keyspace_num, keyspace_name=keyspace_name, profile=profile,
                          client_encrypt=client_encrypt, compaction_strategy=compaction_strategy)
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
 
         stress_cmd = self.append_no_warmup_to_cmd(stress_cmd)
@@ -107,7 +107,7 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # noqa: PLR0914
         # TODO:
         # - Add support for profile yaml once cql-stress supports 'user' command.
         # - Adjust metrics collection once cql-stress displays the metrics grouped by operation (mixed workload).
@@ -165,7 +165,7 @@ class CqlStressCassandraStressThread(CassandraStressThread):
                 with SoftTimeoutContext(timeout=self.timeout, operation="cql-stress-cassandra-stress"):
                     result = cmd_runner.run(
                         cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(
                     stress_event=cs_stress_event, exc=exc)
 

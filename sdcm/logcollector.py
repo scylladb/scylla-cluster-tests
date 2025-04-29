@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-#  pylint: disable=too-many-lines
 import os
 import json
 import re
@@ -66,10 +65,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class CollectingNode:
-    # pylint: disable=too-few-public-methods,too-many-instance-attributes
     logdir = None
 
-    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None, tags=None, logdir=None):  # pylint: disable=too-many-arguments
+    def __init__(self, name, ssh_login_info=None, instance=None, global_ip=None, grafana_ip=None, tags=None, logdir=None):
         if logdir:
             self.logdir = logdir
         self._containers = {}
@@ -92,7 +90,7 @@ class PrometheusSnapshotErrorException(Exception):
     pass
 
 
-class BaseLogEntity:  # pylint: disable=too-few-public-methods
+class BaseLogEntity:
     """Base class for log entity
 
     LogEntity any file, command, operation, complex actions
@@ -117,7 +115,7 @@ class BaseLogEntity:  # pylint: disable=too-few-public-methods
     def set_params(self, params):
         self._params = params
 
-    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):  # pylint: disable=unused-argument,no-self-use
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         raise Exception('Should be implemented in child class')
 
 
@@ -131,18 +129,18 @@ class BaseMonitoringEntity(BaseLogEntity):
     @staticmethod
     def get_monitoring_stack(backend):
         if backend == 'aws':
-            from sdcm.cluster_aws import MonitorSetAWS  # pylint: disable=import-outside-toplevel
+            from sdcm.cluster_aws import MonitorSetAWS
             return MonitorSetAWS
         elif backend == 'docker':
-            from sdcm.cluster_docker import MonitorSetDocker  # pylint: disable=import-outside-toplevel
+            from sdcm.cluster_docker import MonitorSetDocker
             return MonitorSetDocker
         elif backend == 'gce':
-            from sdcm.cluster_gce import MonitorSetGCE  # pylint: disable=import-outside-toplevel
+            from sdcm.cluster_gce import MonitorSetGCE
             return MonitorSetGCE
         elif backend == 'baremetal':
-            from sdcm.cluster_baremetal import MonitorSetPhysical  # pylint: disable=import-outside-toplevel
+            from sdcm.cluster_baremetal import MonitorSetPhysical
             return MonitorSetPhysical
-        from sdcm.cluster import BaseMonitorSet  # pylint: disable=import-outside-toplevel
+        from sdcm.cluster import BaseMonitorSet
         return BaseMonitorSet
 
     def get_monitoring_version(self, node):
@@ -157,7 +155,7 @@ class BaseMonitoringEntity(BaseLogEntity):
                 return None, None, None
             result = node.remoter.run(
                 f"cat {basedir}/{name}/monitor_version", ignore_status=True, verbose=False)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Failed to get monitoring version: %s", details)
             return None, None, None
 
@@ -169,7 +167,7 @@ class BaseMonitoringEntity(BaseLogEntity):
         return name, monitor_version, scylla_version
 
 
-class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
+class CommandLog(BaseLogEntity):
     """Command to get log and save output result to file on remote host
 
     CommandLog which allow to save the output (usually log output)
@@ -210,7 +208,7 @@ class FileLog(CommandLog):
     def find_local_files(search_in_dir, search_pattern, except_patterns="collected_logs"):
         local_files = []
         for root, _, files in os.walk(search_in_dir):
-            for f in files:  # pylint: disable=invalid-name
+            for f in files:
                 full_path = os.path.join(root, f)
                 if except_patterns in full_path:
                     continue
@@ -221,7 +219,7 @@ class FileLog(CommandLog):
         return local_files
 
     @staticmethod
-    def find_on_builder(builder, file_name, search_in_dir="/"):  # pylint: disable=unused-argument
+    def find_on_builder(builder, file_name, search_in_dir="/"):
         result = builder.remoter.run('find {search_in_dir} -name {file_name}'.format(**locals()),
                                      ignore_status=True)
         if not result.exited and not result.stderr:
@@ -321,7 +319,7 @@ class PrometheusSnapshots(BaseMonitoringEntity):
     def get_prometheus_snapshot_remote(self, node) -> Optional[str]:
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
-        except (PrometheusSnapshotErrorException, Exception) as details:  # pylint: disable=broad-except
+        except (PrometheusSnapshotErrorException, Exception) as details:
             LOGGER.warning("Create prometheus snapshot failed %s.\nUse prometheus data directory", details)
             node.remoter.run('docker stop aprom', ignore_status=True)
             snapshot_dir = self.monitoring_data_dir
@@ -400,7 +398,7 @@ class MonitoringStack(BaseMonitoringEntity):
             res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
             if res.ok:
                 return res.text
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.warning("Unable to get Grafana annotations [%s]", details)
         return ""
 
@@ -429,7 +427,7 @@ class MonitoringStack(BaseMonitoringEntity):
         return local_archive
 
 
-class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-methods
+class GrafanaEntity(BaseMonitoringEntity):
     """Base Gragana log entity
 
     Base class to support various Grafana log entity
@@ -520,12 +518,12 @@ class GrafanaScreenShot(GrafanaEntity):
                             for chunk in response.iter_content(chunk_size=8192):
                                 output_file.write(chunk)
                     screenshots.append(screenshot_path)
-                except Exception as details:  # pylint: disable=broad-except
+                except Exception as details:
                     LOGGER.error("Error get screenshot %s: %s", dashboard.name, details, exc_info=True)
 
             return screenshots
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Error taking monitor screenshot: %s, traceback: %s", details, traceback.format_exc())
             return []
 
@@ -591,7 +589,7 @@ class LogCollector:
                     'Remote storing folder not created.\n{}'.format(result))
                 remote_dir = self.node_remote_dir
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Error during creating remote directory %s", details)
             remote_dir = self.node_remote_dir
 
@@ -640,7 +638,7 @@ class LogCollector:
                                        local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
                                        remote_dst=remote_node_dir,
                                        local_search_path=local_search_path)
-                except Exception as details:  # pylint: disable=unused-variable, broad-except  # noqa: BLE001
+                except Exception as details:  # noqa: BLE001
                     LOGGER.error("Error occured during collecting of %s on host: %s\n%s",
                                  log_entity.name, node.name, details)
 
@@ -654,7 +652,7 @@ class LogCollector:
             try:
                 ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                     collect_logs_per_node, ignore_exceptions=True)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error('Error occured during collecting logs %s', details)
 
         if not os.listdir(self.local_dir):
@@ -689,7 +687,7 @@ class LogCollector:
     def update_db_info(self):
         pass
 
-    def _compress_file(self, src_path: str, src_name: str) -> str:  # pylint: disable=no-self-use
+    def _compress_file(self, src_path: str, src_name: str) -> str:
         archive_name = f"{src_name}.tar.gz"
         with tarfile.open(archive_name, "w:gz") as tar:
             tar.add(src_path, arcname=src_name)
@@ -704,7 +702,7 @@ class LogCollector:
                 src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
         try:
             return self._compress_file(src_path, src_name)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Error during archive creation. Details: \n%s", details)
             return None
 
@@ -802,7 +800,7 @@ def save_kallsyms_map(node):
 
         try:
             log_entity.collect(node, node.logdir, remote_node_dir)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Error occurred during collecting kallsyms on host: %s\n%s", node.name, details)
 
 
@@ -829,7 +827,7 @@ def collect_log_entities(node, log_entities: List[BaseLogEntity]):
             try:
                 log_entity.collect(node, node.logdir, remote_node_dir)
                 LOGGER.debug("Diagnostic file '%s' collected", log_entity.name)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error("Error occurred during collecting diagnostics data on host: %s\n%s", node.name, details)
 
 
@@ -1113,7 +1111,7 @@ class KubernetesAPIServerLogCollector(BaseSCTLogCollector):
             self.generate_apiserver_call_stats_file(apiserver_logdir)
             return self.create_single_archive_and_upload()
 
-    def generate_apiserver_call_stats_file(self, apiserver_logdir: str) -> None:  # pylint: disable=no-self-use
+    def generate_apiserver_call_stats_file(self, apiserver_logdir: str) -> None:
         dst_file_path = f"{apiserver_logdir}/{self.api_call_stats_filename}"
         results, results_list = {}, []
 
@@ -1216,7 +1214,7 @@ class KubernetesLogCollector(BaseSCTLogCollector):
                                     k8s_logdir, '.kube', current_k8s_logdir_sub_file)):
                                 KubernetesOps.gather_k8s_logs(k8s_logdir)
                                 break
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Got following failure processing the K8S logs: %s", exc)
         return super().collect_logs(local_search_path=local_search_path)
 
@@ -1281,7 +1279,7 @@ class SSTablesCollector(BaseSCTLogCollector):
         data_path, keyspace, table_dir, sstable_name = sstable_path.rsplit("/", 3)
         return f"{data_path}/{keyspace}/{table_dir}", keyspace, table_dir.split("-")[0], sstable_name
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:  # pylint: disable=too-many-locals
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         try:
             raw_events_file_path = Path(self.local_dir).parent.parent.parent / EVENTS_LOG_DIR / RAW_EVENTS_LOG
             with open(raw_events_file_path, "r", encoding="utf-8") as events_file:
@@ -1321,7 +1319,7 @@ class SSTablesCollector(BaseSCTLogCollector):
                     s3_bucket=S3Storage.bucket_name,
                     s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
                     max_size_gb=80, public_read_acl=True)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:
             LOGGER.exception("failed collecting malformed sstables:\n%s", error, exc_info=error)
             return []
         return [s3_link]
@@ -1343,7 +1341,7 @@ class SSLConfCollector(BaseSCTLogCollector):
     cluster_log_type = 'ssl-conf'
 
 
-class Collector:  # pylint: disable=too-many-instance-attributes,
+class Collector:
     """Collector instance
 
     Collector instance which should be run to collect logs and additional info
@@ -1417,7 +1415,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
 
     def find_and_append_cloud_manager_instance_to_collecting_nodes(self):
         try:
-            from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
+            from cluster_cloud import get_manager_instance_by_cluster_id
         except ImportError:
             LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
             return
@@ -1431,7 +1429,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
             if not instance:
                 raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
             return
 
@@ -1645,7 +1643,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                     LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
                 else:
                     LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__, exc_info=True)
@@ -1657,7 +1655,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.storage_dir = os.path.join(self.sct_result_dir, log_dir, 'collected_logs')
         os.makedirs(self.storage_dir, exist_ok=True)
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
-            with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w", encoding="utf-8") as f:  # pylint: disable=invalid-name
+            with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w", encoding="utf-8") as f:
                 f.write(self.test_id)
 
 

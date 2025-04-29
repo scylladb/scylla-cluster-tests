@@ -28,7 +28,7 @@ SYSLOGNG_PORT = 49153  # Non-root
 LOGGER = logging.getLogger(__name__)
 
 
-class SyslogNGContainerMixin:  # pylint: disable=too-few-public-methods
+class SyslogNGContainerMixin:
     @cached_property
     def syslogng_confpath(self) -> str:
         return generate_syslogng_conf_file()

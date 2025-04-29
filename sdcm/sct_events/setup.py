@@ -82,14 +82,14 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
         if (proc := get_events_process(name, _registry=_registry)) and proc.is_alive():
             LOGGER.debug("Signaling %s to terminate and wait for finish...", name)
             proc.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
-            events_stat[f"{proc._registry}[{name}]"] = proc.events_counter  # pylint: disable=protected-access
+            events_stat[f"{proc._registry}[{name}]"] = proc.events_counter
     LOGGER.debug("All events consumers stopped.")
 
     if events_stat:
         LOGGER.info("Statistics of sent/received events (by device): %s", json.dumps(events_stat, indent=4))
 
 
-def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unused-argument
+def enable_default_filters(sct_config: SCTConfiguration):
 
     # Default filters.
     if SkipPerIssues('scylladb/scylla-enterprise#1272', params=sct_config):

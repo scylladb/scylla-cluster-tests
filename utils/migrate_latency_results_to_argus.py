@@ -18,7 +18,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 LOGGER = logging.getLogger(__name__)
 
 
-def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=True):  # pylint: disable=too-many-locals
+def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=True):
     ks = KeyStore()
     es_conf = ks.get_elasticsearch_token()
     elastic_search = Elasticsearch(**es_conf)

@@ -14,14 +14,14 @@ from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 LOGGER = logging.getLogger(__name__)
 
 
-class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-methods
+class SstablesValidator(TeardownValidator):
     validator_name = 'scrub'
 
     @staticmethod
     def _upload_corrupted_files(node: BaseNode, invalid_sstables_lines):
         # get corrupted sstables from lines:
-        # INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable /var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/me-3gey_0z3c_2h5vl2ogebmg26ku9t-big-Data.db to "/var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/quarantine"  # pylint: disable=line-too-long
-        # scylla[5976]:  [shard 6:strm] compaction - Finished scrubbing in validate mode /var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db - sstable is invalid"  # pylint: disable=line-too-long
+        # INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable /var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/me-3gey_0z3c_2h5vl2ogebmg26ku9t-big-Data.db to "/var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/quarantine"
+        # scylla[5976]:  [shard 6:strm] compaction - Finished scrubbing in validate mode /var/lib/scylla/data/keyspace1/standard1-01b9f260d55311ef8caf5992914eabbe/me-3gn1_0bxv_16fs02rr7ufpbjejzy-big-Data.db - sstable is invalid"
         corrupted_sstables = []
         sstable_path_regexp = re.compile(r'[./\w\-]+(\.db|quarantine)')
         for line in invalid_sstables_lines:
@@ -72,7 +72,7 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
                                                  extra_time_to_expiration=60):
                     parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
                 LOGGER.info("Nodetool scrub validation finished")
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.error("Error during nodetool scrub validation: %s", exc)
                 ValidatorEvent(
                     message=f'Error during nodetool scrub validation: {exc}', severity=Severity.ERROR).publish()

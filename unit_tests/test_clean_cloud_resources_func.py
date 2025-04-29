@@ -38,13 +38,13 @@ class CleanInstanceAwsTest(unittest.TestCase):
     def test_empty_tags_dict(self, _):
         self.assertRaisesRegex(AssertionError, "not provided", clean_instances_aws, {})
 
-    def test_empty_list(self, ec2_client):  # pylint: disable=no-self-use
+    def test_empty_list(self, ec2_client):
         with patch.object(resources_cleanup, "list_instances_aws", Mock(return_value={})) as list_instances_aws:
             resources_cleanup.clean_instances_aws({"TestId": 1111, })
         list_instances_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
         ec2_client().terminate_instances.assert_not_called()
 
-    def test_sct_runner(self, ec2_client):  # pylint: disable=no-self-use
+    def test_sct_runner(self, ec2_client):
         with patch.object(
                 resources_cleanup, "list_instances_aws",
                 Mock(return_value={"eu-north-1": [SCT_RUNNER_AWS]})) as list_instances_aws:
@@ -52,7 +52,7 @@ class CleanInstanceAwsTest(unittest.TestCase):
         list_instances_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
         ec2_client().terminate_instances.assert_not_called()
 
-    def test_terminate(self, ec2_client):  # pylint: disable=no-self-use
+    def test_terminate(self, ec2_client):
         with patch.object(
                 resources_cleanup, "list_instances_aws",
                 Mock(return_value={"eu-north-1": [{"InstanceId": "i-1111"}]})) as list_instances_aws:
@@ -66,7 +66,7 @@ class CleanElasticIpsAws(unittest.TestCase):
     def test_empty_tags_dict(self, _):
         self.assertRaisesRegex(AssertionError, "not provided", clean_elastic_ips_aws, {})
 
-    def test_empty_list(self, ec2_client):  # pylint: disable=no-self-use
+    def test_empty_list(self, ec2_client):
         with patch.object(
                 resources_cleanup, "list_elastic_ips_aws",
                 Mock(return_value={})) as list_elastic_ips_aws:
@@ -75,7 +75,7 @@ class CleanElasticIpsAws(unittest.TestCase):
         ec2_client().disassociate_address.assert_not_called()
         ec2_client().release_address.assert_not_called()
 
-    def test_release(self, ec2_client):  # pylint: disable=no-self-use
+    def test_release(self, ec2_client):
         return_value = {"eu-north-1": [{
             "AssociationId": 2222,
             "AllocationId": 3333,
@@ -94,7 +94,7 @@ class CleanClustersGkeTest(unittest.TestCase):
     def test_empty_tags_dict(self):
         self.assertRaisesRegex(AssertionError, "not provided", clean_clusters_gke, {})
 
-    def test_destroy(self):  # pylint: disable=no-self-use
+    def test_destroy(self):
         cluster = MagicMock()
         with patch.object(
                 resources_cleanup, "list_clusters_gke",
@@ -108,7 +108,7 @@ class CleanInstancesGceTest(unittest.TestCase):
     def test_empty_tags_dict(self):
         self.assertRaisesRegex(AssertionError, "not provided", clean_instances_gce, {})
 
-    def test_destroy(self):  # pylint: disable=no-self-use
+    def test_destroy(self):
         instance = MagicMock()
         with patch.object(
                 resources_cleanup, "list_instances_gce",

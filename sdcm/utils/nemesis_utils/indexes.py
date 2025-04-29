@@ -15,7 +15,7 @@ import logging
 import random
 import time
 
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
@@ -36,7 +36,7 @@ def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
                                      f" WHERE keyspace_name = '{ks}'"
                                      f" AND view_name = '{cf}'")
             return result and bool(len(result.one()))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug('Got no result from system_schema.views for %s.%s table. Error: %s', ks, cf, exc)
             return False
 
@@ -104,7 +104,7 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
         query = SimpleStatement(f'SELECT * FROM {ks}.{cf} WHERE "{column}" = %s LIMIT 100', fetch_size=100)
         LOGGER.debug("Verifying query by index works: %s", query)
         result = session.execute(query, parameters=(value,))
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         InfoEvent(message=f"Index {ks}.{cf}({column}) does not work in query: {query}. Reason: {exc}",
                   severity=Severity.ERROR).publish()
     if len(list(result)) == 0:

@@ -89,7 +89,6 @@ class CommandRunner(metaclass=ABCMeta):
             watchers.append(LogWriteWatcher(log_file))
         return watchers
 
-    # pylint: disable=too-many-arguments
     @abstractmethod
     def run(self,
             cmd: str,
@@ -104,7 +103,6 @@ class CommandRunner(metaclass=ABCMeta):
             ) -> Result:
         pass
 
-    # pylint: disable=too-many-arguments
     def sudo(self,
              cmd: str,
              timeout: Optional[float] = None,
@@ -191,7 +189,7 @@ class CommandRunner(metaclass=ABCMeta):
         return shlex.quote("".join(new_name))
 
     @staticmethod
-    def _make_ssh_command(user: str = "root",  # pylint: disable=too-many-arguments
+    def _make_ssh_command(user: str = "root",
                           port: int = 22, opts: str = '', hosts_file: str = '/dev/null',
                           key_file: str = None, connect_timeout: float = 300, alive_interval: float = 300,
                           extra_ssh_options: str = '') -> str:
@@ -210,7 +208,7 @@ class CommandRunner(metaclass=ABCMeta):
                                alive_interval, user, port)
 
 
-class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
+class OutputWatcher(StreamWatcher):
     def __init__(self, log: logging.Logger, hostname: str):
         super().__init__()
         self.hostname = hostname
@@ -231,13 +229,13 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
         self.log.debug("<%s>: %s", self.hostname, line.rstrip('\n'))
 
 
-class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
+class LogWriteWatcher(StreamWatcher):
     def __init__(self, log_file: str):
         super().__init__()
         self.len = 0
         self.log_file = log_file
         # open fail with line buffering, so prom stats would be as accuracte as possible
-        # pylint: disable=consider-using-with
+
         self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
 
     def submit(self, stream: str) -> list:

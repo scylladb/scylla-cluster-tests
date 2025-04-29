@@ -11,7 +11,7 @@ from sdcm.remote.libssh2_client.exceptions import UnexpectedExit
 logger = logging.getLogger(__name__)
 
 
-def run_long_running_cmd(remoter: RemoteCmdRunnerBase,  # pylint: disable=too-many-arguments
+def run_long_running_cmd(remoter: RemoteCmdRunnerBase,
                          cmd: str,
                          timeout: float | None = None,
                          ignore_status: bool = False,

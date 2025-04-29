@@ -16,7 +16,7 @@ import unittest
 
 from sdcm.utils.version_utils import ComparableScyllaVersion
 
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module, import-error
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 
 
 def general_test(scylla_repo='', linux_distro='', cloud_provider=None):
