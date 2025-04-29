@@ -39,7 +39,7 @@ class PrometheusDumper(BaseEventsProcess[Tuple[str, Any], None], threading.Threa
         for event_tuple in self.inbound_events():
             with verbose_suppress("PrometheusDumper failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
-                events_gauge.labels(event_class,  # pylint: disable=no-member
+                events_gauge.labels(event_class,
                                     getattr(event, "type", ""),
                                     getattr(event, "subtype", ""),
                                     event.severity,

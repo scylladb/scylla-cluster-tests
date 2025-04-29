@@ -1,7 +1,5 @@
 from sdcm.utils.ci_tools import get_test_name
 
-# pylint: disable=too-few-public-methods
-
 
 class Dashboard:
     name: str

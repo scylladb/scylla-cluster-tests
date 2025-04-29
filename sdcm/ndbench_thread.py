@@ -106,11 +106,11 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             operation, name = key.split('_', 1)
                             self.set_metric(operation, name, float(value))
 
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
 
 
-class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class NdBenchStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ndbench"
 
@@ -160,7 +160,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                                     log_file=log_file_name,
                                     verbose=True,
                                     retry=0)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 ndbench_failure_event = NdBenchStressEvent.failure(
                     node=str(loader),
                     stress_cmd=self.stress_cmd,

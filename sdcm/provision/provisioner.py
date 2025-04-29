@@ -36,7 +36,7 @@ class DataDisk:
 
 
 @dataclass
-class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
+class InstanceDefinition:
     name: str
     image_id: str
     type: str   # instance_type from yaml
@@ -70,7 +70,7 @@ class PricingModel(Enum):
 
 
 @dataclass
-class VmInstance:  # pylint: disable=too-many-instance-attributes
+class VmInstance:
     name: str
     region: str
     user_name: str

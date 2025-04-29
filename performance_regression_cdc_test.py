@@ -62,7 +62,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         write_cmd = self.params.get("stress_cmd_w")
 
         self._workload_cdc(write_cmd,
-                           stress_num=2,  # pylint: disable=unused-variable
+                           stress_num=2,
                            test_name="test_write",
                            sub_type="cdc_disabled")
         node1: BaseNode = self.db_cluster.nodes[0]
@@ -71,7 +71,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         node1.run_cqlsh(f"ALTER TABLE {self.keyspace}.{self.table} WITH cdc = {{'enabled': true, 'postimage': true}}")
 
         self._workload_cdc(write_cmd,
-                           stress_num=2,  # pylint: disable=unused-variable
+                           stress_num=2,
                            test_name="test_write",
                            sub_type="cdc_preimage_enabled")
 
@@ -90,7 +90,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
     def test_mixed_latency(self):
         self.cdc_workflow(use_cdclog_reader=True)
 
-    def cdc_workflow(self, use_cdclog_reader=False):  # pylint: disable=unused-variable
+    def cdc_workflow(self, use_cdclog_reader=False):
         self.keyspace = "keyspace1"
         self.table = "standard1"
         write_cmd = self.params.get("stress_cmd_w")
@@ -152,7 +152,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
-    def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None,  # pylint: disable=too-many-arguments
+    def _workload_cdc(self, stress_cmd, stress_num, test_name, sub_type=None,
                       save_stats=True, read_cdclog_cmd=None, update_cdclog_stats=False, enable_batching=True):
         cdc_stress_queue = None
 

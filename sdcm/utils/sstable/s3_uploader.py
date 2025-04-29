@@ -31,7 +31,7 @@ def upload_sstables_to_s3(node: CollectingNode | BaseNode, keyspace: str, test_i
         if s3_link:
             LOGGER.info("Successfully uploaded sstables on node %s for keyspace %s", node.name, keyspace)
         node.remoter.run(f"nodetool clearsnapshot -t {snapshot_tag} {keyspace}")
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Error while getting and uploading sstables: %s", exc, exc_info=exc)
         s3_link = ""
     return s3_link

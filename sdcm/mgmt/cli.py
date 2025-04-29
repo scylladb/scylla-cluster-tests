@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
+
 import json
 import time
 import logging
@@ -49,10 +49,10 @@ forcing_tls_minimum_version = LooseVersion("3.2.6")
 # TODO: remove these checks once manager 2.6 is no longer supported
 
 
-class ScyllaManagerBase:  # pylint: disable=too-few-public-methods
+class ScyllaManagerBase:
 
-    def __init__(self, id, manager_node):  # pylint: disable=redefined-builtin
-        self.id = id  # pylint: disable=invalid-name
+    def __init__(self, id, manager_node):
+        self.id = id
         self.manager_node = manager_node
         self.sctool = SCTool(manager_node=manager_node)
 
@@ -65,7 +65,7 @@ class ManagerTask:
     def __init__(self, task_id, cluster_id, manager_node):
         self.manager_node = manager_node
         self.sctool = SCTool(manager_node=manager_node)
-        self.id = task_id  # pylint: disable=invalid-name
+        self.id = task_id
         self.cluster_id = cluster_id
 
     def get_property(self, parsed_table, column_name):
@@ -393,7 +393,7 @@ class ManagerTask:
         # * check that progress command works on various task statuses (that was how manager bug #856 found).
         # * print the progress to log in cases needed for failures/performance analysis.
         ###
-        progress = self.progress  # pylint: disable=unused-variable  # noqa: F841
+        progress = self.progress  # noqa: F841
         return self.status in list_status
 
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
@@ -552,7 +552,7 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return RestoreTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches  # noqa: PLR0913
+    def create_backup_task(self, dc_list=None,  # noqa: PLR0913
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
                            snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, legacy_args=None):
@@ -601,7 +601,7 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
+    def create_repair_task(self, dc_list=None,
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
                            intensity=None, parallel=None, cron=None, start_date=None):
         # the interval string:
@@ -700,7 +700,7 @@ class ManagerCluster(ScyllaManagerBase):
         cmd = "cluster delete -c {}".format(self.id)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def update(self, name=None, host=None, client_encrypt=None, force_non_ssl_session_port=False):  # pylint: disable=too-many-arguments
+    def update(self, name=None, host=None, client_encrypt=None, force_non_ssl_session_port=False):
         """
         $ sctool cluster update --help
         Modify a cluster
@@ -804,7 +804,6 @@ class ManagerCluster(ScyllaManagerBase):
         """
         Gets the Manager's Cluster Nodes status
         """
-        # pylint: disable=too-many-locals
 
         # $ sctool status -c bla
         # Datacenter: dc1
@@ -862,8 +861,8 @@ class ManagerCluster(ScyllaManagerBase):
                                                          health.rest_status, health.rest_rtt, health.ssl))
         return dict_hosts_health
 
-    class _HostHealth():  # pylint: disable=too-few-public-methods
-        def __init__(self, status, rtt, ssl, rest_status, rest_rtt, rest_http_status_code=None):  # pylint: disable=too-many-arguments
+    class _HostHealth():
+        def __init__(self, status, rtt, ssl, rest_status, rest_rtt, rest_http_status_code=None):
             self.status = status
             self.rtt = rtt
             self.rest_status = rest_status
@@ -963,7 +962,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def get_cluster_hosts_with_ips(db_cluster):
         return [[n, n.ip_address] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,  # pylint: disable=too-many-arguments
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,
                     auth_token=None, credentials=None, force_non_ssl_session_port=False):
         """
         :param name: cluster name
@@ -986,7 +985,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
           https://manager.docs.scylladb.com/stable/add-a-cluster.html
           https://manager.docs.scylladb.com/stable/sctool#cluster-add
         """
-        # pylint: disable=too-many-locals
+
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
 
@@ -1120,7 +1119,7 @@ class SCTool:
     def __init__(self, manager_node):
         self.manager_node = manager_node
 
-    def run(self,  # pylint: disable=too-many-arguments
+    def run(self,
             cmd,
             is_verify_errorless_result=False,
             parse_table_res=True,
@@ -1328,7 +1327,7 @@ class ScyllaMgmt:
             raise Exception(err_msg)
         try:
             return json.loads(resp.content)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             LOGGER.error('Failed load data from json %s, error: %s', resp.content, ex)
         return resp.content
 
@@ -1432,7 +1431,7 @@ class ScyllaMgmt:
     def get_task_progress(self, cluster_id, repair_unit):
         try:
             return self.get(path='cluster/{}/repair/unit/{}/progress'.format(cluster_id, repair_unit))
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             LOGGER.exception('Failed to get repair progress: %s', ex)
         return None
 

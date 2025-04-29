@@ -15,7 +15,7 @@ from unit_tests.test_cluster import DummyDbCluster
 logging.basicConfig(level=logging.DEBUG)
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
+class DummyNode(BaseNode):
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -76,25 +76,22 @@ class FakeServiceLevel(ServiceLevel):
 
 class FakePrometheus:
     @staticmethod
-    # pylint: disable=unused-argument
-    def get_scylla_scheduler_runtime_ms(start_time, end_time, node_ip, irate_sample_sec='60s'):
+    def get_scylla_io_queue_total_operations(start_time, end_time, node_ip, irate_sample_sec='60s'):
         return {'127.0.0.1': {'sl:default': [410.5785714285715, 400.36428571428576],
                               'sl:sl200_abc': [177.11428571428573, 182.02857142857144],
                               'sl:sl50_abc': [477.11428571428573, 482.02857142857144]}
                 }
 
-    # pylint: disable=unused-argument,no-self-use
     def get_scylla_reactor_utilization(self, start_time, end_time, instance):
         return 100
 
 
-# pylint: disable=too-few-public-methods
 class FakeSession:
     default_timeout = 0
 
 
 class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
-    def test_less_runtime_than_expected_error(self):
+    def test_less_operations_than_expected_error(self):
         node = DummyNode(name='test_node',
                          parent_cluster=None,
                          ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
@@ -110,12 +107,12 @@ class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
                       {"role": role_high, 'service_level': role_high.attached_service_level}]
 
         with self.assertRaises(SchedulerRuntimeUnexpectedValue) as error:
-            self.validate_scheduler_runtime(start_time=time.time(),
-                                            end_time=time.time() + 60,
-                                            read_users=read_roles,
-                                            prometheus_stats=prometheus_stats,
-                                            db_cluster=db_cluster,
-                                            publish_wp_error_event=False)
+            self.validate_io_queue_operations(start_time=time.time(),
+                                              end_time=time.time() + 60,
+                                              read_users=read_roles,
+                                              prometheus_stats=prometheus_stats,
+                                              db_cluster=db_cluster,
+                                              publish_wp_error_event=False)
         assert str(error.exception) == str('\n(Node 127.0.0.1) - Service level with higher shares got less resources '
                                            'unexpectedly. CPU%: 100. Runtime per service level group:\n  sl:sl50_abc '
                                            '(shares 50): 479.57\n  sl:sl200_abc (shares 200): 179.57')

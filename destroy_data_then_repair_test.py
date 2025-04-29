@@ -19,7 +19,7 @@ from sdcm import nemesis
 
 class CorruptThenRepair(ClusterTester):
 
-    def test_destroy_data_then_repair_test_nodes(self):  # pylint: disable=invalid-name
+    def test_destroy_data_then_repair_test_nodes(self):
         # populates 100GB
         write_queue = self.populate_data_parallel(100, blocking=False)
 
