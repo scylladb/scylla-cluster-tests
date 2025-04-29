@@ -32,7 +32,7 @@ from sdcm.sct_events.loaders import KclStressEvent
 LOGGER = logging.getLogger(__name__)
 
 
-class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class KclStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.kcl"
 
@@ -82,7 +82,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
                                     log_file=log_file_name,
                                     retry=0,
                                     )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             errors_str = format_stress_cmd_error(exc)
             kcl_failure_event = KclStressEvent.failure(
                 node=loader,
@@ -99,7 +99,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return loader, result, kcl_failure_event or kcl_finish_event
 
 
-class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class CompareTablesSizesThread(DockerBasedStressThread):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
@@ -153,7 +153,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
                 time.sleep(self._interval)
             return None
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,

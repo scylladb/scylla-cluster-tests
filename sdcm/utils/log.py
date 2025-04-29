@@ -98,7 +98,7 @@ class JSONLFormatter(logging.Formatter):
         return json.dumps(log_entry, ensure_ascii=False)
 
 
-class FilterRemote(logging.Filter):  # pylint: disable=too-few-public-methods
+class FilterRemote(logging.Filter):
     def filter(self, record):
         return not record.name == 'sdcm.remote'
 
@@ -128,7 +128,7 @@ def replace_vars(obj, variables, obj_type=None):
     return obj
 
 
-def configure_logging(exception_handler=None,  # pylint: disable=too-many-arguments
+def configure_logging(exception_handler=None,
                       formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None):
     urllib3.disable_warnings()
     warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)

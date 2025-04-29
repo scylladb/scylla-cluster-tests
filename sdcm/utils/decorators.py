@@ -34,17 +34,16 @@ class Retry(Exception):
     pass
 
 
-class retrying:  # pylint: disable=invalid-name,too-few-public-methods
+class retrying:
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    # pylint: disable=too-many-arguments,redefined-outer-name
     def __init__(self, n=3, sleep_time=1,
                  allowed_exceptions=(Exception,), message="", timeout=0,
                  raise_on_exceeded=True):
         if n:
-            self.n = n  # number of times to retry  # pylint: disable=invalid-name
+            self.n = n  # number of times to retry
         else:
             self.n = sys.maxsize * 2 + 1
         self.sleep_time = sleep_time  # number seconds to sleep between retries
@@ -82,7 +81,7 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
         return inner
 
 
-timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
+timeout = partial(retrying, n=0)
 
 
 def log_run_info(arg):
@@ -191,7 +190,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
-    from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
+    from sdcm.utils import latency
 
     def wrapper(func):
 
@@ -333,7 +332,7 @@ class NoValue(Exception):
     ...
 
 
-class optional_cached_property(cached_property):  # pylint: disable=invalid-name,too-few-public-methods
+class optional_cached_property(cached_property):
     """Extension for cached_property from Lib/functools.py with ability to ignore calculated result.
 
     To make it to not cache a value on a property call raise NoValue exception: it will be ignored and
