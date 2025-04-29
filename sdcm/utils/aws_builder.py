@@ -60,7 +60,13 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.labels,  // labels
   "/tmp/jenkins/", // fs root
   new SSHConnector(22,
+<<<<<<< HEAD
                    "user-jenkins_scylla_test_id_ed25519.pem", "", "", "", "", null, 0, 0,
+||||||| parent of b888452ea (fix(aws_builder): reset configureation back to defaults)
+                   "user-jenkins_scylla_test_id_ed25519.pem", "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", "", "", "", null, 0, 0,
+=======
+                   "user-jenkins_scylla_test_id_ed25519.pem", "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", "", "", "", null, null, null,
+>>>>>>> b888452ea (fix(aws_builder): reset configureation back to defaults)
                    new NonVerifyingKeyVerificationStrategy()),
   false, // privateIpUsed
   true, // alwaysReconnect
