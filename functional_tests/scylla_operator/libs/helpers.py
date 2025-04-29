@@ -100,7 +100,7 @@ def scylla_services_names(db_cluster: ScyllaPodCluster) -> list:
             if name not in ('NAME', f"{scylla_cluster_name}-client")]
 
 
-def wait_for_resource_absence(db_cluster: ScyllaPodCluster,  # pylint: disable=too-many-arguments
+def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
                               resource_type: str, resource_name: str,
                               namespace: str = SCYLLA_NAMESPACE,
                               step: int = 2, timeout: int = 60) -> None:
@@ -198,7 +198,7 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
     # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
     for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
         assert wait_for(
-            func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+            func=lambda: list(resharding_start),
             step=1, timeout=600, throw_exc=False,
             text=f"Waiting for the start of resharding on the '{node.name}' node.",
         ), f"Start of resharding hasn't been detected on the '{node.name}' node."
@@ -207,7 +207,7 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
 
         # Wait for the end of resharding
         assert wait_for(
-            func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+            func=lambda: list(resharding_finish),
             step=3, timeout=600, throw_exc=False,
             text=f"Waiting for the finish of resharding on the '{node.name}' node.",
         ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."

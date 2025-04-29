@@ -55,7 +55,7 @@ class AWSPlacementInfo(BaseModel):
 
 
 class AWSInstanceParams(InstanceParamsBase):
-    # pylint: disable=invalid-name
+
     ImageId: str
     KeyName: str
     InstanceType: str
@@ -69,7 +69,6 @@ class AWSInstanceParams(InstanceParamsBase):
     AddressingType: str = None
     EbsOptimized: bool = None
 
-    # pylint: disable=arguments-differ
     def model_dump(
         self,
         *,

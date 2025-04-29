@@ -22,7 +22,7 @@ pytestmark = [
 ]
 
 
-class DBCluster:  # pylint: disable=too-few-public-methods
+class DBCluster:
     def __init__(self, nodes):
         self.nodes = nodes
 

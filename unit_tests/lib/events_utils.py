@@ -56,7 +56,7 @@ class EventsUtilsMixin:
         shutil.rmtree(cls.temp_dir)
 
     @contextmanager
-    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1,  # pylint: disable=no-self-use
+    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1,
                           last_event_processing_delay: float = 1):
         last_event_n = subscriber.events_counter + count
         end_time = time.perf_counter() + timeout

@@ -133,7 +133,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
     default_run_retry = 8
 
-    def __init__(self, kluster, pod_image: str,  # pylint: disable=too-many-arguments
+    def __init__(self, kluster, pod_image: str,
                  pod_name: str, container: Optional[str] = None,
                  namespace: str = "default") -> None:
         self.kluster = kluster
@@ -162,7 +162,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
             },
         )
 
-    def run(self, cmd, **kwargs):  # pylint: disable=arguments-differ
+    def run(self, cmd, **kwargs):
         if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
             if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
                 LOGGER.info(
@@ -194,8 +194,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
                                                           "k8s_container": self.container,
                                                           "k8s_namespace": self.namespace, })))
 
-    # pylint: disable=too-many-arguments
-    def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+    def _run_execute(self, cmd: str, timeout: Optional[float] = None,
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
                      watchers: Optional[List[StreamWatcher]] = None):
         # TODO: This should be removed than sudo calls will be done in more organized way.
@@ -213,14 +212,12 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
         return super()._run_execute(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose,
                                     new_session=True, watchers=watchers)
 
-    # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300):
         KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod_name}:{src}", dst,
                                 container=self.container, timeout=timeout)
         return True
 
-    # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
         with KEY_BASED_LOCKS.get_lock(f"k8s--{self.kluster.name}--{self.namespace}--{self.pod_name}"):
@@ -405,7 +402,7 @@ class KubernetesPodWatcher(KubernetesRunner):
             namespace=self.context.config.k8s_namespace).stdout.strip()
         return yaml.safe_load(result_raw) or {}
 
-    def returncode(self, status: dict | None = None) -> Optional[int]:  # pylint: disable=arguments-differ
+    def returncode(self, status: dict | None = None) -> Optional[int]:
         if status is None:
             status = self._get_pod_status()
         # NOTE: logic is based on the following conditions:
@@ -440,7 +437,7 @@ class KubernetesPodWatcher(KubernetesRunner):
             pod_name, result)
         return result
 
-    def _is_pod_failed_or_completed(self, _cache={}) -> bool:  # pylint: disable=dangerous-default-value  # noqa: B006
+    def _is_pod_failed_or_completed(self, _cache={}) -> bool:  # noqa: B006
         last_call_at = _cache.get('last_call_at')
         if last_call_at and time.time() - last_call_at < 3:
             time.sleep(3)
@@ -566,9 +563,8 @@ class KubernetesPodWatcher(KubernetesRunner):
         return super().run(command, **kwargs)
 
 
-# pylint: disable=too-many-instance-attributes
 class KubernetesPodRunner(KubernetesCmdRunner):
-    def __init__(self, kluster,  # pylint: disable=too-many-arguments,super-init-not-called
+    def __init__(self, kluster,
                  template_path: str,
                  template_modifiers: list,
                  pod_name_template: str,
@@ -580,7 +576,7 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         self.pod_name_template = pod_name_template
         self.namespace = namespace
         self.environ = environ
-        RemoteCmdRunnerBase.__init__(  # pylint: disable=non-parent-init-called
+        RemoteCmdRunnerBase.__init__(
             self=self, hostname=f"pod/{pod_name_template}")
         self._pod_counter = -1
         self._connections = []
@@ -629,7 +625,6 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         self._connections.append(connection)
         return connection
 
-    # pylint: disable=too-many-arguments,unused-argument
     def receive_files(self, src, dst, delete_dst=False,
                       preserve_perm=True, preserve_symlinks=False, timeout=300):
         # TODO: may be implemented if we want to copy files which exist in the image
@@ -637,7 +632,6 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         #       running pod.
         raise NotImplementedError()
 
-    # pylint: disable=too-many-arguments,unused-argument
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
         """Mount single files to a 'dynamic'aly created pods.
 

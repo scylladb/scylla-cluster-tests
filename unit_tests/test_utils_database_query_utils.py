@@ -5,7 +5,7 @@ from unit_tests.test_cluster import DummyScyllaCluster
 
 
 @pytest.mark.integration
-def test_fetch_all_rows(docker_scylla, params, events):  # pylint: disable=unused-argument
+def test_fetch_all_rows(docker_scylla, params, events):
 
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params

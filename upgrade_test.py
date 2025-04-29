@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-# pylint: disable=too-many-lines
 import traceback
 from itertools import zip_longest, chain, count as itertools_count
 import json
@@ -28,7 +27,7 @@ import cassandra
 import tenacity
 from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
@@ -133,7 +132,6 @@ def recover_conf(node):
             r'if test -e $conf.backup; then sudo cp -v $conf.backup $conf; fi; done')
 
 
-# pylint: disable=too-many-instance-attributes, too-many-public-methods
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
@@ -190,11 +188,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                                  msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
                                  .format(table_name, count[0][0]))
                 self.actions_log.info("Finish read data from tables", target=table_name)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 InfoEvent(message=f"Failed read data from {table_name} tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
                           severity=Severity.ERROR).publish()
 
-    def validate_truncated_entries_for_table(self, session, system_truncated=False):  # pylint: disable=invalid-name
+    def validate_truncated_entries_for_table(self, session, system_truncated=False):
         tables_id = self.get_tables_id_of_keyspace(session=session, keyspace_name='truncate_ks')
 
         for table_id in tables_id:
@@ -223,7 +221,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                             ignore_raft_topology_cmd_failing])
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):  # noqa: PLR0915
-        # pylint: disable=too-many-branches,too-many-statements
         self.actions_log.info("Starting node upgrade", target=node.name)
         new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
         new_version = new_version or self.params.get('new_version')
@@ -361,7 +358,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                             ignore_topology_change_coordinator_errors,
                             ignore_raft_topology_cmd_failing])
     def _rollback_node(self, node, upgrade_sstables=True):
-        # pylint: disable=too-many-branches,too-many-statements
         self.actions_log.info("Starting node rollback", target=node.name)
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout.strip()
@@ -430,7 +426,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.db_cluster.wait_all_nodes_un()
         self.actions_log.info("Node rollback completed", target=node.name)
 
-    def upgradesstables_if_command_available(self, node, queue=None):  # pylint: disable=invalid-name
+    def upgradesstables_if_command_available(self, node, queue=None):
         upgradesstables_available = False
         upgradesstables_supported = node.remoter.run(
             'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
@@ -442,7 +438,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             queue.put(upgradesstables_available)
             queue.task_done()
 
-    def get_highest_supported_sstable_version(self):  # pylint: disable=invalid-name
+    def get_highest_supported_sstable_version(self):
         """
         find the highest sstable format version supported in the cluster
 
@@ -477,7 +473,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 assert list(sstable_versions)[0] == self.expected_sstable_format_version, (
                     "expected to format version to be '{}', found '{}'".format(
                         self.expected_sstable_format_version, list(sstable_versions)[0]))
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 self.log.warning(ex)
                 return False
             else:
@@ -574,7 +570,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         dc_nodes = {}
         for node in nodes:
             dc_nodes.setdefault(node.dc_idx, []).append(node)
-        for dc in dc_nodes:  # pylint: disable=consider-using-dict-items
+        for dc in dc_nodes:
             random.shuffle(dc_nodes[dc])
 
         return [x for x in chain.from_iterable(zip_longest(*dc_nodes.values())) if x]
@@ -584,7 +580,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # noqa: PLR0914, PLR0915
+    def test_rolling_upgrade(self):  # noqa: PLR0914, PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
@@ -776,7 +772,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.actions_log.info('Starting verification stresses after cluster upgrade')
         stress_after_cluster_upgrade = self.params.get('stress_after_cluster_upgrade')
         self.run_stress_thread(stress_cmd=stress_after_cluster_upgrade)
-        verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
+        verify_stress_after_cluster_upgrade = self.params.get(
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
@@ -1161,10 +1157,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def _get_current_operator_image_tag(self):
         return self.k8s_cluster.kubectl(
             "get deployment scylla-operator -o custom-columns=:..image --no-headers",
-            namespace=self.k8s_cluster._scylla_operator_namespace  # pylint: disable=protected-access
+            namespace=self.k8s_cluster._scylla_operator_namespace
         ).stdout.strip().split(":")[-1]
 
-    def test_kubernetes_operator_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def test_kubernetes_operator_upgrade(self):
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step1 - Populate DB with data').publish()
@@ -1201,7 +1197,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         expected_docker_image_tag = upgrade_docker_image.split(':')[-1]
         if not expected_docker_image_tag:
             operator_chart_info = self.k8s_cluster.helm(
-                f"ls -n {self.k8s_cluster._scylla_operator_namespace} -o json")  # pylint: disable=protected-access
+                f"ls -n {self.k8s_cluster._scylla_operator_namespace} -o json")
             expected_docker_image_tag = json.loads(operator_chart_info)[0]["app_version"]
         self.assertEqual(expected_docker_image_tag, actual_docker_image_tag)
 
@@ -1309,7 +1305,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="Step5 - Check Scylla-operator pods").publish()
         self.k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod",
-            namespace=self.k8s_cluster._scylla_operator_namespace,  # pylint: disable=protected-access
+            namespace=self.k8s_cluster._scylla_operator_namespace,
             timeout=600)
 
         InfoEvent(message="Step6 - Check Scylla pods").publish()
@@ -1401,7 +1397,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.test_config.argus_client().submit_packages([package])
             else:
                 self.log.warning("Couldn't extract version from %s", new_version)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             self.log.exception("Failed to save upgraded Scylla version in Argus", exc_info=exc)
 
 
@@ -1460,7 +1456,7 @@ class UpgradeCustomTest(UpgradeTest):
 
         return cs_user_profiles
 
-    def _custom_profile_rolling_upgrade(self, cs_user_profiles, new_scylla_repo=None, new_version=None):  # pylint: disable=too-many-locals,too-many-statements
+    def _custom_profile_rolling_upgrade(self, cs_user_profiles, new_scylla_repo=None, new_version=None):
         self.upgrade_os(self.db_cluster.nodes)
 
         InfoEvent(message='Starting write workload during entire test').publish()
@@ -1479,7 +1475,7 @@ class UpgradeCustomTest(UpgradeTest):
             try:
                 self.metric_has_data(
                     metric_query='sct_cassandra_stress_user_gauge{type="ops", keyspace="%s"}' % keyspace_name, n=10)
-            except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001
                 InfoEvent(
                     f"Get metrix data for keyspace {keyspace_name} failed with error: {err}", severity=Severity.ERROR).publish()
 

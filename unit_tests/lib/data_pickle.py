@@ -16,7 +16,6 @@ import json
 import enum
 
 
-# pylint: disable=too-few-public-methods
 class DefaultValue:
     pass
 
