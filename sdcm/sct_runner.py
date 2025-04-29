@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import logging
@@ -72,7 +72,7 @@ from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
 
 if TYPE_CHECKING:
-    # pylint: disable=ungrouped-imports
+
     from typing import Optional, Any, Type
 
     from mypy_boto3_ec2.literals import InstanceTypeType
@@ -100,7 +100,7 @@ def datetime_from_formatted(date_string: str) -> datetime.datetime:
 
 
 @dataclass
-class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
+class SctRunnerInfo:
     sct_runner_class: Type[SctRunner] = field(repr=False)
     cloud_service_instance: EC2Client | AzureService | None = field(repr=False)
     region_az: str
@@ -186,14 +186,14 @@ class SctRunner(ABC):
         ...
 
     def get_remoter(self, host, connect_timeout: Optional[float] = None) -> RemoteCmdRunnerBase:
-        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)  # pylint: disable=consider-using-with
+        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
         self._ssh_pkey_file.write(self.key_pair.private_key.decode())
         self._ssh_pkey_file.flush()
         return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER,
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE  # pylint: disable=import-outside-toplevel
+        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
@@ -293,7 +293,6 @@ class SctRunner(ABC):
         ...
 
     @abstractmethod
-    # pylint: disable=too-many-arguments
     def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
@@ -376,7 +375,7 @@ class SctRunner(ABC):
             try:
                 LOGGER.info("Terminating SCT Image Builder instance `%s'...", builder_instance_id)
                 self._terminate_image_builder_instance(instance=instance)
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 LOGGER.warning("Was not able to terminate `%s': %s\nPlease terminate manually!!!",
                                builder_instance_id, ex)
         else:
@@ -395,7 +394,7 @@ class SctRunner(ABC):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         ...
 
-    def create_instance(self,  # pylint: disable=too-many-arguments
+    def create_instance(self,
                         test_id: str,
                         test_name: str,
                         test_duration: int,
@@ -513,7 +512,6 @@ class AwsSctRunner(SctRunner):
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
     def _create_instance(self,
                          instance_type: InstanceTypeType,
                          base_image: Any,
@@ -713,7 +711,7 @@ class AwsSctRunner(SctRunner):
         return image.image_id
 
     def _copy_source_image_to_region(self) -> None:
-        result = self.aws_region.client.copy_image(  # pylint: disable=no-member
+        result = self.aws_region.client.copy_image(
             Description=self.IMAGE_DESCRIPTION,
             Name=self.image_name,
             SourceImageId=self.source_image.image_id,
@@ -774,7 +772,7 @@ class AwsSctRunner(SctRunner):
         LOGGER.info("Updated SCT Runner %s with tags: %s successfully.", cloud_instance_name, tags_to_create)
 
 
-class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
+class GceSctRunner(SctRunner):
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
@@ -850,7 +848,6 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     def tags_to_labels(tags: dict[str, str]) -> dict[str, str]:
         return {key.lower(): value.lower().replace(".", "_") for key, value in tags.items()}
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
@@ -1044,7 +1041,7 @@ class AzureSctRunner(SctRunner):
                         return gallery_image_version
         return None
 
-    def _create_instance(self,  # pylint: disable=too-many-arguments
+    def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
                          tags: dict[str, str],
@@ -1174,7 +1171,7 @@ class AzureSctRunner(SctRunner):
         tags_to_create = {str(k): str(v) for k, v in tags.items()}
         params = TagsPatchResource.from_dict(
             {
-                "operation": TagsPatchOperation.MERGE.value,  # pylint:disable=no-member
+                "operation": TagsPatchOperation.MERGE.value,
                 "properties": {
                     "tags": tags_to_create,
                 }
@@ -1248,7 +1245,7 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
         runner_to_update = runner_to_update[0]
         runner_to_update.sct_runner_class.set_tags(runner_to_update, tags=tags)
         LOGGER.info("Tags on SCT runner updated with: %s", tags)
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Could not set SCT runner tags to: %s due to exc:\n%s", tags, exc)
 
 
@@ -1288,7 +1285,7 @@ def clean_sct_runners(test_status: str,
                       backend: str = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
-    # pylint: disable=too-many-branches,too-many-statements
+
     sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
@@ -1350,7 +1347,7 @@ def clean_sct_runners(test_status: str,
             sct_runner_info.terminate()
             runners_terminated += 1
             end_message = f"Number of cleaned runners: {runners_terminated}"
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
             end_message = "No runners have been terminated"
 

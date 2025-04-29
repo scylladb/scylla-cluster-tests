@@ -42,7 +42,7 @@ BACKENDS = {
 }
 
 
-class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
+class ArtifactsTest(ClusterTester):
     REPO_TABLE = "housekeeping.repo"
     CHECK_VERSION_TABLE = "housekeeping.checkversion"
 
@@ -311,8 +311,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                   scylla_encryption_options=scylla_encryption_options,
                                   compaction=compaction_strategy, sstable_size=sstable_size)
 
-    # pylint: disable=too-many-statements,too-many-branches
-    def test_scylla_service(self):
+    def test_scylla_service(self):  # noqa: PLR0915
 
         self.run_pre_create_schema()
 

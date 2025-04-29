@@ -51,7 +51,7 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
                 except TestFailure:
                     self.kill_test(sys.exc_info())
 
-    def kill_test(self, backtrace_with_reason, memo={}) -> None:  # pylint: disable=dangerous-default-value
+    def kill_test(self, backtrace_with_reason, memo={}) -> None:  # noqa: B006
         self.terminate()
         if tester := TestConfig().tester_obj():
             if memo:

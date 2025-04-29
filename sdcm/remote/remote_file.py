@@ -31,7 +31,6 @@ def read_to_stringio(fobj):
     return StringIO(fobj.read())
 
 
-# pylint: disable=too-many-locals,too-many-arguments
 @contextlib.contextmanager
 def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
                 preserve_ownership=True, preserve_permissions=True, log_change=True):

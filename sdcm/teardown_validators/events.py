@@ -39,7 +39,7 @@ class FailingEventsFilter:
         return match
 
 
-class ErrorEventsValidator(TeardownValidator):  # pylint: disable=too-few-public-methods
+class ErrorEventsValidator(TeardownValidator):
     """
     A teardown validator that checks test events log for presence of specific error events and critical-level events.
     If the test doesn't have any of the defined failing error events or critical events, its status

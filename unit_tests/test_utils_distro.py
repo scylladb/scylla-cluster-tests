@@ -276,7 +276,7 @@ VERSION_ID 18.04
 }
 
 
-class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
+class TestDistro(unittest.TestCase):
     def test_unknown(self):
         self.assertTrue(Distro.UNKNOWN.is_unknown)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])

@@ -12,9 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-# pylint: disable=too-many-lines
 
-# pylint: disable=too-many-lines
 import random
 from pathlib import Path
 from functools import cached_property
@@ -455,7 +453,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                       timeout=110000, restore_data=True)
         self.run_verification_read_stress()
 
-    def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
+    def test_restore_multiple_backup_snapshots(self):  # noqa: PLR0914
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
         cluster_backend = self.params.get('cluster_backend')

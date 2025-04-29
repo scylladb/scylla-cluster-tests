@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-# pylint: disable=redefined-outer-name
+
 import os
 import uuid
 from collections import namedtuple
@@ -21,12 +21,12 @@ import pytest
 from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
-from sdcm.utils.azure_utils import AzureService  # pylint: disable=import-error
-from unit_tests.provisioner.fake_azure_service import FakeAzureService  # pylint: disable=import-error
+from sdcm.utils.azure_utils import AzureService
+from unit_tests.provisioner.fake_azure_service import FakeAzureService
 
 
 @pytest.fixture(scope="session")
-def azure_service(tmp_path_factory) -> AzureService:  # pylint: disable=no-self-use
+def azure_service(tmp_path_factory) -> AzureService:
     run_on_real_azure = False   # make it True to test with real Azure
     if run_on_real_azure:
         # When true this becomes e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)
@@ -66,7 +66,7 @@ def params():
 
 
 @pytest.fixture
-def test_config(params):  # pylint: disable=unused-argument,redefined-outer-name
+def test_config(params):
     config = get_test_config()
     config.set_test_id("12345678-87654321")
     TestConfig.SYSLOGNG_ADDRESS = ("localhost", 12345)
