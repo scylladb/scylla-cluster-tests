@@ -35,7 +35,6 @@ class NodeIpsNotConfiguredError(Exception):
 class PhysicalMachineNode(cluster.BaseNode):
     log = LOGGER
 
-    # pylint: disable=too-many-arguments
     def __init__(self, name, parent_cluster: 'PhysicalMachineCluster',
                  public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
@@ -93,7 +92,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         super().destroy()
 
 
-class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
+class PhysicalMachineCluster(cluster.BaseCluster):
     def __init__(self, **kwargs):
         self.nodes = []
         self.credentials = kwargs.pop('credentials')
@@ -107,7 +106,6 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
 
     @property
     def ssh_username(self) -> str:
-        # pylint: disable=no-member
         return self._ssh_username
 
     def _create_node(self, name, public_ip, private_ip):
@@ -121,7 +119,6 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         node.init()
         return node
 
-    # pylint: disable=unused-argument,too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "baremetal can provision diffrent types"
         for node_index in range(count):
@@ -145,7 +142,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         super().__init__(**kwargs)
 
 
-class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):  # pylint: disable=abstract-method
+class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop('user_prefix')
