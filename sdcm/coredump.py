@@ -337,7 +337,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
 
         pid_list = []
         for dump in coredump_infos:
-            if "bash" not in dump['exe'] and "fwupd" not in dump['exe']:
+            if "bash" not in dump.get('exe', "") and "fwupd" not in dump.get('exe', ''):
                 pid_list.append(CoreDumpInfo(pid=str(dump['pid']), node=self.node))
         return pid_list
 
