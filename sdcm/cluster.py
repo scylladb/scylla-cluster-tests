@@ -1230,7 +1230,7 @@ class BaseNode(AutoSshContainerMixin):
             time.sleep(1)
 
         if self._coredump_thread:
-            self._coredump_thread.join(20*60)
+            self._coredump_thread.join(60*60)
         if self._journal_thread:
             self._journal_thread.stop(timeout // 10)
         if self._scylla_manager_journal_thread:
