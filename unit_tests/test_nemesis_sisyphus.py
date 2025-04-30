@@ -9,7 +9,7 @@ def test_list_all_available_nemesis(generate_file=True):
     registry = NemesisRegistry(Nemesis, COMPLEX_NEMESIS)
     disruption_list = registry.get_disrupt_methods()
 
-    assert len(disruption_list) == 92
+    assert len(disruption_list) == 93
 
     class_properties, method_properties = registry.gather_properties()
     sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))

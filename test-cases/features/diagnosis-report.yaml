@@ -1,0 +1,13 @@
+test_duration: 30
+stress_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=60 -pop seq=1..30000000"
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.large'
+nemesis_class_name: 'ScyllaDiagnosisReport'
+nemesis_interval: 5
+
+email_recipients: ['qa@scylladb.com']
+stress_image:
+  cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
