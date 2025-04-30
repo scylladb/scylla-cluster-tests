@@ -24,10 +24,10 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws-eu-central-1': 'aws-sct-builders-eu-central-1-v3-asg',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1-v3-asg',
                           'aws-us-west-2' : 'aws-sct-builders-us-west-2-v3-asg',
-                          'gce-us-east1': "${gcp_project}-builders-us-east1-template-v2",
-                          'gce-us-west1': "${gcp_project}-builders-us-west1-template-v2",
-                          'gce-us-central1': "${gcp_project}-builders-us-central1-template-v2",
-                          'gce': "${gcp_project}-builders-us-east1-template-v2",
+                          'gce-us-east1': "${gcp_project}-builders-us-east1-template-v3",
+                          'gce-us-west1': "${gcp_project}-builders-us-west1-template-v3",
+                          'gce-us-central1': "${gcp_project}-builders-us-central1-template-v3",
+                          'gce': "${gcp_project}-builders-us-east1-template-v3",
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg']
 
