@@ -149,5 +149,68 @@
       "exited": 0,
       "exit_status": 0
     }
+  ],
+  "sudo coredumpctl list 24393 -q --json=short" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "[{\"time\":1733783727661621,\"pid\":609,\"uid\":998,\"gid\":998,\"sig\":11,\"corefile\":\"present\",\"exe\":\"/usr/bin/python3.8\",\"size\":776650}]\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo coredumpctl list 5348 -q --json=short" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "[{\"time\":1733783727661631,\"pid\":609,\"uid\":998,\"gid\":998,\"sig\":11,\"corefile\":\"present\",\"exe\":\"/opt/scylladb/libexec/scylla\",\"size\":776650}]\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "rpm -qf /usr/bin/python3.8" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "python38\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "rpm -qf /opt/scylladb/libexec/scylla" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "scylla-server\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "rpm -q --queryformat '%{VERSION}' scylla-server" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "6.3.0\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "rpm -q --queryformat '%{VERSION}' python38" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "3.8\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "systemctl list-units --type=service --state=running | grep -q \"systemd-coredump@\"": [
+        {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 1,
+      "exit_status": 1
+    }
   ]
 }

@@ -19,5 +19,14 @@
       },
       "reason": null
     }
+  ],
+  "systemctl list-units --type=service --state=running | grep -q \"systemd-coredump@\"": [
+        {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 1,
+      "exit_status": 1
+    }
   ]
 }
