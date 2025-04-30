@@ -333,7 +333,8 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
 
     def update_new_coredump_with_exec_information(self, core_info: CoreDumpInfo) -> None:
         core = self._get_core_by_pid(core_info.pid)
-        core_info.update(executable=core['exe'], executable_version=self._get_executable_version(core['exe']))
+        core_info.update(executable=core.get('exe', 'N\A'),
+                         executable_version=self._get_executable_version(core.get('exe', 'N\A')))
 
     @staticmethod
     def _extract_version(release_version: str) -> Optional[str]:
@@ -386,7 +387,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
 
         pid_list = []
         for dump in coredump_infos:
-            if "bash" not in dump['exe'] and "fwupd" not in dump['exe']:
+            if "bash" not in dump.get('exe', "") and "fwupd" not in dump.get('exe', ''):
                 pid_list.append(CoreDumpInfo(pid=str(dump['pid']), node=self.node))
         return pid_list
 
