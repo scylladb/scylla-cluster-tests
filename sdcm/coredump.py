@@ -390,7 +390,21 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 pid_list.append(CoreDumpInfo(pid=str(dump['pid']), node=self.node))
         return pid_list
 
+    def _wait_for_pending_coredumps(self):
+        """
+        Check for active coredumps being created by waiting for systemd-coredump@ to stop running.
+        """
+        result = self.node.remoter.run('systemctl list-units --type=service --state=running | grep -q "systemd-coredump@"',
+                                       verbose=False, ignore_status=True)
+        if result.ok:
+            self.log.info("Pending coredumps found, waiting for them to complete")
+            self.node.remoter.run(
+                'while systemctl list-units --type=service --state=running | grep -q "systemd-coredump@"; do sleep 1; done',
+                verbose=False, ignore_status=True, timeout=1800)
+            self.log.info("Coredump completed")
+
     def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+        self._wait_for_pending_coredumps()
         if self.systemd_version >= 248:
             # since systemd/systemd@0689cfd we have option to get
             # the coredump information in json format
