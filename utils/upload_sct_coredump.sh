@@ -16,7 +16,7 @@ if [[ -n "${RUNNER_IP}" ]] ; then
 fi
 
 # Check if the coredumps exists in directory
-if ./docker/env/hydra.sh $EXTRA_HYDRA_ARGS "bash -c \"[[ -n \$( ls $COREDUMP_DIR ) ]]\"" ; then
+if ./docker/env/hydra.sh $EXTRA_HYDRA_ARGS "bash -c \"[[ -n \\\"\$( ls $COREDUMP_DIR )\\\" ]]\"" ; then
 
     # Compress the coredumps into a tar.gz file
     ./docker/env/hydra.sh $EXTRA_HYDRA_ARGS "bash -c \"tar --zstd -cf $COREDUMP_TARBALL -C $COREDUMP_DIR .\""
