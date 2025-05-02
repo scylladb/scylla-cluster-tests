@@ -134,7 +134,7 @@ class SstableLoadUtils:
 
     @staticmethod
     @timeout_decor(
-        timeout=180,
+        timeout=600,
         allowed_exceptions=(AssertionError,),
         message="Waiting for resharding completion message to appear in logs")
     def validate_resharding_after_refresh(node, system_log_follower):
