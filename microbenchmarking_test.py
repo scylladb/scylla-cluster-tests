@@ -42,3 +42,6 @@ class PerfSimpleQueryTest(ClusterTester):
                     self._test_id, is_gce=is_gce,
                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
             send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results)
+
+    def update_test_with_errors(self):
+        self.log.info("update_test_with_errors: Suppress writing errors to ES")
