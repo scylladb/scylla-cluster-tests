@@ -102,6 +102,29 @@ def restart_syslogng_service():
     return "systemctl restart syslog-ng  || true\n"
 
 
+def update_repo_cache():
+    return dedent("""\
+        if yum --help 2>/dev/null 1>&2 ; then
+            echo "Cleaning yum cache..."
+            yum clean all
+            rm -rf /var/cache/yum/
+        elif apt-get --help 2>/dev/null 1>&2 ; then
+            echo "Cleaning apt cache..."
+            apt-get clean all
+            rm -rf /var/cache/apt/
+
+            for n in 1 2 3 4 5 6 7 8 9; do
+                if apt-get -y update; then
+                    break
+                fi
+                sleep 0.5
+            done
+        else
+            echo "Unsupported distro"
+        fi
+    """)
+
+
 def install_syslogng_service():
     return dedent("""\
         SYSLOG_NG_INSTALLED=""
@@ -111,7 +134,13 @@ def install_syslogng_service():
                 yum reinstall -y syslog-ng
                 SYSLOG_NG_INSTALLED=1
             else
-                yum install -y epel-release
+                for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                    if yum install -y epel-release; then
+                        break
+                    fi
+                    sleep 1
+                done
+
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
                     if yum install -y --downloadonly syslog-ng; then
                         break
@@ -134,13 +163,6 @@ def install_syslogng_service():
                 SYSLOG_NG_INSTALLED=1
             else
                 cat /etc/apt/sources.list
-                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
-                    if apt-get -y update ; then
-                        break
-                    fi
-                    sleep 0.5
-                done
-
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
                     DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y syslog-ng || true
                     if dpkg-query --show syslog-ng ; then
