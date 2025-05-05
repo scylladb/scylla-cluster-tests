@@ -12,7 +12,7 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replicati
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
 round_robin: true
 
-n_db_nodes: 3
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 seeds_num: 2
