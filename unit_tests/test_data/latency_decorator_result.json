@@ -198,7 +198,7 @@
     }
   ],
   "hdr_summary": {
-    "WRITE": {
+    "WRITE--WRITE-rt": {
       "start_time": 1721564063.4528425,
       "end_time": 1721566723000.0,
       "stddev": 954797.9976915072,
@@ -214,7 +214,7 @@
         "percentile_99": ""
       }
     },
-    "READ": {
+    "READ--READ-rt": {
       "start_time": 1721564063.4528425,
       "end_time": 1721566723000.0,
       "stddev": 1205563.31676526,
