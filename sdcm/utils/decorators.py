@@ -178,7 +178,7 @@ def _find_hdr_tags(*args):
 
 
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
-                                 cycle_name: Optional[str] = None):
+                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -226,7 +226,9 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 return res
             monitor = monitoring_set.nodes[0]
             screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
-            if 'read' in test_name:
+            if workload_type:
+                workload = workload_type
+            elif 'read' in test_name:
                 workload = 'read'
             elif 'write' in test_name:
                 workload = 'write'
