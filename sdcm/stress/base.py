@@ -53,10 +53,14 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
         self.hdr_tags = []
+        self.stress_operation = self.set_stress_operation(stress_cmd)
 
         if "k8s" not in self.params.get("cluster_backend") and self.docker_image_name:
             for loader in self.loader_set.nodes:
                 RemoteDocker.pull_image(loader, self.docker_image_name)
+
+    def set_stress_operation(self, stress_cmd):
+        return ""
 
     @cached_property
     def docker_image_name(self):
