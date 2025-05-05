@@ -86,8 +86,26 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.compaction_strategy = compaction_strategy
         self.set_hdr_tags(stress_cmd)
 
+    def set_stress_operation(self, stress_cmd):
+        if " mixed " in stress_cmd:
+            self.stress_operation = "mixed"
+        elif " read " in stress_cmd:
+            self.stress_operation = "read"
+        elif " write " in stress_cmd:
+            self.stress_operation = "write"
+        elif " counter_read " in stress_cmd:
+            self.stress_operation = "counter_read"
+        elif " counter_write " in stress_cmd:
+            self.stress_operation = "counter_write"
+        elif " user " in stress_cmd:
+            self.stress_operation = "user"
+        else:
+            raise ValueError(
+                "Cannot detect supported stress operation type from the stress command: %s" % stress_cmd)
+        return self.stress_operation
+
     def set_hdr_tags(self, stress_cmd):
-        # TODO: add support for the "counter_write" and "user" modes?
+        # TODO: add support for the "counter_write", "counter_read" and "user" modes?
         params = get_stress_cmd_params(stress_cmd)
         if "fixed threads" in params:
             if " mixed " in stress_cmd:
