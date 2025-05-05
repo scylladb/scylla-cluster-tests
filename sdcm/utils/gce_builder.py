@@ -53,7 +53,7 @@ ComputeEngineCloud gcpCloud = new ComputeEngineCloud(config.name, config.project
 gcpCloud.setNoDelayProvisioning(true)
 
 InstanceConfiguration instanceConfiguration = new InstanceConfiguration()
-instanceConfiguration.setNumExecutorsStr("4")
+instanceConfiguration.setNumExecutorsStr("1")
 instanceConfiguration.setOneShot(false)
 instanceConfiguration.setNamePrefix("builders")
 instanceConfiguration.setDescription("SCT Jenkins builders")
