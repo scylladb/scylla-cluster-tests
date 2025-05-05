@@ -17,6 +17,7 @@ from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
     configure_sshd_script,
     restart_sshd_service,
+    update_repo_cache,
     install_syslogng_service,
     configure_syslogng_target_script,
     restart_syslogng_service,
@@ -76,6 +77,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script = ''
         script += disable_daily_apt_triggers()
         if self.logs_transport == 'syslog-ng':
+            script += update_repo_cache()
             script += install_syslogng_service()
             script += configure_syslogng_target_script(
                 host=self.syslog_host_port[0],
