@@ -43,7 +43,7 @@ def test_write(self):
     self.bisect_ref_value = self.bisect_result_value * 0.95 if self.bisect_ref_value is None else self.bisect_ref_value
     # update bisect_result_value with the result value for further comparison
     self.bisect_result_value = sum([int(result['op rate']) for result in results])
-    self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
+    self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
     self.update_test_details(scylla_conf=True)
     self.display_results(results, test_name='test_write')
     self.check_regression()
