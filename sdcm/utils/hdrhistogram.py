@@ -315,9 +315,9 @@ class _HdrRangeHistogramBuilder:
         # 4) NOT_SUPPORTED: 'ycsb', it supports HDR histograms, but doesn't use tags in it.
         #    So, the 'ycsb' case should be handled separately.
         hdr_tag = hdr_tag.lower().strip()
-        if any(w_word in hdr_tag for w_word in ("write", "insert", "update")):
+        if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
-        elif any(r_word in hdr_tag for r_word in ("read", "select", "get")):
+        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count")):
             return "READ"
         elif self.stress_operation in ("WRITE", "READ"):
             # branch for the scylla-bench case with its 'co-fixed' and 'raw' tags
