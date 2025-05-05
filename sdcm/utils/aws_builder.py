@@ -96,7 +96,7 @@ jenkins.save()
 
 class AwsBuilder:
     NUM_CPUS = 2
-    NUM_EXECUTORS = 4
+    NUM_EXECUTORS = 1
     VERSION = 'v3'
 
     def __init__(self, region: AwsRegion, params=None, number=1):
