@@ -74,15 +74,21 @@ class RemoteDocker(BaseNode):
         except (ValueError, socket.herror):
             return self.external_address
 
-    @cached_property
-    def running_in_docker(self):
-        ok = self.node.remoter.run("test /.dockerenv", ignore_status=True).ok
-        ok |= 'docker' in self.node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
+    @staticmethod
+    @cache
+    def running_in_docker(node):
+        ok = node.remoter.run("test /.dockerenv", ignore_status=True).ok
+        ok |= 'docker' in node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
         return ok
+
+    @staticmethod
+    @cache
+    def running_in_podman(node) -> bool:
+        return 'podman' in node.remoter.run('echo $container', ignore_status=True).stdout
 
     @cached_property
     def sudo_needed(self):
-        return 'sudo ' if self.running_in_docker else ''
+        return 'sudo ' if self.running_in_docker(self.node) and not self.running_in_podman(self.node) else ''
 
     def create_network(self, docker_network):
         try:
@@ -158,7 +164,8 @@ class RemoteDocker(BaseNode):
     def pull_image(node, image):
         # Login docker-hub before pull, in case node authentication is expired or not logged-in.
         docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker)
-        remote_cmd = node.remoter.sudo if node.is_docker else node.remoter.run
+        remote_cmd = node.remoter.sudo if RemoteDocker.running_in_docker(
+            node) and not RemoteDocker.running_in_podman(node) else node.remoter.run
         remote_cmd(f"docker pull {image}", verbose=True, retry=3)
 
     def __enter__(self):
