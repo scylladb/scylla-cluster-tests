@@ -26,6 +26,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
 from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
 
@@ -609,6 +610,56 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
         self.run_mixed_workload()
+
+    def test_latency_steady_state(self):
+        """Test designed to run multiple stress commands, possibly, using different stress operation types.
+
+        For example, 'latte' uses rune function names in HDR histogram tags,
+        so we should gather all the unique tags into separate lists - one per stress operation type
+        """
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+        stress_operation_mapping = {}
+        for stress_cmd in self.params.get("stress_cmd"):
+            stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, round_robin=True)
+            stress_op = stress_thread.stress_operation  # test depends on the 'stress_operation' attr
+            assert stress_op, "stress operation type should not be empty: %s" % stress_op
+            if stress_op not in stress_operation_mapping:
+                stress_operation_mapping[stress_op] = []
+            stress_operation_mapping[stress_op].append(stress_thread)
+
+        def _test_latency_steady_state_template(workload: str, *args):
+            tester, stress_queue = args  # blindly assume 2 args
+
+            # NOTE: "steady" word from the func name will be used by the latency calculator decorator
+            @latency_calculator_decorator(workload_type=workload)
+            def _test_latency_steady_state(tester, stress_queue: list):
+                for stress_thread in stress_queue:
+                    self.verify_stress_thread(stress_thread)
+
+                # NOTE: 'hdr_tags' will be used by the latency calculator decorator
+                hdr_tags = []
+                for stress_thread in stress_queue:
+                    hdr_tags.extend(stress_thread.hdr_tags)
+                return {"hdr_tags": hdr_tags}  # must be dict with 'hdr_tags' key
+
+            # NOTE: 'tester' arg must be first and positional due to latency calculator decorator expectations
+            return _test_latency_steady_state(tester, stress_queue=stress_queue)
+
+        object_set = ParallelObject(
+            timeout=None,
+            objects=[
+                [_stress_op, self, _stress_queue]
+                for _stress_op, _stress_queue in stress_operation_mapping.items()
+            ],
+            num_workers=len(stress_operation_mapping))
+        object_set.run(
+            func=_test_latency_steady_state_template,
+            unpack_objects=True,
+            ignore_exceptions=False)
 
     def test_latency_read_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
