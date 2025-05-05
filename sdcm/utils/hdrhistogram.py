@@ -328,7 +328,8 @@ class _HdrRangeHistogramBuilder:
     def _get_summary_for_operation_by_hdr_tag(self, histogram: _HdrRangeHistogram) -> dict[str, dict[str, int]] | None:
         if histogram.histogram and (parsed_summary := self._convert_raw_histogram(
                 histogram.histogram, histogram.start_time, histogram.end_time)):
-            return {self._get_workload_type_by_hdr_tag(histogram.hdr_tag): asdict(parsed_summary)}
+            actual_workload_type = self._get_workload_type_by_hdr_tag(histogram.hdr_tag)
+            return {f"{actual_workload_type}--{histogram.hdr_tag}": asdict(parsed_summary)}
         return None
 
     @staticmethod
