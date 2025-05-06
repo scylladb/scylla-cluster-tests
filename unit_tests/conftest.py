@@ -80,8 +80,8 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
         create_ca(localhost)
 
-    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
-                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
                          ' --entrypoint /entry.sh')
 
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
