@@ -29,3 +29,4 @@ append_scylla_yaml:
       iam_role_arn: arn:aws:iam::797456418907:instance-profile/qa-scylla-manager-backup-instance-profile
 
 user_prefix: 'manager-native-backup-benchmark'
+use_hdrhistogram: true
