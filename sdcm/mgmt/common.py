@@ -14,6 +14,7 @@ from sdcm.utils.common import get_sct_root_path
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
+BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
 
 
 def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
@@ -181,9 +182,6 @@ class AgentBackupParameters(BaseModel):
     low_level_retries: Optional[int] = 20
 
     model_config = ConfigDict(arbitrary_types_allowed=False)
-
-
-BACKUP_SIZE_REGEX = re.compile(r".+100% │ (.*?) │ ", re.MULTILINE)
 
 
 def get_backup_size(mgr_cluster, task_id):
