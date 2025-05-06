@@ -301,10 +301,11 @@ class TestClusterQuorum(LongevityTest):
         self.log.info("Stress during adding DC started")
         return read_thread, write_thread
 
-    def get_voters_by_region(self, data_nodes: list[BaseNode]) -> dict[str, list[BaseNode]]:
+    def get_voters_by_region(self, nodes_list: list[BaseNode]) -> dict[str, list[BaseNode]]:
         voters_per_region = DefaultDict()
-        group0_members = data_nodes[0].raft.get_group0_members()
-        hostid_node_map = {node.host_id: node for node in self.db_cluster.get_nodes_up_and_normal(data_nodes[0])}
+        group0_members = nodes_list[0].raft.get_group0_members()
+        hostid_node_map = {node.host_id: node for node in self.db_cluster.get_nodes_up_and_normal(
+            nodes_list[0]) if node in nodes_list}
         for member in filter(lambda m: m["voter"], group0_members):
             if node := hostid_node_map.get(member['host_id']):
                 voters_per_region.setdefault(node.region, []).append(node)
