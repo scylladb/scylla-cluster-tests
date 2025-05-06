@@ -2717,3 +2717,10 @@ def parse_python_thread_command(cmd: str) -> dict:
                         tokens_iter = iter([next_token] + list(tokens_iter))
 
     return options
+
+
+def format_size(size_in_bytes):
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if size_in_bytes < 1024:
+            return f"{size_in_bytes:.2f} {unit}"
+        size_in_bytes /= 1024
