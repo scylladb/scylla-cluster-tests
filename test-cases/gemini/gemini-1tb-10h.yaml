@@ -9,7 +9,7 @@ instance_type_loader: 'm6i.xlarge'
 user_prefix: 'gemini-1tb-10h'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['run_with_gemini']
+nemesis_selector: 'run_with_gemini'
 nemesis_interval: 5
 nemesis_seed: '041'
 

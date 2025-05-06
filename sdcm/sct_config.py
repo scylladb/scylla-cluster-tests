@@ -651,7 +651,7 @@ class SCTConfiguration(dict):
                       parallel threads on different nodes. Ex.: "ChaosMonkey:2"
                     - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
                       <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
-                      parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+                      parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
             """),
 
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",
@@ -666,8 +666,9 @@ class SCTConfiguration(dict):
              help="""Run nemesis during prepare stage of the test"""),
 
         dict(name="nemesis_seed", env="SCT_NEMESIS_SEED",
-             type=int, k8s_multitenancy_supported=True,
-             help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey"""),
+             type=int_or_space_separated_ints, k8s_multitenancy_supported=True,
+             help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey.
+             Can provide a list of seeds for multiple nemesis"""),
 
         dict(name="nemesis_add_node_cnt",
              env="SCT_NEMESIS_ADD_NODE_CNT",
@@ -1596,10 +1597,13 @@ class SCTConfiguration(dict):
              help="Flag for running db node benchmarks before the tests"),
         dict(name="nemesis_selector", env="SCT_NEMESIS_SELECTOR",
              type=str_or_list, k8s_multitenancy_supported=True,
-             help="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
-             ALL the properties in that list which are set to true (the intersection of all properties).
-             (In other words filters out all nemesis that doesn't ONE of these properties set to true)
-             IMPORTANT: If a property doesn't exist, ALL the nemesis will be included."""),
+             help="""nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has
+             example of logical expression:
+             ```yaml
+                nemesis_selector: "disruptive and not sla" # simple one
+                nemesis_selector: "disruptive and not (sla or limited or manager_operation or config_changes)" # complex one
+             ```
+             """),
         dict(name="nemesis_exclude_disabled", env="SCT_NEMESIS_EXCLUDE_DISABLED",
              type=boolean, k8s_multitenancy_supported=True,
              help="""nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out from list

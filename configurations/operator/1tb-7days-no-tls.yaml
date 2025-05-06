@@ -1,5 +1,5 @@
 user_prefix: 'longevity-operator-1tb-7d'
-nemesis_selector: ['kubernetes']
+nemesis_selector: 'kubernetes'
 k8s_minio_storage_size: '2048Gi'
 
 # NOTE: operator doesn't support encryption as of January 2022

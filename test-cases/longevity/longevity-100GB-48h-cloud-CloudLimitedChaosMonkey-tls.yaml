@@ -12,7 +12,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i4i.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ['limited']
+nemesis_selector: 'limited'
 nemesis_interval: 30
 nemesis_during_prepare: false
 

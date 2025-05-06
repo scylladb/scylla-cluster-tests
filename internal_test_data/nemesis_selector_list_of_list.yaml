@@ -1,1 +1,1 @@
-nemesis_selector: [["config_changes", "topology_changes"], ["topology_changes"], ["disruptive"]]
+nemesis_selector: ["config_changes and topology_changes", "topology_changes", "disruptive"]

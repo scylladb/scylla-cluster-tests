@@ -962,7 +962,7 @@ More arguments to append to scylla-node-exporter command line
 
 ## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
 
-Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
 
 **default:** NoOpMonkey
 
@@ -3165,7 +3165,7 @@ Flag for running db node benchmarks before the tests
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included.
+nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: ["disruptive and not sla"] # simple one<br>nemesis_selector: ["disruptive and not (sla or limited or manager_operation or config_changes)"] # complex one<br>```
 
 **default:** N/A
 

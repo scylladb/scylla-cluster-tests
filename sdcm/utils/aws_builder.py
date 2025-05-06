@@ -59,7 +59,7 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.labels,  // labels
   "/tmp/jenkins/", // fs root
   new SSHConnector(22,
-                   "user-jenkins_scylla_test_id_ed25519.pem", "", "", "", "", null, 0, 0,
+                   "user-jenkins_scylla_test_id_ed25519.pem", "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", "", "", "", null, null, null,
                    new NonVerifyingKeyVerificationStrategy()),
   false, // privateIpUsed
   true, // alwaysReconnect

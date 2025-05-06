@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-lines, too-many-public-methods
 import ipaddress
 import json
 import logging
@@ -67,26 +66,23 @@ INSTANCE_STORE = "instance_store"
 
 SPOT_TERMINATION_CHECK_DELAY = 0
 
-P = ParamSpec("P")  # pylint: disable=invalid-name
-R = TypeVar("R")  # pylint: disable=invalid-name
-
-# pylint: disable=too-many-lines
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
-class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method,
+class AWSCluster(cluster.BaseCluster):
 
     """
     Cluster of Node objects, started on Amazon EC2.
     """
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # noqa: PLR0913
                  services, credentials, cluster_uuid=None,
                  ec2_instance_type='c6i.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None, node_type=None,
                  extra_network_interface=False, add_nodes=True):
-        # pylint: disable=too-many-locals
         region_names = params.region_names
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
@@ -132,7 +128,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return self.params.get('aws_instance_profile_name_loader')
         return None
 
-    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
+    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None, is_zero_node=False):
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
         params = dict(ImageId=ami_id,
@@ -166,8 +162,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-locals
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, instance_type=None, is_zero_node=False):
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
@@ -207,7 +202,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         return instances
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):
         if not count:  # EC2 API fails if we request zero instances.
             return []
 
@@ -246,7 +241,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         return instances
 
-    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
+    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):
         instances = None
 
         if self.instance_provision.lower() == 'spot' or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
@@ -288,7 +283,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return True
         return False
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None, is_zero_node=False):
         instances = []
         max_num_on_demand = 2
         if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
@@ -369,7 +364,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
-    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
+    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None, is_zero_node=False):
         nodes = [node for node in self.nodes if node.dc_idx == dc_idx and node.rack == az_idx]
         if nodes:
             return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node)
@@ -384,7 +379,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.info('Found no provisioned instances. Provision them.')
         return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node)
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, is_zero_node=False):
         if not count:
             return []
@@ -423,7 +417,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.write_node_private_ip_file()
         return self.nodes[-count:]
 
-    def _create_node(self, instance, ami_username, node_prefix, node_index,  # pylint: disable=too-many-arguments
+    def _create_node(self, instance, ami_username, node_prefix, node_index,
                      base_logdir, dc_idx, rack):
         ec2_service = self._ec2_services[0 if self.params.get("simulated_regions") else dc_idx]
         credentials = self._credentials[0 if self.params.get("simulated_regions") else dc_idx]
@@ -444,7 +438,7 @@ class AWSNode(cluster.BaseNode):
     TOKEN_URL = "http://169.254.169.254/latest/api/token"
     log = LOGGER
 
-    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, ami_username='root',
                  base_logdir=None, dc_idx=0, rack=0):
         self.node_index = node_index
@@ -625,7 +619,7 @@ class AWSNode(cluster.BaseNode):
 
                 return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
 
         return SPOT_TERMINATION_CHECK_DELAY
@@ -693,7 +687,7 @@ class AWSNode(cluster.BaseNode):
         except tenacity.RetryError:
             try:
                 self._instance.reload()
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:
                 LOGGER.exception("Error while reloading instance metadata: %s", ex)
             finally:
                 LOGGER.debug(self._instance.meta.data)
@@ -888,7 +882,7 @@ class AWSNode(cluster.BaseNode):
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
@@ -897,7 +891,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None,
                  node_type: str = 'scylla-db',
                  ):
-        # pylint: disable=too-many-locals
+
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = self.test_config.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -921,7 +915,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             extra_network_interface=network_interfaces_count(params) > 1)
         self.version = '2.1'
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, is_zero_node=False):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
@@ -971,14 +964,14 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
 class CassandraAWSCluster(ScyllaAWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
                  n_nodes=3,
                  params=None):
-        # pylint: disable=too-many-locals
+
         if ec2_block_device_mappings is None:
             ec2_block_device_mappings = []
         # We have to pass the cluster name in advance in user_data
@@ -992,7 +985,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, sum(n_nodes)))
-        # pylint: disable=unexpected-keyword-arg
+
         super().__init__(
             ec2_ami_id=ec2_ami_id,
             ec2_subnet_id=ec2_subnet_id,
@@ -1022,7 +1015,6 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             except Exception as exc:  # noqa: BLE001
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if not ec2_user_data:
             if self.nodes:
@@ -1056,18 +1048,18 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.run('sudo apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=too-many-arguments
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         self.get_seed_nodes()
 
 
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         node_type = 'loader'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
@@ -1095,13 +1087,13 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None,
                  add_nodes=True, monitor_id=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')

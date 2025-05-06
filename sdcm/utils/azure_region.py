@@ -415,7 +415,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             gallery_image_version=self.common_parameters(location=self.sct_gallery_location, tags=tags) | {
                 "storage_profile": {
                     "source": {
-                        "id": source_id,
+                        "virtual_machine_id": source_id
                     },
                 },
             },

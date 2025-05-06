@@ -412,7 +412,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         with environment(SCT_CLUSTER_BACKEND='docker'):
             enable_default_filters(SCTConfiguration())
 
-        with self.wait_for_n_events(self.get_events_logger(), count=4):
+        with self.wait_for_n_events(self.get_events_logger(), count=5):
             DatabaseLogEvent.BACKTRACE() \
                 .add_info(node="A",
                           line_number=22,
@@ -439,6 +439,13 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                      ".c.sct-project-1.internal/10.142.1.155:9042: Cannot achieve consistency level for cl ONE. Requires 1, alive 0",
             ).publish()
 
+            DatabaseLogEvent.RUNTIME_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="ERROR 2023-12-18 12:45:25,673 [shard 0: gms] raft_topology - topology change coordinator fiber got error std::runtime_error "
+                     "(raft topology: exec_global_command(barrier) failed with seastar::rpc::closed_error (connection is closed))"
+            ).publish()
+
         log_content = self.get_event_log_file("events.log")
 
         self.assertIn("other back trace", log_content)
@@ -451,6 +458,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         error_log_content = self.get_event_log_file("error.log")
         assert 'data_dictionary::no_such_column_family' not in error_log_content
         assert 'Authentication error' in error_log_content
+        assert 'topology change coordinator fiber got error' not in error_log_content
 
     def test_failed_stall_during_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
