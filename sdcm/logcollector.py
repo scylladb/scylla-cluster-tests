@@ -219,6 +219,10 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
+        if not remote_logfile:
+            LOGGER.warning(
+                "Nothing to collect. Command '%s' did not prepare log file on remote host '%s'", self.cmd, node.name)
+            return None
         LogCollector.receive_log(node=node,
                                  remote_log_path=remote_logfile,
                                  local_dir=local_dst,
