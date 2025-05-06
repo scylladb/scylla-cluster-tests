@@ -885,7 +885,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         for node in self.db_cluster.nodes:
             result = wait_for(func=self.db_cluster.is_features_enabled_on_node,
                               timeout=60,
-                              step=f"Check feature enabled on node {node.name}",
+                              step=1,
+                              text=f"Check feature enabled on node {node.name}",
                               throw_exc=False,
                               feature_list=[CONSISTENT_TOPOLOGY_CHANGES_FEATURE],
                               node=node)
