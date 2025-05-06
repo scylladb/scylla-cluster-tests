@@ -110,7 +110,7 @@ class TestClusterQuorum(LongevityTest):
 
         for node in data_nodes_per_region[dead_region]:
             wait_for(is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
-                     down_node=node, verification_node=verification_node, text=f"Wait other nodes see {node.name} as DOWN...")
+                     down_node=node, verification_node=arbitor_dc_node, text=f"Wait other nodes see {node.name} as DOWN...")
 
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, arbitor_dc_node)
         InfoEvent(f"Current node states: {nodes_status}").publish()
