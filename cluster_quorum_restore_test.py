@@ -1,5 +1,6 @@
 from contextlib import ExitStack
 import random
+import time
 from typing import DefaultDict, Tuple, List
 
 
@@ -56,9 +57,11 @@ class TestClusterQuorum(LongevityTest):
         for node in self.db_cluster.data_nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        InfoEvent("Start background workload")
+        InfoEvent("Start background workload").publish()
         read_thread, write_thread = self.start_background_stress_commands(
             node_ips=[n.cql_address for n in data_nodes_per_region[alive_region]])
+        # wait background stress threads started:
+        time.sleep(15)
 
         # need to stop nodes simultaneoslly
         nodes_status = self.display_current_voters_states(self.db_cluster.nodes, verification_node)
