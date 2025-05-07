@@ -76,6 +76,7 @@ from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
+from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
@@ -308,6 +309,7 @@ class ClusterInformation(NamedTuple):
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     log = None
+    actions_log = None
     localhost = None
     events_processes_registry = None
     monitors: BaseMonitorSet = None
@@ -692,6 +694,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_logging(self):
         self.log = logging.getLogger(self.__class__.__name__)
+        self.actions_log = get_action_logger('tester')
         self.logdir = self.test_config.logdir()
 
     def run(self, result=None):
@@ -1105,6 +1108,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # available yet. Update rack info in Argus for loaders in the end of set up.
         for loaders in self.loaders_multitenant:
             loaders.update_rack_info_in_argus()
+        self.actions_log.info("initialized test")
 
     def set_system_auth_rf(self, db_cluster=None):
         db_cluster = db_cluster or self.db_cluster
@@ -2482,6 +2486,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if tablets_config:
                 cmd += ' AND TABLETS = %s' % tablets_config
             execution_result = session.execute(cmd)
+            self.actions_log.info("Keyspace created", metadata={"keyspace": keyspace_name, "statement": cmd})
 
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
@@ -2541,6 +2546,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('CQL query to execute: {}'.format(query))
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
+        self.actions_log.info("Created table", metadata={"table_name": name, "query": query})
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
