@@ -124,6 +124,9 @@ class TestClusterQuorum(LongevityTest):
         InfoEvent("Replace all data nodes in dead DC").publish()
         self.replace_nodes_by_host_id(dead_node_mapping=hostid_dead_node_mapping, verification_node=arbitor_dc_node)
 
+        InfoEvent("Update info about nodes by region")
+        data_nodes_per_region = self.db_cluster.nodes_by_region(nodes=self.db_cluster.data_nodes)
+
         InfoEvent("Rebuild and repair data on new nodes").publish()
         for node in data_nodes_per_region[dead_region]:
             node.run_nodetool(sub_cmd=f"rebuild -- {region_dc_mapping[alive_region]}", publish_event=True)
