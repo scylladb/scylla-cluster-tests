@@ -25,7 +25,8 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
+from sdcm.utils.action_logger import get_action_logger
+from sdcm.utils.log import MultilineMessagesFormatter, configure_logging, JSONLFormatter
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
@@ -56,10 +57,15 @@ class ClusterTesterForTests(ClusterTester):
             unittest.mock.patch("sdcm.sct_events.base.SctEvent._events_processes_registry",
                                 self.events_processes_registry)
         self.events_processes_registry_patcher.start()
+        self.actions_log = get_action_logger('tester')
         configure_logging(
             formatters={
                 'default': {
                     '()': MultilineMessagesFormatter,
+                    'format': '%(message)s'
+                },
+                'action_logger': {
+                    '()': JSONLFormatter,
                     'format': '%(message)s'
                 }
             },

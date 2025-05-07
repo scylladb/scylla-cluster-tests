@@ -13,8 +13,10 @@
 import datetime
 import pprint
 import re
+from contextlib import contextmanager
 from functools import cached_property
 import json
+from typing import Iterator, Any
 from unittest import SkipTest
 
 import yaml
@@ -62,6 +64,13 @@ class ArtifactsTest(ClusterTester):
 
         super().tearDown()
 
+    @contextmanager
+    def logged_subtest(self, action: str,
+                       trace_id:  str | None = None, metadata: dict[str, Any] | None = None) -> Iterator[None]:
+        with self.actions_log.action_scope(action, self.node.name, trace_id, metadata):
+            with self.subTest(msg=action):
+                yield
+
     # since this logic id depended on code run by SCT to mark uuid as test, since commit 617026aa, this code it run in the background
     # and not being waited for, so we need to compensate for it here with retries
     @retrying(n=15, sleep_time=10, allowed_exceptions=(AssertionError,))
@@ -71,6 +80,7 @@ class ArtifactsTest(ClusterTester):
         Validate reported version
         prev_id: check if new version is created
         """
+        self.actions_log.info("Validating scylla version in housekeepingdb", target=self.node.name)
         assert self.node.uuid, "Node UUID wasn't created"
 
         row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
@@ -104,7 +114,7 @@ class ArtifactsTest(ClusterTester):
                 assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
             else:
                 assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
-
+        self.actions_log.info("Scylla version in housekeepingdb is validated", target=self.node.name)
         return row[0] if row else 0
 
     @property
@@ -134,10 +144,10 @@ class ArtifactsTest(ClusterTester):
             transport_str = c_s_transport_str(
                 self.params.get('peer_verification'), self.params.get('client_encrypt_mtls'))
             stress_cmd += f" -transport '{transport_str}'"
-
-        result = self.node.remoter.run(stress_cmd)
-        assert "java.io.IOException" not in result.stdout
-        assert "java.io.IOException" not in result.stderr
+        with self.actions_log.action_scope("running cassandra-stress", target=self.node.name, metadata={"stress_cmd": stress_cmd}):
+            result = self.node.remoter.run(stress_cmd)
+            assert "java.io.IOException" not in result.stdout
+            assert "java.io.IOException" not in result.stderr
 
     def check_scylla(self):
         self.node.run_nodetool("status")
@@ -223,6 +233,8 @@ class ArtifactsTest(ClusterTester):
         """
         if not self.params.get("use_preinstalled_scylla"):
             self.log.info("Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
+            self.actions_log.info(
+                "Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False", target=self.node.name)
             return
 
         describecluster_snitch = self.get_describecluster_info().snitch
@@ -234,13 +246,13 @@ class ArtifactsTest(ClusterTester):
         snitch_matches_describecluster = [pattern.search(describecluster_snitch) for pattern in snitch_patterns]
         snitch_matches_scylla_yaml = [pattern.search(scylla_yaml_snitch) for pattern in snitch_patterns]
 
-        with self.subTest('verify snitch against describecluster output'):
+        with self.logged_subtest('verify snitch against describecluster output'):
             self.assertTrue(any(snitch_matches_describecluster),
                             msg=f"Expected snitch matches for describecluster to not be empty, but was. Snitch "
                             f"matches: {snitch_matches_describecluster}"
                             )
 
-        with self.subTest('verify snitch against scylla.yaml configuration'):
+        with self.logged_subtest('verify snitch against scylla.yaml configuration'):
             self.assertTrue(any(snitch_matches_scylla_yaml),
                             msg=f"Expected snitch matches for scylla yaml to not be empty, but was. Snitch "
                             f"matches: {snitch_matches_scylla_yaml}"
@@ -263,6 +275,7 @@ class ArtifactsTest(ClusterTester):
 
     def verify_nvme_write_cache(self) -> None:
         if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
+            self.actions_log.info("Skipped verifying NVMe write cache", target=self.node.name)
             return
         expected_write_cache_value = "write back" if self.write_back_cache else "write through"
 
@@ -323,11 +336,11 @@ class ArtifactsTest(ClusterTester):
         backend = self.params.get("cluster_backend")
 
         if backend == "aws":
-            with self.subTest("check ENA support"):
+            with self.logged_subtest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
 
         if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
-            with self.subTest("check Scylla IO Params"):
+            with self.logged_subtest("check Scylla IO Params"):
                 try:
                     if self.node.db_node_instance_type in ["t3.micro"]:
                         self.skipTest(
@@ -342,57 +355,58 @@ class ArtifactsTest(ClusterTester):
                     )
                 except SkipTest as exc:
                     self.log.info("Skipping IOTuneValidation due to %s", exc.args)
+                    self.actions_log.info("Skipped IOTuneValidation", target=self.node.name)
                 except Exception:  # noqa: BLE001
                     self.log.error("IOTuneValidator failed", exc_info=True)
                     TestFrameworkEvent(source={self.__class__.__name__},
                                        message="Error during IOTune params validation.",
                                        severity=Severity.ERROR).publish()
 
-        with self.subTest("verify write cache for NVMe devices"):
+        with self.logged_subtest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
 
         if (backend != "docker" and not self.params.get("nonroot_offline_install")
                 and self.node.db_node_instance_type != "t3.micro"):
-            with self.subTest("verify XFS online discard enabled"):
+            with self.logged_subtest("verify XFS online discard enabled"):
                 self.verify_xfs_online_discard_enabled()
 
         if backend == "gce":
-            with self.subTest("verify users"):
+            with self.logged_subtest("verify users"):
                 self.verify_users()
 
         expected_housekeeping_status_code = 'cr' if backend == "docker" else 'r'
 
         if self.params.get("use_preinstalled_scylla") and backend != "docker":
-            with self.subTest("check the cluster name"):
+            with self.logged_subtest("check the cluster name"):
                 self.check_cluster_name()
 
-        with self.subTest('verify snitch'):
+        with self.logged_subtest('verify snitch'):
             self.verify_snitch(backend_name=backend)
 
-        with self.subTest('verify node health'):
+        with self.logged_subtest('verify node health'):
             self.verify_node_health()
 
-        with self.subTest("check Scylla server after installation"):
+        with self.logged_subtest("check Scylla server after installation"):
             self.check_scylla()
 
-        with self.subTest("check cqlsh installation"):
+        with self.logged_subtest("check cqlsh installation"):
             self.check_cqlsh()
 
-        with self.subTest("check node_exporter liveness"):
+        with self.logged_subtest("check node_exporter liveness"):
             node_info_service = NodeLoadInfoServices().get(self.node)
             assert node_info_service.cpu_load_5
             assert node_info_service.get_node_boot_time_seconds()
 
-        with self.subTest("check scylla_doctor results"):
-            if self.params.get("run_scylla_doctor"):
+        if self.params.get("run_scylla_doctor"):
+            with self.logged_subtest("check scylla_doctor results"):
                 self.run_scylla_doctor()
-            else:
-                self.log.info("Running scylla-doctor is disabled")
+        else:
+            self.log.info("Running scylla-doctor is disabled")
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
         if backend != "docker":
-            with self.subTest("check if scylla unnecessarily installed a time synchronization service"):
+            with self.logged_subtest("check if scylla unnecessarily installed a time synchronization service"):
                 # Checks https://github.com/scylladb/scylla/issues/8339
                 # If the instance already has systemd-timesyncd
                 is_timesyncd_service_installed = self.check_service_existence(service_name="systemd-timesyncd")
@@ -443,24 +457,24 @@ class ArtifactsTest(ClusterTester):
             #                                                 backend=backend)
 
         version_id_after_stop = 0
-        with self.subTest("check Scylla server after stop/start"):
+        with self.logged_subtest("check Scylla server after stop/start"):
             self.node.stop_scylla(verify_down=True)
             self.node.start_scylla(verify_up=True)
-
             # Scylla service has been stopped/started after installation and re-configuration.
             # So we don't need to stop and to start it again
             self.check_scylla()
 
             if not self.node.is_nonroot_install:
                 self.log.info("Validate version after stop/start")
-                self.check_housekeeping_service_status(backend=backend)
-                version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
-                    prev_id=0,
-                    expected_status_code=expected_housekeeping_status_code,
-                    new_row_expected=False,
-                    backend=backend)
+                with self.actions_log.action_scope("Validate version after stop/start"):
+                    self.check_housekeeping_service_status(backend=backend)
+                    version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
+                        prev_id=0,
+                        expected_status_code=expected_housekeeping_status_code,
+                        new_row_expected=False,
+                        backend=backend)
 
-        with self.subTest("check Scylla server after restart"):
+        with self.logged_subtest("check Scylla server after restart"):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
 
@@ -473,35 +487,41 @@ class ArtifactsTest(ClusterTester):
                                                             backend=backend)
 
         if backend != 'docker':
-            with self.subTest("Check the output of perftune.py"):
+            with self.logged_subtest("Check the output of perftune.py"):
                 perftune_checker = PerftuneOutputChecker(self.node)
                 perftune_checker.compare_perftune_results()
 
         if backend == 'docker':
-            with self.subTest("Check docker latest tags"):
+            with self.logged_subtest("Check docker latest tags"):
                 self.verify_docker_latest_match_release()
 
     def run_scylla_doctor(self):
         if self.params.get('client_encrypt') and SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2280", self.params):
             self.log.info("Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
+            self.actions_log.info(
+                "Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
             return
 
         if self.db_cluster.nodes[0].is_nonroot_install and \
                 SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/10540", self.params):
             self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
+            self.actions_log.info(
+                "Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254.")
             return
 
         if self.node.parent_cluster.cluster_backend == "docker":
-            self.log.info("Scylla Doctor check in SCT isn't yet support for docker backend")
+            self.log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
+            self.actions_log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
             return
 
         for node in self.db_cluster.nodes:
-            scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
-            scylla_doctor.install_scylla_doctor()
-            scylla_doctor.argus_collect_sd_package()
-            scylla_doctor.run_scylla_doctor_and_collect_results()
-            scylla_doctor.analyze_vitals()
-            scylla_doctor.analyze_and_verify_results()
+            with self.actions_log.action_scope("installing and running Scylla Doctor", target=node.name):
+                scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
+                scylla_doctor.install_scylla_doctor()
+                scylla_doctor.argus_collect_sd_package()
+                scylla_doctor.run_scylla_doctor_and_collect_results()
+                scylla_doctor.analyze_vitals()
+                scylla_doctor.analyze_and_verify_results()
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
