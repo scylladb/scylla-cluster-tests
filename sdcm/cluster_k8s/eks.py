@@ -129,6 +129,9 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             instance_type=params.get("instance_type_loader"),
             role_arn=params.get('eks_nodegroup_role_arn'),
             disk_size=params.get('root_disk_size_monitor'),
+            labels={
+                "scylla.scylladb.com/node-type": "scylla"
+            },
             k8s_cluster=k8s_cluster))
 
     if params.get('k8s_deploy_monitoring'):
