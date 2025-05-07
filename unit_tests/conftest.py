@@ -71,7 +71,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
     docker_version = docker_scylla_args.get(
-        'image', "scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+        'image', "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
     cluster = LocalScyllaClusterDummy(params=params)
 
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
