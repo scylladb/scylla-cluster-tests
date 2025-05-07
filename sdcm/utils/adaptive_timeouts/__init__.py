@@ -1,53 +1,26 @@
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from enum import Enum
 from typing import Any
 
-from sdcm.sct_events.system import SoftTimeoutEvent, HardTimeoutEvent
+from sdcm.sct_events.system import SoftTimeoutEvent
 from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
     NodeLoadInfoServices
-from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)
 
-TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
-TABLETS_HARD_TIMEOUT = 3 * 60 * 60
 
-
-def _get_decommission_timeout(node_info_service: NodeLoadInfoService,
-                              tablets_enabled: bool = False) -> tuple[tuple[int, int | None], dict[str, Any]]:
+def _get_decommission_timeout(node_info_service: NodeLoadInfoService) -> tuple[int, dict[str, Any]]:
     """Calculate timeout for decommission operation based on node load info. Still experimental, used to gather historical data."""
     try:
-        node_info = node_info_service.as_dict()
-        if tablets_enabled:
-            node_info["tablets_enabled"] = True
-            return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
-
-        # For non-tablet cases, calculate based on data size
         # rough estimation from previous runs almost 9h for 1TB
-        timeout = max(int(node_info_service.node_data_size_mb * 0.03), 7200)  # 2 hours minimum
-        return (timeout, None), node_info
+        timeout = int(node_info_service.node_data_size_mb * 0.03)
+        timeout = max(timeout, 7200)  # 2 hours minimum
+        return timeout, node_info_service.as_dict()
     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
-        return (6*60*60, None), {}
-
-
-def _get_new_node_timeout(node_info_service: NodeLoadInfoService,
-                          timeout: int | float = None,
-                          tablets_enabled: bool = False,) -> tuple[tuple[int, int | None], dict[str, Any]]:
-    """Calculate timeout for adding a new node operation"""
-    try:
-        node_info = node_info_service.as_dict()
-        if tablets_enabled:
-            node_info["tablets_enabled"] = True
-            return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
-        # For non-tablet cases, use the passed timeout
-        return (timeout, None), node_info
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-        LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
-        return (timeout, None), {}
+        return 6*60*60, {}
 
 
 def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
@@ -80,7 +53,7 @@ class Operations(Enum):
 
     maps to (function, (required arguments))"""
     DECOMMISSION = ("decommission", _get_decommission_timeout, ())
-    NEW_NODE = ("new_node", _get_new_node_timeout, ("timeout",))
+    NEW_NODE = ("new_node", _get_soft_timeout, ("timeout",))
     CREATE_INDEX = ("create_index", _get_soft_timeout, ("timeout",))
     START_SCYLLA = ("start_scylla", _get_soft_timeout, ("timeout",))
     RESTART_SCYLLA = ("restart_scylla", _get_soft_timeout, ("timeout",))
@@ -110,52 +83,8 @@ class TestInfoServices:  # pylint: disable=too-few-public-methods
         )
 
 
-class TimeoutMonitor:
-    """
-    Monitors an operation and publishes error or critical event, when soft or hard timeouts is reached, correspondingly
-    """
-
-    def __init__(self, operation: str, soft_timeout: int | float, hard_timeout: int | float = None, start_time: float | None = None):
-        self.operation = operation
-        self.soft_timeout = soft_timeout
-        self.hard_timeout = hard_timeout
-        self.start_time = start_time or time.monotonic()
-        self.soft_timeout_triggered = False
-        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="timeout_monitor")
-        self.running = False
-
-    def __enter__(self):
-        if self.soft_timeout or self.hard_timeout:
-            self.running = True
-            self.executor.submit(self._monitor_timeouts)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.running = False
-        try:
-            self.executor.shutdown(wait=False, cancel_futures=True)
-        except Exception as exc:
-            LOGGER.exception("Error shutting down timeout monitor executor for %s: %s", self.operation, exc)
-
-    def _monitor_timeouts(self):
-        while self.running:
-            duration = time.monotonic() - self.start_time
-
-            if self.hard_timeout and duration > self.hard_timeout:
-                HardTimeoutEvent(
-                    operation=self.operation, duration=duration, hard_timeout=self.hard_timeout).publish_or_dump()
-                self.running = False
-                return
-            if not self.soft_timeout_triggered and self.soft_timeout and duration > self.soft_timeout:
-                SoftTimeoutEvent(
-                    operation=self.operation, duration=duration, soft_timeout=self.soft_timeout).publish_or_dump()
-                self.soft_timeout_triggered = True
-
-            time.sleep(5.0)
-
-
 @contextmanager
-def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, F821
+def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
                      stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
@@ -163,47 +92,29 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
-    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
-    tablets_enabled = is_tablets_feature_enabled(node)
-
-    _, timeout_func, required_arg_names = operation.value
-    args = {arg: kwargs[arg] for arg in required_arg_names}
-
-    if tablet_sensitive_op:
-        args['tablets_enabled'] = tablets_enabled
-    result = timeout_func(node_info_service=NodeLoadInfoServices().get(node), **args)
-    if tablet_sensitive_op:
-        (soft_timeout, hard_timeout), load_metrics = result
-    else:
-        soft_timeout, load_metrics = result
-        hard_timeout = None
-    load_metrics.update(TestInfoServices.get(node))
-
-    start_time = time.monotonic()
+    args = {}
+    for arg in operation.value[2]:
+        assert arg in kwargs, f"Argument '{arg}' is required for operation {operation.name}"
+        args[arg] = kwargs[arg]
+    timeout, load_metrics = operation.value[1](node_info_service=NodeLoadInfoServices().get(node), **args)
+    load_metrics = load_metrics | TestInfoServices.get(node)
+    start_time = time.time()
     timeout_occurred = False
-    monitor_ctx = (TimeoutMonitor(operation.name, soft_timeout, hard_timeout, start_time=start_time)
-                   if tablet_sensitive_op and tablets_enabled and hard_timeout
-                   else nullcontext())
-
     try:
-        with monitor_ctx:
-            yield hard_timeout or soft_timeout
+        yield timeout
     except Exception as exc:  # pylint: disable=broad-except
         exc_name = exc.__class__.__name__
         if "timeout" in exc_name.lower() or "timed out" in str(exc):
             timeout_occurred = True
         raise
     finally:
-        duration = time.monotonic() - start_time
-        soft_timeout_exceeded = soft_timeout and duration > soft_timeout
-        if soft_timeout_exceeded:
+        duration = time.time() - start_time
+        if duration > timeout:
             timeout_occurred = True
-        if timeout_occurred and not (tablet_sensitive_op and tablets_enabled):
-            SoftTimeoutEvent(operation=operation.name, soft_timeout=soft_timeout, duration=duration).publish_or_dump()
-
+            SoftTimeoutEvent(operation=operation.name, soft_timeout=timeout, duration=duration).publish_or_dump()
         try:
             if load_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
-                                    timeout=soft_timeout, timeout_occurred=timeout_occurred)
+                                    timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)

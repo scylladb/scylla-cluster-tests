@@ -106,7 +106,6 @@ StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
 TestFrameworkEvent: CRITICAL
 SoftTimeoutEvent: ERROR
-HardTimeoutEvent: CRITICAL
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
 AwsKmsEvent: ERROR
