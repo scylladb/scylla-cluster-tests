@@ -5,7 +5,7 @@ stress_cmd: "cassandra-stress write no-warmup cl=QUORUM n=1500000 -schema 'repli
 stress_read_cmd: "cassandra-stress read cl=QUORUM n=1500000 -mode cql3 native  -rate threads=50 -pop seq=1..100000000 -log interval=5"
 
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
 
