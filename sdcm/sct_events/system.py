@@ -104,12 +104,6 @@ class SoftTimeoutEvent(TestFrameworkEvent):
         super().__init__(source='SoftTimeout', severity=Severity.ERROR, trace=sys._getframe().f_back, message=message)
 
 
-class HardTimeoutEvent(TestFrameworkEvent):
-    def __init__(self, operation: str, duration: int | float, hard_timeout: int | float):
-        message = f"operation '{operation}' exceeded hard-timeout of {hard_timeout}s"
-        super().__init__(source='HardTimeout', severity=Severity.CRITICAL, trace=sys._getframe().f_back, message=message)
-
-
 class ElasticsearchEvent(InformationalEvent):
     def __init__(self, doc_id: str, error: str):
         super().__init__(severity=Severity.ERROR)
