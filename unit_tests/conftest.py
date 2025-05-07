@@ -70,7 +70,15 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
+<<<<<<< HEAD
     docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:6.1.0-dev-0.20240605.2c3f7c996f98")
+||||||| parent of 89eec8399 (fix(podman): make sure refs to dockerhub are full)
+    docker_version = docker_scylla_args.get(
+        'image', "scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+=======
+    docker_version = docker_scylla_args.get(
+        'image', "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+>>>>>>> 89eec8399 (fix(podman): make sure refs to dockerhub are full)
     cluster = LocalScyllaClusterDummy(params=params)
 
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
