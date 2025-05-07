@@ -88,8 +88,8 @@ def test_01_gemini_thread(request, docker_scylla, params):
         "--max-clustering-keys=4",
         "--min-clustering-keys=2",
         "--partition-key-distribution=normal",
-        "--token-range-slices=512",
-        "--partition-key-buffer-reuse-size=100",
+        "--token-range-slices=10000",
+        "--partition-key-buffer-reuse-size=125",
         "--statement-log-file-compression=zstd",
     ]
 

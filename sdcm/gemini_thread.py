@@ -96,8 +96,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             "min-clustering-keys": 2,
             "partition-key-distribution": "normal",  # Distribution for hitting the partition
             # These two are used to control the memory usage of Gemini
-            "token-range-slices": 512,  # Number of partitions
-            "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
+            "token-range-slices": 10000,  # Number of partitions
+            "partition-key-buffer-reuse-size": 125,  # Internal Channel Size per parittion value generation
             "statement-log-file-compression": "zstd",
         }
 
@@ -108,7 +108,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
     def _generate_gemini_command(self):
         seed = self.params.get("gemini_seed") or random.randint(1, 100)
         table_options = self.params.get("gemini_table_options")
-        log_statements = self.params.get("gemini_log_cql_statements") or False
+        log_statements = self.params.get("gemini_log_cql_statements") or True
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
