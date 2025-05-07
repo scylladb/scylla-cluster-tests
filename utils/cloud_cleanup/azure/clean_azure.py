@@ -54,7 +54,7 @@ def get_vm_creation_time(v_m, resource_group_name):
             compute_client.virtual_machines.begin_update(resource_group_name, v_m.name, parameters={
                 "tags": tags,
             })
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info(
                 "Failed to update VM tags: %s in resource group: %s with exception: %s",
                 v_m.name, resource_group_name, exc)
@@ -73,7 +73,7 @@ def get_rg_creation_time(resource_group):
         resource_group.tags = tags
         try:
             resource_client.resource_groups.create_or_update(resource_group.name, resource_group)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to update RG tags: %s with exception: %s", resource_group.name, exc)
     return creation_time
 
@@ -103,7 +103,7 @@ def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False)
         LOGGER.info("Deleting VM: %s in resource group: %s", vm_name, resource_group_name)
         try:
             compute_client.virtual_machines.begin_delete(resource_group_name, vm_name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info(
                 "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc)
             return
@@ -117,7 +117,7 @@ def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
         LOGGER.info("Stopping VM: %s in resource group: %s", vm_name, resource_group_name)
         try:
             compute_client.virtual_machines.begin_deallocate(resource_group_name, vm_name, test_id)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to stop VM: %s in resource group: %s with exception: %s",
                         vm_name, resource_group_name, exc)
             return
@@ -131,7 +131,7 @@ def delete_resource_group(resource_group_name, dry_run=False):
         LOGGER.info("Deleting resource group: %s", resource_group_name)
         try:
             resource_client.resource_groups.begin_delete(resource_group_name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to delete resource group: %s with exception: %s", resource_group_name, exc)
 
 

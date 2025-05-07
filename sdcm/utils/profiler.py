@@ -67,10 +67,10 @@ class ProfileableProcess(multiprocessing.Process):
             if profile:
                 profile = profile.fork()
                 profile.set_global_main_profile(profile)
-                profile.enable()  # pylint: disable=protected-access
+                profile.enable()
             original_run_method()
             if profile:
-                profile.create_stats()  # pylint: disable=protected-access
+                profile.create_stats()
         setattr(obj, 'run', modified_run)
 
     def _bind_profile(self, group_name):
@@ -96,11 +96,11 @@ class ProfileableProcess(multiprocessing.Process):
 
     @staticmethod
     def deactivate():
-        multiprocessing.Process._bootstrap_inner = REAL_PROCESS_BOOTSTRAP  # pylint: disable=protected-access
+        multiprocessing.Process._bootstrap_inner = REAL_PROCESS_BOOTSTRAP
         multiprocessing.Process.start = REAL_PROCESS_START
 
 
-REAL_PROCESS_BOOTSTRAP = multiprocessing.Process._bootstrap  # pylint: disable=protected-access
+REAL_PROCESS_BOOTSTRAP = multiprocessing.Process._bootstrap
 REAL_PROCESS_START = multiprocessing.Process.start
 
 
@@ -142,10 +142,10 @@ class ProfileableThread(threading.Thread):
         def modified_run():
             profile = getattr(obj, '_profile', None)
             if profile:
-                profile.enable()  # pylint: disable=protected-access
+                profile.enable()
             original_run_method()
             if profile:
-                profile.create_stats()  # pylint: disable=protected-access
+                profile.create_stats()
         setattr(obj, 'run', modified_run)
 
     def _bootstrap_inner(self):
@@ -155,7 +155,7 @@ class ProfileableThread(threading.Thread):
     @staticmethod
     def init_profile(obj):
         if obj.__class__.__name__ == '_DummyThread':
-            profile_group_name = multiprocessing.current_process()._name  # pylint: disable=protected-access
+            profile_group_name = multiprocessing.current_process()._name
         else:
             profile_group_name = getattr(obj, '_name', 'UnknownThread')
         ProfileableThread._bind_profile(obj, profile_group_name)
@@ -178,17 +178,17 @@ class ProfileableThread(threading.Thread):
 
     @staticmethod
     def deactivate():
-        threading.Thread._bootstrap_inner = REAL_BOOTSTRAP_INNER  # pylint: disable=protected-access
+        threading.Thread._bootstrap_inner = REAL_BOOTSTRAP_INNER
 
 
-REAL_BOOTSTRAP_INNER = threading.Thread._bootstrap_inner  # pylint: disable=protected-access
+REAL_BOOTSTRAP_INNER = threading.Thread._bootstrap_inner
 
 
 def _get_timer_from_str(timer_name):
     return TIMERS.get(timer_name, None)
 
 
-class StatsHolder:  # pylint: disable=too-few-public-methods
+class StatsHolder:
     """ A class that is designed to hold stats that could be fed to pstats.Stats
     """
 

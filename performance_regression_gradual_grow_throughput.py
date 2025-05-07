@@ -32,7 +32,7 @@ class Workload(NamedTuple):
     step_duration: str
 
 
-class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
+class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     """
     This class presents new performance test that run gradual increased throughput steps.
     The test run steps with different throughput.
@@ -43,8 +43,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
 
     def setUp(self):
         super().setUp()
-        self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
-        self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
+        self.CLUSTER_SIZE = self.params.get("n_db_nodes")
+        self.REPLICATION_FACTOR = 3
 
     def throttle_steps(self, workload_type):
         throttle_steps = self.params["perf_gradual_throttle_steps"]
@@ -64,7 +64,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                                severity=Severity.CRITICAL).publish()
         return step_duration[workload_type]
 
-    def test_mixed_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_mixed_gradual_increase_load(self):
         """
         Test steps:
 
@@ -84,7 +84,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         self._base_test_workflow(workload=workload,
                                  test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
 
-    def test_write_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_write_gradual_increase_load(self):
         """
         Test steps:
 
@@ -104,7 +104,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         self._base_test_workflow(workload=workload,
                                  test_name="test_write_gradual_increase_load (100% writes)")
 
-    def test_read_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_read_gradual_increase_load(self):
         """
         Test steps:
 
@@ -211,7 +211,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f'DROP KEYSPACE IF EXISTS {"keyspace1"};')
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
         if workload.cs_cmd_warm_up is not None:
             self.warmup_cache(workload.cs_cmd_warm_up, workload.num_threads)

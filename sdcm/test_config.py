@@ -26,7 +26,7 @@ from sdcm.utils.metaclasses import Singleton
 LOGGER = logging.getLogger(__name__)
 
 
-class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
+class TestConfig(metaclass=Singleton):
     TEST_DURATION = 60
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
@@ -240,7 +240,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             syslogng_host = "127.0.0.1"
             syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
         else:
-            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
+            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS
         return syslogng_host, syslogng_port
 
     @classmethod

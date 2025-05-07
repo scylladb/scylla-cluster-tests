@@ -10,8 +10,8 @@ from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
 
 
-class FakeNode(BaseNode):  # pylint: disable=abstract-method
-    # pylint: disable=super-init-not-called
+class FakeNode(BaseNode):
+
     def __init__(self, remoter, logdir):
         self.remoter = remoter
         os.makedirs(logdir, exist_ok=True)

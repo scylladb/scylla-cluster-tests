@@ -32,7 +32,6 @@ from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class CoreDumpInfo:
     pid: str
@@ -63,7 +62,6 @@ class CoreDumpInfo:
             return f'CoreDump[{self.pid}, {self.corefile}]'
         return f'CoreDump[{self.pid}]'
 
-    # pylint: disable=too-many-arguments
     def update(self,
                node: 'BaseNode' = None,  # noqa: F821
                corefile: str = None,
@@ -91,7 +89,7 @@ class CoreDumpInfo:
                 setattr(self, attr_name, attr_value)
 
 
-class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attributes
+class CoredumpThreadBase(Thread):
     lookup_period = 30
     upload_retry_limit = 3
     max_coredump_thread_exceptions = 10
@@ -121,7 +119,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             try:
                 self.main_cycle_body()
                 exceptions_count = 0
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.error("Following error occurred: %s", exc)
                 exceptions_count += 1
                 if exceptions_count == self.max_coredump_thread_exceptions:
@@ -179,7 +177,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 if result:
                     uploaded.append(core_info)
                     self.publish_event(core_info)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
 
     @abstractmethod
@@ -189,7 +187,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     def publish_event(self, core_info: CoreDumpInfo):
         try:
             core_info.publish_event()
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
@@ -231,7 +229,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
     @contextmanager
-    def hard_link_corefile(self, corefile):  # pylint: disable=unused-argument,no-self-use
+    def hard_link_corefile(self, corefile):
         yield
 
     def upload_coredump(self, core_info: CoreDumpInfo):
@@ -248,7 +246,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                     core_info.corefile = str(hard_link)
                 self._upload_coredump(core_info)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             core_info.download_instructions = 'failed to upload core'
             self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
             raise
@@ -278,13 +276,13 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 return coredump
         if not self._is_pigz_installed:
             self._install_pigz()
-        try:  # pylint: disable=unreachable
+        try:
             if not self.node.remoter.run(f'sudo ls {coredump}.gz', verbose=False, ignore_status=True).ok:
                 self.node.remoter.run(f'sudo pigz --fast --keep {coredump}')
             coredump += '.gz'
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
+        except NETWORK_EXCEPTIONS:
             raise
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
         return coredump
 
@@ -354,7 +352,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         try:
             systemd_version = get_systemd_version(self.node.remoter.run(
                 "systemctl --version", ignore_status=True).stdout)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
 
@@ -442,7 +440,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         return pids_list
 
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
-        # pylint: disable=too-many-branches
+
         coredump_info = self._get_coredumpctl_info(core_info)
         corefile = ''
         executable = ''
@@ -513,7 +511,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                     else:
                         raise ValueError(f'Date has unknown format: {timestring}')
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
                          source_timestamp=event_timestamp, coredump_info="\n".join(coredump_info)+"\n")

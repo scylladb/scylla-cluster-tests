@@ -13,7 +13,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, ConfigDict
 
 
 class AttrBuilder(BaseModel):

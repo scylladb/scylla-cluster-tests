@@ -4,8 +4,8 @@ from test_lib.cql_types import CQLTypeBuilder, NOT_EMBEDDABLE_COLUMN_TYPES, COLL
 
 class CQLColumnTypeTest(unittest.TestCase):
 
-    def test_get_random(self):  # pylint: disable=no-self-use
-        # pylint: disable=invalid-name,unused-variable,no-member,protected-access
+    def test_get_random(self):
+
         already_used = {}
         EMBEDDABLE_NON_COLLECTION_COLUMN_TYPES = \
             [e for e in ALL_COLUMN_TYPES if e not in NOT_EMBEDDABLE_COLUMN_TYPES and e not in COLLECTION_COLUMN_TYPES]
@@ -25,8 +25,8 @@ class CQLColumnTypeTest(unittest.TestCase):
         random_type = CQLTypeBuilder.get_random(already_used, allow_levels=1)
         assert random_type is None, "We should reach end of variants here, and therefore None should be returned"
 
-    def test_str_and_remember_forget_variants(self):  # pylint: disable=no-self-use
-        # pylint: disable=no-member,protected-access
+    def test_str_and_remember_forget_variants(self):
+
         type_int = CQLTypeBuilder('int')
         assert type_int._get_available_variants(
             already_created_info={},

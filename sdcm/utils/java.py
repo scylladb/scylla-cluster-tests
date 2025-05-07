@@ -6,7 +6,7 @@ from sdcm import sct_abs_path
 JAVA_DOCKER_IMAGE = 'openjdk:23-slim'
 
 
-class JavaContainerMixin:  # pylint: disable=too-few-public-methods
+class JavaContainerMixin:
     def java_container_run_args(self) -> dict:
         user_home = os.path.expanduser("~")
         volumes = {

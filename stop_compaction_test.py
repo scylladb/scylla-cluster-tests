@@ -38,7 +38,7 @@ def record_sub_test_result(func: Callable):
         try:
             func(*args, **kwargs)
             return {test_name: ["SUCCESS", []]}
-        except Exception as exc:  # pylint:disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error(exc)
             return {test_name: ["FAILURE", [exc]]}
     return wrapper
@@ -243,7 +243,7 @@ class StopCompactionTest(ClusterTester):
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
             self._grep_log_and_assert(self.node)
             self.test_statuses.update({"StartStopUpgradeCompaction": ["SUCCESS", []]})
-        except self.failureException as exc:  # pylint:disable=broad-except
+        except self.failureException as exc:
             self.test_statuses.update({"StartStopUpgradeCompaction": ["FAILURE", [exc]]})
             raise exc
         finally:
@@ -316,7 +316,7 @@ class StopCompactionTest(ClusterTester):
         try:
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
             self.test_statuses.update({"StartStopReshapeCompaction": ["SUCCESS", []]})
-        except self.failureException as exc:  # pylint:disable=broad-except
+        except self.failureException as exc:
             self.test_statuses.update({"StartStopReshapeCompaction": ["FAILURE", [exc]]})
             raise exc
         finally:
@@ -375,7 +375,7 @@ class StopCompactionTest(ClusterTester):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         email_data.update({"test_statuses": self.test_statuses,
