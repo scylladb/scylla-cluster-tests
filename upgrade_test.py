@@ -1246,10 +1246,29 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         for scylla_pod in self.db_cluster.nodes[::-1]:
             scylla_pod.wait_for_pod_readiness()
 
-        for condition in ("Available=True", "Progressing=False", "Degraded=False"):
-            self.k8s_cluster.kubectl_wait(
-                f"scyllacluster {self.params.get('k8s_scylla_cluster_name')} --for=condition={condition}",
-                namespace=self.db_cluster.namespace, timeout=600)
+        available = progressing = degraded = None
+        for _ in range(20):
+            scylla_cluster_conditions = json.loads(self.k8s_cluster.kubectl(
+                f"get scyllacluster {self.params.get('k8s_scylla_cluster_name')} -o json",
+                namespace=self.db_cluster.namespace
+            ).stdout.strip())["status"]["conditions"]
+
+            for condition in scylla_cluster_conditions:
+                if condition["type"] == "Available":
+                    available = condition["status"] == "True"
+                elif condition["type"] == "Progressing":
+                    progressing = condition["status"] == "True"
+                elif condition["type"] == "Degraded":
+                    degraded = condition["status"] == "True"
+
+            if available and not progressing and not degraded:
+                break
+            time.sleep(30)
+
+        assert available, "ScyllaCluster is not available"
+        assert not progressing, "ScyllaCluster is still progressing"
+        assert not degraded, "ScyllaCluster is degraded"
+
         scylla_cluster_conditions = json.loads(self.k8s_cluster.kubectl(
             f"get scyllacluster {self.params.get('k8s_scylla_cluster_name')} -o json",
             namespace=self.db_cluster.namespace).stdout.strip())["status"]["conditions"]
