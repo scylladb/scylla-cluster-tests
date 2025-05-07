@@ -27,11 +27,11 @@ stress_cmd: [
 
 stress_read_cmd: [
                    # Read the first 250 paritions with validate-data flag (Partitions we don't delete during the test)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=250 -partition-offset=1 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=50 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -validate-data",
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=250 -partition-offset=1 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -concurrency=45 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations=0 -duration=6420m -validate-data",
                   # Read partitions 251-1250 (1000 partitions)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=200 -connection-count=100 -iterations=0 -duration=6420m",
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000 -partition-offset=251 -clustering-row-count=200000 -clustering-row-size=uniform:512..5120 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=180 -connection-count=100 -iterations=0 -duration=6420m",
                   # Read partitions 1251-2000 (750 partitions) that are being written during the test (different row size)
-                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=150 -connection-count=100 -iterations=0 -duration=6420m"
+                  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=135 -connection-count=100 -iterations=0 -duration=6420m"
                  ]
 
 # Create MV and set tombstone_gc to 'repair' + a propagation_delay_in_seconds of 5 minutes for the tombstone-gc-verification table:
