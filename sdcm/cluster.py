@@ -3239,6 +3239,20 @@ class FlakyRetryPolicy(RetryPolicy):
     def on_unavailable(self, query, consistency, required_replicas, alive_replicas, retry_num):
         return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
+    def on_request_error(self, query, consistency, error, retry_num):
+        """
+        Override to log the first 5 server errors, defer to parent for retry-next-host,
+        then after 5 attempts give up and rethrow.
+        """
+        if retry_num < 5:
+            LOGGER.debug(
+                "Server error on query=%r (consistency=%s) attempt #%d: %s",
+                query, consistency, retry_num, error
+            )
+            return super().on_request_error(query, consistency, error, retry_num)
+
+        return self.RETHROW, None
+
 
 @dataclass
 class DeadNode:
