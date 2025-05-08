@@ -95,6 +95,9 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
+    def set_stress_operation(self, stress_cmd):
+        return get_latte_operation_type(self.stress_cmd)
+
     def build_stress_cmd(self, cmd_runner, loader, hosts):  # pylint: disable=too-many-locals
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
@@ -198,15 +201,14 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
 
-        stress_operation = get_latte_operation_type(self.stress_cmd)
-        first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [stress_operation])[0]
+        first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [self.stress_operation])[0]
         log_file_name = os.path.join(
             loader.logdir, 'latte%s-l%s-c%s-%s.log' % (first_tag_or_op, loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('latte benchmarking tool local log: %s', log_file_name)
 
         # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
         log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
-        remote_hdr_file_name = f"hdrh-latte-{stress_operation}-{log_id}.hdr"
+        remote_hdr_file_name = f"hdrh-latte-{self.stress_operation}-{log_id}.hdr"
         LOGGER.debug("latte remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
         LOGGER.debug("latte HDR local file %s", local_hdr_file_name)
@@ -260,7 +262,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     keyspace=keyspace_holder,
                     instance_name=loader.ip_address,
                     metrics=nemesis_metrics_obj(),
-                    stress_operation=stress_operation,
+                    stress_operation=self.stress_operation,
                     stress_log_filename=log_file_name,
                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 LatteHDRExporter(
@@ -268,7 +270,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     instance_name=loader.ip_address,
                     hdr_tags=self.hdr_tags,
                     metrics=nemesis_metrics_obj(),
-                    stress_operation=stress_operation,
+                    stress_operation=self.stress_operation,
                     stress_log_filename=local_hdr_file_name,
                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 LatteStressEvent(

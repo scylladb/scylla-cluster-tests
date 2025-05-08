@@ -17,8 +17,6 @@
 import os
 import time
 
-from enum import Enum
-
 import yaml
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
@@ -29,16 +27,11 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
 from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
 
 KB = 1024
-
-
-class PerformanceTestWorkload(Enum):
-    WRITE = "write"
-    READ = "read"
-    MIXED = "mixed"
 
 
 class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  # pylint: disable=too-many-public-methods
@@ -291,9 +284,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             self.db_cluster.start_nemesis(interval=interval)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(
-            PerformanceTestWorkload.READ,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details()
         self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
         self.check_regression()
@@ -309,9 +300,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
                 nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
-        self.build_histogram(
-            PerformanceTestWorkload.WRITE,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
         self.check_regression()
@@ -327,9 +316,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
                 nemesis=self.get_nemesis_class(), tester_obj=self, hdr_tags=stress_queue.hdr_tags)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
-        self.build_histogram(
-            PerformanceTestWorkload.MIXED,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
         self.check_regression()
@@ -537,9 +524,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(
-            PerformanceTestWorkload.WRITE,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')
         self.check_regression()
@@ -571,9 +556,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             stress_cmd=base_cmd_r, stress_num=stress_multiplier, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(
-            PerformanceTestWorkload.READ,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read')
         self.check_regression()
@@ -604,9 +587,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
             stress_cmd=base_cmd_m, stress_num=stress_multiplier, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
-        self.build_histogram(
-            PerformanceTestWorkload.MIXED,
-            hdr_tags=stress_queue.hdr_tags)
+        self.build_histogram(stress_queue.stress_operation, hdr_tags=stress_queue.hdr_tags)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
@@ -630,6 +611,56 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
         self.run_mixed_workload()
+
+    def test_latency_steady_state(self):
+        """Test designed to run multiple stress commands, possibly, using different stress operation types.
+
+        For example, 'latte' uses rune function names in HDR histogram tags,
+        so we should gather all the unique tags into separate lists - one per stress operation type
+        """
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+        stress_operation_mapping = {}
+        for stress_cmd in self.params.get("stress_cmd"):
+            stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, round_robin=True)
+            stress_op = stress_thread.stress_operation  # test depends on the 'stress_operation' attr
+            assert stress_op, "stress operation type should not be empty: %s" % stress_op
+            if stress_op not in stress_operation_mapping:
+                stress_operation_mapping[stress_op] = []
+            stress_operation_mapping[stress_op].append(stress_thread)
+
+        def _test_latency_steady_state_template(workload: str, *args):
+            tester, stress_queue = args  # blindly assume 2 args
+
+            # NOTE: "steady" word from the func name will be used by the latency calculator decorator
+            @latency_calculator_decorator(workload_type=workload)
+            def _test_latency_steady_state(tester, stress_queue: list):
+                for stress_thread in stress_queue:
+                    self.verify_stress_thread(stress_thread)
+
+                # NOTE: 'hdr_tags' will be used by the latency calculator decorator
+                hdr_tags = []
+                for stress_thread in stress_queue:
+                    hdr_tags.extend(stress_thread.hdr_tags)
+                return {"hdr_tags": hdr_tags}  # must be dict with 'hdr_tags' key
+
+            # NOTE: 'tester' arg must be first and positional due to latency calculator decorator expectations
+            return _test_latency_steady_state(tester, stress_queue=stress_queue)
+
+        object_set = ParallelObject(
+            timeout=None,
+            objects=[
+                [_stress_op, self, _stress_queue]
+                for _stress_op, _stress_queue in stress_operation_mapping.items()
+            ],
+            num_workers=len(stress_operation_mapping))
+        object_set.run(
+            func=_test_latency_steady_state_template,
+            unpack_objects=True,
+            ignore_exceptions=False)
 
     def test_latency_read_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
@@ -797,7 +828,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
         self.check_regression()
         self.kill_stress_thread()
 
-    def build_histogram(self, workload: PerformanceTestWorkload, hdr_tags: list):
+    def build_histogram(self, workload: str, hdr_tags: list):
         if not self.params["use_hdrhistogram"]:
             return
 
