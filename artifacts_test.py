@@ -71,6 +71,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         Validate reported version
         prev_id: check if new version is created
         """
+        self.actions_log.info("Validating scylla version in housekeepingdb", target=self.node.name)
         assert self.node.uuid, "Node UUID wasn't created"
 
         row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
@@ -104,7 +105,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                 assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
             else:
                 assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
-
+        self.actions_log.info("Scylla version in housekeepingdb is validated", target=self.node.name)
         return row[0] if row else 0
 
     @property
@@ -121,12 +122,14 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         return None
 
     def check_cluster_name(self):
+        self.actions_log.info("Checking cluster name", target=self.node.name)
         with self.node.remote_scylla_yaml() as scylla_yaml:
             yaml_cluster_name = scylla_yaml.cluster_name
 
         self.assertTrue(self.db_cluster.name == yaml_cluster_name,
                         f"Cluster name is not as expected. Cluster name in scylla.yaml: {yaml_cluster_name}. "
                         f"Cluster name: {self.db_cluster.name}")
+        self.actions_log.info("Cluster name is validated", target=self.node.name)
 
     def run_cassandra_stress(self, args: str):
         stress_cmd = f"{self.node.add_install_prefix(STRESS_CMD)} {args} -node {self.node.ip_address}"
@@ -134,10 +137,12 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             transport_str = c_s_transport_str(
                 self.params.get('peer_verification'), self.params.get('client_encrypt_mtls'))
             stress_cmd += f" -transport '{transport_str}'"
-
+        self.actions_log.info("Running Cassandra stress", metadata={"stress_cmd": stress_cmd}, target=self.node.name)
         result = self.node.remoter.run(stress_cmd)
         assert "java.io.IOException" not in result.stdout
         assert "java.io.IOException" not in result.stderr
+        self.actions_log.info("Cassandra stress is finished", metadata={
+                              "stress_cmd": stress_cmd}, target=self.node.name)
 
     def check_scylla(self):
         self.node.run_nodetool("status")
@@ -146,6 +151,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
 
     def check_cqlsh(self):
+        self.actions_log.info("Checking cqlsh", target=self.node.name)
         output = self.node.run_cqlsh("desc keyspaces")
         self.log.debug(output.stdout)
 
@@ -159,6 +165,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.log.debug(host)
             assert 'broadcast_address' in host and 'host_id' in host, (
                 f"system.local: {host}, doesn't have 'broadcast_address' or 'host_id'")
+        self.actions_log.info("cqlsh is checked", target=self.node.name)
 
     def check_housekeeping_service_status(self, backend: str):
         housekeeping_service_name = "scylla-housekeeping" if backend == "docker" else "scylla-housekeeping-restart"
@@ -190,6 +197,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         # We can't ship the image with Scylla internal users inside. So we
         # need to verify that mistakenly we didn't create all the users that we have project wide in the image
         self.log.info("Checking that all existent users except centos were created after boot")
+        self.actions_log.info(
+            "Checking that all existent users except centos were created after boot", target=self.node.name)
         uptime = self.node.remoter.run(cmd="uptime -s").stdout.strip()
         datetime_format = "%Y-%m-%d %H:%M:%S"
         instance_start_time = datetime.datetime.strptime(uptime, datetime_format)
@@ -212,17 +221,24 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             else:
                 raise AssertionError(f"Unable to parse/find timestamp of the user {user} creation in {line}")
         self.log.info("All users except image user 'centos' were created after the boot.")
+        self.actions_log.info("All users except image user 'centos' were created after the boot.",
+                              target=self.node.name)
 
     def verify_node_health(self):
+        self.actions_log.info("Verifying node health", target=self.node.name)
         self.node.check_node_health()
+        self.actions_log.info("Node health is verified", target=self.node.name)
 
     def verify_snitch(self, backend_name: str):
         """
         Verify that the snitch used in the cluster is appropriate for
         the backend used.
         """
+        self.actions_log.info("Verifying snitch", target=self.node.name)
         if not self.params.get("use_preinstalled_scylla"):
             self.log.info("Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
+            self.actions_log.info(
+                "Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False", target=self.node.name)
             return
 
         describecluster_snitch = self.get_describecluster_info().snitch
@@ -245,6 +261,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                             msg=f"Expected snitch matches for scylla yaml to not be empty, but was. Snitch "
                             f"matches: {snitch_matches_scylla_yaml}"
                             )
+        self.actions_log.info("Snitch is verified", target=self.node.name)
 
     def verify_docker_latest_match_release(self) -> None:
         latest_version = get_latest_scylla_release(product='scylla')
@@ -262,7 +279,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             f"latest != {latest_version}, images digest differs [{latest_digests}] != [{release_digests}]"
 
     def verify_nvme_write_cache(self) -> None:
+        self.actions_log.info("Verifying NVMe write cache", target=self.node.name)
         if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
+            self.actions_log.info("Skipped verifying NVMe write cache", target=self.node.name)
             return
         expected_write_cache_value = "write back" if self.write_back_cache else "write through"
 
@@ -274,8 +293,10 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.log.info("Expected write cache for %s is %r", nvme_device, expected_write_cache_value)
             write_cache = run(f"cat /sys/block/{nvme_device}/queue/write_cache").stdout.strip()
             self.assertEqual(write_cache, expected_write_cache_value)
+        self.actions_log.info("Write cache is verified", target=self.node.name)
 
     def verify_xfs_online_discard_enabled(self) -> None:
+        self.actions_log.info("Verifying XFS online discard enabled", target=self.node.name)
         run = self.node.remoter.sudo
 
         self.log.info("Verify XFS mount options for /var/lib/scylla contain `discard'")
@@ -286,6 +307,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if self.params.get("use_preinstalled_scylla"):
             self.log.info("Ensure that we don't run fstrim")
             self.assertEqual(run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip(), "disabled")
+        self.actions_log.info("XFS online discard verified", target=self.node.name)
 
     def check_service_existence(self, service_name):
         res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"',
@@ -317,7 +339,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                   compaction=compaction_strategy, sstable_size=sstable_size)
 
     # pylint: disable=too-many-statements,too-many-branches
-    def test_scylla_service(self):
+    def test_scylla_service(self):  # noqa: PLR0915
 
         self.run_pre_create_schema()
 
@@ -329,6 +351,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
             with self.subTest("check Scylla IO Params"):
+                self.actions_log.info("Checking Scylla IO Params", target=self.node.name)
                 try:
                     if self.node.db_node_instance_type in ["t3.micro"]:
                         self.skipTest(
@@ -343,8 +366,10 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                     )
                 except SkipTest as exc:
                     self.log.info("Skipping IOTuneValidation due to %s", exc.args)
+                    self.actions_log.info("Skipped IOTuneValidation", target=self.node.name)
                 except Exception:  # pylint: disable=broad-except # noqa: BLE001
                     self.log.error("IOTuneValidator failed", exc_info=True)
+                    self.actions_log.error("IOTuneValidator failed", target=self.node.name)
                     TestFrameworkEvent(source={self.__class__.__name__},
                                        message="Error during IOTune params validation.",
                                        severity=Severity.ERROR).publish()
@@ -380,9 +405,11 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             self.check_cqlsh()
 
         with self.subTest("check node_exporter liveness"):
+            self.actions_log.info("Checking node_exporter liveness", target=self.node.name)
             node_info_service = NodeLoadInfoServices().get(self.node)
             assert node_info_service.cpu_load_5
             assert node_info_service.get_node_boot_time_seconds()
+            self.actions_log.info("node_exporter liveness is verified", target=self.node.name)
 
         with self.subTest("check scylla_doctor results"):
             if self.params.get("run_scylla_doctor"):
@@ -394,6 +421,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
         if backend != "docker":
             with self.subTest("check if scylla unnecessarily installed a time synchronization service"):
+                self.actions_log.info(
+                    "Checking if scylla unnecessarily installed a time synchronization service", target=self.node.name)
                 # Checks https://github.com/scylladb/scylla/issues/8339
                 # If the instance already has systemd-timesyncd
                 is_timesyncd_service_installed = self.check_service_existence(service_name="systemd-timesyncd")
@@ -427,6 +456,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                     self.log.warning("Seems that there was an issue with ntp check. Here's the full list of services "
                                      "active on the node: %s", full_list)
                     raise
+                self.actions_log.info("Unnecessary time synchronization service check is verified",
+                                      target=self.node.name)
 
             # TODO: implement after the new provision will be added
             # Task: https://trello.com/c/BIdIUwyT/4096-housekeeping-implemented-a-test-that-checks-i-value-when-scylla-
@@ -445,24 +476,31 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         version_id_after_stop = 0
         with self.subTest("check Scylla server after stop/start"):
+            self.actions_log.info("Stopping Scylla server", target=self.node.name)
             self.node.stop_scylla(verify_down=True)
+            self.actions_log.info("Scylla server stopped", target=self.node.name)
+            self.actions_log.info("Starting Scylla server", target=self.node.name)
             self.node.start_scylla(verify_up=True)
-
+            self.actions_log.info("Scylla server started", target=self.node.name)
             # Scylla service has been stopped/started after installation and re-configuration.
             # So we don't need to stop and to start it again
             self.check_scylla()
 
             if not self.node.is_nonroot_install:
                 self.log.info("Validate version after stop/start")
+                self.actions_log.info("Validate version after stop/start", target=self.node.name)
                 self.check_housekeeping_service_status(backend=backend)
                 version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
                     prev_id=0,
                     expected_status_code=expected_housekeeping_status_code,
                     new_row_expected=False,
                     backend=backend)
+                self.actions_log.info("Version after stop/start is verified", target=self.node.name)
 
         with self.subTest("check Scylla server after restart"):
+            self.actions_log.info("Restarting Scylla server", target=self.node.name)
             self.node.restart_scylla(verify_up_after=True)
+            self.actions_log.info("Scylla server restarted", target=self.node.name)
             self.check_scylla()
 
             if not self.node.is_nonroot_install:
@@ -475,34 +513,63 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         if backend != 'docker':
             with self.subTest("Check the output of perftune.py"):
+                self.actions_log.info("Checking the output of perftune.py", target=self.node.name)
                 perftune_checker = PerftuneOutputChecker(self.node)
                 perftune_checker.compare_perftune_results()
+                self.actions_log.info("The output of perftune.py is verified")
 
         if backend == 'docker':
             with self.subTest("Check docker latest tags"):
+                self.actions_log.info("Checking docker latest tags")
                 self.verify_docker_latest_match_release()
+                self.actions_log.info("Docker latest tags are verified")
 
     def run_scylla_doctor(self):
+        self.actions_log.info("Running scylla-doctor")
         if self.params.get('client_encrypt') and SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2280", self.params):
             self.log.info("Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
+            self.actions_log.info(
+                "Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
             return
 
         if self.db_cluster.nodes[0].is_nonroot_install and \
                 SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/10540", self.params):
             self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
+            self.actions_log.info(
+                "Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254.")
             return
 
         if self.node.parent_cluster.cluster_backend == "docker":
             self.log.info("Scylla Doctor check in SCT isn't yet support for docker backend")
+            self.actions_log.info("Scylla Doctor check in SCT isn't yet support for docker backend")
             return
 
         for node in self.db_cluster.nodes:
             scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
+            self.actions_log.info("Installing Scylla Doctor", target=node.name)
             scylla_doctor.install_scylla_doctor()
+            self.actions_log.info("Scylla Doctor is installed", target=node.name)
             scylla_doctor.argus_collect_sd_package()
+            self.actions_log.info("Running Scylla Doctor", target=node.name)
             scylla_doctor.run_scylla_doctor_and_collect_results()
+            self.actions_log.info("Scylla Doctor is finished", target=node.name)
+            self.actions_log.info("Analyzing Scylla Doctor results", target=node.name)
             scylla_doctor.analyze_vitals()
             scylla_doctor.analyze_and_verify_results()
+            scylla_doctor.install_scylla_doctor()
+            self.actions_log.info("Scylla Doctor is installed", target=node.name)
+            scylla_doctor.argus_collect_sd_package()
+            self.actions_log.info("Running Scylla Doctor", target=node.name)
+            scylla_doctor.run_scylla_doctor_and_collect_results()
+            self.actions_log.info("Scylla Doctor is finished", target=node.name)
+            self.actions_log.info("Analyzing Scylla Doctor results", target=node.name)
+            scylla_doctor.analyze_vitals()
+            scylla_doctor.run_scylla_doctor_and_collect_results()
+            self.actions_log.info("Scylla Doctor is finished", target=node.name)
+            self.actions_log.info("Analyzing Scylla Doctor results", target=node.name)
+            scylla_doctor.analyze_vitals()
+            scylla_doctor.analyze_and_verify_results()
+            self.actions_log.info("Scylla Doctor test is completed", target=node.name)
 
     def get_email_data(self):
         self.log.info("Prepare data for email")

@@ -1011,6 +1011,8 @@ class BaseSCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='argus.log',
                 search_locally=True),
+        FileLog(name='actions.log',
+                search_locally=True),
         FileLog(name=r'*debug.json',
                 search_locally=True),
         FileLog(name='result_gradual_increase.log'),
