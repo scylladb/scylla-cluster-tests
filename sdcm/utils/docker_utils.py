@@ -498,6 +498,10 @@ def running_in_docker():
         )
 
 
+def running_in_podman():
+    return os.environ.get('container') == 'podman'
+
+
 def get_docker_bridge_gateway(remoter):
     result = remoter.run(
         "docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge",
