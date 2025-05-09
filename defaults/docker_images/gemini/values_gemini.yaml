@@ -1,2 +1,2 @@
 gemini:
-  image: scylladb/gemini:1.8.11
+  image: scylladb/gemini:1.9.1
