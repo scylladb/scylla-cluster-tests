@@ -100,6 +100,11 @@ upgrade_test.py                             @abramche @fruch
 /test-cases/features/out-of-space-prevention              @pehala
 /jenkins-pipelines/oss/features/out-of-space-prevention   @pehala
 
+# Size-based load balancing
+/longevity_balancer_test.py                                 @pehala
+/test-cases/features/size-based-load-balancing              @pehala
+/jenkins-pipelines/oss/features/size-based-load-balancing   @pehala
+
 # Backup & Restore
 jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/scylla-enterprise-perf-manager-native-backup-nemesis.jenkinsfile   @pehala
 jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/scylla-enterprise-perf-manager-rclone-backup-nemesis.jenkinsfile   @pehala
