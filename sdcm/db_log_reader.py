@@ -132,25 +132,25 @@ class DbLogReader(Process):
                         self._build_id = match.groups()[0]
                         LOGGER.debug("Found build-id: %s", self._build_id)
 
-                    match = BACKTRACE_RE.search(line)
                     one_line_backtrace = []
-                    if match and backtraces:
-                        data = match.groupdict()
-                        if data['other_bt']:
-                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                        if data['scylla_bt']:
-                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
-                    elif "backtrace:" in line.lower() and "0x" in line:
+                    if ("backtrace:" in line.lower() or "report: at" in line.lower()) and "0x" in line:
                         # This part handles the backtrases are printed in one line.
                         # Example:
                         # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
                         # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
                         # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
                         # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
-                        splitted_line = re.split("backtrace:", line, flags=re.IGNORECASE)
+                        splitted_line = re.split("backtrace:|report: at", line, flags=re.IGNORECASE)
                         for trace_line in splitted_line[1].split():
                             if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
                                 one_line_backtrace.append(trace_line)
+
+                    elif (match := BACKTRACE_RE.search(line)) and backtraces:
+                        data = match.groupdict()
+                        if data['other_bt']:
+                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
+                        if data['scylla_bt']:
+                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
 
                     # for each line, if it matches a continuous event pattern,
                     # call the appropriate function with the class tied to that pattern
@@ -186,7 +186,7 @@ class DbLogReader(Process):
         traces_count = 0
         for backtrace in backtraces:
             backtrace['event'].raw_backtrace = "\n".join(backtrace['backtrace'])
-            if backtrace['event'].type == 'BACKTRACE':
+            if backtrace['backtrace']:
                 traces_count += 1
 
         # support interlaced reactor stalled
