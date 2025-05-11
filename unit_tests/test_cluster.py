@@ -211,14 +211,18 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
-            event_backtrace1, event_backtrace2 = events[-3], events[-2]
-            print(event_backtrace1)
-            print(event_backtrace2)
+            backtraces = [event for event in events if event["type"] == "BACKTRACE"]
+            assert len(backtraces) == 2
+            for event_backtrace in backtraces:
+                assert event_backtrace["raw_backtrace"]
 
-            assert event_backtrace1["type"] == "BACKTRACE"
-            assert event_backtrace1["raw_backtrace"]
-            assert event_backtrace2["type"] == "BACKTRACE"
-            assert event_backtrace2["raw_backtrace"]
+            oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+            assert len(oversized_events) == 2
+            for event_oversized in oversized_events:
+                print(event_oversized)
+                assert event_oversized["raw_backtrace"]
+
+            print(events[-1])
 
     def test_gate_closed_ignored_exception_is_catched(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'gate_closed_ignored_exception.log')
