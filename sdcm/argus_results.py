@@ -477,7 +477,6 @@ class PeriodicDiskUsageToArgus:
 
     def disk_usage_to_argus(self):
         from sdcm.utils.common import get_node_disk_usage
-
         while not self.stop_event.is_set():
             # table has to be recreated in case nodes were added or removed
             data_table = self.results_table()
