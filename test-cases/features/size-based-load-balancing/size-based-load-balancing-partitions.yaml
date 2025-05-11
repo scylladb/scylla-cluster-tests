@@ -1,0 +1,50 @@
+test_duration: 720
+prepare_write_cmd:  [
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table1 -partition-count=200000 -partition-offset=10000001  -clustering-row-count=10      -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table2 -partition-count=100000 -partition-offset=20000001  -clustering-row-count=10      -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table3 -partition-count=20000  -partition-offset=30000001  -clustering-row-count=100     -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table1 -partition-count=10000  -partition-offset=40000001  -clustering-row-count=100     -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table2 -partition-count=2000   -partition-offset=50000001  -clustering-row-count=1000    -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table3 -partition-count=1000   -partition-offset=60000001  -clustering-row-count=1000    -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table1 -partition-count=200    -partition-offset=70000001  -clustering-row-count=10000   -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table2 -partition-count=100    -partition-offset=80000001  -clustering-row-count=10000   -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table3 -partition-count=20     -partition-offset=90000001  -clustering-row-count=100000  -clustering-row-size=fixed:131072 -concurrency=20 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table1 -partition-count=10     -partition-offset=100000001 -clustering-row-count=100000  -clustering-row-size=fixed:131072 -concurrency=10 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table2 -partition-count=2      -partition-offset=110000001 -clustering-row-count=1000000 -clustering-row-size=fixed:131072 -concurrency=2  -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table3 -partition-count=1      -partition-offset=120000001 -clustering-row-count=1000000 -clustering-row-size=fixed:131072 -concurrency=1  -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+]
+
+stress_cmd: [
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table4 -partition-count=200000 -partition-offset=210000001 -clustering-row-count=7       -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table5 -partition-count=100000 -partition-offset=220000001 -clustering-row-count=7       -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table6 -partition-count=20000  -partition-offset=230000001 -clustering-row-count=70      -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table4 -partition-count=10000  -partition-offset=240000001 -clustering-row-count=70      -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table5 -partition-count=2000   -partition-offset=250000001 -clustering-row-count=700     -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table6 -partition-count=1000   -partition-offset=260000001 -clustering-row-count=700     -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table4 -partition-count=200    -partition-offset=270000001 -clustering-row-count=7000    -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table5 -partition-count=100    -partition-offset=280000001 -clustering-row-count=7000    -clustering-row-size=fixed:131072 -concurrency=40 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table6 -partition-count=20     -partition-offset=290000001 -clustering-row-count=70000   -clustering-row-size=fixed:131072 -concurrency=20 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table4 -partition-count=10     -partition-offset=300000001 -clustering-row-count=70000   -clustering-row-size=fixed:131072 -concurrency=10 -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table5 -partition-count=2      -partition-offset=310000001 -clustering-row-count=700000  -clustering-row-size=fixed:131072 -concurrency=2  -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -table=table6 -partition-count=1      -partition-offset=320000001 -clustering-row-count=700000  -clustering-row-size=fixed:131072 -concurrency=1  -connection-count=40 -consistency-level=quorum -rows-per-request=20 -timeout=180s -retry-number=50 -retry-interval=100ms,1s",
+]
+
+n_db_nodes: 6
+simulated_racks: 3
+instance_type_db: 'i4i.2xlarge'
+n_loaders: 6
+instance_type_loader: 'c6i.2xlarge'
+# the test should run on a heterogeneous cluster, so it adds different instance types
+# reuses the nemesis_ variables for simplicity
+nemesis_add_node_cnt: 3
+nemesis_grow_shrink_instance_type: 'i4i.large'
+
+user_prefix: 'balancer-test'
+
+round_robin: true
+append_scylla_args: '--logger-log-level load_balancer=debug --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
+  rf_rack_valid_keyspaces: true
