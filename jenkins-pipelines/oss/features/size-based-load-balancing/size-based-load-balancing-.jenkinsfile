@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: "aws",
+    region: 'eu-west-1',
+    availability_zone: 'a',
+    test_name: 'longevity_balancer_test.LongevityBalancerTest.test_load_balance',
+    test_config: 'test-cases/features/size-based-load-balancing/size-based-load-balancing-partitions.yaml',
+    provision_type: 'on_demand',
+)
