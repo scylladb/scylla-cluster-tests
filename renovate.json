@@ -3,6 +3,10 @@
   "extends": [
     "config:recommended"
   ],
+  "ignorePresets": [
+    "group:monorepos",
+    "group:recommended"
+  ],
   "schedule": [
     "every weekend"
   ],
@@ -52,7 +56,7 @@
       "enabled": true
     },
     {
-      "groupName": "All Helm values files",
+      "groupName": null,
       "matchManagers": [
         "helm-values"
       ],
