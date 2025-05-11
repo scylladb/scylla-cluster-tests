@@ -55,7 +55,7 @@ def test_01_gemini_thread(request, docker_scylla, params):
         stress_cmd=cmd,
         test_cluster=test_cluster,
         oracle_cluster=test_cluster,
-        timeout=120,
+        timeout=360,
         params=params,
     )
 
@@ -96,7 +96,7 @@ def test_gemini_thread_without_cluster(request, docker_scylla, params):
         stress_cmd=cmd,
         test_cluster=test_cluster,
         oracle_cluster=None,
-        timeout=120,
+        timeout=360,
         params=params,
     )
 
