@@ -1,0 +1,6 @@
+gce_root_disk_type_loader: 'pd-ssd'
+root_disk_size_loader: 50
+gce_instance_type_monitor: 'n2-highmem-16'
+user_prefix: 'perf-regression-n2'
+gce_project: 'gcp-local-ssd-latency'
+gce_network: 'qa-vpc'
