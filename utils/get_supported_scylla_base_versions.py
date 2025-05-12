@@ -59,7 +59,7 @@ class UpgradeBaseVersion:
                 scylla_version = version.replace('branch-', '').replace('enterprise-', '')
             except AssertionError:
                 scylla_version = get_branch_version(self.scylla_repo)
-        LOGGER.info("Scylla major version used for upgrade versions listing: %s", version)
+        LOGGER.info("Scylla major version used for upgrade versions listing: %s", scylla_version)
         return scylla_version
 
     def set_start_support_version(self, backend: str = None) -> None:
