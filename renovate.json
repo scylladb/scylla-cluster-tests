@@ -18,8 +18,7 @@
   ],
   "labels": [
     "renovate",
-    "dependencies",
-    "New Hydra Version"
+    "dependencies"
   ],
   "enabledManagers": [
     "pip-compile",
@@ -47,13 +46,19 @@
         "minor",
         "patch"
       ],
-      "enabled": false
+      "enabled": false,
+      "addLabels": [
+        "New Hydra Version"
+      ]
     },
     {
       "matchPackageNames": [
         "scylla-driver"
       ],
-      "enabled": true
+      "enabled": true,
+      "addLabels": [
+        "New Hydra Version"
+      ]
     },
     {
       "groupName": null,
@@ -61,9 +66,8 @@
         "helm-values"
       ],
       "enabled": true,
-      "labels": [
-        "renovate",
-        "dependencies"
+      "addLabels": [
+        "test-integration"
       ]
     }
   ],
@@ -72,11 +76,7 @@
   },
   "osvVulnerabilityAlerts": true,
   "github-actions": {
-    "enabled": true,
-    "labels": [
-      "renovate",
-      "dependencies"
-    ]
+    "enabled": true
   },
   "helm-values": {
     "fileMatch": [
