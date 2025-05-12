@@ -1597,7 +1597,7 @@ class BaseNode(AutoSshContainerMixin):
                 pass
             except Exception as details:  # noqa: BLE001
                 self.log.error("failed to decode backtrace %s", details)
-                if "is closed" in details:
+                if "is closed" in str(details):
                     break
             finally:
                 if event:
