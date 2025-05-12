@@ -1514,7 +1514,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 pass
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("failed to decode backtrace %s", details)
-                if "is closed" in details:
+                if "is closed" in str(details):
                     break
             finally:
                 if event:
