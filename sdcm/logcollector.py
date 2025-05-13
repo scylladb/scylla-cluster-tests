@@ -647,7 +647,7 @@ class LogCollector:
         archive_dir, log_filename = os.path.split(log_filename)
         archive_name = os.path.join(archive_dir, archive_name or log_filename) + ".tar.zst"
         node.install_package('zstd', ignore_status=True)
-        if not node.remoter.run(f"tar --zstd -cf '{archive_name}' -C '{archive_dir}' '{log_filename}'", ignore_status=True).ok:
+        if not node.remoter.run(f"tar --zstd --warning=no-file-changed -cf '{archive_name}' -C '{archive_dir}' '{log_filename}'", ignore_status=True).ok:
             LOGGER.error("Unable to archive log `%s' to `%s'", log_filename, archive_name)
             return None
         if not check_archive(node.remoter, archive_name):
@@ -729,7 +729,7 @@ class LogCollector:
         archive_dir, log_filename = os.path.split(src_path)
 
         LocalCmdRunner().run(
-            cmd=f"tar --zstd -cf '{archive_name}' -C '{archive_dir}' --transform 's/{log_filename}/{src_name}/' '{log_filename}'")
+            cmd=f"tar --zstd --warning=no-file-changed -cf '{archive_name}' -C '{archive_dir}' --transform 's/{log_filename}/{src_name}/' '{log_filename}'")
 
         return archive_name
 
