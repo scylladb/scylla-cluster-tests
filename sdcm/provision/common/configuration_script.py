@@ -18,6 +18,7 @@ from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
     configure_sshd_script,
     restart_sshd_service,
+    configure_backoff_timeout,
     update_repo_cache,
     install_syslogng_service,
     configure_syslogng_target_script,
@@ -89,6 +90,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ''
 
+        script += configure_backoff_timeout()
         if self.logs_transport == 'syslog-ng':
             script += configure_syslogng_destination_conf(
                 host=self.syslog_host_port[0],
