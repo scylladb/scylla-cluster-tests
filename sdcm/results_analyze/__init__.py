@@ -445,6 +445,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
     def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments  # noqa: PLR0914
         doc = self.get_test_by_id(test_id)
+        if not doc:
+            raise ValueError(f'Cannot find test by id: {test_id}!')
+
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
