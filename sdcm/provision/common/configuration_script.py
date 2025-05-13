@@ -17,6 +17,7 @@ from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
     configure_sshd_script,
     restart_sshd_service,
+    configure_backoff_timeout,
     install_syslogng_service,
     configure_syslogng_target_script,
     restart_syslogng_service,
@@ -85,6 +86,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ''
+        script += configure_backoff_timeout()
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
             script += 'if [ -z "$SYSLOG_NG_INSTALLED" ]; then\n'

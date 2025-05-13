@@ -139,6 +139,23 @@ def restart_syslogng_service():
     return "systemctl restart syslog-ng  || true\n"
 
 
+def configure_backoff_timeout():
+    return dedent("""\
+        backoff() {
+            local attempt=$1
+            local max_timeout=${2:-60}
+            local base=${3:-5}
+            local timeout
+
+            timeout=$((attempt * base))
+            if [ $timeout -gt $max_timeout ]; then
+                timeout=$max_timeout
+            fi
+            echo $timeout
+        }
+    """)
+
+
 def install_syslogng_service():
     return dedent("""\
         SYSLOG_NG_INSTALLED=""
@@ -149,9 +166,17 @@ def install_syslogng_service():
                 SYSLOG_NG_INSTALLED=1
             else
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
+                    if yum install -y epel-release; then
+                        break
+                    fi
+                    sleep $(backoff $n)
+                done
+
+                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
                     if yum install -y --downloadonly syslog-ng; then
                         break
                     fi
+                    sleep $(backoff $n)
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
@@ -159,7 +184,7 @@ def install_syslogng_service():
                         SYSLOG_NG_INSTALLED=1
                         break
                     fi
-                    sleep 10
+                    sleep $(backoff $n)
                 done
             fi
         elif apt-get --help 2>/dev/null 1>&2 ; then
@@ -174,7 +199,7 @@ def install_syslogng_service():
                     if apt-get -y update ; then
                         break
                     fi
-                    sleep 0.5
+                    sleep $(backoff $n)
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
@@ -183,6 +208,7 @@ def install_syslogng_service():
                         SYSLOG_NG_INSTALLED=1
                         break
                     fi
+                    sleep $(backoff $n)
                 done
             fi
         else
