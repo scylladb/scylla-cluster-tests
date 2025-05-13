@@ -16,6 +16,7 @@ from cassandra.cluster import Session  # pylint: disable=no-name-in-module
 
 CONSISTENT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
 CONSISTENT_CLUSTER_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"
+GROUP0_LIMITED_VOTERS = "GROUP0_LIMITED_VOTERS"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,3 +84,8 @@ def is_tablets_feature_enabled(node) -> bool:
             return True
 
     return False
+
+
+def is_group0_limited_voters_enabled(session: Session) -> bool:
+    """ Check whether feature group0 limited voters is enabled"""
+    return GROUP0_LIMITED_VOTERS in get_enabled_features(session)
