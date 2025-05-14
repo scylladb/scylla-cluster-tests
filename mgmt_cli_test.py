@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -16,8 +15,6 @@
 
 # pylint: disable=too-many-lines
 import random
-import threading
-from enum import Enum
 from pathlib import Path
 from functools import cached_property
 import re
@@ -28,16 +25,13 @@ from dataclasses import dataclass
 
 import boto3
 import yaml
-from docker.errors import InvalidArgument
 
 from invoke import exceptions
 
-from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus,
-                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult)
+from sdcm.argus_results import (send_manager_snapshot_details_to_argus)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
+from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.remote import shell_script_cmd, LOCALRUNNER
@@ -45,6 +39,7 @@ from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
@@ -327,6 +322,17 @@ class ClusterOperations(ClusterTester):
         nodetool_status = self.db_cluster.get_nodetool_status(self.db_cluster.nodes[0])
         rf = {dc_name: len(nodes) for dc_name, nodes in nodetool_status.items()}
         return rf
+
+    def _cluster_flush_and_major_compaction(self, keyspace: str, table: str):
+        InfoEvent(message='Flush cluster then run a major compaction and wait for finish').publish()
+        flush_nodes(cluster=self.db_cluster, keyspace=keyspace)
+        major_compaction_nodes(cluster=self.db_cluster, keyspace=keyspace, table=table)
+        self.wait_no_compactions_running(n=400, sleep_time=60)
+
+    def _align_cluster_data_state(self, keyspace: str, table: str):
+        clear_snapshot_nodes(cluster=self.db_cluster)
+        self._cluster_flush_and_major_compaction(keyspace, table)
+        self.run_fstrim_on_all_db_nodes()
 
 
 class BucketOperations(ClusterTester):
@@ -1660,249 +1666,3 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
             assert host_health.rest_status == HostRestStatus.UP, "Host REST status is not 'UP'"
 
         self.log.info('finishing test_manager_installed_and_functional')
-
-
-class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
-
-    def get_restore_extra_parameters(self) -> str:
-        extra_params = self.params.get('mgmt_restore_extra_params')
-        return extra_params if extra_params else None
-
-    def _send_restore_results_to_argus(self, task: RestoreTask, manager_version_timestamp: int,
-                                       dataset_label: str = None):
-        total_restore_time = int(task.duration.total_seconds())
-        repair_time = int(task.post_restore_repair_duration.total_seconds())
-        results = {
-            "restore time": (total_restore_time - repair_time),
-            "repair time": repair_time,
-            "total": total_restore_time,
-        }
-        download_bw, load_and_stream_bw = task.download_bw, task.load_and_stream_bw
-        if download_bw:
-            results["download bandwidth"] = download_bw
-        if load_and_stream_bw:
-            results["l&s bandwidth"] = load_and_stream_bw
-        send_manager_benchmark_results_to_argus(
-            argus_client=self.test_config.argus_client(),
-            result=results,
-            sut_timestamp=manager_version_timestamp,
-            row_name=dataset_label,
-        )
-
-    def test_backup_and_restore_only_data(self):
-        """The test is extensively used for restore benchmarking purposes and consists of the following steps:
-        1. Populate the cluster with data (currently operates with datasets of 500GB, 1TB, 2TB, 5TB);
-        2. Run the backup task and wait for its completion;
-        3. Truncate the tables in the cluster;
-        4. Run the restore task (custom batch_size and parallel params can be set in the pipeline)
-           and wait for its completion;
-        5. Run the verification read stress to ensure the data is restored correctly.
-        """
-        self.run_prepare_write_cmd()
-
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
-
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
-
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
-        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
-        assert backup_task_status == TaskStatus.DONE, \
-            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
-        self.manager_test_metrics.backup_time = backup_task.duration
-
-        ks_number = self.params.get('keyspace_num') or 1
-        ks_names = self.get_keyspace_name(ks_number=ks_number)
-        for ks_name in ks_names:
-            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
-
-        extra_params = self.get_restore_extra_parameters()
-        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                             timeout=110000, restore_data=True, extra_params=extra_params)
-        self.manager_test_metrics.restore_time = task.duration
-
-        manager_version_timestamp = manager_tool.sctool.client_version_timestamp
-        self._send_restore_results_to_argus(task, manager_version_timestamp)
-
-        self.run_verification_read_stress()
-
-    def test_restore_from_precreated_backup(self, snapshot_name: str, restore_outside_manager: bool = False):
-        """The test restores the schema and data from a pre-created backup and runs the verification read stress.
-        1. Define the backup to restore from
-        2. Run restore schema to empty cluster
-        3. Run restore data
-        4. Run verification read stress
-
-        Args:
-            snapshot_name: The name of the snapshot to restore from.
-                           All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
-            restore_outside_manager: set True to restore outside of Manager via nodetool refresh
-        """
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
-
-        snapshot_data = self.get_snapshot_data(snapshot_name)
-
-        self.log.info("Restoring the schema")
-        location = [f"s3:{snapshot_data.bucket}"]
-        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag, timeout=600,
-                                      restore_schema=True, location_list=location)
-        for ks_name in snapshot_data.keyspaces:
-            self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
-
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        # Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
-
-        if restore_outside_manager:
-            self.log.info("Restoring the data outside the Manager")
-            with ExecutionTimer() as timer:
-                self.restore_backup_without_manager(
-                    mgr_cluster=mgr_cluster,
-                    snapshot_tag=snapshot_data.tag,
-                    ks_tables_list=snapshot_data.ks_tables_map,
-                    location=location[0],
-                    precreated_backup=True,
-                )
-            restore_time = timer.duration
-        else:
-            self.log.info("Restoring the data with Manager task")
-            extra_params = self.get_restore_extra_parameters()
-            task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
-                                                 timeout=snapshot_data.exp_timeout, restore_data=True,
-                                                 location_list=location, extra_params=extra_params)
-            restore_time = task.duration
-            manager_version_timestamp = manager_tool.sctool.client_version_timestamp
-            self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
-
-        self.manager_test_metrics.restore_time = restore_time
-
-        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
-            self.log.info("Running verification read stress")
-            cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
-            self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
-        else:
-            self.log.info("Skipping verification read stress because of the test or snapshot configuration")
-
-    def test_restore_benchmark(self):
-        """Benchmark restore operation.
-
-        The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
-        restore from a pre-created backup.
-        """
-        if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
-            self.log.info("Executing test_restore_from_precreated_backup...")
-            self.test_restore_from_precreated_backup(reuse_snapshot_name)
-        else:
-            self.log.info("Executing test_backup_and_restore_only_data...")
-            self.test_backup_and_restore_only_data()
-
-    def test_restore_data_without_manager(self):
-        """The test restores the schema and data from a pre-created backup.
-        The distinctive feature is that data restore is performed outside the Manager via nodetool refresh.
-        Nodetool refresh cmd can be run with extra flags: --load-and-stream and --primary-replica-only.
-        These extra flags can be set in `mgmt_nodetool_refresh_flags` variable.
-
-        The motivation of having such a test is to check L&S efficiency when doing the restore of the full cluster in
-        comparison with the same test but with restore executed via Manager.
-        """
-        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
-        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
-                               "Please provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
-
-        self.test_restore_from_precreated_backup(snapshot_name, restore_outside_manager=True)
-
-
-class ManagerReportType(Enum):
-    READ = 1
-    BACKUP = 2
-
-
-class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
-    def report_to_argus(self, report_type: ManagerReportType, data: dict, label: str):
-        if report_type == ManagerReportType.READ:
-            table = ManagerBackupReadResult(sut_timestamp=mgmt.get_scylla_manager_tool(
-                manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
-        elif report_type == ManagerReportType.BACKUP:
-            table = ManagerBackupBenchmarkResult(sut_timestamp=mgmt.get_scylla_manager_tool(
-                manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
-        else:
-            raise InvalidArgument("Unknown report type")
-
-        for key, value in data.items():
-            table.add_result(column=key, value=value, row=label, status=Status.UNSET)
-        submit_results_to_argus(self.test_config.argus_client(), table)
-
-    def create_backup_and_report(self, mgr_cluster, label: str):
-        # After the issue https://github.com/scylladb/scylla-manager/issues/4125 is resolved try to rerun it with
-        # different `transfers` settings to apply more IO pressure on the scylla cluster
-        task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
-
-        backup_status = task.wait_and_get_final_status(timeout=7200)
-        assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
-
-        InfoEvent(
-            message=f'Backup total time is: {task.duration}.').publish()
-        backup_report = {
-            "backup time": int(task.duration.total_seconds()),
-        }
-        self.report_to_argus(ManagerReportType.BACKUP, backup_report, label)
-        return task
-
-    def run_read_stress_and_report(self, label):
-        stress_queue = []
-
-        for command in self.params.get('stress_read_cmd'):
-            stress_queue.append(self.run_stress_thread(command, round_robin=True, stop_test_on_failure=False))
-
-        with ExecutionTimer() as stress_timer:
-            for stress in stress_queue:
-                assert self.verify_stress_thread(stress), "Read stress command"
-        InfoEvent(message=f'Read stress duration: {stress_timer.duration}s.').publish()
-
-        read_stress_report = {
-            "read time": int(stress_timer.duration.total_seconds()),
-        }
-        self.report_to_argus(ManagerReportType.READ, read_stress_report, label)
-
-    def test_backup_benchmark(self):
-        self.log.info("Executing test_backup_restore_benchmark...")
-
-        self.log.info("Write data to table")
-        self.run_prepare_write_cmd()
-
-        self.log.info("Disable clusterwide compaction")
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
-
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
-
-        self.log.info("Create and report backup time")
-        backup_task = self.create_backup_and_report(mgr_cluster, "Backup")
-
-        self.log.info("Remove backup")
-        backup_task.delete_backup_snapshot()
-
-        self.log.info("Run read test")
-        self.run_read_stress_and_report("Read stress")
-
-        self.log.info("Create and report backup time during read stress")
-
-        backup_thread = threading.Thread(target=self.create_backup_and_report,
-                                         kwargs={"mgr_cluster": mgr_cluster, "label": "Backup during read stress"})
-
-        read_stress_thread = threading.Thread(target=self.run_read_stress_and_report,
-                                              kwargs={"label": "Read stress during backup"})
-        backup_thread.start()
-        read_stress_thread.start()
-
-        backup_thread.join()
-        read_stress_thread.join()
