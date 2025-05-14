@@ -50,12 +50,14 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
         """.format(hostname=hostname))
 
 
-def configure_vector_target_script(host: str, port: int) -> str:
+def configure_vector_target_script(host: str, port: int, prometheus_url: str) -> str:
     return dedent("""
         echo "
         sources:
             journald:
                 type: journald
+            vector_metrics:
+                type: internal_metrics
 
         transforms:
             filter_audit:
@@ -70,10 +72,18 @@ def configure_vector_target_script(host: str, port: int) -> str:
                 inputs:
                     - filter_audit
                 address: {host}:{port}
+                healthcheck: false
+            prometheus:
+                type: prometheus_remote_write
+                endpoint: "{prometheus_url}/api/v1/write"
+                inputs:
+                  - vector_metrics
+                healthcheck: false
+
         " > /etc/vector/vector.yaml
 
         systemctl kill -s HUP --kill-who=main vector.service
-    """).format(host=host, port=port)
+    """).format(host=host, port=port, prometheus_url=prometheus_url if prometheus_url else "http://localhost:9090")
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:

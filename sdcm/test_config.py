@@ -57,6 +57,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     backup_azure_blob_credentials = {}
 
+    prometheus_url: str = None
+
     @classmethod
     def test_id(cls):
         return cls._test_id
@@ -241,6 +243,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
             logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
+            test_config=cls(),
         ).to_string()
 
     @classmethod
@@ -261,6 +264,13 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             return vector_host, vector_port
         else:
             return None
+
+    def set_prometheus_url(cls, prometheus_url: str) -> None:
+        cls.prometheus_url = prometheus_url
+
+        if cls.VECTOR_ADDRESS:
+            for node in cls.tester_obj().db_cluster.nodes:
+                node.configure_remote_logging()
 
     @classmethod
     def set_ip_ssh_connections(cls, ip_type):

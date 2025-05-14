@@ -13,6 +13,7 @@
 
 import abc
 from textwrap import dedent
+from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
@@ -42,6 +43,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     hostname: str = ''
     log_file: str = ''
+    test_config: Any | None = None
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -113,7 +115,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += update_repo_cache()
             script += install_vector_service()
             host, port = self.syslog_host_port
-            script += configure_vector_target_script(host=host, port=port)
+            script += configure_vector_target_script(host=host, port=port,
+                                                     prometheus_url=self.test_config.prometheus_url)
 
         if self.configure_sshd:
             script += configure_sshd_script()

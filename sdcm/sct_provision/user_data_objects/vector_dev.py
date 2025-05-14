@@ -28,5 +28,5 @@ class VectorDevUserDataObject(SctUserDataObject):
         script = install_vector_service()
         host, port = self.test_config.get_logging_service_host_port()
         script += configure_vector_target_script(
-            host=host, port=port)
+            host=host, port=port, prometheus_url=self.test_config.prometheus_url)
         return script
