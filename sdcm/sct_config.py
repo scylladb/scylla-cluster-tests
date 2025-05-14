@@ -1445,7 +1445,7 @@ class SCTConfiguration(dict):
                   "we enable kms by default since if we use scylla 2023.1.3 and up"),
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
-             help="How to transport logs: syslog-ng, ssh or docker", choices=("ssh", "docker", "syslog-ng")),
+             help="How to transport logs: syslog-ng, ssh or docker", choices=("ssh", "docker", "syslog-ng", "vector")),
 
         dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
              help="Collect logs from instances and sct runner"),

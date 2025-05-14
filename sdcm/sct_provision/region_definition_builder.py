@@ -27,6 +27,7 @@ from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTr
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
 from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
+from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.test_config import TestConfig
 
@@ -147,6 +148,7 @@ class DefinitionBuilder(abc.ABC):
             DisableAptTriggersUserDataObject,
             SyslogNgUserDataObject,
             SyslogNgExporterUserDataObject,
+            VectorDevUserDataObject,
             SshdUserDataObject,
             EnableWaLinuxAgent,
             ScyllaUserDataObject,

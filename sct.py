@@ -226,6 +226,9 @@ def provision_resources(backend, test_name: str, config: str):
     if params.get("logs_transport") == 'syslog-ng':
         click.echo("Provision syslog-ng logging service")
         test_config.configure_syslogng(localhost)
+    elif params.get("logs_transport") == 'vector':
+        click.echo("Provision vector logging service")
+        test_config.configure_vector(localhost)
     else:
         click.echo("No need provision logging service")
 
