@@ -54,6 +54,8 @@ def configure_vector_target_script(host: str, port: int) -> str:
         sources:
             journald:
                 type: journald
+            vector_metrics:
+                type: internal_metrics
 
         transforms:
             filter_audit:
@@ -68,6 +70,14 @@ def configure_vector_target_script(host: str, port: int) -> str:
                 inputs:
                     - filter_audit
                 address: {host}:{port}
+                healthcheck: false
+            prometheus:
+                type: prometheus_exporter
+                address: 0.0.0.0:9577
+                inputs:
+                  - vector_metrics
+                healthcheck: false
+
         " > /etc/vector/vector.yaml
 
         systemctl kill -s HUP --kill-who=main vector.service
