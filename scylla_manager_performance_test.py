@@ -29,7 +29,7 @@ from sdcm.argus_results import send_manager_benchmark_results_to_argus, ManagerB
 from sdcm.cluster import BaseNode
 from sdcm.mgmt import TaskStatus
 from sdcm.mgmt.cli import RestoreTask, BackupTask, ManagerCluster
-from sdcm.mgmt.common import get_backup_size
+from sdcm.mgmt.common import get_backup_size, ObjectStorageUploadMode
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.cluster_tools import clear_snapshot_nodes
 from sdcm.utils.common import ParallelObject, format_size
@@ -225,15 +225,18 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         }
         self.report_to_argus(ManagerReportType.BACKUP, report, label)
 
-    def _manager_backup(self, mgr_cluster, timeout: int = 7200):
-        InfoEvent(message='Starting `rclone` based backup').publish()
-        task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+    def _manager_backup(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode = None, timeout: int = 7200):
+        InfoEvent(
+            message=f'Starting a Manager backup (Object Storage Upload Mode: {object_storage_upload_mode})').publish()
+        task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"],
+                                              object_storage_upload_mode=object_storage_upload_mode)
         backup_status = task.wait_and_get_final_status(timeout=timeout)
         assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
         return task
 
-    def manager_backup_and_report(self, mgr_cluster, label: str, delete_snapshot: bool = False, timeout: int = 7200):
-        task = self._manager_backup(mgr_cluster=mgr_cluster, timeout=timeout)
+    def manager_backup_and_report(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, label: str, delete_snapshot: bool = False, timeout: int = 7200):
+        task = self._manager_backup(mgr_cluster=mgr_cluster,
+                                    object_storage_upload_mode=object_storage_upload_mode, timeout=timeout)
         self.report_manager_backup_results_to_argus(label=label, task=task, mgr_cluster=mgr_cluster)
         if delete_snapshot:
             self.log.info("Delete Manager backup snapshot")
@@ -393,15 +396,17 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         # Cleanup the extra stress
         self._align_cluster_data_state(self.keyspace, self.table)
 
-        # Backup baseline (rClone)
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
-        self.log.info("Create and report backup baseline time")
-        self.manager_backup_and_report(mgr_cluster=mgr_cluster, label="rClone Backup baseline", delete_snapshot=True,
-                                       timeout=self.benchmark_timeout)
 
+        # Backup baseline (rClone)
+        self.log.info("Create and report rClone backup baseline time")
+        self.manager_backup_and_report(mgr_cluster=mgr_cluster, label="rClone Backup baseline", delete_snapshot=True,
+                                       object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, timeout=self.benchmark_timeout)
+
+        # rClone backup with stress
         backup_and_stress_jobs = [
-            partial(self.manager_backup_and_report, mgr_cluster,
+            partial(self.manager_backup_and_report, mgr_cluster, ObjectStorageUploadMode.RCLONE,
                     "rClone backup with stress", True, self.benchmark_timeout),
             partial(self.run_stress_and_report, legend="stress with rClone backup")
         ]
@@ -411,13 +416,16 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         # Cleanup the extra stress
         self._align_cluster_data_state(self.keyspace, self.table)
 
-        # Backup native
-        self.native_backup_and_report(label="Native Backup baseline")
+        # Backup baseline (native)
+        self.manager_backup_and_report(mgr_cluster=mgr_cluster, label="Native Backup baseline", delete_snapshot=True,
+                                       object_storage_upload_mode=ObjectStorageUploadMode.NATIVE,
+                                       timeout=self.benchmark_timeout)
         self.run_fstrim_on_all_db_nodes()
 
         # Backup native with read and write stress
         backup_and_stress_jobs = [
-            partial(self.native_backup_and_report, label="Native backup with stress"),
+            partial(self.manager_backup_and_report, mgr_cluster, ObjectStorageUploadMode.NATIVE,
+                    "Native backup with stress", True, self.benchmark_timeout),
             partial(self.run_stress_and_report, legend="stress with Native backup")
         ]
         ParallelObject(objects=backup_and_stress_jobs, timeout=self.benchmark_timeout).call_objects()
