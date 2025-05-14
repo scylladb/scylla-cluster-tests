@@ -1364,6 +1364,28 @@
                             "legendFormat": "Dropped {{instance}}",
                             "range": true,
                             "refId": "B"
+                        },
+                                                {
+                            "datasource": "prometheus",
+                            "editorMode": "code",
+                            "exemplar": false,
+                            "expr": "increase(vector_component_received_events_total{component_id=\"sct-runner\", dc=~\"$dc\", instance=~\"[[node]]\"}[10m])",
+                            "format": "time_series",
+                            "instant": false,
+                            "intervalFactor": 1,
+                            "legendFormat": "Processed {{instance}}",
+                            "range": true,
+                            "refId": "C"
+                        },
+                        {
+                            "datasource": "prometheus",
+                            "editorMode": "code",
+                            "expr": "increase(vector_component_discarded_events_total{component_id=\"sct-runner\", dc=~\"$dc\", instance=~\"[[node]]\"}[10m])",
+                            "format": "time_series",
+                            "intervalFactor": 1,
+                            "legendFormat": "Dropped {{instance}}",
+                            "range": true,
+                            "refId": "D"
                         }
                     ],
                     "title": "Logs create/drop rates",

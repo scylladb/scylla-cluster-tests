@@ -27,6 +27,5 @@ class VectorDevUserDataObject(SctUserDataObject):
     def script_to_run(self) -> str:
         script = install_vector_service()
         host, port = self.test_config.get_logging_service_host_port()
-        script += configure_vector_target_script(
-            host=host, port=port)
+        script += configure_vector_target_script(host=host, port=port)
         return script

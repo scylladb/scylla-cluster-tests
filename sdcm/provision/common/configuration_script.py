@@ -13,6 +13,7 @@
 
 import abc
 from textwrap import dedent
+from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
@@ -42,6 +43,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     hostname: str = ''
     log_file: str = ''
+    test_config: Any | None = None
 
     def to_string(self) -> str:
         script = self._start_script()

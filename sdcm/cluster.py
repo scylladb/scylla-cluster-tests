@@ -2980,6 +2980,7 @@ class BaseNode(AutoSshContainerMixin):
             logs_transport=self.parent_cluster.params.get('logs_transport'),
             hostname=self.name,
             log_file=log_file,
+            test_config=self.test_config,
         ).to_string()
         self.remoter.sudo(shell_script_cmd(script, quote="'"))
 
@@ -3523,7 +3524,8 @@ class BaseCluster:
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
-                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port(),
+                                                  test_config=self.test_config)
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):
@@ -5524,6 +5526,7 @@ class BaseMonitorSet:
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
+        self.prometheus_port = 9090
         self.prometheus_retention = "365d"
         self.monitor_branch = self.params.get('monitor_branch')
         self.grafana_start_time = 0
@@ -6088,7 +6091,6 @@ class BaseMonitorSet:
             {scylla_manager_servers_arg} \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
             -b "--web.enable-admin-api --storage.tsdb.retention.time={self.prometheus_retention}" \
-            -b "--web.enable--remote-write-receiver" \
             -c 'GF_USERS_DEFAULT_THEME=dark'
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
