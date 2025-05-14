@@ -1,11 +1,11 @@
 import base64
 import json
 import logging
-from typing import Union
+from typing import Union, Any
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
 from sdcm.provision.common.user_data import UserDataBuilderBase, DataDeviceType, ScyllaUserDataBuilderBase, RaidLevelType
@@ -23,7 +23,9 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     user_data_format_version: str = Field(default='2', exclude=True)
     scylla_yaml_raw: ScyllaYaml = Field(default=None, exclude=True)
     syslog_host_port: tuple[str, int] | None = Field(default=None, exclude=True)
+    test_config: Any = Field(exclude=True)
 
+    @computed_field
     @property
     def scylla_yaml(self) -> dict:
         scylla_yaml = ScyllaYaml() if self.scylla_yaml_raw is None else self.scylla_yaml_raw
@@ -32,10 +34,12 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             scylla_yaml.auto_bootstrap = self.bootstrap
         return scylla_yaml.model_dump(exclude_defaults=True, exclude_none=True, exclude_unset=True)
 
+    @computed_field
     @property
-    def start_scylla_on_first_boot(self):
+    def start_scylla_on_first_boot(self) -> bool:
         return False
 
+    @computed_field
     @property
     def data_device(self) -> DataDeviceType:
         """
@@ -46,6 +50,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             return DataDeviceType.ATTACHED.value
         return DataDeviceType.INSTANCE_STORE.value
 
+    @computed_field
     @property
     def raid_level(self) -> RaidLevelType:
         """
@@ -53,6 +58,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         """
         return self.params.get("raid_level") or RaidLevelType.RAID0
 
+    @computed_field
     @property
     def post_configuration_script(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
@@ -60,6 +66,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
+            test_config=self.test_config,
         ).to_string()
         LOGGER.debug("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
@@ -114,6 +121,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 class AWSInstanceUserDataBuilder(UserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(exclude=True)
     syslog_host_port: tuple[str, int] | None = None
+    test_config: Any = Field(exclude=True)
     aws_additional_interface: bool = False
 
     def to_string(self) -> str:
@@ -123,5 +131,6 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
+            test_config=self.test_config,
         ).to_string()
         return post_boot_script
