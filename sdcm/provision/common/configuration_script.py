@@ -26,7 +26,9 @@ from sdcm.provision.common.utils import (
     install_syslogng_exporter,
     disable_daily_apt_triggers,
     configure_syslogng_destination_conf,
-    configure_syslogng_file_source
+    configure_syslogng_file_source,
+    install_vector_service,
+    configure_vector_target_script,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -52,7 +54,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         return ''
 
     @staticmethod
-    def _skip_if_already_run() -> str:
+    def _skip_if_already_run_syslogng() -> str:
         """
         If a node was configured before sct-runner, skip syslog-ng installation. Just ensure
         that logging destination is updated in the configuration and the service is
@@ -62,6 +64,20 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v syslog-ng >/dev/null 2>&1; then
             write_syslog_ng_destination
             sudo systemctl restart syslog-ng
+            exit 0
+        fi
+        """)
+
+    @staticmethod
+    def _skip_if_already_run_vector() -> str:
+        """
+        If a node was configured before sct-runner, skip vector installation. Just ensure
+        that logging destination is updated in the configuration and the service is
+        restarted, to retrigger sending logs.
+        """
+        return dedent(f"""
+        if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v vector >/dev/null 2>&1; then
+            sudo systemctl restart vector
             exit 0
         fi
         """)
@@ -96,7 +112,9 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 host=self.syslog_host_port[0],
                 port=self.syslog_host_port[1],
                 throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
-        script += self._skip_if_already_run()
+            script += self._skip_if_already_run_syslogng()
+        if self.logs_transport == "vector":
+            script += self._skip_if_already_run_vector()
         script += disable_daily_apt_triggers()
         if self.logs_transport == 'syslog-ng':
             script += update_repo_cache()
@@ -106,6 +124,12 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 script += configure_syslogng_file_source(log_file=self.log_file)
             script += restart_syslogng_service()
             script += install_syslogng_exporter()
+
+        if self.logs_transport == 'vector':
+            script += update_repo_cache()
+            script += install_vector_service()
+            host, port = self.syslog_host_port
+            script += configure_vector_target_script(host=host, port=port)
 
         if self.configure_sshd:
             script += configure_sshd_script()
