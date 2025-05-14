@@ -48,6 +48,32 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
         """.format(hostname=hostname))
 
 
+def configure_vector_target_script(host: str, port: int) -> str:
+    return dedent("""
+        echo "
+        sources:
+            journald:
+                type: journald
+
+        transforms:
+            filter_audit:
+                inputs:
+                    - journald
+                type: filter
+                condition: |
+                    !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? \\"default\\", \\"AUDIT\\")
+        sinks:
+            sct-runner:
+                type: vector
+                inputs:
+                    - filter_audit
+                address: {host}:{port}
+        " > /etc/vector/vector.yaml
+
+        systemctl kill -s HUP --kill-who=main vector.service
+    """).format(host=host, port=port)
+
+
 def configure_hosts_set_hostname_script(hostname: str) -> str:
     return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
            f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
@@ -169,6 +195,41 @@ def install_syslogng_service():
         else
             echo "Unsupported distro"
         fi
+    """)
+
+
+def install_vector_service():
+    return dedent("""\
+        # install repo
+        for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+            if bash -c "$(curl -L https://setup.vector.dev)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        # install vector
+        if yum --help 2>/dev/null 1>&2 ; then
+            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                if yum install -y vector; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
+        elif apt-get --help 2>/dev/null 1>&2 ; then
+            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y vector || true
+                if dpkg-query --show vector ; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
+        else
+            echo "Unsupported distro"
+        fi
+
+        systemctl enable vector
+        systemctl start vector
     """)
 
 
