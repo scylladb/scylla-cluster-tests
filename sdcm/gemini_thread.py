@@ -71,12 +71,12 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.unique_id = uuid.uuid4()
         self.gemini_default_flags = {
             "level": "info",
-            "request-timeout": "60s",
+            "request-timeout": "3s",
             "connect-timeout": "60s",
             "consistency": "QUORUM",
-            "async-objects-stabilization-backoff": "1s",
+            "async-objects-stabilization-backoff": "10ms",
             "async-objects-stabilization-attempts": 10,
-            "max-mutation-retries-backoff": "1s",
+            "max-mutation-retries-backoff": "10ms",
             "max-mutation-retries": 10,
             "dataset-size": "large",
             "oracle-host-selection-policy": "token-aware",
@@ -95,10 +95,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             "min-partition-keys": 2,
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
-            "partition-key-distribution": "normal",  # Distribution for hitting the partition
+            "partition-key-distribution": "uniform",  # Distribution for hitting the partition
             # These two are used to control the memory usage of Gemini
-            "token-range-slices": 100,  # Number of partitions
-            "partition-key-buffer-reuse-size": 10000,  # Internal Channel Size per parittion value generation
+            "token-range-slices": 10000,  # Number of partitions
+            "partition-key-buffer-reuse-size": 128,  # Internal Channel Size per partition value generation
             "statement-log-file-compression": "zstd",
         }
 
@@ -109,7 +109,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
     def _generate_gemini_command(self):
         seed = self.params.get("gemini_seed") or random.randint(1, 100)
         table_options = self.params.get("gemini_table_options")
-        log_statements = self.params.get("gemini_log_cql_statements") or False
+        log_statements = self.params.get("gemini_log_cql_statements") or True
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
