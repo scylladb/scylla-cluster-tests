@@ -28,7 +28,7 @@ scylla_linux_distro: 'ubuntu-focal'
 scylla_linux_distro_loader: 'ubuntu-jammy'
 ssh_transport: 'libssh2'
 
-monitor_branch: 'branch-4.9'
+monitor_branch: 'branch-4.10'
 
 space_node_threshold: 0
 
