@@ -281,6 +281,7 @@ def call(Map pipelineParams) {
                                                             loadEnvFromString(params.extra_environment_variables)
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
+                                                                checkoutQaInternal(params)
                                                             }
                                                         dockerLogin(params)
                                                         }
