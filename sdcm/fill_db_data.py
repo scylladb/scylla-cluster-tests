@@ -3195,8 +3195,7 @@ class FillDatabaseData(ClusterTester):
     @property
     def tablets_enabled(self) -> bool:
         """Check is tablets enabled on cluster"""
-        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            return is_tablets_feature_enabled(session)
+        return is_tablets_feature_enabled(self.db_cluster.nodes[0])
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
