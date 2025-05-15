@@ -34,24 +34,22 @@ def test_01_gemini_thread(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
 
-    cmd = " ".join(
-        [
-            "--duration=1m",
-            "--warmup=0",
-            "--concurrency=5",
-            "--mode=write",
-            "--cql-features=basic",
-            "--max-mutation-retries=100",
-            "--max-mutation-retries-backoff=100ms",
-            "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
-            "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
-            "--use-server-timestamps=true",
-        ]
-    )
+    options = [
+        "--duration=1m",
+        "--warmup=0",
+        "--concurrency=5",
+        "--mode=write",
+        "--cql-features=basic",
+        "--max-mutation-retries=100",
+        "--max-mutation-retries-backoff=100ms",
+        "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
+        "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
+        "--use-server-timestamps=true",
+    ]
 
     gemini_thread = GeminiStressThread(
         loaders=loader_set,
-        stress_cmd=cmd,
+        stress_cmd=" ".join(options),
         test_cluster=test_cluster,
         oracle_cluster=test_cluster,
         timeout=120,
@@ -62,6 +60,41 @@ def test_01_gemini_thread(request, docker_scylla, params):
         gemini_thread.kill()
 
     request.addfinalizer(cleanup_thread)
+
+    default_options = [
+        "--oracle-replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
+        "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
+        "--level=info",
+        "--request-timeout=3s",
+        "--connect-timeout=60s",
+        "--consistency=QUORUM",
+        "--async-objects-stabilization-backoff=10ms",
+        "--async-objects-stabilization-attempts=10",
+        "--dataset-size=large",
+        "--oracle-host-selection-policy=token-aware",
+        "--test-host-selection-policy=token-aware",
+        "--drop-schema=true",
+        "--fail-fast=true",
+        "--materialized-views=false",
+        "--use-lwt=false",
+        "--use-counters=false",
+        "--max-tables=1",
+        "--max-columns=16",
+        "--min-columns=8",
+        "--max-partition-keys=6",
+        "--min-partition-keys=2",
+        "--max-clustering-keys=4",
+        "--min-clustering-keys=2",
+        "--partition-key-distribution=uniform",
+        "--token-range-slices=10000",
+        "--partition-key-buffer-reuse-size=128",
+        "--statement-log-file-compression=zstd",
+    ]
+
+    gemini_cmd = gemini_thread._generate_gemini_command()
+
+    for option in default_options + options:
+        assert option in gemini_cmd
 
     gemini_thread.run()
 
