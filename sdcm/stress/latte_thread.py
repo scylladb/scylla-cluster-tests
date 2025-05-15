@@ -36,6 +36,7 @@ from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
 LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
+LATTE_THREADS_RE = r"(?:\s|^)(?:-t[= ]|--threads[= ]?)(\d+)(?:\s|$)"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -64,6 +65,14 @@ def find_latte_tags(stress_cmd):
         for sub_item in sub_items:
             tags.append(sub_item.strip())
     return tags
+
+
+def find_latte_threads_num(stress_cmd):
+    matches = re.findall(LATTE_THREADS_RE, stress_cmd)
+    if matches:
+        return int(matches[0])
+    # NOTE: threads were not specified, assume latte's default as `1`
+    return 1
 
 
 def get_latte_operation_type(stress_cmd):
