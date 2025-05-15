@@ -1,0 +1,119 @@
+# NOTE: schema in latte gets created by a separate 'latte schema' command.
+#       So, it's schema params must be defined in the 'latte_schema_parameters' SCT config option
+#       and be supported by a rune script that is used.
+latte_schema_parameters:
+  replication_factor: 3
+  compaction_strategy: IncrementalCompactionStrategy
+  column_count: 1
+
+prepare_write_cmd:
+  - >-
+    latte run --function=write --tag=latte-prepare-01 --sampling=10s --duration=162500001
+    --threads=7 --concurrency=21 --consistency=ALL --start-cycle 1 --end-cycle 162500001
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=650000004
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-02 --sampling=10s --duration=162500001
+    --threads=7 --concurrency=21 --consistency=ALL --start-cycle 162500002 --end-cycle 325000002
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=650000004
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-03 --sampling=10s --duration=162500001
+    --threads=7 --concurrency=21 --consistency=ALL --start-cycle 325000003 --end-cycle 487500003
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=650000004
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-04 --sampling=10s --duration=162500001
+    --threads=7 --concurrency=21 --consistency=ALL --start-cycle 487500004 --end-cycle 650000004
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=650000004
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_w:
+  - >-
+    latte run --function=write --tag=latte-write-01 --sampling=10s --duration=402653184 $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 1 --end-cycle 402653184
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=1610612736
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-write-02 --sampling=10s --duration=402653184 $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 402653185 --end-cycle 805306368
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=1610612736
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-write-03 --sampling=10s --duration=402653184 $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 805306369 --end-cycle 1207959552
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=1610612736
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-write-04 --sampling=10s --duration=402653184 $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 1207959553 --end-cycle 1610612736
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=1610612736
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_r:
+  - >-
+    latte run --function=read --tag=latte-read-01 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 1 --end-cycle 5000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-read-02 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 5000001 --end-cycle 10000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-read-03 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 10000001 --end-cycle 15000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-read-04 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 15000001 --end-cycle 20000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_cache_warmup:
+  - >-
+    latte run --function=read --tag=latte-cache-warmup-01 --sampling=10s --duration=5000000
+    --threads=7 --concurrency=$threads --consistency=ALL --start-cycle 1 --end-cycle 5000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-cache-warmup-02 --sampling=10s --duration=5000000
+    --threads=7 --concurrency=$threads --consistency=ALL --start-cycle 5000001 --end-cycle 10000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-cache-warmup-03 --sampling=10s --duration=5000000
+    --threads=7 --concurrency=$threads --consistency=ALL --start-cycle 10000001 --end-cycle 15000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=read --tag=latte-cache-warmup-04 --sampling=10s --duration=5000000
+    --threads=7 --concurrency=$threads --consistency=ALL --start-cycle 15000001 --end-cycle 20000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_m:
+  - >-
+    latte run --function=write,read --tag=latte-mixed-01 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 1 --end-cycle 5000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write,read --tag=latte-mixed-02 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 5000001 --end-cycle 10000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write,read --tag=latte-mixed-03 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 10000001 --end-cycle 15000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write,read --tag=latte-mixed-04 --sampling=10s --duration=$duration $throttle
+    --threads=7 --concurrency=$threads --consistency=QUORUM --start-cycle 15000001 --end-cycle 20000000
+    -P key_size=10 -P column_size=1024 -P column_count=1 -P row_count=20000000
+    data_dir/latte/latte_cs_alike.rn
+
+instance_type_loader: 'c7i.2xlarge'
