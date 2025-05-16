@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: '''["eu-west-1", "eu-west-2", "eu-north-1"]''',
+    test_name: 'raft_quorum_with_arbiterdc_test.TestClusterQuorum.test_raft_quorum_saved_after_add_arbiter_dc',
+    test_config: '''["test-cases/features/restore-quorum-with-zero-nodes.yaml","configurations/zerotoken_nodes/multidc_config_with_empty_arbiter_dc.yaml"]''',
+
+    timeout: [time: 120, unit: 'MINUTES']
+)

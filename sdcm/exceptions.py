@@ -95,3 +95,7 @@ class NemesisStressFailure(Exception):
 
 class BannedQueryExecUnexpectedSuccess(Exception):
     """Exception when query executed successfully on banned node"""
+
+
+class ReadBarrierErrorException(Exception):
+    """Raise exception if read barrier call failed"""

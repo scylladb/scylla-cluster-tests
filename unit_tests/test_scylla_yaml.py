@@ -260,6 +260,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'hinted_handoff_enabled': None,
                 'hinted_handoff_throttle_in_kb': None,
                 'hints_directory': None,
+                'ignore_dead_nodes_for_replace': None,
                 'in_memory_compaction_limit_in_mb': None,
                 'incremental_backups': None,
                 'index_summary_capacity_in_mb': None,
