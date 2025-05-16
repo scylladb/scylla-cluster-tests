@@ -80,12 +80,15 @@ def is_tablets_feature_enabled(node) -> bool:
     """
     with node.remote_scylla_yaml() as scylla_yaml:
         # for backward compatibility of 2024.1 and earlier
-        scylla_conf = scylla_yaml.dict()
-        if "tablets" in (scylla_conf.get("experimental_features") or []):
+        if isinstance(scylla_yaml, dict):
+            scylla_conf_dict = scylla_yaml
+        else:
+            scylla_conf_dict = scylla_yaml.dict()
+        if "tablets" in (scylla_conf_dict.get("experimental_features") or []):
             return True
-        if scylla_conf.get("enable_tablets"):
+        if scylla_conf_dict.get("enable_tablets"):
             return True
-        if scylla_conf.get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
+        if scylla_conf_dict.get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
             return True
 
     return False

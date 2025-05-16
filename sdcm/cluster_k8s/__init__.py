@@ -125,7 +125,7 @@ SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
 K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0"  # without 'v' prefix
-SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.2.6"
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.5.0"
 
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
@@ -818,7 +818,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         if not current_file.endswith((".yaml", ".yml")):
                             continue
                         self.apply_file(
-                            os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
+                            os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False, server_side=True,
+                            force_conflicts=True)
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
             self.log.info("Upgrade Scylla Operator CRDs: END")

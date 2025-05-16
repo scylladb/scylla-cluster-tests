@@ -6,10 +6,8 @@ rollingOperatorUpgradePipeline(
     backend: 'k8s-gke',
     region: 'us-east1',
     availability_zone: 'c',
-    // NOTE: the lowest Scylla version which can be used for exposing Pod IPs is '2023.1.x'
-    base_versions: '["2023.1.2"]',
-    // TODO: set the new version as '2024.1.x' when gets released
-    new_version: '2024.1.0-rc2',
+    base_versions: '["2023.1.11"]',
+    new_version: '2024.2.7',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
     test_config: '''["test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml", "configurations/operator/expose-pod-ips.yaml"]''',
 )

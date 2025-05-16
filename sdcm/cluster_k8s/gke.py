@@ -130,6 +130,9 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
         instance_type=params.get("gce_instance_type_db"),
         num_nodes=params.get("n_db_nodes"),
         taints=["role=scylla-clusters:NoSchedule"],
+        labels={
+            "scylla.scylladb.com/node-type": "scylla"
+        },
         k8s_cluster=k8s_cluster)
     k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
