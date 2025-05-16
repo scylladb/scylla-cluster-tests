@@ -1,0 +1,36 @@
+prepare_write_cmd: [
+    "cql-stress-cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
+    "cql-stress-cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
+    "cql-stress-cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
+    "cql-stress-cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
+]
+
+stress_cmd_w:  [
+  "cql-stress-cassandra-stress write cl=QUORUM n=402653184 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..402653184",
+  "cql-stress-cassandra-stress write cl=QUORUM n=402653184 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=402653185..805306368",
+  "cql-stress-cassandra-stress write cl=QUORUM n=402653184 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=805306369..1207959552",
+  "cql-stress-cassandra-stress write cl=QUORUM n=402653184 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1207959553..1610612736"
+]
+
+stress_cmd_r: [
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
+  "cql-stress-cassandra-stress read  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
+stress_cmd_cache_warmup: [
+  "cql-stress-cassandra-stress read  cl=ALL n=5000000 -mode cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
+  "cql-stress-cassandra-stress read  cl=ALL n=5000000 -mode cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
+  "cql-stress-cassandra-stress read  cl=ALL n=5000000 -mode cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
+  "cql-stress-cassandra-stress read  cl=ALL n=5000000 -mode cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
+stress_cmd_m: [
+  "cql-stress-cassandra-stress mixed  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
+  "cql-stress-cassandra-stress mixed  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
+  "cql-stress-cassandra-stress mixed  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
+  "cql-stress-cassandra-stress mixed  cl=QUORUM duration=$duration -mode cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
+instance_type_loader: 'c7i.2xlarge'
