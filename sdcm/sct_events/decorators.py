@@ -24,7 +24,7 @@ def raise_event_on_failure(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             ThreadFailedEvent(message=str(exc), traceback=format_exc()).publish()
         return None
 

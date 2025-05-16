@@ -79,7 +79,7 @@ def install_client_certificate(remoter, node_identifier):
     dst = '/tmp/ssl_conf'
     remoter.run(f'mkdir -p {dst}')
     remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / node_identifier) + '/', dst=dst)
-    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / 'client'), dst=dst)  # pylint: disable=not-callable
+    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / 'client'), dst=dst)
     setup_script = dedent(f"""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
@@ -145,7 +145,6 @@ def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
         )
 
 
-# pylint: disable=too-many-arguments,too-many-locals
 def create_certificate(
         cert_file: Path, key_file: Path, cname: str, ca_cert_file: Path = None, ca_key_file: Path = None,
         server_csr_file: Path = None, ip_addresses: list = None, dns_names: list = None, valid_days: int = 365) -> None:

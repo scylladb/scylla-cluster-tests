@@ -91,11 +91,11 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
-class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
-    def build_stress_cmd(self, cmd_runner, loader, hosts):  # pylint: disable=too-many-locals
+    def build_stress_cmd(self, cmd_runner, loader, hosts):
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
         script_name = script_name_regx.search(self.stress_cmd).group(0)
@@ -138,7 +138,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 processed_v = v
                 try:
                     processed_v = int(v)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     if v not in ('true', 'false'):
                         processed_v = r"\"%s\"" % v
                 custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
@@ -281,7 +281,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 )
                 return self.parse_final_output(result)
 
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return {}

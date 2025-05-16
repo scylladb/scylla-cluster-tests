@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-# pylint: disable=too-many-lines
 
 from __future__ import absolute_import, annotations
 
@@ -31,7 +30,7 @@ from sdcm.utils.decorators import retrying
 LOGGER = logging.getLogger(__name__)
 
 
-class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+class PartitionsValidationAttributes:
     """
     A class that gathers all data related to partitions-validation.
     It helps Longevity tests that uses "validate_partitions" to
@@ -40,7 +39,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
     PARTITIONS_ROWS_BEFORE = "partitions_rows_before"
     PARTITIONS_ROWS_AFTER = "partitions_rows_after"
 
-    def __init__(self, tester, table_name: str, primary_key_column: str, limit_rows_number: int = 0,  # pylint: disable=too-many-arguments
+    def __init__(self, tester, table_name: str, primary_key_column: str, limit_rows_number: int = 0,
                  max_partitions_in_test_table: str | None = None,
                  partition_range_with_data_validation: str | None = None, validate_partitions: bool = False):
         """
@@ -94,7 +93,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                 session.default_consistency_level = ConsistencyLevel.QUORUM
                 pk_list = sorted(get_partition_keys(ks_cf=self.table_name, session=session,
                                                     pk_name=self.primary_key_column))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
                                severity=Severity.ERROR).publish()
             return None
@@ -121,7 +120,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                                                                   statement=count_pk_rows_cmd, retries=1, timeout=600,
                                                                   raise_on_exceeded=True, verbose=False)
                         pk_rows_num_result = pk_rows_num_query_result[0].count
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
                                        severity=Severity.ERROR).publish()
                     return None
@@ -212,7 +211,7 @@ def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = No
     return pks_list
 
 
-def fetch_all_rows(session, default_fetch_size, statement, retries: int = 4, timeout: int = None,  # pylint: disable=too-many-arguments
+def fetch_all_rows(session, default_fetch_size, statement, retries: int = 4, timeout: int = None,
                    raise_on_exceeded: bool = False, verbose=True):
     """
     ******* Caution *******

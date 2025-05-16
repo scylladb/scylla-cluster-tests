@@ -47,7 +47,7 @@ class AWSInstance(CloudInstance):
             for event in result["Events"]:
                 if event['EventName'] == 'RunInstances':
                     return event["Username"]
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Error occurred when trying to find an owner for '%s' in CloudTrail: %s",
                            self._instance['InstanceId'], exc)
         return None

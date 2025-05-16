@@ -16,7 +16,7 @@ import re
 import logging
 import warnings
 from pprint import pformat
-from types import SimpleNamespace  # pylint: disable=no-name-in-module
+from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple, Protocol
 from functools import cache
 import itertools
@@ -63,11 +63,10 @@ class DockerClient(docker.DockerClient):
         return res
 
 
-_docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)  # pylint: disable=invalid-name
+_docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)
 
 
 class _Name(SimpleNamespace):
-    # pylint: disable=too-few-public-methods
 
     def __init__(self, name: Optional[str]) -> None:
         family, *member = (None, ) if name is None else name.split(":", 1)
@@ -81,13 +80,13 @@ class _Name(SimpleNamespace):
 
 
 class INodeWithContainerManager(Protocol):
-    # pylint: disable=too-few-public-methods
+
     _containers: dict[str, Container]
     tags: dict[str, str]
     parent_cluster: Any
 
 
-class ContainerManager:  # pylint: disable=too-many-public-methods)
+class ContainerManager:
     """A set of methods for manipulating containers associated with a node.
 
     This manager expects that node instance has two dicts: `_containers' and `tags'.
@@ -143,8 +142,6 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
 
     where `name' is a key for `_containers' dict.
     """
-
-    # pylint: disable=protected-access
 
     keep_alive_suffix = "---KEEPALIVE"
     default_docker_client = _docker
@@ -251,7 +248,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             try:
                 with open(logfile, "ab") as log:
                     log.write(container.logs())
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.error("Unable to write container logs to %s", logfile, exc_info=exc)
             else:
                 LOGGER.debug("Container %s logs written to %s", container, logfile)
@@ -268,7 +265,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         for name in tuple(instance._containers.keys()):
             try:
                 cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.error("%s: some exception raised during container `%s' destroying", instance, name, exc_info=exc)
 
     @classmethod
@@ -289,7 +286,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             cls.set_container_keep_alive(instance, name)
 
     @classmethod
-    def ssh_copy_id(cls,  # pylint: disable=too-many-arguments
+    def ssh_copy_id(cls,
                     instance: INodeWithContainerManager,
                     name: str,
                     user: str,

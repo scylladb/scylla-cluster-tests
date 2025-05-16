@@ -65,7 +65,7 @@ class ScyllaDoctor:
             sd_package = Package(name="scylla-doctor", date="", version=self.version, revision_id="", build_id="")
             LOGGING.info("Saving Scylla doctor package in Argus...")
             self.test_config.argus_client().submit_packages([sd_package])
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             LOGGING.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
 
     def find_local_python3_binary(self, user_home: str):

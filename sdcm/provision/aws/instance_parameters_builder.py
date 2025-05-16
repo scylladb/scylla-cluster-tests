@@ -21,35 +21,35 @@ from sdcm.provision.common.builders import AttrBuilder
 class AWSInstanceParamsBuilderBase(AttrBuilder, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def BlockDeviceMappings(self) -> List[AWSDiskMapping]:  # pylint: disable=invalid-name
+    def BlockDeviceMappings(self) -> List[AWSDiskMapping]:
         pass
 
     @property
     @abc.abstractmethod
-    def ImageId(self) -> Optional[str]:  # pylint: disable=invalid-name
+    def ImageId(self) -> Optional[str]:
         pass
 
     @property
     @abc.abstractmethod
-    def KeyName(self) -> str:  # pylint: disable=invalid-name
+    def KeyName(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
+    def NetworkInterfaces(self) -> List[dict]:
         pass
 
     @property
     @abc.abstractmethod
-    def IamInstanceProfile(self):  # pylint: disable=invalid-name
+    def IamInstanceProfile(self):
         pass
 
     @property
     @abc.abstractmethod
-    def InstanceType(self) -> str:  # pylint: disable=invalid-name
+    def InstanceType(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
+    def Placement(self) -> Optional[AWSPlacementInfo]:
         pass

@@ -42,22 +42,22 @@ class SCTProvisionLayout:
         return self._params.get('db_type') == 'mixed_scylla'
 
     @property
-    def db_cluster(self):  # pylint: disable=no-self-use
+    def db_cluster(self):
         return None
 
     @property
-    def loader_cluster(self):  # pylint: disable=no-self-use
+    def loader_cluster(self):
         return None
 
     @property
-    def monitoring_cluster(self):  # pylint: disable=no-self-use
+    def monitoring_cluster(self):
         return None
 
     @property
-    def cs_db_cluster(self):  # pylint: disable=no-self-use
+    def cs_db_cluster(self):
         return None
 
-    def provision(self):  # pylint: disable=no-self-use
+    def provision(self):
         raise RuntimeError("This backend is not supported yet")
 
 

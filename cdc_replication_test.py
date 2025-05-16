@@ -23,7 +23,7 @@ from textwrap import dedent
 from typing import Optional, Tuple
 
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm import cluster
 from sdcm.tester import ClusterTester
@@ -132,7 +132,6 @@ class CDCReplicationTest(ClusterTester):
         self.start_replicator(Mode.DELTA)
 
         self.consistency_ok = True
-        # pylint: disable=unexpected-keyword-arg
         self.db_cluster.nemesis.append(CategoricalMonkey(
             tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event,
             dist={
@@ -224,8 +223,6 @@ class CDCReplicationTest(ClusterTester):
             # If the test fails, one should connect to the cluster manually and investigate there,
             # or try to reproduce based on the logs in a smaller test.
             self.fail('Consistency check failed.')
-
-    # pylint: disable=too-many-statements,too-many-branches,too-many-locals
 
     def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
         assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"

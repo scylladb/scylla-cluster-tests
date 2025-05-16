@@ -28,7 +28,7 @@ KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 
-class KeyStore:  # pylint: disable=too-many-public-methods
+class KeyStore:
     @property
     def s3(self) -> S3ServiceResource:
         return boto3.resource("s3")

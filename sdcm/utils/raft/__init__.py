@@ -172,7 +172,7 @@ class RaftFeature(RaftFeatureOperations):
                 for row in rows:
                     group0_members.append({"host_id": str(row.server_id),
                                            "voter": row.can_vote})
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
 

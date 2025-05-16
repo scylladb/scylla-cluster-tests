@@ -52,7 +52,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         return mgr_cluster, current_manager_version
 
-    def test_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
+    def test_upgrade(self):  # noqa: PLR0914
         manager_node = self.monitors.nodes[0]
 
         target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_address')

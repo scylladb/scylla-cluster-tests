@@ -45,7 +45,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
                             -nodes {node_ips} -group-size {shards_per_node} \
                             -worker-id {worker_id} -worker-count {worker_count}"
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=unused-argument
+    def _run_stress(self, loader, loader_idx, cpu_idx):
         loader_node_logdir = Path(loader.logdir)
         if not loader_node_logdir.exists():
             loader_node_logdir.mkdir()
@@ -79,7 +79,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                                stress_cmd=self.stress_cmd,
                                                errors=result.stderr.split("\n")).publish()
                 return result
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             CDCReaderStressEvent.failure(node=loader,
                                          stress_cmd=self.stress_cmd,
                                          errors=[format_stress_cmd_error(exc), ]).publish()
