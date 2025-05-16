@@ -140,47 +140,27 @@ def test_list_nemesis_of_added_disrupt_methods(capsys):
     assert "It Works!" in captured.out
 
 
-def test_is_it_on_kubernetes():
-    class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-            self.nodes = []
-
-    class FakeGkeScyllaPodCluster(GkeScyllaPodCluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-            self.nodes = []
-
-    class FakeEksScyllaPodCluster(EksScyllaPodCluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-            self.nodes = []
-
-    class FakeScyllaGCECluster(ScyllaGCECluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-            self.nodes = []
-
-    class FakeScyllaAWSCluster(ScyllaAWSCluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-            self.nodes = []
-
-    class FakeScyllaDockerCluster(ScyllaDockerCluster):
+@pytest.mark.parametrize(
+    "parent, result",
+    [
+        (LocalMinimalScyllaPodCluster, True),
+        (GkeScyllaPodCluster, True),
+        (EksScyllaPodCluster, True),
+        (ScyllaGCECluster, False),
+        (ScyllaAWSCluster, False),
+        (ScyllaDockerCluster, False)
+    ]
+)
+def test_is_it_on_kubernetes(parent, result):
+    class FakeClass(parent):
         def __init__(self, params: dict = None):
             self.params = params
             self.nodes = []
 
     params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
-
-    assert FakeNemesis(FakeTester(db_cluster=FakeLocalMinimalScyllaPodCluster(),
-                       params=params), None)._is_it_on_kubernetes()
-    assert FakeNemesis(FakeTester(db_cluster=FakeGkeScyllaPodCluster(), params=params), None)._is_it_on_kubernetes()
-    assert FakeNemesis(FakeTester(db_cluster=FakeEksScyllaPodCluster(), params=params), None)._is_it_on_kubernetes()
-
-    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaGCECluster(), params=params), None)._is_it_on_kubernetes()
-    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaAWSCluster(), params=params), None)._is_it_on_kubernetes()
-    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaDockerCluster(), params=params), None)._is_it_on_kubernetes()
+    nemesis = FakeNemesis(FakeTester(db_cluster=FakeClass(),
+                                     params=params), None)
+    assert nemesis._is_it_on_kubernetes() == result
 
 
 def test_categorical_monkey():
