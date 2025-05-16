@@ -34,7 +34,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
-    # pylint: disable=ungrouped-imports
+
     from typing import Optional, Callable, Iterator
 
     from azure.core.credentials import TokenCredential
@@ -68,7 +68,7 @@ class VirtualMachineIPs(NamedTuple):
 
 class AzureService(metaclass=Singleton):
     @cached_property
-    def azure_credentials(self) -> dict[str, str]:  # pylint: disable=no-self-use; pylint doesn't now about cached_property
+    def azure_credentials(self) -> dict[str, str]:
         return KeyStore().get_azure_credentials()
 
     @cached_property

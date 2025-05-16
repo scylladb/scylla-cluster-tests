@@ -20,7 +20,7 @@ from test_lib.utils import get_data_by_path, MagicList
 logging.basicConfig(level=logging.DEBUG)
 
 
-class TestClass:  # pylint: disable=too-few-public-methods
+class TestClass:
     __test__ = False  # Mark this class to be not collected by pytest.
 
     def __init__(self, **kwargs):
@@ -35,7 +35,7 @@ class TestClass:  # pylint: disable=too-few-public-methods
 
 
 class TestLibUtilsTest(unittest.TestCase):
-    def test_magic_list(self):  # pylint: disable=no-self-use
+    def test_magic_list(self):
         tmp = MagicList([
             TestClass(val1=1, val2=2),
             TestClass(val1=3, val2=5),
@@ -51,7 +51,7 @@ class TestLibUtilsTest(unittest.TestCase):
             repr(sorted(tmp.group_by('val2').items(), key=lambda item: item[0])),
             "[(0, [<val1=10,val2=0>]), (2, [<val1=1,val2=2>]), (5, [<val1=3,val2=5>])]")
 
-    def test_get_data_by_path(self):  # pylint: disable=no-self-use
+    def test_get_data_by_path(self):
         data = {
             'l1_key': {
                 'l2_key': 10

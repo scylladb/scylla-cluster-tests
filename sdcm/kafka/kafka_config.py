@@ -1,8 +1,6 @@
 from typing import Optional
 
-from pydantic import Field, BaseModel, Extra  # pylint: disable=no-name-in-module
-
-# pylint: disable=too-few-public-methods
+from pydantic import Field, BaseModel, Extra
 
 
 class ConnectorConfiguration(BaseModel):

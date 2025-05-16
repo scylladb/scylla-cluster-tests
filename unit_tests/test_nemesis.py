@@ -76,12 +76,12 @@ class FakeTester:
     def get_test_details(self):
         pass
 
-    def id(self):  # pylint: disable=invalid-name,no-self-use
+    def id(self):
         return 0
 
 
 class FakeNemesis(Nemesis):
-    def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
+    def __new__(cls, tester_obj, termination_event, *args):
         return object.__new__(cls)
 
     def disrupt(self):
@@ -115,7 +115,7 @@ class FakeCategoricalMonkey(CategoricalMonkey):
 
 class AddRemoveDCMonkey(FakeNemesis):
     @Nemesis.add_disrupt_method
-    def disrupt_add_remove_dc(self):  # pylint: disable=no-self-use
+    def disrupt_add_remove_dc(self):
         return 'Worked'
 
     def disrupt(self):
@@ -129,7 +129,6 @@ def test_list_nemesis_of_added_disrupt_methods():
     assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
 
 
-# pylint: disable=super-init-not-called,too-many-ancestors
 def test_is_it_on_kubernetes():
     class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
         def __init__(self, params: dict = None):
@@ -163,7 +162,6 @@ def test_is_it_on_kubernetes():
 
     params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
 
-    # pylint: disable=protected-access
     assert FakeNemesis(FakeTester(db_cluster=FakeLocalMinimalScyllaPodCluster(),
                        params=params), None)._is_it_on_kubernetes()
     assert FakeNemesis(FakeTester(db_cluster=FakeGkeScyllaPodCluster(), params=params), None)._is_it_on_kubernetes()
@@ -174,7 +172,6 @@ def test_is_it_on_kubernetes():
     assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaDockerCluster(), params=params), None)._is_it_on_kubernetes()
 
 
-# pylint: disable=protected-access
 def test_categorical_monkey():
     tester = FakeTester()
 
@@ -226,7 +223,7 @@ def test_use_disabled_monkey():
 
 
 class TestSisyphusMonkeyNemesisFilter:
-    # pylint: disable=no-self-use
+
     @pytest.fixture(autouse=True)
     def expected_topology_changes_methods(self):
         return [
@@ -318,7 +315,7 @@ class TestSisyphusMonkeyNemesisFilter:
             assert disrupt_method in expected_config_and_schema_changes_methods, \
                 f"{disrupt_method=} from {collected_disrupt_methods_names=} was not found in {expected_config_and_schema_changes_methods=}"
 
-    def test_add_sisyphus_with_filter_in_parallel_nemesis_run(self, expected_schema_changes_methods, expected_topology_changes_methods):  # pylint: disable=too-many-locals
+    def test_add_sisyphus_with_filter_in_parallel_nemesis_run(self, expected_schema_changes_methods, expected_topology_changes_methods):
         tester = ClusterTesterForTests()
         tester.db_cluster = Cluster(nodes=[Node(), Node()])
         tester.db_cluster.params = tester.params

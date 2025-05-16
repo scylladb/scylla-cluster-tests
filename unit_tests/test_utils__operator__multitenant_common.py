@@ -47,14 +47,14 @@ class FakePerformanceTest(FakeTestBase):
     pass
 
 
-class FakeDbCluster:  # pylint: disable=too-few-public-methods
+class FakeDbCluster:
     def __init__(self, fake_index):
         self.fake_index = fake_index
         self.k8s_clusters = [type("FakeK8SCluster", (), {"tenants_number": 2})]
         self.params = {}
 
 
-class FakeMultitenantTestBase:  # pylint: disable=too-few-public-methods
+class FakeMultitenantTestBase:
     def __init__(self):
         self.test_config = TestConfig()
         self.test_config.set_test_id_only("fake-test-id")
@@ -95,7 +95,6 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
             if k.startswith('SCT_'):
                 del os.environ[k]
 
-    # pylint: disable=protected-access
     def _multitenant_class_with_shared_options(self, klass):
         os.environ['SCT_CONFIG_FILES'] = (
             'unit_tests/test_data/test_config/multitenant/shared_option_values.yaml')

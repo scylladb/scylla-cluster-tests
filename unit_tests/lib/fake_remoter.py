@@ -24,7 +24,7 @@ class FakeRemoter(RemoteCmdRunnerBase):
 
     result_map: Dict[Pattern, Result] = {}
 
-    def run(self,  # pylint: disable=too-many-arguments
+    def run(self,
             cmd: str,
             timeout=None,
             ignore_status=False,

@@ -35,7 +35,6 @@ class ScyllaOperatorLogEvent(LogEvent):
         super().__init__(regex=regex, severity=severity)
         self.line_number = None
 
-    # pylint: disable=too-many-locals
     def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         # I0628 15:53:02.269804       1 operator/operator.go:133] <message>
         # I - Log level = INFO
@@ -54,7 +53,7 @@ class ScyllaOperatorLogEvent(LogEvent):
             self.source_timestamp = datetime.datetime(
                 year=year, month=month, day=day, hour=int(hour), minute=int(minute), second=int(second),
                 microsecond=int(milliseconds), tzinfo=datetime.timezone.utc).timestamp()
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         self.event_timestamp = time.time()
         self.node = str(node)

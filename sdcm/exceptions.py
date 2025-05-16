@@ -56,7 +56,7 @@ class AuditLogTestFailure(Exception):
     """
 
 
-class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
+class BootstrapStreamErrorFailure(Exception):
     """ raised if node was not boostrapped after bootstrap
     streaming was aborted """
 

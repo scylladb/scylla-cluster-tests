@@ -40,7 +40,6 @@ class FakeSCTConfiguration(SCTConfiguration):
         }
 
 
-# pylint: disable=too-many-instance-attributes
 class ClusterTesterForTests(ClusterTester):
     _sct_log = None
     _final_event = None
@@ -88,7 +87,7 @@ class ClusterTesterForTests(ClusterTester):
         pass
 
     @property
-    def elasticsearch(self):  # pylint: disable=invalid-overridden-method
+    def elasticsearch(self):
         return None
 
     @silence()
@@ -111,15 +110,15 @@ class ClusterTesterForTests(ClusterTester):
         self.events_processes_registry_patcher.stop()
 
     def _validate_results(self):
-        self.result._excinfo = []  # pylint: disable=protected-access
+        self.result._excinfo = []
         final_event = self.final_event
         unittest_final_event = self.unittest_final_event
         self._remove_errors_from_unittest_results(self._outcome)
         events_by_category = self.events
         sleep(0.3)
         # cache files info before deleting the folder
-        sct_log = self.sct_log  # pylint: disable=pointless-statement
-        event_summary = self.event_summary  # pylint: disable=pointless-statement
+        sct_log = self.sct_log
+        event_summary = self.event_summary
         shutil.rmtree(self.logdir)
         for event_category, total_events in event_summary.items():
             assert len(events_by_category[event_category]) == total_events, \
@@ -224,7 +223,7 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
             end_time = time.time() + 2
             while time.time() < end_time:
                 time.sleep(0.1)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     def _validate_results(self):

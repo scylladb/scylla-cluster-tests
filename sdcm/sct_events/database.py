@@ -67,7 +67,6 @@ class DatabaseLogEvent(LogEvent, abstract=True):
 MILLI_RE = re.compile(r"(\d+) ms")
 
 
-# pylint: disable=too-few-public-methods
 class ReactorStalledMixin(Generic[T_log_event]):
     tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
 
@@ -405,7 +404,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
     save_to_files = False
     continuous_hash_fields = ('node', 'shard', 'table', 'compaction_process_id')
 
-    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
+    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,
                  severity=Severity.NORMAL, **__):
         self.table = table
         self.compaction_process_id = compaction_process_id

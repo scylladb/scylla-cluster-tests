@@ -555,6 +555,6 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_placement_group(GroupName=name)
                     LOGGER.info("Placement group deleted: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:
                     LOGGER.debug("Failed to delete placement group: %s", str(ex))
                     raise

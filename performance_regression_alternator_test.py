@@ -27,7 +27,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
-    def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
+    def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',
                   save_stats=True, is_alternator=True):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')

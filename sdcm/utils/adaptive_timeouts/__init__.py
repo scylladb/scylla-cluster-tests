@@ -18,7 +18,7 @@ def _get_decommission_timeout(node_info_service: NodeLoadInfoService) -> tuple[i
         timeout = int(node_info_service.node_data_size_mb * 0.03)
         timeout = max(timeout, 7200)  # 2 hours minimum
         return timeout, node_info_service.as_dict()
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
         return 6*60*60, {}
 
@@ -27,7 +27,7 @@ def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | flo
     # no timeout calculation - just return the timeout passed as argument along with node load info
     try:
         return timeout, node_info_service.as_dict()
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
         return timeout, {}
 
@@ -74,7 +74,7 @@ class Operations(Enum):
                                  ("timeout", "service_level_for_test_step"))
 
 
-class TestInfoServices:  # pylint: disable=too-few-public-methods
+class TestInfoServices:
     @staticmethod
     def get(node: "BaseNode") -> dict:  # noqa: F821
         return dict(
@@ -101,7 +101,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
     timeout_occurred = False
     try:
         yield timeout
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         exc_name = exc.__class__.__name__
         if "timeout" in exc_name.lower() or "timed out" in str(exc):
             timeout_occurred = True
@@ -115,5 +115,5 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
             if load_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)

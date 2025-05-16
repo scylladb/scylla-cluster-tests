@@ -32,12 +32,12 @@ from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, Ins
 LOGGER = logging.getLogger(__name__)
 
 
-class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-few-public-methods
+class AWSInstanceProvisioner(InstanceProvisionerBase):
     # TODO: Make them configurable
     _wait_interval = 5
     _iam_fleet_role = 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role'
 
-    def provision(  # pylint: disable=too-many-arguments
+    def provision(
             self,
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
@@ -208,7 +208,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
         try:
             resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
             LOGGER.info("%s: - %s", request_ids, resp)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("%s: - failed to get status: %s", request_ids, exc)
             return []
         for req in resp['SpotFleetRequestConfigs']:

@@ -26,7 +26,7 @@ from unit_tests.test_utils_common import DummyNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
-class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
+class DecodeDummyNode(DummyNode):
 
     def copy_scylla_debug_info(self, node_name, debug_file):
         return "scylla_debug_info_file"
@@ -97,17 +97,17 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         )
 
     def _read_and_publish_events(self):
-        self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+        self._db_log_reader._read_and_publish_events()
 
     def _read_and_publish_events_no_decoding(self):
-        self._db_log_reader_no_decoding._read_and_publish_events()  # pylint: disable=protected-access
+        self._db_log_reader_no_decoding._read_and_publish_events()
 
     def setUp(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self._read_and_publish_events_no_decoding()  # pylint: disable=protected-access
+        self._read_and_publish_events_no_decoding()
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
@@ -144,7 +144,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
                 self.assertEqual(event['backtrace'].strip(),
                                  "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
 
-    def test_03_decode_interlace_reactor_stall(self):  # pylint: disable=invalid-name
+    def test_03_decode_interlace_reactor_stall(self):
 
         self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
@@ -152,7 +152,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        self._read_and_publish_events()  # pylint: disable=protected-access
+        self._read_and_publish_events()
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()

@@ -20,7 +20,7 @@ from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, Se
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
-# pylint: disable=no-member
+
 class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster

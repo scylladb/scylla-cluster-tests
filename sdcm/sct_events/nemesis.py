@@ -21,7 +21,7 @@ class DisruptionEvent(ContinuousEvent):
                  nemesis_name,
                  node,
                  severity=Severity.NORMAL,
-                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+                 publish_event=True):
         self.nemesis_name = nemesis_name
         self.node = str(node)
         self.duration = None

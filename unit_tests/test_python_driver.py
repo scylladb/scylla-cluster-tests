@@ -8,7 +8,7 @@ from unit_tests.test_cluster import DummyDbCluster, DummyNode, DummyRemote
 log = logging.getLogger(__name__)
 
 
-class Node(DummyNode):  # pylint: disable=abstract-method
+class Node(DummyNode):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._host_id = ''
@@ -27,7 +27,7 @@ def test_01_test_python_driver_serverless_connectivity(params):
 
     # local bundle file
     params['k8s_connection_bundle_file'] = '/home/fruch/Downloads/k8s_config.yaml'
-    node._host_id = '0d56abe0-91f9-43ee-9b39-4536488b6089'  # pylint: disable=protected-access
+    node._host_id = '0d56abe0-91f9-43ee-9b39-4536488b6089'
     node.remoter = DummyRemote()
     db_cluster = DummyDbCluster(nodes=[node], params=params)
     node.parent_cluster = db_cluster

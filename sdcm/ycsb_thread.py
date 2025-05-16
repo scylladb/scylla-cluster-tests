@@ -67,7 +67,6 @@ class YcsbStatsPublisher(FileFollowerThread):
             self.set_metric('verify', stat['status'], float(stat['value']))
 
     def run(self):
-        # pylint: disable=too-many-nested-blocks
 
         # 729.39 current ops/sec;
         # [READ: Count=510, Max=195327, Min=2011, Avg=4598.69, 90=5743, 99=12583, 99.9=194815, 99.99=195327]
@@ -108,15 +107,15 @@ class YcsbStatsPublisher(FileFollowerThread):
                                         value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
 
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception("fail to send metric")
 
 
-class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class YcsbStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
-    def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches
+    def copy_template(self, cmd_runner, loader_name, memo={}):
         if loader_name in memo:
             return None
         web_protocol = "http"
@@ -243,7 +242,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         output = {k: str(v) for k, v in output.items()}
         return output
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
+    def _run_stress(self, loader, loader_idx, cpu_idx):
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.name
@@ -279,7 +278,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             loader.logdir, 'ycsb-l%s-c%s-%s.log' % (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
-        def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
+        def raise_event_callback(sentinel, line):
             if line:
                 YcsbStressEvent.error(node=cmd_runner_name, stress_cmd=stress_cmd, errors=[line, ]).publish()
 

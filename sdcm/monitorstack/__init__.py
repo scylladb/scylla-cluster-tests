@@ -37,7 +37,7 @@ class ErrorUploadAnnotations(Exception):
     pass
 
 
-def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements,too-many-locals  # noqa: PLR0911
+def restore_monitoring_stack(test_id, date_time=None):  # noqa: PLR0911
     if not is_docker_available():
         return False
 
@@ -295,7 +295,7 @@ def get_monitoring_stack_dir(base_dir):
 
 def get_monitoring_stack_scylla_version(monitoring_stack_dir):
     try:
-        with open(os.path.join(monitoring_stack_dir, 'monitor_version'), encoding="utf-8") as f:  # pylint: disable=invalid-name
+        with open(os.path.join(monitoring_stack_dir, 'monitor_version'), encoding="utf-8") as f:
             versions = f.read().strip()
         monitoring_version, scylla_version = versions.split(':')
         if not requests.head(f'https://github.com/scylladb/scylla-monitoring/tree/{monitoring_version}'
@@ -303,7 +303,7 @@ def get_monitoring_stack_scylla_version(monitoring_stack_dir):
             scylla_version = 'master'
 
         return monitoring_version, scylla_version
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return 'branch-3.0', 'master'
 
 
@@ -313,7 +313,7 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_d
         status.append(restore_sct_dashboards(grafana_docker_port=grafana_docker_port,
                                              sct_dashboard_file=sct_dashboard_file))
         status.append(restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during uploading sct monitoring data %s", details)
         status.append(False)
 
@@ -323,7 +323,7 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_d
 def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number=1):
     try:
         return start_dockers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number)
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Dockers are not started. Error: %s", details)
         return {}
 
@@ -336,7 +336,7 @@ def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
         sct_dashboard_file = [Path(__file__).parent.parent.parent / 'data_dir' / sct_dashboard_file_name]
 
     dashboard_url = f'http://localhost:{grafana_docker_port}/api/dashboards/db'
-    with open(sct_dashboard_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
+    with open(sct_dashboard_file, encoding="utf-8") as f:
         dashboard_config = json.load(f)
         # NOTE: remove value from the 'dashboard.id' field to avoid following error:
         #
@@ -359,7 +359,7 @@ def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
                 res.text))
         LOGGER.info('Dashboard %s loaded successfully', sct_dashboard_file)
         return True
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:
         LOGGER.error('Error uploading dashboard %s. Error message %s', sct_dashboard_file, details)
         raise
 
@@ -374,11 +374,11 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
         LOGGER.info('There is no annotations file.Skip loading annotations')
         return False
     try:
-        with open(annotations_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
+        with open(annotations_file, encoding="utf-8") as f:
             annotations = json.load(f)
 
         annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
-        for an in annotations:  # pylint: disable=invalid-name
+        for an in annotations:
             res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
             if res.status_code != 200:
                 LOGGER.info('Error during uploading annotation %s. Error message %s', an, res.text)
@@ -386,18 +386,18 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
                                                                                                              res.text))
         LOGGER.info('Annotations loaded successfully')
         return True
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:
         LOGGER.error("Error during annotations data upload %s", details)
         raise
 
 
 @retrying(n=3, sleep_time=5, message='Start docker containers')
-def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):  # pylint: disable=unused-argument
+def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):
     graf_port = get_free_port(ports_to_try=[GRAFANA_DOCKER_PORT + i for i in range(tenants_number)] + [0])
     alert_port = get_free_port(ports_to_try=[ALERT_DOCKER_PORT + i for i in range(tenants_number)] + [0])
     prom_port = get_free_port(ports_to_try=[PROMETHEUS_DOCKER_PORT + i for i in range(tenants_number)] + [0])
 
-    lr = LocalCmdRunner()  # pylint: disable=invalid-name
+    lr = LocalCmdRunner()
     lr.run('cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}'.format(**locals()),
            ignore_status=True, verbose=False)
 
@@ -478,9 +478,9 @@ def verify_monitoring_stack(containers_ports):
 
 
 def verify_dockers_are_running(containers_ports):
-    result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)  # pylint: disable=invalid-name
+    result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)
     docker_names = result.stdout.strip().split()
-    result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)  # pylint: disable=invalid-name
+    result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)
     grafana_docker_port = containers_ports["grafana_docker_port"]
     prometheus_docker_port = containers_ports["prometheus_docker_port"]
     if result.ok and docker_names:
@@ -493,7 +493,7 @@ def verify_dockers_are_running(containers_ports):
 
 
 def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
-    # pylint: disable=import-outside-toplevel
+
     from sdcm.logcollector import GrafanaEntity, MonitoringStack
     grafana_statuses = []
     for dashboard in GrafanaEntity.base_grafana_dashboards:
@@ -504,7 +504,7 @@ def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
                                                             title=dashboard.title)
             grafana_statuses.append(result)
             LOGGER.info("Dashboard {} is available".format(dashboard.title))
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)
 
@@ -524,7 +524,6 @@ def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT
     :rtype: {bool}
     """
 
-    # pylint: disable=import-outside-toplevel
     from sdcm.db_stats import PrometheusDBStats
 
     time_end = time.time()
@@ -535,7 +534,7 @@ def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT
         prom_client.get_throughput(time_start, time_end)
         LOGGER.info("Prometheus is up")
         return True
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error requesting prometheus %s", details)
         return False
 
@@ -551,7 +550,7 @@ def kill_running_monitoring_stack_services(ports=None):
                               "prometheus_docker_port": PROMETHEUS_DOCKER_PORT,
                               "alert_docker_port": ALERT_DOCKER_PORT}
 
-    lr = LocalCmdRunner()  # pylint: disable=invalid-name
+    lr = LocalCmdRunner()
     for docker in get_monitoring_stack_services(ports=dockers_ports):
         LOGGER.info("Killing %s", docker['service'])
         lr.run('docker rm -f {name}-{port}'.format(name=docker['name'], port=docker['port']),

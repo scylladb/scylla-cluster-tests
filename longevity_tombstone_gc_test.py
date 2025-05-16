@@ -64,7 +64,6 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         Run a major compaction.
         Verify no tombstones.
         """
-        # pylint: disable=too-many-locals,too-many-statements
 
         self.create_tables_for_scylla_bench()
         self.db_node = self.db_cluster.nodes[0]

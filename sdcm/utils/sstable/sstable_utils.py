@@ -20,7 +20,6 @@ class SstableUtils:
 
     """
 
-    # pylint: disable=too-many-instance-attributes
     def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None,
                  db_node: 'BaseNode' = None,  # noqa: F821
                  **kwargs):
@@ -57,7 +56,7 @@ class SstableUtils:
         self.log.debug('Got %s sstables %s', len(selected_sstables), message)
         return selected_sstables
 
-    def check_that_sstables_are_encrypted(self, sstables=None,  # pylint: disable=too-many-branches
+    def check_that_sstables_are_encrypted(self, sstables=None,
                                           expected_bool_value: bool = True) -> list:
 
         if not sstables:
@@ -161,7 +160,7 @@ class SstableUtils:
                     self.log.debug('No repair history found for %s.%s', self.keyspace, self.table)
                     return None
                 return str(output[-1].repair_time)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 self.log.error('Failed to get repair date of %s.%s. Error: %s', self.keyspace, self.table, exc)
                 raise
 
