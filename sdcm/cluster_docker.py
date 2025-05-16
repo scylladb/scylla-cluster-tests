@@ -21,6 +21,8 @@ from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.docker_service_manager import create_service_manager
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.net import get_my_public_ip
@@ -81,10 +83,18 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix)
         self.node_index = node_index
+        self.docker_service_manager = None
+        self._docker_cmd_runner = None
 
         if container is not None:
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
+
+    def setup_docker_management(self, container: Container):
+        """Set up Docker command runner and service manager for direct container management"""
+        self._docker_cmd_runner = RemoteDocker(
+            node=self, image_name=container.image.tags[0] if container.image.tags else "unknown", docker_id=container.id)
+        self.docker_service_manager = create_service_manager(self._docker_cmd_runner)
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
@@ -139,6 +149,14 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         ContainerManager.get_container(self, "node").restart()
 
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
+        if self.docker_service_manager:
+            status = self.docker_service_manager.get_service_status(service_name)
+            # format similar to supervisorctl status output for compatibility
+            return type('ServiceStatus', (), {
+                'stdout': f"{service_name} {status}",
+                'stderr': "",
+                'ok': status in ['running', 'active', 'RUNNING']
+            })
         return self.remoter.sudo('sh -c "{0} || {0}.service"'.format(f"supervisorctl status {service_name}"),
                                  timeout=timeout, ignore_status=ignore_status)
 
@@ -146,14 +164,18 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
-                          timeout=timeout)
+        if self.docker_service_manager:
+            self.docker_service_manager.start_service('scylla', timeout=timeout)
+        else:
+            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
+                              timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
-        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.start_scylla_housekeeping_service(timeout=timeout)
+        # It's likely that we won't need this step after scylladb docker image becomes supervisor-less
+        # # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
+        # # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        # self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
@@ -162,24 +184,34 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
-        with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
-            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
-                              timeout=timeout)
+        if self.docker_service_manager:
+            self.docker_service_manager.stop_service('scylla', timeout=timeout)
+        else:
+            # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
+            with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
+                self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
+                                  timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
-        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.stop_scylla_housekeeping_service(timeout=timeout)
+        # It's likely that we won't need this step after scylladb docker image becomes supervisor-less
+        # # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
+        # # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        # self.stop_scylla_housekeeping_service(timeout=timeout)
 
-    def stop_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
-                          timeout=timeout)
+    # def stop_scylla_housekeeping_service(self, timeout=300):
+    #     if self._docker_service_manager:
+    #         self.stop_container_service('scylla-housekeeping', timeout=timeout)
+    #     else:
+    #         self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
+    #                           timeout=timeout)
 
-    def start_scylla_housekeeping_service(self, timeout=300):
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
-                          timeout=timeout)
+    # def start_scylla_housekeeping_service(self, timeout=300):
+    #     if self._docker_service_manager:
+    #         self.start_container_service('scylla-housekeeping', timeout=timeout)
+    #     else:
+    #         self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
+    #                           timeout=timeout)
 
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
@@ -191,15 +223,19 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         if verify_up_before:
             self.wait_db_up(timeout=verify_up_timeout)
 
-        # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
-        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
-        self.stop_scylla_housekeeping_service(timeout=timeout)
-        # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
-        with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
-            self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
+        # It's likely that we won't need this step after scylladb docker image becomes supervisor-less
+        # # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
+        # # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        # self.stop_scylla_housekeeping_service(timeout=timeout)
+        if self.docker_service_manager:
+            self.docker_service_manager.restart_service('scylla', timeout=timeout)
+        else:
+            # ignoring WARN messages upon stopping - https://github.com/scylladb/scylla-cluster-tests/issues/10633
+            with DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line="WARN "):
+                self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
-        self.start_scylla_housekeeping_service(timeout=timeout)
+        # self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800) -> None:
@@ -263,6 +299,9 @@ class DockerCluster(cluster.BaseCluster):
         ContainerManager.run_container(node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None)
         ContainerManager.wait_for_status(node, "node", status="running")
         ContainerManager.ssh_copy_id(node, "node", self.node_container_user, self.node_container_key_file)
+
+        container = ContainerManager.get_container(node, "node")
+        node.setup_docker_management(container)
 
         node.init()
 

@@ -180,7 +180,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                            severity=Severity.ERROR).publish()
             return
 
-        status = status_out.stdout.strip()
+        status = status_out.stdout.strip().lower()
         # Expected output:
         #     "scylla-housekeeping-restart.service: Succeeded" - ubuntu, centos
         #     "RUNNING" - docker
@@ -189,7 +189,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if "scylla-housekeeping-restart.service: Succeeded" in status or \
                 "Started Scylla Housekeeping restart mode" in status or \
                 "Started scylla-housekeeping-restart.service - Scylla Housekeeping restart mode" in status or \
-                "RUNNING" in status:
+                "running" in status:
             ScyllaHousekeepingServiceEvent(message="scylla-housekeeping-restart service running",
                                            severity=Severity.NORMAL).publish()
         else:

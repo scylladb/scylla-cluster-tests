@@ -17,19 +17,25 @@ LOGGER = logging.getLogger(__name__)
 
 # pylint: disable=too-many-public-methods
 class RemoteDocker(BaseNode):
-    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):  # pylint: disable=too-many-arguments
+    def __init__(
+            self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None, docker_id=None):  # pylint: disable=too-many-arguments
         self.node = node
         self._internal_ip_address = None
         self.log = LOGGER
-        ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
-        if docker_network:
-            extra_docker_opts += f" --network {docker_network}"
-            self.create_network(docker_network)
-        extra_docker_opts += f" --label TestId={node.test_config.test_id()}"
-        res = self.node.remoter.run(
-            f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}',
-            verbose=True, retry=3)
-        self.docker_id = res.stdout.strip()
+
+        if self.docker_id:
+            self.docker_id = docker_id
+        else:
+            ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
+            if docker_network:
+                extra_docker_opts += f" --network {docker_network}"
+                self.create_network(docker_network)
+            extra_docker_opts += f" --label TestId={node.test_config.test_id()}"
+            res = self.node.remoter.run(
+                f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}',
+                verbose=True, retry=3)
+            self.docker_id = res.stdout.strip()
+
         self.image_name = image_name
         self.docker_network = docker_network
         super().__init__(name=image_name, parent_cluster=node.parent_cluster)
