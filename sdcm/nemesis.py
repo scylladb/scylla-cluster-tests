@@ -1899,6 +1899,18 @@ class Nemesis:
         with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
             node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
+    def run_repair_on_nodes(self, nodes: list, publish_event=True):
+        """
+        Execute a nodetool repair on the specified nodes, disregarding errors that may
+        arise from failed or unavailable nodes during the process.
+        """
+        for node in nodes:
+            try:
+                with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
+                    node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+            except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
+                self.log.warning(f"Repair failed to complete on node: {node}, with error: {str(err)}")
+
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool('rebuild', long_running=True, retry=0)
@@ -3651,12 +3663,7 @@ class Nemesis:
         # and as a result requires ignoring repair errors
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="failed to repair"):
-            for node in up_normal_nodes:
-                try:
-                    self.repair_nodetool_repair(node=node, publish_event=False)
-                except Exception as details:  # noqa: BLE001
-                    self.log.error(f"failed to execute repair command "
-                                   f"on node {node} due to the following error: {str(details)}")
+            self.run_repair_on_nodes(nodes=up_normal_nodes)
 
         exit_status = remove_node()
         # if remove node command failed by any reason,
@@ -4109,7 +4116,10 @@ class Nemesis:
     def disrupt_repair_streaming_err(self):
         """
         Stop repair in middle to trigger some streaming fails, then rebuild the data on the node.
+        Repair call before streaming is needed to avoid c-s data validation error.
+        Ref: https://github.com/scylladb/scylladb/issues/21428
         """
+        self.run_repair_on_nodes(nodes=self.cluster.data_nodes)
         with ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_repair_streaming()
 
