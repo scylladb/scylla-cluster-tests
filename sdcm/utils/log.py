@@ -2,8 +2,10 @@ import sys
 import logging
 import logging.config
 import warnings
+from datetime import datetime
 
 import urllib3
+import json
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +68,36 @@ class MultilineMessagesFormatter(logging.Formatter):
         return output
 
 
+class JSONLFormatter(logging.Formatter):
+    """
+    A custom logging formatter that outputs log records in JSON Lines (JSONL) format.
+
+    Attributes added to the log record:
+    - datetime: The current UTC timestamp in ISO 8601 format with a 'Z' suffix.
+    - status: The log level name in lowercase.
+    - source: Optional source of the log record.
+    - action: Optional action associated with the log record.
+    - target: Optional target information, if available.
+    - trace_id: Optional trace ID for correlation, if available.
+    - metadata: Optional metadata dictionary, if available.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry = {
+            "datetime": datetime.utcnow().isoformat() + "Z",
+            "status": record.levelname.lower(),
+            "source": getattr(record, "source", ""),
+            "action": getattr(record, "action", ""),
+        }
+        if target := getattr(record, "target", None):
+            log_entry["target"] = target
+        if trace_id := getattr(record, "trace_id", None):
+            log_entry["trace_id"] = trace_id
+        if metadata := getattr(record, "metadata", None):
+            log_entry["metadata"] = metadata
+        return json.dumps(log_entry, ensure_ascii=False)
+
+
 class FilterRemote(logging.Filter):  # pylint: disable=too-few-public-methods
     def filter(self, record):
         return not record.name == 'sdcm.remote'
@@ -109,6 +141,10 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
                 '()': MultilineMessagesFormatter,
                 'format': '< t:%(asctime)s f:%(filename)-15s l:%(lineno)-4s c:%(name)-20s p:%(levelname)-5s > %(message)s'
             },
+            'action_logger': {
+                '()': JSONLFormatter,
+                'format': '%(message)s'
+            }
         }
     if filters is None:
         filters = {
@@ -138,6 +174,13 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
                 'filename': '{log_dir}/argus.log',
                 'mode': 'a',
                 'formatter': 'default',
+            },
+            'actions': {
+                'level': 'INFO',
+                'class': 'logging.FileHandler',
+                'filename': '{log_dir}/actions.log',
+                'mode': 'a',
+                'formatter': 'action_logger',
             }
         }
     if loggers is None:
@@ -178,6 +221,11 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
             'argus': {
                 'handlers': ['argus'],
                 'level': 'DEBUG',
+                'propagate': False
+            },
+            'action_logger': {
+                'handlers': ['actions'],
+                'level': 'INFO',
                 'propagate': False
             },
             'sdcm.argus_test_run': {
