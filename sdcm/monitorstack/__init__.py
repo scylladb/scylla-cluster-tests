@@ -465,6 +465,7 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
             -s {monitoring_dockers_dir}/config/scylla_servers.yml \
             -d {monitoring_stack_data_dir} -v {scylla_version} \
             -b '-storage.tsdb.retention.time=100y' \
+            -b '--web.enable-remote-write-receiver' \
             -c 'GF_USERS_DEFAULT_THEME=dark'""".format(**locals()))
     res = lr.run(cmd, ignore_status=True)
     if res.ok:

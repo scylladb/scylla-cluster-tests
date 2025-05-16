@@ -31,6 +31,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
     SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
+    VECTOR_SSH_TUNNEL_LOCAL_PORT = 5001
     IP_SSH_CONNECTIONS = 'private'
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
@@ -42,6 +43,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
     SYSLOGNG_ADDRESS = None
+    VECTOR_ADDRESS = None
     LDAP_ADDRESS = None
     DECODING_QUEUE = None
 
@@ -54,6 +56,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     _argus_client: ArgusSCTClient | MagicMock = MagicMock()
 
     backup_azure_blob_credentials = {}
+
+    prometheus_url: str = None
 
     @classmethod
     def test_id(cls):
@@ -223,6 +227,15 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         cls.SYSLOGNG_ADDRESS = (address, port)
 
     @classmethod
+    def configure_vector(cls, node):
+        ContainerManager.run_container(node, "vector", logdir=cls.logdir())
+        cls._link_running_syslog_logdir(node.vector_log_dir)
+        port = node.vector_port
+        LOGGER.info("vector listen on port %s (config: %s)", port, node.vector_confpath)
+        address = get_my_ip()
+        cls.VECTOR_ADDRESS = (address, port)
+
+    @classmethod
     def get_startup_script(cls) -> str:
         host_port = cls.get_logging_service_host_port()
         if not host_port or not host_port[0]:
@@ -230,18 +243,34 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
             logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
+            test_config=cls(),
         ).to_string()
 
     @classmethod
     def get_logging_service_host_port(cls) -> tuple[str, int] | None:
-        if not cls.SYSLOGNG_ADDRESS:
-            return None
-        if cls.IP_SSH_CONNECTIONS == "public":
-            syslogng_host = "127.0.0.1"
-            syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
+        if cls.SYSLOGNG_ADDRESS:
+            if cls.IP_SSH_CONNECTIONS == "public":
+                syslogng_host = "127.0.0.1"
+                syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
+            else:
+                syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
+            return syslogng_host, syslogng_port
+        elif cls.VECTOR_ADDRESS:
+            if cls.IP_SSH_CONNECTIONS == "public":
+                vector_host = "127.0.0.1"
+                vector_port = cls.VECTOR_SSH_TUNNEL_LOCAL_PORT
+            else:
+                vector_host, vector_port = cls.VECTOR_ADDRESS
+            return vector_host, vector_port
         else:
-            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
-        return syslogng_host, syslogng_port
+            return None
+
+    def set_prometheus_url(cls, prometheus_url: str) -> None:
+        cls.prometheus_url = prometheus_url
+
+        if cls.VECTOR_ADDRESS:
+            for node in cls.tester_obj().db_cluster.nodes:
+                node.configure_remote_logging()
 
     @classmethod
     def set_ip_ssh_connections(cls, ip_type):

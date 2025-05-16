@@ -468,6 +468,14 @@ class BaseNode(AutoSshContainerMixin):
                 ContainerManager.run_container(self, "auto_ssh:syslog_ng",
                                                local_port=self.test_config.SYSLOGNG_ADDRESS[1],
                                                remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT)
+            if self.test_config.VECTOR_ADDRESS:
+                try:
+                    ContainerManager.destroy_container(self, "auto_ssh:vector", ignore_keepalive=True)
+                except NotFound:
+                    pass
+                ContainerManager.run_container(self, "auto_ssh:vector",
+                                               local_port=self.test_config.VECTOR_ADDRESS[1],
+                                               remote_port=self.test_config.VECTOR_SSH_TUNNEL_LOCAL_PORT)
             if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
@@ -592,7 +600,7 @@ class BaseNode(AutoSshContainerMixin):
     def system_log(self):
         orig_log_path = os.path.join(self.logdir, 'system.log')
 
-        if self.test_config.SYSLOGNG_ADDRESS:
+        if self.test_config.SYSLOGNG_ADDRESS or self.test_config.VECTOR_ADDRESS:
             syslogng_log_path = os.path.join(self.test_config.logdir(), 'hosts', self.short_hostname, 'messages.log')
             if os.path.exists(syslogng_log_path) and (not os.path.islink(orig_log_path)):
                 os.symlink(os.path.relpath(syslogng_log_path, self.logdir), orig_log_path)
@@ -1026,6 +1034,8 @@ class BaseNode(AutoSshContainerMixin):
             self._journal_thread.start()
         elif logs_transport == 'syslog-ng':
             self.log.debug("Use no logging daemon since log transport is syslog-ng")
+        elif logs_transport == 'vector':
+            self.log.debug("Use no logging daemon since log transport is vector")
         else:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
@@ -1044,7 +1054,7 @@ class BaseNode(AutoSshContainerMixin):
             node_name=str(self.name),
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=self.test_config.DECODING_QUEUE,
-            log_lines=self.parent_cluster.params.get('logs_transport') in ['syslog-ng',]
+            log_lines=self.parent_cluster.params.get('logs_transport') in ['syslog-ng', 'vector']
         )
         self._db_log_reader_thread.start()
 
@@ -2954,7 +2964,7 @@ class BaseNode(AutoSshContainerMixin):
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
     def configure_remote_logging(self):
-        if self.parent_cluster.params.get('logs_transport') not in ['syslog-ng',]:
+        if self.parent_cluster.params.get('logs_transport') not in ['syslog-ng', 'vector']:
             return
         log_file = ""
         if 'db-node' in self.name and self.is_nonroot_install and not self.is_scylla_logging_to_journal:
@@ -2964,6 +2974,7 @@ class BaseNode(AutoSshContainerMixin):
             logs_transport=self.parent_cluster.params.get('logs_transport'),
             hostname=self.name,
             log_file=log_file,
+            test_config=self.test_config,
         ).to_string()
         self.remoter.sudo(shell_script_cmd(script, quote="'"))
 
@@ -3500,7 +3511,8 @@ class BaseCluster:
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
-                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port(),
+                                                  test_config=self.test_config)
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):
@@ -5419,6 +5431,7 @@ class BaseMonitorSet:
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
+        self.prometheus_port = 9090
         self.prometheus_retention = "365d"
         self.monitor_branch = self.params.get('monitor_branch')
         self.grafana_start_time = 0
@@ -5532,6 +5545,8 @@ class BaseMonitorSet:
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
+            self.test_config.set_prometheus_url(
+                f"http://{normalize_ipv6_url(node.external_address)}:{self.prometheus_port}")
             return
 
         self.install_scylla_monitoring(node)
@@ -5546,6 +5561,8 @@ class BaseMonitorSet:
         # be captured.
         self.grafana_start_time = time.time()
         set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
+        self.test_config.set_prometheus_url(
+            f"http://{normalize_ipv6_url(node.external_address)}:{self.prometheus_port}")
         # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
@@ -5983,6 +6000,7 @@ class BaseMonitorSet:
             {scylla_manager_servers_arg} \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
             -b "--web.enable-admin-api --storage.tsdb.retention.time={self.prometheus_retention}" \
+            -b "--web.enable-remote-write-receiver" \
             -c 'GF_USERS_DEFAULT_THEME=dark'
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)

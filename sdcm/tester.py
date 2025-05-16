@@ -940,7 +940,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get("logs_transport") == 'syslog-ng':
             self.test_config.configure_syslogng(self.localhost)
-
+        if self.params.get("logs_transport") == 'vector':
+            self.test_config.configure_vector(self.localhost)
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
 
