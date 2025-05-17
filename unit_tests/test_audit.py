@@ -14,13 +14,13 @@ def test_get_audit_log_rows_can_be_filtered_by_time():
     node = DummyAuditNode(name='dummy-node', parent_cluster=None)
     # no date filter provided
     rows = get_audit_log_rows(node, from_datetime=None)
-    assert len(list(rows)) == 95
+    assert len(list(rows)) == 69
 
     # filter by date
-    start_time = datetime(2023, 7, 24, 11, 39, 1, 123)  # 2023-07-24T11:39:01.123
+    start_time = datetime(2025, 5, 17, 5, 49, 37, 280)  # 2025-05-17T05:49:37.280
     rows = get_audit_log_rows(node, from_datetime=start_time)
     rows = list(rows)
-    assert len(rows) == 21
+    assert len(rows) == 4
     assert not [row for row in rows if row.event_time < start_time.replace(microsecond=0)]
 
 
