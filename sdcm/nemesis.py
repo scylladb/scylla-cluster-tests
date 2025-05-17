@@ -5114,6 +5114,9 @@ class Nemesis:
         if store == "syslog" and self._is_it_on_kubernetes():
             # generally syslog is not supported on K8S because of different log line format
             raise UnsupportedNemesis("syslog store is not supported on Kubernetes scylladb/scylla-operator#1299")
+        if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.1"):
+            raise UnsupportedNemesis(
+                "Audit feature log format was changed in Scylla 2025.2 and later. Use old sct-branch for Scylla < 2025.2")
 
         audit = Audit(self.cluster)
 
