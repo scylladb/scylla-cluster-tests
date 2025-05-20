@@ -63,6 +63,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
+            text(defaultValue: '',
+                    description: 'custom config file to be used on top of the test_config',
+                   name: "custom_config")
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -126,7 +129,7 @@ def call(Map pipelineParams) {
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
 
-                                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                        def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
                                         stage("Checkout (${instance_type})") {
                                             script {
                                                 loadEnvFromString(params.extra_environment_variables)
@@ -137,6 +140,21 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                             dockerLogin(params)
+                                        }
+                                        stage('Create Custom Config') {
+                                            steps {
+                                                catchError(stageResult: 'FAILURE') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    createCustomConfig(params)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {

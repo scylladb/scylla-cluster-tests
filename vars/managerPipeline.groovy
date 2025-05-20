@@ -141,6 +141,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            text(defaultValue: '',
+                    description: 'custom config file to be used on top of the test_config',
+                   name: "custom_config")
 
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
@@ -200,6 +203,21 @@ def call(Map pipelineParams) {
                     }
                     dockerLogin(params)
                }
+            }
+            stage('Create Custom Config') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createCustomConfig(params)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             stage('Create Argus Test Run') {
                 steps {
@@ -283,7 +301,7 @@ def call(Map pipelineParams) {
                                         // handle params which can be a json list
                                         def region = initAwsRegionParam(params.region, builder.region)
                                         def datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
-                                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                        def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
                                         def cloud_provider = params.backend.trim().toLowerCase()
 
                                         sh """#!/bin/bash

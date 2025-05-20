@@ -35,6 +35,9 @@ def call() {
             string(defaultValue: "test-cases/longevity/longevity-100gb-4h.yaml",
                    description: '',
                    name: 'test_config')
+            text(defaultValue: '',
+                   description: 'custom config file to be used on top of the test_config',
+                   name: "custom_config")
             string(defaultValue: "aws",
                description: 'aws|gce',
                name: 'backend')
@@ -136,6 +139,21 @@ def call() {
                   }
                   dockerLogin(params)
                }
+            }
+            stage('Create Custom Config') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createCustomConfig(params)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             stage('Create SCT Runner') {
                 steps {

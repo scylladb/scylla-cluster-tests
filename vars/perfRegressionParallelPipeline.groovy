@@ -76,6 +76,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            text(defaultValue: '',
+                    description: 'custom config file to be used on top of the test_config',
+                   name: "custom_config")
 
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
@@ -273,6 +276,21 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
+                                        stage('Create Custom Config') {
+                                            steps {
+                                                catchError(stageResult: 'FAILURE') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    createCustomConfig(params)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
                                                 script {
@@ -318,7 +336,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                                    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                                    def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
                                                     def perf_extra_jobs_to_compare = groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare)
                                                     def current_region = initAwsRegionParam(params.region, builder.region)
 

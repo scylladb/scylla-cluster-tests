@@ -7,7 +7,8 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if (params.gce_datacenter) {
         current_gce_datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
     }
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+
+    def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def perf_extra_jobs_to_compare = params.perf_extra_jobs_to_compare ? groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare) : ""
 

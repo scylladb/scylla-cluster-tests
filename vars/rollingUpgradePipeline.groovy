@@ -61,6 +61,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            text(defaultValue: '',
+                    description: 'custom config file to be used on top of the test_config',
+                   name: "custom_config")
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
@@ -209,6 +212,21 @@ def call(Map pipelineParams) {
                                                             }
                                                         }
                                                         dockerLogin(params)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage('Create Custom Config') {
+                                            steps {
+                                                catchError(stageResult: 'FAILURE') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                timeout(time: 5, unit: 'MINUTES') {
+                                                                    createCustomConfig(params)
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
