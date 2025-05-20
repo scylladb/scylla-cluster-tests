@@ -13,6 +13,10 @@
 
 import time
 import contextlib
+import os
+import traceback
+import re
+import uuid
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import optional_stage, latency_calculator_decorator
@@ -21,10 +25,11 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
-from performance_regression_test import PerformanceRegressionTest
+from performance_regression_test import PerformanceRegressionTest, PerformanceTestWorkload
 from upgrade_test import UpgradeTest
-
+from typing import Optional
 
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def setUp(self):
@@ -35,8 +40,24 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
+    @latency_calculator_decorator
+    def _workload_with_latency_calculator_decorator(self, *args, **kwargs):
+        workload = kwargs.get('workload')
+        if workload == PerformanceTestWorkload.READ:
+            self.params['workload_name'] = 'read'
+            self.hdr_tags = ['read']
+        elif workload == PerformanceTestWorkload.WRITE:
+            self.params['workload_name'] = 'write'
+            self.hdr_tags = ['write']
+        elif workload == PerformanceTestWorkload.MIXED:
+            self.params['workload_name'] = 'mixed'
+            self.hdr_tags = ['mixed']
+        else:
+            self.log.error(f'unknown workload {workload} - some things might not work as expected')
+        return self._workload(*args, **kwargs)
+    
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
-                  save_stats=True, is_alternator=True, nemesis=False):
+                  save_stats=True, is_alternator=True, nemesis=False, workload: Optional[PerformanceTestWorkload] = None):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -53,9 +74,113 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
 
+        work_types = ('READ', 'SCAN', 'UPDATE', 'INSERT', 'DELETE', 'WRITE')
+        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid.uuid4()}')
+        start_time_re = re.compile(r'^#\[StartTime: (\d+(\.\d+)?) ')
+        os.makedirs(dir_name, exist_ok=True)
+        if workload is not None and 'workload_name' in self.params:
+            for loader in self.loaders.nodes:
+                loader_index = loader.node_index
+                for work_type in work_types:
+                    for stress_idx in range(0, stress_num):
+                        pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+                        if os.path.isfile(pth):
+                            self.log.error(f'QWERTY removing file {pth}')
+                            try:
+                                os.remove(pth)
+                            except:
+                                pass
+                        assert not os.path.exists(pth), pth
+                        pth += '_'
+                        if os.path.isfile(pth):
+                            self.log.error(f'QWERTY removing file {pth}')
+                            try:
+                                os.remove(pth)
+                            except:
+                                pass
+                        assert not os.path.exists(pth), pth
+            hdrh_logger_contextes = []
+            for loader in self.loaders.nodes:
+                loader_index = loader.node_index
+                for work_type in work_types:
+                    for stress_idx in range(0, stress_num):
+                        hdrh_logger = HDRHistogramFileLogger(
+                            node=loader,
+                            remote_log_file=f'/tmp/hdr-output-directory/{loader_index}/{stress_idx}/hdrh-{work_type}.hdr',
+                            target_log_file=os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr_'),
+                        )
+                        hdrh_logger.start()
+                        hdrh_logger_contextes.append(hdrh_logger)
+
+        self.log.error(f'QWERTY running job with dir_name {dir_name}')
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
+        self.log.error(f'QWERTY job with dir_name {dir_name} is done')
+        if workload is not None and 'workload_name' in self.params:
+            for hdrh_logger in hdrh_logger_contextes:
+                hdrh_logger.stop()
+            tag_text = f'Tag={self.params["workload_name"]}'
+            allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
+            for loader in self.loaders.nodes:
+                loader_index = loader.node_index
+                for work_type in work_types:
+                    for stress_idx in range(0, stress_num):
+                        dst_pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+                        src_pth = dst_pth + '_'
+                        if os.path.isfile(src_pth):
+                            with open(src_pth, 'r', encoding='utf8') as input:
+                                data = input.readlines()
+                            data2 = []
+                            min_starting_time = None
+                            ignored_tail_lines = 0
+                            for d in data:
+                                d = d.strip()
+                                if d.startswith('tail: '):
+                                    ignored_tail_lines += 1
+                                elif d.startswith('#'):
+                                    m = start_time_re.match(d)
+                                    if m:
+                                        start_time = m.group(1)
+                                        if min_starting_time is None or float(start_time) < min_starting_time:
+                                            min_starting_time = float(start_time)
+                                        self.log.error(f'QWERTY file {src_pth} ignoring comment line `{d}` with start time {start_time}')
+                                    else:
+                                        self.log.error(f'QWERTY file {src_pth} ignoring comment line `{d}`')
+                                else:
+                                    d2 = set(d)
+                                    if d2 - allowed_chars:
+                                        self.log.error(f'QWERTY file {src_pth} ignoring line `{d}`, because of invalid characters')
+                                    else:
+                                        data2.append(d)
+                            removed = len(data) - len(data2)
+                            self.log.error(f'QWERTY file {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
+                            data3 = [
+                                '#[Histogram log format version 1.3]',
+                            ]
+                            if min_starting_time is None:
+                                min_starting_time = self.get_test_start_time() or self.start_time
+                            data3.append(f'#[StartTime: {min_starting_time} ()')
+                            for d in data2:
+                                if d[0].isdigit() or d[0] == '.':
+                                    data3.append(f'{tag_text},{d}')
+                                else:
+                                    data3.append(d)
+                            data3.append('"StartTimestamp","Interval_Length","Interval_Max","Interval_Compressed_Histogram"')
+                            if data3:
+                                # in case last line was only partially written - python implementation of hdr histogram
+                                # doesn't like it
+                                data3.pop()
+                            data_f = ('\n'.join(data3)).strip()
+                            if data_f:
+                                start_time = self.get_test_start_time() or self.start_time
+                                self.log.error(f'QWERTY writing updated file {dst_pth} lines {len(data3)}')
+                                with open(dst_pth, 'w', encoding='utf8') as output:
+                                    output.write(data_f)
+                                # self.log.error(f'QWERTY writing updated file {dst_pth} completed')
+                                # for e, d in enumerate(data3):
+                                #     self.log.error(f'QWERTY file {src_pth} line {e} {d}')
+            self.build_histogram(workload, hdr_tags=[self.params['workload_name']])
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
@@ -275,67 +400,83 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_multiplier = 2
         self.wait_no_compactions_running(n=120)
 
+        def clear_hdr_files():
+            for root, _, files in os.walk(self.loaders.logdir):
+                for file in files:
+                    if file.endswith('.hdr'):
+                        full_path = os.path.join(root, file)
+                        self.log.info(f'QWERTY removing file {full_path}')
+                        os.remove(full_path)
         self.run_fstrim_on_all_db_nodes()
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1, is_alternator=False)
+            keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.READ)
+        clear_hdr_files()
 
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1)
+            keyspace_num=1, workload=PerformanceTestWorkload.READ)
+        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1)
+            keyspace_num=1, workload=PerformanceTestWorkload.READ)
         self.check_regression_with_baseline('cql')
+        clear_hdr_files()
 
         stress_multiplier = 1
         self.run_fstrim_on_all_db_nodes()
 
         self.wait_no_compactions_running()
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.WRITE)
+        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1)
+            stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
+        clear_hdr_files()
 
         self.wait_no_compactions_running(n=120)
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000",
-            stress_num=stress_multiplier, keyspace_num=1)
+            stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
         self.check_regression_with_baseline('cql')
+        clear_hdr_files()
 
         stress_multiplier = 1
         self.wait_no_compactions_running(n=120)
         self.run_fstrim_on_all_db_nodes()
 
-        self._workload(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.MIXED)
+        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(test_name=self.id() + '_mixed', sub_type='without-lwt',
-                       stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1)
+        self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
+                       stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
+        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(test_name=self.id() + '_mixed', sub_type='with-lwt',
-                       stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1)
+        self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
+                       stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
+        clear_hdr_files()
 
         self.check_regression_with_baseline('cql')
 

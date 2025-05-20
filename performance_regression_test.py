@@ -797,22 +797,30 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
         self.check_regression()
         self.kill_stress_thread()
 
-    def build_histogram(self, workload: PerformanceTestWorkload, hdr_tags: list):
+    def build_histogram(self, workload: PerformanceTestWorkload, hdr_tags: list, absolute_time = True, base_path=None):
         if not self.params["use_hdrhistogram"]:
             return
 
-        start_time = self.get_test_start_time() or self.start_time
-        end_time = time.time()
+        if absolute_time:
+            self.log.error('QWERTY using absolute time')
+            start_time = self.get_test_start_time() or self.start_time
+            end_time = time.time()
+        else:
+            self.log.error('QWERTY using relative time')
+            start_time = 0
+            end_time = 9999999999
 
         histogram_total_data = self.get_hdrhistogram(
             hdr_tags=hdr_tags, stress_operation=workload.value,
-            start_time=start_time, end_time=end_time)
+            start_time=start_time, end_time=end_time, base_path=base_path)
+        self.log.error(f'QWERTY histogram_total_data: {histogram_total_data}')
         self.update_hdrhistograms(histogram_name="test_histogram",
                                   histogram_data=histogram_total_data)
 
         histogram_data_by_interval = self.get_hdrhistogram_by_interval(
             hdr_tags=hdr_tags, stress_operation=workload.value,
-            start_time=start_time, end_time=end_time)
+            start_time=start_time, end_time=end_time, base_path=base_path)
+        self.log.error(f'QWERTY histogram_data_by_interval: {histogram_data_by_interval}')
 
         self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
                                   histogram_data=histogram_data_by_interval)

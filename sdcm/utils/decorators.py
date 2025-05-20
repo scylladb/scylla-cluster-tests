@@ -228,6 +228,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             end = time.time()
             test_name = tester.__repr__().split('testMethod=')[-1].split('>')[0]
             if not monitoring_set or not monitoring_set.nodes:
+                logging.error(f'QWERTY returning not monitoring_set')                
                 return res
             monitor = monitoring_set.nodes[0]
             screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
@@ -240,6 +241,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             elif tester.params.get('workload_name'):
                 workload = tester.params['workload_name']
             else:
+                logging.error(f'QWERTY returning res')
                 return res
 
             latency_results_file_path = tester.latency_results_file

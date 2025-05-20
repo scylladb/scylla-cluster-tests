@@ -32,8 +32,8 @@ def call(Map pipelineParams) {
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
 
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_ami_id', '')}", description: '', name: 'scylla_ami_id')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}", description: '', name: 'scylla_version')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')

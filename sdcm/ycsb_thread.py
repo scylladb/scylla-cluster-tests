@@ -264,9 +264,14 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                    extra_docker_opts=f'--label shell_marker={self.shell_marker}',
                                    docker_network=self.params.get('docker_network'))
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+            os.makedirs(f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}', exist_ok=True)
+            try:
+                os.chmod('/tmp/hdr-output-directory', 0o777)
+            except Exception:
+                LOGGER.exception(f'chmod failed for /tmp/hdr-output-directory')
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,
-                extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}',
+                extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker} -v /tmp/hdr-output-directory/{loader_idx}/{cpu_idx}:/tmp/hdr-output-directory:z',
                 docker_network=self.params.get('docker_network'))
             cmd_runner_name = str(loader)
 

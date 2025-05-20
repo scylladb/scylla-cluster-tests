@@ -114,7 +114,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
     cmd = (
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 "
-        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
+        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=2002003000 -s -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdrh-"
     )
     ycsb_thread = YcsbStressThread(
         loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params

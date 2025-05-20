@@ -16,6 +16,7 @@ import json
 import logging
 import collections
 import multiprocessing
+import traceback
 from typing import Tuple, Optional, Callable, Any, Dict, List, cast
 from pathlib import Path
 from functools import partial
@@ -86,6 +87,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 self.write_event(event=event)
 
     def write_event(self, event: SctEvent) -> None:
+        LOGGER.info(f'QWERTY writign event {traceback.format_exc()}')
         if event.source_timestamp:
             message = f"{event.formatted_event_timestamp} <{event.formatted_source_timestamp}>: {str(event).strip()}"
         else:

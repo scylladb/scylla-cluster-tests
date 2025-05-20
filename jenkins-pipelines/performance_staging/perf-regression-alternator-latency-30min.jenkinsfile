@@ -9,4 +9,7 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_alternator_test.PerformanceRegressionAlternatorTest",
     test_config: "test-cases/performance/perf-regression-alternator-latency-500gb-30min.yaml",
     sub_tests: ["test_latency"],
+    scylla_version: '2025.1.1',
+    provision_type: 'on_demand',
+    email_recipients: 'radoslaw.cybulski@scylladb.com',
 )

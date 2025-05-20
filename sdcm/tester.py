@@ -3909,25 +3909,33 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return False
 
     def get_hdrhistogram(self, hdr_tags: list[str], stress_operation: str,
-                         start_time: float, end_time: float) -> dict[str, Any]:
+                         start_time: float, end_time: float, absolute_time = True, base_path=None) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
             return {}
+        if base_path is None:
+            base_path = self.loaders.logdir
         self.log.info("Build HDR histogram (tags: %s) with start time: %s, end time: %s; for operation: %s",
                       hdr_tags, start_time, end_time, stress_operation)
+        for line in traceback.format_stack():
+            self.log.info(f'calling from {line.strip()}')
         histogram_data = make_hdrhistogram_summary(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
-            start_time=start_time, end_time=end_time, base_path=self.loaders.logdir)
+            start_time=start_time, end_time=end_time, base_path=base_path, absolute_time=absolute_time)
         self.log.info("HDR histogram summary result: %s", histogram_data)
         return histogram_data[0] if histogram_data else {}
 
     def get_hdrhistogram_by_interval(self, hdr_tags: list[str], stress_operation: str,
                                      start_time: float, end_time: float,
-                                     time_interval: int = 600) -> list[dict[str, Any]]:
+                                     time_interval: int = 600, base_path=None) -> list[dict[str, Any]]:
         if not self.params["use_hdrhistogram"]:
             return []
+        if base_path is None:
+            base_path = self.loaders.logdir
         self.log.info(
-            "Build HDR histogram (tags: %s) with start time: %s, end time: %s, time interval: %s for operation: %s",
-            hdr_tags, start_time, end_time, time_interval, stress_operation)
+            "Build HDR histogram (tags: %s) with start time: %s, end time: %s, time interval: %s for operation: %s path %s",
+            hdr_tags, start_time, end_time, time_interval, stress_operation, self.loaders.logdir)
+        for line in traceback.format_stack():
+            self.log.info(f'calling from {line.strip()}')
         return make_hdrhistogram_summary_by_interval(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)

@@ -505,6 +505,7 @@ class Stats:
             LOGGER.error("Failed to update test stats: ES connection is not created (doc_id=%s)", self._test_id)
             return
         try:
+            self.log.error(f'QWERTY data {data}')
             self.elasticsearch.update_doc(
                 index=self._test_index,
                 doc_id=self._test_id,
