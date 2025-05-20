@@ -14,6 +14,18 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
+        },
+        "victorialogs": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--network=bridge",
+                "--rm",
+                "-e",
+                "VL_INSTANCE_ENTRYPOINT=http://localhost:9428",
+                "mcp-victorialogs:latest"
+            ]
         }
     }
 }
