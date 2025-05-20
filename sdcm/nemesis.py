@@ -5357,6 +5357,7 @@ class Nemesis:
         simulate_node_unavailability = node_operations.block_scylla_ports if use_iptables else node_operations.pause_scylla_with_sigstop
         with self.run_nemesis(node_list=self.cluster.nodes,
                               nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
+            stack.callback(drop_keyspace, node=working_node)
             target_host_id = self.target_node.host_id
             stack.callback(self._remove_node_add_node, verification_node=working_node, node_to_remove=self.target_node,
                            remove_node_host_id=target_host_id)
@@ -5392,6 +5393,9 @@ class Nemesis:
                             "Query from banned node was executed succesful with Consistency.QUORUM")
                     except (NoHostAvailable, OperationTimedOut, Unavailable) as exc:
                         self.log.debug("Query failed with error: %s as expected", exc)
+            self.log.debug("Remove banned node %s from cluster node list", self.target_node.name)
+            # need to remove it before create cluster connection, so banned node was not in ip list
+            self.cluster.nodes.remove(self.target_node)
 
             with self.cluster.cql_connection_patient(working_node) as session:
                 LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
