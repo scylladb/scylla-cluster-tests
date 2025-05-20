@@ -1,0 +1,19 @@
+{
+    "inputs": [
+        {
+            "type": "promptString"
+        }
+    ],
+    "servers": {
+        "argus": {
+            "command": "/home/ls/venvs/sct/bin/mcp",
+            "args": [
+                "run",
+                "${workspaceFolder}/mcps/mcp_argus.py"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    }
+}
