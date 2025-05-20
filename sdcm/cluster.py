@@ -3509,8 +3509,9 @@ class BaseCluster:
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
 
-    def get_node_cql_ips(self):
-        return [node.cql_address for node in self.nodes]
+    def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
+        nodes = nodes if nodes else self.nodes
+        return [node.cql_address for node in nodes]
 
     def get_node_database_errors(self):
         errors = {}
@@ -3651,12 +3652,13 @@ class BaseCluster:
 
     def cql_connection(self, node, keyspace=None, user=None,
                        password=None, compression=True, protocol_version=None,
-                       port=None, ssl_context=None, connect_timeout=100, verbose=True):
+                       port=None, ssl_context=None, connect_timeout=100, verbose=True,
+                       nodes_for_wlrr: list[BaseNode] | None = None):
         if connection_bundle_file := node.parent_cluster.connection_bundle_file:
             wlrr = None
             node_ips = []
         else:
-            node_ips = self.get_node_cql_ips()
+            node_ips = self.get_node_cql_ips(nodes=nodes_for_wlrr)
             wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
@@ -3689,10 +3691,10 @@ class BaseCluster:
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-
                                user=None, password=None,
                                compression=True, protocol_version=None,
-                               port=None, ssl_context=None, connect_timeout=100, verbose=True):
+                               port=None, ssl_context=None, connect_timeout=100, verbose=True,
+                               nodes_for_wlrr: list[BaseNode] | None = None):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
