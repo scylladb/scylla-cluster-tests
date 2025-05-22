@@ -12,9 +12,13 @@ def call(Map pipelineParams) {
             SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                    description: 'aws|gce|azure|docker',
                    name: 'backend')
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+               description: 'Availability zone',
+               name: 'availability_zone')
             string(defaultValue: '',
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_repo')
@@ -24,6 +28,7 @@ def call(Map pipelineParams) {
             booleanParam(defaultValue: "${pipelineParams.get('nonroot_offline_install', false)}",
                    description: 'Install Scylla without required root priviledge',
                    name: 'nonroot_offline_install')
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
                    description: 'a Scylla Manager repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_mgmt_address')
@@ -33,6 +38,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
                    description: 'master_latest|3.2|3.1',
                    name: 'manager_version')
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
@@ -57,12 +63,13 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla version to run against (mostly for docker backend)',
                    name: 'scylla_version')
-            string(defaultValue: "${pipelineParams.get('instance_type', '')}",
-                   description: 'a cloud instance type (leave blank for test case defaults)',
-                   name: 'instance_type')
             string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/artifacts/centos7.yaml')}",
                    description: 'a config file for the artifacts test',
                    name: 'test_config')
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
+            string(defaultValue: "${pipelineParams.get('instance_type', '')}",
+                   description: 'a cloud instance type (leave blank for test case defaults)',
+                   name: 'instance_type')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -72,18 +79,18 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'on_demand|spot_low_price|spot',
                    name: 'provision_type')
-            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
-                   description: 'email recipients of email report',
-                   name: 'email_recipients')
-            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
-               description: 'Availability zone',
-               name: 'availability_zone')
+            separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
+            separator(name: 'EMAIL_REPORT', sectionHeader: 'Email Report Configuration')
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+                   description: 'email recipients of email report',
+                   name: 'email_recipients')
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            separator(name: 'EXTRA_ENVIRONMENTAL_VARIABLES', sectionHeader: 'Extra environment variables Configuration')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                     description: (
                         'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
