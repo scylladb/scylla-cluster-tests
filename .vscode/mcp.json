@@ -1,0 +1,31 @@
+{
+    "inputs": [
+        {
+            "type": "promptString"
+        }
+    ],
+    "servers": {
+        "argus": {
+            "command": "/home/ls/venvs/sct/bin/mcp",
+            "args": [
+                "run",
+                "${workspaceFolder}/mcps/mcp_argus.py"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        "victorialogs": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--network=bridge",
+                "--rm",
+                "-e",
+                "VL_INSTANCE_ENTRYPOINT=http://localhost:9428",
+                "mcp-victorialogs:latest"
+            ]
+        }
+    }
+}

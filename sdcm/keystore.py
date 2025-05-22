@@ -123,6 +123,15 @@ class KeyStore:
     def get_baremetal_config(self, config_name: str):
         return self.get_json(f"{config_name}.json")
 
+    def get_ngrok_auth_token(self):
+        """Ngrok is used to provide public access to local temporary services.
+
+        Useful for providing access to LLMs for locally running prometheus in our MCP solutions.
+
+        See: https://ngrok.com/docs/what-is-ngrok/#what-is-ngrok-1
+        """
+        return self.get_file_contents("ngrok_auth_token")
+
     @staticmethod
     def calculate_s3_etag(file: BinaryIO, chunk_size=8 * 1024 * 1024):
         """Calculates the S3 custom e-tag (a specially formatted MD5 hash)"""
