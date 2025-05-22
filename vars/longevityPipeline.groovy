@@ -26,7 +26,7 @@ def call(Map pipelineParams) {
                description: 'aws|gce|azure|docker',
                name: 'backend')
 
-            string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
+            string(defaultValue: "${pipelineParams.get('region', 'us-east-1')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",

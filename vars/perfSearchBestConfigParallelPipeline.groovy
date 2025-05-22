@@ -19,7 +19,7 @@ def call(Map pipelineParams) {
                description: 'aws|gce',
                name: 'backend')
 
-            string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
+            string(defaultValue: "${pipelineParams.get('region', 'us-east-1')}",
                description: 'us-east-1|eu-west-1',
                name: 'region')
 
