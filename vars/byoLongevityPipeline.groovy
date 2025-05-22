@@ -20,7 +20,7 @@ def call() {
 		}
 
          parameters {
-
+            separator(name: 'SCT_CONFIG', sectionHeader: 'SCT Repository Configuration')
             string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
                    description: 'sct git repo',
                    name: 'sct_repo')
@@ -28,13 +28,14 @@ def call() {
             string(defaultValue: 'master',
                    description: 'sct git branch',
                    name: 'sct_branch')
-
+            separator(name: 'TEST_CONFIG', sectionHeader: 'Test Configuration')
             string(defaultValue: "longevity_test.LongevityTest.test_custom_time",
                    description: '',
                    name: 'test_name')
             string(defaultValue: "test-cases/longevity/longevity-100gb-4h.yaml",
                    description: '',
                    name: 'test_config')
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "aws",
                description: 'aws|gce',
                name: 'backend')
@@ -47,12 +48,13 @@ def call() {
             string(defaultValue: "a",
                description: 'Availability zone',
                name: 'availability_zone')
-
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: '', name: 'loader_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'gce_image_db')
-            string(defaultValue: '', description: '', name: 'scylla_version')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
+            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
+            string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs://', name: 'update_db_packages')
 
             string(defaultValue: '',
                    description: "Which version to use for oracle cluster during gemini test",
@@ -60,7 +62,7 @@ def call() {
 
             string(defaultValue: '', description: 'run gemini with specific seed number',
                    name: "gemini_seed")
-
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: '',
                    description: 'If empty - the default scylla manager agent repo will be taken',
                    name: 'scylla_mgmt_agent_address')
@@ -72,7 +74,7 @@ def call() {
             string(defaultValue: '',
                    description: 'master_latest|3.2|3.1',
                    name: 'manager_version')
-
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "spot",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -83,7 +85,7 @@ def call() {
             string(defaultValue: "private",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-
+            separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "destroy",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -96,13 +98,10 @@ def call() {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
 
+            separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: '360',
                    description: 'timeout for jenkins job in minutes',
                    name: 'timeout')
-
-            string(defaultValue: '',
-                   description: 'cloud path for RPMs, s3:// or gs://',
-                   name: 'update_db_packages')
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
