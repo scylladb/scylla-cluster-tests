@@ -1,0 +1,26 @@
+test_duration: 30
+stress_cmd: [
+  "cassandra-stress write cl=QUORUM duration=15m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..10000000 -log interval=5"
+]
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.2xlarge'
+
+n_monitor_nodes: 1
+instance_type_monitor: 't3.large'
+
+user_prefix: 'hackathon-custom-config'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+parallel_node_operations: true
+
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'

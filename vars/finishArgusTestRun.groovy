@@ -3,7 +3,7 @@
 import org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper
 
 def call(Map params, RunWrapper currentBuild) {
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+    def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
     def test_status = currentBuild.currentResult
 
     sh """#!/bin/bash
