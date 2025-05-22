@@ -1,12 +1,16 @@
 {
     "inputs": [
         {
-            "type": "promptString"
+            "type": "promptString",
+            "id": "prometheus_url",
+            "default": "http://172.17.0.1:9090",
+            "description": "Put here prometheus URL. To spawn it locally and expose to LLM run following script: SCT$ ./mcps/setup_prometheus.py $TEST_ID",
+            "password": false
         }
     ],
     "servers": {
         "argus": {
-            "command": "/home/ls/venvs/sct/bin/mcp",
+            "command": "${workspaceFolder}/.venv/bin/mcp",
             "args": [
                 "run",
                 "${workspaceFolder}/mcps/mcp_argus.py"
@@ -23,9 +27,23 @@
                 "--network=bridge",
                 "--rm",
                 "-e",
-                "VL_INSTANCE_ENTRYPOINT=http://localhost:9428",
+                "VL_INSTANCE_ENTRYPOINT=http://172.17.0.1:9428",
                 "mcp-victorialogs:latest"
             ]
+        },
+        "prometheus": {
+            "command": "docker",
+            "args": [
+                "run",
+                "--rm",
+                "-i",
+                "-e", "PROMETHEUS_URL",
+                "ghcr.io/pab1it0/prometheus-mcp-server:1.0.0"
+            ],
+            "env": {
+              "PROMETHEUS_URL": "${input:prometheus_url}"
+            }
         }
+
     }
 }
