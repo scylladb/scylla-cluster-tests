@@ -52,7 +52,9 @@ def call() {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'gce_image_db')
             string(defaultValue: '', description: '', name: 'scylla_version')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list,
+                   name: 'scylla_repo')
 
             string(defaultValue: '',
                    description: "Which version to use for oracle cluster during gemini test",

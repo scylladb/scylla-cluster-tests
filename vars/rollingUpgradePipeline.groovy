@@ -36,7 +36,9 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'new_scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository to upgrade to. Specify the repository URL and optionally a specific version after a colon. For example: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2025.2.list:2025.2.5`',
+                   name: 'new_scylla_repo')
 
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',

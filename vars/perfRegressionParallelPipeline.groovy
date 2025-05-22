@@ -37,8 +37,12 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
-            string(defaultValue: '', description: '', name: 'new_scylla_repo')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository to upgrade to. Specify the repository URL and optionally a specific version after a colon. For example: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2025.2.list:2025.2.5`',
+                   name: 'new_scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
