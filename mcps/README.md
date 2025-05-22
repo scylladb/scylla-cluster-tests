@@ -2,22 +2,20 @@
 
 ## 1. Pull VictoriaLogs Image
 ```bash
-docker pull victoriametrics/victoria-metrics:v1.117.1
+docker pull docker.io/victoriametrics/victoria-logs:v1.22.2-victorialogs
 ```
 
 ## 2. Start VictoriaLogs Container
 ```bash
 docker run -d \
-  --name victorialogs \
-  -p 8428:8428 \
-  -v victoria-metrics-data:/victoria-metrics-data \
-  victoriametrics/victoria-metrics:v1.117.1 \
-  -storageDataPath=victoria-metrics-data \
-  -selfScrapeInterval=5s
+  -p 9428:9428 \
+  -v ./victoria-logs-data:/victoria-logs-data \
+  docker.io/victoriametrics/victoria-logs:v1.22.2-victorialogs \
+  -storageDataPath=victoria-logs-data
 ```
 
 ## 3. Open VictoriaLogs UI
-Ensure that the service is running by visiting: [http://localhost:8428/](http://localhost:8428/)
+Ensure that the service is running by visiting: [http://localhost:9428/](http://localhost:9428/)
 
 ## 4. Build an Image for VictoriaLogs MCP Server
 ```bash
