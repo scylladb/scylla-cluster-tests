@@ -51,6 +51,7 @@ def call(Map pipelineParams) {
             SCT_TEST_ID = UUID.randomUUID().toString()
         }
         parameters {
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backup_bucket_backend', '')}",
                description: 's3|gcs|azure or empty',
                name: 'backup_bucket_backend')
@@ -75,7 +76,8 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
 
 
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
             string(defaultValue: "${pipelineParams.get('scylla_version', '2025.1')}", description: '', name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
             string(defaultValue: '', description: '', name: 'scylla_repo')
@@ -91,7 +93,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
-
+            separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -101,11 +103,11 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
-
+            separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
                    description: 'master_latest|3.5|3.4',
                    name: 'manager_version')
@@ -133,7 +135,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_agent_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager agents in the manager upgrade test',
                    name: 'target_scylla_mgmt_agent_address')
-
+            separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
