@@ -6,7 +6,8 @@ from pathlib import Path
 import yaml
 from jinja2 import Template
 
-import sdcm.utils.nemesis_jobs_configs as config
+# To import all nemesis
+from sdcm.nemesis import *
 
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
@@ -22,6 +23,10 @@ class NemesisJobGenerator:
         "gce": "us-east1",
         "azure": "eastus",
         "docker": "eu-west-1"
+    }
+
+    BACKEND_CONFIGS = {
+        "docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]
     }
 
     def __init__(self, base_job: str = None, base_dir: str | Path = Path("."), backend: str = None) -> 'NemesisJobGenerator':
@@ -110,10 +115,11 @@ class NemesisJobGenerator:
 
     def create_job_files_from_template(self) -> list[Path]:
         pipeline_files = []
-        backend_config = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(self.backend, [])
+        backend_config = self.BACKEND_CONFIGS.get(self.backend, [])
         for cls in self.nemesis_class_list:
-            additional_configs = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(cls, [])
-            additional_params = config.NEMESIS_ADDITIONAL_PIPELINE_PARAMS.get(cls, {})
+            clazz = globals()[cls]
+            additional_configs = clazz.additional_configs or []
+            additional_params = clazz.additional_params or {}
             config_name = [
                 str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
                 str(self.nemesis_test_config_dir / f"{cls}.yaml"),
@@ -123,10 +129,14 @@ class NemesisJobGenerator:
             job_file_name = f"{self.base_job}-{cls}-{self.backend}.jenkinsfile"
             nemesis_job_groovy_source = Template(self.nemesis_job_template).render(
                 {
-                    "nemesis_longevity_config": config_name,
-                    "backend": self.backend,
-                    "region": self.BACKEND_TO_REGION.get(self.backend, "eu-west-1"),
-                    "additional_params": additional_params,
+                    "params": {
+                        "backend": self.backend,
+                        "region": self.BACKEND_TO_REGION.get(self.backend, "eu-west-1"),
+                        "test_name": 'longevity_test.LongevityTest.test_custom_time',
+                        "test_config": config_name,
+                        **additional_params,
+                    }
+
                 })
             job_path = self.base_nemesis_job_dir / job_file_name
             with job_path.open("w") as file:
