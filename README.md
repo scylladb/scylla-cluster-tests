@@ -148,7 +148,8 @@ Change the relevant parameters and nemesis class name to the one you want to deb
 test_duration: 60
 stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
 n_db_nodes: 4
-nemesis_class_name: 'DecommissionMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'DecommissionMonkey'
 nemesis_interval: 5
 ```
 For more details on docker backend supported nemesis, please check [docker backend specifics](./docs/docker-backend-overview.md)

@@ -6,7 +6,7 @@ Should not be dependent on the implementation of Nemesis class
 
 import pytest
 
-from sdcm.nemesis import Nemesis, SisyphusMonkey
+from sdcm.nemesis import NemesisRunner, SisyphusMonkey
 from sdcm.nemesis_registry import NemesisRegistry
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
@@ -14,7 +14,7 @@ from unit_tests.nemesis.test_registry import FlagClass
 from unit_tests.test_tester import ClusterTesterForTests
 
 
-class TestNemesisClass(Nemesis):
+class TestNemesisClass(NemesisRunner):
     COMMON_STRING = "called test function "
     kubernetes = False
     flag_a = False
