@@ -16,31 +16,22 @@ import re
 import threading
 import uuid
 from datetime import timedelta
-from enum import Enum
 from functools import partial
 
-from docker.errors import InvalidArgument
-
-from argus.client.generic_result import Status
-from mgmt_cli_test import ManagerTestFunctionsMixIn
 from sdcm import mgmt
-from sdcm.argus_results import send_manager_benchmark_results_to_argus, ManagerBackupReadResult, \
-    ManagerBackupBenchmarkResult, submit_results_to_argus
+from sdcm.argus_results import send_manager_benchmark_results_to_argus
 from sdcm.cluster import BaseNode
 from sdcm.mgmt import TaskStatus
-from sdcm.mgmt.cli import RestoreTask, BackupTask, ManagerCluster
-from sdcm.mgmt.common import get_backup_size, ObjectStorageUploadMode
+from sdcm.mgmt.cli import RestoreTask
+from sdcm.mgmt.common import ObjectStorageUploadMode
+from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
+from sdcm.mgmt.argus_report import report_to_argus, report_manager_backup_results_to_argus, ManagerReportType
 from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.cluster_tools import clear_snapshot_nodes
 from sdcm.utils.common import ParallelObject, format_size
 from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.time_utils import ExecutionTimer
-
-
-class ManagerReportType(Enum):
-    READ = 1
-    BACKUP = 2
 
 
 class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
@@ -205,26 +196,6 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     snapshot_list_lock = threading.Lock()
     base_prefix = ""
 
-    def report_to_argus(self, report_type: ManagerReportType, data: dict, label: str):
-        timestamp = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp
-        if report_type == ManagerReportType.READ:
-            table = ManagerBackupReadResult(sut_timestamp=timestamp)
-        elif report_type == ManagerReportType.BACKUP:
-            table = ManagerBackupBenchmarkResult(sut_timestamp=timestamp)
-        else:
-            raise InvalidArgument("Unknown report type")
-
-        for key, value in data.items():
-            table.add_result(column=key, value=value, row=label, status=Status.UNSET)
-        submit_results_to_argus(self.test_config.argus_client(), table)
-
-    def report_manager_backup_results_to_argus(self, label: str, task: BackupTask, mgr_cluster: ManagerCluster) -> None:
-        report = {
-            "Size": get_backup_size(mgr_cluster, task.id),
-            "Time": int(task.duration.total_seconds()),
-        }
-        self.report_to_argus(ManagerReportType.BACKUP, report, label)
-
     def _manager_backup(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode = None, timeout: int = 7200):
         InfoEvent(
             message=f'Starting a Manager backup (Object Storage Upload Mode: {object_storage_upload_mode})').publish()
@@ -237,7 +208,8 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     def manager_backup_and_report(self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, label: str, delete_snapshot: bool = False, timeout: int = 7200):
         task = self._manager_backup(mgr_cluster=mgr_cluster,
                                     object_storage_upload_mode=object_storage_upload_mode, timeout=timeout)
-        self.report_manager_backup_results_to_argus(label=label, task=task, mgr_cluster=mgr_cluster)
+        report_manager_backup_results_to_argus(self.monitors, self.test_config, label=label, task=task,
+                                               mgr_cluster=mgr_cluster)
         if delete_snapshot:
             self.log.info("Delete Manager backup snapshot")
             task.delete_backup_snapshot()
@@ -261,7 +233,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
             "Size": format_size(sum(self.node_backup_size.values()) / len(self.node_backup_size.values())),
             "Time": int(backup_timer.duration.total_seconds()),
         }
-        self.report_to_argus(ManagerReportType.BACKUP, backup_report, label)
+        report_to_argus(self.monitors, self.test_config, ManagerReportType.BACKUP, backup_report, label)
         clear_snapshot_nodes(cluster=self.db_cluster)
 
     def run_read_stress_and_report(self, label):
@@ -278,7 +250,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         read_stress_report = {
             "read time": int(stress_timer.duration.total_seconds()),
         }
-        self.report_to_argus(ManagerReportType.READ, read_stress_report, label)
+        report_to_argus(self.monitors, self.test_config, ManagerReportType.READ, read_stress_report, label)
 
     def run_stress_and_report(self, legend: str):
         """
@@ -388,13 +360,13 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         self.run_prepare_write_cmd()
 
         # Run a major compaction before perf measurements
-        self._align_cluster_data_state(self.keyspace, self.table)
+        self.align_cluster_data_state(self.keyspace, self.table)
 
         InfoEvent(message='Start Read and Write stress baseline').publish()
         self.run_stress_and_report(legend="Baseline stress")
 
         # Cleanup the extra stress
-        self._align_cluster_data_state(self.keyspace, self.table)
+        self.align_cluster_data_state(self.keyspace, self.table)
 
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
@@ -414,7 +386,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         ParallelObject(objects=backup_and_stress_jobs, timeout=self.benchmark_timeout).call_objects()
 
         # Cleanup the extra stress
-        self._align_cluster_data_state(self.keyspace, self.table)
+        self.align_cluster_data_state(self.keyspace, self.table)
 
         # Backup baseline (native)
         self.manager_backup_and_report(mgr_cluster=mgr_cluster, label="Native Backup baseline", delete_snapshot=True,
