@@ -1,2 +1,2 @@
 ycsb:
-  image: scylladb/hydra-loaders:ycsb-jdk8-20220918
+  image: docker.io/scylladb/hydra-loaders:ycsb-jdk8-20250525

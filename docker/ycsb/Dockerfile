@@ -1,4 +1,4 @@
-FROM openjdk:8 as builder
+FROM eclipse-temurin:21 as builder
 
 ARG BRANCH
 ARG REPO
