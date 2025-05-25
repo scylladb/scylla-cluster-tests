@@ -210,7 +210,7 @@ def latency_calculator_decorator(
         @wraps(func)
         def wrapped(*args, **kwargs):  # noqa: PLR0914
             from sdcm.tester import ClusterTester  # noqa: PLC0415
-            from sdcm.nemesis import Nemesis  # noqa: PLC0415
+            from sdcm.nemesis import NemesisRunner  # noqa: PLC0415
 
             start = time.time()
             # If the decorator is applied dynamically, "self" argument is not transferred  via "args" and may be found in bounded function
@@ -219,7 +219,7 @@ def latency_calculator_decorator(
                 cluster = _self.db_cluster
                 tester = _self
                 monitoring_set = _self.monitors
-            elif isinstance(_self, Nemesis):
+            elif isinstance(_self, NemesisRunner):
                 cluster = _self.cluster
                 tester = _self.tester
                 monitoring_set = _self.monitoring_set
