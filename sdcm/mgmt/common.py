@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from enum import Enum
 import logging
 import datetime
@@ -8,9 +9,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
-
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
@@ -201,3 +202,25 @@ class ObjectStorageUploadMode(str, Enum):
     AUTO = "auto"
     RCLONE = "rclone"
     NATIVE = "native"
+
+
+def manager_backup(mgr_cluster, locations, object_storage_upload_mode=None, timeout=7200):
+    """
+    Perform a Manager backup task and wait for its completion.
+
+    Args:
+        mgr_cluster: The ManagerCluster object.
+        locations: List of backup locations.
+        object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
+        timeout: Timeout for the backup task.
+
+    Returns:
+        The completed backup task.
+    """
+    InfoEvent(
+        message=f'Starting a Manager backup (Object Storage Upload Mode: {object_storage_upload_mode})').publish()
+    task = mgr_cluster.create_backup_task(location_list=locations, rate_limit_list=["0"],
+                                          object_storage_upload_mode=object_storage_upload_mode)
+    backup_status = task.wait_and_get_final_status(timeout=timeout)
+    assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
+    return task
