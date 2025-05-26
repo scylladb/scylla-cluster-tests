@@ -1761,6 +1761,10 @@ class SCTConfiguration(dict):
              help="Workload name, can be: write|read|mixed|unset."
                   "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
                   "If unset, workload is taken from test name."),
+
+        dict(name="allocation_as_errors", env="SCT_ALLOCATION_AS_ERRORS", type=boolean,
+             help="If set to True, allocation errors will be treated as test errors. "
+                  "If set to False, allocation errors will be treated as warnings."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

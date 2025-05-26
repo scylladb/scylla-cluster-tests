@@ -158,5 +158,10 @@ def enable_default_filters(sct_config: SCTConfiguration):
                         r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_error"
                         r" \(connection is closed\)\)").publish()
 
+    if not sct_config.get('allocation_as_errors'):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+                                    regex=r'.*seastar_memory - oversized allocation:').publish()
+
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
