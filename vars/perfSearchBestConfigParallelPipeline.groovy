@@ -33,7 +33,9 @@ def call(Map pipelineParams) {
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'Url to the repo of scylla version to install scylla. Can provide specific version after a colon e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`',
+                   name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
                    name: 'provision_type')

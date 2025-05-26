@@ -32,7 +32,7 @@ def call(Map pipelineParams) {
                    description: 'a Scylla version to run against',
                    name: 'scylla_version')
             string(defaultValue: '',
-                   description: 'a Scylla repo to run against',
+                   description: 'ScyllaDB repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
                    name: 'scylla_repo')
 
             string(defaultValue: '',
