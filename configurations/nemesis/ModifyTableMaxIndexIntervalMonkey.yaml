@@ -1,2 +1,3 @@
-nemesis_class_name: 'ModifyTableMaxIndexIntervalMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ModifyTableMaxIndexIntervalMonkey'
 user_prefix: 'longevity-5gb-1h-ModifyTableMaxIndexIntervalMonkey'

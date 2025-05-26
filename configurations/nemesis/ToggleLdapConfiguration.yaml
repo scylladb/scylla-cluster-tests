@@ -1,2 +1,3 @@
-nemesis_class_name: 'ToggleLdapConfiguration'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ToggleLdapConfiguration'
 user_prefix: 'longevity-5gb-1h-ToggleLdapConfiguration'
