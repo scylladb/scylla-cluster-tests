@@ -86,7 +86,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
     make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password, \
     parse_python_thread_command, get_data_dir_path
-from sdcm.utils.cql_utils import cql_quote_if_needed
+from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
@@ -2544,50 +2544,43 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
 
     def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # noqa: PLR0913
-
                                  mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
                                  gc_grace=None, compact_storage=False):
 
-        mv_columns_str = mv_columns
-        if isinstance(mv_columns, list):
-            mv_columns_str = ', '.join(c for c in mv_columns)
+        # Fix quotes for column names, only use quotes where needed
+        if mv_columns != '*':
+            mv_columns = [
+                cql_quote_if_needed(cql_unquote_if_needed(col))
+                for col in (mv_columns if isinstance(mv_columns, list) else list(mv_columns))
+            ]
+        mv_partition_key = [
+            cql_quote_if_needed(cql_unquote_if_needed(pk))
+            for pk in (mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key))
+        ]
+        mv_clustering_key = [
+            cql_quote_if_needed(cql_unquote_if_needed(cl))
+            for cl in (mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key))
+        ]
 
-        where_clause = []
-        mv_partition_key = mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key)
-        mv_clustering_key = mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key)
+        where_clause = ' and '.join([f'{kc} is not null' for kc in mv_partition_key + mv_clustering_key])
+        select_clause = ', '.join(mv_columns)
+        pk_clause = ', '.join(mv_partition_key)
+        cl_clause = ', '.join(mv_clustering_key)
 
-        for kc in mv_partition_key + mv_clustering_key:
-            where_clause.append('{} is not null'.format(kc))
-
-        pk_clause = ', '.join(pk for pk in mv_partition_key)
-        cl_clause = ', '.join(cl for cl in mv_clustering_key)
-
-        query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
-                'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name,
-                                                                                                mv_name=mv_name,
-                                                                                                mv_columns=mv_columns_str,
-                                                                                                table_name=base_table_name,
-                                                                                                where_clause=' and '.join
-                                                                                                (wc for wc in
-                                                                                                 where_clause),
-                                                                                                pk=pk_clause,
-                                                                                                cl=cl_clause)
+        query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
+                f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
         if compression is not None:
-            query = ('%s AND compression = { \'sstable_compression\': '
-                     '\'%sCompressor\' }' % (query, compression))
-
+            query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
         if read_repair is not None:
-            query = '%s AND read_repair_chance=%f' % (query, read_repair)
+            query += f" AND read_repair_chance={read_repair}"
         if gc_grace is not None:
-            query = '%s AND gc_grace_seconds=%d' % (query, gc_grace)
+            query += f" AND gc_grace_seconds={gc_grace}"
         if speculative_retry is not None:
-            query = ('%s AND speculative_retry=\'%s\'' %
-                     (query, speculative_retry))
-
+            query += f" AND speculative_retry='{speculative_retry}'"
         if compact_storage:
             query += ' AND COMPACT STORAGE'
 
-        self.log.debug('MV create statement: {}'.format(query))
+        self.log.debug(f'MV create statement: {query}')
         session.execute(query, timeout=600)
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):

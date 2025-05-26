@@ -5069,7 +5069,6 @@ class Nemesis:
                 if not column:
                     raise UnsupportedNemesis(
                         'A supported column for creating MV is not found. nemesis can\'t run')
-                column = f'"{column}"'
                 self.log.info("Stopping Scylla on node %s", self.target_node.name)
                 self.target_node.stop_scylla()
                 InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
