@@ -2998,9 +2998,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     @silence(name="Save node schema", raise_error_event=False)
     def save_cqlsh_output_in_file(self, node, cmd: str, log_file: str):
-        self.log.info("Save command '%s' output in the file. Node %s", cmd, node.name)
+        self.log.info("Save command '%s' output in the file %s/%s. Node %s",
+                      cmd, self.logdir, log_file, node.name)
 
-        log_file_path = Path(self.logdir) / self.db_cluster.logdir / log_file
+        log_file_path = Path(self.logdir) / log_file
         self.log.debug("Schema file path: %s", log_file_path)
         if not (result := node.run_cqlsh(cmd).stdout):
             return
@@ -3016,7 +3017,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
 
-        self.log.info("Save nodes user schema in the files")
+        self.log.info("Save nodes user schema in the files under folder: %s", self.logdir)
         # Collect schema info from one node only. Not need to collect from every node
         found_live_node = False
         for node in self.db_cluster.nodes:
