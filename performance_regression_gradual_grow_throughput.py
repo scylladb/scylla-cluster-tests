@@ -115,12 +115,34 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
+<<<<<<< HEAD
         compaction_strategy = self.params.get('compaction_strategy')
         if workload.preload_data:
             self.preload_data(compaction_strategy=compaction_strategy)
             self.wait_no_compactions_running(n=400, sleep_time=120)
             self.run_fstrim_on_all_db_nodes()
 
+||||||| parent of 90a24771b (improvement(PerformanceRegressionPredefinedStepsTest): Run alter table earlier)
+        if workload.preload_data and not skip_optional_stage('perf_preload_data'):
+            self.preload_data()
+            self.wait_no_compactions_running(n=400, sleep_time=120)
+            self.run_fstrim_on_all_db_nodes()
+
+            if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
+                self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
+                self._run_cql_commands(post_prepare_cql_cmds)
+
+=======
+        if workload.preload_data and not skip_optional_stage('perf_preload_data'):
+            self.preload_data()
+            if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
+                self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
+                self._run_cql_commands(post_prepare_cql_cmds)
+
+            self.wait_no_compactions_running(n=400, sleep_time=120)
+            self.run_fstrim_on_all_db_nodes()
+
+>>>>>>> 90a24771b (improvement(PerformanceRegressionPredefinedStepsTest): Run alter table earlier)
         self.run_gradual_increase_load(workload=workload,
                                        stress_num=stress_num,
                                        num_loaders=num_loaders,
