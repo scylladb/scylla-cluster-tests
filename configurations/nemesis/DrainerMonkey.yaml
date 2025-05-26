@@ -1,2 +1,3 @@
-nemesis_class_name: 'DrainerMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'DrainerMonkey'
 user_prefix: 'longevity-5gb-1h-DrainerMonkey'
