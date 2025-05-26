@@ -141,6 +141,15 @@ scylla cloud cluster id
 **type:** int
 
 
+## **cloud_cluster_name** / SCT_CLOUD_CLUSTER_NAME
+
+scylla cloud cluster name
+
+**default:** N/A
+
+**type:** str
+
+
 ## **cloud_prom_bearer_token** / SCT_CLOUD_PROM_BEARER_TOKEN
 
 scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance
