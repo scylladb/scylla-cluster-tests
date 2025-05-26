@@ -85,7 +85,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                     for stress_idx in range(0, stress_num):
                         pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
                         if os.path.isfile(pth):
-                            self.log.error(f'QWERTY removing file {pth}')
+                            self.log.error(f'QWERTY renaming file {pth}')
                             try:
                                 os.rename(pth, pth + '_old')
                             except:
@@ -93,7 +93,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         assert not os.path.exists(pth), pth
                         pth += '_'
                         if os.path.isfile(pth):
-                            self.log.error(f'QWERTY removing file {pth}')
+                            self.log.error(f'QWERTY renaming file {pth}')
                             try:
                                 os.rename(pth, pth + '_old')
                             except:
