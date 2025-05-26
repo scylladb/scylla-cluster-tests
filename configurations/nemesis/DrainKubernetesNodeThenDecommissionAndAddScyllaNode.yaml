@@ -1,2 +1,3 @@
-nemesis_class_name: 'DrainKubernetesNodeThenDecommissionAndAddScyllaNode'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'DrainKubernetesNodeThenDecommissionAndAddScyllaNode'
 user_prefix: 'longevity-5gb-1h-DrainKubernetesNodeThenDecommissionAndAddScyllaNode'
