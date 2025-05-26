@@ -87,7 +87,9 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 self.write_event(event=event)
 
     def write_event(self, event: SctEvent) -> None:
-        LOGGER.info(f'QWERTY writign event {traceback.format_stack()}')
+        LOGGER.info(f'QWERTY writign event')
+        for l in traceback.format_stack():
+            LOGGER.info(f'QWERTY {l.strip()}')
         if event.source_timestamp:
             message = f"{event.formatted_event_timestamp} <{event.formatted_source_timestamp}>: {str(event).strip()}"
         else:
