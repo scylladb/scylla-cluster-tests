@@ -1,2 +1,3 @@
-nemesis_class_name: 'ModifyTableDefaultTimeToLiveMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ModifyTableDefaultTimeToLiveMonkey'
 user_prefix: 'longevity-5gb-1h-ModifyTableDefaultTimeToLiveMonkey'

@@ -1,2 +1,3 @@
-nemesis_class_name: 'KillMVBuildingCoordinator'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'KillMVBuildingCoordinator'
 user_prefix: 'longevity-5gb-1h-KillMVBuildingCoordinator'

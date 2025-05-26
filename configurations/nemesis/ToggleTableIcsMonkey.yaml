@@ -1,2 +1,3 @@
-nemesis_class_name: 'ToggleTableIcsMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ToggleTableIcsMonkey'
 user_prefix: 'longevity-5gb-1h-ToggleTableIcsMonkey'

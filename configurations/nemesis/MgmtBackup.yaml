@@ -1,2 +1,3 @@
-nemesis_class_name: 'MgmtBackup'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'MgmtBackup'
 user_prefix: 'longevity-5gb-1h-MgmtBackup'

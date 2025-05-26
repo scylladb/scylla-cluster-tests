@@ -1,2 +1,3 @@
-nemesis_class_name: 'SnapshotOperations'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'SnapshotOperations'
 user_prefix: 'longevity-5gb-1h-SnapshotOperations'

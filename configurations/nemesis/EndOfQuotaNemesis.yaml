@@ -1,2 +1,3 @@
-nemesis_class_name: 'EndOfQuotaNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'EndOfQuotaNemesis'
 user_prefix: 'longevity-5gb-1h-EndOfQuotaNemesis'
