@@ -296,6 +296,9 @@ class SCTConfiguration(dict):
         dict(name="cloud_cluster_id", env="SCT_CLOUD_CLUSTER_ID", type=int,
              help="""scylla cloud cluster id"""),
 
+        dict(name="cloud_cluster_name", env="SCT_CLOUD_CLUSTER_NAME", type=str,
+             help="""scylla cloud cluster name"""),
+
         dict(name="cloud_prom_bearer_token", env="SCT_CLOUD_PROM_BEARER_TOKEN", type=str,
              help="""scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance"""),
 
