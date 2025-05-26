@@ -356,8 +356,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # Create materialized view
             view_name = base_table_name + '_mv'
             self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-            self.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
-                                          mv_columns=['"C0"', 'key'])
+            self.create_materialized_view(ks_name, base_table_name, view_name, ['C0'], ['key'], session,
+                                          mv_columns=['C0', 'key'])
 
             # Wait for the materialized view is built
             self._wait_for_view(self.db_cluster, session, ks_name, view_name)
