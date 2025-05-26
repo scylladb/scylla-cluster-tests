@@ -1,2 +1,3 @@
-nemesis_class_name: 'ModifyTableCommentMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ModifyTableCommentMonkey'
 user_prefix: 'longevity-5gb-1h-ModifyTableCommentMonkey'

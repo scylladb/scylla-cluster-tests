@@ -1,2 +1,3 @@
-nemesis_class_name: 'RollingRestartConfigChangeInternodeCompression'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'RollingRestartConfigChangeInternodeCompression'
 user_prefix: 'longevity-5gb-1h-RollingRestartConfigChangeInternodeCompression'
