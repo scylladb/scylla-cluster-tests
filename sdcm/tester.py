@@ -135,6 +135,7 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     ScyllaLogCollector,
     SirenManagerLogCollector,
+    SchemaLogCollector,
 )
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
@@ -2990,10 +2991,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.destroy_credentials()
 
     @silence(name="Save node schema", raise_error_event=False)
-    def save_cqlsh_output_in_file(self, node, cmd: str, log_file: str):
-        self.log.info("Save command '%s' output in the file. Node %s", cmd, node.name)
+    def save_cqlsh_output_in_file(self, node, cmd: str, log_dir: Path, log_file: str):
+        self.log.info("Save command '%s' output in the file %s/%s. Node %s", cmd, log_dir, log_file, node.name)
 
-        log_file_path = Path(self.logdir) / self.db_cluster.logdir / log_file
+        log_file_path = log_dir / log_file
         self.log.debug("Schema file path: %s", log_file_path)
         if not (result := node.run_cqlsh(cmd).stdout):
             return
@@ -3009,20 +3010,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
 
-        self.log.info("Save nodes user schema in the files")
+        local_dir = Path(self.logdir) / "collected_logs" / f"schema-logs-{self.test_id[:8]}"
+        self.log.info("Create folder for schema logs under folder: %s", local_dir)
+        try:
+            local_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as details:
+            if not local_dir.exists():
+                self.log.error("Folder %s is not created. Error: %s", local_dir, details)
+                return
+
+        self.log.info("Save nodes user schema in the files under folder: %s", local_dir)
         # Collect schema info from one node only. Not need to collect from every node
         found_live_node = False
         for node in self.db_cluster.nodes:
             if not node._is_node_ready_run_scylla_commands():
                 continue
             found_live_node = True
-            self.save_cqlsh_output_in_file(node=node, cmd="desc schema", log_file="schema.log")
+            self.save_cqlsh_output_in_file(node=node, cmd="desc schema", log_dir=local_dir, log_file="schema.log")
             self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system_schema.tables",
+                                           log_dir=local_dir,
                                            log_file="system_schema_tables.log")
             self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system.truncated",
+                                           log_dir=local_dir,
                                            log_file="system_truncated.log")
             self.save_cqlsh_output_in_file(node=node,
                                            cmd="desc schema with internals",
+                                           log_dir=local_dir,
                                            log_file="schema_with_internals.log")
             break
 
@@ -3523,6 +3536,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.info("Start collect logs...")
         logs_dict = {"db_cluster_log": "",
+                     "schema_logs": "",
                      "loader_log": "",
                      "monitoring_log": "",
                      "prometheus_data": "",
@@ -3561,6 +3575,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "nodes": [],
                      "collector": KubernetesMustGatherLogCollector,
                      "logname": "k8s_log", },
+                    {"name": "schema-logs",
+                     "nodes": self.db_cluster and self.db_cluster.nodes,
+                     "collector": SchemaLogCollector,
+                     "logname": "schema_logs", },
                     )
 
         for cluster in clusters:
