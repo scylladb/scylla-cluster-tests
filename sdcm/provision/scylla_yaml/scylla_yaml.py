@@ -153,8 +153,10 @@ class ScyllaYaml(BaseModel):
         Returns:
             String containing the unified diff
         """
-        self_str = yaml.safe_dump(self.model_dump(exclude_none=True)).splitlines(keepends=True)
-        other_str = yaml.safe_dump(other.model_dump(exclude_none=True)).splitlines(keepends=True)
+        self_str = yaml.safe_dump(self.model_dump(exclude_defaults=True, exclude_unset=True,
+                                  exclude_none=True)).splitlines(keepends=True)
+        other_str = yaml.safe_dump(other.model_dump(exclude_defaults=True, exclude_unset=True,
+                                   exclude_none=True)).splitlines(keepends=True)
         return "".join(unified_diff(self_str, other_str))
 
     def __copy__(self):
