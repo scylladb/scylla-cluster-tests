@@ -87,7 +87,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         if os.path.isfile(pth):
                             self.log.error(f'QWERTY removing file {pth}')
                             try:
-                                os.remove(pth)
+                                os.rename(pth, pth + '_old')
                             except:
                                 pass
                         assert not os.path.exists(pth), pth
@@ -95,7 +95,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         if os.path.isfile(pth):
                             self.log.error(f'QWERTY removing file {pth}')
                             try:
-                                os.remove(pth)
+                                os.rename(pth, pth + '_old')
                             except:
                                 pass
                         assert not os.path.exists(pth), pth

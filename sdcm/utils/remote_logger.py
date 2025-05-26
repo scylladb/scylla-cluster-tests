@@ -107,8 +107,10 @@ class SSHLoggerBase(LoggerBase):
     def _retrieve(self, since: str) -> None:
         self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(since=since or "the beginning"))
         try:
+            c = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else "")
+            self._log.debug(f"Running command: {c}")
             self._remoter.run(
-                cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
+                cmd=c,
                 verbose=self.VERBOSE_RETRIEVE,
                 ignore_status=True,
                 log_file=self._target_log_file,
@@ -205,7 +207,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         while not te_is_set:
             LOGGER.debug("Start check if remoter ready. %s", self._remote_log_file)
             if self._is_ready_to_retrieve():
-                LOGGER.debug("Remoter ready. %s", self._remote_log_file)
+                LOGGER.debug("Remoter ready. %s (%s)", self._remote_log_file, read_from_timestamp)
                 self._retrieve(since=read_from_timestamp)
                 LOGGER.debug("Retrieve finished. %s", self._remote_log_file)
                 read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
