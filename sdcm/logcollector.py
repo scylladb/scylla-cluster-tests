@@ -1433,6 +1433,7 @@ class Collector:
             }
         self.cluster_log_collectors |= {
             ScyllaLogCollector: self.db_cluster,
+            SchemaLogCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
             PythonSCTLogCollector: self.sct_set,
             LoaderLogCollector: self.loader_set,
@@ -1707,6 +1708,20 @@ class Collector:
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
             with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w", encoding="utf-8") as f:
                 f.write(self.test_id)
+
+
+class SchemaLogCollector(BaseSCTLogCollector):
+    log_entities = [FileLog(name='schema.log',
+                            search_locally=True),
+                    FileLog(name='system_schema_tables.log',
+                            search_locally=True),
+                    FileLog(name='system_truncated.log',
+                            search_locally=True),
+                    FileLog(name='schema_with_internals.log',
+                            search_locally=True),
+                    ]
+    cluster_log_type = "schema-logs"
+    cluster_dir_prefix = "schema-logs"
 
 
 def check_archive(remoter, path: str) -> bool:
