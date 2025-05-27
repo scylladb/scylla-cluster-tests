@@ -84,10 +84,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 for work_type in work_types:
                     for stress_idx in range(0, stress_num):
                         pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+                        pth_rename = os.path.join(dir_name, f'used-{stress_idx}-{work_type}-{loader_index}.hdr')
                         if os.path.isfile(pth):
                             self.log.error(f'QWERTY renaming file {pth}')
                             try:
-                                os.rename(pth, pth + '_old')
+                                os.rename(pth, pth_rename)
                             except:
                                 pass
                         assert not os.path.exists(pth), pth
@@ -95,7 +96,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         if os.path.isfile(pth):
                             self.log.error(f'QWERTY renaming file {pth}')
                             try:
-                                os.rename(pth, pth + '_old')
+                                os.rename(pth, pth_rename)
                             except:
                                 pass
                         assert not os.path.exists(pth), pth
@@ -400,25 +401,16 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_multiplier = 2
         self.wait_no_compactions_running(n=120)
 
-        def clear_hdr_files():
-            for root, _, files in os.walk(self.loaders.logdir):
-                for file in files:
-                    if file.endswith('.hdr'):
-                        full_path = os.path.join(root, file)
-                        self.log.info(f'QWERTY removing file {full_path}')
-                        os.remove(full_path)
         self.run_fstrim_on_all_db_nodes()
         self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.READ)
-        clear_hdr_files()
 
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, workload=PerformanceTestWorkload.READ)
-        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload with lwt
@@ -427,7 +419,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, workload=PerformanceTestWorkload.READ)
         self.check_regression_with_baseline('cql')
-        clear_hdr_files()
 
         stress_multiplier = 1
         self.run_fstrim_on_all_db_nodes()
@@ -436,7 +427,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + " -target 10000",
             stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.WRITE)
-        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
@@ -444,7 +434,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + " -target 10000",
             stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
-        clear_hdr_files()
 
         self.wait_no_compactions_running(n=120)
         # run a workload with lwt
@@ -453,7 +442,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000",
             stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
         self.check_regression_with_baseline('cql')
-        clear_hdr_files()
 
         stress_multiplier = 1
         self.wait_no_compactions_running(n=120)
@@ -462,21 +450,18 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + " -target 10000",
             stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.MIXED)
-        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
                        stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
-        clear_hdr_files()
 
         self.wait_no_compactions_running()
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
                        stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
-        clear_hdr_files()
 
         self.check_regression_with_baseline('cql')
 
