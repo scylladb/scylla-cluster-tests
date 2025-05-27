@@ -168,7 +168,7 @@ class SCTDedicatedHosts:
         cls.reservations = {}
 
     @staticmethod
-    def list_hosts(tags_dict: dict, region_name: str | None = None, group_as_region: bool = True, verbose: bool = False) -> list:
+    def list_hosts(tags_dict: dict, region_name: str | None = None, group_as_region: bool = True, verbose: bool = True) -> list:
         hosts = {}
         aws_regions = [region_name] if region_name else all_aws_regions()
 
@@ -204,6 +204,8 @@ class SCTDedicatedHosts:
     @classmethod
     def release_by_tags(cls, tags_dict: dict, regions=None, dry_run=False) -> None:
         """Cancel all dedicated hosts with specific tags in AWS."""
+
+        tags_dict.pop('NodeType')
 
         assert tags_dict, "tags_dict not provided (can't clean all hosts)"
         if regions:
