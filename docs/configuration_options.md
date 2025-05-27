@@ -147,7 +147,7 @@ scylla cloud cluster name
 
 **default:** N/A
 
-**type:** str
+**type:** str (appendable)
 
 
 ## **cloud_prom_bearer_token** / SCT_CLOUD_PROM_BEARER_TOKEN
