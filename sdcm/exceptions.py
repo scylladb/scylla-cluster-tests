@@ -95,3 +95,7 @@ class NemesisStressFailure(Exception):
 
 class BannedQueryExecUnexpectedSuccess(Exception):
     """Exception when query executed successfully on banned node"""
+
+
+class Group0LimitedVotersFeatureNotEnableOnNodes(Exception):
+    """Raise if feature group0_limited_voters is enabled on nodes"""
