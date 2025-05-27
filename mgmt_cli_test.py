@@ -273,31 +273,6 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
 class ClusterOperations(ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
 
-    def ensure_and_get_cluster(self, manager_tool, force_add: bool = False, **add_cluster_extra_params):
-        """Get the cluster if it is already added, otherwise add it to manager.
-
-        Use force_add=True if you want to re-add the cluster (delete and add again) even if it already added.
-        Use add_cluster_extra_params to pass additional parameters (like 'client_encrypt') to the add_cluster method.
-        """
-        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME)
-
-        if not mgr_cluster or force_add:
-            if mgr_cluster:
-                mgr_cluster.delete()
-
-            add_cluster_params = {}
-            add_cluster_params.update(
-                name=self.CLUSTER_NAME,
-                db_cluster=self.db_cluster,
-                auth_token=self.monitors.mgmt_auth_token,
-                force_non_ssl_session_port=manager_tool.is_force_non_ssl_session_port(db_cluster=self.db_cluster),
-            )
-            add_cluster_params.update(add_cluster_extra_params)
-
-            mgr_cluster = manager_tool.add_cluster(**add_cluster_params)
-
-        return mgr_cluster
-
     def get_cluster_hosts_ip(self):
         return ScyllaManagerTool.get_cluster_hosts_ip(self.db_cluster)
 
@@ -799,8 +774,7 @@ class ManagerTestFunctionsMixIn(
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
     def test_restore_multiple_backup_snapshots(self):  # noqa: PLR0914
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend != 'aws':
             self.log.error("Test supports only AWS ATM")
@@ -835,8 +809,7 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
     def test_restore_backup_with_task(self, ks_names: list = None):
         self.log.info('starting test_restore_backup_with_task')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         if not ks_names:
             ks_names = ['keyspace1']
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=ks_names)
@@ -857,8 +830,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_basic_backup(self, ks_names: list = None):
         self.log.info('starting test_basic_backup')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
@@ -870,8 +842,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_multiple_ks_tables(self):
         self.log.info('starting test_backup_multiple_ks_tables')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         tables = self.create_ks_and_tables(10, 100)
         self.log.debug('tables list = {}'.format(tables))
         # TODO: insert data to those tables
@@ -884,8 +855,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_location_with_path(self):
         self.log.info('starting test_backup_location_with_path')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
             mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
         except ScyllaManagerError as error:
@@ -894,8 +864,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_rate_limit(self):
         self.log.info('starting test_backup_rate_limit')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         rate_limit_list = [f'{dc}:{random.randint(15, 25)}' for dc in self.get_all_dcs_names()]
         self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
@@ -915,8 +884,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         previously mentioned orphan files from the bucket.
         """
         self.log.info('starting test_backup_purge_removes_orphan_files')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, retention=1)
@@ -941,8 +909,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_enospc_during_backup(self):
         self.log.info('starting test_enospc_during_backup')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         # deleting previous snapshots so that the current backup will last longer
         previous_backup_tasks = mgr_cluster.backup_task_list
         for backup_task in previous_backup_tasks:
@@ -977,8 +944,7 @@ class ManagerBackupTests(ManagerRestoreTests):
             return
 
         self.log.info('starting test_enospc_before_restore')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
@@ -1036,8 +1002,7 @@ class ManagerBackupTests(ManagerRestoreTests):
             compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
         self.log.info('Prepare Manager')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
 
         self.log.info('Run backup #1')
         backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -1139,7 +1104,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
     def test_repair_multiple_keyspace_types(self):
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         rf = self.get_rf_based_on_nodes_number() if len(self.params.region_names) > 1 else 2
         self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=rf)
@@ -1209,7 +1174,7 @@ class ManagerCRUDTests(ManagerTestFunctionsMixIn):
         """
         self.log.info('starting test_mgmt_cluster_crud')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
@@ -1226,8 +1191,7 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
 
     def test_cluster_healthcheck(self):
         self.log.info('starting test_mgmt_cluster_healthcheck')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         other_host, other_host_ip = [
             host_data for host_data in self.get_cluster_hosts_with_ips() if
             host_data[1] != self.get_cluster_hosts_ip()[0]][0]
@@ -1275,8 +1239,7 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
         nodes_from_local_dc = self.db_cluster.nodes[:2]
         nodes_from_distant_dc = self.db_cluster.nodes[2:]
         manager_node = self.monitors.nodes[0]
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
             reconfigure_scylla_manager(manager_node=manager_node, logger=self.log,
                                        values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
@@ -1316,7 +1279,6 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             self.db_cluster.enable_client_encrypt()
 
         manager_node = self.monitors.nodes[0]
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
 
         self.log.info("Create and send client TLS certificate/key to the manager node")
         manager_node.create_node_certificate(cert_file=manager_node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
@@ -1324,7 +1286,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
         manager_node.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
         manager_node.remoter.send_files(src=str(manager_node.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
 
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True, client_encrypt=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True, client_encrypt=True)
 
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
@@ -1357,10 +1319,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
     def _test_suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
         self.log.info('starting test_suspend_and_resume_{}'.format(task_type))
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         elif task_type == "repair":
@@ -1381,10 +1342,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         suspension_duration = 75
         test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
         self.log.info('starting test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may run very fast and
         # the test won't be able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         task_type = random.choice(["backup", "repair"])
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -1415,10 +1375,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
 
     def _test_suspend_and_resume_without_starting_tasks(self):
         self.log.info('starting test_suspend_and_resume_without_starting_tasks')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
@@ -1657,7 +1616,7 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
         self.log.info("Got Manager's version: %s", manager_tool.sctool.version)
 
         # Add cluster and verify hosts health
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Host status is not 'UP'"
@@ -1710,7 +1669,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
@@ -1747,7 +1706,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             restore_outside_manager: set True to restore outside of Manager via nodetool refresh
         """
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         snapshot_data = self.get_snapshot_data(snapshot_name)
 
@@ -1886,8 +1845,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         for node in self.db_cluster.nodes:
             compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         self.log.info("Create and report backup time")
         backup_task = self.create_backup_and_report(mgr_cluster, "Backup")
