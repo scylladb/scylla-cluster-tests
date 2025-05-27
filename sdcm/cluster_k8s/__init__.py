@@ -2746,10 +2746,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         #       by Scylla pod IP addresses.
         return self.k8s_clusters[0].scylla_manager_cluster.nodes[0]
 
-    def get_cluster_manager(self, create_cluster_if_not_exists: bool = False) -> AnyManagerCluster:
-        return super().get_cluster_manager(create_cluster_if_not_exists=create_cluster_if_not_exists)
+    def get_cluster_manager(self,
+                            create_if_not_exists: bool = False,
+                            force_add: bool = False,
+                            **add_cluster_extra_params) -> AnyManagerCluster:
+        return super().get_cluster_manager(create_if_not_exists=create_if_not_exists, force_add=force_add,
+                                           **add_cluster_extra_params)
 
-    def create_cluster_manager(self, cluster_name: str, manager_tool=None, host_ip=None):
+    def create_cluster_manager(self, cluster_name: str, manager_tool=None, **add_cluster_extra_params):
         self.log.info('Scylla manager should not be manipulated on kubernetes manually')
         self.log.info('Instead of creating new cluster we will wait for 5 minutes till it get registered automatically')
         raise NotImplementedError('Scylla manager should not be manipulated on kubernetes manually')
