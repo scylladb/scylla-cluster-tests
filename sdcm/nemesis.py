@@ -19,7 +19,6 @@ Classes that introduce disruption in clusters.
 import contextlib
 import copy
 import datetime
-import inspect
 import logging
 import math
 import os
@@ -6816,8 +6815,7 @@ class CategoricalMonkey(NemesisRunner):
 
         for _name, _weight in dist.items():
             name = str(_name)
-            prefixed_name = f"disrupt_{name}"
-            if prefixed_name not in all_methods:
+            if _name not in all_methods.keys():
                 raise ValueError(f"'{name}' is not a valid disruption. All methods: {all_methods.keys()}")
 
             if not is_nonnegative_number(_weight):
@@ -6827,9 +6825,9 @@ class CategoricalMonkey(NemesisRunner):
 
             weight = float(_weight)
             if weight > 0:
-                population.append(all_methods[prefixed_name])
+                population.append(all_methods[_name])
                 weights.append(weight)
-            listed_methods.add(prefixed_name)
+            listed_methods.add(_name)
 
         if default_weight > 0:
             for method_name, method in all_methods.items():
@@ -6842,27 +6840,20 @@ class CategoricalMonkey(NemesisRunner):
 
         return population, weights
 
-    @staticmethod
-    def get_disrupt_methods() -> Dict[str, Callable]:
-        return {
-            attr[0]: attr[1]
-            for attr in inspect.getmembers(CategoricalMonkey)
-            if attr[0].startswith("disrupt_") and callable(attr[1])
-        }
-
     def __init__(self, tester_obj, termination_event, dist: dict, *args, default_weight: float = 1, **kwargs):
         super().__init__(tester_obj, termination_event, *args, **kwargs)
-        self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
+        self.random = random.Random(self.nemesis_seed)
+        self.disruption_distribution = self.get_disruption_distribution(dist, default_weight)
 
-    def disrupt(self):
-        self._random_disrupt()
-
-    def _random_disrupt(self):
+    def select_next_nemesis(self):
         population, weights = self.disruption_distribution
         assert len(population) == len(weights) and population
 
-        method = random.choices(population, weights=weights)[0]
-        self.execute_nemesis(method)
+        return self.random.choices(population, weights=weights)[0]
+
+    def call_next_nemesis(self):
+        """Override parent method to change how nemesis are executed"""
+        self.execute_nemesis(self.select_next_nemesis())
 
 
 class ScyllaCloudLimitedChaosMonkey(NemesisRunner):
