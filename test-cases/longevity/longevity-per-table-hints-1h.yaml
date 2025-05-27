@@ -1,0 +1,42 @@
+# This test validates the per-table hints functionality with the expected_data_size_in_gb and
+# min_per_shard_tablet_count option.
+# The test creates a table with tablets configuration and runs a mixed workload with GrowShrinkNemesis
+# to test hint behavior during cluster scaling operations.
+#
+# Test Evaluation:
+# - Results must be evaluated manually from Grafana keyspace charts
+# - Monitor tablet distribution and hint management during cluster topology changes
+#
+# Note: This test will fail with syntax error if run against branches that don't support per-tablet hints
+test_duration: 120
+pre_create_schema: True
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 };",
+  "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, \"C0\" blob, \"C1\" blob, \"C2\" blob, \"C3\" blob, \"C4\" blob, \"C5\" blob, \"C6\" blob, \"C7\" blob) WITH  tablets = {'expected_data_size_in_gb': 256, 'min_per_shard_tablet_count': 5};"
+]
+
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000"]
+
+stress_cmd: ["cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000"]
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+seeds_num: 3
+simulated_racks: 3
+
+instance_type_db: 'i4i.2xlarge'
+
+nemesis_class_name: 'GrowShrinkClusterNemesis'
+nemesis_interval: 10
+nemesis_filter_seeds: false
+nemesis_add_node_cnt: 3
+
+user_prefix: 'longevity-per-table-hints-1h'
+space_node_threshold: 64424
+
+parallel_node_operations: true
+
+append_scylla_yaml:
+  enable_tablets: true
+  auto_snapshot: false

@@ -1,0 +1,24 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+/**
+ * This test validates the per-table hints feature by:
+ * - Creating a table with tablets using expected_data_size_in_gb, min_per_shard_tablet_count
+ * - Running GrowShrinkNemesis to test cluster scaling behavior
+ * - Testing mixed workload under cluster topology changes
+ *
+ * Test Evaluation:
+ * - Results are evaluated manually from Grafana keyspace charts
+ * - Monitor tablet distribution during cluster scaling
+ * - If run against a non per-tablet hints branch, the job will fail with syntax error
+ */
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    availability_zone: 'c',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/longevity/longevity-per-table-hints-1h.yaml',
+    instance_provision_fallback_on_demand: true
+)
