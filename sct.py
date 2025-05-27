@@ -649,15 +649,16 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
               type=str,
               help="List images by version. Use '-v all' for all versions. "
                    "OSS format: <4.3> Enterprise format: <enterprise-2021.1>. Mutually exclusive with --branch.")
-@click.option('-r', '--region',
+@click.option('-r', '--region', "regions",
               type=CloudRegion(),
               help="Cloud region to query images in. Defaults to eu-west-1",
-              default="eu-west-1")
+              default=["eu-west-1"],
+              multiple=True)
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
               help="architecture of the AMI (default: x86_64)")
-def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
+def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
     add_file_logger()
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
@@ -672,73 +673,73 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
 
     branch = branch or "master:latest"
 
-    if version is not None:
-        match cloud_provider:
-            case "aws":
-                rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
-                        title=f"AWS Machine Images by Version in region {region}")
-                )
-            case "gce":
-                if arch:
-                    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-                    click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
-                rows = get_gce_images_versioned(version=version)
-
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="GCE Machine Images by version")
-                )
-            case "azure":
-                if arch:
-                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
-                rows = []
-                for image in azure_images:
-                    rows.append(['Azure', image.name, image.unique_id, 'N/A'])
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="Azure Machine Images by version")
-                )
-
-            case _:
-                click.echo(f"Cloud provider {cloud_provider} is not supported")
-
-    elif branch:
-        if ":" not in branch:
-            branch += ":all"
-
-        match cloud_provider:
-            case "aws":
-                region = region or "eu-west-1"
-                ami_images = get_ami_images(branch=branch, region=region, arch=arch)
-                click.echo(
-                    create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
-                        title=f"AMI Machine Images for {branch} in region {region}"
+    for region in regions:
+        if version is not None:
+            match cloud_provider:
+                case "aws":
+                    rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                            title=f"AWS Machine Images by Version in region {region}")
                     )
-                )
-            case "gce":
-                gce_images = get_gce_images(branch=branch, arch=arch)
-                click.echo(
-                    create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
-                        title=f"GCE Machine Images for {branch}"
-                    )
-                )
-            case "azure":
-                if arch:
-                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
-                rows = []
-                for image in azure_images:
-                    rows.append(['Azure', image.name, image.id, 'N/A'])
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="Azure Machine Images by version")
-                )
+                case "gce":
+                    if arch:
+                        #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+                        click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
+                    rows = get_gce_images_versioned(version=version)
 
-            case _:
-                click.echo(f"Cloud provider {cloud_provider} is not supported")
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="GCE Machine Images by version")
+                    )
+                case "azure":
+                    if arch:
+                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                    azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
+                    rows = []
+                    for image in azure_images:
+                        rows.append(['Azure', image.name, image.unique_id, 'N/A'])
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="Azure Machine Images by version")
+                    )
+
+                case _:
+                    click.echo(f"Cloud provider {cloud_provider} is not supported")
+
+        elif branch:
+            if ":" not in branch:
+                branch += ":all"
+
+            match cloud_provider:
+                case "aws":
+                    ami_images = get_ami_images(branch=branch, region=region, arch=arch)
+                    click.echo(
+                        create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                            title=f"AMI Machine Images for {branch} in region {region}"
+                        )
+                    )
+                case "gce":
+                    gce_images = get_gce_images(branch=branch, arch=arch)
+                    click.echo(
+                        create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                            title=f"GCE Machine Images for {branch}"
+                        )
+                    )
+                case "azure":
+                    if arch:
+                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                    rows = []
+                    for image in azure_images:
+                        rows.append(['Azure', image.name, image.id, 'N/A'])
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="Azure Machine Images by version")
+                    )
+
+                case _:
+                    click.echo(f"Cloud provider {cloud_provider} is not supported")
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
