@@ -43,6 +43,17 @@ short-name-mode="permissive"
 ```
 
 ### Run a test
+If you wish to run the tests on a local machine, ensure you have Docker installed and running.
+For the purpose of debugging a simple logic of a nemesis, for example, it would be recommended to use Docker backend.
+#### Disable Argus (if not needed for testing)
+To disable Argus reporting during testing, set the following environment variable:
+```bash
+export SCT_ENABLE_ARGUS=false
+```
+### Logs Location
+
+All logs generated during test runs can be found in the `~/sct-results` directory.
+
 
 Example running test using Hydra using `test-cases/PR-provision-test.yaml` configuration file
 
