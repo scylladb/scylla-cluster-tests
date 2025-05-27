@@ -3,7 +3,7 @@
 List<Integer> call(Map params, String region){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+    def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
     def cmd = """#!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}

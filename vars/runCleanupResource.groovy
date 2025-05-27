@@ -6,7 +6,7 @@ def call(Map params, String region){
     if (params.gce_datacenter) {
         current_gce_datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
     }
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+    def test_config = env.TEST_CONFIG ?: groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
     sh """#!/bin/bash
