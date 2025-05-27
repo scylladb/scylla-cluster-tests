@@ -5164,31 +5164,64 @@ class BaseScyllaCluster:
     def scylla_manager_cluster_name(self):
         return self.name
 
-    def get_cluster_manager(self, create_cluster_if_not_exists: bool = True) -> AnyManagerCluster:
+    def get_cluster_manager(self,
+                            create_if_not_exists: bool = True,
+                            force_add: bool = False,
+                            **add_cluster_extra_params) -> AnyManagerCluster:
+        """Get the Manager cluster if it already exists, otherwise create it.
+
+        Args:
+            create_if_not_exists: If True, create the cluster if it does not exist.
+            force_add: If True, re-add the cluster (delete and add again) even if it already added.
+            add_cluster_extra_params: Pass additional parameters (like 'client_encrypt') to the add_cluster method.
+        """
         if not self.params.get('use_mgmt'):
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
-        LOGGER.debug("sctool version is : {}".format(manager_tool.sctool.version))
+
         cluster_name = self.scylla_manager_cluster_name
+
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
         mgr_cluster = manager_tool.get_cluster(cluster_name)
-        if not mgr_cluster and create_cluster_if_not_exists:
-            self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
-            return self.create_cluster_manager(cluster_name, manager_tool=manager_tool)
+
+        if mgr_cluster and force_add:
+            LOGGER.debug("Cluster '%s' already exists in Manager. Deleting and adding it again", cluster_name)
+            mgr_cluster.delete()
+            return self.create_cluster_manager(cluster_name=cluster_name, manager_tool=manager_tool,
+                                               **add_cluster_extra_params)
+
+        if not mgr_cluster and create_if_not_exists:
+            LOGGER.debug("Could not find cluster '%s'. Adding it to Manager", cluster_name)
+            return self.create_cluster_manager(cluster_name=cluster_name, manager_tool=manager_tool,
+                                               **add_cluster_extra_params)
+
         return mgr_cluster
 
-    def create_cluster_manager(self, cluster_name: str, manager_tool=None, host_ip=None):
+    def create_cluster_manager(self,
+                               cluster_name: str,
+                               manager_tool=None,
+                               **add_cluster_extra_params) -> AnyManagerCluster:
+        """Adds a cluster to the Scylla Manager.
+
+        Args:
+            cluster_name: The name of the cluster to be added to the Scylla Manager.
+            manager_tool: An instance of the Scylla Manager tool. If not provided, it will be initialized.
+            **add_cluster_extra_params: Additional parameters ('client_encrypt') to customize the cluster creation.
+        """
         if manager_tool is None:
             manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
-        if host_ip is None:
-            host_ip = self.nodes[0].scylla_listen_address
-        credentials = self.get_db_auth()
-        return manager_tool.add_cluster(
-            name=cluster_name,
-            host=host_ip,
-            auth_token=self.scylla_manager_auth_token,
-            credentials=credentials,
-            force_non_ssl_session_port=manager_tool.is_force_non_ssl_session_port(db_cluster=self),
-        )
+
+        host_ip = add_cluster_extra_params.pop("host_ip", None) or self.nodes[0].scylla_listen_address
+
+        add_cluster_params = {
+            "auth_token": self.scylla_manager_auth_token,
+            "credentials": self.get_db_auth(),
+            "force_non_ssl_session_port": manager_tool.is_force_non_ssl_session_port(db_cluster=self),
+            "host": host_ip,
+            "name": cluster_name,
+            **add_cluster_extra_params,
+        }
+
+        return manager_tool.add_cluster(**add_cluster_params)
 
     def is_additional_data_volume_used(self) -> bool:
         """return true if additional data volume is configured
