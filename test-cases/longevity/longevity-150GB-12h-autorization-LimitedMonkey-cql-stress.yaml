@@ -1,0 +1,32 @@
+test_duration: 750
+prepare_write_cmd: "cql-stress-cassandra-stress write cl=ALL n=50050075  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..50050075 -log interval=15"
+
+stress_cmd: ["cql-stress-cassandra-stress write cl=QUORUM duration=11h  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=250 throttle=45000/s'  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=400200300..600200300 -log interval=15"]
+stress_read_cmd: ["cql-stress-cassandra-stress read cl=QUORUM duration=11h -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate 'threads=250 throttle=45000/s'  -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..50050075 -log interval=5"]
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
+n_db_nodes: 6
+n_loaders: 1
+n_monitor_nodes: 1
+simulated_racks: 3
+
+instance_type_db: 'i4i.2xlarge'
+gce_instance_type_db: 'n2-highmem-16'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'limited'
+nemesis_seed: '026'
+nemesis_interval: 30
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-50gb-12h'
+
+space_node_threshold: 644245094
+
+server_encrypt: true
+client_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+use_preinstalled_scylla: true
