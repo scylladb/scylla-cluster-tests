@@ -19,6 +19,7 @@ import contextlib
 from typing import Any
 from sdcm.loader import CqlStressCassandraStressExporter, CqlStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, cql_stress_transport_str
 from sdcm.reporting.tooling_reporter import CqlStressCassandraStressVersionReporter
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
@@ -98,6 +99,11 @@ class CqlStressCassandraStressThread(CassandraStressThread):
                 stress_cmd = re.sub(r'(-mode.*?)(-)?', r'\1 user={} password={} \2'.format(*credentials), stress_cmd)
             else:
                 stress_cmd += ' -mode user={} password={} '.format(*credentials)
+
+        if self.client_encrypt and 'transport' not in stress_cmd:
+            transport_str = cql_stress_transport_str(self.params.get('peer_verification'))
+            stress_cmd += f" -transport '{transport_str}'"
+
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
@@ -160,7 +166,12 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         else:
             node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
         node_cmd = f'echo {tag}; {node_cmd}'
-
+        if self.client_encrypt:
+            for ssl_file in loader.ssl_conf_dir.iterdir():
+                if ssl_file.is_file():
+                    cmd_runner.send_files(str(ssl_file),
+                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
+                                          verbose=True)
         try:
             prefix,  *_ = stress_cmd.split("cql-stress-cassandra-stress", maxsplit=1)
             reporter = CqlStressCassandraStressVersionReporter(
