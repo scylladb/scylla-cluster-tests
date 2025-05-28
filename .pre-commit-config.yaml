@@ -51,6 +51,13 @@ repos:
         types: [python]
         exclude: ^argus/.*$
 
+    -   id: update-conf-docs
+        name: update-conf-docs
+        entry: ./sct.py update-conf-docs
+        language: system
+        pass_filenames: false
+        files: (?x)(sdcm/sct_config.py|defaults/.*.yaml)
+
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v5.0.0
   hooks:
