@@ -35,3 +35,6 @@ scylla_network_config:
   public: false
   use_dns: false
   nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
+
+append_scylla_yaml:
+  test_parameter: test_value
