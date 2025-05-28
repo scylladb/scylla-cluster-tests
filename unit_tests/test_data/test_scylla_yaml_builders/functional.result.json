@@ -20,5 +20,14 @@
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
   "enable_ipv6_dns_lookup": false,
+<<<<<<< HEAD
   "hinted_handoff_enabled": false
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+  "listen_interface": "eth0",
+  "hinted_handoff_enabled": false
+=======
+  "listen_interface": "eth0",
+  "hinted_handoff_enabled": false,
+  "test_parameter": "test_value"
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
 }
