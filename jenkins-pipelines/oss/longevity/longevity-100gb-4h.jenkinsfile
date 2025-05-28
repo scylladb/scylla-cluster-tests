@@ -8,6 +8,6 @@ longevityPipeline(
     region: 'eu-west-1',
     availability_zone: 'c',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-100gb-4h.yaml',
+    test_config: 'test-cases/longevity/longevity-100gb-4h-cql-stress.yaml',
     instance_provision_fallback_on_demand: true
 )

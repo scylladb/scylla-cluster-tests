@@ -3498,7 +3498,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             now = time.time()
             results = self.prometheus_db.query(query=metric_query, start=now - 60, end=now)
             self.log.debug("metric_has_data: %s", results)
-            assert results, "No results from Prometheus"
+            assert results, f"No results from Prometheus for metric: {metric_query}"
             if results:
                 assert any((float(v[1]) for v in results[0]["values"])) > 0, f"{metric_query} didn't has data in it"
 
