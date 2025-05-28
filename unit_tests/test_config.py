@@ -302,7 +302,112 @@ class ConfigurationTests(unittest.TestCase):
         assert len(amis) == 2
         assert all(ami.startswith('ami-') for ami in amis)
 
-    def test_conf_check_required_files(self):
+    def test_14_check_rackaware_config_false_loader(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'false'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError, expected_regex="rack_aware_loader' must be set to True for rackaware validator."):
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_one_racks(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError,
+                                    expected_regex="Rack-aware validation can only be performed in multi-availability zone or multi-"):
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_no_rack_without_loader(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1 eu-west-2"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '2 2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError,
+                                    expected_regex="Rack-aware validation requires zones without loaders."):
+
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_az(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_N_LOADERS'] = '1'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_region(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '1 0'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_az_and_region(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '1 1'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_conf_check_required_files(self):  # pylint: disable=no-self-use
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         ami_id = get_ssm_ami(
             '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')

@@ -254,6 +254,8 @@ teardown_validators:
         event_type: RUNTIME_ERROR
         regex: '.*runtime_error.*'
       - event_class: CoreDumpEvent
+  rackaware:
+    enabled: false
 
 kafka_backend: null
 kafka_connectors: []

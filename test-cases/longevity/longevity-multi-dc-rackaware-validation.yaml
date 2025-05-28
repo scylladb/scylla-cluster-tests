@@ -1,0 +1,24 @@
+test_duration: 180
+
+prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=2097152 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+                    ]
+
+stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=120m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..2097152)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -errors retries=50",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=120m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..2097152)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -errors retries=50",
+             ]
+rack_aware_loader: true
+n_db_nodes: '6 6'
+n_loaders: '1 1'
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 10
+
+user_prefix: 'multi-dc-rackaware-validation'
+
+# teardown validators
+teardown_validators:
+  rackaware:
+    enabled: true
