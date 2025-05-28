@@ -10,24 +10,55 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+<<<<<<< HEAD
 from difflib import unified_diff
 from typing import List, Literal, Union
 
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+from difflib import unified_diff
+from typing import List, Literal, Union, Any
+
+=======
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
 import logging
+from difflib import unified_diff
+from typing import Literal, List, Dict, Any, Union
+
 import yaml
+<<<<<<< HEAD
 from pydantic import validator, BaseModel, Extra
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+from pydantic import validator, BaseModel, ConfigDict
 
+from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
+    ServerEncryptionOptions, ClientEncryptionOptions
+=======
+from pydantic import field_validator, BaseModel, ConfigDict
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+
+from sdcm.provision.scylla_yaml.auxiliaries import EndPointSnitchType, ServerEncryptionOptions, ClientEncryptionOptions, \
+    SeedProvider, RequestSchedulerOptions
 
 logger = logging.getLogger(__name__)
 
 
 class ScyllaYaml(BaseModel):
+    """
+    Model for scylla.yaml configuration.
+    Allows for any parameters, parameters here are just type hint helpers
+    """
 
+<<<<<<< HEAD
     class Config:  # pylint: disable=too-few-public-methods
         extra = Extra.allow
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+=======
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
 
     broadcast_address: str = None  # ""
     api_port: int = None  # 10000
@@ -51,7 +82,8 @@ class ScyllaYaml(BaseModel):
     disk_failure_policy: Literal["die", "stop_paranoid", "stop", "best_effort", "ignore"] = None  # "stop"
     endpoint_snitch: EndPointSnitchType = None
 
-    @validator("endpoint_snitch", pre=True, always=True)
+    @field_validator("endpoint_snitch", mode="before")
+    @classmethod
     def set_endpoint_snitch(cls, endpoint_snitch: str):
         if endpoint_snitch is None:
             return endpoint_snitch
@@ -189,7 +221,8 @@ class ScyllaYaml(BaseModel):
     ] = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
-    @validator("request_scheduler", pre=True, always=True)
+    @field_validator("request_scheduler", mode="before")
+    @classmethod
     def set_request_scheduler(cls, request_scheduler: str):
         if request_scheduler is None:
             return request_scheduler
@@ -208,7 +241,8 @@ class ScyllaYaml(BaseModel):
         "com.scylladb.auth.SaslauthdAuthenticator"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
-    @validator("authenticator", pre=True, always=True)
+    @field_validator("authenticator", mode="before")
+    @classmethod
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
             return authenticator
@@ -228,7 +262,8 @@ class ScyllaYaml(BaseModel):
         "com.scylladb.auth.SaslauthdAuthorizer"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
-    @validator("authorizer", pre=True, always=True)
+    @field_validator("authorizer", mode="before")
+    @classmethod
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
             return authorizer
@@ -359,6 +394,7 @@ class ScyllaYaml(BaseModel):
     def dict(
         self,
         *,
+<<<<<<< HEAD
         include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
         exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
         by_alias: bool = False,
@@ -371,11 +407,32 @@ class ScyllaYaml(BaseModel):
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+        explicit: List[str] = None,
+        **kwargs,
+    ) -> dict[str, Any]:  # noqa: F821
+        to_dict = super().model_dump(**kwargs)
+=======
+        explicit: List[str] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Converts the model to a dictionary, including dynamically added parameters.
+
+        Args:
+            explicit: List of attributes that should be explicitly included even if they have default values
+            **kwargs: Additional parameters passed to the Pydantic model_dump
+
+        Returns:
+            Dictionary containing all attributes of the model
+        """
+        to_dict = super().model_dump(**kwargs)
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
         if explicit:
             for required_attrs in explicit:
-                to_dict[required_attrs] = getattr(self, required_attrs)
+                to_dict[required_attrs] = getattr(self, required_attrs, None)
         return to_dict
 
+<<<<<<< HEAD
     def _update_dict(self, obj: dict, fields_data: dict):
         for attr_name, attr_value in obj.items():
             attr_info = fields_data.get(attr_name, None)
@@ -389,21 +446,39 @@ class ScyllaYaml(BaseModel):
                     attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+    def _update_dict(self, obj: dict, fields_data: dict):
+        for attr_name, attr_value in obj.items():
+            attr_info = fields_data.get(attr_name, None)
+            if attr_info is None:
+                logger.warning("Provided unknown attribute `%s`", attr_name)
+            setattr(self, attr_name, attr_value)
+
+=======
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
     def update(self, *objects: Union['ScyllaYaml', dict]):
         """
         Do the same as dict.update, with one exception.
         It ignores whatever key if it's value equal to default
         This comes from module `attr` and probably could be tackled there
         """
+<<<<<<< HEAD
         fields_data = self.__fields__
+||||||| parent of 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
+        fields_data = self.model_fields
+=======
+        fields_names = self.__class__.model_fields
+>>>>>>> 3b4160b34 (fix(scylla_yaml): Allow usage of any option in append_scylla_yaml)
         for obj in objects:
             if isinstance(obj, ScyllaYaml):
-                for attr_name, attr_value in obj.__dict__.items():
-                    attr_type = fields_data.get(attr_name)
-                    if (attr_type and attr_value is not None) and attr_value != getattr(self, attr_name, None):
+                attrs = {*fields_names, *obj.model_extra.keys()}
+                for attr_name in attrs:
+                    attr_value = getattr(obj, attr_name, None)
+                    if attr_value is not None and attr_value != getattr(self, attr_name, None):
                         setattr(self, attr_name, attr_value)
             elif isinstance(obj, dict):
-                self._update_dict(obj, fields_data=fields_data)
+                for attr_name, attr_value in obj.items():
+                    setattr(self, attr_name, attr_value)
             else:
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self
