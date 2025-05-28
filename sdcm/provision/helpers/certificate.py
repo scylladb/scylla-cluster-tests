@@ -339,6 +339,14 @@ def c_s_transport_str(peer_verification: bool, client_mtls: bool) -> str:
     return transport_str
 
 
+def cql_stress_transport_str(peer_verification: bool) -> str:
+    """Build transport string for cassandra-stress."""
+    transport_str = f'truststore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} truststore-password=cassandra'
+    if peer_verification:
+        transport_str += ' hostname-verification=true'
+    return transport_str
+
+
 def create_ca(localhost):
     _create_ca()
     _import_ca_to_jks_truststore(localhost)
