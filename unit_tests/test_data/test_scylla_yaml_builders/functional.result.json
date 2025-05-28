@@ -21,5 +21,6 @@
   "auto_bootstrap": true,
   "enable_ipv6_dns_lookup": false,
   "listen_interface": "eth0",
-  "hinted_handoff_enabled": false
+  "hinted_handoff_enabled": false,
+  "test_parameter": "test_value"
 }
