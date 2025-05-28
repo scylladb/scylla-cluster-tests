@@ -10,24 +10,26 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from difflib import unified_diff
-from typing import List, Literal, Union
-
 import logging
+from difflib import unified_diff
+from typing import Literal, List, Union
+
 import yaml
-from pydantic import validator, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import field_validator, BaseModel, ConfigDict
 
-from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
-    ServerEncryptionOptions, ClientEncryptionOptions
-
+from sdcm.provision.scylla_yaml.auxiliaries import EndPointSnitchType, ServerEncryptionOptions, ClientEncryptionOptions, \
+    SeedProvider, RequestSchedulerOptions
 
 logger = logging.getLogger(__name__)
 
 
 class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+    """
+    Model for scylla.yaml configuration.
+    Allows for any parameters, parameters here are just type hint helpers
+    """
 
-    class Config:  # pylint: disable=too-few-public-methods
-        extra = Extra.allow
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     broadcast_address: str = None  # ""
     api_port: int = None  # 10000
@@ -51,8 +53,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     disk_failure_policy: Literal["die", "stop_paranoid", "stop", "best_effort", "ignore"] = None  # "stop"
     endpoint_snitch: EndPointSnitchType = None
 
-    # pylint: disable=no-self-argument,no-self-use
-    @validator("endpoint_snitch", pre=True, always=True)
+    @field_validator("endpoint_snitch", mode="before")
+    @classmethod
     def set_endpoint_snitch(cls, endpoint_snitch: str):
         if endpoint_snitch is None:
             return endpoint_snitch
@@ -183,8 +185,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     ] = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
-    # pylint: disable=no-self-argument,no-self-use
-    @validator("request_scheduler", pre=True, always=True)
+    @field_validator("request_scheduler", mode="before")
+    @classmethod
     def set_request_scheduler(cls, request_scheduler: str):
         if request_scheduler is None:
             return request_scheduler
@@ -203,8 +205,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthenticator"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
-    # pylint: disable=no-self-argument,no-self-use
-    @validator("authenticator", pre=True, always=True)
+    @field_validator("authenticator", mode="before")
+    @classmethod
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
             return authenticator
@@ -224,8 +226,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthorizer"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
-    # pylint: disable=no-self-argument,no-self-use
-    @validator("authorizer", pre=True, always=True)
+    @field_validator("authorizer", mode="before")
+    @classmethod
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
             return authorizer
@@ -358,26 +360,22 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         exclude_unset: bool = False,
         explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
     ) -> 'DictStrAny':
+        """Converts the model to a dictionary, including dynamically added parameters.
+
+        Args:
+            explicit: List of attributes that should be explicitly included even if they have default values
+            **kwargs: Additional parameters passed to the Pydantic model_dump
+
+        Returns:
+            Dictionary containing all attributes of the model
+        """
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)
         if explicit:
             for required_attrs in explicit:
-                to_dict[required_attrs] = getattr(self, required_attrs)
+                to_dict[required_attrs] = getattr(self, required_attrs, None)
         return to_dict
-
-    def _update_dict(self, obj: dict, fields_data: dict):
-        for attr_name, attr_value in obj.items():
-            attr_info = fields_data.get(attr_name, None)
-            if attr_info is None:
-                logger.warning("Provided unknown attribute `%s`", attr_name)
-            if attr_info and hasattr(attr_info.type_, "__attrs_attrs__"):
-                if attr_value is not None:
-                    if not isinstance(attr_value, dict):
-                        raise ValueError("Unexpected data `%s` in attribute `%s`" % (
-                            type(attr_value), attr_name))
-                    attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
-            setattr(self, attr_name, attr_value)
 
     def update(self, *objects: Union['ScyllaYaml', dict]):
         """
@@ -385,15 +383,17 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         It ignores whatever key if it's value equal to default
         This comes from module `attr` and probably could be tackled there
         """
-        fields_data = self.__fields__
+        fields_names = self.__class__.model_fields
         for obj in objects:
             if isinstance(obj, ScyllaYaml):
-                for attr_name, attr_value in obj.__dict__.items():
-                    attr_type = fields_data.get(attr_name)
-                    if (attr_type and attr_value is not None) and attr_value != getattr(self, attr_name, None):
+                attrs = {*fields_names, *obj.model_extra.keys()}
+                for attr_name in attrs:
+                    attr_value = getattr(obj, attr_name, None)
+                    if attr_value is not None and attr_value != getattr(self, attr_name, None):
                         setattr(self, attr_name, attr_value)
             elif isinstance(obj, dict):
-                self._update_dict(obj, fields_data=fields_data)
+                for attr_name, attr_value in obj.items():
+                    setattr(self, attr_name, attr_value)
             else:
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self

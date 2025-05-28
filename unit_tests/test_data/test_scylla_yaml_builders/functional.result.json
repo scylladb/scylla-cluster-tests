@@ -20,5 +20,6 @@
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
   "enable_ipv6_dns_lookup": false,
-  "hinted_handoff_enabled": false
+  "hinted_handoff_enabled": false,
+  "test_parameter": "test_value"
 }
