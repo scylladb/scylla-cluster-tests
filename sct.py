@@ -1698,7 +1698,7 @@ def get_nemesis_list(backend, config):
 
     # NOTE: this import messes up logging for the test, since it's importing tester.py
     # directly down the line
-    from unit_tests.test_nemesis import FakeTester
+    from unit_tests.nemesis.fake_cluster import FakeTester
 
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
