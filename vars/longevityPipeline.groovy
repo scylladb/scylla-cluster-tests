@@ -51,13 +51,21 @@ def call(Map pipelineParams) {
                name: 'prepare_stress_duration')
 
             // ScyllaDB Configuration
-	    separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
-	    string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
-	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection. Choose only one from AMI, GCE, Azure, ScyllaDB Repo, or BYO ScyllaDB')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+            string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+            string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
             string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
             string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
+            string(defaultValue: '',
+                   description: (
+                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. \n' +
+                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git'),
+                   name: 'byo_scylla_repo')
+            string(defaultValue: '',
+                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
+                   name: 'byo_scylla_branch')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
@@ -182,14 +190,6 @@ def call(Map pipelineParams) {
                     name: 'extra_environment_variables')
             // BYO ScyllaDB Configuration
             separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
-            string(defaultValue: '',
-                   description: (
-                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. \n' +
-                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git'),
-                   name: 'byo_scylla_repo')
-            string(defaultValue: '',
-                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
-                   name: 'byo_scylla_branch')
             string(defaultValue: '/scylla-master/byo/byo_build_tests_dtest',
                    description: 'Used when byo scylladb repo+branch is provided. Default "/scylla-master/byo/byo_build_tests_dtest"',
                    name: 'byo_job_path')
