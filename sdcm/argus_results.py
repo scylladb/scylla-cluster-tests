@@ -187,11 +187,11 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         summary = result["hdr_summary"]
         LOGGER.info(f'QWERTY summary is {summary}')
         if operation.upper() not in summary:
-            LOGGER.info(f'QWERTY not in summary')
+            LOGGER.info(f'QWERTY not in summary operation: {operation.upper()}')
             continue
         for percentile in ["90", "99"]:
             value = summary[operation.upper()][f"percentile_{percentile}"]
-            LOGGER.info(f'QWERTY value is `{repr(value)}`')
+            LOGGER.info(f'QWERTY value is `{repr(value)}` for {operation.upper()} percentile {percentile}')
             result_table.add_result(column=f"P{percentile} {operation}",
                                     row=f"Cycle #{cycle}",
                                     value=value,
