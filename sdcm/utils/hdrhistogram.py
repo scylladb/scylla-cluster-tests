@@ -139,7 +139,8 @@ class _HdrRangeHistogramBuilder:
         for tag in self.hdr_tags:
             try:
                 result = self.build_histogram_summary_by_tag(path, tag)
-                scan_results.update(result)
+                if result is not None:
+                    scan_results.update(result)
             except Exception as exc:
                 LOGGER.exception(f"Failed to build histogram summary for {path} with tag {tag}: {exc}")
 
