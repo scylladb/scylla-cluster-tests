@@ -115,6 +115,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                             remote_log_file=f'/tmp/hdr-output-directory/{loader_index}/{stress_idx}/hdrh-{work_type}.hdr',
                             target_log_file=os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr_'),
                         )
+                        hdrh_logger.create_empty_remote_log_file()
                         hdrh_logger.start()
                         hdrh_logger_contextes.append(hdrh_logger)
 
@@ -181,6 +182,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                 # for e, d in enumerate(data3):
                                 #     self.log.error(f'QWERTY file {src_pth} line {e} {d}')
             self.build_histogram(workload, hdr_tags=self.hdr_tags)
+            for hdrh_logger in hdrh_logger_contextes:
+                hdrh_logger.remove_remote_log_file()
+
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 

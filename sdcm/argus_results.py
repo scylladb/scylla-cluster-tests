@@ -191,6 +191,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
             continue
         for percentile in ["90", "99"]:
             value = summary[operation.upper()][f"percentile_{percentile}"]
+            if value < 0.001:
+                value = 0.001
             LOGGER.info(f'QWERTY value is `{repr(value)}` for {operation.upper()} percentile {percentile}')
             result_table.add_result(column=f"P{percentile} {operation}",
                                     row=f"Cycle #{cycle}",

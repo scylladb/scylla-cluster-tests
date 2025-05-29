@@ -184,7 +184,7 @@ class _HdrRangeHistogramBuilder:
                     futures.append(executor.submit(self._build_histograms_summary_with_interval_by_tag,
                                                    path, hdr_tag, start_interval, end_interval, interval_num))
                 interval_num += 1
-            LOGGER.info(f'QWERTY waiting for finish ({len(futures)} futures) start {start_interval} end {end_interval}')
+            LOGGER.info(f'QWERTY waiting for finish ({len(futures)} futures) start {start_interval} end {end_interval} window_step {window_step}')
             results = {}
             for future in futures:
                 if res := future.result():

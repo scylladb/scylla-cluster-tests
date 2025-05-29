@@ -146,6 +146,24 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self._lock = Lock()
         self._started = False
 
+    def create_empty_remote_log_file(self) -> None:
+        """
+        Create an empty HDR file on the remote node.
+        This is needed to avoid issues with the tail command
+        when the file is not created yet.
+        """
+        self._node.remoter.run(cmd=f"touch {self._remote_log_file}", ignore_status=True)
+        LOGGER.debug("Created empty HDR file on the remote node: %s", self._remote_log_file)
+
+    def remove_remote_log_file(self) -> None:
+        """
+        Create an empty HDR file on the remote node.
+        This is needed to avoid issues with the tail command
+        when the file is not created yet.
+        """
+        self._node.remoter.run(cmd=f"rm -f {self._remote_log_file}", ignore_status=True)
+        LOGGER.debug("Removed HDR file %s", self._remote_log_file)
+        
     def start(self) -> None:
         with self._lock:
             if self._started:
