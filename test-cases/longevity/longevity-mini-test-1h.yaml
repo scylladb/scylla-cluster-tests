@@ -1,7 +1,7 @@
 test_duration: 180
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..10000000 -log interval=5"]
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
 
