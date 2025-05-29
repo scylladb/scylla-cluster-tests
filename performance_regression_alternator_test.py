@@ -40,6 +40,20 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
+    @latency_calculator_decorator
+    def _workload_with_latency_calculator_decorator(self, *args, **kwargs):
+        workload = kwargs.get('workload')
+        self.hdr_tags = ['read', 'write']
+        if workload == PerformanceTestWorkload.READ:
+            self.params['workload_name'] = 'read'
+        elif workload == PerformanceTestWorkload.WRITE:
+            self.params['workload_name'] = 'write'
+        elif workload == PerformanceTestWorkload.MIXED:
+            self.params['workload_name'] = 'mixed'
+        else:
+            self.log.error(f'unknown workload {workload} - some things might not work as expected')
+        return self._workload(*args, **kwargs)
+    
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
                   save_stats=True, is_alternator=True, nemesis=False, workload: Optional[PerformanceTestWorkload] = None):
         if not is_alternator:
@@ -353,34 +367,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.check_regression_with_baseline('cql')
 
-    def _workload_set_workload_name(self, *args, **kwargs):
-        self.hdr_tags = [ 'read', 'write' ]
-        workload = kwargs.get('workload')
-        if workload == PerformanceTestWorkload.READ:
-            self.params['workload_name'] = 'read'
-        elif workload == PerformanceTestWorkload.WRITE:
-            self.params['workload_name'] = 'write'
-        elif workload == PerformanceTestWorkload.MIXED:
-            self.params['workload_name'] = 'mixed'
-        else:
-            self.log.error(f'unknown workload {workload} - some things might not work as expected')
-        return self._workload(*args, **kwargs)
-    
-    @latency_calculator_decorator
-    def latency_cs(self, *args, **kwargs):
-        self._workload_set_workload_name(*args, **kwargs)
-        return self._workload(*args, **kwargs)
-    
-    @latency_calculator_decorator
-    def latency_alternator_no_lwt(self, *args, **kwargs):
-        self._workload_set_workload_name(*args, **kwargs)
-        return self._workload(*args, **kwargs)
-    
-    @latency_calculator_decorator
-    def latency_alternator_with_lwt(self, *args, **kwargs):
-        self._workload_set_workload_name(*args, **kwargs)
-        return self._workload(*args, **kwargs)
-    
     def test_latency(self):
         """
         Test steps:
@@ -415,20 +401,20 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.wait_no_compactions_running(n=120)
 
         self.run_fstrim_on_all_db_nodes()
-        self.latency_cs(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.READ)
 
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self.latency_alternator_no_lwt(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, workload=PerformanceTestWorkload.READ)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self.latency_alternator_with_lwt(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1, workload=PerformanceTestWorkload.READ)
         self.check_regression_with_baseline('cql')
@@ -437,21 +423,21 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.run_fstrim_on_all_db_nodes()
 
         self.wait_no_compactions_running()
-        self.latency_cs(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w,
             stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.WRITE)
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self.latency_alternator_no_lwt(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w,
             stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
 
         self.wait_no_compactions_running(n=120)
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self.latency_alternator_with_lwt(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w,
             stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.WRITE)
         self.check_regression_with_baseline('cql')
@@ -460,20 +446,20 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.wait_no_compactions_running(n=120)
         self.run_fstrim_on_all_db_nodes()
 
-        self.latency_cs(
+        self._workload_with_latency_calculator_decorator(
             test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m,
             stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, workload=PerformanceTestWorkload.MIXED)
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self.latency_alternator_no_lwt(test_name=self.id() + '_mixed', sub_type='without-lwt',
+        self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
                        stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self.latency_alternator_with_lwt(test_name=self.id() + '_mixed', sub_type='with-lwt',
+        self._workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
                        stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1, workload=PerformanceTestWorkload.MIXED)
 
         self.check_regression_with_baseline('cql')
