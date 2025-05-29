@@ -13,6 +13,7 @@
 
 import abc
 from textwrap import dedent
+from typing import Any
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
@@ -26,7 +27,9 @@ from sdcm.provision.common.utils import (
     install_syslogng_exporter,
     disable_daily_apt_triggers,
     configure_syslogng_destination_conf,
-    configure_syslogng_file_source
+    configure_syslogng_file_source,
+    install_vector_service,
+    configure_vector_target_script,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -40,6 +43,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     hostname: str = ''
     log_file: str = ''
+    test_config: Any | None = None
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -106,6 +110,12 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 script += configure_syslogng_file_source(log_file=self.log_file)
             script += restart_syslogng_service()
             script += install_syslogng_exporter()
+
+        if self.logs_transport == 'vector':
+            script += update_repo_cache()
+            script += install_vector_service()
+            host, port = self.syslog_host_port
+            script += configure_vector_target_script(host=host, port=port)
 
         if self.configure_sshd:
             script += configure_sshd_script()
