@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v5.0.0
     hooks:
     -   id: trailing-whitespace
         exclude: >
@@ -59,7 +59,7 @@ repos:
         files: (?x)(sdcm/sct_config.py|defaults/.*.yaml)
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-  rev: v5.0.0
+  rev: v9.22.0
   hooks:
       - id: commitlint
         stages: [commit-msg]
