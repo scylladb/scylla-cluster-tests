@@ -1,0 +1,6 @@
+append_scylla_yaml:
+  object_storage_endpoints:
+    - name: s3.us-east-1.amazonaws.com
+      port: 443
+      https: true
+      aws_region: us-east-1
