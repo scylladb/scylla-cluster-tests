@@ -112,7 +112,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if workload is not None and 'workload_name' in self.params:
             for hdrh_logger in hdrh_logger_contextes:
                 hdrh_logger.stop()
-            #allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
+            allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
             for loader in self.loaders.nodes:
                 loader_index = loader.node_index
                 for work_type, tag in work_types.items():
@@ -123,42 +123,35 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         if os.path.isfile(src_pth):
                             with open(src_pth, 'r', encoding='utf8') as input:
                                 data = input.readlines()
-                            data2 = data
-                            # data2 = []
-                            # min_starting_time = None
-                            # ignored_tail_lines = 0
-                            # for d in data:
-                            #     d = d.strip()
-                            #     if d.startswith('tail: '):
-                            #         ignored_tail_lines += 1
-                            #     elif d.startswith('#'):
-                            #         m = start_time_re.match(d)
-                            #         if m:
-                            #             start_time = m.group(1)
-                            #             if min_starting_time is None or float(start_time) < min_starting_time:
-                            #                 min_starting_time = float(start_time)
-                            #             self.log.error(f'QWERTY file {src_pth} ignoring comment line `{d}` with start time {start_time}')
-                            #         else:
-                            #             self.log.error(f'QWERTY file {src_pth} ignoring comment line `{d}`')
-                            #     else:
-                            #         d2 = set(d)
-                            #         if d2 - allowed_chars:
-                            #             self.log.error(f'QWERTY file {src_pth} ignoring line `{d}`, because of invalid characters')
-                            #         else:
-                            #             data2.append(d)
-                            # removed = len(data) - len(data2)
-                            # self.log.error(f'QWERTY file {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
+                            data2 = []
+                            min_starting_time = None
+                            ignored_tail_lines = 0
+                            for d in data:
+                                d = d.strip()
+                                if d.startswith('#'):
+                                    data2.append(d)
+                                elif d.startswith('tail: '):
+                                    ignored_tail_lines += 1
+                                else:
+                                    d2 = set(d)
+                                    if d2 - allowed_chars:
+                                        self.log.error(f'QWERTY file {src_pth} ignoring line `{d}`, because of invalid characters')
+                                    else:
+                                        data2.append(d)
+                            removed = len(data) - len(data2)
+                            self.log.error(f'QWERTY file {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
                             data3 = [
                                 #'#[Histogram log format version 1.3]',
                             ]
                             # if min_starting_time is None:
                             #     min_starting_time = self.get_test_start_time() or self.start_time
                             # data3.append(f'#[StartTime: {min_starting_time} ()')
-                            for d in data2:
+                            for e, d in enumerate(data2):
                                 if d[0].isdigit() or d[0] == '.':
                                     data3.append(f'{tag_text},{d}')
                                 else:
                                     data3.append(d)
+                                self.log.error(f'QWERTY file {dst_pth} line {e} {data3[-1]}')
                             #data3.append('"StartTimestamp","Interval_Length","Interval_Max","Interval_Compressed_Histogram"')
                             # if data3:
                             #     # in case last line was only partially written - python implementation of hdr histogram

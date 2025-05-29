@@ -3916,8 +3916,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             base_path = self.loaders.logdir
         self.log.info("Build HDR histogram (tags: %s) with start time: %s, end time: %s; for operation: %s",
                       hdr_tags, start_time, end_time, stress_operation)
-        for line in traceback.format_stack():
-            self.log.info(f'calling from {line.strip()}')
         histogram_data = make_hdrhistogram_summary(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             start_time=start_time, end_time=end_time, base_path=base_path, absolute_time=absolute_time)
