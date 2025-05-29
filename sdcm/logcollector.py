@@ -1433,6 +1433,7 @@ class Collector:
             }
         self.cluster_log_collectors |= {
             ScyllaLogCollector: self.db_cluster,
+            SchemaLogCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
             PythonSCTLogCollector: self.sct_set,
             LoaderLogCollector: self.loader_set,
@@ -1707,6 +1708,26 @@ class Collector:
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
             with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w", encoding="utf-8") as f:
                 f.write(self.test_id)
+
+
+class SchemaLogCollector(BaseSCTLogCollector):
+    log_entities = [FileLog(name='schema.log',
+                            search_locally=False),
+                    FileLog(name='system_schema_tables.log',
+                            search_locally=False),
+                    FileLog(name='system_truncated.log',
+                            search_locally=False),
+                    FileLog(name='schema_with_internals.log',
+                            search_locally=False),
+                    ]
+    cluster_log_type = "schema-logs"
+    cluster_dir_prefix = "schema-logs"
+
+    def collect_logs(self, local_search_path=None) -> list[str]:
+        logdir = Path(local_search_path) / "collected_logs" / f"{self.cluster_dir_prefix}-{self.test_id[:8]}"
+        # Schema logs are stored in the test run log directory, inside the "schema-logs-<test_id>" subfolder
+        self.local_dir = str(logdir)
+        return super().collect_logs()
 
 
 def check_archive(remoter, path: str) -> bool:
