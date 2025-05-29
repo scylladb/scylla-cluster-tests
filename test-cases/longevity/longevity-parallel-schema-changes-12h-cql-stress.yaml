@@ -1,0 +1,35 @@
+test_duration: 800
+
+prepare_write_cmd:  [
+                     "cql-stress-cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80  -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(128)' -log interval=10",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=1000 -clustering-row-size=uniform:1024..4096 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=5 -timeout=60s -retry-number=30 -retry-interval=500ms,1s",
+                    ]
+
+stress_cmd: [
+             "cql-stress-cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate 'threads=40 throttle=15000/s' -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(128)' -log interval=10",
+             "cql-stress-cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate 'threads=40 throttle=15000/s' -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(128)' -log interval=10",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=50 -clustering-row-count=1000 -partition-offset=11 -clustering-row-size=uniform:1024..4096  -concurrency=20  -connection-count=20  -consistency-level=quorum -rows-per-request=50 -timeout=60s -retry-number=30 -retry-interval=500ms,1s -iterations 0 -duration=700m -max-rate 1000",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=50 -clustering-row-count=1000 -partition-offset=41 -clustering-row-size=uniform:1024..4096   -concurrency=20 -connection-count=20  -consistency-level=quorum -rows-per-request=50 -timeout=60s -retry-number=30 -retry-interval=500ms,1s -iterations 0 -duration=700m -max-rate 1000"
+             ]
+
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+simulated_racks: 3
+
+instance_type_db: 'i4i.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
+nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
+nemesis_interval: 10
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-parallel-topology-schema-12h'
+space_node_threshold: 64424
+round_robin: true
+
+seeds_num: 3
+
+teardown_validators:
+  scrub:
+    enabled: true
