@@ -3479,6 +3479,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             assert not self.is_compaction_running, "Waiting until all compactions settle down"
         _is_no_compaction_running()
 
+    @measure_time
+    def wait_for_no_tablets_splits(self, n=3, sleep_time=180):
+        # Wait until there are no tablets splits happened
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def _is_no_tablets_splits():
+            query = "select resize_type from system.tablets"
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0], connect_timeout=600) as session:
+                query_result = session.execute(query)
+
+            results_set = set([result_row.resize_type for result_row in query_result])
+            self.log.debug("resize_type all results: %s", results_set)
+            assert results_set == {'none'} or not results_set, (
+                "Tablet splits or merges still in progress: %s" % results_set)
+        _is_no_tablets_splits()
+
     def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
         """
         wait for any prometheus metric to have data in it
