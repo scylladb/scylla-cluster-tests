@@ -536,6 +536,18 @@ class Nemesis:
             self.target_node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
 
+    def _sigquit_scylla_daemon(self):
+        self.log.info('Sending SIGQUIT to scylla processes in %s',
+                      self.target_node)
+        self.target_node.remoter.sudo("pkill -3 scylla", ignore_status=True)
+        # Wait for few seconds before checking diagnosis data
+        time.sleep(30)
+        if self.target_node.is_diagnostics_logged:
+            self.log.info("Diagnosis dump report is found")
+        else:
+            self.log.error("Diagonosis dump report is missing")
+            raise Exception("Diagonosis dump report not found")
+
     @decorate_with_context(ignore_raft_topology_cmd_failing)
     @target_all_nodes
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):
@@ -1576,6 +1588,14 @@ class Nemesis:
     @target_all_nodes
     def disrupt_kill_scylla(self):
         self._kill_scylla_daemon()
+
+    def disrupt_sigquit_scylla(self):
+        stress_cmd = self.tester.params.get('stress_cmd')
+        self.tester.run_stress_thread(
+            stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
+        # Wait for 5 mins before sending signal
+        time.sleep(300)
+        self._sigquit_scylla_daemon()
 
     def disrupt_no_corrupt_repair(self):
 
@@ -6317,6 +6337,14 @@ class OperatorNodetoolFlushAndReshard(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_flush_and_reshard_on_kubernetes()
+
+
+class ScyllaDiagnosisReport(Nemesis):
+    disruptive = False
+    kubernetes = False
+
+    def disrupt(self):
+        self.disrupt_sigquit_scylla()
 
 
 class ScyllaKillMonkey(Nemesis):

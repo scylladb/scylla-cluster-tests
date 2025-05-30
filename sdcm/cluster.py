@@ -992,6 +992,10 @@ class BaseNode(AutoSshContainerMixin):
         return self.name
 
     @property
+    def is_diagnostics_logged(self):
+        return self.remoter.run("grep 'Diagnostics dump requested via SIGQUIT' /var/log/messages", ignore_status=True).exit_status == 0
+
+    @property
     def is_spot(self):
         return False
 
