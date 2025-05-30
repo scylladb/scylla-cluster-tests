@@ -23,13 +23,11 @@ if [[ -n "$(docker images scylladb/hydra:${VERSION} -q)" ]]; then
     echo "Local image exists. Not building."
 else
     echo "Hydra image with version $VERSION not found locally. Building..."
+    uv lock
+    uv export --frozen --output-file ${DOCKER_ENV_DIR}/${PY_PREREQS_FILE}
     cd "${DOCKER_ENV_DIR}"
-    REQUIREMENTS_IN=$(realpath --relative-to=${DOCKER_ENV_DIR} ${SCT_DIR}/requirements.in)
-    uv pip compile $REQUIREMENTS_IN --generate-hashes --python-version=$(cat ${SCT_DIR}/.python-version) > ${SCT_DIR}/${PY_PREREQS_FILE}
-    sed 's|\.\./\.\./requirements.in|requirements.in|' -i  ${SCT_DIR}/requirements.txt
-    cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
-    rm -f ${PY_PREREQS_FILE}
+    rm ${DOCKER_ENV_DIR}/${PY_PREREQS_FILE}
     cd -
     docker login
     echo "Tagging and pushing..."
