@@ -66,4 +66,5 @@ data_validation: |
   partition_range_with_data_validation: 0-100
   limit_rows_number: 5555
 # Run a verification every 10 minutes:
-run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'
+# Disabled due to https://github.com/scylladb/scylladb/issues/23743
+# run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'
