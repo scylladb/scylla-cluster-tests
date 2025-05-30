@@ -31,6 +31,35 @@ from performance_regression_test import PerformanceRegressionTest, PerformanceTe
 from upgrade_test import UpgradeTest
 from typing import Optional
 
+work_types = {
+    'READ': 'read', 
+    'SCAN': 'read',
+    'UPDATE': 'write',
+    'INSERT': 'write',
+    'DELETE': 'write',
+    'WRITE': 'write',
+}
+
+def uuid_decorator(f):
+    def wrapped(self, *args, **kwargs):        
+        uuid = uuid=uuid.uuid4()
+        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid.uuid4()}')
+        stress_num = kwargs.get('stress_num', 1)
+        workload = kwargs.get('workload', None)
+        val = f(self, *args, uuid=uuid, **kwargs)
+        if workload is not None and 'workload_name' in self.params:
+            for loader in self.loaders.nodes:
+                loader_index = loader.node_index
+                for work_type, tag in work_types.items():
+                    tag_text = f'Tag={tag}'
+                    for stress_idx in range(0, stress_num):
+                        dst_pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+                        self.log.info(f'QWERTY removing file {dst_pth}')
+                        try:
+                            os.remove(dst_pth)
+                        except Exception:
+                            pass
+        
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def setUp(self):
         super().setUp()
@@ -55,7 +84,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         return self._workload(*args, **kwargs)
     
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
-                  save_stats=True, is_alternator=True, nemesis=False, workload: Optional[PerformanceTestWorkload] = None):
+                  save_stats=True, is_alternator=True, nemesis=False, workload: Optional[PerformanceTestWorkload] = None, uuid=None):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -72,18 +101,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
 
-        work_types = {
-            'READ': 'read', 
-            'SCAN': 'read',
-            'UPDATE': 'write',
-            'INSERT': 'write',
-            'DELETE': 'write',
-            'WRITE': 'write',
-        }
-        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid.uuid4()}')
+        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid}')
         start_time_re = re.compile(r'^#\[StartTime: (\d+(\.\d+)?) ')
         os.makedirs(dir_name, exist_ok=True)
         if workload is not None and 'workload_name' in self.params:
+            assert uuid is not None
             for loader in self.loaders.nodes:
                 loader_index = loader.node_index
                 for work_type in work_types:
@@ -189,20 +211,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
-        if workload is not None and 'workload_name' in self.params:
-            for hdrh_logger in hdrh_logger_contextes:
-                hdrh_logger.remove_remote_log_file()
-            for loader in self.loaders.nodes:
-                loader_index = loader.node_index
-                for work_type, tag in work_types.items():
-                    tag_text = f'Tag={tag}'
-                    for stress_idx in range(0, stress_num):
-                        dst_pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
-                        self.log.info(f'QWERTY removing file {dst_pth}')
-                        try:
-                            os.remove(dst_pth)
-                        except Exception:
-                            pass
 
     def create_alternator_table(self, schema, alternator_write_isolation):
         node = self.db_cluster.nodes[0]
