@@ -70,7 +70,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack = contextlib.ExitStack()
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
-
+    
+    @uuid_decorator
     @latency_calculator_decorator
     def _workload_with_latency_calculator_decorator(self, *args, **kwargs):
         workload = kwargs.get('workload')
