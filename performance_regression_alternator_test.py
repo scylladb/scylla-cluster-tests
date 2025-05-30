@@ -143,6 +143,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                             ignored_tail_lines = 0
                             for d in data:
                                 d = d.strip()
+                                if d.startswith('#[Logging for:'):
+                                    self.log.error(f'QWERTY file {src_pth} removing previous content ({len(data2)} lines)')
+                                    data2 = []
                                 if d.startswith('#'):
                                     data2.append(d)
                                 elif d.startswith('tail: '):
@@ -184,6 +187,17 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.build_histogram(workload, hdr_tags=self.hdr_tags)
             for hdrh_logger in hdrh_logger_contextes:
                 hdrh_logger.remove_remote_log_file()
+            for loader in self.loaders.nodes:
+                loader_index = loader.node_index
+                for work_type, tag in work_types.items():
+                    tag_text = f'Tag={tag}'
+                    for stress_idx in range(0, stress_num):
+                        dst_pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+                        self.log.info(f'QWERTY removing file {dst_pth}')
+                        try:
+                            os.remove(dst_pth)
+                        except Exception:
+                            pass
 
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
