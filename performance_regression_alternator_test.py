@@ -42,16 +42,16 @@ work_types = {
 
 def uuid_decorator(f):
     def wrapped(self, *args, **kwargs):        
-        uuid = uuid=uuid.uuid4()
-        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid.uuid4()}')
+        uuid_val = uuid.uuid4()
+        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid_val}')
         stress_num = kwargs.get('stress_num', 1)
         workload = kwargs.get('workload', None)
-        val = f(self, *args, uuid=uuid, **kwargs)
+        kwargs['uuid'] = uuid_val
+        val = f(self, *args, **kwargs)
         if workload is not None and 'workload_name' in self.params:
             for loader in self.loaders.nodes:
                 loader_index = loader.node_index
                 for work_type, tag in work_types.items():
-                    tag_text = f'Tag={tag}'
                     for stress_idx in range(0, stress_num):
                         dst_pth = os.path.join(dir_name, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
                         self.log.info(f'QWERTY removing file {dst_pth}')
@@ -59,6 +59,8 @@ def uuid_decorator(f):
                             os.remove(dst_pth)
                         except Exception:
                             pass
+        return val
+    return wrapped
         
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def setUp(self):
