@@ -185,6 +185,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                 # for e, d in enumerate(data3):
                                 #     self.log.error(f'QWERTY file {src_pth} line {e} {d}')
             self.build_histogram(workload, hdr_tags=self.hdr_tags)
+
+        if save_stats:
+            self.update_test_details(scylla_conf=True, alternator=is_alternator)
+
+        if workload is not None and 'workload_name' in self.params:
             for hdrh_logger in hdrh_logger_contextes:
                 hdrh_logger.remove_remote_log_file()
             for loader in self.loaders.nodes:
@@ -198,9 +203,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                             os.remove(dst_pth)
                         except Exception:
                             pass
-
-        if save_stats:
-            self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_alternator_table(self, schema, alternator_write_isolation):
         node = self.db_cluster.nodes[0]
