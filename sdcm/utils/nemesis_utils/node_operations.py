@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import random
 
 from typing import Optional
 
@@ -86,3 +87,57 @@ def is_node_seen_as_down(down_node: BaseNode, verification_node: BaseNode) -> bo
     nodes_status = verification_node.parent_cluster.get_nodetool_status(verification_node, dc_aware=False)
     down_node_status = nodes_status.get(down_node.ip_address)
     return (not down_node_status or down_node_status["state"] == "DN")
+
+
+def handle_failed_removenode(node_to_remove: BaseNode, verification_node: BaseNode) -> None:
+    """
+    Attempt recovery steps if a removed node is still in the cluster:
+    - Clean up garbage Raft host IDs.
+    - Remove from dead_nodes_list if consistent with the ring.
+    """
+    LOGGER.error(f"nodetool removenode failed for node {node_to_remove}")
+
+    garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
+    LOGGER.debug("Difference between token ring and group0 is %s", garbage_host_ids)
+
+    if garbage_host_ids:
+        verification_node.raft.clean_group0_garbage()
+    else:
+        LOGGER.debug(f"Attempting to remove node {node_to_remove} from dead_nodes_list")
+        node = next(
+            (n for n in node_to_remove.parent_cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address),
+            None
+        )
+        if node:
+            node_to_remove.parent_cluster.dead_nodes_list.remove(node)
+        else:
+            LOGGER.debug(f"Node {node_to_remove.name} not found in dead_nodes_list")
+
+
+def ensure_seed_node_after_removal(cluster, nodes_to_remove):
+    """
+    Ensures that the cluster will not lose all seed nodes after removing the given nodes.
+    Promotes one of the surviving nodes to be a seed if needed.
+    """
+    surviving_nodes = [node for node in cluster.nodes if node not in nodes_to_remove]
+    surviving_seeds = [node for node in surviving_nodes if node.is_seed]
+
+    if not surviving_seeds:
+        candidate = random.choice(surviving_nodes)
+        candidate.set_seed_flag(True)
+        cluster.update_seed_provider()
+        LOGGER.info(
+            f"Promoted {candidate} to seed to maintain availability after removing {[n.name for n in nodes_to_remove]}"
+        )
+
+def ensure_rack_symmetry(cluster, selected_nodes):
+    """
+    Ensure one node is selected per rack across all racks in the cluster.
+    """
+    available_racks = {
+        (dc, rack_idx)
+        for dc, racks in cluster.get_nodes_per_datacenter_and_rack_idx().items()
+        for rack_idx in racks
+    }
+
+    return len(selected_nodes) == len(available_racks)
