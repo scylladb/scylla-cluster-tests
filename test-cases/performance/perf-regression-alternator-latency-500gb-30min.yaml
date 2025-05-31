@@ -15,19 +15,19 @@ prepare_write_cmd:
 
 
 stress_cmd_w: >-2
-  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 20000 -p recordcount=1250000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 40000 -p recordcount=1250000
   -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
-  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=4000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=8000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
 
 stress_cmd_r: >-2
-  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 20000 -p recordcount=1250000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 40000 -p recordcount=1250000
   -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
-  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=4000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=8000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
 
 stress_cmd_m: >-2
-  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 20000 -p recordcount=1250000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 40000 -p recordcount=1250000
   -p readproportion=0.5 -p updateproportion=0.5 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
-  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=4000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=1800 -p operationcount=8000000 -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-
 
 
 n_db_nodes: 3
