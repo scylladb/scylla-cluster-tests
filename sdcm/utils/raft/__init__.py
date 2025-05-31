@@ -320,6 +320,10 @@ class RaftFeature(RaftFeatureOperations):
                                         event_class=DatabaseLogEvent.DATABASE_ERROR,
                                         regex=r".*raft.*applier fiber stopped because of the error.*abort requested",
                                         extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                        regex=r".*raft_topology - tablets draining failed.*connection is closed\)\). Aborting the topology operation",
+                                        extra_time_to_expiration=timeout),
         )
 
     def is_cluster_topology_consistent(self) -> bool:
