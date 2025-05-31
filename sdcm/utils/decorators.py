@@ -214,7 +214,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 raise ValueError(
                     f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'")
 
-            row_name = gettattr(_self, 'row_name', None)
+            row_name = getattr(_self, 'row_name', None)
             # Keep for debug purposes
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
