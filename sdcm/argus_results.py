@@ -171,8 +171,10 @@ def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResu
             raise
 
 
-def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
+def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int | str, result: dict,
                          start_time: float = 0, error_thresholds: dict = None):
+    if type(cycle) is int:
+        cycle = f"Cycle #{cycle}"
     result_table = workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
@@ -195,31 +197,31 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                 value = 0.001
             LOGGER.info(f'QWERTY value is `{repr(value)}` for {operation.upper()} percentile {percentile}')
             result_table.add_result(column=f"P{percentile} {operation}",
-                                    row=f"Cycle #{cycle}",
+                                    row=cycle,
                                     value=value,
                                     status=Status.UNSET)
         if value := summary[operation.upper()].get("throughput", None):
             result_table.add_result(column=f"Throughput {operation.lower()}",
-                                    row=f"Cycle #{cycle}",
+                                    row=cycle,
                                     value=value,
                                     status=Status.UNSET)
 
-    result_table.add_result(column="duration", row=f"Cycle #{cycle}",
+    result_table.add_result(column="duration", row=cycle,
                             value=result["duration_in_sec"], status=Status.UNSET)
     try:
         overview_screenshot = [screenshot for screenshot in result["screenshots"] if "overview" in screenshot][0]
-        result_table.add_result(column="Overview", row=f"Cycle #{cycle}",
+        result_table.add_result(column="Overview", row=cycle,
                                 value=overview_screenshot, status=Status.UNSET)
     except IndexError:
         pass
     try:
         qa_screenshot = [screenshot for screenshot in result["screenshots"]
                          if "scylla-per-server-metrics-nemesis" in screenshot][0]
-        result_table.add_result(column="QA dashboard", row=f"Cycle #{cycle}",
+        result_table.add_result(column="QA dashboard", row=cycle,
                                 value=qa_screenshot, status=Status.UNSET)
     except IndexError:
         pass
-    result_table.add_result(column="start time", row=f"Cycle #{cycle}",
+    result_table.add_result(column="start time", row=cycle,
                             value=start_time, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
@@ -228,10 +230,10 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table = ReactorStallStatsResult()
         result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
-        result_table.add_result(column="total", row=f"Cycle #{cycle}",
+        result_table.add_result(column="total", row=cycle,
                                 value=stall_stats["counter"], status=Status.UNSET)
         for interval, value in stall_stats["ms"].items():
-            result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
+            result_table.add_result(column=f"{interval}ms", row=cycle,
                                     value=value, status=Status.UNSET)
         submit_results_to_argus(argus_client, result_table)
 
