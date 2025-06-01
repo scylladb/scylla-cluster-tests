@@ -1,0 +1,33 @@
+test_duration: 1200
+prepare_write_cmd:  [
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100000 -partition-offset=1      -clustering-row-count=8      -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data" ,
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10000  -partition-offset=100001 -clustering-row-count=80     -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1000   -partition-offset=110001 -clustering-row-count=800    -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100    -partition-offset=111001 -clustering-row-count=8000   -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10     -partition-offset=111101 -clustering-row-count=80000  -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1      -partition-offset=111111 -clustering-row-count=800000 -clustering-row-size=fixed:131072 -concurrency=25 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=180s -retry-number=50 -retry-interval=100ms,1s -validate-data",
+]
+
+n_db_nodes: 9
+simulated_racks: 3
+instance_type_db: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.2xlarge'
+
+n_monitor_nodes: 1
+instance_type_monitor: 't3.large'
+
+user_prefix: 'balancer-test'
+
+nemesis_class_name: 'NoOpMonkey'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+parallel_node_operations: true
+
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
