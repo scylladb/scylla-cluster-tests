@@ -335,6 +335,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
         os.environ['SCT_REGION_NAME'] = "eu-west-1 eu-west-2"
         os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
         os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_N_LOADERS'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
