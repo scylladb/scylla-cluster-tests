@@ -2563,7 +2563,9 @@ class Nemesis:
                 1.0: Disables the Bloom filter.
             default: bloom_filter_fp_chance = 0.01
         """
-        self._modify_table_property(name="bloom_filter_fp_chance", val=random.random() / 2)
+        # minimum value cannot be 0, as that would require "infinite" memory
+        # the actual minimum value is 6.71e-05, as declared in `min_supported_bloom_filter_fp_chance()`
+        self._modify_table_property(name="bloom_filter_fp_chance", val=random.uniform(6.71e-05, 0.5))
 
     def toggle_table_gc_mode(self):
         """
