@@ -4050,7 +4050,7 @@ class Nemesis:
         """
         self._destroy_data_and_restart_scylla()
 
-        timeout = 1800 if self._is_it_on_kubernetes() else 400
+        timeout = 1800
         if self.cluster.params.get('cluster_backend') == 'azure':
             timeout += 1200  # Azure reboot can take up to 20min to initiate
 
