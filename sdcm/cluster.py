@@ -2606,17 +2606,28 @@ class BaseNode(AutoSshContainerMixin):
                 self.remoter.run('cp -r %s %s' % (f, new_full_path), ignore_status=True)
         return root_dir
 
-    def generate_coredump_file(self, restart_scylla=True, node_name: str = None, message: str = None):
+    def generate_coredump_file(self, restart_scylla=True, node_name: str = None, message: str = None, generate_diagnosis=False):
         message = message or "Generating a Scylla core dump by SIGQUIT..\n"
         if node_name:
             message += f"Node: {node_name}"
-        InfoEvent(severity=Severity.ERROR, message=message)
-        self.remoter.sudo("pkill -f --signal 3 /usr/bin/scylla")
-        self.wait_db_down(timeout=600)
-        if restart_scylla:
-            self.log.debug('Restart scylla server')
-            self.stop_scylla(timeout=600)
-            self.start_scylla(timeout=600)
+        if generate_diagnosis:
+            InfoEvent(severity=Severity.DEBUG, message=message)
+            with DbNodeLogger([self], "send SIGQUIT to scylla", target_node=self, additional_info="diagnosis dump" if generate_diagnosis else "coredump"):
+                self.remoter.sudo("pkill -3 scylla")
+                time.sleep(30)
+                if not self.is_diagnostics_logged:
+                    raise Exception("Diagnosis dump report not found")
+                else:
+                    self.log.info("Diagnosis dump report found")
+        else:
+            InfoEvent(severity=Severity.ERROR, message=message)
+            self.remoter.sudo("pkill -f --signal 3 /usr/bin/scylla")
+            self.wait_db_down(timeout=600)
+
+            if restart_scylla:
+                self.log.debug('Restart scylla server')
+                self.stop_scylla(timeout=600)
+                self.start_scylla(timeout=600)
 
     def get_console_output(self):
         # TODO add to each type of node
@@ -3214,6 +3225,10 @@ class BaseNode(AutoSshContainerMixin):
     @cached_property
     def systemd_version(self) -> int:
         return get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
+
+    @property
+    def is_diagnostics_logged(self):
+        return self.remoter.run("grep 'Diagnostics dump requested via SIGQUIT' /var/log/messages", ignore_status=True).exit_status == 0
 
 
 class FlakyRetryPolicy(RetryPolicy):
