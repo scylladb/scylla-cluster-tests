@@ -1763,6 +1763,7 @@ def finish_argus_test_run(jenkins_status):
         if jenkins_status == "ABORTED":
             new_status = TestStatus.ABORTED
         test_config.argus_client().set_sct_run_status(new_status)
+        test_config.argus_client().finalize_sct_run()
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
 
