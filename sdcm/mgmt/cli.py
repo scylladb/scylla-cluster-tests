@@ -671,7 +671,7 @@ class ManagerCluster(ScyllaManagerBase):
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
         if object_storage_upload_mode is not None:
-            cmd += " --api-hint {} ".format(object_storage_upload_mode.value)
+            cmd += " --method {} ".format(object_storage_upload_mode.value)
         if legacy_args:
             cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
