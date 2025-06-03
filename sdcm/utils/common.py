@@ -2485,16 +2485,6 @@ def make_threads_be_daemonic_by_default():
     threading.current_thread()._daemonic = True
 
 
-def clear_out_all_exit_hooks():
-    """
-    Some thread-related code is using threading._register_atexit to hook to python program exit
-    in order teardown gracefully as result test can halt at the end for any period of time, even for days.
-    To avoid that we clear it out to be sure that nothing is hooked and test is terminated right after
-      teardown.
-    """
-    threading._threading_atexits.clear()
-
-
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
                                         event_severity=Severity.ERROR, instance=None):
     end_time = int(time.time())
