@@ -4,11 +4,10 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
     paths:
-      - 'docker/env/Dockerfile'
+      - 'Dockerfile'
       - 'docker/env/build_n_push.sh'
-      - 'docker/env/hydra.sh'
-      - 'requirements.in'
-      - 'requirements.txt'
+      - 'uv.lock'
+      - 'pyproject.toml'
 
 jobs:
     test:
