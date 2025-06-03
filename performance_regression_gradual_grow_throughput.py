@@ -1,3 +1,4 @@
+import math
 import pathlib
 import time
 from enum import Enum
@@ -10,6 +11,7 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.stress.latte_thread import find_latte_threads_num
 from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
@@ -30,6 +32,21 @@ class Workload(NamedTuple):
     drop_keyspace: bool
     wait_no_compactions: bool
     step_duration: str
+
+
+def is_latte_command(stress_cmd: str) -> bool:
+    return "latte " in stress_cmd and " run " in stress_cmd
+
+
+def process_stress_threads_number(stress_cmd: str, num_threads: int) -> int:
+    # NOTE: latte has 2 separate options - '--threads' and '--concurrency'.
+    #       CS's threads == latte threads multiple of 'concurrency'
+    #       Example: 620 CS threads = 7 latte threads with concurrency as '89' per each thread (623)
+    if is_latte_command(stress_cmd):
+        latte_threads_num = find_latte_threads_num(stress_cmd)
+        return math.ceil(num_threads / latte_threads_num)
+
+    return num_threads
 
 
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
@@ -191,8 +208,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_queue = []
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
+            current_num_threads = process_stress_threads_number(stress_cmd, num_threads)
             stress_cmd_to_run = stress_cmd.replace(
-                "$threads", f"{num_threads}").replace("$throttle", f"{current_throttle}")
+                "$threads", f"{current_num_threads}").replace("$throttle", f"{current_throttle}")
             if step_duration is not None:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
             params.update({'stress_cmd': stress_cmd_to_run})
@@ -224,7 +242,15 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         for throttle_step in workload.throttle_steps:
             self.log.info("Run cs command with rate: %s Kops", throttle_step)
-            current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
+            if throttle_step == "unthrottled":
+                current_throttle = ""
+            else:
+                throttle_value = int(int(throttle_step) // (num_loaders * stress_num))
+                if is_latte_command(workload.cs_cmd_tmpl[0]):
+                    current_throttle = f"--rate={throttle_value}"
+                else:
+                    current_throttle = f"fixed={throttle_value}/s"
+
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
             results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
@@ -303,7 +329,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_queue = []
         for stress_cmd in stress_cmd_templ:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
+            current_num_threads = process_stress_threads_number(stress_cmd, num_threads)
+            stress_cmd_to_run = stress_cmd.replace("$threads", str(current_num_threads))
             params.update({'stress_cmd': stress_cmd_to_run})
             # Run all stress commands
             self.log.debug('RUNNING warm up stress cmd: %s', stress_cmd_to_run)
