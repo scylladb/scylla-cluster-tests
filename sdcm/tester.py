@@ -84,7 +84,7 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_servi
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password, \
+    make_threads_be_daemonic_by_default, ParallelObject, change_default_password, \
     parse_python_thread_command, get_data_dir_path
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
@@ -3084,11 +3084,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
-        self.remove_python_exit_hooks()
-
-    @silence()
-    def remove_python_exit_hooks(self):
-        clear_out_all_exit_hooks()
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
