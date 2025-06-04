@@ -5018,7 +5018,7 @@ class BaseScyllaCluster:
             node.start_scylla(verify_up=True)
             self.log.debug("'%s' restarted.", node.name)
 
-    @retrying(n=15, sleep_time=5, allowed_exceptions=ClusterNodesNotReady)
+    @retrying(n=30, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
     def wait_all_nodes_un(self):
         for node in self.nodes:
             self.check_nodes_up_and_normal(verification_node=node)
