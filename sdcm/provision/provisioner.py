@@ -54,6 +54,10 @@ class ProvisionError(Exception):
     pass
 
 
+class OperationPreemptedError(Exception):
+    pass
+
+
 class ProvisionerError(Exception):
     pass
 
