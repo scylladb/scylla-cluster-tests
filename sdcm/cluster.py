@@ -294,6 +294,7 @@ class BaseNode(AutoSshContainerMixin):
         self.lock = threading.Lock()
 
         self.running_nemesis = None
+        self.decommissioning = False
 
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -5093,7 +5094,7 @@ class BaseScyllaCluster:
                 return None
 
         target_node_ip = node.ip_address
-        undecommission_nodes = [n for n in self.nodes if n != node]
+        undecommission_nodes = [n for n in self.nodes if n != node and not n.decommissioning]
 
         verification_node = random.choice(undecommission_nodes)
         node_ip_list = get_node_ip_list(verification_node)
@@ -5141,13 +5142,22 @@ class BaseScyllaCluster:
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
+        @contextlib.contextmanager
+        def mark_decommissioning(node: BaseNode):
+            node.decommissioning = True
+            try:
+                yield
+            finally:
+                node.decommissioning = False
+
         if not node._is_zero_token_node:
             if tablets_enabled := is_tablets_feature_enabled(node):
                 dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
                 dc_topology_rf_change.decrease_keyspaces_rf()
-        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
-            node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
-        self.verify_decommission(node)
+        with mark_decommissioning(node):
+            with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+                node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
+            self.verify_decommission(node)
         if node._is_zero_token_node:
             return None
         return dc_topology_rf_change if tablets_enabled else None
