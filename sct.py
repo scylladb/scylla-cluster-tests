@@ -193,7 +193,7 @@ class SctLoader(unittest.TestLoader):
 def cli(ctx):
     disable_loggers_during_startup()
     # Ugly way of filtering the few command that do not require OKTA verification
-    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list", "create-nemesis-pipelines"):
+    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list", "create-nemesis-pipelines", "pre-commit"):
         try_auth_with_okta()
 
         key_store = KeyStore()
