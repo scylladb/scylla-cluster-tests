@@ -45,8 +45,8 @@ simulated_racks: 3
 
 round_robin: true
 
-instance_type_db: 'i3en.2xlarge'
-gce_instance_type_db: 'n2-highmem-16'
+instance_type_db: 'i3en.xlarge'
+gce_instance_type_db: 'n2-highmem-8'
 gce_instance_type_loader: 'e2-standard-16'
 gce_n_local_ssd_disk_db: 16
 instance_type_loader: 'c5n.4xlarge'
