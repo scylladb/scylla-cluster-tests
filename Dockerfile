@@ -15,10 +15,12 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyri
 # Download, build and install Python packages.
 FROM apt_base AS python_packages
 ENV PIP_NO_CACHE_DIR=1
+ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
-ADD requirements.txt .
-RUN pip install uv==0.2.24
-RUN uv pip install --system -r requirements.txt
+ADD uv.lock  .
+ADD pyproject.toml .
+RUN pip install uv
+RUN uv sync --frozen
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.27.3
