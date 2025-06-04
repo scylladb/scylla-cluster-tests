@@ -96,14 +96,23 @@ pipeline {
                 timeout(time: 15, unit: 'MINUTES')
             }
             steps {
-                script {
-                    dockerLogin(params)
-                    try {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
+                        dockerLogin(params)
+                        // also check the commit-message for the rules we want
                         sh 'touch ./.git/COMMIT_EDITMSG'
                         sh './docker/env/hydra.sh pre-commit'
-                        // also check the commit-messge for the rules we want
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
                         pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
-                    } catch(Exception ex) {
+                    }
+                }
+                failure {
+                    script {
                         pullRequestSetResult('failure', 'jenkins/precommit', 'Precommit failed')
                     }
                 }
@@ -114,13 +123,21 @@ pipeline {
                 timeout(time: 20, unit: 'MINUTES')
             }
             steps {
-                script {
-                    try {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
                         checkoutQaInternal(params)
-
                         sh './docker/env/hydra.sh unit-tests'
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
                         pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
-                    } catch(Exception ex) {
+                    }
+                }
+                failure {
+                    script {
                         pullRequestSetResult('failure', 'jenkins/unittests', 'Some unit tests failed')
                     }
                 }
@@ -131,13 +148,21 @@ pipeline {
                 timeout(time: 10, unit: 'MINUTES')
             }
             steps {
-                script {
-                    try {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
                         checkoutQaInternal(params)
-
                         sh ''' ./docker/env/hydra.sh bash ./utils/lint_test_cases.sh '''
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
                         pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
-                    } catch(Exception ex) {
+                    }
+                }
+                failure {
+                    script {
                         pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
                     }
                 }
@@ -153,11 +178,11 @@ pipeline {
                 timeout(time: 40, unit: 'MINUTES')
             }
             steps {
-                script {
-                    def curr_params = createRunConfiguration('docker')
-                    def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
-                    dockerLogin(params)
-                    try {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
+                        def curr_params = createRunConfiguration('docker')
+                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                        dockerLogin(params)
                         withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                             dir('scylla-cluster-tests') {
                                 checkout scm
@@ -178,9 +203,18 @@ pipeline {
                                     echo "end  integration-tests ..."
                                 """
                             }
-                            pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
                         }
-                    } catch(Exception ex) {
+                    }
+                }
+            }
+            post {
+                success {
+                    script {
+                        pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
+                    }
+                }
+                failure {
+                    script {
                         pullRequestSetResult('failure', 'jenkins/integration-tests', 'Some integration tests failed')
                     }
                 }
