@@ -5,6 +5,6 @@ def call(String status, String context, String description){
 		pullRequest.createStatus(status: status,
 			context: context,
 			description: description,
-			targetUrl: "${env.JOB_URL}/workflow-stage")
+			targetUrl: "${env.BUILD_URL}pipeline-overview")
 	}
 }
