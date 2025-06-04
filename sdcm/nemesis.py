@@ -5614,10 +5614,16 @@ class Nemesis(NemesisFlags):
                 self.log.debug("Remove node %s : hostid: %s with blocked scylla from cluster",
                                self.target_node.name, target_host_id)
                 self.actions_log.info(f"Remove {self.target_node.name} node from cluster")
-                working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+                # For process paused with SIGSTOP signal, network sockets are still open,
+                # so already running raft barriers could stuck. To avoid that
+                # we need to block scylla ports on target node.
+                if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
+                    with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
+                        working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+                else:
+                    working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
                 assert node_operations.is_node_removed_from_cluster(removed_node=self.target_node, verification_node=working_node), \
                     f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
-
                 # Context manager at exit  start scylla on target node.
                 # But node already removed from cluster. So any operations from it
                 # should be banned. If query executed succesfull, raise an error
