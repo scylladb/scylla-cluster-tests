@@ -1,18 +1,19 @@
 import yaml
 
 from sdcm import sct_abs_path
-from sdcm.nemesis import Nemesis, COMPLEX_NEMESIS
+from sdcm.nemesis import NemesisBaseClass
 from sdcm.nemesis_registry import NemesisRegistry
 
 
 def test_list_all_available_nemesis(generate_file=True):
-    registry = NemesisRegistry(Nemesis, COMPLEX_NEMESIS)
+    registry = NemesisRegistry(NemesisBaseClass)
     disruption_list = registry.get_disrupt_methods()
 
-    assert len(disruption_list) == 92
+    assert len(disruption_list) == 95
 
-    class_properties, method_properties = registry.gather_properties()
-    sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
+    class_properties = registry.gather_properties()
+    sorted_dict = dict(sorted(class_properties.items(), key=lambda d: d[0]))
+
     if generate_file:
         with open(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
             yaml.dump(sorted_dict, outfile1, default_flow_style=False)
@@ -23,4 +24,4 @@ def test_list_all_available_nemesis(generate_file=True):
     with open(sct_abs_path('data_dir/nemesis.yml'), 'r', encoding="utf-8") as nemesis_file:
         static_nemesis_list = yaml.safe_load(nemesis_file)
 
-    assert static_nemesis_list == method_properties
+    assert static_nemesis_list == class_properties

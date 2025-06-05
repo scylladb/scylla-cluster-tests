@@ -1,9 +1,9 @@
-disrupt_abort_repair:
+AbortRepairMonkey:
   disruptive: false
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_add_drop_column:
+AddDropColumnMonkey:
   disruptive: false
   free_tier_set: true
   kubernetes: true
@@ -12,383 +12,455 @@ disrupt_add_drop_column:
   run_with_gemini: false
   schema_changes: true
   supports_high_disk_utilization: true
-disrupt_add_remove_dc:
+AddRemoveDcNemesis:
   disruptive: true
   kubernetes: false
   limited: true
   run_with_gemini: false
   topology_changes: true
-disrupt_add_remove_mv:
+AddRemoveMvNemesis:
   disruptive: true
   free_tier_set: true
   schema_changes: true
   supports_high_disk_utilization: false
-disrupt_bootstrap_streaming_error:
+  target_pool: data_nodes
+AddRemoveRackNemesis:
+  config_changes: true
+  disruptive: true
+  kubernetes: true
+BlockNetworkMonkey:
+  disruptive: true
+  kubernetes: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+BootstrapStreamingErrorNemesis:
   disruptive: true
   supports_high_disk_utilization: true
+  target_pool: data_nodes
   topology_changes: true
-disrupt_corrupt_then_scrub:
+CDCStressorMonkey:
+  disruptive: false
+  free_tier_set: true
+ClusterRollingRestart:
+  disruptive: true
+  free_tier_set: true
+  kubernetes: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+ClusterRollingRestartRandomOrder:
+  disruptive: true
+  free_tier_set: true
+  kubernetes: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+CorruptThenRebuildMonkey:
+  disruptive: true
+  kubernetes: true
+CorruptThenRepairMonkey:
+  disruptive: true
+  kubernetes: true
+  supports_high_disk_utilization: true
+CorruptThenScrubMonkey:
   disruptive: false
   supports_high_disk_utilization: false
-disrupt_create_index:
+  target_pool: data_nodes
+CreateIndexNemesis:
   disruptive: false
   free_tier_set: true
   schema_changes: true
   supports_high_disk_utilization: false
-disrupt_decommission_streaming_err:
-  disruptive: true
-  topology_changes: true
-disrupt_delete_10_full_partitions:
-  delete_rows: true
-  disruptive: false
-  free_tier_set: true
-  kubernetes: true
-disrupt_delete_by_rows_range:
-  delete_rows: true
-  disruptive: false
-  free_tier_set: true
-  kubernetes: true
-disrupt_delete_overlapping_row_ranges:
-  delete_rows: true
-  disruptive: false
-  free_tier_set: true
-  kubernetes: true
-disrupt_destroy_data_then_rebuild:
-  disruptive: true
-  kubernetes: true
-disrupt_destroy_data_then_repair:
-  disruptive: true
-  kubernetes: true
-  supports_high_disk_utilization: true
-disrupt_disable_binary_gossip_execute_major_compaction:
-  disruptive: true
-  kubernetes: true
-  supports_high_disk_utilization: true
-disrupt_disable_enable_ldap_authorization:
+  target_pool: data_nodes
+DecommissionMonkey:
   disruptive: true
   limited: true
-disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
-  disruptive: true
-  kubernetes: true
-disrupt_drain_kubernetes_node_then_replace_scylla_node:
-  disruptive: true
-  kubernetes: true
-disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
-  disruptive: true
-  kubernetes: false
-disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
-  disruptive: true
-  kubernetes: false
-disrupt_end_of_quota_nemesis:
-  config_changes: true
-  disruptive: true
-disrupt_grow_shrink_cluster:
-  disruptive: true
-  kubernetes: true
+  supports_high_disk_utilization: false
+  target_pool: nodes
   topology_changes: true
-disrupt_grow_shrink_new_rack:
-  config_changes: true
+DecommissionSeedNode:
+  disruptive: true
+  supports_high_disk_utilization: false
+  target_pool: nodes
+  topology_changes: true
+DecommissionStreamingErrMonkey:
+  disruptive: true
+  topology_changes: true
+DeleteByPartitionsMonkey:
+  delete_rows: true
+  disruptive: false
+  free_tier_set: true
+  kubernetes: true
+DeleteByRowsRangeMonkey:
+  delete_rows: true
+  disruptive: false
+  free_tier_set: true
+  kubernetes: true
+DeleteOverlappingRowRangesMonkey:
+  delete_rows: true
+  disruptive: false
+  free_tier_set: true
+  kubernetes: true
+DisableBinaryGossipExecuteMajorCompaction:
   disruptive: true
   kubernetes: true
-disrupt_grow_shrink_zero_nodes:
+  supports_high_disk_utilization: true
+DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
+  disruptive: true
+  exclusive: true
+  kubernetes: true
+DrainKubernetesNodeThenReplaceScyllaNode:
+  disruptive: true
+  exclusive: true
+  kubernetes: true
+DrainerMonkey:
+  disruptive: true
+  kubernetes: true
+  limited: true
+  target_pool: nodes
+  topology_changes: true
+EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
+  disruptive: true
+  kubernetes: false
+  target_pool: nodes
+EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
+  disruptive: true
+  kubernetes: false
+  target_pool: nodes
+EndOfQuotaNemesis:
+  config_changes: true
+  disruptive: true
+  target_pool: nodes
+EnospcAllNodesMonkey:
+  disruptive: true
+  kubernetes: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+EnospcMonkey:
+  disruptive: true
+  kubernetes: true
+  limited: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+GrowShrinkClusterNemesis:
+  disruptive: true
+  kubernetes: true
+  target_pool: data_nodes
+  topology_changes: true
+GrowShrinkZeroTokenNode:
   disruptive: true
   free_tier_set: false
   schema_changes: false
+  target_pool: nodes
   zero_node_changes: true
-disrupt_hard_reboot_node:
+HardRebootNodeMonkey:
   disruptive: true
   free_tier_set: true
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_hot_reloading_internode_certificate:
-  config_changes: true
-  disruptive: false
-  supports_high_disk_utilization: true
-disrupt_increase_shares_by_attach_another_sl_during_load:
+  target_pool: nodes
+IsolateNodeWithIptableRuleNemesis:
   disruptive: true
-  sla: true
-disrupt_kill_scylla:
+  kubernetes: false
+  target_pool: nodes
+  topology_changes: true
+IsolateNodeWithProcessSignalNemesis:
   disruptive: true
-  free_tier_set: true
-  kubernetes: true
-  supports_high_disk_utilization: true
-disrupt_ldap_connection_toggle:
-  disruptive: false
-  limited: true
-disrupt_load_and_stream:
+  kubernetes: false
+  target_pool: nodes
+  topology_changes: true
+LoadAndStreamMonkey:
   disruptive: false
   kubernetes: true
   limited: true
   run_with_gemini: false
   supports_high_disk_utilization: true
-disrupt_major_compaction:
+  target_pool: data_nodes
+MajorCompactionMonkey:
   disruptive: false
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_maximum_allowed_sls_with_max_shares_during_load:
-  disruptive: false
-  sla: true
-disrupt_memory_stress:
+MemoryStressMonkey:
   disruptive: true
   free_tier_set: true
   supports_high_disk_utilization: true
-disrupt_mgmt_backup:
+  target_pool: nodes
+MgmtBackup:
   disruptive: false
   limited: true
   manager_operation: true
   supports_high_disk_utilization: false
-disrupt_mgmt_backup_specific_keyspaces:
+  target_pool: data_nodes
+MgmtBackupSpecificKeyspaces:
   disruptive: false
   limited: true
   manager_operation: true
   supports_high_disk_utilization: false
-disrupt_mgmt_corrupt_then_repair:
+  target_pool: data_nodes
+MgmtCorruptThenRepair:
   disruptive: true
   kubernetes: true
   manager_operation: true
   supports_high_disk_utilization: true
-disrupt_mgmt_repair_cli:
+  target_pool: data_nodes
+MgmtRepair:
   disruptive: false
   kubernetes: true
   limited: true
   manager_operation: true
   supports_high_disk_utilization: true
-disrupt_mgmt_restore:
+  target_pool: data_nodes
+MgmtRestore:
   disruptive: true
   kubernetes: true
   limited: true
   manager_operation: true
   supports_high_disk_utilization: false
-disrupt_modify_table:
+  target_pool: data_nodes
+ModifyTableMonkey:
   disruptive: false
   free_tier_set: true
   kubernetes: true
   limited: true
   schema_changes: true
   supports_high_disk_utilization: true
-disrupt_multiple_hard_reboot_node:
+MultipleHardRebootNodeMonkey:
   disruptive: true
   free_tier_set: true
   kubernetes: true
   supports_high_disk_utilization: true
-disrupt_network_block:
+  target_pool: nodes
+NemesisSequence:
   disruptive: true
-  kubernetes: true
-  networking: true
+  networking: false
   run_with_gemini: false
-disrupt_network_random_interruptions:
-  disruptive: true
-  kubernetes: true
-  networking: true
-  run_with_gemini: false
-disrupt_network_reject_inter_node_communication:
-  disruptive: true
-  free_tier_set: true
-  networking: true
-  run_with_gemini: false
-disrupt_network_reject_node_exporter:
-  disruptive: true
-  networking: true
-  run_with_gemini: false
-disrupt_network_reject_thrift:
-  disruptive: true
-  networking: true
-  run_with_gemini: false
-disrupt_network_start_stop_interface:
-  disruptive: true
-  networking: true
-  run_with_gemini: false
-disrupt_no_corrupt_repair:
+NoCorruptRepairMonkey:
   disruptive: false
   kubernetes: true
   limited: true
-disrupt_nodetool_cleanup:
-  disruptive: false
-  kubernetes: true
-  limited: true
-  supports_high_disk_utilization: true
-disrupt_nodetool_decommission:
-  disruptive: true
-  limited: true
-  supports_high_disk_utilization: false
-  topology_changes: true
-disrupt_nodetool_drain:
-  disruptive: true
-  kubernetes: true
-  limited: true
-  topology_changes: true
-disrupt_nodetool_enospc:
-  disruptive: true
-  kubernetes: true
-  supports_high_disk_utilization: true
-disrupt_nodetool_flush_and_reshard_on_kubernetes:
-  disruptive: true
-  kubernetes: true
-disrupt_nodetool_refresh:
-  disruptive: false
-  kubernetes: true
-  run_with_gemini: false
-  supports_high_disk_utilization: true
-disrupt_nodetool_seed_decommission:
-  disruptive: true
-  supports_high_disk_utilization: false
-  topology_changes: true
-disrupt_rebuild_streaming_err:
-  disruptive: true
-disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
-  disruptive: true
-  kubernetes: false
-  topology_changes: true
-disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
-  disruptive: true
-  kubernetes: false
-  topology_changes: true
-disrupt_remove_node_then_add_node:
-  disruptive: true
-  kubernetes: false
-  supports_high_disk_utilization: false
-  topology_changes: true
-disrupt_remove_service_level_while_load:
-  disruptive: true
-  sla: true
-disrupt_repair_streaming_err:
-  disruptive: true
-disrupt_replace_scylla_node_on_kubernetes:
-  disruptive: true
-  free_tier_set: true
-  kubernetes: true
-disrupt_replace_service_level_using_detach_during_load:
-  disruptive: true
-  sla: true
-disrupt_replace_service_level_using_drop_during_load:
-  disruptive: true
-  sla: true
-disrupt_resetlocalschema:
-  config_changes: true
-  disruptive: false
-  free_tier_set: true
-disrupt_restart_then_repair_node:
-  disruptive: true
-  kubernetes: true
-disrupt_restart_with_resharding:
+NodeRestartWithResharding:
   config_changes: true
   disruptive: true
   kubernetes: true
   topology_changes: true
-disrupt_rolling_config_change_internode_compression:
+NodeTerminateAndReplace:
+  disruptive: true
+  kubernetes: false
+  target_pool: nodes
+  topology_changes: true
+  zero_node_changes: true
+NodeToolCleanupMonkey:
+  disruptive: false
+  kubernetes: true
+  limited: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+OperatorNodeReplace:
+  disruptive: true
+  free_tier_set: true
+  kubernetes: true
+OperatorNodetoolFlushAndReshard:
+  disruptive: true
+  kubernetes: true
+PauseLdapNemesis:
+  disruptive: false
+  limited: true
+  target_pool: nodes
+RandomInterruptionNetworkMonkey:
+  disruptive: true
+  kubernetes: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+RebuildStreamingErrMonkey:
+  disruptive: true
+RefreshBigMonkey:
+  disruptive: false
+  kubernetes: true
+  run_with_gemini: false
+  supports_high_disk_utilization: true
+  target_pool: nodes
+RefreshMonkey:
+  disruptive: false
+  kubernetes: true
+  limited: true
+  run_with_gemini: false
+  supports_high_disk_utilization: true
+  target_pool: nodes
+RejectInterNodeNetworkMonkey:
+  disruptive: true
+  free_tier_set: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+RejectNodeExporterNetworkMonkey:
+  disruptive: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+RejectThriftNetworkMonkey:
+  disruptive: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+RemoveServiceLevelMonkey:
+  disruptive: true
+  sla: true
+RepairStreamingErrMonkey:
+  disruptive: true
+ResetLocalSchemaMonkey:
+  config_changes: true
+  disruptive: false
+  free_tier_set: true
+  target_pool: nodes
+RestartThenRepairNodeMonkey:
+  disruptive: true
+  kubernetes: true
+  target_pool: nodes
+RollingRestartConfigChangeInternodeCompression:
   config_changes: true
   disruptive: true
   full_cluster_restart: true
   supports_high_disk_utilization: true
-disrupt_rolling_restart_cluster:
+  target_pool: nodes
+ScyllaKillMonkey:
   disruptive: true
   free_tier_set: true
   kubernetes: true
   supports_high_disk_utilization: true
-disrupt_run_cdcstressor_tool:
-  disruptive: false
-  free_tier_set: true
-disrupt_run_unique_sequence:
-  disruptive: true
-  networking: false
-  run_with_gemini: false
-disrupt_serial_restart_elected_topology_coordinator:
+  target_pool: nodes
+SerialRestartOfElectedTopologyCoordinatorNemesis:
   disruptive: true
   supports_high_disk_utilization: true
+  target_pool: nodes
   topology_changes: true
-disrupt_show_toppartitions:
+SlaDecreaseSharesDuringLoad:
+  disruptive: false
+  sla: true
+SlaIncreaseSharesByAttachAnotherSlDuringLoad:
+  disruptive: true
+  sla: true
+SlaIncreaseSharesDuringLoad:
+  disruptive: false
+  sla: true
+SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
+  disruptive: false
+  sla: true
+SlaReplaceUsingDetachDuringLoad:
+  disruptive: true
+  sla: true
+SlaReplaceUsingDropDuringLoad:
+  disruptive: true
+  sla: true
+SnapshotOperations:
   disruptive: false
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_sla_decrease_shares_during_load:
-  disruptive: false
-  sla: true
-disrupt_sla_increase_shares_during_load:
-  disruptive: false
-  sla: true
-disrupt_snapshot_operations:
-  disruptive: false
-  kubernetes: true
-  limited: true
-  supports_high_disk_utilization: true
-disrupt_soft_reboot_node:
+  target_pool: nodes
+SoftRebootNodeMonkey:
   disruptive: true
   free_tier_set: true
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_start_stop_cleanup_compaction:
+  target_pool: nodes
+SslHotReloadingNemesis:
+  config_changes: true
   disruptive: false
   supports_high_disk_utilization: true
-disrupt_start_stop_major_compaction:
+  target_pool: nodes
+StartStopCleanupCompaction:
   disruptive: false
   supports_high_disk_utilization: true
-disrupt_start_stop_scrub_compaction:
+StartStopMajorCompaction:
   disruptive: false
-disrupt_start_stop_validation_compaction:
+  supports_high_disk_utilization: true
+StartStopScrubCompaction:
+  disruptive: false
+StartStopValidationCompaction:
   disruptive: false
   supports_high_disk_utilization: false
-disrupt_stop_start_scylla_server:
+StopStartInterfacesNetworkMonkey:
+  disruptive: true
+  networking: true
+  run_with_gemini: false
+  target_pool: nodes
+StopStartMonkey:
   disruptive: true
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_stop_wait_start_scylla_server:
+  target_pool: nodes
+StopWaitStartMonkey:
   disruptive: true
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
+  target_pool: nodes
   zero_node_changes: true
-disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
+SwitchBetweenPasswordAuthAndSaslauthdAuth:
   config_changes: true
   disruptive: true
-disrupt_terminate_and_replace_node:
+TerminateAndRemoveNodeMonkey:
   disruptive: true
   kubernetes: false
+  supports_high_disk_utilization: false
+  target_pool: nodes
   topology_changes: true
-  zero_node_changes: true
-disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
+TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
   disruptive: true
+  exclusive: true
   kubernetes: true
-disrupt_terminate_kubernetes_host_then_replace_scylla_node:
+TerminateKubernetesHostThenReplaceScyllaNode:
   disruptive: true
+  exclusive: true
   kubernetes: true
-disrupt_toggle_audit_syslog:
+ToggleAuditNemesisSyslog:
   config_changes: true
   disruptive: true
   free_tier_set: true
   schema_changes: true
   supports_high_disk_utilization: true
-disrupt_toggle_cdc_feature_properties_on_table:
+ToggleCDCMonkey:
   config_changes: true
   disruptive: false
   free_tier_set: true
   schema_changes: true
-disrupt_toggle_table_gc_mode:
+ToggleGcModeMonkey:
   disruptive: false
   free_tier_set: true
   kubernetes: true
   schema_changes: true
   supports_high_disk_utilization: true
-disrupt_toggle_table_ics:
+ToggleLdapConfiguration:
+  disruptive: true
+  limited: true
+  target_pool: nodes
+ToggleTableIcsMonkey:
   free_tier_set: true
   kubernetes: true
   schema_changes: true
-disrupt_truncate:
+TopPartitions:
+  disruptive: false
+  kubernetes: true
+  limited: true
+  supports_high_disk_utilization: true
+  target_pool: nodes
+TruncateLargeParititionMonkey:
+  disruptive: false
+  free_tier_set: true
+  kubernetes: true
+  supports_high_disk_utilization: true
+TruncateMonkey:
   disruptive: false
   free_tier_set: true
   kubernetes: true
   limited: true
   supports_high_disk_utilization: true
-disrupt_truncate_large_partition:
-  disruptive: false
-  free_tier_set: true
-  kubernetes: true
-  supports_high_disk_utilization: true
-disrupt_validate_hh_short_downtime:
+ValidateHintedHandoffShortDowntime:
   disruptive: true
   free_tier_set: true
   kubernetes: true
+  target_pool: data_nodes
