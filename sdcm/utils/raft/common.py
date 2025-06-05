@@ -20,6 +20,7 @@ from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, Bas
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.utils.decorators import retrying
+from sdcm.utils.features import is_group0_limited_voters_enabled
 
 
 LOGGER = logging.getLogger(__name__)
@@ -201,14 +202,17 @@ class NodeBootstrapAbortManager:
         # check only latest host_id.
         host_id = host_ids[-1]
         LOGGER.info("Check group0 and token ring")
+        with self.db_cluster.cql_connection_patient(node=self.verification_node) as session:
+            limited_group0_voters_enabled = is_group0_limited_voters_enabled(session)
+
         for node in [node for node in self.verification_node.parent_cluster.nodes if node != self.bootstrap_node]:
             token_ring = node.get_token_ring_members()
             group0 = node.raft.get_group0_members()
             all_nodes_token_ring.append(host_id in [n["host_id"] for n in token_ring])
 
             for n in group0:
-                if host_id == n["host_id"] and n['voter']:
-                    all_nodes_group0.append(True)
+                if host_id == n["host_id"]:
+                    all_nodes_group0.append(limited_group0_voters_enabled or n["is_voter"])
                     break
             else:
                 all_nodes_group0.append(False)
