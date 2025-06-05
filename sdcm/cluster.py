@@ -2170,10 +2170,16 @@ class BaseNode(AutoSshContainerMixin):
             f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version}")
 
     def install_scylla_debuginfo(self) -> None:
-        if self.distro.is_rhel_like or self.distro.is_sles:
-            package_name = fr"{self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
+        if ComparableScyllaVersion(self.scylla_version) > '2025.1.0~dev':
+            # since source available versions, theres only on option for package names
+            package_prefix = "scylla"
         else:
-            package_name = fr"{self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
+            package_prefix = self.scylla_pkg()
+
+        if self.distro.is_rhel_like or self.distro.is_sles:
+            package_name = fr"{package_prefix}-debuginfo-{self.scylla_version}\*"
+        else:
+            package_name = fr"{package_prefix}-server-dbg={self.scylla_version}\*"
 
         self.log.debug("Installing Scylla debug info...")
         # using ignore_status=True cause of docker image doesn't have the repo/list available
