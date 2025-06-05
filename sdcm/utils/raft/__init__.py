@@ -1,10 +1,12 @@
+from __future__ import annotations
 import contextlib
 import logging
 import random
 
 from enum import Enum
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Mapping, Iterable, Any, Generator
+from typing import NamedTuple, Mapping, Iterable, Generator, TYPE_CHECKING
+
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -16,6 +18,8 @@ from sdcm.utils.features import (is_consistent_topology_changes_feature_enabled,
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
 from sdcm.rest.raft_api import RaftApi
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode, TokenRingMember
 
 
 LOGGER = logging.getLogger(__name__)
@@ -24,6 +28,24 @@ RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
 
 class Group0MembersNotConsistentWithTokenRingMembersException(Exception):
     pass
+
+
+class NodeState(str, Enum):
+    BOOTSTRAPPING = "BOOTSTRAPPING"
+    DECOMMISSIONING = "DECOMMISSIONING"
+    NORMAL = "NORMAL"
+    REMOVING = "REMOVING"
+    REBUILDING = 'REBUILDING'
+    REPLACING = 'REPLACING'
+    SHUTDOWN = "shutdown"  # issue https://github.com/scylladb/scylladb/issues/27002
+    NOTEXISTS = 'notexists'
+
+
+class NodeStatus(NamedTuple):
+    ip_address: str
+    host_id: str
+    state: NodeState
+    up: bool
 
 
 class Group0Member(NamedTuple):
@@ -87,9 +109,8 @@ ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
 
 
 class RaftFeatureOperations(ABC):
-    _node: "BaseNode"  # noqa: F821
+    _node: BaseNode
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]]
-    message_iter: Iterable | None = None
 
     @property
     @abstractmethod
@@ -129,7 +150,7 @@ class RaftFeatureOperations(ABC):
 
     def check_group0_tokenring_consistency(
             self, group0_members: list[Group0Member],
-            tokenring_members: list['TokenRingMember']) -> [HealthEventsGenerator | None]:  # noqa: F821
+            tokenring_members: list[TokenRingMember]) -> [HealthEventsGenerator | None]:
         ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
@@ -162,7 +183,7 @@ class RaftFeature(RaftFeatureOperations):
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
     }
 
-    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
+    def __init__(self, node: BaseNode) -> None:
         super().__init__()
         self._node = node
 
@@ -241,12 +262,12 @@ class RaftFeature(RaftFeatureOperations):
         def is_node_down(removing_host_id: str) -> bool:
             node_status = get_node_status_from_system_by(verification_node=self._node,
                                                          host_id=removing_host_id)
-            return not node_status.get("up", False)
+            return not node_status.up
 
         def is_node_in_bootstrapping_status(removing_host_id: str) -> bool:
             node_status = get_node_status_from_system_by(verification_node=self._node,
                                                          host_id=removing_host_id)
-            return node_status.get("status", "") == "BOOTSTRAPPING"
+            return node_status.state == NodeState.BOOTSTRAPPING
 
         LOGGER.debug("Clean group0 non-voter's members")
         host_ids = self.search_inconsistent_host_ids()
@@ -255,8 +276,8 @@ class RaftFeature(RaftFeatureOperations):
             removing_host_id = host_ids.pop(0)
             wait_for(func=is_node_down, step=5, timeout=60, throw_exc=False,
                      text=f"Waiting node with {removing_host_id} marked down", removing_host_id=removing_host_id)
-            wait_for(func=lambda: not is_node_in_bootstrapping_status(), step=5, timeout=120, throw_exc=False,
-                     text=f"Waiting node with {removing_host_id} doesn't have status BOOTSTRAPPING", removing_host_id=removing_host_id)
+            wait_for(func=lambda: not is_node_in_bootstrapping_status(removing_host_id), step=5, timeout=120, throw_exc=False,
+                     text=f"Waiting node with {removing_host_id} doesn't have status BOOTSTRAPPING")
 
             ignore_dead_nodes_opt = f"--ignore-dead-nodes {','.join(host_ids)}" if host_ids else ""
 
@@ -347,7 +368,7 @@ class RaftFeature(RaftFeatureOperations):
 
     def check_group0_tokenring_consistency(
             self, group0_members: list[Group0Member],
-            tokenring_members: list['TokenRingMember']) -> HealthEventsGenerator:  # noqa: F821
+            tokenring_members: list[TokenRingMember]) -> HealthEventsGenerator:
         LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
                      self._node.name, self._node.host_id)
         token_ring_node_ids = [member.host_id for member in tokenring_members]
@@ -419,7 +440,7 @@ class NoRaft(RaftFeatureOperations):
         ]
     }
 
-    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
+    def __init__(self, node: BaseNode) -> None:
         super().__init__()
         self._node = node
 
@@ -463,7 +484,7 @@ class NoRaft(RaftFeatureOperations):
 
     def check_group0_tokenring_consistency(
             self, group0_members: list[Group0Member],
-            tokenring_members: list['TokenRingMember']) -> Generator[None, None, None]:  # noqa: F821
+            tokenring_members: list[TokenRingMember]) -> Generator[None, None, None]:
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
         yield None
@@ -480,7 +501,7 @@ def get_raft_mode(node) -> RaftFeature | NoRaft:
         return RaftFeature(node) if is_consistent_cluster_management_feature_enabled(session) else NoRaft(node)
 
 
-def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address: str = "", host_id: str = "") -> dict[str, Any]:  # noqa: F821
+def get_node_status_from_system_by(verification_node: BaseNode, *, ip_address: str = "", host_id: str = "") -> NodeStatus:
     """Get node status from system.cluster_status table
 
     The table contains actual information about nodes statuses in cluster
@@ -493,17 +514,15 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
     elif host_id:
         query += f" where host_id={host_id} ALLOW FILTERING"
     else:
-        LOGGER.warning("Ip address or host id were not provided")
-        return {}
+        raise ValueError("Either ip_address or host_id must be provided")
 
     with verification_node.parent_cluster.cql_connection_patient(node=verification_node) as session:
         session.default_timeout = 300
         results = session.execute(query)
         row = results.one()
         if not row:
-            return {}
-        node_status = {"ip_address": row.peer, "host_id": str(
-            row.host_id), "state": row.status, "up": row.up}
+            return NodeStatus(ip_address="", host_id="", state=NodeState.NOTEXISTS, up=False)
+        node_status = NodeStatus(ip_address=row.peer, host_id=str(row.host_id), state=NodeState(row.status), up=row.up)
         LOGGER.debug("Node status: %s", node_status)
         return node_status
 
@@ -511,4 +530,7 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
 __all__ = ["get_raft_mode",
            "get_node_status_from_system_by",
            "Group0MembersNotConsistentWithTokenRingMembersException",
-           "TopologyOperations"]
+           "TopologyOperations",
+           "NodeState",
+           "NodeStatus",
+           "Group0Member"]

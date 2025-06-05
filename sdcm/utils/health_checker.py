@@ -10,13 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+from __future__ import annotations
 import time
 import logging
-from typing import Generator
+from typing import Generator, TYPE_CHECKING
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
+if TYPE_CHECKING:
+    from sdcm.utils.raft import Group0Member, TokenRingMember
 
 
 CHECK_NODE_HEALTH_RETRIES = 10
@@ -265,7 +267,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     return err
 
 
-def check_group0_tokenring_consistency(group0_members: list['Group0Member'],   # noqa: F821
-                                       tokenring_members: list['TokenRingMember'],  # noqa: F821
+def check_group0_tokenring_consistency(group0_members: list[Group0Member],
+                                       tokenring_members: list[TokenRingMember],
                                        current_node) -> HealthEventsGenerator:
     return current_node.raft.check_group0_tokenring_consistency(group0_members, tokenring_members)
