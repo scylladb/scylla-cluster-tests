@@ -122,24 +122,32 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if credentials := self.loader_set.get_db_auth():
             auth_config = f' --user {credentials[0]} --password {credentials[1]}'
 
-        datacenter = ""
-        if self.loader_set.test_config.MULTI_REGION:
+        datacenter, rack = "", ""
+        if self.params.get("rack_aware_loader"):
+            rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
+            if len(set(rack_names.values())) > 1:
+                if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
+                    rack = f"--rack {loader_rack} "
+        if self.loader_set.test_config.MULTI_REGION or rack:
             # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
             # not for loader nodes. So call next function for DB nodes
             datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
             if loader_dc := datacenter_name_per_region.get(loader.region):
-                datacenter = f"--datacenter {loader_dc}"
+                datacenter = f"--datacenter {loader_dc} "
             else:
                 LOGGER.error(
                     "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
                     loader.region, datacenter_name_per_region)
+                if rack:
+                    # NOTE: fail fast if we cannot find proper dc value when rack-awareness is enabled
+                    raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
 
         cmd_runner.run(
             cmd=f'latte schema {script_name} {ssl_config} {auth_config} -- {hosts}',
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q '
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q '
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
