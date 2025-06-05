@@ -209,13 +209,17 @@ class NodeBootstrapAbortManager:
             token_ring = node.get_token_ring_members()
             group0 = node.raft.get_group0_members()
             all_nodes_token_ring.append(host_id in [n["host_id"] for n in token_ring])
-
+            LOGGER.info("Next group0 members %s will be checked for host: %s", group0, node.name)
             for n in group0:
                 if host_id == n["host_id"]:
-                    all_nodes_group0.append(limited_group0_voters_enabled or n["is_voter"])
+                    LOGGER.info("Next will be added to all_nodes_group0: %s, %s: %s",
+                                limited_group0_voters_enabled, n["voter"], limited_group0_voters_enabled or n["voter"])
+                    all_nodes_group0.append(limited_group0_voters_enabled or n["voter"])
                     break
             else:
                 all_nodes_group0.append(False)
+        LOGGER.info(">>>RESULT of bootstrap: token_ring: %s, group0: %s",
+                    all_nodes_token_ring, all_nodes_group0)
         return all(all_nodes_group0) and all(all_nodes_token_ring)
 
     def clean_and_restart_bootstrap_after_abort(self):
