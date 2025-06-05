@@ -27,7 +27,7 @@ from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel, OperationPreemptedError
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService
 
@@ -136,8 +136,17 @@ class AzureProvisioner(Provisioner):
         ip_addresses = self._ip_provider.get_or_create(instance_definitions=definitions_to_provision, version="IPV4")
         nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses],
                                                 names=[definition.name for definition in definitions_to_provision])
-        v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
-                                               nic.id for nic in nics], pricing_model=pricing_model)
+        try:
+            v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
+                                                   nic.id for nic in nics], pricing_model=pricing_model)
+        except OperationPreemptedError:
+            # upon preemption error, need to recreate providers to rediscover resources as cache might be invalid.
+            self._ip_provider = IpAddressProvider(
+                self._resource_group_name, self._region, self._az, self._azure_service)
+            self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
+            self._vm_provider = VirtualMachineProvider(
+                self._resource_group_name, self._region, self._az, self._azure_service)
+            raise
         for definition, v_m in zip(definitions, v_ms):
             instance = self._vm_to_instance(v_m)
             self._cache[definition.name] = instance

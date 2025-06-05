@@ -14,20 +14,20 @@
 import logging
 from typing import List, Any
 
-from tenacity import retry, stop_after_attempt
 
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
-from sdcm.provision.provisioner import PricingModel, VmInstance, ProvisionError, Provisioner, InstanceDefinition
+from sdcm.provision.provisioner import PricingModel, VmInstance, ProvisionError, Provisioner, InstanceDefinition, OperationPreemptedError
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
 
-@retry(stop=stop_after_attempt(3), reraise=True)
+@retrying(n=3, sleep_time=5, allowed_exceptions=(ProvisionError,))
 def provision_with_retry(provisioner: Provisioner, definitions: List[InstanceDefinition], pricing_model: PricingModel
                          ) -> List[VmInstance]:
     return provisioner.get_or_create_instances(definitions=definitions, pricing_model=pricing_model)
@@ -38,7 +38,7 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
                                       ) -> List[VmInstance]:
     try:
         provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
-    except ProvisionError:
+    except OperationPreemptedError:
         if pricing_model.is_spot() and fallback_on_demand:
             provision_with_retry(provisioner, definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
         else:
