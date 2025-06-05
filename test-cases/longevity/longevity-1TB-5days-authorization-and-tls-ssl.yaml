@@ -12,15 +12,15 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=6800m -schema 'replicati
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
 round_robin: true
 
-n_db_nodes: 3
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 seeds_num: 2
 
-instance_type_db: 'i4i.4xlarge'
-gce_instance_type_db: 'n2-highmem-16'
+instance_type_db: 'i4i.2xlarge'
+gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 16
-azure_instance_type_db: 'Standard_L16s_v3'
+azure_instance_type_db: 'Standard_L8s_v3'
 root_disk_size_runner: 120
 
 instance_type_loader: 'c6i.4xlarge'
