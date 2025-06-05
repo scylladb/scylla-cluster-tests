@@ -157,7 +157,8 @@ class CassandraStressThread(DockerBasedStressThread):
             if self.params.get("rack_aware_loader"):
                 # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
                 rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
-                if len(set(rack_names.values())) > 1 and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
+                by_region_rack_names = self.loader_set.get_rack_names_per_datacenter_from_rack_mapping(rack_names)
+                if any(len(racks) > 1 for racks in by_region_rack_names.values()) and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
                     if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
                         stress_cmd += f"rack={loader_rack} "
                         node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(
