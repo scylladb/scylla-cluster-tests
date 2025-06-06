@@ -226,6 +226,13 @@ class NodeBootstrapAbortManager:
                 all_nodes_group0.append(False)
         LOGGER.info(">>>RESULT of bootstrap: token_ring: %s, group0: %s",
                     all_nodes_token_ring, all_nodes_group0)
+        LOGGER.info(">> Check status in verification node and raft topology coordinator")
+        node_state = get_node_status_from_system_by(verification_node=self.verification_node, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
+        coordinator = get_topology_coordinator_node(self.verification_node)
+        node_state = get_node_status_from_system_by(verification_node=coordinator, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
+
         return all(all_nodes_group0) and all(all_nodes_token_ring)
 
     def clean_and_restart_bootstrap_after_abort(self):
