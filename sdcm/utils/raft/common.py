@@ -207,14 +207,14 @@ class NodeBootstrapAbortManager:
             return False
         # check only latest host_id.
         host_id = host_ids[-1]
-        LOGGER.info("Check group0 and token ring")
+        LOGGER.debug("Check group0 and token ring")
         for node in [node for node in self.verification_node.parent_cluster.nodes if node != self.bootstrap_node]:
             token_ring = node.get_token_ring_members()
             group0 = node.raft.get_group0_members()
-            all_nodes_token_ring.append(host_id in [n["host_id"] for n in token_ring])
-
+            all_nodes_token_ring.append(host_id in [n.host_id for n in token_ring])
+            LOGGER.debug("Next group0 members %s will be checked for host: %s", group0, node.name)
             for n in group0:
-                if host_id == n["host_id"] and n['voter']:
+                if host_id == n.host_id and n.voter:
                     all_nodes_group0.append(True)
                     break
             else:
