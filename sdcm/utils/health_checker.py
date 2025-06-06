@@ -265,7 +265,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     return err
 
 
-def check_group0_tokenring_consistency(group0_members: list[dict[str, str]],
-                                       tokenring_members: list[dict[str, str]],
+def check_group0_tokenring_consistency(group0_members: list['Group0Member'],   # noqa: F821
+                                       tokenring_members: list['TokenRingMember'],  # noqa: F821
                                        current_node) -> HealthEventsGenerator:
     return current_node.raft.check_group0_tokenring_consistency(group0_members, tokenring_members)
