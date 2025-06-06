@@ -60,6 +60,24 @@ Time in minutes, Time of execution for stress commands from stress_cmd parameter
 **type:** int
 
 
+## **alternator_stress_rate** / SCT_ALTERNATOR_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing.
+
+**default:** N/A
+
+**type:** int
+
+
+## **alternator_write_always_lwt_stress_rate** / SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites alternator_stress_rate.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **n_db_nodes** / SCT_N_DB_NODES
 
 Number list of database data nodes in multiple data centers. To use with<br>multi data centers and zero nodes, dc with zero-nodes only should be set as 0,<br>ex. "3 3 0".

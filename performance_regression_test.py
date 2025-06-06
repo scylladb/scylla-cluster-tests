@@ -840,6 +840,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if not self.params["use_hdrhistogram"]:
             return
 
+        self.log.debug(f'building histograms for tags {hdr_tags}')
         start_time = self.get_test_start_time() or self.start_time
         end_time = time.time()
 
@@ -855,6 +856,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
                                   histogram_data=histogram_data_by_interval)
+        self.log.debug(f'building histograms for tags {hdr_tags} completed')
 
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
