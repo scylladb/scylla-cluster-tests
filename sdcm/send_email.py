@@ -561,6 +561,11 @@ class SnitchEmailReporter(BaseEmailReporter):
     pass
 
 
+# Alternator's performance tests need only vanilla processing, hence empty class, which inherits functionality from base
+class PerformanceRegressionAlternatorTestEmailReporter(BaseEmailReporter):
+    pass
+
+
 class PerfSimpleQueryReporter(BaseEmailReporter):
     _fields = (
         "subject",
@@ -581,7 +586,7 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
 def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-
+    LOGGER.info("Building email reporter for class: %s", name)
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:
@@ -612,6 +617,8 @@ def build_reporter(name: str,  # noqa: PLR0911
         return PerfSimpleQueryReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ScaleUp" in name:
         return ScaleUpEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "PerformanceRegressionAlternatorTest" in name:
+        return PerformanceRegressionAlternatorTestEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

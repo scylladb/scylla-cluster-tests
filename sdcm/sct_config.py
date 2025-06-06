@@ -268,6 +268,14 @@ class SCTConfiguration(dict):
                   Time in minutes, Time of execution for stress commands from stress_cmd parameters
                   and is used in test duration calculation
              """),
+        dict(name="alternator_stress_rate", env="SCT_ALTERNATOR_STRESS_RATE", type=int,
+             help="""
+                  Number of operations per second to achieve in stress commands for alternator testing.
+             """),
+        dict(name="alternator_write_always_lwt_stress_rate", env="SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE", type=int,
+             help="""
+                  Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites alternator_stress_rate.
+             """),
         dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_space_separated_ints,
              help="""Number list of database data nodes in multiple data centers. To use with
              multi data centers and zero nodes, dc with zero-nodes only should be set as 0,
