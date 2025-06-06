@@ -11,13 +11,33 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import time
 import contextlib
+import os
+import traceback
+import re
+import uuid
 
-from performance_regression_test import PerformanceRegressionTest
-from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
 from sdcm.utils import alternator
-from sdcm.utils.decorators import optional_stage
+from sdcm.utils.decorators import optional_stage, latency_calculator_decorator
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
 
+from performance_regression_test import PerformanceRegressionTest, PerformanceTestWorkload
+from upgrade_test import UpgradeTest
+from typing import Optional, Literal
+
+work_types = {
+    'READ': 'read', 
+    'SCAN': 'read',
+    'UPDATE': 'write',
+    'INSERT': 'write',
+    'DELETE': 'write',
+    'WRITE': 'write',
+}
 
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def setUp(self):
@@ -28,8 +48,41 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
+    def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
+        self.hdr_tags = ['read', 'write']
+        self.row_name_override = row_name
+        if test_name.endswith('_throughput_read'):
+            self.params['workload_name'] = 'throughput'
+            cycle_name = 'throughput-read'
+            hdr_workload = PerformanceTestWorkload.READ
+        elif test_name.endswith('_throughput_write'):
+            self.params['workload_name'] = 'throughput'
+            cycle_name = 'throughput-write'
+            hdr_workload = PerformanceTestWorkload.WRITE
+        elif test_name.endswith('_read'):
+            self.params['workload_name'] = 'read'
+            cycle_name = '100% read'
+            hdr_workload = PerformanceTestWorkload.READ
+        elif test_name.endswith('_write'):
+            self.params['workload_name'] = 'write'
+            cycle_name = '100% write'
+            hdr_workload = PerformanceTestWorkload.WRITE
+        elif test_name.endswith('_mixed'):
+            self.params['workload_name'] = 'mixed'
+            cycle_name = '50% read 50% write'
+            hdr_workload = PerformanceTestWorkload.MIXED
+        else:
+            self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
+            
+        @latency_calculator_decorator(cycle_name=cycle_name)
+        def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
+            return self._workload(*args, **kwargs)
+
+        ret = execute_workload_with_latency_calculator_decorator(self, hdr_workload=hdr_workload, test_name=test_name, stress_num=stress_num, **kwargs)
+        return ret
+    
     def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',
-                  save_stats=True, is_alternator=True):
+                  save_stats=True, is_alternator=True, hdr_workload=None):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -39,14 +92,31 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if save_stats:
             self.create_test_stats(test_name=test_name, sub_type=sub_type,
                                    doc_id_with_timestamp=True, append_sub_test_to_name=False)
+
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
+        if self.params['use_hdrhistogram']:
+            assert hdr_workload is not None, "hdr_workload must be provided when use_hdrhistogram is True"
+            self.build_histogram(hdr_workload, hdr_tags=self.hdr_tags)
+
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
+
     def create_alternator_table(self, schema, alternator_write_isolation):
         node = self.db_cluster.nodes[0]
+
+        if self.params.get("alternator_enforce_authorization"):
+            self.log.info("Create the role for Alternator authorization")
+            with self.db_cluster.cql_connection_patient(node) as session:
+                session.execute(
+                    "CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
+                    (
+                        self.params.get("alternator_access_key_id"),
+                        self.params.get("alternator_secret_access_key"),
+                    )
+                )
 
         # drop tables
         table_name = alternator.consts.TABLE_NAME
@@ -59,6 +129,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.run_fstrim_on_all_db_nodes()
         self.wait_no_compactions_running()
 
+    def drop_cql_table(self):
+        node = self.db_cluster.nodes[0]
+        with self.db_cluster.cql_connection_patient(node) as session:
+            try:
+                session.execute("DROP TABLE IF EXISTS ycsb.usertable;")
+                session.execute("DROP KEYSPACE IF EXISTS ycsb;")
+            except Exception as e:
+                self.log.error(f"Failed to drop CQL table: {e}")
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
@@ -217,99 +295,349 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.check_regression_with_baseline('cql')
 
+    def test_full(self):
+        self.run_tests_by_name('full')
+
     def test_latency(self):
+        self.run_tests_by_name('basic-read')
+
+    def test_latency_read(self):
+        self.run_tests_by_name('basic-read')
+
+    def test_latency_write(self):
+        self.run_tests_by_name('basic-write')
+
+    def test_latency_mixed(self):
+        self.run_tests_by_name('basic-mixed')
+
+    def test_throughput(self):
+        self.run_tests_by_name('basic-throughput')
+
+    def test_throughput_read(self):
+        self.run_tests_by_name('basic-throughput-read')
+
+    def test_throughput_write(self):
+        self.run_tests_by_name('basic-throughput-write')
+
+    def run_tests_by_name(self, mode):
         """
         Test steps:
 
-        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
-        with round_robin and list of stress_cmd - the data will load several times faster.
-        2. Run READ workload with cql.
-        3. Run READ workload without lwt.
-        4. Run READ workload with lwt.
-        5. Run WRITE workload with cql.
-        6. Run WRITE workload without lwt.
-        7. Run WRITE workload with lwt.
-        8. Run MIXED workload with cql.
-        9. Run MIXED workload without lwt.
+         1. Prepare cluster with data (reach steady_state of compactions and ~x10 capacity than RAM.)
+            with round_robin and list of stress_cmd - the data will load several times faster.
+         2. Run READ workload with cql.
+         3. Run READ workload without lwt.
+         4. Run READ workload with lwt.
+         5. Run WRITE workload with cql.
+         6. Run WRITE workload without lwt.
+         7. Run WRITE workload with lwt.
+         8. Run MIXED workload with cql.
+         9. Run MIXED workload without lwt.
         10. Run MIXED workload with lwt.
+        11. Run READ workload with cql - calculate throughput.
+        12. Run READ workload without lwt - calculate throughput.
+        13. Run READ workload with lwt - calculate throughput.
         """
         node = self.db_cluster.nodes[0]
-
-        self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
-                                     alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-
-        self.create_cql_ks_and_table(field_number=10)
-        self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
 
         base_cmd_w = self.params.get('stress_cmd_w')
         base_cmd_r = self.params.get('stress_cmd_r')
         base_cmd_m = self.params.get('stress_cmd_m')
 
-        stress_multiplier = 2
-        self.wait_no_compactions_running(n=120)
-
-        self.run_fstrim_on_all_db_nodes()
-        self._workload(
-            test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1, is_alternator=False)
-
-        # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(
-            test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1)
-
-        self.wait_no_compactions_running()
-        # run a workload with lwt
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(
-            test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1)
-        self.check_regression_with_baseline('cql')
-
         stress_multiplier = 1
+
+        is_basic = mode.startswith('basic')
+        run_read = mode == 'full' or mode == 'basic' or mode == 'basic-read'
+        run_write = mode == 'full' or mode == 'basic' or mode == 'basic-write'
+        run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
+        run_read_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-read'
+        run_write_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-write'
+
+
+        def run_read_cql():
+            if is_basic: return
+            if not run_read: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
+                keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_read_alternator_no_lwt():
+            if not run_read: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
+                keyspace_num=1, row_name = 'alternator-no-lwt')
+        def run_write_cql():
+            if is_basic: return
+            if not run_write: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_write_alternator_no_lwt():
+            if not run_write: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + cmd_add_params,
+                stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
+        def run_write_alternator_with_lwt():
+            if not run_write: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_params,
+                stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-always-lwt')
+        def run_mixed_cql():
+            if is_basic: return
+            if not run_mixed: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_mixed_alternator_no_lwt():
+            if not run_mixed: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
+                           stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
+        def run_mixed_alternator_with_lwt():
+            if not run_mixed: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
+                           stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-always-lwt')
+        def run_read_throughput_cql():
+            if is_basic: return
+            if not run_read_throughput: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_throughput_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_read_throughput_alternator_no_lwt():
+            if not run_read_throughput: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_read', sub_type='without-lwt',
+                           stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
+        def run_write_throughput_cql():
+            if is_basic: return
+            if not run_write_throughput: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_throughput_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_throughput_params,
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_write_throughput_alternator_no_lwt():
+            if not run_write_throughput: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_write', sub_type='without-lwt',
+                           stress_cmd=base_cmd_w + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
+
+        tests_to_run = (
+            run_read_cql,
+            run_read_alternator_no_lwt,
+            run_write_cql,
+            run_write_alternator_no_lwt,
+            run_write_alternator_with_lwt,
+            run_mixed_cql,
+            run_mixed_alternator_no_lwt,
+            run_mixed_alternator_with_lwt,
+            run_read_throughput_cql,
+            run_read_throughput_alternator_no_lwt,
+            run_write_throughput_cql,
+            run_write_throughput_alternator_no_lwt,
+        )
+        duration = self.params.get('stress_duration') / len(tests_to_run)
+        try:
+            target = self.params.get('stress_target')
+            self.log.info(f"Using target {target} for stress tests.")
+        except KeyError:
+            target = 15000
+            self.log.info(f"Using default target {target} for stress tests.")
+        if duration < 1:
+            self.log.warning(f"Stress duration {self.params.get('stress_duration')} after dividing by {len(tests_to_run)} is less than 1 minute, setting it to 1 minute.")
+            duration = 1
+        cmd_add_params = f" -target {target} -p maxexecutiontime={int(60 * duration)}"
+        cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(60 * duration)}"
+
+        self.pre_create_alternator_tables()
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ONLY_RMW_USES_LWT)
+
+        self.create_cql_ks_and_table(field_number=10)
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+
+        for func in tests_to_run:
+            self.wait_no_compactions_running(n=120)
+            func()
+
+    def test_latency_write_with_nemesis(self):
+        self.create_alternator_table(
+            schema=self.params.get("dynamodb_primarykey_type"),
+            alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+        )
+        self.create_cql_ks_and_table(field_number=10)
+
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+        self.alternator.set_write_isolation(
+            node=self.db_cluster.nodes[0],
+            isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT,
+        )
+        self._workload(
+            test_name=self.id() + "_write",
+            sub_type="with-lwt",
+            stress_cmd=self.params.get("stress_cmd_w") + " -target 3000",
+            nemesis=True,
+        )
+        self.check_latency_during_ops()
+
+    def test_latency_read_with_nemesis(self):
+        self.create_alternator_table(
+            schema=self.params.get("dynamodb_primarykey_type"),
+            alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+        )
+        self.create_cql_ks_and_table(field_number=10)
+
+        # Run a write workload as a preparation.
+        self.preload_data()
+
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+        self.alternator.set_write_isolation(
+            node=self.db_cluster.nodes[0],
+            isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT,
+        )
+        self._workload(
+            test_name=self.id() + "_read",
+            sub_type="with-lwt",
+            stress_cmd=self.params.get("stress_cmd_r") + " -target 3000",
+            nemesis=True,
+        )
+        self.check_latency_during_ops()
+
+    def test_latency_mixed_with_nemesis(self):
+        self.create_alternator_table(
+            schema=self.params.get("dynamodb_primarykey_type"),
+            alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+        )
+        self.create_cql_ks_and_table(field_number=10)
+
+        # Run a write workload as a preparation.
+        self.preload_data()
+
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+        self.alternator.set_write_isolation(
+            node=self.db_cluster.nodes[0],
+            isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT,
+        )
+        self._workload(
+            test_name=self.id() + "_mixed",
+            sub_type="with-lwt",
+            stress_cmd=self.params.get("stress_cmd_m") + " -target 3000",
+            nemesis=True,
+        )
+        self.check_latency_during_ops()
+
+
+class PerformanceRegressionAlternatorUpgradeTest(PerformanceRegressionAlternatorTest, UpgradeTest):  # pylint: disable=too-many-ancestors
+    def get_email_data(self) -> dict:
+        return PerformanceRegressionAlternatorTest.get_email_data(self)
+
+    @latency_calculator_decorator(legend="Upgrade Node")
+    def upgrade_node(self, node) -> None:  # pylint: disable=arguments-differ
+        InfoEvent(message=f"Upgrade Node {node.name} begin").publish()
+        self._upgrade_node(node)
+        InfoEvent(message=f"Upgrade Node {node.name} ended").publish()
+
+    def _stop_stress_when_finished(self) -> None:  # pylint: disable=no-self-use
+        with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
+                                         event_class=YcsbStressEvent,
+                                         extra_time_to_expiration=60):
+            self.loaders.kill_stress_thread()
+
+    @latency_calculator_decorator
+    def steady_state_latency(self) -> None:  # pylint: disable=no-self-use
+        sleep_time = self.db_cluster.params.get("nemesis_interval") * 60
+        InfoEvent(message=f"Starting Steady State calculation for {sleep_time}s").publish()
+        time.sleep(sleep_time)
+        InfoEvent(message=f"Ended Steady State calculation. Took {sleep_time}s").publish()
+
+    @latency_calculator_decorator
+    def post_upgrades_steady_state(self) -> None:
+        sleep_time = self.db_cluster.params.get("nemesis_interval") * 60
+        InfoEvent(message=f"Starting Post-Upgrade Steady State calculation for {sleep_time}s").publish()
+        time.sleep(sleep_time)
+        InfoEvent(message=f"Ended Post-Upgrade Steady State calculation. Took {sleep_time}s").publish()
+
+    def run_workload_and_upgrade(self, stress_cmd: str, sub_type: str) -> None:
+        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
+        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
+        self.tester = self  # pylint: disable=attribute-defined-outside-init
+        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+
+        test_index = f"alternator-latency-during-upgrade-{sub_type}"
+        self.create_test_stats(
+            sub_type=sub_type,
+            append_sub_test_to_name=False,
+            test_index=test_index,
+        )
+        stress_queue = self.run_stress_thread(
+            stress_cmd=stress_cmd,
+            stats_aggregate_cmds=False,
+        )
+        time.sleep(60)  # postpone measure steady state latency to skip start period when latency is high
+        self.steady_state_latency()
+        versions_list = []
+
+        def _get_version_and_build_id_from_node(scylla_node) -> tuple[str, str]:
+            version = scylla_node.remoter.run("scylla --version")
+            build_id = scylla_node.remoter.run("scylla --build-id")
+            return version.stdout.strip(), build_id.stdout.strip()
+
+        for node in self.db_cluster.nodes:
+            base_version, base_build_id = _get_version_and_build_id_from_node(node)
+            self.upgrade_node(node)
+            target_version, target_build_id = _get_version_and_build_id_from_node(node)
+            versions_list.append({
+                "base_version": base_version,
+                "base_build_id": base_build_id,
+                "target_version": target_version,
+                "target_build_id": target_build_id,
+                "node_name": node.name,
+            })
+            time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
+        self.post_upgrades_steady_state()
+
+        # TODO: check if all `base_version` and all `target_version` are the same
+        self.update({"base_target_versions": versions_list})
+        self._stop_stress_when_finished()
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details(scrap_metrics_step=60, alternator=True)
+        self.display_results(results, test_name="test_alternator_latency_with_upgrade")
+        self.update_test_details(scrap_metrics_step=60, alternator=True)
+        self.display_results(results, test_name="test_alternator_latency_during_upgrade")
+        self.check_latency_during_ops()
+
+    def _prepare_latency_with_upgrade(self) -> None:
+        self.run_fstrim_on_all_db_nodes()
+        self.create_alternator_table(
+            schema=self.params.get("dynamodb_primarykey_type"),
+            alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+        )
+        self.create_cql_ks_and_table(field_number=10)
+        self.preload_data()
+        self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
 
-        self.wait_no_compactions_running()
-        self._workload(
-            test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+    def test_latency_write_with_upgrade(self) -> None:
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(
+            stress_cmd=self.params.get("stress_cmd_w") + " -target 3000",
+            sub_type="write",
+        )
 
-        self.wait_no_compactions_running()
-        # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(
-            test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1)
+    def test_latency_read_with_upgrade(self) -> None:
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(
+            stress_cmd=self.params.get("stress_cmd_r") + " -target 3000",
+            sub_type="read",
+        )
 
-        self.wait_no_compactions_running(n=120)
-        # run a workload with lwt
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(
-            test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000",
-            stress_num=stress_multiplier, keyspace_num=1)
-        self.check_regression_with_baseline('cql')
-
-        stress_multiplier = 1
-        self.wait_no_compactions_running(n=120)
-        self.run_fstrim_on_all_db_nodes()
-
-        self._workload(
-            test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
-
-        self.wait_no_compactions_running()
-        # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self._workload(test_name=self.id() + '_mixed', sub_type='without-lwt',
-                       stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1)
-
-        self.wait_no_compactions_running()
-        # run a workload with lwt
-        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        self._workload(test_name=self.id() + '_mixed', sub_type='with-lwt',
-                       stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1)
-
-        self.check_regression_with_baseline('cql')
+    def test_latency_mixed_with_upgrade(self) -> None:
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(
+            stress_cmd=self.params.get("stress_cmd_m") + " -target 3000",
+            sub_type="mixed",
+        )

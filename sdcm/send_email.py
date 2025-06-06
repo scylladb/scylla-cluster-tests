@@ -561,6 +561,10 @@ class SnitchEmailReporter(BaseEmailReporter):
     pass
 
 
+class PerformanceRegressionAlternatorEmailReporter(BaseEmailReporter):
+    pass
+
+
 class PerfSimpleQueryReporter(BaseEmailReporter):
     _fields = (
         "subject",
@@ -612,6 +616,8 @@ def build_reporter(name: str,  # noqa: PLR0911
         return PerfSimpleQueryReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ScaleUp" in name:
         return ScaleUpEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "PerformanceRegressionAlternatorTest" in name:
+        return PerformanceRegressionAlternatorEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
