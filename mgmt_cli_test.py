@@ -1444,7 +1444,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.db_cluster.unlock_ear_key()
         return ear_key.get("keyid")
 
-    def test_prepare_backup_snapshot(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
+    def test_prepare_backup_snapshot(self):  # noqa: PLR0914
         """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
 
         Steps:
