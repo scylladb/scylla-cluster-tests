@@ -401,7 +401,7 @@ class ConfigurationTests(unittest.TestCase):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-    def test_conf_check_required_files(self):  # pylint: disable=no-self-use
+    def test_conf_check_required_files(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         ami_id = get_ssm_ami(
             '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')
