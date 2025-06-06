@@ -276,6 +276,7 @@ class silence:
                 self.log.debug("Finished '%s'. No errors were silenced.", name)
             except Exception as exc:  # noqa: BLE001
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
+                self.log.debug("Stacktrace is %s", traceback.format_exc())
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
             return result
 
@@ -2252,7 +2253,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                 timeout=timeout,
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
-                                round_robin=round_robin, params=self.params).run()
+                                round_robin=round_robin, params=self.params,
+                                cluster_tester=self).run()
 
     def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
@@ -3861,12 +3863,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        if email_data:
+        if email_data is not None:
             email_data['grafana_screenshots'] = grafana_screenshots
             email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)
+        else:
+            self.log.info('failed to get email data, email will not be sent.')
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:
@@ -4060,9 +4064,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info(
             "Build HDR histogram (tags: %s) with start time: %s, end time: %s, time interval: %s for operation: %s",
             hdr_tags, start_time, end_time, time_interval, stress_operation)
-        return make_hdrhistogram_summary_by_interval(
+        histogram_data = make_hdrhistogram_summary_by_interval(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)
+        self.log.info("HDR histogram summary result: %s", histogram_data)
+        return histogram_data
 
     @property
     def all_db_nodes(self) -> list[BaseNode]:

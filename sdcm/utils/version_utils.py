@@ -278,7 +278,6 @@ def get_url_content(url, return_url_data=True):
         raise ValueError(f"The repository URL '{url}' not contains any content")
     if return_url_data:
         return response_data.split('\n')
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned    return []
     return []
 
 
@@ -408,7 +407,6 @@ def get_branch_version(url, full_version: bool = False):
         return get_branch_version_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
         return get_branch_version_from_centos_repository(urls=urls, full_version=full_version)
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return []
 
 
@@ -420,7 +418,6 @@ def get_all_versions(url: str, full_version: bool = False) -> set[str]:
         return get_all_versions_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
         return get_all_versions_from_centos_repository(urls=urls, full_version=full_version)
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return set()
 
 
