@@ -7,6 +7,6 @@ perfRegressionParallelPipeline(
     backend: "aws",
     region: "us-east-1",
     test_name: "performance_regression_alternator_test.PerformanceRegressionAlternatorTest",
-    test_config: "test-cases/performance/perf-regression-alternator-basic.yaml",
-    sub_tests: ["test_basic"],
+    test_config: """["test-cases/performance/perf-regression-alternator-basic.yaml", "configurations/alternator/enforce-authorization.yaml"]""",
+    sub_tests: ["test_full"],
 )
