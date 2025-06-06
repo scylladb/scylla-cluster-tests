@@ -8,7 +8,7 @@ from sdcm.teardown_validators.base import TeardownValidator
 LOGGER = logging.getLogger(__name__)
 
 
-class RackawareValidator(TeardownValidator):  # pylint: disable=too-few-public-methods
+class RackawareValidator(TeardownValidator):
     """
     Rack-aware validation is enabled under these conditions:
     - A rack-aware policy is configured.
