@@ -410,7 +410,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.wait_no_compactions_running(n=120)
 
         cmd_add_params = " -target 20000 -p maxexecutiontime=2400 -p operationcount=2000000"
-        cmd_add_throughput_params = " -p maxexecutiontime=2400"
+        cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=99999999999999"
         self.run_fstrim_on_all_db_nodes()
         self._prepare_and_execute_workload_with_latency_calculator_decorator(
             test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
