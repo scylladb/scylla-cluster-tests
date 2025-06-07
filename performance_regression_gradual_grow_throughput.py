@@ -136,6 +136,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self._run_cql_commands(post_prepare_cql_cmds)
 
             self.wait_no_compactions_running(n=400, sleep_time=120)
+            # In the test_read performance test, we observed that even without any write operations, compactions were occurring.
+            # These compactions are a result of tablet splits and can happen several minutes after the wait_no_compactions function
+            # has finished.
+            # To address this, we will now verify that no tablet splits or merges are active by checking the system.tablets table.
+            # The new condition for system idleness requires the resize_type column to be 'none' for all relevant tablets for a
+            # continuous period of three minutes.
+            self.wait_for_no_tablets_splits()
             self.run_fstrim_on_all_db_nodes()
 
         self.run_gradual_increase_load(workload=workload,
@@ -240,8 +247,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             # We want 3 minutes (180 sec) wait between steps.
             # In case of "mixed" workflow - wait for compactions finished.
             # In case of "read" workflow -  it just will wait for 3 minutes
-            if workload.wait_no_compactions and (wait_time := self.wait_no_compactions_running()[0]) < 180:
-                time.sleep(180 - wait_time)
+            if workload.wait_no_compactions:
+                if (wait_time := self.wait_no_compactions_running()[0]) < 180:
+                    time.sleep(180 - wait_time)
+                self.log.info("All compactions are finished")
+
+                # In the test_read performance test, we observed that even without any write operations, compactions were occurring.
+                # These compactions are a result of tablet splits and can happen several minutes after the wait_no_compactions function
+                # has finished.
+                # To address this, we will now verify that no tablet splits or merges are active by checking the system.tablets table.
+                # The new condition for system idleness requires the resize_type column to be 'none' for all relevant tablets for a
+                # continuous period of three minutes.
+                self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
         self.run_performance_analyzer(total_summary=total_summary)
