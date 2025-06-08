@@ -299,49 +299,5 @@ latency_decorator_error_thresholds:
           fixed_limit: 10
       P99 read:
           fixed_limit: 10
-<<<<<<< HEAD
 
 adaptive_timeout_store_metrics: true
-||||||| parent of 5a41e2855 (feature(adaptive_timeouts): skip reporting for performence tests)
-=======
-<<<<<<< HEAD
-||||||| parent of 9d4234902 (feature(adaptive_timeouts): skip reporting for performence tests)
-
-mgmt_snapshots_preparer_params:
-  # Such a configuration is used by Manager backup snapshots prepare test
-  cs_cmd_template: "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}"
-  operation: "write"
-  cl: "QUORUM"
-  replication: "NetworkTopologyStrategy"
-  rf: 3
-  compaction: "IncrementalCompactionStrategy"
-  threads_num: 500
-  col_size: 1024
-  col_n: 1
-  # Defined in a runtime based on backup size, number of loaders, scylla version, etc
-  ks_name: ''
-  num_of_rows: ''
-  sequence_start: ''
-  sequence_end: ''
-=======
-
-mgmt_snapshots_preparer_params:
-  # Such a configuration is used by Manager backup snapshots prepare test
-  cs_cmd_template: "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}"
-  operation: "write"
-  cl: "QUORUM"
-  replication: "NetworkTopologyStrategy"
-  rf: 3
-  compaction: "IncrementalCompactionStrategy"
-  threads_num: 500
-  col_size: 1024
-  col_n: 1
-  # Defined in a runtime based on backup size, number of loaders, scylla version, etc
-  ks_name: ''
-  num_of_rows: ''
-  sequence_start: ''
-  sequence_end: ''
-
-adaptive_timeout_store_metrics: true
->>>>>>> 9d4234902 (feature(adaptive_timeouts): skip reporting for performence tests)
->>>>>>> 5a41e2855 (feature(adaptive_timeouts): skip reporting for performence tests)
