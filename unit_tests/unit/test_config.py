@@ -825,3 +825,11 @@ def test_docker_single_rack_no_snitch_override(monkeypatch):
     conf.verify_configuration()
 
     assert conf.get("endpoint_snitch") is None
+
+
+def test_verify_protected_db_nodes(monkeypatch):
+    monkeypatch.setenv("SCT_PROTECTED_DB_NODES", "[1, 2]")
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+
+    assert conf.get("protected_db_nodes") == [1, 2]

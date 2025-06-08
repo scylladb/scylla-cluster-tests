@@ -151,6 +151,11 @@ def str_or_list_or_eval(value: Union[str, List[str], None]) -> List[str] | None:
     raise ValueError(f"{value} isn't a string or a list")
 
 
+def int_list_or_eval(value: Union[str, List[int]]) -> List[int]:
+    values = str_or_list_or_eval(value)
+    return [int(v) for v in values]
+
+
 StringOrList = Annotated[
     str | list[str], BeforeValidator(str_or_list_or_eval), Field(json_schema_extra={"appendable": True})
 ]
@@ -530,6 +535,9 @@ class SCTConfiguration(BaseModel):
     )
     n_monitor_nodes: IntOrList = SctField(
         description="Number list of monitor nodes in multiple data centers",
+    )
+    protected_db_nodes: Annotated[list[int] | None, BeforeValidator(int_list_or_eval)] = SctField(
+        description="List of protected db nodes indexes, that won't be select by nemesis",
     )
     intra_node_comm_public: Boolean = SctField(
         description="If True, all communication between nodes are via public addresses",
@@ -3357,6 +3365,9 @@ class SCTConfiguration(BaseModel):
 
         if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
             re.compile(backtrace_decoding_disable_regex)
+
+        if self.get("protected_db_nodes") and self.get("cluster_backend").startswith("k8s"):
+            raise ValueError("'protected_db_nodes' is not currently not supported for any of the k8s-* backends")
 
     def _get_normalized_arch(self, instance_type: str, region_name: str, default: str = "x86_64") -> str:
         """Detect architecture from AWS instance type and normalize to Scylla package naming.

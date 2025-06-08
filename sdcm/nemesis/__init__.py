@@ -252,6 +252,7 @@ class NemesisFlags:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
     sla: bool = False  # flag that signal that nemesis is used for SLA tests
+    full_cluster_restart: bool = False  # A flag denotes a nemesis that restarts the whole cluster.
     enospc: bool = False  # flag that signal that nemesis causes a node to go out of space
     modify_table: bool = False  # flag that modifies table properties, not columns
 
@@ -1231,7 +1232,7 @@ class NemesisRunner:
             [
                 node
                 for node in self.cluster.nodes
-                if node not in (new_node, self.target_node) and not node.running_nemesis
+                if node not in (new_node, self.target_node) and not node.running_nemesis and not node.is_protected
             ]
         )
 
@@ -5347,7 +5348,7 @@ class NemesisRunner:
             if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
                 raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
-        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis and not node.is_protected]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
         cql_query_executor_node = self.random.choice(free_nodes)
@@ -5637,6 +5638,10 @@ class NemesisRunner:
             if coordinator_node != self.target_node and coordinator_node.running_nemesis:
                 raise UnsupportedNemesis(
                     f"Coordinator node is busy with {coordinator_node.running_nemesis}, Coordinator node was restarted: {num_of_restart}"
+                )
+            elif coordinator_node.is_protected:
+                raise UnsupportedNemesis(
+                    f"Coordinator node {coordinator_node.name} is protected, Coordinator node was restarted: {num_of_restart}"
                 )
             elif coordinator_node != self.target_node:
                 self.switch_target_node(coordinator_node)

@@ -1476,7 +1476,9 @@ class ClusterTester(unittest.TestCase):
         self, keyspace, db_cluster=None, repair_after_alter=True
     ):
         db_cluster = db_cluster or self.db_cluster
-        node = random.choice([node for node in self.db_cluster.nodes if not node.running_nemesis])
+        node = random.choice(
+            [node for node in self.db_cluster.nodes if not node.running_nemesis and not node.is_protected]
+        )
         nodes_by_region = self.db_cluster.nodes_by_region()
         dc_by_region = self.db_cluster.get_datacenter_name_per_region(db_cluster.nodes)
         datacenters = {}

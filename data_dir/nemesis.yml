@@ -4,6 +4,7 @@ AbortDecommissionMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -21,6 +22,7 @@ AbortRepairMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -38,6 +40,7 @@ AddDropColumnMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -55,6 +58,7 @@ AddRemoveDcNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -72,6 +76,7 @@ AddRemoveMvNemesis:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -89,6 +94,7 @@ AddRemoveRackNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -106,6 +112,7 @@ BlockNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -123,6 +130,7 @@ BootstrapStreamingErrorNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -140,6 +148,7 @@ CDCStressorMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -157,6 +166,7 @@ ClusterRollingRestart:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -174,6 +184,7 @@ ClusterRollingRestartRandomOrder:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -191,6 +202,7 @@ CorruptThenRebuildMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -208,6 +220,7 @@ CorruptThenRepairMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -225,6 +238,7 @@ CorruptThenScrubMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -242,6 +256,7 @@ CreateIndexNemesis:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -259,6 +274,7 @@ DecommissionMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -276,6 +292,7 @@ DecommissionSeedNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -293,6 +310,7 @@ DecommissionStreamingErrMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -310,6 +328,7 @@ DeleteByPartitionsMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -327,6 +346,7 @@ DeleteByRowsRangeMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -344,6 +364,7 @@ DeleteOverlappingRowRangesMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -361,6 +382,7 @@ DisableBinaryGossipExecuteMajorCompaction:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -378,6 +400,7 @@ DrainKubernetesNodeThenDecommissionAndAddScyllaNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -395,6 +418,7 @@ DrainKubernetesNodeThenReplaceScyllaNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -412,6 +436,7 @@ DrainerMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -429,6 +454,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -446,6 +472,7 @@ EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -463,6 +490,7 @@ EndOfQuotaNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -480,6 +508,7 @@ EnospcAllNodesMonkey:
   disruptive: true
   enospc: true
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -497,6 +526,7 @@ EnospcMonkey:
   disruptive: true
   enospc: true
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -514,6 +544,7 @@ GrowShrinkClusterNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -531,6 +562,7 @@ GrowShrinkZeroTokenNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -548,6 +580,7 @@ HardRebootNodeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -565,6 +598,7 @@ IsolateNodeWithIptableRuleNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -582,6 +616,7 @@ IsolateNodeWithProcessSignalNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -599,6 +634,7 @@ KillMVBuildingCoordinator:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -616,6 +652,7 @@ LoadAndStreamMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -633,6 +670,7 @@ MajorCompactionMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -650,6 +688,7 @@ MemoryStressMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -667,6 +706,7 @@ MgmtBackup:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: true
@@ -684,6 +724,7 @@ MgmtBackupSpecificKeyspaces:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: true
@@ -701,6 +742,7 @@ MgmtCorruptThenRepair:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: true
@@ -718,6 +760,7 @@ MgmtRepair:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: true
@@ -735,6 +778,7 @@ MgmtRestore:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: true
@@ -752,6 +796,7 @@ ModifyTableBloomFilterFpChanceMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -769,6 +814,7 @@ ModifyTableCachingMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -786,6 +832,7 @@ ModifyTableCommentMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -803,6 +850,7 @@ ModifyTableCompactionMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -820,6 +868,7 @@ ModifyTableCompressionMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -837,6 +886,7 @@ ModifyTableCrcCheckChanceMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -854,6 +904,7 @@ ModifyTableDclocalReadRepairChanceMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -871,6 +922,7 @@ ModifyTableDefaultTimeToLiveMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -888,6 +940,7 @@ ModifyTableGcGraceTimeMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -905,6 +958,7 @@ ModifyTableMaxIndexIntervalMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -922,6 +976,7 @@ ModifyTableMemtableFlushPeriodInMsMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -939,6 +994,7 @@ ModifyTableMinIndexIntervalMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -956,6 +1012,7 @@ ModifyTableReadRepairChanceMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -973,6 +1030,7 @@ ModifyTableSpeculativeRetryMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -990,6 +1048,7 @@ ModifyTableTwcsWindowSizeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1007,6 +1066,7 @@ MultipleHardRebootNodeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1024,6 +1084,7 @@ NemesisSequence:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1041,6 +1102,7 @@ NoCorruptRepairMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1058,6 +1120,7 @@ NodeRestartWithResharding:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1075,6 +1138,7 @@ NodeTerminateAndReplace:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1092,6 +1156,7 @@ NodeToolCleanupMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1109,6 +1174,7 @@ OperatorNodeReplace:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1126,6 +1192,7 @@ OperatorNodetoolFlushAndReshard:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1143,6 +1210,7 @@ PauseLdapNemesis:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -1160,6 +1228,7 @@ RandomInterruptionNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1177,6 +1246,7 @@ RebuildStreamingErrMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1194,6 +1264,7 @@ RefreshBigMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1211,6 +1282,7 @@ RefreshMonkey:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1228,6 +1300,7 @@ RejectInterNodeNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1245,6 +1318,7 @@ RejectNodeExporterNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1262,6 +1336,7 @@ RejectThriftNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1279,6 +1354,7 @@ RemoveServiceLevelMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1296,6 +1372,7 @@ RepairStreamingErrMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1313,6 +1390,7 @@ ResetLocalSchemaMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1330,6 +1408,7 @@ RestartThenRepairNodeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1347,6 +1426,7 @@ RollingRestartConfigChangeInternodeCompression:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: true
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1364,6 +1444,7 @@ ScyllaKillMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1381,6 +1462,7 @@ SerialRestartOfElectedTopologyCoordinatorNemesis:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1398,6 +1480,7 @@ SlaDecreaseSharesDuringLoad:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1415,6 +1498,7 @@ SlaIncreaseSharesByAttachAnotherSlDuringLoad:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1432,6 +1516,7 @@ SlaIncreaseSharesDuringLoad:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1449,6 +1534,7 @@ SlaMaximumAllowedSlsWithMaxSharesDuringLoad:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1466,6 +1552,7 @@ SlaReplaceUsingDetachDuringLoad:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1483,6 +1570,7 @@ SlaReplaceUsingDropDuringLoad:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1500,6 +1588,7 @@ SnapshotOperations:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1517,6 +1606,7 @@ SoftRebootNodeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1534,6 +1624,7 @@ SslHotReloadingNemesis:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1551,6 +1642,7 @@ StartStopCleanupCompaction:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1568,6 +1660,7 @@ StartStopMajorCompaction:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1585,6 +1678,7 @@ StartStopScrubCompaction:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1602,6 +1696,7 @@ StartStopValidationCompaction:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1619,6 +1714,7 @@ StopStartInterfacesNetworkMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1636,6 +1732,7 @@ StopStartMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1653,6 +1750,7 @@ StopWaitStartMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1670,6 +1768,7 @@ SwitchBetweenPasswordAuthAndSaslauthdAuth:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1687,6 +1786,7 @@ TerminateAndRemoveNodeMonkey:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1704,6 +1804,7 @@ TerminateKubernetesHostThenDecommissionAndAddScyllaNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1721,6 +1822,7 @@ TerminateKubernetesHostThenReplaceScyllaNode:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1738,6 +1840,7 @@ ToggleAuditNemesisSyslog:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1755,6 +1858,7 @@ ToggleCDCMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: false
   limited: false
   manager_operation: false
@@ -1772,6 +1876,7 @@ ToggleGcModeMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1789,6 +1894,7 @@ ToggleLdapConfiguration:
   disruptive: true
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: false
   limited: true
   manager_operation: false
@@ -1806,6 +1912,7 @@ ToggleTableIcsMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1823,6 +1930,7 @@ TopPartitions:
   disruptive: false
   enospc: false
   free_tier_set: false
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1840,6 +1948,7 @@ TruncateLargeParititionMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
@@ -1857,6 +1966,7 @@ TruncateMonkey:
   disruptive: false
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: true
   manager_operation: false
@@ -1874,6 +1984,7 @@ ValidateHintedHandoffShortDowntime:
   disruptive: true
   enospc: false
   free_tier_set: true
+  full_cluster_restart: false
   kubernetes: true
   limited: false
   manager_operation: false
