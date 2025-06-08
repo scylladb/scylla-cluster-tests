@@ -122,7 +122,8 @@ class NemesisNodeAllocator(metaclass=Singleton):
         """
         with self.lock:
             nodes = self._get_pool_type_nodes(pool_type)
-            available_for_selection = [node for node in nodes if node not in self.active_nemesis_on_nodes]
+            available_for_selection = [
+                node for node in nodes if node not in self.active_nemesis_on_nodes and not node.is_protected]
             if node_list:
                 available_for_selection = list(set(available_for_selection) & set(node_list))
 
