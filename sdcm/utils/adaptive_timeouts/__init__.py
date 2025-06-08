@@ -168,16 +168,21 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
 
     _, timeout_func, required_arg_names = operation.value
     args = {arg: kwargs[arg] for arg in required_arg_names}
-
+    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+    if store_metrics:
+        metrics = {}
+    else:
+        metrics = NodeLoadInfoServices().get(node)
     if tablet_sensitive_op:
         args['tablets_enabled'] = tablets_enabled
-    result = timeout_func(node_info_service=NodeLoadInfoServices().get(node), **args)
+    result = timeout_func(node_info_service=metrics, **args)
     if tablet_sensitive_op:
         (soft_timeout, hard_timeout), load_metrics = result
     else:
         soft_timeout, load_metrics = result
         hard_timeout = None
-    load_metrics.update(TestInfoServices.get(node))
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
 
     start_time = time.monotonic()
     timeout_occurred = False
@@ -202,7 +207,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
             SoftTimeoutEvent(operation=operation.name, soft_timeout=soft_timeout, duration=duration).publish_or_dump()
 
         try:
-            if load_metrics:
+            if load_metrics and store_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=soft_timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # noqa: BLE001
