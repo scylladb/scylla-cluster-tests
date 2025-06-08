@@ -43,3 +43,5 @@ authorizer: 'CassandraAuthorizer'
 
 nemesis_during_prepare: false
 use_preinstalled_scylla: true
+
+logs_transport: 'vector'

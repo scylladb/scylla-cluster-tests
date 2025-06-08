@@ -27,3 +27,7 @@ post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 12
 
 
 round_robin: true
+
+# enable vector.dev logging for all tier1
+# TODO: remove this when vector.dev logging is enabled by default
+logs_transport: 'vector'
