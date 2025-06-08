@@ -65,5 +65,5 @@ append_scylla_yaml:
 
 use_placement_group: true
 use_prepared_loaders: false
-stress_image:
-  cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
+
+adaptive_timeout_store_metrics: false

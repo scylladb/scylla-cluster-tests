@@ -36,3 +36,5 @@ use_hdrhistogram: true
 use_placement_group: true
 use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
+
+adaptive_timeout_store_metrics: false

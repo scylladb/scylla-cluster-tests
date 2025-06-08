@@ -34,3 +34,5 @@ use_placement_group: true
 email_subject_postfix: 'latency during upgrades'
 
 cluster_health_check: false
+
+adaptive_timeout_store_metrics: false
