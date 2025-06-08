@@ -2490,8 +2490,7 @@ class BaseNode(AutoSshContainerMixin):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        with adaptive_timeout(operation=Operations.START_SCYLLA, node=self, timeout=timeout):
-            self.start_service(service_name='scylla-server', timeout=timeout * 4)
+        self.start_service(service_name='scylla-server', timeout=timeout * 4)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -2553,7 +2552,7 @@ class BaseNode(AutoSshContainerMixin):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_up_before:
             self.wait_db_up(timeout=verify_up_timeout)
-        with adaptive_timeout(operation=Operations.START_SCYLLA, node=self, timeout=timeout):
+        with adaptive_timeout(operation=Operations.RESTART_SCYLLA, node=self, timeout=timeout):
             self.restart_service(service_name='scylla-server', timeout=timeout * 2)
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
