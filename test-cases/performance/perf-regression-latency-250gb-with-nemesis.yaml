@@ -33,3 +33,5 @@ store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
 use_prepared_loaders: true
 use_hdrhistogram: true
+
+adaptive_timeout_store_metrics: false

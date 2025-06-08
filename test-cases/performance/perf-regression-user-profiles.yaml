@@ -38,3 +38,5 @@ backtrace_decoding: false
 print_kernel_callstack: true
 
 email_recipients: ['scylla-perf-results@scylladb.com']
+
+adaptive_timeout_store_metrics: false

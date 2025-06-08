@@ -35,3 +35,5 @@ use_prepared_loaders: true
 use_hdrhistogram: true
 email_subject_postfix: 'latency during grow-shrink'
 hinted_handoff: 'enabled'
+
+adaptive_timeout_store_metrics: false
