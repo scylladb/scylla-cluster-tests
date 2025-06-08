@@ -103,6 +103,11 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list of strings.")
 
 
+def int_list_or_eval(value: Union[str, List[int]]) -> List[int]:
+    values = str_or_list_or_eval(value)
+    return [int(v) for v in values]
+
+
 def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     """Convert an environment variable into a Python's list."""
 
@@ -275,6 +280,9 @@ class SCTConfiguration(dict):
 
         dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_space_separated_ints,
              help="Number list of monitor nodes in multiple data centers"),
+
+        dict(name="protected_db_nodes", env="SCT_PROTECTED_DB_NODES", type=int_list_or_eval,
+             help="List of protected db nodes indexes, that won't be select by nemesis"),
 
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
              help="If True, all communication between nodes are via public addresses"),
