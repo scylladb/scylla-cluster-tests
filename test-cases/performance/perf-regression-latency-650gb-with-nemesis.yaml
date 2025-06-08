@@ -38,3 +38,5 @@ cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
 hinted_handoff: 'enabled'
+
+adaptive_timeout_store_metrics: false

@@ -37,3 +37,5 @@ parallel_node_operations: true
 cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.3'
+
+adaptive_timeout_store_metrics: false
