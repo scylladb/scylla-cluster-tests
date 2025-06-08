@@ -35,3 +35,5 @@ email_subject_postfix: 'latency during upgrades'
 cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
+
+adaptive_timeout_store_metrics: false

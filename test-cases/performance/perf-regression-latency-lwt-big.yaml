@@ -56,3 +56,5 @@ backtrace_decoding: false
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'lwt@scylladb.com']
 email_subject_postfix: 'disk-wise(big dataset)'
+
+adaptive_timeout_store_metrics: false

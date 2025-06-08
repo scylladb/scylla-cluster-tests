@@ -96,9 +96,21 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
     for arg in operation.value[2]:
         assert arg in kwargs, f"Argument '{arg}' is required for operation {operation.name}"
         args[arg] = kwargs[arg]
-    timeout, load_metrics = operation.value[1](node_info_service=NodeLoadInfoServices().get(node), **args)
+
+    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+
+    if store_metrics:
+        metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
+
+    timeout, load_metrics = operation.value[1](node_info_service=metrics, **args)
     load_metrics = load_metrics | TestInfoServices.get(node)
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
+
     start_time = time.time()
+
     timeout_occurred = False
     try:
         yield timeout
@@ -113,7 +125,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
             timeout_occurred = True
             SoftTimeoutEvent(operation=operation.name, soft_timeout=timeout, duration=duration).publish_or_dump()
         try:
-            if load_metrics:
+            if load_metrics and store_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # noqa: BLE001
