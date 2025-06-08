@@ -11,12 +11,15 @@ availability_zone: 'a,b,c'
 n_db_nodes: 6
 n_loaders: 3
 
+protected_db_nodes: [1,]
+
 instance_type_db: 'i4i.4xlarge'
 # Seems the c5.xlarge type is small for this load - I receive OOM on 2 loaders
 instance_type_loader: 'c6i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '027'
+nemesis_selector: 'not full_cluster_restart'
 
 user_prefix: 'longevity-tls-50gb-3d'
 
@@ -35,3 +38,7 @@ use_dns_names: true
 # enable vector.dev logging for all tier1
 # TODO: remove this when vector.dev logging is enabled by default
 logs_transport: 'vector'
+
+teardown_validators:
+   protected_db_nodes_memory:
+     enabled: true
