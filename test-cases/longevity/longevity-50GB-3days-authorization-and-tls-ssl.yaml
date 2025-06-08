@@ -32,3 +32,7 @@ authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
 use_dns_names: true
+
+# enable vector.dev logging for all tier1
+# TODO: remove this when vector.dev logging is enabled by default
+logs_transport: 'vector'

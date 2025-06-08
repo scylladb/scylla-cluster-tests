@@ -23,3 +23,7 @@ gemini_log_cql_statements: false
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i4i.16xlarge'
+
+# enable vector.dev logging for all tier1
+# TODO: remove this when vector.dev logging is enabled by default
+logs_transport: 'vector'
