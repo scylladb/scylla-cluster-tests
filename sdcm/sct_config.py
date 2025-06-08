@@ -2122,7 +2122,8 @@ class SCTConfiguration(dict):
                         f" Got error: {repr(exp)}, on item '{param}'") from exp
 
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
-        if (self.get("simulated_regions") or 0) > 1 or (self.get("simulated_racks") or 0) > 1:
+        num_of_db_nodes = sum([int(i) for i in str(self.get("n_db_nodes") or 0).split(" ")])
+        if (self.get("simulated_regions") or 0) > 1 or (self.get("simulated_racks") or 0) > 1 and num_of_db_nodes > 1 and cluster_backend != "docker":
             if snitch := self.get("endpoint_snitch"):
                 assert snitch.endswith("GossipingPropertyFileSnitch"), \
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
