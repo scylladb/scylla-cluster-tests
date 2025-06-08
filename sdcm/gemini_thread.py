@@ -25,6 +25,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.reporting.tooling_reporter import GeminiVersionReporter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -174,6 +175,13 @@ class GeminiStressThread(DockerBasedStressThread):
         LOGGER.debug("gemini local log: %s", log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
+        try:
+            prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
+            reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
+
         with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
             try:
                 publisher.event_id = gemini_stress_event.event_id
