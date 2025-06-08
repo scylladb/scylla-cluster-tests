@@ -1,3 +1,4 @@
+import json
 import logging
 from functools import lru_cache
 
@@ -27,6 +28,7 @@ class ToolReporterBase():
         self.argus_client = argus_client
         self.additional_data = None
         self.version: str | None = None
+        self.data: str | None = None
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -105,6 +107,47 @@ class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
     def __init__(self, driver_version: str, runner: CommandRunner, command_prefix: str = None, argus_client: ArgusSCTClient = None) -> None:
         super().__init__(runner, command_prefix, argus_client)
         self.version = driver_version
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class GeminiVersionReporter(ToolReporterBase):
+    """
+    Reports Gemini and scylla gocql driver versions used in SCT.
+    """
+    # pylint: disable=too-few-public-methods,attribute-defined-outside-init
+    TOOL_NAME = "gemini"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} --version-json")
+        LOGGER.debug("%s: Collected gemini version output:\n%s", self, output.stdout)
+        version_info = json.loads(output.stdout)
+        LOGGER.debug("Result:\n%s", version_info)
+
+        s_b_info = version_info.get("gemini", {})
+        self.version = f"{s_b_info.get('version', '#FAILED_CHECK_LOGS')}"
+        self.date = s_b_info.get('commit_date')
+        self.revision_id = s_b_info.get('commit_sha')
+
+        if driver_details := version_info.get("scylla-driver", {}):
+            GeminiGoCqlDriverVersionReporter(
+                driver_version=driver_details.get('version'),
+                date=driver_details.get("commit_date"),
+                revision_id=driver_details.get("commit_sha"),
+                argus_client=self.argus_client
+            ).report()
+
+
+class GeminiGoCqlDriverVersionReporter(ToolReporterBase):
+    # pylint: disable=too-few-public-methods,attribute-defined-outside-init
+    TOOL_NAME = "gemini-gocql-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
 
     def _collect_version_info(self) -> None:
         pass
