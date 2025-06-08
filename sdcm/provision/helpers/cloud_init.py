@@ -15,6 +15,7 @@ import logging
 from sdcm.provision.provisioner import VmInstance
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +24,8 @@ class CloudInitError(Exception):
     pass
 
 
+@retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError, ),
+          message="waiting for cloud-init to complete")
 def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance):
     """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok.
     """
