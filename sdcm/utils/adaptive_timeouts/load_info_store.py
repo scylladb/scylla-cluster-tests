@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import time
-import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 from functools import cached_property
@@ -26,8 +25,6 @@ from dataclasses import dataclass
 import yaml
 from cachetools import cached, TTLCache
 from argus.client.generic_result import StaticGenericResultTable, ColumnMetadata, ResultType, Status
-
-from sdcm.es import ES
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -206,59 +203,6 @@ class AdaptiveTimeoutStore(metaclass=Singleton):
 
     def get(self, operation: str | None, timeout_occurred: bool = False):
         pass
-
-
-class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
-    """AdaptiveTimeoutStore implementation backed by Elasticsearch."""
-
-    def __init__(self):
-        self._index = "sct-adaptive-timeouts"
-
-    @cached_property
-    def _es(self):
-        return ES()
-
-    def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
-              timeout_occurred: bool):
-        body = metrics
-        body["test_id"] = TestConfig.test_id()
-        body["end_time"] = datetime.utcfromtimestamp(time.time())
-        body["operation"] = operation
-        body["duration"] = duration
-        body["timeout"] = timeout
-        body["timeout_occurred"] = timeout_occurred
-        load_id = str(uuid.uuid4())
-        LOGGER.debug("Storing adaptive timeout info: %s=%s", load_id, body)
-        if not self._es:
-            LOGGER.debug("ESAdaptiveTimeoutStore is not initialized, skipping store")
-            return
-
-        self._es.create(index=self._index, id=load_id, document=body)
-
-    def get(self, operation: str | None, timeout_occurred: bool | None = None):
-        """Get adaptive timeout info from ES.
-
-        Example usage:
-            >>> from sdcm.utils.adaptive_timeouts.load_info_store import ESAdaptiveTimeoutStore
-            >>> from sdcm.utils.adaptive_timeouts import Operations
-            >>> ESAdaptiveTimeoutStore().get(operation=Operations.DECOMMISSION.name)
-        """
-        if not self._es:
-            return []
-        filters = []
-        if operation is not None:
-            filters.append({"match": {"operation": operation}})
-        if timeout_occurred is not None:
-            filters.append({"match": {"timeout_occurred": timeout_occurred}})
-        query = {
-            "query": {
-                "bool": {
-                    "must": filters
-                }
-            }
-        }
-        res = self._es.search(index=self._index, body=query)
-        return [hit["_source"] for hit in res["hits"]["hits"]]
 
 
 @dataclass
