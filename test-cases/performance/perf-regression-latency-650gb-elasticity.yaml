@@ -36,3 +36,5 @@ use_hdrhistogram: true
 email_subject_postfix: 'elasticity test'
 nemesis_double_load_during_grow_shrink_duration: 30
 parallel_node_operations: true
+
+adaptive_timeout_store_metrics: false

@@ -122,7 +122,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
             timeout_occurred = True
             SoftTimeoutEvent(operation=operation.name, soft_timeout=timeout, duration=duration).publish_or_dump()
         try:
-            if load_metrics:
+            if load_metrics and store_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # noqa: BLE001
