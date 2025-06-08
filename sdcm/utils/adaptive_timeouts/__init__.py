@@ -170,9 +170,9 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
     args = {arg: kwargs[arg] for arg in required_arg_names}
     store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
     if store_metrics:
-        metrics = {}
-    else:
         metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
     if tablet_sensitive_op:
         args['tablets_enabled'] = tablets_enabled
     result = timeout_func(node_info_service=metrics, **args)
