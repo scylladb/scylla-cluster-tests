@@ -96,6 +96,15 @@ Number list of monitor nodes in multiple data centers
 **type:** int_or_space_separated_ints
 
 
+## **protected_db_nodes** / SCT_PROTECTED_DB_NODES
+
+List of protected db nodes indexes, that won't be select by nemesis
+
+**default:** N/A
+
+**type:** int_list_or_eval
+
+
 ## **intra_node_comm_public** / SCT_INTRA_NODE_COMM_PUBLIC
 
 If True, all communication between nodes are via public addresses
