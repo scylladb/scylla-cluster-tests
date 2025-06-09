@@ -13,6 +13,15 @@ rack_aware_loader: true
 availability_zone: 'a,b,c'
 n_db_nodes: '6 6'
 n_loaders: '2 1'
+<<<<<<< HEAD
+||||||| parent of 614dec680 (fix(test): fix missing monitor nodes)
+
+rack_aware_loader: true
+=======
+n_monitor_nodes: 1
+
+rack_aware_loader: true
+>>>>>>> 614dec680 (fix(test): fix missing monitor nodes)
 region_aware_loader: true
 n_monitor_nodes: 1
 

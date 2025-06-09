@@ -10,6 +10,15 @@ rack_aware_loader: true
 n_db_nodes: '15 15 15'
 instance_type_db: 'i4i.large'
 n_loaders: '2 2 2'
+<<<<<<< HEAD
+||||||| parent of 614dec680 (fix(test): fix missing monitor nodes)
+
+rack_aware_loader: true
+=======
+n_monitor_nodes: 1
+
+rack_aware_loader: true
+>>>>>>> 614dec680 (fix(test): fix missing monitor nodes)
 region_aware_loader: true
 n_monitor_nodes: 1
 
