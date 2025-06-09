@@ -1083,6 +1083,8 @@ class Nemesis:
         self.current_disruption = label
 
     def disrupt_destroy_data_then_repair(self):
+        """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
+        self.run_repair_on_nodes(self.cluster.data_nodes)
         self._destroy_data_and_restart_scylla()
         # try to save the node
         self.repair_nodetool_repair()
