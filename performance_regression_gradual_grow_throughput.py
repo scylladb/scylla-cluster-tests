@@ -1,10 +1,11 @@
 import pathlib
 import time
 from enum import Enum
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import json
-from typing import NamedTuple
+from dataclasses import dataclass, replace
+from typing import List, Union
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events import Severity
@@ -19,16 +20,22 @@ class CSPopulateDistribution(Enum):
     UNIFORM = "uniform"
 
 
-class Workload(NamedTuple):
+@dataclass
+class Workload:
     workload_type: str
     cs_cmd_tmpl: list
     cs_cmd_warm_up: list | None
-    num_threads: int
+    num_threads: Union[List[int], int]
     throttle_steps: list
     preload_data: bool
     drop_keyspace: bool
     wait_no_compactions: bool
     step_duration: str
+
+    def __post_init__(self):
+        if isinstance(self.num_threads, int):
+            # If only one thread count is provided, convert it to a list
+            self.num_threads = [self.num_threads]
 
 
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
@@ -188,6 +195,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
             return latency_results
+        return {step: {"step": step, "legend": "", "cycles": []}}
 
     def run_step(self, stress_cmds, current_throttle, num_threads, step_duration):
         results = []
@@ -214,9 +222,70 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f'DROP KEYSPACE IF EXISTS {"keyspace1"};')
 
+    @staticmethod
+    def _step_names(step_names, total_counts):
+        """
+        Helper function to generate names based on throttle_steps and num_threads.
+        Example:
+            step_names = ["100", "unthrottled", "unthrottled"]
+            total_counts = {"unthrottled": 2, "100": 1}
+            Result: ["100", "unthrottled_1", "unthrottled_2"]
+        """
+        step_seen = {}
+        result = []
+        for name in step_names:
+            step_seen[name] = step_seen.get(name, 0) + 1
+            if total_counts[name] > 1:
+                result.append(f"{name}_{step_seen[name]}")
+            else:
+                result.append(name)
+        return result
+
+    def get_sequential_throttle_steps(self, workload: Workload):
+        """
+        Returns a list of throttle step names based on throttle_steps and num_threads.
+        - If all num_threads are the same, use throttle_step (with count if repeated).
+        - If num_threads are unique per step, use '<throttle_step>_<num_threads>_threads'.
+          If this combination repeats, append a count.
+        """
+        throttle_steps = workload.throttle_steps
+        num_threads = workload.num_threads
+
+        if len(set(num_threads)) == 1:
+            # All thread counts are the same, only add count for repeated steps
+            step_names = throttle_steps
+        else:
+            # Each step has a unique thread count, use <throttle_step>_<num_threads>_threads
+            step_names = [f"{step}_{threads}_threads" for step, threads in zip(throttle_steps, num_threads)]
+
+        total_counts = Counter(step_names)
+
+        return self._step_names(step_names, total_counts)
+
+    @staticmethod
+    def update_num_threads_for_steps(workload: Workload):
+        """
+        Ensures that the `num_threads` list in the workload matches the length of `throttle_steps`.
+        If only one thread count is provided but multiple throttle steps exist, the single value is repeated
+        to match the number of steps.
+
+        Args:
+            workload (Workload): The workload namedtuple containing `num_threads` and `throttle_steps`.
+
+        Returns:
+            Workload: A new Workload instance with an updated `num_threads` list if needed.
+        """
+        if len(workload.num_threads) == 1 and len(workload.throttle_steps) > 1:
+            workload = replace(workload, num_threads=[workload.num_threads[0]] * len(workload.throttle_steps))
+        return workload
+
+    # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
+        workload = self.update_num_threads_for_steps(workload=workload)
+
         if workload.cs_cmd_warm_up is not None:
-            self.warmup_cache(workload.cs_cmd_warm_up, workload.num_threads)
+            # Use the maximum thread count for warmup to ensure the cache is warmed up with the highest level of concurrency
+            self.warmup_cache(workload.cs_cmd_warm_up, max(workload.num_threads))
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
@@ -225,18 +294,20 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=True)
         total_summary = {}
 
-        for throttle_step in workload.throttle_steps:
-            self.log.info("Run cs command with rate: %s Kops", throttle_step)
+        sequential_steps = self.get_sequential_throttle_steps(workload)
+        for throttle_step, num_threads, current_throttle_step in zip(workload.throttle_steps, workload.num_threads, sequential_steps):
+            self.log.info("Run cs command with rate: %s Kops; threads: %s; step name: %s", throttle_step, num_threads,
+                          current_throttle_step)
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
-            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
-                                                      cycle_name=throttle_step))(self.run_step))
+            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
+                                                      cycle_name=current_throttle_step))(self.run_step))
             results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
-                                  num_threads=workload.num_threads, step_duration=workload.step_duration)
+                                  num_threads=num_threads, step_duration=workload.step_duration)
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details(scylla_conf=True)
-            summary_result = self.check_latency_during_steps(step=throttle_step)
-            summary_result[throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
+            summary_result = self.check_latency_during_steps(step=current_throttle_step)
+            summary_result[current_throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
             if workload.drop_keyspace:
                 self.drop_keyspace()
