@@ -204,9 +204,9 @@ class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
 
 class QAonlyInstancesTimeDistributionReport(InstancesTimeDistributionReport):
     def _is_user_be_skipped(self, instance):
-        return instance.owner == "qa" or instance.owner not in self.qa_users
+        return instance.owner in ["qa", "QA"] or instance.owner not in self.qa_users
 
 
 class NonQaInstancesTimeDistributionReport(InstancesTimeDistributionReport):
     def _is_user_be_skipped(self, instance):
-        return instance.owner == "qa" or instance.owner in self.qa_users
+        return instance.owner in ["qa", "QA"] or instance.owner in self.qa_users
