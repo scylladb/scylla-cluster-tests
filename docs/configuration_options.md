@@ -2573,7 +2573,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 ## **perf_gradual_threads** / SCT_PERF_GRADUAL_THREADS
 
-Threads amount of c-s load for gradual performance test per sub-test. Example: {'read': 100, 'write': 200, 'mixed': 300}
+Threads amount of stress load for gradual performance test per sub-test. Example: {'read': 100, 'write': [200, 300], 'mixed': 300}
 
 **default:** N/A
 
