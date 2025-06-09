@@ -1299,8 +1299,9 @@ class SCTConfiguration(dict):
             multiple commands can passed as a list"""),
 
         dict(name="perf_gradual_threads", env="SCT_PERF_GRADUAL_THREADS", type=dict_or_str,
-             help="Threads amount of c-s load for gradual performance test per sub-test. "
-                  "Example: {'read': 100, 'write': 200, 'mixed': 300}"),
+             help="Threads amount of stress load for gradual performance test per sub-test. "
+                  "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}"),
+
         dict(name="perf_gradual_throttle_steps", env="SCT_PERF_GRADUAL_THROTTLE_STEPS", type=dict_or_str,
              help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}"),
 
@@ -2223,6 +2224,37 @@ class SCTConfiguration(dict):
                     int(i) for i in str(data_nodes_num).split()]
                 assert len(zero_nodes_num) == len(
                     data_nodes_num), "Config of zero token nodes is not equal config of data nodes for multi dc"
+
+        # 21 validate performance throughput parameters
+        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
+            for workload, params in performance_throughput_params.items():
+                if not isinstance(params, list):
+                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter")
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(f"Invalid thread count type for '{workload}': {thread_count} "
+                                         f"(type: {type(thread_count).__name__})")
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                                     f"or a list with the same length as perf_gradual_throttle_steps for {workload}")
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path('defaults/docker_images'))
