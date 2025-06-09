@@ -1877,10 +1877,12 @@ class Nemesis:
         Usually retrieved from the test yaml by using the "nemesis_selector", more about nemesis_selector behaviour in sct_config.py
         """
         self.log.debug(f'nemesis_seed to be used is {self.nemesis_seed}')
-        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self._disruption_list_names}")
+        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {[nemesis.__name__ for nemesis in disruption_list]}")
         nemesis_multiply_factor = nemesis_multiply_factor or self.cluster.params.get('nemesis_multiply_factor') or 1
-        random.Random(self.nemesis_seed).shuffle(disruption_list * nemesis_multiply_factor)
-        self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
+        multipled_disruption_list = disruption_list * nemesis_multiply_factor
+        random.Random(self.nemesis_seed).shuffle(multipled_disruption_list)
+        self.log.info(f"List of Nemesis to execute: {[nemesis.__name__ for nemesis in multipled_disruption_list]}")
+        return multipled_disruption_list
 
     @cached_property
     def infinite_cycle(self):
@@ -5635,7 +5637,7 @@ class SisyphusMonkey(Nemesis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -5750,7 +5752,7 @@ class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
             'disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation',
             'disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation',
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -6078,7 +6080,7 @@ class ScyllaCloudLimitedChaosMonkey(Nemesis):
             'disrupt_soft_reboot_node',
             'disrupt_truncate'
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
@@ -6094,7 +6096,7 @@ class MdcChaosMonkey(Nemesis):
             'disrupt_no_corrupt_repair',
             'disrupt_nodetool_decommission'
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -6249,7 +6251,7 @@ class DisruptKubernetesNodeThenReplaceScyllaNode(Nemesis):
             'disrupt_drain_kubernetes_node_then_replace_scylla_node',
             'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -6281,7 +6283,7 @@ class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
             'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
             'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -6299,7 +6301,7 @@ class K8sSetMonkey(Nemesis):
             'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
             'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
@@ -6490,7 +6492,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_mgmt_backup_specific_keyspaces',
             'disrupt_mgmt_backup',
         ])
-        self.shuffle_list_of_disruptions(self.disruptions_list)
+        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
         self.call_next_nemesis()
