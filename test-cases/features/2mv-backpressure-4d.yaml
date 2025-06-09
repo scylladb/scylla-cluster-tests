@@ -3,7 +3,7 @@ test_duration: 6480
 prepare_write_cmd: "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=1)' cl=QUORUM n=250000000 -mode cql3 native -rate threads=200"
 stress_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=1)' cl=QUORUM duration=5760m -mode cql3 native -pop seq=250000000..500000000 -rate threads=200",
             "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(mv_p_read1=1,mv_p_read2=1)' cl=QUORUM duration=5760m -mode cql3 native -pop seq=1..250000000 -rate threads=10"]
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 4
 n_monitor_nodes: 1
 
