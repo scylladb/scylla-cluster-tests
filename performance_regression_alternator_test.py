@@ -408,7 +408,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         stress_multiplier = 1
 
-        cmd_add_params = " -target 20000 -p maxexecutiontime=2400 -p operationcount=20000000"
+        cmd_add_params = " -target 15000 -p maxexecutiontime=2400 -p operationcount=20000000"
         cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=40000000"
 
         def run_read_cql():
@@ -464,6 +464,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='with-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload='throughput', row_name = 'alternator-always-lwt')
 
+        self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
+                                    alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+
+        self.create_cql_ks_and_table(field_number=10)
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+
         for func in [
             run_read_cql,
             run_read_alternator_no_lwt,
@@ -478,15 +486,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             run_throughput_alternator_no_lwt,
             run_throughput_alternator_with_lwt
         ]:
-            self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
-                                        alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-
-            self.drop_cql_table()
-            self.create_cql_ks_and_table(field_number=10)
-            self.run_fstrim_on_all_db_nodes()
-            self.preload_data()
-
             self.wait_no_compactions_running(n=120)
             func()
 
