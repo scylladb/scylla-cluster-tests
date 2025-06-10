@@ -41,7 +41,6 @@ k8s_use_chaos_mesh: true
 k8s_minio_storage_size: '60Gi'
 
 k8s_n_monitor_nodes: 0
-n_monitor_nodes: 1
 # NOTE: if we do not specify 'k8s_n_loader_pods_per_cluster' then value of the 'n_loaders' is used
 n_loaders: 1
 n_db_nodes: 4

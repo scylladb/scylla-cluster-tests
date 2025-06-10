@@ -5,6 +5,5 @@ stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'rep
 
 n_db_nodes: 2
 n_loaders: 1
-n_monitor_nodes: 1
 
 user_prefix: 'gce-multi-dc-shutdown-1-7'
