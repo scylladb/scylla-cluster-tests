@@ -40,7 +40,6 @@ alternator_write_isolation: 'forbid'
 
 n_db_nodes: 3
 n_loaders: 3
-n_monitor_nodes: 1
 
 instance_type_db: 'i3.2xlarge'
 instance_type_loader: 'c5.2xlarge'

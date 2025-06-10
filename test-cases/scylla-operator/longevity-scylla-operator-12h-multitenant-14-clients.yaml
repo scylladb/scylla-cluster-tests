@@ -24,7 +24,6 @@ k8s_n_scylla_pods_per_cluster: 3
 instance_type_db: 'i4i.4xlarge'
 
 # NOTE: 1 (one) monitoring node per tenant
-n_monitor_nodes: 1
 
 n_loaders: 14
 k8s_n_loader_pods_per_cluster: 1
