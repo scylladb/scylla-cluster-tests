@@ -648,14 +648,15 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                    "OSS format: <4.3> Enterprise format: <enterprise-2021.1>. Mutually exclusive with --branch.")
 @click.option('-r', '--region', "regions",
               type=CloudRegion(),
-              help="Cloud region to query images in. Defaults to eu-west-1",
-              default=["eu-west-1"],
+              help="Cloud region to query images in",
               multiple=True)
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
               help="architecture of the AMI (default: x86_64)")
 def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
+    if len(regions) == 0:
+        regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
