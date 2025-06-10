@@ -60,7 +60,7 @@ dev = [
     "autopep8==2.3.1",
     "pre-commit==4.0.1",
     "pycodestyle==2.12.0",
-    "ruff==0.4.7",
+    "ruff==0.11.13",
 ]
 [tool.uv]
 package = false
@@ -76,18 +76,19 @@ lint.select = [
     "F541",
     "PIE",
     "B006",
+    "PLW", # mainly for PLW0211
 ]
-exclude = ["argus/"]
 lint.ignore = ["E501", "PLR2004"]
+
+lint.preview = true
+lint.explicit-preview-rules = true
+exclude = ["argus/"]
 
 target-version = "py310"
 
 force-exclude = true
 line-length = 240
 respect-gitignore = true
-
-lint.preview = true
-lint.explicit-preview-rules = true
 
 [tool.ruff.lint.pylint]
 max-args = 12
