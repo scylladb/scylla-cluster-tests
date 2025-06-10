@@ -5032,6 +5032,11 @@ class Nemesis:
         if self.cluster.nemesis_count > 1 and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/21695", params=self.tester.params):
             raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
 
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
+                raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
+
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
 
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
@@ -5068,6 +5073,11 @@ class Nemesis:
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
+
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
+                raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
 
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
