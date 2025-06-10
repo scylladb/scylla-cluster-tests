@@ -12,7 +12,6 @@ run_fullscan:
   - '{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}'
 n_db_nodes: 6
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 azure_instance_type_db: 'Standard_L16s_v3'

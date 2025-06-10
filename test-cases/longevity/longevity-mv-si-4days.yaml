@@ -12,7 +12,6 @@ run_fullscan: ['{"mode": "table", "ks_cf": "random", "interval": 15}']
 
 n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.8xlarge'
 gce_instance_type_db: 'n2-highmem-64'

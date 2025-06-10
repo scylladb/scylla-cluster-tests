@@ -8,7 +8,6 @@ stress_cmd: ["cql-stress-cassandra-stress write cl=QUORUM duration=240m -schema 
 
 n_db_nodes: 6
 n_loaders: 1
-n_monitor_nodes: 1
 seeds_num: 3
 simulated_racks: 3
 

@@ -5,7 +5,6 @@ instance_type_loader: 'c6i.2xlarge'
 
 n_db_nodes: 3
 n_loaders: 4
-n_monitor_nodes: 1
 
 mgmt_prepare_snapshot_size: 2048  # GB
 

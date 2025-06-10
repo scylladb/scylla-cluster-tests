@@ -15,7 +15,6 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replicatio
 availability_zone: 'a'
 n_db_nodes: 3
 n_loaders: 2
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.8xlarge'
 gce_instance_type_db: 'n2-highmem-32'

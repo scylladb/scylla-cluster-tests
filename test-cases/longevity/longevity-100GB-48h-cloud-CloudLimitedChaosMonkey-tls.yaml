@@ -7,7 +7,6 @@ run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", 
 
 n_db_nodes: 6
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
 
