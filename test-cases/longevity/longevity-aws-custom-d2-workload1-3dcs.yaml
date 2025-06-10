@@ -1,5 +1,4 @@
 test_duration: 255
-n_monitor_nodes: 1
 n_db_nodes: '3 3 3'
 n_loaders: '3 1 1'
 rack_aware_loader: true

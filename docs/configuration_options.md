@@ -91,7 +91,7 @@ Number list of loader nodes in multiple data centers
 
 Number list of monitor nodes in multiple data centers
 
-**default:** N/A
+**default:** 1
 
 **type:** int_or_space_separated_ints
 

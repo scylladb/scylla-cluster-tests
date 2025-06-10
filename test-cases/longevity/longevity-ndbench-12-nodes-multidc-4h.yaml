@@ -14,7 +14,6 @@ rack_aware_loader: true
 region_name: 'us-east-1 eu-west-1'
 n_db_nodes: '6 6'
 n_loaders: '2 2'
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c6i.4xlarge'

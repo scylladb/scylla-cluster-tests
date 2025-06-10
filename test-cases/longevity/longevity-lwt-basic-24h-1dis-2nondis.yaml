@@ -5,7 +5,6 @@ stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(se
 
 n_db_nodes: 4
 n_loaders: 3
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 
