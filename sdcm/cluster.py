@@ -353,7 +353,7 @@ class BaseNode(AutoSshContainerMixin):
             if self.parent_cluster.node_type == "scylla-db":
                 if self._is_node_ready_run_scylla_commands():
                     rack_names = self.parent_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[self])
-                    self._node_rack = list(rack_names.values())[0]
+                    self._node_rack = next(iter(rack_names.values()), None)
             else:
                 if not (rack_names := self.test_config.tester_obj().rack_names_per_datacenter_and_rack_idx_map):
                     return self._node_rack
