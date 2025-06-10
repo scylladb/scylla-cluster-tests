@@ -5,9 +5,6 @@ def call(String status, String context, String description){
 		pullRequest.createStatus(status: status,
 			context: context,
 			description: description,
-			targetUrl: "${env.JOB_URL}/workflow-stage")
-	}
-	if (status == 'failure') {
-		currentBuild.result = 'FAILURE'
+			targetUrl: "${env.BUILD_URL}pipeline-overview")
 	}
 }
