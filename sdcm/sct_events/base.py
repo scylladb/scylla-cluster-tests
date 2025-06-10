@@ -477,7 +477,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
                 # 2021-04-06 13:03:28  ...
                 event_time = " ".join(splitted_line[:2])
 
-            self.source_timestamp = dateutil.parser.parse(event_time).timestamp()
+            self.source_timestamp = dateutil.parser.parse(event_time).replace(tzinfo=timezone.utc) .timestamp()
         except ValueError:
             pass
         self.event_timestamp = time.time()
