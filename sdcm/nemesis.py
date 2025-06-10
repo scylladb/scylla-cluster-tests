@@ -5397,7 +5397,7 @@ class Nemesis:
             # Pass only active nodes for connection. Workaround for issue:
             # https://github.com/scylladb/python-driver/issues/484
             alive_cluster_nodes = [node for node in self.cluster.nodes if node != self.target_node]
-            with self.cluster.cql_connection_patient(working_node, nodes_for_wlrr=alive_cluster_nodes) as session:
+            with self.cluster.cql_connection_patient(working_node, whitelist_nodes=alive_cluster_nodes) as session:
                 LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
                 stmt = SimpleStatement(f"SELECT * from {keyspace_name}.{table_name}",
                                        consistency_level=ConsistencyLevel.QUORUM)

@@ -3654,7 +3654,7 @@ class BaseCluster:
 
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_context=None, connect_timeout=100, verbose=True,
-                       nodes_for_wlrr: list[BaseNode] | None = None):
+                       whitelist_nodes: list[BaseNode] | None = None):
         """
         Establishes a CQL connection to a specified node in the cluster.
 
@@ -3669,7 +3669,7 @@ class BaseCluster:
             ssl_context (ssl.SSLContext, optional): The SSL context for secure connections. Defaults to None.
             connect_timeout (int, optional): The timeout for establishing the connection, in seconds. Defaults to 100.
             verbose (bool, optional): Whether to enable verbose logging. Defaults to True.
-            nodes_for_wlrr (list[BaseNode] | None, optional): A list of nodes to use for the WhiteListRoundRobinPolicy. Defaults to None.
+            whitelist_nodes (list[BaseNode] | None, optional): A list of nodes to use for the WhiteListRoundRobinPolicy. Defaults to None.
 
         Returns:
             Session: A CQL session object for interacting with the cluster.
@@ -3682,7 +3682,7 @@ class BaseCluster:
             wlrr = None
             node_ips = []
         else:
-            node_ips = self.get_node_cql_ips(nodes=nodes_for_wlrr)
+            node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
             wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
@@ -3718,7 +3718,7 @@ class BaseCluster:
                                user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_context=None, connect_timeout=100, verbose=True,
-                               nodes_for_wlrr: list[BaseNode] | None = None):
+                               whitelist_nodes: list[BaseNode] | None = None):
         """
         Establishes a CQL connection to a specified node, retrying until successful or until the timeout is exceeded.
 
@@ -3733,7 +3733,7 @@ class BaseCluster:
         - ssl_context (ssl.SSLContext, optional): The SSL context for secure connections. Defaults to None.
         - connect_timeout (int, optional): The maximum time (in seconds) to wait for a connection. Defaults to 100.
         - verbose (bool, optional): Whether to enable verbose logging. Defaults to True.
-        - nodes_for_wlrr (list[BaseNode] | None, optional): A list of nodes for white-label round-robin load balancing. Defaults to None.
+        - whitelist_nodes (list[BaseNode] | None, optional): A list of nodes for white-label round-robin load balancing. Defaults to None.
 
         Returns:
         - A connection object after successfully establishing a connection.
