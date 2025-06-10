@@ -4,7 +4,6 @@ stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM n=20000000 -schema 're
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c7i.large'

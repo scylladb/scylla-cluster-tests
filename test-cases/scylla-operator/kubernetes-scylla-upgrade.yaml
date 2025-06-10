@@ -8,7 +8,6 @@ n_db_nodes: 3
 k8s_n_scylla_pods_per_cluster: 3
 
 n_loaders: 1
-n_monitor_nodes: 1
 
 use_mgmt: false
 

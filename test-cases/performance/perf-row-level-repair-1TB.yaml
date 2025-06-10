@@ -13,7 +13,6 @@ stress_cmd: "scylla-bench -workload=sequential -mode=write -max-rate=300 -replic
 
 n_db_nodes: 3
 n_loaders: 8
-n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 instance_type_loader: 'c4.2xlarge'

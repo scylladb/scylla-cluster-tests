@@ -9,7 +9,6 @@ stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=1440m -mode cql3 nat
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 60}']
 n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c5.2xlarge'

@@ -7,7 +7,6 @@ stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=302004
 instance_type_db: 'i4i.2xlarge'
 n_db_nodes: '3 3'
 n_loaders: '1 1'
-n_monitor_nodes: 1
 region_aware_loader: true
 num_nodes_to_rollback: 2   # max is n_db_nodes -1, after upgrading 4 nodes last node can't be rollback
 
