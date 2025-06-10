@@ -3436,7 +3436,7 @@ class BaseCluster:
         return rack_names_mapping
 
     @staticmethod
-    def get_rack_names_per_datacenter_from_rack_mapping(self, rack_mapping) -> dict[str, list[str]]:
+    def get_rack_names_per_datacenter_from_rack_mapping(rack_mapping) -> dict[str, list[str]]:
         by_region_rack_names = defaultdict(list)
         for (region, _), v in rack_mapping.items():
             by_region_rack_names.setdefault(region, []).append(v)
