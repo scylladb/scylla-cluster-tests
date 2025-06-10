@@ -2,7 +2,6 @@ test_duration: 360
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 prepare_write_cmd:
   # NOTE: --duration in these commands is number of rows that will be written.

@@ -4,7 +4,6 @@ stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(str
              ]
 
 n_loaders: 1
-n_monitor_nodes: 1
 n_db_nodes: 1
 
 instance_type_runner: c6i.2xlarge

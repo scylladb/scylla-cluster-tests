@@ -11,7 +11,6 @@ stress_read_cmd: [
 
 n_db_nodes: 5
 n_loaders: 3
-n_monitor_nodes: 1
 
 round_robin: true
 instance_type_db: 'i4i.2xlarge'

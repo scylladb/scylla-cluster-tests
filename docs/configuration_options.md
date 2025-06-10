@@ -91,7 +91,7 @@ Number list of loader nodes in multiple data centers
 
 Number list of monitor nodes in multiple data centers
 
-**default:** N/A
+**default:** 1
 
 **type:** int_or_list
 
@@ -1066,6 +1066,15 @@ Seed number for gemini command
 **default:** N/A
 
 **type:** int
+
+
+## **gemini_log_cql_statements** / SCT_GEMINI_LOG_CQL_STATEMENTS
+
+Log CQL statements to file
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **gemini_table_options** / SCT_GEMINI_TABLE_OPTIONS
@@ -2746,7 +2755,7 @@ Run post behavior actions in sct teardown step
 
 Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2764,7 +2773,7 @@ Failure/post test behavior, i.e. what to do with the loader cloud instances at t
 
 Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2773,7 +2782,7 @@ Failure/post test behavior, i.e. what to do with the monitor cloud instances at 
 
 Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.<br><br>'destroy' - Destroy k8s cluster and credentials (default)<br>'keep' - Keep k8s cluster running and leave credentials alone<br>'keep-on-failure' - Keep k8s cluster if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -3340,6 +3349,6 @@ configuration for setup up kafka connectors
 
 Run scylla-doctor in artifact tests
 
-**default:** N/A
+**default:** True
 
 **type:** boolean

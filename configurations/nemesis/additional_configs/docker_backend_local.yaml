@@ -13,7 +13,6 @@ user_prefix: 'longevity-1gb-1h-nemesis'
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 seeds_num: 3
 
 nemesis_interval: 3
