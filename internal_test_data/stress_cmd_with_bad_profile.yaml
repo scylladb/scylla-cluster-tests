@@ -2,7 +2,6 @@ test_duration: 5
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 user_prefix: 'fruch-testing'
 db_type: scylla
 instance_type_db: 'i4i.large'

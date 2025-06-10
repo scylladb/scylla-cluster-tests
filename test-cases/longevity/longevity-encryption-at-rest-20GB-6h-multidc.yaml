@@ -12,7 +12,6 @@ round_robin: true
 rack_aware_loader: true
 n_db_nodes: '3 3'
 n_loaders: '1 1'
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.xlarge'
 
