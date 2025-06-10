@@ -630,8 +630,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         dc_nodes = {}
         for node in nodes:
             dc_nodes.setdefault(node.dc_idx, []).append(node)
-        for dc in dc_nodes:  # pylint: disable=consider-using-dict-items
-            random.shuffle(dc_nodes[dc])
+        for dc_node_list in dc_nodes.values():
+            random.shuffle(dc_node_list)
 
         return [x for x in chain.from_iterable(zip_longest(*dc_nodes.values())) if x]
 

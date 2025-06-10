@@ -315,16 +315,16 @@ if __name__ == "__main__":
                             default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
     arg_parser.add_argument("--verbose", action="store_true",
                             help="print processing instances details",
-                            default=os.environ.get('VERBOSE', False))
+                            default=os.environ.get('VERBOSE'))
     arg_parser.add_argument("--trace", action="store_true",
                             help="trace every AWS call",
-                            default=os.environ.get('TRACE', False))
+                            default=os.environ.get('TRACE'))
     arg_parser.add_argument("--wait", type=int,
                             help="blind wait for instances to stop timeout",
-                            default=os.environ.get('WAIT', 60))
+                            default=os.environ.get('WAIT', '60'))
     arg_parser.add_argument("--dry-run", action="store_true",
                             help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN', False))
+                            default=os.environ.get('DRY_RUN'))
     arg_parser.add_argument("--default-action",
                             help="The default action when stopping an image (stop/terminate)",
                             default=os.environ.get('DEFAULT_ACTION', "terminate"))

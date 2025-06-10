@@ -7,18 +7,20 @@ lint.select = [
     "F541",
     "PIE",
     "B006",
+    "PLW", # mainly for PLW0211
 ]
 
 lint.ignore = ["E501", "PLR2004"]
+
+lint.preview = true
+lint.explicit-preview-rules = true
+exclude = ["argus/"]
 
 target-version = "py310"
 
 force-exclude = true
 line-length = 240
 respect-gitignore = true
-
-lint.preview = true
-lint.explicit-preview-rules = true
 
 [tool.ruff.lint.pylint]
 max-args = 12
