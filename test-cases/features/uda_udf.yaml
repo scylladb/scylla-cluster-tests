@@ -5,7 +5,6 @@ stress_cmd: ["cassandra-stress user profile=/tmp/c-s_uda_udf.yaml ops'(my_avg=1,
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 experimental_features:

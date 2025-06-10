@@ -3,7 +3,6 @@ test_duration: 480
 
 n_db_nodes: 3
 
-n_monitor_nodes: 1
 
 #GCE
 use_preinstalled_scylla: false  # required when using non standard instance type

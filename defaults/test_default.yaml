@@ -101,6 +101,7 @@ use_legacy_cluster_init: false
 internode_encryption: 'all'
 
 use_mgmt: true
+n_monitor_nodes: 1
 manager_prometheus_port: 5090
 scylla_mgmt_pkg: ''
 

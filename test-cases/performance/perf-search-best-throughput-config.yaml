@@ -7,7 +7,6 @@ stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema '
 
 n_db_nodes: 3
 n_loaders: 2
-n_monitor_nodes: 1
 
 num_loaders_step: 0
 stress_threads_start_num: 50
