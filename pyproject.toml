@@ -48,7 +48,7 @@ dependencies = [
     "PyYAML==6.0.1",
     "pyzmq==26.2.0",
     "questionary==2.1.0",
-    "requests==2.32.2",
+    "requests==2.32.4",
     "scylla-driver==3.29.3",
     "sortedcontainers==2.4.0",
     "ssh2-python3==1.11.1",
