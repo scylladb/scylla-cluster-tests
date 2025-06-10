@@ -5374,11 +5374,12 @@ class Nemesis:
         simulate_node_unavailability = node_operations.block_scylla_ports if use_iptables else node_operations.pause_scylla_with_sigstop
         with self.run_nemesis(node_list=self.cluster.nodes,
                               nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
+            stack.enter_context(node_operations.block_loaders_payload_for_scylla_node(
+                self.target_node, loader_nodes=self.loaders.nodes))
+            stack.callback(drop_keyspace, node=working_node)
             target_host_id = self.target_node.host_id
             stack.callback(self._remove_node_add_node, verification_node=working_node, node_to_remove=self.target_node,
                            remove_node_host_id=target_host_id)
-            stack.enter_context(node_operations.block_loaders_payload_for_scylla_node(
-                self.target_node, loader_nodes=self.loaders.nodes))
             self.tester.create_keyspace(keyspace_name, replication_factor=3)
             self.tester.create_table(name=table_name, keyspace_name=keyspace_name, key_type="bigint",
                                      columns={"name": "text"})
@@ -5410,7 +5411,10 @@ class Nemesis:
                     except (NoHostAvailable, OperationTimedOut, Unavailable) as exc:
                         self.log.debug("Query failed with error: %s as expected", exc)
 
-            with self.cluster.cql_connection_patient(working_node) as session:
+            # Pass only active nodes for connection. Workaround for issue:
+            # https://github.com/scylladb/python-driver/issues/484
+            alive_cluster_nodes = [node for node in self.cluster.nodes if node != self.target_node]
+            with self.cluster.cql_connection_patient(working_node, whitelist_nodes=alive_cluster_nodes) as session:
                 LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
                 stmt = SimpleStatement(f"SELECT * from {keyspace_name}.{table_name}",
                                        consistency_level=ConsistencyLevel.QUORUM)
