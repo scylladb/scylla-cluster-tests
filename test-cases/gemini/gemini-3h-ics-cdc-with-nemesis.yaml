@@ -2,7 +2,6 @@ test_duration: 500
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
-n_monitor_nodes: 1
 instance_type_db: 'i4i.large'
 
 user_prefix: 'ics-cdc-gemini-basic-3h'

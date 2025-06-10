@@ -7,7 +7,6 @@ stress_read_cmd:  "cassandra-stress read cl=ONE n=10000 -mode cql3 native -rate 
 
 n_db_nodes: 4
 n_loaders: 4
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 
