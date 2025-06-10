@@ -44,7 +44,7 @@ class AwsRegion:
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
         # cause import straight from common create cyclic dependency
-        from sdcm.utils.common import all_aws_regions
+        from sdcm.utils.common import all_aws_regions  # noqa: PLC0415
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
