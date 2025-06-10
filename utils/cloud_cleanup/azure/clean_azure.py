@@ -174,7 +174,7 @@ if __name__ == "__main__":
                             default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
     arg_parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction,
                             help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN', False))
+                            default=os.environ.get('DRY_RUN'))
 
     args = arg_parser.parse_args()
 
