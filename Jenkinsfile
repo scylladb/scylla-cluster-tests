@@ -95,6 +95,7 @@ pipeline {
                 script {
                     dockerLogin(params)
                     try {
+                        sh 'touch ./.git/COMMIT_EDITMSG'
                         sh './docker/env/hydra.sh pre-commit'
                         // also check the commit-messge for the rules we want
                         pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
