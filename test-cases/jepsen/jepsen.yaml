@@ -10,7 +10,6 @@ root_disk_size_db: 50
 gce_n_local_ssd_disk_db: 1
 n_db_nodes: 5
 n_loaders: 1
-n_monitor_nodes: 1
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-buster'
 use_preinstalled_scylla: false
