@@ -17,7 +17,6 @@ round_robin: true
 
 n_db_nodes: 4
 n_loaders: 4
-n_monitor_nodes: 1
 seeds_num: 2
 
 instance_type_db: 'i4i.4xlarge'

@@ -6,7 +6,6 @@ stress_cmd: [
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-16'
