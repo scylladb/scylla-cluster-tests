@@ -10,7 +10,6 @@ stress_cmd: ["cassandra-stress user profile=scylla-qa-internal/profile-d/profile
 
 n_db_nodes: 3
 n_loaders: 3
-n_monitor_nodes: 1
 availability_zone: 'a,b,c'
 
 

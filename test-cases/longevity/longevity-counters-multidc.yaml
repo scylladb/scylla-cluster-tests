@@ -7,7 +7,6 @@ stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replicati
 availability_zone: 'a,b,c'
 n_db_nodes: '3 3 3'
 n_loaders:  '1 1 1'
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 

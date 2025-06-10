@@ -12,7 +12,6 @@ stress_read_cmd: [
 
 n_db_nodes: 3
 n_loaders: 3
-n_monitor_nodes: 1
 simulated_racks: 3
 
 instance_type_db: 'i3en.2xlarge'

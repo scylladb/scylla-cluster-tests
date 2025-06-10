@@ -54,7 +54,6 @@ gce_root_disk_type_monitor: 'pd-standard'
 root_disk_size_monitor: 50
 gce_n_local_ssd_disk_monitor: 0
 
-n_monitor_nodes: 1
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 use_preinstalled_scylla: true

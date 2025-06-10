@@ -8,7 +8,6 @@ instance_type_db: 'i4i.2xlarge'
 rack_aware_loader: true
 n_db_nodes: '3 3'
 n_loaders: '1 1'
-n_monitor_nodes: 1
 region_aware_loader: true
 num_nodes_to_rollback: 2   # max is n_db_nodes -1, after upgrading 4 nodes last node can't be rollback
 
