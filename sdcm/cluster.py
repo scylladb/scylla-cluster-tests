@@ -3496,8 +3496,9 @@ class BaseCluster:
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
 
-    def get_node_cql_ips(self):
-        return [node.cql_address for node in self.nodes]
+    def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
+        nodes = nodes if nodes else self.nodes
+        return [node.cql_address for node in nodes]
 
     def get_node_database_errors(self):
         errors = {}
@@ -3636,13 +3637,38 @@ class BaseCluster:
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
     def cql_connection(self, node, keyspace=None, user=None,
+
                        password=None, compression=True, protocol_version=None,
-                       port=None, ssl_context=None, connect_timeout=100, verbose=True):
+                       port=None, ssl_context=None, connect_timeout=100, verbose=True,
+                       whitelist_nodes: list[BaseNode] | None = None):
+        """
+        Establishes a CQL connection to a specified node in the cluster.
+
+        Args:
+            node (BaseNode): The target node to connect to.
+            keyspace (str, optional): The keyspace to use for the connection. Defaults to None.
+            user (str, optional): The username for authentication. Defaults to None.
+            password (str, optional): The password for authentication. Defaults to None.
+            compression (bool, optional): Whether to enable compression for the connection. Defaults to True.
+            protocol_version (int, optional): The CQL protocol version to use. Defaults to None.
+            port (int, optional): The port to connect to. Defaults to None.
+            ssl_context (ssl.SSLContext, optional): The SSL context for secure connections. Defaults to None.
+            connect_timeout (int, optional): The timeout for establishing the connection, in seconds. Defaults to 100.
+            verbose (bool, optional): Whether to enable verbose logging. Defaults to True.
+            whitelist_nodes (list[BaseNode] | None, optional): A list of nodes to use for the WhiteListRoundRobinPolicy. Defaults to None.
+
+        Returns:
+            Session: A CQL session object for interacting with the cluster.
+
+        Notes:
+            - If a connection bundle file is available in the parent cluster, it will be used for the connection.
+            - If no connection bundle file is provided, the method will use the WhiteListRoundRobinPolicy with the specified nodes.
+        """
         if connection_bundle_file := node.parent_cluster.connection_bundle_file:
             wlrr = None
             node_ips = []
         else:
-            node_ips = self.get_node_cql_ips()
+            node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
             wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
@@ -3675,14 +3701,32 @@ class BaseCluster:
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
-
                                user=None, password=None,
                                compression=True, protocol_version=None,
-                               port=None, ssl_context=None, connect_timeout=100, verbose=True):
+                               port=None, ssl_context=None, connect_timeout=100, verbose=True,
+                               whitelist_nodes: list[BaseNode] | None = None):
         """
-        Returns a connection after it stops throwing NoHostAvailables.
+        Establishes a CQL connection to a specified node, retrying until successful or until the timeout is exceeded.
 
-        If the timeout is exceeded, the exception is raised.
+        Parameters:
+        - node: The target node to connect to.
+        - keyspace (str, optional): The keyspace to use for the connection. Defaults to None.
+        - user (str, optional): The username for authentication. Defaults to None.
+        - password (str, optional): The password for authentication. Defaults to None.
+        - compression (bool, optional): Whether to enable compression for the connection. Defaults to True.
+        - protocol_version (int, optional): The CQL protocol version to use. Defaults to None.
+        - port (int, optional): The port to connect to. Defaults to None.
+        - ssl_context (ssl.SSLContext, optional): The SSL context for secure connections. Defaults to None.
+        - connect_timeout (int, optional): The maximum time (in seconds) to wait for a connection. Defaults to 100.
+        - verbose (bool, optional): Whether to enable verbose logging. Defaults to True.
+        - whitelist_nodes (list[BaseNode] | None, optional): A list of nodes for white-label round-robin load balancing. Defaults to None.
+
+        Returns:
+        - A connection object after successfully establishing a connection.
+
+        Raises:
+        - Exception: If the timeout is exceeded and a connection cannot be established.
+
         """
         kwargs = locals()
         del kwargs["self"]
