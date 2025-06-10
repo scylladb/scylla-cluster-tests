@@ -17,23 +17,20 @@
     "scylladb/qa-maintainers"
   ],
   "labels": [
+    "backport/none",
     "renovate",
     "dependencies"
   ],
   "enabledManagers": [
-    "pip-compile",
+    "pep621",
     "github-actions",
     "helm-values"
   ],
   "packageRules": [
     {
       "groupName": "All pip dependencies",
-      "matchManagers": [
-        "pip-compile"
-      ],
-      "matchPackageNames": [
-        "!scylla-driver"
-      ],
+      "matchManagers": ["pep621"],
+      "packageNames": ["!scylla-driver"],
       "enabled": true
     },
     {
