@@ -1,5 +1,4 @@
 test_duration: 1440
-n_monitor_nodes: 1
 n_db_nodes: '12 12 12 12 12'
 n_loaders: '5 1 1 1 1'
 

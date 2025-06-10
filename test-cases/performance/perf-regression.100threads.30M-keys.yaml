@@ -14,7 +14,6 @@ k8s_scylla_disk_gi: 1760
 
 n_db_nodes: 3
 n_loaders: 4
-n_monitor_nodes: 1
 
 #AWS
 instance_type_db: 'i3.2xlarge'

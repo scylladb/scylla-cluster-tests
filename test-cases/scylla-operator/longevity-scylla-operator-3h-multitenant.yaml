@@ -20,7 +20,6 @@ k8s_n_scylla_pods_per_cluster: 3
 # NOTE: K8S Scylla nodes have 3.5Tb disk size
 k8s_scylla_disk_gi: 1745
 
-n_monitor_nodes: 1
 
 # NOTE: we deploy here 4 K8S nodes of the 'loader' type and going to create 2 pairs of loader pods.
 n_loaders: 4

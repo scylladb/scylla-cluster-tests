@@ -13,7 +13,6 @@ stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=5760m -mode cql3 nat
                   "cassandra-stress read cl=QUORUM duration=5760m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=DeflateCompressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=none -rate threads=20 -pop seq=1..100000000 -log interval=5"]
 n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
 user_prefix: 'longevity-50gb-4d-not-jenkins'

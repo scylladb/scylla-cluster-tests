@@ -8,7 +8,6 @@ n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 
 n_loaders: 1
-n_monitor_nodes: 1
 
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
 k8s_scylla_operator_chart_version: 'latest'  # will pick up the latest stable version, i.e. 'v1.3.0'

@@ -9,7 +9,6 @@ instance_type_loader: 'c5.large'
 region_name: 'us-east-1 us-west-2'
 n_db_nodes: '2 1'
 n_loaders: 1
-n_monitor_nodes: 1
 
 user_prefix: manager-regression
 space_node_threshold: 6442

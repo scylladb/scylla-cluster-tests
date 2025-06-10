@@ -12,7 +12,6 @@ stress_cmd_no_mv_profile: 'data_dir/cs_no_mv_basic_profile.yaml'
 
 n_db_nodes: 4
 n_loaders: 4
-n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 instance_type_loader: 'c5.2xlarge'
