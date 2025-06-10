@@ -352,9 +352,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                             or not all(nemesis in latency_during_ops_stats for nemesis in results_per_nemesis_by_version):
                         continue
                     scylla_version = full_version_info.get('version')
-                    for nemesis in results_per_nemesis_by_version:
-                        nemesis_stat = latency_during_ops_stats.get(nemesis)
-                        results_per_nemesis_by_version[nemesis].setdefault(scylla_version, [])
+                    for nemesis_key, nemesis_results in results_per_nemesis_by_version.items():
+                        nemesis_stat = latency_during_ops_stats.get(nemesis_key)
+                        nemesis_results.setdefault(scylla_version, [])
                         self._calculate_cycles_average(nemesis_stat)
                         # if calculated average stat for nemesis is empty or 0, don't add it to version results
                         if not nemesis_stat["hdr_summary_average"] \
@@ -362,25 +362,24 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                             continue
                         nemesis_stat.update({"version": full_version_info})
                         nemesis_stat.update({"Steady State": latency_during_ops_stats["Steady State"]})
-                        results_per_nemesis_by_version[nemesis][scylla_version].append(nemesis_stat)
+                        nemesis_results[scylla_version].append(nemesis_stat)
 
             # choose best result for each nemesis per version
             # by most less Cycles Average,  and Relative_to Steady
             all_results = self._get_previous_results(test_doc, is_gce)
             sort_results_by_versions(all_results)
-            for nemesis in results_per_nemesis_by_version:
-                for version in results_per_nemesis_by_version[nemesis]:
+            for nemesis_key, nemesis_results in results_per_nemesis_by_version.items():
+                for version_key, version_result in nemesis_results.items():
                     try:
-                        best_results[nemesis][version] = sorted(
-                            results_per_nemesis_by_version[nemesis][version],
-                            key=lambda obj: obj.get("average_time_operation_in_sec"))[0]
+                        best_results[nemesis_key][version_key] = sorted(version_result,
+                                                                        key=lambda obj: obj.get("average_time_operation_in_sec"))[0]
                     except IndexError:
-                        best_results[nemesis][version] = {}
+                        best_results[nemesis_key][version_key] = {}
 
-                best_results[nemesis] = {per_version: best_results[nemesis][per_version]
-                                         for per_version in sorted(best_results[nemesis].keys(),
-                                                                   key=lambda version: version,
-                                                                   reverse=True)}
+                best_results[nemesis_key] = {per_version: best_results[nemesis_key][per_version]
+                                             for per_version in sorted(best_results[nemesis_key].keys(),
+                                                                       key=lambda version: version,
+                                                                       reverse=True)}
             return best_results
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)

@@ -2802,8 +2802,7 @@ class Nemesis:
 
             if proposed_ttl > MAX_TTL:
                 current_size = MAX_TTL // (multiplier * expected_sstable_number)
-                if current_size < 1:
-                    current_size = 1
+                current_size = max(current_size, 1)
 
                 proposed_ttl = current_size * multiplier * expected_sstable_number
 

@@ -748,16 +748,16 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
 
-    for curr_region_name in instances:
+    for curr_region_name, per_region_instances in instances.items():
         if running:
-            instances[curr_region_name] = [i for i in instances[curr_region_name] if i['State']['Name'] == 'running']
+            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] == 'running']
         else:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
+            instances[curr_region_name] = [i for i in per_region_instances
                                            if not i['State']['Name'] == 'terminated']
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
-        for curr_region_name in instances:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
+        for curr_region_name, per_region_instances in instances.items():
+            instances[curr_region_name] = [i for i in per_region_instances
                                            if i['Placement']['AvailabilityZone'] == curr_region_name + availability_zone]
     if not group_as_region:
         instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
@@ -2625,12 +2625,12 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
                    ).run(get_placement_groups, ignore_exceptions=True)
 
-    for curr_region_name in placement_groups:
+    for curr_region_name, instances in placement_groups.items():
         if available:
             placement_groups[curr_region_name] = [
                 i for i in placement_groups[curr_region_name] if i['State'] == 'available']
         else:
-            placement_groups[curr_region_name] = [i for i in placement_groups[curr_region_name]
+            placement_groups[curr_region_name] = [i for i in instances
                                                   if not i['State'] == 'deleted']
     if not group_as_region:
         placement_groups = list(itertools.chain(*list(placement_groups.values())))  # flatten the list of lists
