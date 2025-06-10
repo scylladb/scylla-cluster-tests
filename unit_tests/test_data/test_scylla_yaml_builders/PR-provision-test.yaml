@@ -16,7 +16,6 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=30
 
 n_loaders: 1
 instance_type_db: 'i4i.large'
-n_monitor_nodes: 1
 n_db_nodes: 3
 
 nemesis_class_name: NonDisruptiveMonkey

@@ -10,7 +10,6 @@ user_profile_table_count: 5000
 batch_size: 100
 
 n_loaders: 5
-n_monitor_nodes: 1
 n_db_nodes: 1
 add_node_cnt: 5
 

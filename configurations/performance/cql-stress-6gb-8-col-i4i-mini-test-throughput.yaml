@@ -10,7 +10,6 @@ use_prepared_loaders: false  # no need for that - using docker anyway
 n_db_nodes: 3
 nemesis_add_node_cnt: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_loader: 'c6i.large'
 instance_type_db: 'i4i.large'

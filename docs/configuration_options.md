@@ -67,7 +67,7 @@ Number list of loader nodes in multiple data centers
 
 Number list of monitor nodes in multiple data centers
 
-**default:** N/A
+**default:** 1
 
 
 ## **intra_node_comm_public** / SCT_INTRA_NODE_COMM_PUBLIC
@@ -1917,8 +1917,6 @@ extra command line options to pass to perf_simple_query
 
 **default:** N/A
 
-**type:** str (appendable)
-
 
 ## **cs_user_profiles** / SCT_CS_USER_PROFILES
 
@@ -1968,8 +1966,6 @@ Threads amount of c-s load for gradual performance test per sub-test. Example: {
 
 **default:** N/A
 
-**type:** dict_or_str
-
 
 ## **perf_gradual_throttle_steps** / SCT_PERF_GRADUAL_THROTTLE_STEPS
 
@@ -1977,16 +1973,12 @@ Used for gradual performance test. Define throttle for load step in ops. Example
 
 **default:** N/A
 
-**type:** dict_or_str
-
 
 ## **perf_gradual_step_duration** / SCT_PERF_GRADUAL_STEP_DURATION
 
-Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m, 'write': None, 'mixed': '30m'}
+Step duration of c-s load for gradual performance test per sub-test. Example: {'read': '30m', 'write': None, 'mixed': '30m'}
 
 **default:** N/A
-
-**type:** dict_or_str
 
 
 ## **skip_download** / SCT_SKIP_DOWNLOAD
@@ -2231,7 +2223,7 @@ Run post behavior actions in sct teardown step
 
 Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 
 ## **post_behavior_loader_nodes** / SCT_POST_BEHAVIOR_LOADER_NODES
@@ -2245,14 +2237,14 @@ Failure/post test behavior, i.e. what to do with the loader cloud instances at t
 
 Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 
 ## **post_behavior_k8s_cluster** / SCT_POST_BEHAVIOR_K8S_CLUSTER
 
 Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.<br><br>'destroy' - Destroy k8s cluster and credentials (default)<br>'keep' - Keep k8s cluster running and leave credentials alone<br>'keep-on-failure' - Keep k8s cluster if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 
 ## **internode_compression** / SCT_INTERNODE_COMPRESSION

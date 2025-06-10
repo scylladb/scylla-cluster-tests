@@ -38,7 +38,6 @@ post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELEC
 
 n_db_nodes: 5
 n_loaders: 5 # Each loader will have 1 scylla-bench process at every step of the test (prepare, verify, stress & stress_read)
-n_monitor_nodes: 1
 
 round_robin: true
 
