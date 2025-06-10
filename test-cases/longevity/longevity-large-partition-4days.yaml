@@ -19,7 +19,6 @@ post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELEC
 
 n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
 azure_instance_type_db: 'Standard_L32s_v3'

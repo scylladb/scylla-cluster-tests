@@ -6,7 +6,6 @@ stress_read_cmd: ["cassandra-stress read cl=ONE duration=360m -schema 'replicati
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
 n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 

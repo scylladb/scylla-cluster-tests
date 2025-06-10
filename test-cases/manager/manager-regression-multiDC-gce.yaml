@@ -5,7 +5,6 @@ stress_read_cmd: "cassandra-stress read cl=QUORUM n=4000000 -schema 'replication
 
 n_db_nodes: "2 1"
 n_loaders: 1
-n_monitor_nodes: 1
 simulated_racks: 0
 
 client_encrypt: true

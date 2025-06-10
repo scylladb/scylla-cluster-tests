@@ -1,7 +1,6 @@
 test_duration: 60
 
 n_loaders: 1
-n_monitor_nodes: 1
 n_db_nodes: 1
 
 instance_type_runner: c7i.2xlarge

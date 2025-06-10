@@ -6,7 +6,6 @@ stress_cmd_w: "cassandra-stress user profile=/tmp/cs_profile_background_reads_ov
 
 n_db_nodes: 1
 n_loaders: 12
-n_monitor_nodes: 1
 instance_type_db: 'i4i.large'
 instance_type_loader: 'c5.4xlarge'
 instance_type_monitor: 't3.small'

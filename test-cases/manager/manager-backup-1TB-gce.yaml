@@ -17,7 +17,6 @@ prepare_wait_no_compactions_timeout: 120
 
 n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8

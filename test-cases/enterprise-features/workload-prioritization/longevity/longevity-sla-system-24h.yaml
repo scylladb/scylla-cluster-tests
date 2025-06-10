@@ -9,7 +9,6 @@ stress_cmd: ["cassandra-stress read cl=QUORUM duration=1380m -schema 'replicatio
 
 n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 round_robin: true
 
 sla: true

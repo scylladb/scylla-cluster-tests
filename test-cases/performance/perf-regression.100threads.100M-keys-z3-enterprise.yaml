@@ -15,7 +15,6 @@ scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/
 k8s_loader_run_type: 'static'
 use_prepared_loaders: true
 n_db_nodes: 3
-n_monitor_nodes: 1
 
 # Loaders
 gce_instance_type_loader: 'c2-standard-30'

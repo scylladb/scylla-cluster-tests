@@ -11,7 +11,6 @@ prepare_cs_user_profiles:
 
 n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 
 gce_instance_type_db: 'n2-highmem-4'
 gce_instance_type_loader: 'n2-highmem-4'

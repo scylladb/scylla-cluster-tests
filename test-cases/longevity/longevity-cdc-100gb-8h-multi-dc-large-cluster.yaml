@@ -9,7 +9,6 @@ stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc.
 n_db_nodes: '15 15 15'
 instance_type_db: 'i4i.large'
 n_loaders: '2 2 2'
-n_monitor_nodes: 1
 
 rack_aware_loader: true
 region_aware_loader: true
