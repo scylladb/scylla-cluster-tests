@@ -46,8 +46,8 @@ class Steps(SlaUtils):
                                                   sleep=600):
 
         with TestStepEvent(step=f"Alter shares from {service_level.shares} to {new_shares} Service "
-                                f"Level {service_level.name} and validate io_queue_operations "
-                                f"during load") as wp_event:
+                           f"Level {service_level.name} and validate io_queue_operations "
+                           f"during load") as wp_event:
             try:
                 service_level.alter(new_shares=new_shares)
                 # Wait for SL update is propagated to all nodes
@@ -75,7 +75,7 @@ class Steps(SlaUtils):
     def detach_service_level_and_run_load(sl_for_detach, role_with_sl_to_detach, sleep=600):
 
         with TestStepEvent(step=f"Detach service level {sl_for_detach.name} with {sl_for_detach.shares} shares from "
-                                f"{role_with_sl_to_detach.name}.") as wp_event:
+                           f"{role_with_sl_to_detach.name}.") as wp_event:
             try:
                 role_with_sl_to_detach.detach_service_level()
                 time.sleep(sleep)
@@ -109,8 +109,8 @@ class Steps(SlaUtils):
             role_for_attach.validate_role_service_level_attributes_against_db()
 
         with TestStepEvent(step=f"Attach service level {new_service_level.name} with "
-                                f"{new_service_level.shares} shares to {role_for_attach.name}. "
-                                f"Validate io_queue_operations during load") as wp_event:
+                           f"{new_service_level.shares} shares to {role_for_attach.name}. "
+                           f"Validate io_queue_operations during load") as wp_event:
             try:
                 role_for_attach.attach_service_level(new_service_level)
                 role_for_attach.validate_role_service_level_attributes_against_db()
