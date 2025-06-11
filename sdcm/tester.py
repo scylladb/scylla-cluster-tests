@@ -97,7 +97,13 @@ from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
-from sdcm.utils.decorators import log_run_info, retrying, measure_time, optional_stage
+from sdcm.utils.decorators import (
+    log_run_info,
+    retrying,
+    measure_time,
+    optional_stage,
+    silence,
+)
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
@@ -227,78 +233,6 @@ def update_cqlshrc(cqlshrc_file: str) -> None:
     }
     with open(cqlshrc_file, 'w', encoding='utf-8') as file:
         config.write(file)
-
-
-class silence:
-    """
-    A decorator and context manager that catch, log and store any exception that
-        happened within wrapped function or within context clause.
-    Two ways of using it:
-    1) as decorator
-        class someclass:
-            @silence(verbose=True)
-            def my_method(self):
-                ...
-
-    2) as context manager
-        class someclass:
-            def my_method(self):
-                with silence(parent=self, name='Step #1'):
-                    ...
-                with silence(parent=self, name='Step #2'):
-                    ...
-    """
-    test = None
-    name: str = None
-
-    def __init__(self, parent=None, name: str = None, verbose: bool = False, raise_error_event=True):
-        self.parent = parent
-        self.name = name
-        self.verbose = verbose
-        self.raise_error_event = raise_error_event
-        self.log = logging.getLogger(self.__class__.__name__)
-
-    def __enter__(self):
-        pass
-
-    def __call__(self, funct):
-        def decor(*args, **kwargs):
-            if self.name is None:
-                name = funct.__name__
-            else:
-                name = self.name
-            result = None
-            try:
-                self.log.debug("Silently running '%s'", name)
-                result = funct(*args, **kwargs)
-                self.log.debug("Finished '%s'. No errors were silenced.", name)
-            except Exception as exc:  # noqa: BLE001
-                self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
-                self._store_test_result(args[0], exc, exc.__traceback__, name)
-            return result
-
-        return decor
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_val is None:
-            self.log.debug("Finished '%s'. No errors were silenced.", self.name)
-        else:
-            self.log.debug("Finished '%s'. %s exception was silenced.", self.name, str(exc_type))
-            self._store_test_result(self.parent, exc_val, exc_tb, self.name)
-        return True
-
-    def _store_test_result(self, parent, exc_val, exc_tb, name):
-        if not self.raise_error_event:
-            return
-
-        TestFrameworkEvent(
-            source=parent.__class__.__name__,
-            source_method=name,
-            message=f'{name} (silenced) failed with:',
-            exception=exc_val,
-            severity=getattr(exc_val, 'severity', Severity.ERROR),
-            trace=exc_tb.tb_frame,
-        ).publish_or_dump(default_logger=parent.log)
 
 
 class CriticalTestFailure(BaseException):
