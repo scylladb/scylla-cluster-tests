@@ -16,7 +16,8 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule, \
+    StaticGenericResultTable
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
@@ -33,7 +34,7 @@ LATENCY_ERROR_THRESHOLDS = {
 }
 
 
-class LatencyCalculatorMixedResult(GenericResultTable):
+class LatencyCalculatorMixedResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -52,7 +53,7 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorWriteResult(GenericResultTable):
+class LatencyCalculatorWriteResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -68,7 +69,7 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorReadResult(GenericResultTable):
+class LatencyCalculatorReadResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -84,7 +85,7 @@ class LatencyCalculatorReadResult(GenericResultTable):
         ]
 
 
-class ReactorStallStatsResult(GenericResultTable):
+class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
         description = ""
@@ -95,6 +96,29 @@ class ReactorStallStatsResult(GenericResultTable):
                 for interval in STALL_INTERVALS
             ]
         ]
+
+
+class PerfSimpleQueryResult(StaticGenericResultTable):
+    def __init__(self, workload: str, parameters: dict):
+        super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
+
+    class Meta:
+        Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="instructions_per_op", unit="",
+                                  type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ]
+
+        ValidationRules = {
+            "allocs_per_op": ValidationRule(best_pct=5),
+            "instructions_per_op": ValidationRule(best_pct=5),
+        }
 
 
 workload_to_table = {
@@ -227,31 +251,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
 
 def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict):
     stats = result["stats"]
-    workload = result["test_properties"]["type"]
-    parameters = result["parameters"]
 
-    class PerfSimpleQueryResult(GenericResultTable):
-        class Meta:
-            name = f"{workload} - Perf Simple Query"
-            description = json.dumps(parameters)
-            Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="instructions_per_op", unit="",
-                                      type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ]
-
-            ValidationRules = {
-                "allocs_per_op": ValidationRule(best_pct=5),
-                "instructions_per_op": ValidationRule(best_pct=5),
-            }
-
-    result_table = PerfSimpleQueryResult()
+    result_table = PerfSimpleQueryResult(workload=result["test_properties"]["type"], parameters=result["parameters"])
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
