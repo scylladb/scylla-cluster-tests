@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from functools import cached_property
 from typing import Union
 
 
@@ -29,13 +30,15 @@ class ColumnMetadata:
     unit: str
     type: ResultType
     higher_is_better: bool = None
+    visible: bool = True  # controls visibility in UI, True by default
 
     def as_dict(self) -> dict:
         return {
             "name": self.name,
             "unit": self.unit,
             "type": str(self.type),
-            "higher_is_better": self.higher_is_better
+            "higher_is_better": self.higher_is_better,
+            "visible": self.visible,
         }
 
 
@@ -51,6 +54,7 @@ class ValidationRule:
             "best_abs": self.best_abs,
             "fixed_limit": self.fixed_limit
         }
+
 
 class ResultTableMeta(type):
     def __new__(cls, name, bases, dct):
@@ -85,21 +89,39 @@ class Cell:
 
     def as_dict(self) -> dict:
         cell = {"value_text": self.value} if isinstance(self.value, str) else {"value": self.value}
-        cell.update({
-            "column": self.column,
-            "row": self.row,
-            "status": str(self.status)
-        })
+        cell.update({"column": self.column, "row": self.row, "status": str(self.status)})
         return cell
 
 
 @dataclass
-class GenericResultTable(metaclass=ResultTableMeta):
+class GenericResultTable:
     """
     Base class for all Generic Result Tables in Argus. Use it as a base class for your result table.
     """
-    sut_timestamp: int = 0  # automatic timestamp based on SUT version. Works only with SCT and refers to Scylla version.
+
+    name: str = ""
+    description: str = ""
+    columns: list[ColumnMetadata] = field(default_factory=list)
+    # automatic timestamp based on SUT version. Works only with SCT and refers to Scylla version.
+    sut_timestamp: int = 0
+    sut_package_name: str = ""
     results: list[Cell] = field(default_factory=list)
+    validation_rules: dict[str, ValidationRule] = field(default_factory=dict)
+
+    @cached_property
+    def column_types(self):
+        """Return columns types as a dictionary."""
+        return {column.name: column.type for column in self.columns}
+
+    def __post_init__(self):
+        """Validate validation rules."""
+        for col_name, rule in self.validation_rules.items():
+            if col_name not in self.column_types:
+                raise ValueError(f"ValidationRule column {col_name} not found in the table")
+            if self.column_types[col_name] == ResultType.TEXT:
+                raise ValueError(f"Validation rules don't apply to TEXT columns")
+            if not isinstance(rule, ValidationRule):
+                raise ValueError(f"Validation rule for column {col_name} is not of type ValidationRule")
 
     def as_dict(self) -> dict:
         rows = []
@@ -118,7 +140,7 @@ class GenericResultTable(metaclass=ResultTableMeta):
         return {
             "meta": meta_info,
             "sut_timestamp": self.sut_timestamp,
-            "results": [result.as_dict() for result in self.results]
+            "results": [result.as_dict() for result in self.results],
         }
 
     def add_result(self, column: str, row: str, value: Union[int, float, str], status: Status):
@@ -127,3 +149,25 @@ class GenericResultTable(metaclass=ResultTableMeta):
         if isinstance(value, str) and self.column_types[column] != ResultType.TEXT:
             raise ValueError(f"Column {column} is not of type TEXT")
         self.results.append(Cell(column=column, row=row, value=value, status=status))
+
+
+class StaticGenericResultTable(GenericResultTable):
+    """Results class for static results metainformation, defined in Meta class."""
+
+    def __init__(
+        self, name=None, description=None, columns=None, sut_package_name=None, validation_rules=None, results=None, sut_timestamp=0
+    ):
+        meta = getattr(self.__class__, "Meta")
+        super().__init__(
+            name=name or meta.name,
+            description=description or meta.description,
+            columns=columns or getattr(meta, "Columns", getattr(meta, "columns", None)),
+            sut_package_name=sut_package_name or getattr(meta, "sut_package_name", ""),
+            validation_rules=validation_rules or getattr(
+                meta, "ValidationRules", getattr(meta, "validation_rules", {})),
+            results=results or [],
+            sut_timestamp=sut_timestamp
+        )
+
+    class Meta:
+        pass

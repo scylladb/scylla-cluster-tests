@@ -18,17 +18,22 @@ def cli():
 
 def _submit_driver_result_internal(api_key: str, base_url: str, run_id: str, metadata_path: str, extra_headers: dict):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
-    LOGGER.info("Submitting results for %s [%s/%s] to Argus...", run_id, metadata["driver_name"], metadata["driver_type"])
+    LOGGER.info("Submitting results for %s [%s/%s] to Argus...", run_id,
+                metadata["driver_name"], metadata["driver_type"])
     raw_xml = (Path(metadata_path).parent / metadata["junit_result"]).read_bytes()
     client = ArgusDriverMatrixClient(run_id=run_id, auth_token=api_key, base_url=base_url, extra_headers=extra_headers)
-    client.submit_driver_result(driver_name=metadata["driver_name"], driver_type=metadata["driver_type"], raw_junit_data=base64.encodebytes(raw_xml))
+    client.submit_driver_result(
+        driver_name=metadata["driver_name"], driver_type=metadata["driver_type"], raw_junit_data=base64.encodebytes(raw_xml))
     LOGGER.info("Done.")
+
 
 def _submit_driver_failure_internal(api_key: str, base_url: str, run_id: str, metadata_path: str, extra_headers: dict):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
-    LOGGER.info("Submitting failure for %s [%s/%s] to Argus...", run_id, metadata["driver_name"], metadata["driver_type"])
+    LOGGER.info("Submitting failure for %s [%s/%s] to Argus...", run_id,
+                metadata["driver_name"], metadata["driver_type"])
     client = ArgusDriverMatrixClient(run_id=run_id, auth_token=api_key, base_url=base_url, extra_headers=extra_headers)
-    client.submit_driver_failure(driver_name=metadata["driver_name"], driver_type=metadata["driver_type"], failure_reason=metadata["failure_reason"])
+    client.submit_driver_failure(
+        driver_name=metadata["driver_name"], driver_type=metadata["driver_type"], failure_reason=metadata["failure_reason"])
     LOGGER.info("Done.")
 
 
@@ -53,7 +58,8 @@ def submit_driver_matrix_run(api_key: str, base_url: str, run_id: str, build_id:
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--metadata-path", required=True, help="Path to the metadata .json file that contains path to junit xml and other required information")
 def submit_driver_result(api_key: str, base_url: str, run_id: str, metadata_path: str, extra_headers: dict):
-    _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id, metadata_path=metadata_path, extra_headers=extra_headers)
+    _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id,
+                                   metadata_path=metadata_path, extra_headers=extra_headers)
 
 
 @click.command("fail-driver")
@@ -63,7 +69,8 @@ def submit_driver_result(api_key: str, base_url: str, run_id: str, metadata_path
 @click.option("--id", "run_id", required=True, help="UUID (v4 or v1) unique to the job")
 @click.option("--metadata-path", required=True, help="Path to the metadata .json file that contains path to junit xml and other required information")
 def submit_driver_failure(api_key: str, base_url: str, run_id: str, metadata_path: str, extra_headers: dict):
-    _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id, metadata_path=metadata_path, extra_headers=extra_headers)
+    _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id,
+                                    metadata_path=metadata_path, extra_headers=extra_headers)
 
 
 @click.command("submit-or-fail-driver")
@@ -75,9 +82,11 @@ def submit_driver_failure(api_key: str, base_url: str, run_id: str, metadata_pat
 def submit_or_fail_driver(api_key: str, base_url: str, run_id: str, metadata_path: str, extra_headers: dict):
     metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     if metadata.get("failure_reason"):
-        _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id, metadata_path=metadata_path, extra_headers=extra_headers)
+        _submit_driver_failure_internal(api_key=api_key, base_url=base_url, run_id=run_id,
+                                        metadata_path=metadata_path, extra_headers=extra_headers)
     else:
-        _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id, metadata_path=metadata_path, extra_headers=extra_headers)
+        _submit_driver_result_internal(api_key=api_key, base_url=base_url, run_id=run_id,
+                                       metadata_path=metadata_path, extra_headers=extra_headers)
 
 
 @click.command("submit-env")
