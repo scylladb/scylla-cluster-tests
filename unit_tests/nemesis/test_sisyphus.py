@@ -18,6 +18,7 @@ class TestNemesisClass(Nemesis):
     flag_b = False
     flag_c = False
     flag_common = False
+    __test__ = False  # Prevent pytest from treating this as a test class
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
         super().__init__(tester_obj, termination_event, *args, nemesis_selector=nemesis_selector,
