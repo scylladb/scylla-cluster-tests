@@ -3009,7 +3009,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def wait_for_machine_image_configured(self):
         self.log.info("Waiting for Scylla Machine Image setup to finish...")
-        wait.wait_for(self.is_machine_image_configured, step=10, timeout=300, throw_exc=False)
+        wait.wait_for(self.is_machine_image_configured, step=10, timeout=600, throw_exc=True)
 
     def get_sysctl_properties(self) -> Dict[str, str]:
         sysctl_properties = {}
