@@ -1,0 +1,15 @@
+#GCE
+use_preinstalled_scylla: false
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 0
+gce_root_disk_type_loader: 'pd-ssd'
+root_disk_size_loader: 50
+gce_instance_type_monitor: 'n2-highmem-16'
+#gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+# 2025.1.2 image used for setting linux kernel as in the scylla 2025.1.2 release:
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/9004163278567520858'
+scylla_repo: 'http://downloads.scylladb.com/deb/debian/scylla-2025.1.list'
+scylla_linux_distro: 'ubuntu-jammy'
+user_prefix: 'perf-regression-z3'
+gce_project: 'gcp-local-ssd-latency'
+gce_network: 'qa-vpc'
