@@ -35,6 +35,8 @@ def test_send_latency_decorator_result_to_argus():
     )
     expected_calls = [
         call(LatencyCalculatorMixedResult(
+            name="mixed - test - latencies",
+            description="mixed workload - test",
             sut_timestamp=0,
             results=[
                 Cell(column='P90 write', row='Cycle #1', value=2.15, status=Status.PASS),
@@ -55,6 +57,8 @@ def test_send_latency_decorator_result_to_argus():
             ]
         )),
         call(ReactorStallStatsResult(
+            name='mixed - test - stalls - REACTOR_STALLED',
+            description='REACTOR_STALLED event counts',
             sut_timestamp=0,
             results=[
                 Cell(column='total', row='Cycle #1', value=18, status=Status.PASS),
