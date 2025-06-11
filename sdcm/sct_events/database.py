@@ -503,7 +503,7 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         TestFrameworkEvent(
             source=event_type.__name__,
             message=f"Did not find events of type {event_type} with hash {continuous_hash} ({kwargs})"
-                    f" with period type {EventPeriod.BEGIN.value}",
+            f" with period type {EventPeriod.BEGIN.value}",
             severity=Severity.DEBUG
         ).publish_or_dump()
 

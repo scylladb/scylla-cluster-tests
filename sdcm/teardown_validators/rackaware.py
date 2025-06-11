@@ -141,11 +141,11 @@ class RackawareValidator(TeardownValidator):  # pylint: disable=too-few-public-m
         LOGGER.debug("User-initiated CQL reads as a percentage of all CQL reads: %s", non_system_cql_reads_perc)
         if non_system_cql_reads_perc > self.EXPECTED_NON_SYSTEM_READS_PERC:
             ValidatorEvent(message=f'Rackaware validation. '
-                                   f'Database nodes in availability zones without loaders received more coordination traffic than the '
-                                   'expected maximum.'
-                                   f'\nUser CQL reads are received on Db nodes in AZ with loaders: {rack_user_cql_reads};'
-                                   f'\nUser CQL reads are received on Db nodes in AZ without loaders: {non_rack_user_cql_reads};\n'
-                                   f'The percent is {non_system_cql_reads_perc}',
+                           f'Database nodes in availability zones without loaders received more coordination traffic than the '
+                           'expected maximum.'
+                           f'\nUser CQL reads are received on Db nodes in AZ with loaders: {rack_user_cql_reads};'
+                           f'\nUser CQL reads are received on Db nodes in AZ without loaders: {non_rack_user_cql_reads};\n'
+                           f'The percent is {non_system_cql_reads_perc}',
                            severity=Severity.ERROR).publish()
             validation_passed = False
 

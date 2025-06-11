@@ -64,9 +64,9 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
 
     def _create_stress_cmd(self, workload: YcsbWorkload):
         cmd = f"bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run scylla -s -P workloads/{workload.name}" \
-              f" -p recordcount={self.records_size}" \
-              f" -p operationcount={self.records_size}" \
-              f" {self.params['stress_cmd']}"
+            f" -p recordcount={self.records_size}" \
+            f" -p operationcount={self.records_size}" \
+            f" {self.params['stress_cmd']}"
         return cmd
 
     def run_pre_create_keyspace(self):

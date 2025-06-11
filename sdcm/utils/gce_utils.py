@@ -331,8 +331,8 @@ class GceLoggingClient:
                 f"projects/{self.project_id}"
             ],
             "filter": f'protoPayload.resourceName="projects/{self.project_id}/zones/{self.zone}/instances/{self.instance_name}"'
-                      f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
-                      f' timestamp > "{from_}" timestamp < "{until}"'
+            f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
+            f' timestamp > "{from_}" timestamp < "{until}"'
         }
         with build('logging', 'v2', credentials=self.credentials, cache_discovery=False) as service:
             return self._get_log_entries(service, query)

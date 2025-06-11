@@ -47,7 +47,7 @@ def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) 
                 severity=Severity.CRITICAL,
                 node=current_node.name,
                 error=f"Current node {current_node}. "
-                      f"Node {node}{is_target} status is {node_properties['status']}",
+                f"Node {node}{is_target} status is {node_properties['status']}",
             )
 
 
@@ -66,8 +66,8 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
 
         is_target = current_node.print_node_running_nemesis(node.ip_address)
         message = f"Current node {current_node}. Found nulls in system.peers for " \
-                  f"node {node}{is_target} with status {gossip_info.get(node, {}).get('status', 'n/a')} : " \
-                  f"{peers_details[node]}"
+            f"node {node}{is_target} with status {gossip_info.get(node, {}).get('status', 'n/a')} : " \
+            f"{peers_details[node]}"
 
         # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
         LOGGER.debug("Print all columns from system.peers for peer %s", node)
@@ -101,7 +101,7 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
                     severity=Severity.ERROR,
                     node=current_node.name,
                     error=f"Current node {current_node}. The node {node}{is_target} "
-                          f"exists in the gossip but doesn't exist in the nodetool.status",
+                    f"exists in the gossip but doesn't exist in the nodetool.status",
                 )
             continue
 
@@ -112,8 +112,8 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
                 severity=Severity.ERROR,
                 node=current_node.name,
                 error=f"Current node {current_node}. Wrong node status. "
-                      f"Node {node}{is_target} status in nodetool.status is "
-                      f"{nodes_status[node]['status']}, but status in gossip {node_info['status']}",
+                f"Node {node}{is_target} status in nodetool.status is "
+                f"{nodes_status[node]['status']}, but status in gossip {node_info['status']}",
             )
 
     # Validate that all nodes in nodetool.status exist in gossip
@@ -126,7 +126,7 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
                 severity=Severity.ERROR,
                 node=current_node.name,
                 error=f"Current node {current_node}. "
-                      f"Node {node}{is_target} exists in the nodetool.status but missed in gossip.",
+                f"Node {node}{is_target} exists in the nodetool.status but missed in gossip.",
             )
 
 
@@ -164,7 +164,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
                 severity=Severity.ERROR,
                 node=current_node.name,
                 error=f"Current node {current_node}. "
-                      f"Node {node}{is_target} exists in the gossip but missed in SYSTEM.PEERS.",
+                f"Node {node}{is_target} exists in the gossip but missed in SYSTEM.PEERS.",
             )
             continue
 
@@ -174,9 +174,9 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
                 severity=Severity.ERROR,
                 node=current_node.name,
                 error=f"Current node {current_node}. Wrong Schema version. "
-                      f"Node {node}{is_target} schema version in SYSTEM.PEERS is "
-                      f"{peers_details[node]['schema_version']}, "
-                      f"but schema version in gossip {node_info['schema']}",
+                f"Node {node}{is_target} schema version in SYSTEM.PEERS is "
+                f"{peers_details[node]['schema_version']}, "
+                f"but schema version in gossip {node_info['schema']}",
             )
 
     # Validate that all nodes in SYSTEM.PEERS exist in gossip
@@ -187,7 +187,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
             severity=Severity.ERROR,
             node=current_node.name,
             error=f"Current node {current_node}. Nodes {','.join(node.ip_address for node in not_in_gossip)}"
-                  f" exists in the SYSTEM.PEERS but missed in gossip.",
+            f" exists in the SYSTEM.PEERS but missed in gossip.",
         )
 
     # Validate that same schema on all nodes in the gossip
@@ -202,7 +202,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
             severity=Severity.WARNING,
             node=current_node.name,
             message=f"Current node {current_node}. "
-                    f"Schema version is not same on all nodes in gossip info: {gossip_info_str}",
+            f"Schema version is not same on all nodes in gossip info: {gossip_info_str}",
         )
 
     # Validate that same schema on all nodes in the SYSTEM.PEERS
@@ -218,7 +218,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
             severity=Severity.WARNING,
             node=current_node.name,
             message=f"Current node {current_node}. "
-                    f"Schema version is not same on all nodes in SYSTEM.PEERS info: {peers_info_str}",
+            f"Schema version is not same on all nodes in SYSTEM.PEERS info: {peers_info_str}",
         )
 
 
