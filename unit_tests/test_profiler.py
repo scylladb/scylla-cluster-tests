@@ -20,6 +20,9 @@ from multiprocessing import Process
 import unittest
 import os.path
 import shutil
+
+import pytest
+
 from sdcm.utils.common import generate_random_string
 from sdcm.prometheus import PrometheusAlertManagerListener
 from unit_tests.lib.test_profiler.lib import LibMultiprocessingProcessCustomClass, LibProcessCustomClass, \
@@ -107,6 +110,7 @@ class ProfileableProcessCustomClassWithRun(pp):
         process_body()
 
 
+@pytest.mark.skip("ProfilerFactory doesn't work from python 3.12 - see https://github.com/python/cpython/issues/110770")
 class TestProfileFactory(unittest.TestCase):
     """ Test to illustrate profile factory usage """
     tmpdir = os.path.join('/tmp', generate_random_string(10))
