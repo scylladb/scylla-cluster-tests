@@ -71,7 +71,7 @@ def cleanup_event_log_file(events):
 
 @pytest.fixture(scope="module", autouse=True)
 def mock_get_partition_keys():
-    with patch("sdcm.scan_operation_thread.get_partition_keys"):
+    with patch("sdcm.scan_operation_thread.get_partition_keys", return_value=["a", "b"]):
         yield
 
 
