@@ -45,6 +45,7 @@ from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 
@@ -523,6 +524,7 @@ class GCECluster(cluster.BaseCluster):
         except Exception as ex:  # noqa: BLE001
             raise CreateGCENodeError('Failed to create node: %s' % ex) from ex
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if count <= 0:
             return []
