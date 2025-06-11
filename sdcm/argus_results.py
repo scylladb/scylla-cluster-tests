@@ -15,7 +15,7 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, StaticGenericResultTable
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
@@ -32,7 +32,7 @@ LATENCY_ERROR_THRESHOLDS = {
 }
 
 
-class LatencyCalculatorMixedResult(GenericResultTable):
+class LatencyCalculatorMixedResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -49,7 +49,7 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorWriteResult(GenericResultTable):
+class LatencyCalculatorWriteResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -64,7 +64,7 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorReadResult(GenericResultTable):
+class LatencyCalculatorReadResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -79,7 +79,7 @@ class LatencyCalculatorReadResult(GenericResultTable):
         ]
 
 
-class ReactorStallStatsResult(GenericResultTable):
+class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
         description = ""
