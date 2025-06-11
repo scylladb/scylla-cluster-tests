@@ -338,9 +338,9 @@ class LongevityDataValidator:
                 DataValidatorEvent.DataValidator(
                     severity=Severity.WARNING,
                     message=f"Problem during copying expected data: view not found."
-                            f"View name for not updated_data: {self.view_name_for_not_updated_data}; "
-                            f"Expected data table name {self.expected_data_table_name}. "
-                            f"Data validation of not updated rows won' be performed"
+                    f"View name for not updated_data: {self.view_name_for_not_updated_data}; "
+                    f"Expected data table name {self.expected_data_table_name}. "
+                    f"Data validation of not updated rows won' be performed"
                 ).publish()
                 return
 
@@ -356,8 +356,8 @@ class LongevityDataValidator:
                 DataValidatorEvent.DataValidator(
                     severity=Severity.ERROR,
                     error=f"Problem during copying expected data from {self.view_name_for_not_updated_data} "
-                          f"to {self.expected_data_table_name}. "
-                          f"Data validation of not updated rows won' be performed"
+                    f"to {self.expected_data_table_name}. "
+                    f"Data validation of not updated rows won' be performed"
                 ).publish()
 
     def copy_updated_expected_data(self):
@@ -368,8 +368,8 @@ class LongevityDataValidator:
                 DataValidatorEvent.DataValidator(
                     severity=Severity.WARNING,
                     message=f"Problem during copying expected data: view not found. "
-                            f"View names for updated data: {self.view_names_for_updated_data}. "
-                            f"Data validation of updated rows won' be performed"
+                    f"View names for updated data: {self.view_names_for_updated_data}. "
+                    f"Data validation of updated rows won' be performed"
                 ).publish()
                 return
 
@@ -387,7 +387,7 @@ class LongevityDataValidator:
                     DataValidatorEvent.DataValidator(
                         severity=Severity.ERROR,
                         error=f"Problem during copying expected data from {src_view} to {expected_data_table_name}. "
-                              f"Data validation of updated rows won' be performed"
+                        f"Data validation of updated rows won' be performed"
                     ).publish()
                 self._validate_updated_per_view.append(True)
 
@@ -396,8 +396,8 @@ class LongevityDataValidator:
             DataValidatorEvent.DataValidator(
                 severity=Severity.WARNING,
                 message=f"Problem during copying expected data: not found. "
-                        f"View name for deletion data: {self.view_name_for_deletion_data}. "
-                        f"Data validation of deleted rows won' be performed"
+                f"View name for deletion data: {self.view_name_for_deletion_data}. "
+                f"Data validation of deleted rows won' be performed"
             ).publish()
             return
 
@@ -437,8 +437,8 @@ class LongevityDataValidator:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate immutable rows. "
-                        f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
-                        f"See error above in the sct.log"
+                f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
+                f"See error above in the sct.log"
             ).publish()
             return
 
@@ -449,7 +449,7 @@ class LongevityDataValidator:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate immutable rows. Fetch all rows from {self.expected_data_table_name} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log"
             ).publish()
             return
 
@@ -459,7 +459,7 @@ class LongevityDataValidator:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Actual dataset length more then expected ({len(actual_result)} > {len(expected_result)}). "
-                        f"Issue #6181"
+                f"Issue #6181"
             ).publish()
         elif not during_nemesis:
             assert len(actual_result) == len(expected_result), \
@@ -479,9 +479,9 @@ class LongevityDataValidator:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.ERROR,
                 error=f"Verify immutable rows. "
-                      f"One or more rows not found as expected, suspected LWT wrong update. "
-                      f"Actual dataset length: {len(actual_result)}, "
-                      f"Expected dataset length: {len(expected_result)}"
+                f"One or more rows not found as expected, suspected LWT wrong update. "
+                f"Actual dataset length: {len(actual_result)}, "
+                f"Expected dataset length: {len(expected_result)}"
             ).publish()
         else:
             LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
@@ -510,7 +510,7 @@ class LongevityDataValidator:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated rows. Fetch all rows from {views_set[0]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log"
             ).publish()
             return None
 
@@ -521,7 +521,7 @@ class LongevityDataValidator:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated rows. Fetch all rows from {views_set[1]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log"
             ).publish()
             return None
 
@@ -532,7 +532,7 @@ class LongevityDataValidator:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated row. Fetch all rows from {views_set[2]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log"
             ).publish()
             return None
 
@@ -598,7 +598,7 @@ class LongevityDataValidator:
             columns_for_validation = ', '.join(self.get_entity_columns(entity_name=data_for_validation.views[0],
                                                                        session=session))
             query = f"select %s f" \
-                    f"rom %s where {' and '.join(missed_row_as_str)}"
+                f"rom %s where {' and '.join(missed_row_as_str)}"
 
             row_data = {}
             for table in data_for_validation.views[:-1]:
@@ -653,8 +653,8 @@ class LongevityDataValidator:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.CRITICAL,
                 error=f"Validation updated rows failed. View {data_for_validation.views[0]}."
-                      "Failed data has been analyzed and saved with json format. "
-                      "Find the result files in sct-runner archive").publish()
+                "Failed data has been analyzed and saved with json format. "
+                "Find the result files in sct-runner archive").publish()
 
     def validate_range_expected_to_change(self, session, during_nemesis=False):
         """
@@ -694,7 +694,7 @@ class LongevityDataValidator:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.WARNING,
                     message=f"Can't start validation for {views_set[0]}. Copying expected data failed. "
-                            f"See error above in the sct.log"
+                    f"See error above in the sct.log"
                 ).publish()
                 continue
 
@@ -710,9 +710,9 @@ class LongevityDataValidator:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.WARNING,
                     message=f"View {views_set[0]}. "
-                            f"Actual dataset length {len(data_for_validation.actual_data)} "
-                            f"more then expected dataset length: {len(data_for_validation.expected_data)}. "
-                            f"Issue #6181"
+                    f"Actual dataset length {len(data_for_validation.actual_data)} "
+                    f"more then expected dataset length: {len(data_for_validation.expected_data)}. "
+                    f"Issue #6181"
                 ).publish()
                 continue
 
@@ -762,12 +762,12 @@ class LongevityDataValidator:
 
         actual_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
                                        statement=f"SELECT {pk_name} FROM "
-                                                 f"{self.view_name_for_deletion_data}", verbose=not during_nemesis)
+                                       f"{self.view_name_for_deletion_data}", verbose=not during_nemesis)
         if actual_result is None:
             DataValidatorEvent.DeletedRowsValidator(
                 severity=Severity.ERROR,
                 error=f"Can't validate deleted rows. Fetch all rows from {self.view_name_for_deletion_data} failed. "
-                      f"See error above in the sct.log"
+                f"See error above in the sct.log"
             ).publish()
             return
 

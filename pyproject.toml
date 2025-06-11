@@ -4,8 +4,8 @@ version = '0.1'
 requires-python = ">=3.10, <3.14"
 dependencies = [
     "aexpect==1.6.2",
-    "anyconfig==0.12.0",
-    "awscli==1.29.4",
+    "anyconfig==0.14.0",
+    "awscli==1.40.34",
     "azure-identity==1.16.1",
     "azure-keyvault-keys==4.11.0",
     "azure-mgmt-compute==33.1.0",
@@ -16,15 +16,15 @@ dependencies = [
     "azure-mgmt-resourcegraph==8.0.0",
     "azure-mgmt-subscription==3.1.1",
     "azure-storage-blob==12.16.0",
+    "boto3==1.38.35",
     "boto3-stubs[s3,ec2,dynamodb,pricing]==1.28.4",
-    "boto3==1.28.4",
     "click==8.1.3",
-    "confluent-kafka==2.5.3",
+    "confluent-kafka[avro]==2.10.1",
     "deepdiff==8.1.1",
     "docker==7.1.0",
     "elasticsearch==8.17.0",
     "fabric==3.2.2",
-    "fastavro==1.9.7",
+    "fastavro==1.11.1",
     "gimme-aws-creds==2.8.2",
     "google-api-python-client==2.93.0",
     "google-cloud-compute==1.13.0",
@@ -33,38 +33,39 @@ dependencies = [
     "invoke==2.2.0",
     "jinja2==3.1.6",
     "kubernetes==31.0.0",
-    "ldap3==2.9.1",
+    "ldap3-bleeding-edge==2.10.1.1338",
     "moto[server]==5.1.1",
     "mysql-connector-python==9.1.0",
     "packaging>=24",
-    "paramiko==3.5.0",
     "parameterized==0.8.1",
+    "paramiko==3.5.0",
     "pre-commit==4.0.1",
     "prettytable==3.10.2",
     "prometheus_client==0.11.0",
     "pycryptodome==3.19.1",
     "pydantic==2.10.5",
     "PyGithub==2.1.1",
-    "pytest-random-order==1.0.4",
     "pytest==8.3.4",
-    "python-jenkins==1.7.0",
+    "pytest-random-order==1.0.4",
+    "pytest-subtests==0.14.2",
+    "python-jenkins==1.8.2",
     "PyYAML==6.0.1",
     "pyzmq==26.2.0",
     "questionary==2.1.0",
     "requests==2.32.4",
     "scylla-driver==3.29.3",
     "sortedcontainers==2.4.0",
-    "ssh2-python3==1.11.1",
+    "ssh2-python>=1.1.2.post1",
     "tcconfig==0.29.1",
     "tenacity==9.0.0",
-    "pytest-subtests==0.14.2",
 ]
 [dependency-groups]
 dev = [
-    "autopep8==2.3.1",
+    "autopep8==2.3.2",
     "pre-commit==4.0.1",
-    "pycodestyle==2.12.0",
+    "pycodestyle==2.13.0",
     "ruff==0.11.13",
+    "uv-sort>=0.4.0",
 ]
 [tool.uv]
 package = false
@@ -88,7 +89,7 @@ lint.preview = true
 lint.explicit-preview-rules = true
 exclude = ["argus/"]
 
-target-version = "py310"
+target-version = "py313"
 
 force-exclude = true
 line-length = 240

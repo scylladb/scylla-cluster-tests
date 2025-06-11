@@ -92,12 +92,12 @@ class SlaPerUserTest(LongevityTest):
         if not (expected_ratio and actual_ratio):
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'Can\'t compare expected and actual shares ratio. Expected: {expected_ratio}. '
-                        f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
+                f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
 
         elif expected_ratio <= actual_ratio:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'{msg}. Actual ratio ({actual_ratio}) is as expected (more or equal then expected ratio '
-                        f'{expected_ratio})',
+                f'{expected_ratio})',
                 severity=Severity.NORMAL).publish()
         else:
             WorkloadPrioritisationEvent.RatioValidationEvent(
@@ -109,7 +109,7 @@ class SlaPerUserTest(LongevityTest):
         if dev is None:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'Can\'t compare expected and actual shares ratio. Expected: {expected_ratio}. '
-                        f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
+                f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
             return False
         elif dev > self.VALID_DEVIATION_PRC:
             WorkloadPrioritisationEvent.RatioValidationEvent(
@@ -698,7 +698,7 @@ class SlaPerUserTest(LongevityTest):
         if improvement_actual >= improvement_expected:
             WorkloadPrioritisationEvent.SlaTestResult(
                 message=f'Actual improvement is {improvement_actual} more/equal then {improvement_expected} '
-                        f'as expected.',
+                f'as expected.',
                 severity=Severity.NORMAL).publish()
 
         else:

@@ -124,7 +124,7 @@ class NdBenchStressThread(DockerBasedStressThread):
         self.stress_cmd = ' '.join([f'-Dndbench.config.{param.strip()}' for param in stress_cmd.split(';')])
         timeout = '' if 'cli.timeoutMillis' in self.stress_cmd else f'-Dndbench.config.cli.timeoutMillis={self.timeout * 1000}'
         self.stress_cmd = f'./gradlew {timeout}' \
-                          f' -Dndbench.config.cass.host={self.node_list[0].cql_address} {self.stress_cmd} run'
+            f' -Dndbench.config.cass.host={self.node_list[0].cql_address} {self.stress_cmd} run'
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         if not os.path.exists(loader.logdir):
