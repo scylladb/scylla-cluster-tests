@@ -470,7 +470,7 @@ def tunnel(user, test_id, region, port, wait_for_port, node_name):
         click.echo(click.style(f"tunnel into: {get_name(connect_vm)}", fg='green'))
         local_port = get_free_port()
         cmd = f'ssh -i {target_key} -N -L {local_port}:{target_ip}:{port} -o "UserKnownHostsFile=/dev/null" ' \
-              f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {bastion_username}@{bastion_ip}'
+            f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {bastion_username}@{bastion_ip}'
         click.echo(cmd)
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

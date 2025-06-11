@@ -205,7 +205,7 @@ class CommitLogCheckThread:
         if response and self.get_commit_log_directory_max_exceed_time(response) > self.exceed_time_interval:
             CommitLogCheckErrorEvent(
                 message=f"commit log directory exceed the limit longer that expected."
-                        f" Prometheus response: {response}").publish()
+                f" Prometheus response: {response}").publish()
 
     def zero_free_segments_checker(self, start_time, end_time):
         response = self.prometheus.query(
@@ -237,7 +237,7 @@ class CommitLogCheckThread:
             trace = traceback.format_exc()
             CommitLogCheckErrorEvent(
                 message=f"CommitLogCheckThread.__init__ failed with unexpected exception:"
-                        f" {exc.__repr__()} with traceback {trace}").publish()
+                f" {exc.__repr__()} with traceback {trace}").publish()
         else:
             try:
                 thread.start()
@@ -245,4 +245,4 @@ class CommitLogCheckThread:
                 trace = traceback.format_exc()
                 CommitLogCheckErrorEvent(
                     message=f"CommitLogCheckThread.start failed with unexpected exception:"
-                            f" {exc.__repr__()} with traceback {trace}").publish()
+                    f" {exc.__repr__()} with traceback {trace}").publish()
