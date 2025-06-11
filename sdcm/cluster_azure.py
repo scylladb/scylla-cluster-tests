@@ -22,6 +22,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -212,6 +213,7 @@ class AzureCluster(cluster.BaseCluster):
                          node_type=node_type)
         self.log.debug("AzureCluster constructor")
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         self.log.info("Adding nodes to cluster")
         nodes = []

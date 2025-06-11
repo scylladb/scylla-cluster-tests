@@ -97,6 +97,7 @@ from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJE
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
     LatencyDuringOperationsPerformanceAnalyzer
@@ -990,6 +991,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
+
+        self.nemesis_allocator = NemesisNodeAllocator(self)
 
         self.init_resources()
 
@@ -3937,3 +3940,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return make_hdrhistogram_summary_by_interval(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)
+
+    @property
+    def all_db_nodes(self) -> list[BaseNode]:
+        """
+        Returns a list of all DB nodes from all managed DB clusters (for multi-tenant support).
+        """
+        db_clusters = self.db_clusters_multitenant or [self.db_cluster]
+        return [node for cluster in db_clusters for node in cluster.nodes]
