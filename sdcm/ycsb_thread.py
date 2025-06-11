@@ -17,6 +17,7 @@ import time
 import uuid
 import tempfile
 import logging
+import glob
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
@@ -27,6 +28,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
 
@@ -115,6 +117,21 @@ class YcsbStatsPublisher(FileFollowerThread):
 class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
+    WORK_TYPES = {
+        'READ': 'read', 
+        'SCAN': 'read',
+        'UPDATE': 'write',
+        'INSERT': 'write',
+        'DELETE': 'write',
+        'WRITE': 'write',
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        uuid_val = uuid.uuid4()
+        self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{uuid_val}')
+        LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
+        self.hdrh_logger_contextes = []
 
     def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches  # noqa: B006
         if loader_name in memo:
@@ -243,6 +260,98 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         output = {k: str(v) for k, v in output.items()}
         return output
 
+    def run(self):
+        self._initialize_hdr_loggers()
+        
+        return super().run()
+    
+    def get_results(self):
+        results = super().get_results()
+        if self.params.get("use_hdrhistogram"):
+            self._terminate_hdr_loggers()
+            self._fix_hdr_files()
+        return results
+    
+    def _fix_hdr_files(self):
+        LOGGER.debug('Fixing HDR files')
+        allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
+        # everything should be stopped here, but we continue with no need to push our luck approach
+        # Note: we will explicitly held a mutex here, because in a case, where get_results is called from multiple
+        # threads, the second thread might get ahead of us and not all hdr files will be fixed.
+        for loader in self.loaders:
+            for cpu_idx in range(self.stress_num):
+                for work_type, tag in self.WORK_TYPES.items():
+                    tag_text = f'Tag={tag}'
+                    dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
+                    src_pth = dst_pth + '_'
+                    if os.path.isfile(src_pth):
+                        LOGGER.debug(f'Fixing HDR file {src_pth}')
+                        with open(src_pth, 'r', encoding='utf8') as input:
+                            data = input.readlines()
+                        data2 = []
+                        ignored_tail_lines = 0
+                        for d in data:
+                            d = d.strip()
+                            if d.startswith('#[Logging for:'):
+                                if data2:
+                                    LOGGER.debug(f'File {src_pth} removing previous content ({len(data2)} lines)')
+                                data2 = []
+                            if d.startswith('#') or d.startswith("'"):
+                                data2.append(d)
+                            elif d.startswith('tail: '):
+                                ignored_tail_lines += 1
+                            else:
+                                d2 = set(d)
+                                if d2 - allowed_chars:
+                                    LOGGER.warning(f'File {src_pth} ignoring line `{d}`, because of invalid characters')
+                                else:
+                                    if d[0].isdigit() or d[0] == '.':
+                                        data2.append(f'{tag_text},{d}')
+                                    else:
+                                        data2.append(d)
+                        removed = len(data) - len(data2)
+                        LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
+                        if data2:
+                            with open(dst_pth, 'w', encoding='utf8') as output:
+                                for d in data2:
+                                    output.write(d)
+                                    output.write('\n')
+                    else:
+                        LOGGER.debug(f'File {src_pth} does not exist, skipping update')
+
+    def _initialize_hdr_loggers(self):
+        for loader in self.loaders:
+            loader_idx = loader.node_index
+            for cpu_idx in range(self.stress_num):
+                for work_type in self.WORK_TYPES:
+                    LOGGER.debug(f'Initializing HDR logger with remote=/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr and target={self.directory_for_hdr_files}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr_')
+                    hdrh_logger = HDRHistogramFileLogger(
+                        node=loader,
+                        remote_log_file=f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr',
+                        target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr_'),
+                    )
+                    self.hdrh_logger_contextes.append(hdrh_logger)
+                    hdrh_logger.start()
+
+    def _terminate_hdr_loggers(self):
+        LOGGER.debug('Terminating HDR loggers')
+        for hdrh_logger in self.hdrh_logger_contextes:
+            hdrh_logger.stop()
+
+    def _prepare_directory_for_hdr_files(self, loader_idx, cpu_idx):
+        hdr_files_directory = f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
+        LOGGER.debug(f'Preparing HDR files directory: {hdr_files_directory}')
+        os.makedirs(hdr_files_directory, exist_ok=True)
+        files = glob.glob(f'{hdr_files_directory}/*.hdr')
+        for f in files:
+            LOGGER.debug(f'removing old hdr file: {f}')
+            os.remove(f)
+        try:
+            os.chmod('/tmp/hdr-output-directory', 0o777)
+        except Exception:
+            LOGGER.exception(f'chmod failed for /tmp/hdr-output-directory')
+        return hdr_files_directory
+
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
@@ -264,14 +373,14 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                    extra_docker_opts=f'--label shell_marker={self.shell_marker}',
                                    docker_network=self.params.get('docker_network'))
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
-            os.makedirs(f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}', exist_ok=True)
-            try:
-                os.chmod('/tmp/hdr-output-directory', 0o777)
-            except Exception:
-                LOGGER.exception(f'chmod failed for /tmp/hdr-output-directory')
+            extra_docker_opts = f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
+            if self.params["use_hdrhistogram"]:
+                hdr_files_directory = self._prepare_directory_for_hdr_files(loader_idx, cpu_idx)
+                extra_docker_opts += f' -v {hdr_files_directory}:/tmp/hdr-output-directory:z'
+
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,
-                extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker} -v /tmp/hdr-output-directory/{loader_idx}/{cpu_idx}:/tmp/hdr-output-directory:z',
+                extra_docker_opts=extra_docker_opts,
                 docker_network=self.params.get('docker_network'))
             cmd_runner_name = str(loader)
 

@@ -25,7 +25,6 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
-from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 from performance_regression_test import PerformanceRegressionTest, PerformanceTestWorkload
 from upgrade_test import UpgradeTest
@@ -49,117 +48,116 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
-    def make_uuid_dir_for_hdr_files(self):
-        uuid_val = uuid.uuid4()
-        dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid_val}')
-        self.directory_for_hdr_files = dir_name
-        os.makedirs(dir_name, exist_ok=True)
+    # def make_uuid_dir_for_hdr_files(self):
+    #     uuid_val = uuid.uuid4()
+    #     dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid_val}')
+    #     self.directory_for_hdr_files = dir_name
+    #     os.makedirs(dir_name, exist_ok=True)
 
-    def remove_old_hdr_files(self, stress_num):
-        for loader in self.loaders.nodes:
-            loader_index = loader.node_index
-            for work_type in work_types:
-                for stress_idx in range(0, stress_num):
-                    dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
-                    if os.path.isfile(dst_pth):
-                        self.log.debug(f'Removing hdr file {dst_pth}')
-                        try:
-                            os.remove(dst_pth)
-                        except Exception:
-                            pass
-        del self.directory_for_hdr_files
+    # def remove_old_hdr_files(self, stress_num):
+    #     for loader in self.loaders.nodes:
+    #         loader_index = loader.node_index
+    #         for work_type in work_types:
+    #             for stress_idx in range(0, stress_num):
+    #                 dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+    #                 if os.path.isfile(dst_pth):
+    #                     self.log.debug(f'Removing hdr file {dst_pth}')
+    #                     try:
+    #                         os.remove(dst_pth)
+    #                     except Exception:
+    #                         pass
+    #     del self.directory_for_hdr_files
 
-    def initialize_hdr_loggers(self, stress_num):
-        self.hdrh_logger_contextes = []
-        for loader in self.loaders.nodes:
-            loader_index = loader.node_index
-            for work_type in work_types:
-                for stress_idx in range(0, stress_num):
-                    hdrh_logger = HDRHistogramFileLogger(
-                        node=loader,
-                        remote_log_file=f'/tmp/hdr-output-directory/{loader_index}/{stress_idx}/hdrh-{work_type}.hdr',
-                        target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr_'),
-                    )
-                    hdrh_logger.start()
-                    self.hdrh_logger_contextes.append(hdrh_logger)
+    # def initialize_hdr_loggers(self, stress_num):
+    #     self.hdrh_logger_contextes = []
+    #     for loader in self.loaders.nodes:
+    #         loader_index = loader.node_index
+    #         for work_type in work_types:
+    #             for stress_idx in range(0, stress_num):
+    #                 hdrh_logger = HDRHistogramFileLogger(
+    #                     node=loader,
+    #                     remote_log_file=f'/tmp/hdr-output-directory/{loader_index}/{stress_idx}/hdrh-{work_type}.hdr',
+    #                     target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr_'),
+    #                 )
+    #                 hdrh_logger.start()
+    #                 self.hdrh_logger_contextes.append(hdrh_logger)
 
-    def terminate_hdr_loggers(self):
-        for hdrh_logger in self.hdrh_logger_contextes:
-            hdrh_logger.stop()
+    # def terminate_hdr_loggers(self):
+    #     for hdrh_logger in self.hdrh_logger_contextes:
+    #         hdrh_logger.stop()
 
-    def update_hdr_files(self, stress_num):
-        allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
-        for loader in self.loaders.nodes:
-            loader_index = loader.node_index
-            for work_type, tag in work_types.items():
-                tag_text = f'Tag={tag}'
-                for stress_idx in range(0, stress_num):
-                    dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
-                    src_pth = dst_pth + '_'
-                    if os.path.isfile(src_pth):
-                        with open(src_pth, 'r', encoding='utf8') as input:
-                            data = input.readlines()
-                        data2 = []
-                        ignored_tail_lines = 0
-                        for d in data:
-                            d = d.strip()
-                            if d.startswith('#[Logging for:'):
-                                if data2:
-                                    self.log.debug(f'File {src_pth} removing previous content ({len(data2)} lines)')
-                                data2 = []
-                            if d.startswith('#') or d.startswith("'"):
-                                data2.append(d)
-                            elif d.startswith('tail: '):
-                                ignored_tail_lines += 1
-                            else:
-                                d2 = set(d)
-                                if d2 - allowed_chars:
-                                    self.log.warning(f'File {src_pth} ignoring line `{d}`, because of invalid characters')
-                                else:
-                                    if d[0].isdigit() or d[0] == '.':
-                                        data2.append(f'{tag_text},{d}')
-                                    else:
-                                        data2.append(d)
-                        removed = len(data) - len(data2)
-                        self.log.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
-                        if data2:
-                            with open(dst_pth, 'w', encoding='utf8') as output:
-                                for d in data2:
-                                    output.write(d)
-                                    output.write('\n')
-                    else:
-                        self.log.debug(f'File {src_pth} does not exist, skipping update')
+    # def update_hdr_files(self, stress_num):
+    #     allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
+    #     for loader in self.loaders.nodes:
+    #         loader_index = loader.node_index
+    #         for work_type, tag in work_types.items():
+    #             tag_text = f'Tag={tag}'
+    #             for stress_idx in range(0, stress_num):
+    #                 dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
+    #                 src_pth = dst_pth + '_'
+    #                 if os.path.isfile(src_pth):
+    #                     with open(src_pth, 'r', encoding='utf8') as input:
+    #                         data = input.readlines()
+    #                     data2 = []
+    #                     ignored_tail_lines = 0
+    #                     for d in data:
+    #                         d = d.strip()
+    #                         if d.startswith('#[Logging for:'):
+    #                             if data2:
+    #                                 self.log.debug(f'File {src_pth} removing previous content ({len(data2)} lines)')
+    #                             data2 = []
+    #                         if d.startswith('#') or d.startswith("'"):
+    #                             data2.append(d)
+    #                         elif d.startswith('tail: '):
+    #                             ignored_tail_lines += 1
+    #                         else:
+    #                             d2 = set(d)
+    #                             if d2 - allowed_chars:
+    #                                 self.log.warning(f'File {src_pth} ignoring line `{d}`, because of invalid characters')
+    #                             else:
+    #                                 if d[0].isdigit() or d[0] == '.':
+    #                                     data2.append(f'{tag_text},{d}')
+    #                                 else:
+    #                                     data2.append(d)
+    #                     removed = len(data) - len(data2)
+    #                     self.log.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
+    #                     if data2:
+    #                         with open(dst_pth, 'w', encoding='utf8') as output:
+    #                             for d in data2:
+    #                                 output.write(d)
+    #                                 output.write('\n')
+    #                 else:
+    #                     self.log.debug(f'File {src_pth} does not exist, skipping update')
 
-    def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, stress_num, hdr_workload: PerformanceTestWorkload | Literal["throughput"], row_name, **kwargs):
-        self.make_uuid_dir_for_hdr_files()
+    def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
+        #self.make_uuid_dir_for_hdr_files()
         self.hdr_tags = ['read', 'write']
         self.row_name_override = row_name
-        if hdr_workload == PerformanceTestWorkload.READ:
+        if test_name.endswith('_read'):
             self.params['workload_name'] = 'read'
             cycle_name = '100% read'
-        elif hdr_workload == PerformanceTestWorkload.WRITE:
+        elif test_name.endswith('_write'):
             self.params['workload_name'] = 'write'
             cycle_name = '100% write'
-        elif hdr_workload == PerformanceTestWorkload.MIXED:
+        elif test_name.endswith('_mixed'):
             self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
-        elif hdr_workload == 'throughput':
-            hdr_workload = PerformanceTestWorkload.READ
+        elif test_name.endswith('_throughput'):
             self.params['workload_name'] = 'read'
             cycle_name = 'throughput'
         else:
-            self.log.error(f'unknown hdr_workload {hdr_workload} - some things might not work as expected')
+            self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
             
         @latency_calculator_decorator(cycle_name=cycle_name)
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
             return self._workload(*args, **kwargs)
 
-        ret = execute_workload_with_latency_calculator_decorator(self, stress_num=stress_num, hdr_workload=hdr_workload, **kwargs)
-        self.remove_old_hdr_files(stress_num=stress_num)
+        ret = execute_workload_with_latency_calculator_decorator(self, test_name=test_name, stress_num=stress_num, **kwargs)
+        #self.remove_old_hdr_files(stress_num=stress_num)
         return ret
     
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
-                  save_stats=True, is_alternator=True, nemesis=False, hdr_workload: Optional[PerformanceTestWorkload] = None, uuid=None):
+                  save_stats=True, is_alternator=True, nemesis=False):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -176,15 +174,13 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
 
-        if hdr_workload is not None:
+        if self.params['use_hdrhistogram']:
             self.initialize_hdr_loggers(stress_num=stress_num)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
-        if hdr_workload is not None:
-            self.terminate_hdr_loggers()
-            self.update_hdr_files(stress_num=stress_num)
-            self.build_histogram(hdr_workload, hdr_tags=self.hdr_tags)
+        if self.params['use_hdrhistogram']:
+            self.build_histogram(self.params['workload_name'], hdr_tags=self.hdr_tags)
 
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
@@ -382,6 +378,12 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.check_regression_with_baseline('cql')
 
     def test_basic(self):
+        self.run_basic_or_full_test(True)
+
+    def test_full(self):
+        self.run_basic_or_full_test(False)
+
+    def run_basic_or_full_test(self, basic):
         """
         Test steps:
 
@@ -408,10 +410,15 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         stress_multiplier = 1
 
-        cmd_add_params = " -target 15000 -p maxexecutiontime=2400 -p operationcount=20000000"
-        cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=40000000"
+        if basic:
+            cmd_add_params = " -target 15000 -p maxexecutiontime=360 -p operationcount=2000000"
+            cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=360 -p operationcount=4000000"
+        else:
+            cmd_add_params = " -target 15000 -p maxexecutiontime=2400 -p operationcount=20000000"
+            cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=40000000"
 
         def run_read_cql():
+            if basic: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.READ, row_name = 'cql')
@@ -426,6 +433,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, hdr_workload=PerformanceTestWorkload.READ, row_name = 'alternator-always-lwt')
         def run_write_cql():
+            if basic: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'cql')
@@ -440,6 +448,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'alternator-always-lwt')
         def run_mixed_cql():
+            if basic: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'cql')
@@ -452,6 +461,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
                            stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'alternator-always-lwt')
         def run_throughput_cql():
+            if basic: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_throghput', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload='throughput', row_name = 'cql')
@@ -488,88 +498,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         ]:
             self.wait_no_compactions_running(n=120)
             func()
-
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
-        #     keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.READ, row_name = 'cql')
-
-        # # run a workload without lwt as baseline
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
-        #     keyspace_num=1, hdr_workload=PerformanceTestWorkload.READ, row_name = 'alternator-no-lwt')
-
-        # self.wait_no_compactions_running()
-        # # run a workload with lwt
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
-        #     keyspace_num=1, hdr_workload=PerformanceTestWorkload.READ, row_name = 'alternator-always-lwt')
-        # self.check_regression_with_baseline('cql')
-
-        # stress_multiplier = 1
-        # self.run_fstrim_on_all_db_nodes()
-
-        # self.wait_no_compactions_running()
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
-        #     stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'cql')
-
-        # self.wait_no_compactions_running()
-        # # run a workload without lwt as baseline
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + cmd_add_params,
-        #     stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'alternator-no-lwt')
-
-        # self.wait_no_compactions_running(n=120)
-        # # run a workload with lwt
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_params,
-        #     stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'alternator-always-lwt')
-        # self.check_regression_with_baseline('cql')
-
-        # stress_multiplier = 1
-        # self.wait_no_compactions_running(n=120)
-        # self.run_fstrim_on_all_db_nodes()
-
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
-        #     stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'cql')
-
-        # self.wait_no_compactions_running()
-        # # run a workload without lwt as baseline
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
-        #                stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'alternator-no-lwt')
-
-        # self.wait_no_compactions_running()
-        # # run a workload with lwt
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
-        #                stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'alternator-always-lwt')
-        # self.check_regression_with_baseline('cql')
-
-        # stress_multiplier = 1
-        # self.wait_no_compactions_running(n=120)
-        # self.run_fstrim_on_all_db_nodes()
-
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(
-        #     test_name=self.id() + '_throghput', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
-        #     stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload='throughput', row_name = 'cql')
-
-        # self.wait_no_compactions_running()
-        # # run a workload without lwt as baseline
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='without-lwt',
-        #                stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload='throughput', row_name = 'alternator-no-lwt')
-
-        # self.wait_no_compactions_running()
-        # # run a workload with lwt
-        # self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-        # self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='with-lwt',
-        #                stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload='throughput', row_name = 'alternator-always-lwt')
 
     def test_latency_write_with_nemesis(self):
         self.create_alternator_table(
