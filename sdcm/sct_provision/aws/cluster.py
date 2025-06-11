@@ -439,4 +439,4 @@ class PlacementGroup(ClusterBase):
                 name=self.placement_group_name, tags=self.common_tags, region=self._region(0))
 
 
-ClusterNode.update_forward_refs()
+ClusterNode.model_rebuild()
