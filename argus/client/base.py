@@ -144,7 +144,7 @@ class ArgusClient:
         if not (run_type and run_id):
             raise ValueError("run_type and run_id must be set in func params or object attributes")
 
-        response = self.get(endpoint=self.Routes.GET, location_params={"type": run_type, "id": run_id })
+        response = self.get(endpoint=self.Routes.GET, location_params={"type": run_type, "id": run_id})
         self.check_response(response)
 
         return response.json()["response"]
@@ -228,4 +228,3 @@ class ArgusClient:
             }
         )
         self.check_response(response)
-

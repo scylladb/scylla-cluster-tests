@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+
 class RawHDRHistogram(TypedDict):
     start_time: int
     percentile_90: float
@@ -11,6 +12,7 @@ class RawHDRHistogram(TypedDict):
     percentile_99: float
     stddev: float
     percentile_99_9: float
+
 
 class GeminiResultsRequest(TypedDict):
     oracle_nodes_count: int
@@ -25,6 +27,7 @@ class GeminiResultsRequest(TypedDict):
     gemini_write_errors: int
     gemini_read_ops: int
     gemini_read_errors: int
+
 
 class PerformanceResultsRequest(TypedDict):
     test_name: str
