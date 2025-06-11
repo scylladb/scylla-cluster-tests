@@ -539,7 +539,8 @@ class BaseNode(AutoSshContainerMixin):
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
             scylla_yml.update(append_scylla_yaml)
-
+        if self.parent_cluster.node_type == "oracle-db":
+            scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
         return scylla_yml
 
     def refresh_ip_address(self):
