@@ -21,6 +21,7 @@ import logging
 import datetime
 import tempfile
 import traceback
+import urllib.parse
 from collections import OrderedDict
 from typing import Optional, Tuple, List
 from pathlib import Path
@@ -454,6 +455,20 @@ class MonitoringStack(BaseMonitoringEntity):
             return None
         return next((dashboard for dashboard in dashboards if title in dashboard["title"]), None)
 
+    @staticmethod
+    def get_panel_by_title(grafana_ip: str, port: int, dashboard_uid: str, panel_title: str) -> int | None:
+        search_api_url = f"http://{grafana_ip}:{port}/api/dashboards/uid/{dashboard_uid}"
+        resp = requests.get(search_api_url)
+        if not resp.ok:
+            LOGGER.error(f"Get dashboard by uid '{dashboard_uid}' failed: {resp.status_code} {resp.content}")
+            return None
+
+        panels = resp.json()['dashboard']['panels']
+        for panel in panels:
+            if panel_title in panel.get('title'):
+                return panel.get('id')
+        return None
+
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         local_archive = self.get_monitoring_data_stack(node, local_dst)
         if not local_archive:
@@ -491,6 +506,7 @@ class GrafanaEntity(BaseMonitoringEntity):
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.', maxsplit=1)[0] + '000'
         self.grafana_dashboards = self.base_grafana_dashboards + kwargs.pop("extra_entities", [])
+        self.extra_params_dict = kwargs.pop("extra_params_dict", {})
         super().__init__(*args, **kwargs)
 
     def get_version(self, node):
@@ -531,22 +547,45 @@ class GrafanaScreenShot(GrafanaEntity):
                         LOGGER.error("Dashboard with title '%s' was not found", dashboard.title)
                         continue
 
+                    # search for panel has a bit different url
+                    if dashboard.panel_title:
+                        path = dashboard_metadata["url"].replace('d/', 'd-solo/')
+                    else:
+                        path = dashboard_metadata["url"]
+
                     grafana_url = self.grafana_entity_url_tmpl.format(
                         node_ip=normalize_ipv6_url(node.grafana_address),
                         grafana_port=self.grafana_port,
-                        path=dashboard_metadata["url"],
+                        path=path,
                         st=self.start_time)
-                    screenshot_path = os.path.join(local_dst,
-                                                   "%s-%s-%s-%s.png" % (self.name,
-                                                                        dashboard.name,
-                                                                        datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
-                                                                        node.name))
+
+                    screenshot_name = f"{self.name}-{dashboard.name}"
+                    request_params_dict = {
+                        'width': dashboard.resolution[0], 'height': '-1', **self.extra_params_dict
+                    }
+                    if dashboard.panel_title:
+                        # If panel title is specified, we need to get the dashboard by UID
+                        panel_id = MonitoringStack.get_panel_by_title(
+                            grafana_ip=normalize_ipv6_url(node.grafana_address),
+                            port=self.grafana_port,
+                            dashboard_uid=dashboard_metadata["uid"],
+                            panel_title=dashboard.panel_title)
+                        if not panel_id:
+                            LOGGER.error("Panel with title '%s' was not found in dashboard '%s'",
+                                         dashboard.panel_title, dashboard.title)
+                            continue
+                        request_params_dict.update({"panelId": f"panel-{panel_id}"})
+                        screenshot_name += f"-{dashboard.panel_title.replace(' ', '_')}"
+                    screenshot_path = os.path.join(
+                        local_dst, f"{screenshot_name}-{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}-{node.name}.png")
+
                     LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
                     # deliberately specifying params as string to be able to use kiosk mode
                     # since requests can put a param without value, if using dict
                     # https://github.com/psf/requests/issues/2651
+                    request_params = f"{urllib.parse.urlencode(request_params_dict)}&kiosk"
                     with requests.get(grafana_url, stream=True,
-                                      params=f"width={dashboard.resolution[0]}&height=-1&kiosk") as response:
+                                      params=request_params) as response:
                         response.raise_for_status()
                         with open(screenshot_path, 'wb') as output_file:
                             for chunk in response.iter_content(chunk_size=8192):
