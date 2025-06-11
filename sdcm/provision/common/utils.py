@@ -92,17 +92,17 @@ def configure_hosts_set_hostname_script(hostname: str) -> str:
 def configure_sshd_script():
     return dedent("""
     if [ -f "/etc/security/limits.d/20-nproc.conf" ]; then
-        sed -i -e "s/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*.*/*\t\tsoft\tnproc\t\tunlimited/" \
+        sed -i -e "s/^\\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*.*/*\t\tsoft\tnproc\t\tunlimited/" \
     /etc/security/limits.d/20-nproc.conf || true
     else
         echo "*    hard    nproc    unlimited" > /etc/security/limits.d/20-nproc.conf || true
     fi
 
-    sed -i "s/#MaxSessions \(.*\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
-    sed -i "s/#MaxStartups \(.*\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
-    sed -i "s/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
-    sed -i "s/#ClientAliveInterval \(.*\)$/ClientAliveInterval 60/" /etc/ssh/sshd_config || true
-    sed -i "s/#ClientAliveCountMax \(.*\)$/ClientAliveCountMax 10/" /etc/ssh/sshd_config || true
+    sed -i "s/#MaxSessions \\(.*\\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
+    sed -i "s/#MaxStartups \\(.*\\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
+    sed -i "s/#LoginGraceTime \\(.*\\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
+    sed -i "s/#ClientAliveInterval \\(.*\\)$/ClientAliveInterval 60/" /etc/ssh/sshd_config || true
+    sed -i "s/#ClientAliveCountMax \\(.*\\)$/ClientAliveCountMax 10/" /etc/ssh/sshd_config || true
     """)
 
 
