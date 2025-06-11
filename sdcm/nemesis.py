@@ -113,7 +113,7 @@ from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
-from sdcm.utils.decorators import skip_on_capacity_issues
+from sdcm.utils.decorators import critical_on_capacity_issues, skip_on_capacity_issues
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
@@ -1246,7 +1246,7 @@ class Nemesis:
         #       as 'NotReady' and will fail the pod waiter function.
         self.log.info("Adding new node to cluster...")
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
-        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+        new_node = critical_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel

@@ -23,9 +23,11 @@ from typing import Optional, Callable
 from botocore.exceptions import ClientError
 
 from sdcm.argus_results import send_result_to_argus
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import EventCounterContextManager
 from sdcm.exceptions import UnsupportedNemesis
+from sdcm.sct_events.system import TestFrameworkEvent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -357,5 +359,24 @@ def skip_on_capacity_issues(func: callable) -> callable:
         except ClientError as ex:
             if "InsufficientInstanceCapacity" in str(ex):
                 raise UnsupportedNemesis("Capacity Issue") from ex
+            raise
+    return wrapper
+
+
+def critical_on_capacity_issues(func: callable) -> callable:
+    """
+    Decorator to end the test with a critical event due to capacity issues
+    This should be used when a failure would leave the cluster in an inconsistent topology state
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as ex:
+            if "InsufficientInstanceCapacity" in str(ex):
+                TestFrameworkEvent(source=callable.__name__,
+                                   message=f"Test failed due to capacity issues: {ex} "
+                                   "cluster is probably unbalanced, continuing with test would yield unknown results",
+                                   severity=Severity.CRITICAL).publish()
             raise
     return wrapper
