@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 from sdcm.cluster import BaseScyllaCluster
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 
@@ -49,9 +50,15 @@ class FakeTester:
     loaders: LocalLoaderSetDummy = field(default_factory=LocalLoaderSetDummy)
     db_cluster: Cluster | BaseScyllaCluster = field(default_factory=lambda: Cluster(nodes=[Node(), Node()]))
     monitors: list = field(default_factory=list)
+    nemesis_allocator: NemesisNodeAllocator = None
+
+    @property
+    def all_db_nodes(self):
+        return self.db_cluster.nodes if self.db_cluster else []
 
     def __post_init__(self):
         self.db_cluster.params = self.params
+        self.nemesis_allocator = NemesisNodeAllocator(self)
 
     def create_stats(self):
         pass

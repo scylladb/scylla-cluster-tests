@@ -48,6 +48,7 @@ from sdcm.utils.aws_utils import (
     tags_as_ec2_tags,
     EksClusterCleanupMixin,
 )
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 
 
 P = ParamSpec("P")
@@ -787,6 +788,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
     PodContainerClass = EksScyllaPodContainer
     nodes: List[EksScyllaPodContainer]
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",

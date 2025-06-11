@@ -23,6 +23,7 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
@@ -290,6 +291,7 @@ class DockerCluster(cluster.BaseCluster):
             self.nodes.append(node)
         return self.nodes
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "docker can't provision different instance types"
         return self._get_nodes() if self.test_config.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
