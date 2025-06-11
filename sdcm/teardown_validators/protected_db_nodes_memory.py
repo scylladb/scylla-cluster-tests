@@ -13,8 +13,15 @@
 
 import time
 import logging
+from pathlib import Path
+from datetime import datetime, timezone
 
 from sdcm.cluster import BaseNode
+from argus.client.sct.types import LogLink
+
+from sdcm.utils.common import S3Storage
+from sdcm.logcollector import GrafanaScreenShot
+from sdcm.monitorstack.ui import DetailedLsaTotalMemory
 from sdcm.sct_events import Severity
 from sdcm.sct_events.teardown_validators import ValidatorEvent
 from sdcm.teardown_validators.base import TeardownValidator
@@ -41,6 +48,7 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
         for node in nodes:
             mem_usage = self._get_memory_usage(node)
             LOG.info(f"Node {node} memory usage: {mem_usage} bytes")
+            self.take_grafana_memory_screenshot(node)
 
     def _get_memory_usage(self, node: BaseNode) -> int:
         """
@@ -67,3 +75,28 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
                     ).publish()
                 return sum(values)
         return 0
+
+    def take_grafana_memory_screenshot(self, node: BaseNode):
+        """
+        Takes a screenshot of the Grafana dashboard for the given node, saves it, uploads it to S3,
+        and submits the screenshot and its link to Argus.
+        """
+        LOG.info(f"Taking Grafana screenshot for node {node.ip_address}")
+
+        date_time = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+        screenshot_collector = GrafanaScreenShot(
+            name="grafana-screenshot",
+            test_start_time=self.tester.start_time,
+            extra_params_dict={"var_node", node.ip_address},
+        )
+        screenshot_collector.base_grafana_dashboards = [DetailedLsaTotalMemory,]
+        screenshot_files = screenshot_collector.collect(self.tester.monitors.nodes[0], self.tester.logdir)
+        client = self.tester.test_config.argus_client()
+
+        for screenshot in screenshot_files:
+            s3_path = "{test_id}/{date}".format(test_id=self.tester.test_config.test_id(), date=date_time)
+            file_url = S3Storage().upload_file(screenshot, s3_path)
+
+            client.submit_sct_logs([LogLink(log_name=Path(screenshot).name, log_link=file_url)])
+            client.submit_screenshots([file_url])
