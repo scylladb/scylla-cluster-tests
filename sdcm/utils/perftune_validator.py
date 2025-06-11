@@ -131,8 +131,8 @@ class PerftuneOutputChecker:
         if cpu_mask_bits != self.expected_result.expected_compute_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-cpu-mask' command on {self.node}"
-                        f"\nActual result: '{cpu_mask}' / {cpu_mask_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_compute_bits} bits",
+                f"\nActual result: '{cpu_mask}' / {cpu_mask_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_compute_bits} bits",
                 severity=Severity.ERROR).publish()
 
     def compare_irq_cpu_mask(self) -> None:
@@ -141,9 +141,9 @@ class PerftuneOutputChecker:
         if irq_cpu_bits != self.expected_result.expected_irq_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-irq-cpu-mask' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{irq_cpu_mask}' / {irq_cpu_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
+                f"{self.node}"
+                f"\nActual result: '{irq_cpu_mask}' / {irq_cpu_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
                 severity=Severity.ERROR).publish()
 
     def compare_default_option_file(self, option_file_dict) -> None:
@@ -153,25 +153,25 @@ class PerftuneOutputChecker:
         if cpu_mask_bits != self.expected_result.total_cpu_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of `cpu_mask` from the 'dump-options-file' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict['cpu_mask']}' / {cpu_mask_bits} bits"
-                        f"\nExpected output: {self.expected_result.total_cpu_bits} bits",
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict['cpu_mask']}' / {cpu_mask_bits} bits"
+                f"\nExpected output: {self.expected_result.total_cpu_bits} bits",
                 severity=Severity.ERROR).publish()
 
         if irq_cpu_bits != self.expected_result.expected_irq_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-irq-cpu-mask' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict['irq_cpu_mask']}' / {irq_cpu_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict['irq_cpu_mask']}' / {irq_cpu_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
                 severity=Severity.ERROR).publish()
 
         if option_file_dict.items() <= self.expected_result.get_expected_options_file_contents().items():
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'dump-options-file' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict}'"
-                        f"\nExpected output: '{self.expected_result.get_expected_options_file_contents()}'",
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict}'"
+                f"\nExpected output: '{self.expected_result.get_expected_options_file_contents()}'",
                 severity=Severity.ERROR).publish()
 
     def compare_option_file_yaml_with_temp_yaml_copy(self, option_file_dict) -> None:
@@ -179,10 +179,10 @@ class PerftuneOutputChecker:
         if diff := DeepDiff(temp_perftune_yaml_content_dict, option_file_dict, ignore_order=True):
             PerftuneResultEvent(
                 message=f"Mismatched results when comparing the output of the 'dump-options-file' command to "
-                        f"the content of the generated perftune.yaml file on {self.node}"
-                        f"\nActual result: '{temp_perftune_yaml_content_dict}'"
-                        f"\nExpected output: '{option_file_dict}'"
-                        f"\nDiff: {diff}",
+                f"the content of the generated perftune.yaml file on {self.node}"
+                f"\nActual result: '{temp_perftune_yaml_content_dict}'"
+                f"\nExpected output: '{option_file_dict}'"
+                f"\nDiff: {diff}",
                 severity=Severity.ERROR).publish()
 
     @staticmethod
@@ -214,7 +214,7 @@ class PerftuneOutputChecker:
         if altered_option_file_contents["irq_cpu_mask"] != random_irq_cpu_mask_string:
             PerftuneResultEvent(
                 message=f"Despite overriding the irq_cpu_mask param, its value is was not altered properly in the "
-                        f"output of the 'dump-options-file' command on node {self.node}",
+                f"output of the 'dump-options-file' command on node {self.node}",
                 severity=Severity.ERROR).publish()
 
     def compare_perftune_results(self) -> None:

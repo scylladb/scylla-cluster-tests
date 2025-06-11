@@ -37,7 +37,7 @@ class DummyK8sCluster:
     def kubectl(self, command, *args, **kwargs):
         result = [result for cmd, result in self._commands.items() if cmd in command]
         assert result, f"given command: {command} was not registered, failing test." \
-                       f" Please register result with 'register_kubectl_result"
+            f" Please register result with 'register_kubectl_result"
         return result[0]
 
     def register_kubectl_result(self, command: str, command_result: Result):

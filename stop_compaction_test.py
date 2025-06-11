@@ -342,7 +342,7 @@ class StopCompactionTest(ClusterTester):
                     found_grepped_expression = True
 
         self.assertTrue(found_grepped_expression, msg=f'Did not find the expected "{self.GREP_PATTERN}" '
-                                                      f'expression in the logs.')
+                        f'expression in the logs.')
 
     @record_sub_test_result
     def _stop_compaction_on_ks_cf_base_scenario(self,

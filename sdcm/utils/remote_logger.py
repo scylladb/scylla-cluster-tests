@@ -503,7 +503,7 @@ class K8sClientLogger(LoggerBase):
             if isoparse(log_timestamp) >= isoparse(self._last_log_timestamp):
                 TestFrameworkEvent(source="K8sClientLogger",
                                    message=f"Failed to find last log timestamp in the log stream for {self._pod_name} after reconnection."
-                                           f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
+                                   f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
                                    severity=Severity.ERROR).publish()
                 return
 

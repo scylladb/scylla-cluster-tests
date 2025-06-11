@@ -2638,7 +2638,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cl_clause = ', '.join(mv_clustering_key)
 
         query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
-                f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
+            f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
         if compression is not None:
             query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
         if read_repair is not None:
@@ -3301,8 +3301,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
         stress_fixed_params = f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={replication_factor}) " \
-                              "compaction(strategy=LeveledCompactionStrategy)' " \
-                              "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
+            "compaction(strategy=LeveledCompactionStrategy)' " \
+            "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="
         population = " -pop seq="
 
@@ -3438,7 +3438,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
-                             f"current size is: '{used}'"
+            f"current size is: '{used}'"
 
     def check_latency_during_ops(self, hdr_tags: list[str]):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
@@ -3878,7 +3878,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ''
             all_nodes_shards['live_nodes'].append({'name': node.name,
                                                    'ip': f"{node.public_ip_address} | {node.private_ip_address}"
-                                                         f"{f' | {ipv6}' if ipv6 else ''}",
+                                                   f"{f' | {ipv6}' if ipv6 else ''}",
                                                    'shards': node.scylla_shards})
 
         all_nodes_shards['dead_nodes'] = [asdict(node) for node in self.db_cluster.dead_nodes_list]

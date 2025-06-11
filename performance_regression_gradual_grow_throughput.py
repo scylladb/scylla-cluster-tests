@@ -58,7 +58,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         if workload_type not in throttle_steps:
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"Throttle steps for '{workload_type}' test is not defined in "
-                                       f"'perf_gradual_throttle_steps' parameter",
+                               f"'perf_gradual_throttle_steps' parameter",
                                severity=Severity.CRITICAL).publish()
         return throttle_steps[workload_type]
 
@@ -67,7 +67,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         if workload_type not in step_duration:
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"Step duration for '{workload_type}' test is not defined in "
-                                       f"'perf_gradual_step_duration' parameter",
+                               f"'perf_gradual_step_duration' parameter",
                                severity=Severity.CRITICAL).publish()
         return step_duration[workload_type]
 

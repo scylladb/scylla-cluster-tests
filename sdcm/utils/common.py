@@ -150,7 +150,7 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
 
 def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
     query = f"select keyspace_name, view_name, base_table_name from system_schema.views " \
-            f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
+        f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     if not result:
@@ -161,7 +161,7 @@ def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
 
 def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -> list:
     query = f"select view_name from system_schema.views " \
-            f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
+        f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     views = []
@@ -173,7 +173,7 @@ def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -
 
 def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
     query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
-            f"and table_name='{entity_name}'"
+        f"and table_name='{entity_name}'"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     view_details = []
@@ -2514,7 +2514,7 @@ def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, promet
 
     if scylla_load < wait_cpu_utilization:
         CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
-                                      " The test results may be not correct.",
+                              " The test results may be not correct.",
                               severity=event_severity).publish()
         return False
 

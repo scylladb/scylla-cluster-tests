@@ -298,7 +298,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                         self.params.scylla_version_upgrade_target)):
                 InfoEvent(
                     message=f'upgrade_node - orig is enterprise and version {self.orig_ver} < 2025.1.0~dev and '
-                            f'scylla_version_upgrade_target is {self.params.scylla_version_upgrade_target}').publish()
+                    f'scylla_version_upgrade_target is {self.params.scylla_version_upgrade_target}').publish()
                 scylla_pkg = 'scylla'
                 scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
                 InfoEvent(message='Rollback mode is set to reinstall').publish()
@@ -562,7 +562,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if idx_token_error:
             IndexSpecialColumnErrorEvent(
                 message=f'Node: {node.name}. Step: {step}. '
-                        f'Found error: index special column "idx_token" is not recognized'
+                f'Found error: index special column "idx_token" is not recognized'
             ).publish()
 
     @staticmethod
