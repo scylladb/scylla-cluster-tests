@@ -50,3 +50,5 @@ email_subject_postfix: 'disk and cache'
 custom_es_index: 'performancestatsv2'
 
 use_hdrhistogram: true
+
+adaptive_timeout_store_metrics: false

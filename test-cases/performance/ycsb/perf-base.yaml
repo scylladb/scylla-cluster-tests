@@ -58,3 +58,5 @@ authorizer: 'CassandraAuthorizer'
 user_prefix: 'perf-ycsb-latency-nemesis'
 email_subject_postfix: 'YCSB workloads'
 store_perf_results: true
+
+adaptive_timeout_store_metrics: false

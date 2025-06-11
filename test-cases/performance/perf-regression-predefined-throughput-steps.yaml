@@ -66,3 +66,5 @@ use_placement_group: true
 use_prepared_loaders: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
+
+adaptive_timeout_store_metrics: false

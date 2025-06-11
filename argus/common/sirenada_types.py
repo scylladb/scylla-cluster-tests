@@ -23,7 +23,7 @@ class RawSirenadaTestCase(TypedDict):
 class RawSirenadaRequest(TypedDict):
     build_id: str
     build_job_url: str
-    run_id: str # UUID
+    run_id: str  # UUID
     region: list[str]
     browsers: list[str]
     clusters: list[str]
