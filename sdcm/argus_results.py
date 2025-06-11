@@ -17,7 +17,8 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule, \
+    StaticGenericResultTable
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
@@ -37,7 +38,7 @@ LATENCY_ERROR_THRESHOLDS = {
 }
 
 
-class LatencyCalculatorMixedResult(GenericResultTable):
+class LatencyCalculatorMixedResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -56,7 +57,7 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorWriteResult(GenericResultTable):
+class LatencyCalculatorWriteResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -72,7 +73,7 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorReadResult(GenericResultTable):
+class LatencyCalculatorReadResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -88,7 +89,7 @@ class LatencyCalculatorReadResult(GenericResultTable):
         ]
 
 
-class ReactorStallStatsResult(GenericResultTable):
+class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
         description = ""
@@ -101,7 +102,7 @@ class ReactorStallStatsResult(GenericResultTable):
         ]
 
 
-class ManagerRestoreBanchmarkResult(GenericResultTable):
+class ManagerRestoreBanchmarkResult(StaticGenericResultTable):
     class Meta:
         name = "Restore benchmark"
         description = "Restore benchmark"
@@ -121,7 +122,7 @@ class ManagerRestoreBanchmarkResult(GenericResultTable):
         }
 
 
-class ManagerBackupBenchmarkResult(GenericResultTable):
+class ManagerBackupBenchmarkResult(StaticGenericResultTable):
     class Meta:
         name = "Backup benchmark"
         description = "Backup benchmark"
@@ -130,7 +131,7 @@ class ManagerBackupBenchmarkResult(GenericResultTable):
         ]
 
 
-class ManagerBackupReadResult(GenericResultTable):
+class ManagerBackupReadResult(StaticGenericResultTable):
     class Meta:
         name = "Read timing"
         description = "Read timing"
@@ -139,7 +140,7 @@ class ManagerBackupReadResult(GenericResultTable):
         ]
 
 
-class ManagerSnapshotDetails(GenericResultTable):
+class ManagerSnapshotDetails(StaticGenericResultTable):
     class Meta:
         name = "Snapshot details"
         description = "Manager snapshots (pre-created for next utilization in restore tests) details"
@@ -151,6 +152,68 @@ class ManagerSnapshotDetails(GenericResultTable):
             ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="scylla_version", unit="", type=ResultType.TEXT),
         ]
+
+
+class PerfSimpleQueryResult(StaticGenericResultTable):
+    def __init__(self, workload: str, parameters: dict):
+        super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
+
+    class Meta:
+        Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="instructions_per_op", unit="",
+                                  type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ]
+
+        ValidationRules = {
+            "allocs_per_op": ValidationRule(best_pct=5),
+            "instructions_per_op": ValidationRule(best_pct=5),
+        }
+
+
+class IOPropertiesResultsTable(StaticGenericResultTable):
+    def __init__(self, cluster_backend: str, instance_type: str):
+        super().__init__(name=f"{cluster_backend} - {instance_type} - Disk Performance")
+
+    class Meta:
+        description = "io_properties.yaml generated from live measured disk"
+        Columns = [
+            ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+        ]
+
+
+class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
+    def __init__(self, cluster_backend: str, instance_type: str):
+        super().__init__(name=f"{cluster_backend} - {instance_type} - Disk Performance Percent deviation")
+
+    class Meta:
+        description = "io_properties.yaml percent deviation from pre-configured disk"
+        Columns = [
+            ColumnMetadata(name="read_iops_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="write_iops_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+        ]
+
+        ValidationRules = {
+            "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
+            "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+            "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
+            "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+        }
 
 
 workload_to_table = {
@@ -283,31 +346,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
 
 def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict):
     stats = result["stats"]
-    workload = result["test_properties"]["type"]
-    parameters = result["parameters"]
 
-    class PerfSimpleQueryResult(GenericResultTable):
-        class Meta:
-            name = f"{workload} - Perf Simple Query"
-            description = json.dumps(parameters)
-            Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="instructions_per_op", unit="",
-                                      type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ]
-
-            ValidationRules = {
-                "allocs_per_op": ValidationRule(best_pct=5),
-                "instructions_per_op": ValidationRule(best_pct=5),
-            }
-
-    result_table = PerfSimpleQueryResult()
+    result_table = PerfSimpleQueryResult(workload=result["test_properties"]["type"], parameters=result["parameters"])
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
@@ -341,46 +381,15 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         LOGGER.warning("No test exists for this run, skipping submitting results")
         return
 
-    class IOPropertiesResultsTable(GenericResultTable):
-        class Meta:
-            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance"
-            description = "io_properties.yaml generated from live measured disk"
-            Columns = [
-                ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
-            ]
-
-    class IOPropertiesDeviationResultsTable(GenericResultTable):
-        class Meta:
-            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance Percent deviation"
-            description = "io_properties.yaml percent deviation from pre-configured disk"
-            Columns = [
-                ColumnMetadata(name="read_iops_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="write_iops_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-            ]
-
-            ValidationRules = {
-                "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
-                "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-                "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
-                "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-            }
-
-    table = IOPropertiesResultsTable()
+    table = IOPropertiesResultsTable(cluster_backend=params.get('cluster_backend'),
+                                     instance_type=node.db_node_instance_type)
     for key, value in results["active"].items():
         table.add_result(column=key, row="measured", value=value, status=Status.UNSET)
         table.add_result(column=key, row="pre-configured", value=results["preset"][key], status=Status.UNSET)
     submit_results_to_argus(argus_client, table)
 
-    table = IOPropertiesDeviationResultsTable()
+    table = IOPropertiesDeviationResultsTable(cluster_backend=params.get('cluster_backend'),
+                                              instance_type=node.db_node_instance_type)
     for key, value in results["deviation_pct"].items():
         table.add_result(column=f"{key}_pct_deviation", row="deviation_percent",
                          value=value, status=Status.PASS if value < 15 else Status.WARNING)
