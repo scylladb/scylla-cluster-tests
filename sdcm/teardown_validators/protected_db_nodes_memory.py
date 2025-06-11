@@ -13,10 +13,16 @@
 
 import time
 import logging
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Tuple, Union
 
+from argus.client.sct.types import LogLink
+
 from sdcm.cluster import BaseNode
+from sdcm.utils.common import S3Storage
+from sdcm.logcollector import GrafanaScreenShot
+from sdcm.monitorstack.ui import DetailedLsaTotalMemory
 from sdcm.sct_events import Severity
 from sdcm.sct_events.teardown_validators import ValidatorEvent
 from sdcm.teardown_validators.base import TeardownValidator
@@ -44,6 +50,7 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
         nodes = [node for node in self.tester.db_cluster.nodes if node.is_protected]
         for node in nodes:
             self.get_memory_usage(node)
+            self.take_grafana_memory_screenshot(node)
 
     def detect_anomalies(self, prom_values: List[Tuple[int, Union[str, int, float]]], node: BaseNode, metric_name: str):
         """
@@ -89,3 +96,36 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
         if results := self.tester.prometheus_db.query(query=query, start=self.tester.start_time, end=time.time()):
             self.detect_anomalies(results[0]['values'],
                                   metric_name="scylla_lsa_total_space_bytes", node=node)
+
+    @silence(verbose=True)
+    def take_grafana_memory_screenshot(self, node: BaseNode):
+        """
+        Takes a screenshot of the Grafana dashboard for the given node, saves it, uploads it to S3,
+        and submits the screenshot and its link to Argus.
+        """
+        LOG.info(f"Taking Grafana screenshot for node {node.ip_address}")
+
+        date_time = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+        screenshot_collector = GrafanaScreenShot(
+            name="grafana-screenshot",
+            test_start_time=self.tester.start_time,
+            extra_params_dict={
+                "var-node": node.ip_address,
+                "var-by": 'instance',
+                "var-cluster": "my-cluster",
+                "var-dc": "$__all",
+                "var-shard": "$__all",
+                "var-func": "sum"
+            },
+        )
+        screenshot_collector.grafana_dashboards = [DetailedLsaTotalMemory,]
+        screenshot_files = screenshot_collector.collect(self.tester.monitors.nodes[0], self.tester.logdir)
+        client = self.tester.test_config.argus_client()
+
+        for screenshot in screenshot_files:
+            s3_path = "{test_id}/{date}".format(test_id=self.tester.test_config.test_id(), date=date_time)
+            file_url = S3Storage().upload_file(screenshot, s3_path)
+
+            client.submit_sct_logs([LogLink(log_name=Path(screenshot).name, log_link=file_url)])
+            client.submit_screenshots([file_url])
