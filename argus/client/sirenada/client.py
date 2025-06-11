@@ -12,6 +12,7 @@ from argus.client.base import ArgusClient
 
 LOGGER = logging.getLogger(__name__)
 
+
 class SirenadaEnv(TypedDict):
     SIRENADA_JOB_ID: str
     SIRENADA_BROWSER: str
@@ -30,6 +31,7 @@ class TestCredentials(TypedDict):
     SIRENADA_OTP_SECRET: str
     ClusterID: str
     region: str
+
 
 class ArgusSirenadaClient(ArgusClient):
     test_type = "sirenada"
@@ -138,7 +140,8 @@ class ArgusSirenadaClient(ArgusClient):
             raise exc
 
         credentials = self._read_credentials(self.results_path / self._credentials_filename)
-        results = self._parse_junit_results(junit_xml=self.results_path / self._junit_xml_filename, credentials=credentials, env=env)
+        results = self._parse_junit_results(junit_xml=self.results_path /
+                                            self._junit_xml_filename, credentials=credentials, env=env)
         request_body: RawSirenadaRequest = {}
 
         request_body["run_id"] = env.get("SIRENADA_JOB_ID")

@@ -4,6 +4,7 @@ from argus.client.base import ArgusClient
 
 LOGGER = logging.getLogger(__name__)
 
+
 class ArgusGenericClient(ArgusClient):
     test_type = "generic"
     schema_version: None = "v1"

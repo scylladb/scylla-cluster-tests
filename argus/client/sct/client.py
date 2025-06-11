@@ -18,7 +18,7 @@ class ArgusSCTClient(ArgusClient):
         CREATE_RESOURCE = "/sct/$id/resource/create"
         TERMINATE_RESOURCE = "/sct/$id/resource/$name/terminate"
         UPDATE_RESOURCE = "/sct/$id/resource/$name/update"
-        SET_SCT_RUNNER  = "/sct/$id/sct_runner/set"
+        SET_SCT_RUNNER = "/sct/$id/sct_runner/set"
         UPDATE_SHARDS_FOR_RESOURCE = "/sct/$id/resource/$name/shards"
         SUBMIT_NEMESIS = "/sct/$id/nemesis/submit"
         SUBMIT_GEMINI_RESULTS = "/sct/$id/gemini/submit"
@@ -209,7 +209,6 @@ class ArgusSCTClient(ArgusClient):
         )
         self.check_response(response)
 
-
     def update_resource(self, name: str, update_data: dict[str, Any]) -> None:
         """
             Update fields of the resource.
@@ -223,7 +222,6 @@ class ArgusSCTClient(ArgusClient):
             }
         )
         self.check_response(response)
-
 
     def submit_nemesis(self, name: str, class_name: str, start_time: int,
                        target_name: str, target_ip: str, target_shards: int) -> None:
