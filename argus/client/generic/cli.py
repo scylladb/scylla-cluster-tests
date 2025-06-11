@@ -9,6 +9,7 @@ from argus.client.generic.client import ArgusGenericClient
 
 LOGGER = logging.getLogger(__name__)
 
+
 def validate_extra_headers(ctx, param, value):
     if isinstance(value, dict):
         return value
@@ -36,7 +37,8 @@ def cli():
 def submit_run(api_key: str, base_url: str, id: str, build_id: str, build_url: str, started_by: str, scylla_version: str = None, extra_headers: dict | None = None):
     LOGGER.info("Submitting %s (%s) to Argus...", build_id, id)
     client = ArgusGenericClient(auth_token=api_key, base_url=base_url, extra_headers=extra_headers)
-    client.submit_generic_run(build_id=build_id, run_id=id, started_by=started_by, build_url=build_url, scylla_version=scylla_version)
+    client.submit_generic_run(build_id=build_id, run_id=id, started_by=started_by,
+                              build_url=build_url, scylla_version=scylla_version)
     LOGGER.info("Done.")
 
 
@@ -68,7 +70,7 @@ def trigger_jobs(api_key: str, base_url: str, job_info_file: str, version: str, 
         LOGGER.error("File not found: %s", job_info_file)
         exit(128)
     payload = json.load(path.open("rt", encoding="utf-8"))
-    client.trigger_jobs({ "release": release, "version": version, "plan_id": plan_id, **payload })
+    client.trigger_jobs({"release": release, "version": version, "plan_id": plan_id, **payload})
 
 
 cli.add_command(submit_run)
