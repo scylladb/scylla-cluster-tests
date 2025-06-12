@@ -136,15 +136,19 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if test_name.endswith('_read'):
             self.params['workload_name'] = 'read'
             cycle_name = '100% read'
+            hdr_workload = PerformanceTestWorkload.READ
         elif test_name.endswith('_write'):
             self.params['workload_name'] = 'write'
             cycle_name = '100% write'
+            hdr_workload = PerformanceTestWorkload.WRITE
         elif test_name.endswith('_mixed'):
             self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
+            hdr_workload = PerformanceTestWorkload.MIXED
         elif test_name.endswith('_throughput'):
             self.params['workload_name'] = 'read'
             cycle_name = 'throughput'
+            hdr_workload = PerformanceTestWorkload.READ
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
             
@@ -152,12 +156,12 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
             return self._workload(*args, **kwargs)
 
-        ret = execute_workload_with_latency_calculator_decorator(self, test_name=test_name, stress_num=stress_num, **kwargs)
+        ret = execute_workload_with_latency_calculator_decorator(self, hdr_workload=hdr_workload, test_name=test_name, stress_num=stress_num, **kwargs)
         #self.remove_old_hdr_files(stress_num=stress_num)
         return ret
     
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
-                  save_stats=True, is_alternator=True, nemesis=False):
+                  save_stats=True, is_alternator=True, nemesis=False, hdr_workload=None):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -178,6 +182,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
         if self.params['use_hdrhistogram']:
+            assert hdr_workload is not None, "hdr_workload must be provided when use_hdrhistogram is True"
             self.build_histogram(self.params['workload_name'], hdr_tags=self.hdr_tags)
 
         if save_stats:
