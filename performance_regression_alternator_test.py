@@ -174,8 +174,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
 
-        if self.params['use_hdrhistogram']:
-            self.initialize_hdr_loggers(stress_num=stress_num)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
