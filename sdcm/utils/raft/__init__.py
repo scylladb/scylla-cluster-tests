@@ -7,9 +7,11 @@ from typing import Protocol, NamedTuple, Mapping, Iterable
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events import Severity
 from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
-
+from sdcm.utils.health_checker import HealthEventsGenerator
+from sdcm.rest.raft_api import RaftApi
 
 LOGGER = logging.getLogger(__name__)
 RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
@@ -74,6 +76,12 @@ class RaftFeatureOperations(Protocol):
 
     @property
     def is_enabled(self) -> bool:
+        """
+                    Please do not use this method in simple statements like:
+                        if not current_node.raft.is_enabled
+                    move logic into separate methods of RaftFeature/NoRaft
+                    classes instead
+                """
         ...
 
     @property
@@ -93,6 +101,11 @@ class RaftFeatureOperations(Protocol):
         ...
 
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
+        ...
+
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> [HealthEventsGenerator | None]:
         ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
@@ -146,6 +159,15 @@ class RaftFeature(RaftFeatureOperations):
         """
         state = self.get_status()
         return state == "use_post_raft_procedures"
+
+    def get_group0_id(self, session) -> str:
+         try:
+             row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
+             return row.value
+         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+             err_msg = f"Get group0 members failed with error: {exc}"
+             LOGGER.error(err_msg)
+             return ""
 
     def get_group0_members(self) -> list[dict[str, str]]:
         LOGGER.debug("Get group0 members")
@@ -274,6 +296,70 @@ class RaftFeature(RaftFeatureOperations):
 
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> HealthEventsGenerator:
+        LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
+                     self._node.name, self._node.host_id)
+        token_ring_node_ids = [member["host_id"] for member in tokenring_members]
+        broken_hosts = self.search_inconsistent_host_ids()
+        for member in group0_members:
+            if member["host_id"] in token_ring_node_ids and member["host_id"] not in broken_hosts:
+                continue
+            error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
+                f"can_vote {member['voter']} and " \
+                f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
+                f"Inconsistency between group0: {group0_members} " \
+                f"and tokenring: {tokenring_members}"
+            LOGGER.error(error_message)
+            yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                severity=Severity.ERROR,
+                node=self._node.name,
+                error=error_message,
+            )
+        LOGGER.debug("Group0 and token-ring are consistent on node %s (host_id=%s)...",
+                     self._node.name, self._node.host_id)
+
+    def call_read_barrier(self):
+        """ Wait until the node applies all previously committed Raft entries
+
+        Any schema/topology changes are committed with Raft group0 on node. Before
+        change is written to node, raft group0 checks that all previous schema/
+        topology changes were applied. Raft triggers read_barrier on node, and
+        node applies all previous changes(commits) before new schema/operation
+        write will be applied. After read barrier finished, it guarantees that
+        node has all schema/topology changes, which was done in cluster before
+        read_barrier started on node.
+
+        """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            raft_group0_id = self.get_group0_id(session)
+            assert raft_group0_id, "Group0 id was not found"
+        try:
+            api = RaftApi(self._node)
+            result = api.read_barrier(group_id=raft_group0_id)
+            LOGGER.debug("Api response %s", result)
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
+
+    def search_inconsistent_host_ids(self) -> list[str]:
+        """ Search inconsistent hosts in group zero and token ring
+
+        Find difference between group0 and tokenring and return hostid
+        of nodes which should be removed for restoring consistency
+                """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            limited_voters_feature_enabled = is_group0_limited_voters_enabled(session)
+        host_ids = self.get_diff_group0_token_ring_members()
+
+        LOGGER.debug("Difference between group0 and token ring: %s", host_ids)
+        # Starting from 2025.2 not all alive nodes are voters. get
+        # non voters node only for older versions < 2025.2
+        if not host_ids and not limited_voters_feature_enabled:
+            LOGGER.debug("Get non-voter member hostids")
+            host_ids = self.get_group0_non_voters()
+        return host_ids
+
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
@@ -325,6 +411,11 @@ class NoRaft(RaftFeatureOperations):
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
 
         return len(token_ring_ids) == num_of_nodes
+
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> None:
+        LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
