@@ -157,6 +157,7 @@ disrupt_mgmt_repair_cli:
   supports_high_disk_utilization: true
 disrupt_mgmt_restore:
   disruptive: true
+  full_cluster_restart: true
   kubernetes: true
   limited: true
   manager_operation: true
@@ -285,6 +286,7 @@ disrupt_rolling_config_change_internode_compression:
 disrupt_rolling_restart_cluster:
   disruptive: true
   free_tier_set: true
+  full_cluster_restart: true
   kubernetes: true
   supports_high_disk_utilization: true
 disrupt_run_cdcstressor_tool:
@@ -345,6 +347,7 @@ disrupt_stop_wait_start_scylla_server:
 disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
   config_changes: true
   disruptive: true
+  full_cluster_restart: true
 disrupt_terminate_and_replace_node:
   disruptive: true
   kubernetes: false
@@ -360,6 +363,7 @@ disrupt_toggle_audit_syslog:
   config_changes: true
   disruptive: true
   free_tier_set: true
+  full_cluster_restart: true
   schema_changes: true
   supports_high_disk_utilization: true
 disrupt_toggle_cdc_feature_properties_on_table:
