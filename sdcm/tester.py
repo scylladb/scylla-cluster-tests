@@ -3120,11 +3120,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     @staticmethod
     def _remove_errors_from_unittest_results(result):
         to_remove = []
-        for error in result.errors:
+        if hasattr(result, 'errors'):
+            errors = result.errors
+        else:
+            errors = result.result.errors
+        for error in errors:
             if error[1] is not None:
                 to_remove.append(error)
         for error in to_remove:
-            result.errors.remove(error)
+            errors.remove(error)
 
     def finalize_teardown(self):
         final_event = self._get_test_result_event()
@@ -3134,7 +3138,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self._outcome is not None:
             # If there is not self._outcome, it means tests running in non-unittest environment
             self._remove_errors_from_unittest_results(self._outcome)
-            self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
+            if hasattr(self._outcome, 'errors'):
+                self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
+            else:
+                print("self._outcome.result.errors", self._outcome.result.errors)
+                self._outcome.result.errors.append((self, (TestResultEvent, final_event, None)))
 
     @silence()
     def destroy_localhost(self):
@@ -3605,11 +3613,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
             :returns tuple(error, test_failure)
         """
-        if hasattr(self, '_outcome'):  # Python 3.4+
+        if hasattr(self._outcome, 'errors'):  # Python 3.4+
             result = self.defaultTestResult()  # these 2 methods have no side effects
-            self._feedErrorsToResult(result, self._outcome.errors)
-        else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
-            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)
+            self._feedErrorsToResult(result, self._outcome.get_test_failures)
+        else:  # Python 3.11+
+            result = self._outcome.result  # these 2 methods have no side effects
         for error in result.errors + result.failures:
             if len(error) > 1 and error[1]:
                 TestFrameworkEvent(
