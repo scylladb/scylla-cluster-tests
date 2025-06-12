@@ -524,7 +524,8 @@ class AWSNode(cluster.BaseNode):
 
         if not self.test_config.REUSE_CLUSTER:
             resources_to_tag = [self._instance.id, ]
-            if len(self._instance.network_interfaces) == 2:
+            if len(self._instance.network_interfaces) == 2 and \
+                    (self.parent_cluster.params.get('intra_node_comm_public') or ssh_connection_ip_type(self.parent_cluster.params) == 'public'):
                 # first we need to configure the both networks so we'll have public ip
                 self.allocate_and_attach_elastic_ip(self.parent_cluster, self.dc_idx)
                 resources_to_tag.append(self.eip_allocation_id)
