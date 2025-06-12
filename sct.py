@@ -1195,8 +1195,18 @@ def run_test(argv, backend, config, logdir):
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
-    unittest.main(module=None, argv=['python -m unittest', argv],
-                  failfast=False, buffer=False, catchbreak=True, testLoader=SctLoader())
+    if '::' in argv:
+        target = argv
+    else:
+        test_path = argv.split('.')
+        test_path[0] = f"{test_path[0]}.py"
+        target = '::'.join(test_path)
+
+    if not target:
+        print("argv is referring to the directory or file that contain tests, it can't be empty")
+        sys.exit(1)
+    return_code = pytest.main(['-s', '-vv', '-rN', '-p', 'no:logging', '-p', 'no:warnings', target])
+    sys.exit(return_code)
 
 
 @cli.command('run-pytest', help="Run tests using pytest")
