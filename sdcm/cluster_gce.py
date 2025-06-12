@@ -107,7 +107,7 @@ class GCENode(cluster.BaseNode):
         return True
 
     def init(self):
-        self._wait_public_ip()
+        self._wait_ip_address_ready()
 
         # sleep 10 seconds for waiting users are added to system
         # related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1121

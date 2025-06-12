@@ -46,7 +46,7 @@ from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip, ec2_instance_wait_private_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.utils.net import to_inet_ntop_format
@@ -224,14 +224,10 @@ class AWSCluster(cluster.BaseCluster):
                          self._ec2_subnet_id, dc_idx, az_idx, i)
             interfaces.append({'DeviceIndex': i,
                                'SubnetId': self._ec2_subnet_id[dc_idx][az_idx][i],
-                               'Groups': self._ec2_security_group_ids[dc_idx]})
+                               'Groups': self._ec2_security_group_ids[dc_idx],
+                               'AssociatePublicIpAddress': i == 0,
+                               })
         self.log.debug("interfaces: '%s' - to create_instances", interfaces)
-
-        # Can only be associated with a single network interface only with the device index of 0:
-        # https://docs.aws.amazon.com/sdkfornet1/latest/apidocs/html/P_Amazon_EC2_Model_InstanceNetworkInterfaceSpecification_
-        # AssociatePublicIpAddress.htm
-        if interfaces_amount == 1:
-            interfaces[0].update({'AssociatePublicIpAddress': True})
 
         self.log.info(f"Create {self.instance_provision} instance(s)")
         if self.instance_provision == 'mixed':
@@ -531,13 +527,14 @@ class AWSNode(cluster.BaseNode):
 
         if not self.test_config.REUSE_CLUSTER:
             resources_to_tag = [self._instance.id, ]
-            if len(self._instance.network_interfaces) == 2:
+            if len(self._instance.network_interfaces) == 2 and \
+                    (self.parent_cluster.params.get('intra_node_comm_public') or ssh_connection_ip_type(self.parent_cluster.params) == 'public'):
                 # first we need to configure the both networks so we'll have public ip
                 self.allocate_and_attach_elastic_ip(self.parent_cluster, self.dc_idx)
                 resources_to_tag.append(self.eip_allocation_id)
             self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
-        self._wait_public_ip()
+        self._wait_ip_address_ready()
         self.scylla_network_configuration = ScyllaNetworkConfiguration(
             network_interfaces=self.network_interfaces,
             scylla_network_config=self.parent_cluster.params["scylla_network_config"])
@@ -666,7 +663,7 @@ class AWSNode(cluster.BaseNode):
         self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
     def _refresh_instance_state(self):
-        self._wait_public_ip()
+        self._wait_ip_address_ready()
         self.refresh_network_interfaces_info()
         public_ipv4_addresses = [interface.ipv4_public_address for interface in self.scylla_network_configuration.network_interfaces
                                  if interface.ipv4_public_address]
@@ -704,8 +701,11 @@ class AWSNode(cluster.BaseNode):
                     f"Timeout while running '{instance_method.__name__}' method on AWS instance '{self._instance.id}'"
                 ) from None
 
-    def _wait_public_ip(self):
-        ec2_instance_wait_public_ip(self._instance)
+    def _wait_ip_address_ready(self):
+        if self.parent_cluster.params.get("intra_node_comm_public") or ssh_connection_ip_type(self.parent_cluster.params) == "public":
+            ec2_instance_wait_public_ip(self._instance)
+        else:
+            ec2_instance_wait_private_ip(self._instance)
 
     @cached_property
     def cql_address(self):
@@ -785,7 +785,7 @@ class AWSNode(cluster.BaseNode):
             self._instance_wait_safe(self._instance.wait_until_stopped)
             self._instance.start()
             self._instance_wait_safe(self._instance.wait_until_running)
-            self._wait_public_ip()
+            self._wait_ip_address_ready()
 
             self.log.debug("Got a new public IP: %s", self._instance.public_ip_address)
 

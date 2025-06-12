@@ -921,7 +921,7 @@ class BaseNode(AutoSshContainerMixin):
         private_ipv4_addresses = [to_inet_ntop_format(address) for address in private_ipv4_addresses]
         return list(set(public_ipv4_addresses + private_ipv4_addresses + [to_inet_ntop_format(self._get_ipv6_ip_address())]))
 
-    def _wait_public_ip(self):
+    def _wait_ip_address_ready(self):
         public_ips, _ = self._refresh_instance_state()
         while not public_ips:
             time.sleep(1)
@@ -3529,11 +3529,11 @@ class BaseCluster:
                                                   test_config=self.test_config)
         return user_data_builder.to_string()
 
-    def get_node_private_ips(self):
-        return [node.private_ip_address for node in self.nodes]
+    def get_node_private_ips(self) -> list[str]:
+        return list(filter(None, [node.private_ip_address for node in self.nodes]))
 
-    def get_node_public_ips(self):
-        return [node.public_ip_address for node in self.nodes]
+    def get_node_public_ips(self) -> list[str]:
+        return list(filter(None, [node.public_ip_address for node in self.nodes]))
 
     def get_node_cql_ips(self, nodes: list[BaseNode] | None = None):
         nodes = nodes if nodes else self.nodes

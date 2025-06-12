@@ -418,6 +418,10 @@ class PublicIpNotReady(Exception):
     pass
 
 
+class PrivateIpNotReady(Exception):
+    pass
+
+
 @retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady, botocore.exceptions.ClientError),
           message="Waiting for instance to get public ip")
 def ec2_instance_wait_public_ip(instance):
@@ -425,6 +429,15 @@ def ec2_instance_wait_public_ip(instance):
     if instance.public_ip_address is None:
         raise PublicIpNotReady(instance)
     LOGGER.debug("[%s] Got public ip: %s", instance, instance.public_ip_address)
+
+
+@retrying(n=90, sleep_time=10, allowed_exceptions=(PrivateIpNotReady, botocore.exceptions.ClientError),
+          message="Waiting for instance to get public ip")
+def ec2_instance_wait_private_ip(instance):
+    instance.reload()
+    if instance.private_ip_address is None:
+        raise PrivateIpNotReady(instance)
+    LOGGER.debug("[%s] Got private ip: %s", instance, instance.private_ip_address)
 
 
 def ec2_ami_get_root_device_name(image_id, region_name):

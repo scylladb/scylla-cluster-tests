@@ -144,6 +144,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return {
             'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],
             'Groups': self._ec2_security_group_ids[self.region_id],
+            # 'AssociatePublicIpAddress': interface_index == 0,
         }
 
     @property
