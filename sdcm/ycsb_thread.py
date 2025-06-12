@@ -131,6 +131,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         uuid_val = uuid.uuid4()
         self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{uuid_val}')
         LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
+        os.makedirs(self.directory_for_hdr_files, exist_ok=True)
         self.hdrh_logger_contextes = []
 
     def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches  # noqa: B006
