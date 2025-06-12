@@ -1,0 +1,6 @@
+latency_decorator_error_thresholds:
+  read:
+    instructions_per_op:
+      fixed_limit: 40000
+    allocs_per_op:
+      best_pct: 5
