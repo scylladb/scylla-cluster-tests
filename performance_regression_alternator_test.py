@@ -378,10 +378,22 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.check_regression_with_baseline('cql')
 
     def test_basic(self):
-        self.run_basic_or_full_test(True)
+        self.run_basic_or_full_test('basic')
 
     def test_full(self):
-        self.run_basic_or_full_test(False)
+        self.run_basic_or_full_test('full')
+
+    def test_basic_read(self):
+        self.run_basic_or_full_test('basic-read')
+
+    def test_basic_write(self):
+        self.run_basic_or_full_test('basic-write')
+
+    def test_basic_mixed(self):
+        self.run_basic_or_full_test('basic-mixed')
+
+    def test_basic_throughput(self):
+        self.run_basic_or_full_test('basic-throughput')
 
     def run_basic_or_full_test(self, basic):
         """
