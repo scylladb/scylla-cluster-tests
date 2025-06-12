@@ -1,11 +1,11 @@
 test_duration: 1200
-prepare_write_cmd: [ "cassandra-stress write cl=ALL n=1500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1500000000",
-                     "cassandra-stress write cl=ALL n=1500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1500000001..3000000000",
-                     "cassandra-stress write cl=ALL n=1500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=3000000001..4500000000",
-                     "cassandra-stress write cl=ALL n=1500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=650 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=4500000001..6000000000" ]
 
-stress_cmd_m: "cassandra-stress mixed cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=144 -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..6000000000,3000000000,900000000)'"
-instance_type_db: 'i4i.8xlarge'
+# Note: the running test MUST be supplied with a dataset file
+# that contains at least these two fields
+# prepare_write_cmd 
+# stress_cmd_m
+
+instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c6i.8xlarge'
 n_db_nodes: 6
 n_loaders: 4
@@ -26,13 +26,21 @@ use_hdrhistogram: true
 ami_id_db_scylla_desc: 'VERSION_DESC'
 nemesis_interval: 1
 round_robin: true
-append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+# Calculate stream_io_throughput_mb_per_sec for i4i.2xlarge:
+# It has Network bandwidth = 6.25 GiB/s
+# GiB/s to Mib/s
+# 6.25 GiB/s = 6250 Mib/s
+# Mib/s to MB/s (disk-wise)
+# Divide by 10 (not 8) → 6250 / 10 = 625 MB/s
+# Convert to "disk MB/s" using 1000/1024: 625 * 1000 / 1024 = ~610.35 MB/s
+# Take 75% of that: 0.75 * 610.35 = ~457.76 MB/s
+append_scylla_args: '--stream_io_throughput_mb_per_sec 458 --stream-io-throughput-mb-per-sec 600 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 backtrace_decoding: false
 
 store_perf_results: false
 use_prepared_loaders: false
 use_placement_group: true
-use_capacity_reservation: true
+use_capacity_reservation: false
 email_subject_postfix: 'latency during operations'
 cluster_health_check: false
 stress_image:
