@@ -630,7 +630,7 @@ class ManagerCluster(ScyllaManagerBase):
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
                            snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, transfers=None,
-                           legacy_args=None):
+                           method=None, legacy_args=None):
         cmd = "backup -c {}".format(self.id)
 
         if dc_list is not None:
@@ -670,6 +670,8 @@ class ManagerCluster(ScyllaManagerBase):
         if upload_parallel_list is not None:
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
+        if method:
+            cmd += f" --method {method}"
         if legacy_args:
             cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)

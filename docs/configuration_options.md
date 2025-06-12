@@ -2427,6 +2427,15 @@ Custom parameters of c-s write operation used in snapshots preparer
 **type:** dict_or_str
 
 
+## **mgmt_backup_method** / SCT_MGMT_BACKUP_METHOD
+
+Backup method (rclone, native or auto) to use for backup in Manager tests
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
