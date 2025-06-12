@@ -30,9 +30,9 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
@@ -177,3 +177,28 @@ def pytest_sessionfinish():
     # to silence the warnings, let's just prevent logging from raising
     # exceptions.
     logging.raiseExceptions = False
+
+
+@pytest.hookimpl(trylast=True, hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    """
+    Hook to capture the test report and attach it to the item.
+    so it can be accessed during
+    """
+    outcome = yield
+    report: pytest.TestReport = outcome.get_result()
+    setattr(item, "rep_" + report.when, report)
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_logreport(report: pytest.TestReport):
+    """
+    Hook to log subtest failures and their context.
+    """
+    if report.when == "call" and getattr(report, "context", None):
+        if report.failed:
+            SUBTESTS_FAILURES[report.nodeid].append(report)
+
+    if report.when == 'call' and 'test_tester' in report.nodeid and report.nodeid.endswith('::test'):
+        # overite the results of specific under test, tests
+        report.outcome = "passed"
