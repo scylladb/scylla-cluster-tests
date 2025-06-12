@@ -115,10 +115,7 @@ class PerfSimpleQueryResult(StaticGenericResultTable):
                    ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
                    ]
 
-        ValidationRules = {
-            "allocs_per_op": ValidationRule(best_pct=5),
-            "instructions_per_op": ValidationRule(best_pct=5),
-        }
+        ValidationRules = dict()
 
 
 workload_to_table = {
@@ -249,10 +246,23 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         submit_results_to_argus(argus_client, result_table)
 
 
-def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict):
-    stats = result["stats"]
+def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict, error_thresholds: dict):
+    def set_validation_rules(column_metadata):
+        if column_threshold := error_thresholds.get(workload, {}).get(column_metadata, {}):
+            LOGGER.debug("%s_threshold result: %s", column_metadata, column_threshold)
+            return ValidationRule(**column_threshold)
+        else:
+            return ValidationRule(best_pct=5)
 
-    result_table = PerfSimpleQueryResult(workload=result["test_properties"]["type"], parameters=result["parameters"])
+    stats = result["stats"]
+    workload = result["test_properties"]["type"]
+    validation_rules = dict()
+    validation_rules["instructions_per_op"] = set_validation_rules("instructions_per_op")
+    validation_rules["allocs_per_op"] = set_validation_rules("allocs_per_op")
+
+    result_table = PerfSimpleQueryResult(workload=workload, parameters=result["parameters"])
+    result_table.validation_rules = validation_rules
+    LOGGER.debug("result_table.validation_rules result: %s", result_table.validation_rules)
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
