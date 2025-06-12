@@ -921,7 +921,7 @@ class BaseNode(AutoSshContainerMixin):
         private_ipv4_addresses = [to_inet_ntop_format(address) for address in private_ipv4_addresses]
         return list(set(public_ipv4_addresses + private_ipv4_addresses + [to_inet_ntop_format(self._get_ipv6_ip_address())]))
 
-    def _wait_public_ip(self):
+    def _wait_ip_address_ready(self):
         public_ips, _ = self._refresh_instance_state()
         while not public_ips:
             time.sleep(1)
