@@ -134,16 +134,16 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.hdr_tags = ['read', 'write']
         self.row_name_override = row_name
         if test_name.endswith('_read'):
-            self.params['workload_name'] = PerformanceTestWorkload.READ
+            self.params['workload_name'] = 'read'
             cycle_name = '100% read'
         elif test_name.endswith('_write'):
-            self.params['workload_name'] = PerformanceTestWorkload.WRITE
+            self.params['workload_name'] = 'write'
             cycle_name = '100% write'
         elif test_name.endswith('_mixed'):
-            self.params['workload_name'] = PerformanceTestWorkload.MIXED
+            self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
         elif test_name.endswith('_throughput'):
-            self.params['workload_name'] = PerformanceTestWorkload.READ
+            self.params['workload_name'] = 'read'
             cycle_name = 'throughput'
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
