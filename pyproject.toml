@@ -54,6 +54,7 @@ dependencies = [
     "ssh2-python3==1.11.1",
     "tcconfig==0.29.1",
     "tenacity==9.0.0",
+    "pytest-subtests==0.14.2",
 ]
 [dependency-groups]
 dev = [
