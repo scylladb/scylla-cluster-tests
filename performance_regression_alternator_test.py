@@ -183,7 +183,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.get_stress_results(queue=stress_queue, store_results=True)
         if self.params['use_hdrhistogram']:
             assert hdr_workload is not None, "hdr_workload must be provided when use_hdrhistogram is True"
-            self.build_histogram(self.params['workload_name'], hdr_tags=self.hdr_tags)
+            self.build_histogram(hdr_workload, hdr_tags=self.hdr_tags)
 
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
