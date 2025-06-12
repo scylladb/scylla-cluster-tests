@@ -261,9 +261,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         return output
 
     def run(self):
+        ret = super().run()
         self._initialize_hdr_loggers()
-        
-        return super().run()
+        return ret
     
     def get_results(self):
         results = super().get_results()
