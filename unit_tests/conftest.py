@@ -30,14 +30,17 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+
+
+pytest_plugins = ["pytester"]
 
 
 @pytest.fixture(scope='module')
@@ -177,3 +180,33 @@ def pytest_sessionfinish():
     # to silence the warnings, let's just prevent logging from raising
     # exceptions.
     logging.raiseExceptions = False
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    """
+    Hook to capture the test report and attach it to the test item,
+    so it can be accessed later during teardown or in fixtures.
+    """
+    outcome = yield
+    report: pytest.TestReport = outcome.get_result()
+    setattr(item, "rep_" + report.when, report)
+
+    if report.when in ("call", "teardown") and item.get_closest_marker("override_pass"):
+        # overite the results of specific under test_tester that are supposed to fail
+        report.outcome = "passed"
+
+    return report
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_logreport(report: pytest.TestReport):
+    """
+    Hook to log subtest failures and their reports,
+    so it can be accessed later during teardown or in fixtures.
+
+    in this one we handle the subtests failures only, and change some of them to passed
+    """
+    if report.when == "call" and getattr(report, "context", None):
+        if report.failed:
+            SUBTESTS_FAILURES[report.nodeid].append(report)

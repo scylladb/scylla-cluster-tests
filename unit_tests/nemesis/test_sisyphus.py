@@ -112,8 +112,9 @@ def test_list_nemesis_of_added_disrupt_methods(get_sisyphus, capsys):
     assert "disrupt_rnd_method" in captured.out
 
 
-def test_add_sisyphus_with_filter_in_parallel_nemesis_run():
+def test_add_sisyphus_with_filter_in_parallel_nemesis_run(tmp_path):
     tester = ClusterTesterForTests()
+    tester._init_logging(tmp_path)
     tester._init_params()
     tester.db_cluster = Cluster(nodes=[Node(), Node()])
     tester.db_cluster.params = tester.params
