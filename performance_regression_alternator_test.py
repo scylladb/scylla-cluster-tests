@@ -395,7 +395,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def test_basic_throughput(self):
         self.run_basic_or_full_test('basic-throughput')
 
-    def run_basic_or_full_test(self, basic):
+    def run_basic_or_full_test(self, mode):
         """
         Test steps:
 
@@ -422,7 +422,12 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         stress_multiplier = 1
 
-        if basic:
+        is_basic = mode.startswith('basic')
+        run_read = mode == 'full' or mode == 'basic' or mode == 'basic-read'
+        run_write = mode == 'full' or mode == 'basic' or mode == 'basic-write'
+        run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
+        run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
+        if is_basic:
             cmd_add_params = " -target 15000 -p maxexecutiontime=360 -p operationcount=2000000"
             cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=360 -p operationcount=4000000"
         else:
@@ -430,58 +435,70 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=40000000"
 
         def run_read_cql():
-            if basic: return
+            if is_basic: return
+            if not run_read: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.READ, row_name = 'cql')
         def run_read_alternator_no_lwt():
+            if not run_read: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, hdr_workload=PerformanceTestWorkload.READ, row_name = 'alternator-no-lwt')
         def run_read_alternator_with_lwt():
+            if not run_read: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, hdr_workload=PerformanceTestWorkload.READ, row_name = 'alternator-always-lwt')
         def run_write_cql():
-            if basic: return
+            if is_basic: return
+            if not run_write: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'cql')
         def run_write_alternator_no_lwt():
+            if not run_write: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'alternator-no-lwt')
         def run_write_alternator_with_lwt():
+            if not run_write: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.WRITE, row_name = 'alternator-always-lwt')
         def run_mixed_cql():
-            if basic: return
+            if is_basic: return
+            if not run_mixed: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'cql')
         def run_mixed_alternator_no_lwt():
+            if not run_mixed: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
                            stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'alternator-no-lwt')
         def run_mixed_alternator_with_lwt():
+            if not run_mixed: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
                            stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload=PerformanceTestWorkload.MIXED, row_name = 'alternator-always-lwt')
         def run_throughput_cql():
-            if basic: return
+            if is_basic: return
+            if not run_throughput: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_throghput', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, hdr_workload='throughput', row_name = 'cql')
         def run_throughput_alternator_no_lwt():
+            if not run_throughput: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='without-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload='throughput', row_name = 'alternator-no-lwt')
         def run_throughput_alternator_with_lwt():
+            if not run_throughput: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='with-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, hdr_workload='throughput', row_name = 'alternator-always-lwt')
