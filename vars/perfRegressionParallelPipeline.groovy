@@ -36,15 +36,17 @@ def call(Map pipelineParams) {
             // ScyllaDB Configuration
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
-            string(defaultValue: '', description: 'Version of ScyllaDB', name: 'scylla_version')
+            string(defaultValue: '',
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
+                   name: 'scylla_version')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
             string(defaultValue: '',
-                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
                    name: 'new_scylla_repo')
             string(defaultValue: '',
-                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
                    name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',

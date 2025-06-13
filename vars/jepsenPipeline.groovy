@@ -30,10 +30,10 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
 
             string(defaultValue: '',
-                   description: 'a Scylla version to run against',
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
                    name: 'scylla_version')
             string(defaultValue: '',
-                   description: 'a Scylla repo to run against',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
                    name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'GCE image for ScyllaDB ',
