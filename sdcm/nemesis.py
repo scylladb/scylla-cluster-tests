@@ -2076,8 +2076,7 @@ class Nemesis:
                     to_be_skipped = []
                 else:
                     to_be_skipped = to_be_skipped.split(',') + to_be_skipped_default
-                tables = get_db_tables(session=session,
-                                       keyspace_name=ks,
+                tables = get_db_tables(keyspace_name=ks,
                                        node=self.target_node,
                                        with_compact_storage=False)
                 if to_be_skipped:
