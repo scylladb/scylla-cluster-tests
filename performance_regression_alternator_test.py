@@ -436,17 +436,17 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             vvv = self.params.get('alternator_running_time_multiplier')
         except:
             vvv = 'not found 1'
-        self.log.error('QWERTY vvv1 `{vvv}`')
+        self.log.error(f'QWERTY vvv1 `{vvv}`')
         try:
             vvv = self.get('alternator_running_time_multiplier')
         except:
             vvv = 'not found 2'
-        self.log.error('QWERTY vvv2 `{vvv}`')
+        self.log.error(f'QWERTY vvv2 `{vvv}`')
         try:
             vvv = os.environ.get('ALTERNATOR_RUNNING_TIME_MULTIPLIER')
         except:
             vvv = 'not found 3'
-        self.log.error('QWERTY vvv3 `{vvv}`')
+        self.log.error(f'QWERTY vvv3 `{vvv}`')
 
         try:
             running_time_multiplier_text = self.params.get('alternator_running_time_multiplier')
