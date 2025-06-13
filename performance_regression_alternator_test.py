@@ -431,24 +431,40 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
 
-        running_time_modifier_text = ''
+        running_time_multiplier_text = ''
         try:
-            running_time_modifier_text = self.params.get('alternator_running_time_multiplier')
-            running_time_modifier = float(running_time_modifier_text)
-            self.log.debug(f'running_time_modifier set to value {running_time_modifier}')
+            vvv = self.params.get('alternator_running_time_multiplier')
         except:
-            running_time_modifier = 1.0
-            if running_time_modifier_text:
-                self.log.warning(f'invalid format for running_time_modifier `{running_time_modifier_text}`, ignoring value')
+            vvv = 'not found 1'
+        self.log.error('QWERTY vvv1 `{vvv}`')
+        try:
+            vvv = self.get('alternator_running_time_multiplier')
+        except:
+            vvv = 'not found 2'
+        self.log.error('QWERTY vvv2 `{vvv}`')
+        try:
+            vvv = os.environ.get('ALTERNATOR_RUNNING_TIME_MULTIPLIER')
+        except:
+            vvv = 'not found 3'
+        self.log.error('QWERTY vvv3 `{vvv}`')
+
+        try:
+            running_time_multiplier_text = self.params.get('alternator_running_time_multiplier')
+            running_time_multiplier = float(running_time_multiplier_text)
+            self.log.debug(f'running_time_multiplier set to value {running_time_multiplier}')
+        except:
+            running_time_multiplier = 1.0
+            if running_time_multiplier_text:
+                self.log.warning(f'invalid format for running_time_multiplier `{running_time_multiplier_text}`, ignoring value')
             else:
-                self.log.debug(f'running_time_modifier not set, using value of 1')
+                self.log.debug(f'running_time_multiplier not set, using value of 1')
 
         if is_basic:
-            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(360 * running_time_modifier)} -p operationcount={int(2000000 * running_time_modifier)}"
-            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(360 * running_time_modifier)} -p operationcount={int(4000000 * running_time_modifier)}"
+            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(360 * running_time_multiplier)} -p operationcount={int(2000000 * running_time_multiplier)}"
+            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(360 * running_time_multiplier)} -p operationcount={int(4000000 * running_time_multiplier)}"
         else:
-            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(2400 * running_time_modifier)} -p operationcount={int(20000000 * running_time_modifier)}"
-            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(2400 * running_time_modifier)} -p operationcount={int(40000000 * running_time_modifier)}"
+            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(2400 * running_time_multiplier)} -p operationcount={int(20000000 * running_time_multiplier)}"
+            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(2400 * running_time_multiplier)} -p operationcount={int(40000000 * running_time_multiplier)}"
 
         def run_read_cql():
             if is_basic: return
