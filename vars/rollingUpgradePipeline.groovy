@@ -37,7 +37,9 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'new_scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   name: 'new_scylla_repo')
 
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
