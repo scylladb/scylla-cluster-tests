@@ -272,7 +272,7 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-compute"
-version = "33.1.0"
+version = "34.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-common", marker = "sys_platform != 'win32'" },
@@ -280,9 +280,9 @@ dependencies = [
     { name = "isodate", marker = "sys_platform != 'win32'" },
     { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/b4/0b5b7e7cce4e83efc59e9a0763d95c613edd0d87f17891d7cccb451ff071/azure_mgmt_compute-33.1.0.tar.gz", hash = "sha256:f5a5e18a5a7a0354562bbfa589b5db4aaf1e8ac3a194a2a910db55900d2535e9", size = 5352255, upload-time = "2024-12-16T07:45:08.846Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/30/bb941f2eee419009668305b510dfb3577604a08102b3a1d0df78d14205f3/azure_mgmt_compute-34.1.0.tar.gz", hash = "sha256:cd9d35d1cc1b8cb0bd241ad55c91b77d14e04ae73c632ada1140135f9c217fe1", size = 1797295, upload-time = "2025-03-24T03:32:41.172Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/aa/69cd7e81a28bc623342311cffc50f117d7d716b97332e1bf38e2027b0d61/azure_mgmt_compute-33.1.0-py3-none-any.whl", hash = "sha256:9b119a1b7f621aee951074ef110b16d545d7b45c9cfb303becf04210bd772c91", size = 5993128, upload-time = "2024-12-16T07:45:12.999Z" },
+    { url = "https://files.pythonhosted.org/packages/52/ba/554194c2287d7fd53257de27898f1d391090e6f2fe54f888c109c90a6592/azure_mgmt_compute-34.1.0-py3-none-any.whl", hash = "sha256:5de9c4ba12a79c69e2db3d880f93869a0a80e5c99d8232dbebf6c19b1ada3638", size = 2021492, upload-time = "2025-03-24T03:32:43.181Z" },
 ]
 
 [[package]]
@@ -299,7 +299,7 @@ wheels = [
 
 [[package]]
 name = "azure-mgmt-network"
-version = "28.1.0"
+version = "29.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "azure-common", marker = "sys_platform != 'win32'" },
@@ -307,9 +307,9 @@ dependencies = [
     { name = "isodate", marker = "sys_platform != 'win32'" },
     { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/19/a3/8d2fa6e33107354c8cd2abcca4e0f02138bda4c6024984ae5fce5cf23b27/azure_mgmt_network-28.1.0.tar.gz", hash = "sha256:8c84bffb5ec75c6e0244e58ecf07c00d5fc421d616b0cb369c6fe585af33cf87", size = 651528, upload-time = "2024-12-20T05:56:54.599Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/b6/fbd5320047659af1bd26aa55529dbe5a8c2faeeb62a8aadc72e1dd88f66c/azure_mgmt_network-29.0.0.tar.gz", hash = "sha256:577fbc76a195f744b97bac4275e11279f7f3e63c659d98773f3b4a9a6e0943b9", size = 684284, upload-time = "2025-05-23T03:06:56.309Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/68/d1604383635f1f1b16cd7f1e27004db40a1f0493c57b2da9fb36dc775a79/azure_mgmt_network-28.1.0-py3-none-any.whl", hash = "sha256:8ddb0e9ec8f10c9c152d60fc945908d113e4591f397ea3e40b92290ec2b01658", size = 575260, upload-time = "2024-12-20T05:56:57.672Z" },
+    { url = "https://files.pythonhosted.org/packages/20/93/949392272f177f8e92dcb916afd20f67ceae62998e798e4a3d98c5f59af3/azure_mgmt_network-29.0.0-py3-none-any.whl", hash = "sha256:c04dc0d9f6b936abe4ec7c5fa9cee1514795b1f84d2742dead2115dcde33476c", size = 608014, upload-time = "2025-05-23T03:06:58.557Z" },
 ]
 
 [[package]]
@@ -872,14 +872,16 @@ wheels = [
 
 [[package]]
 name = "elasticsearch"
-version = "8.17.0"
+version = "9.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "elastic-transport", marker = "sys_platform != 'win32'" },
+    { name = "python-dateutil", marker = "sys_platform != 'win32'" },
+    { name = "typing-extensions", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/57/f61579940df4771971aede5b355f64c758f56d8cc9bd4407d669c2f0dd2f/elasticsearch-8.17.0.tar.gz", hash = "sha256:c1069bf2204ba8fab29ff00b2ce6b37324b2cc6ff593283b97df43426ec13053", size = 460268, upload-time = "2024-12-16T06:30:00.731Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/63/a296828c46fd162a95ed1c560a3fdcea6a68a3b7c45d2aa60594f33eaf1b/elasticsearch-9.0.2.tar.gz", hash = "sha256:290e790153500d9f3cb66d74918ac70e9f96b5cd88147213859edca6ab5013f5", size = 829474, upload-time = "2025-06-05T11:55:05.998Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/82/832ff4bdb53429af0025f5032c8b4f3ba18915e08ce16fc55aa09e900e26/elasticsearch-8.17.0-py3-none-any.whl", hash = "sha256:15965240fe297279f0e68b260936d9ced9606aa7ef8910b9b56727f96ef00d5b", size = 571182, upload-time = "2024-12-16T06:29:53.828Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/81/eadbbc38011dd3380dac72a142b175b4a174fa671c584ec38701995b1991/elasticsearch-9.0.2-py3-none-any.whl", hash = "sha256:47cac1f0e5e7be8d8c6751a5d7818d416adfc11eac72f1b59e145930a87de880", size = 914307, upload-time = "2025-06-05T11:40:22.194Z" },
 ]
 
 [[package]]
@@ -1221,18 +1223,19 @@ wheels = [
 
 [[package]]
 name = "google-cloud-storage"
-version = "2.10.0"
+version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", marker = "sys_platform != 'win32'" },
     { name = "google-auth", marker = "sys_platform != 'win32'" },
     { name = "google-cloud-core", marker = "sys_platform != 'win32'" },
+    { name = "google-crc32c", marker = "sys_platform != 'win32'" },
     { name = "google-resumable-media", marker = "sys_platform != 'win32'" },
     { name = "requests", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6b/20/51e9676cc112ec7344c0a8690361175dc1f41ed6edf618eae8af87d92a49/google-cloud-storage-2.10.0.tar.gz", hash = "sha256:934b31ead5f3994e5360f9ff5750982c5b6b11604dc072bc452c25965e076dc7", size = 5504936, upload-time = "2023-06-26T20:34:54.303Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/08/52143124415a889bbab60a8ecede1e31ea0e8d992ca078317886f26dc3be/google_cloud_storage-3.1.0.tar.gz", hash = "sha256:944273179897c7c8a07ee15f2e6466a02da0c7c4b9ecceac2a26017cb2972049", size = 7666527, upload-time = "2025-02-28T00:20:02.383Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/14/c9d4faae7ea4bff4405152cbc762b61100aa6949273b4eb3203d23308670/google_cloud_storage-2.10.0-py2.py3-none-any.whl", hash = "sha256:9433cf28801671de1c80434238fb1e7e4a1ba3087470e90f70c928ea77c2b9d7", size = 114565, upload-time = "2023-06-26T20:34:51.797Z" },
+    { url = "https://files.pythonhosted.org/packages/13/b8/c99c965659f45efa73080477c49ffddf7b9aecb00806be8422560bb5b824/google_cloud_storage-3.1.0-py2.py3-none-any.whl", hash = "sha256:eaf36966b68660a9633f03b067e4a10ce09f1377cae3ff9f2c699f69a81c66c6", size = 174861, upload-time = "2025-02-28T00:19:59.459Z" },
 ]
 
 [[package]]
@@ -1651,7 +1654,7 @@ wheels = [
 
 [[package]]
 name = "kubernetes"
-version = "31.0.0"
+version = "33.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi", marker = "sys_platform != 'win32'" },
@@ -1666,9 +1669,9 @@ dependencies = [
     { name = "urllib3", marker = "sys_platform != 'win32'" },
     { name = "websocket-client", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7e/bd/ffcd3104155b467347cd9b3a64eb24182e459579845196b3a200569c8912/kubernetes-31.0.0.tar.gz", hash = "sha256:28945de906c8c259c1ebe62703b56a03b714049372196f854105afe4e6d014c0", size = 916096, upload-time = "2024-09-20T03:16:08.089Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/52/19ebe8004c243fdfa78268a96727c71e08f00ff6fe69a301d0b7fcbce3c2/kubernetes-33.1.0.tar.gz", hash = "sha256:f64d829843a54c251061a8e7a14523b521f2dc5c896cf6d65ccf348648a88993", size = 1036779, upload-time = "2025-06-09T21:57:58.521Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fb/a8/17f5e28cecdbd6d48127c22abdb794740803491f422a11905c4569d8e139/kubernetes-31.0.0-py2.py3-none-any.whl", hash = "sha256:bf141e2d380c8520eada8b351f4e319ffee9636328c137aa432bc486ca1200e1", size = 1857013, upload-time = "2024-09-20T03:16:06.05Z" },
+    { url = "https://files.pythonhosted.org/packages/89/43/d9bebfc3db7dea6ec80df5cb2aad8d274dd18ec2edd6c4f21f32c237cbbb/kubernetes-33.1.0-py2.py3-none-any.whl", hash = "sha256:544de42b24b64287f7e0aa9513c93cb503f7f40eea39b20f66810011a86eabc5", size = 1941335, upload-time = "2025-06-09T21:57:56.327Z" },
 ]
 
 [[package]]
@@ -3209,8 +3212,8 @@ requires-dist = [
     { name = "anyconfig", specifier = "==0.12.0" },
     { name = "awscli", specifier = "==1.29.4" },
     { name = "azure-identity", specifier = "==1.16.1" },
-    { name = "azure-mgmt-compute", specifier = "==33.1.0" },
-    { name = "azure-mgmt-network", specifier = "==28.1.0" },
+    { name = "azure-mgmt-compute", specifier = "==34.1.0" },
+    { name = "azure-mgmt-network", specifier = "==29.0.0" },
     { name = "azure-mgmt-resource", specifier = "==23.2.0" },
     { name = "azure-mgmt-resourcegraph", specifier = "==8.0.0" },
     { name = "azure-mgmt-subscription", specifier = "==3.1.1" },
@@ -3221,17 +3224,17 @@ requires-dist = [
     { name = "confluent-kafka", specifier = "==2.5.3" },
     { name = "deepdiff", specifier = "==8.1.1" },
     { name = "docker", specifier = "==7.1.0" },
-    { name = "elasticsearch", specifier = "==8.17.0" },
+    { name = "elasticsearch", specifier = "==9.0.2" },
     { name = "fabric", specifier = "==3.2.2" },
     { name = "fastavro", specifier = "==1.9.7" },
     { name = "gimme-aws-creds", specifier = "==2.8.2" },
     { name = "google-api-python-client", specifier = "==2.93.0" },
     { name = "google-cloud-compute", specifier = "==1.13.0" },
-    { name = "google-cloud-storage", specifier = "==2.10.0" },
+    { name = "google-cloud-storage", specifier = "==3.1.0" },
     { name = "hdrhistogram", specifier = "==0.9.2" },
     { name = "invoke", specifier = "==2.2.0" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "kubernetes", specifier = "==31.0.0" },
+    { name = "kubernetes", specifier = "==33.1.0" },
     { name = "ldap3", specifier = "==2.9.1" },
     { name = "moto", extras = ["server"], specifier = "==5.1.1" },
     { name = "mysql-connector-python", specifier = "==9.1.0" },
