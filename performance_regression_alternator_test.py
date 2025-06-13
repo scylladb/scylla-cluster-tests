@@ -431,13 +431,17 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
 
+        running_time_modifier_text = ''
         try:
-            running_time_modifier = float(os.environ.get('ALTERNATOR_RUNNING_TIME_MULTIPLIER', '1'))
-            self.log.debug(f'ALTERNATOR_RUNNING_TIME_MULTIPLIER set to value {running_time_modifier}')
+            running_time_modifier_text = self.params.get('alternator_running_time_multiplier')
+            running_time_modifier = float(running_time_modifier_text)
+            self.log.debug(f'running_time_modifier set to value {running_time_modifier}')
         except:
             running_time_modifier = 1.0
-            v = os.environ.get("ALTERNATOR_RUNNING_TIME_MULTIPLIER", "1")
-            self.log.warning(f'ALTERNATOR_RUNNING_TIME_MULTIPLIER value "{v}", using default value {running_time_modifier}')
+            if running_time_modifier_text:
+                self.log.warning(f'invalid format for running_time_modifier `{running_time_modifier_text}`, ignoring value')
+            else:
+                self.log.debug(f'running_time_modifier not set, using value of 1')
 
         if is_basic:
             cmd_add_params = f" -target 15000 -p maxexecutiontime={int(360 * running_time_modifier)} -p operationcount={int(2000000 * running_time_modifier)}"
