@@ -33,8 +33,12 @@ def call(Map pipelineParams) {
                    name: 'gce_datacenter')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_version')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
+                   name: 'scylla_version')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
+                   name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')

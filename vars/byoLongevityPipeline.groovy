@@ -49,13 +49,14 @@ def call() {
                description: 'Availability zone',
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
-            string(defaultValue: '', description: '', name: 'loader_ami_id')
-            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
-            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
-            string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs://', name: 'update_db_packages')
-
+            string(name: 'loader_ami_id', defaultValue: '', description: '')
+            string(name: 'scylla_ami_id', defaultValue: '', description: 'AMI ID for ScyllaDB ')
+            string(name: 'gce_image_db', defaultValue: '', description: 'GCE image for ScyllaDB ')
+            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)')
+            string(name: 'scylla_repo',
+                   defaultValue: '',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list')
+            string(name: 'update_db_packages', defaultValue: '', description: 'cloud path for RPMs, s3:// or gs://')
             string(defaultValue: '',
                    description: "Which version to use for oracle cluster during gemini test",
                    name: "oracle_scylla_version")

@@ -48,7 +48,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}", description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
             string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 
-            string(defaultValue: '', description: '', name: 'new_scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
+                   name: 'new_scylla_repo')
             booleanParam(defaultValue: base_version_all_sts_versions,
                          description: 'Whether to include all supported STS versions as base versions',
                          name: 'base_version_all_sts_versions')

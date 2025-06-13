@@ -79,9 +79,13 @@ def call(Map pipelineParams) {
 
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.3')}", description: '', name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '2025.3')}",
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
+                   name: 'scylla_version')
             // When branching to manager version branch, set scylla_version to the latest release
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository (Debian/Ubuntu or RHEL-based). e.g. apt: http://downloads.scylladb.com/deb/debian/scylla-2025.4.list',
+                   name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}",
                    description: "gce image of scylla (since scylla_version doesn't work with gce)",
                    name: 'gce_image_db')  // TODO: remove setting once hydra is able to discover scylla images in gce from scylla_version
