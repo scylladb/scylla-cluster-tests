@@ -1117,6 +1117,48 @@ class ConfigurationTests(unittest.TestCase):
         conf.is_enterprise = True
         conf.update_config_based_on_version()
 
+    @staticmethod
+    def test_37_validates_single_thread_count_for_all_throttle_steps():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"read": [620]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"read": ["unthrottled", "unthrottled"]}'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_37_raises_error_for_mismatched_thread_and_throttle_step_counts(self):
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"read": [620, 630]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"read": ["100", "200", "unthrottled"]}'
+        with self.assertRaises(ValueError):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+    @staticmethod
+    def test_37_handles_empty_performance_throughput_parameters():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = "{}"
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = "{}"
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    @staticmethod
+    def test_37_validates_multiple_thread_counts_per_throttle_step():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"write": [400, 420, 440, 460, 480]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"write": ["100", "200", "300", "400", "unthrottled"]}'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_37_raises_error_for_invalid_thread_count_type(self):
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"mixed": ["invalid_type"]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"mixed": ["unthrottled"]}'
+        with self.assertRaises(ValueError):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+    def test_37_raises_error_for_thread_count_not_list(self):
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"mixed": 100}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"mixed": ["unthrottled"]}'
+        with self.assertRaises(ValueError):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
 
 if __name__ == "__main__":
     unittest.main()
