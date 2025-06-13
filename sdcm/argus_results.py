@@ -156,7 +156,8 @@ class ManagerSnapshotDetails(GenericResultTable):
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
-    "read": LatencyCalculatorReadResult
+    "read": LatencyCalculatorReadResult,
+    "throughput": LatencyCalculatorReadResult,
 }
 
 

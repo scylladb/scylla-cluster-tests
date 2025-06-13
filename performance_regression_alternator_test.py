@@ -146,7 +146,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             cycle_name = '50% read 50% write'
             hdr_workload = PerformanceTestWorkload.MIXED
         elif test_name.endswith('_throughput'):
-            self.params['workload_name'] = 'read'
+            self.params['workload_name'] = 'throughput'
             cycle_name = 'throughput'
             hdr_workload = PerformanceTestWorkload.READ
         else:
