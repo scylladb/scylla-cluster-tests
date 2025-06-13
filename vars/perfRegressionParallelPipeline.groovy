@@ -138,6 +138,9 @@ def call(Map pipelineParams) {
             string(defaultValue: 'next',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
+            string(defaultValue: "${pipelineParams.get('running_time_multiplier', '1')},
+                   description: 'Modifies expected running time of the test (1 leaves intact, 0.5 halves, 2 doubles).',
+                   name: 'running_time_multiplier')
         }
         options {
             timestamps()

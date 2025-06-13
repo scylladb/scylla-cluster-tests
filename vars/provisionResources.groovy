@@ -134,6 +134,10 @@ def call(Map params, String region){
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
 
+    if [[ -n "${params.running_time_multiplier ? params.running_time_multiplier : ''}" ]] ; then
+        export ALTERNATOR_RUNNING_TIME_MULTIPLIER="${params.running_time_multiplier}"
+    fi
+
     echo "Starting to resource provision ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then

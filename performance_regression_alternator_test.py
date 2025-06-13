@@ -430,12 +430,21 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_write = mode == 'full' or mode == 'basic' or mode == 'basic-write'
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
+
+        try:
+            running_time_modifier = float(os.environ.get('ALTERNATOR_RUNNING_TIME_MULTIPLIER', '1'))
+            self.log.debug(f'ALTERNATOR_RUNNING_TIME_MULTIPLIER set to value {running_time_modifier}')
+        except:
+            running_time_modifier = 1.0
+            v = os.environ.get("ALTERNATOR_RUNNING_TIME_MULTIPLIER", "1")
+            self.log.warning(f'ALTERNATOR_RUNNING_TIME_MULTIPLIER value "{v}", using default value {running_time_modifier}')
+
         if is_basic:
-            cmd_add_params = " -target 15000 -p maxexecutiontime=360 -p operationcount=2000000"
-            cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=360 -p operationcount=4000000"
+            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(360 * running_time_modifier)} -p operationcount={int(2000000 * running_time_modifier)}"
+            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(360 * running_time_modifier)} -p operationcount={int(4000000 * running_time_modifier)}"
         else:
-            cmd_add_params = " -target 15000 -p maxexecutiontime=2400 -p operationcount=20000000"
-            cmd_add_throughput_params = " -target 999999 -p maxexecutiontime=2400 -p operationcount=40000000"
+            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(2400 * running_time_modifier)} -p operationcount={int(20000000 * running_time_modifier)}"
+            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(2400 * running_time_modifier)} -p operationcount={int(40000000 * running_time_modifier)}"
 
         def run_read_cql():
             if is_basic: return
