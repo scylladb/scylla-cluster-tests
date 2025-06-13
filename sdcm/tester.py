@@ -35,6 +35,7 @@ import json
 
 import botocore
 import yaml
+import pytest
 from invoke.exceptions import UnexpectedExit, Failure
 
 from cassandra.concurrent import execute_concurrent_with_args
@@ -153,7 +154,7 @@ from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
-
+from sdcm.exceptions import TestFailedByEvents
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -589,7 +590,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.warning("Error submitting gemini results to argus", exc_info=True)
 
     def collect_ssl_conf(self):
-        shutil.copytree(Path(get_data_dir_path('ssl_conf')), Path(self.logdir) / 'ssl_conf')
+        shutil.copytree(Path(get_data_dir_path('ssl_conf')), Path(self.logdir) / 'ssl_conf', dirs_exist_ok=True)
 
     def _init_data_validation(self):
         if data_validation := self.params.get('data_validation'):
@@ -2570,7 +2571,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cl_clause = ', '.join(mv_clustering_key)
 
         query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
-                f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
+            f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
         if compression is not None:
             query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
         if read_repair is not None:
@@ -3045,7 +3046,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.stop_timeout_thread()
         self.stop_event_analyzer()
         self.stop_resources()
-        self.get_test_failures()
 
         with silence(parent=self, name='closing decoding queue as needed'):
             if self.test_config.BACKTRACE_DECODING:
@@ -3073,11 +3073,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.save_email_data()
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        self.stop_event_device()
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 
-        self.finalize_teardown()
         self.argus_finalize_test_run()
         try:
             ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
@@ -3088,6 +3086,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
+
+    @pytest.fixture(scope='session', autouse=True)
+    def stop_event_system(self):
+        self.stop_event_device()
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
@@ -3120,21 +3122,56 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     @staticmethod
     def _remove_errors_from_unittest_results(result):
         to_remove = []
-        for error in result.errors:
+        if hasattr(result, 'errors'):
+            errors = result.errors
+        else:
+            errors = result.result.errors
+        for error in errors:
             if error[1] is not None:
                 to_remove.append(error)
         for error in to_remove:
-            result.errors.remove(error)
+            errors.remove(error)
+
+    @pytest.fixture(autouse=True)
+    def teardown_fail_by_events(self, request):
+        yield
+
+        self.finalize_teardown()
 
     def finalize_teardown(self):
         final_event = self._get_test_result_event()
         if final_event.test_status == 'SUCCESS':
             self.log.info(str(final_event))
             return
-        if self._outcome is not None:
-            # If there is not self._outcome, it means tests running in non-unittest environment
-            self._remove_errors_from_unittest_results(self._outcome)
-            self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
+        else:
+            self.log.error(str(final_event))
+            raise TestFailedByEvents(f"\n{final_event}")
+
+    @pytest.fixture(autouse=True)
+    def report_failures_as_event(self, request: pytest.FixtureRequest):
+        yield
+        from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
+        print(f"fruch: {SUBTESTS_FAILURES}")
+        print(f"{request.node.nodeid=}")
+        if subtests_results := SUBTESTS_FAILURES.pop(request.node.nodeid, None):
+            for report in subtests_results:
+                print(f"fruch: {report.context.msg}")
+
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=report.nodeid + " - " + report.context.msg,
+                    exception=f"Subtests failed:\n{report.longreprtext}",
+                    severity=Severity.ERROR,
+                ).publish_or_dump(default_logger=self.log)
+
+        if rep_call := getattr(request.node, "rep_call", None):
+            if rep_call.failed:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=request.node.name,
+                    exception=request.node.rep_call.longreprtext,
+                    severity=Severity.ERROR,
+                ).publish_or_dump(default_logger=self.log)
 
     @silence()
     def destroy_localhost(self):
@@ -3184,8 +3221,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
         stress_fixed_params = f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={replication_factor}) " \
-                              "compaction(strategy=LeveledCompactionStrategy)' " \
-                              "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
+            "compaction(strategy=LeveledCompactionStrategy)' " \
+            "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="
         population = " -pop seq="
 
@@ -3321,7 +3358,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
-                             f"current size is: '{used}'"
+            f"current size is: '{used}'"
 
     def check_latency_during_ops(self, hdr_tags: list[str]):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
@@ -3596,29 +3633,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info("Logs collected. Run command `hydra investigate show-logs %s' to get links",
                       self.test_config.test_id())
 
-    @silence()
-    def get_test_failures(self):
-        """
-            Print to logging in case of failure or error in unittest
-            since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
-            applied the idea from
-            https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
-            :returns tuple(error, test_failure)
-        """
-        if hasattr(self, '_outcome'):  # Python 3.4+
-            result = self.defaultTestResult()  # these 2 methods have no side effects
-            self._feedErrorsToResult(result, self._outcome.errors)
-        else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
-            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)
-        for error in result.errors + result.failures:
-            if len(error) > 1 and error[1]:
-                TestFrameworkEvent(
-                    source=self.__class__.__name__,
-                    source_method=error[0],
-                    message=error[1],
-                    severity=Severity.ERROR,
-                ).publish_or_dump(default_logger=self.log)
-
     def stop_all_nodes_except_for(self, node):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
 
@@ -3784,7 +3798,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ''
             all_nodes_shards['live_nodes'].append({'name': node.name,
                                                    'ip': f"{node.public_ip_address} | {node.private_ip_address}"
-                                                         f"{f' | {ipv6}' if ipv6 else ''}",
+                                                   f"{f' | {ipv6}' if ipv6 else ''}",
                                                    'shards': node.scylla_shards})
 
         all_nodes_shards['dead_nodes'] = [asdict(node) for node in self.db_cluster.dead_nodes_list]

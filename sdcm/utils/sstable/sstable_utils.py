@@ -181,7 +181,7 @@ class SstableUtils:
                                                     user=self.user, password=self.password) as session:
             try:
                 query = f"SELECT repair_time from system.repair_history WHERE keyspace_name = '{self.keyspace}' " \
-                        f"AND table_name = '{self.table}' ALLOW FILTERING;"
+                    f"AND table_name = '{self.table}' ALLOW FILTERING;"
                 results = session.execute(query)
                 output = results.all()
                 output_length = len(output)

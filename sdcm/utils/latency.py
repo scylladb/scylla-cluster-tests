@@ -61,7 +61,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  
     for load in load_type:
         for precision in scylla_precision:
             query = f'histogram_quantile(0.{precision},sum(rate(scylla_storage_proxy_coordinator_{load}_' \
-                    f'latency_bucket{{}}[{duration}s])) by (instance, le))'
+                f'latency_bucket{{}}[{duration}s])) by (instance, le))'
             query_res = prometheus.query(query, start, end)
             for entry in query_res:
                 node_ip = entry['metric']['instance'].replace('[', '').replace(']', '')

@@ -272,7 +272,7 @@ class AwsRegion:
         else:
             route_tables = list(self.sct_vpc.route_tables.all())
             assert len(route_tables) == 1, f"Only one main route table should exist for {self.SCT_VPC_NAME}. " \
-                                           f"Found {len(route_tables)}!"
+                f"Found {len(route_tables)}!"
             route_table: EC2ServiceResource.RouteTable = route_tables[0]
 
             route_table.create_tags(Tags=[{"Key": "Name", "Value": self.sct_route_table_name(index=index)}])
