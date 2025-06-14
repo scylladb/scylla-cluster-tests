@@ -28,7 +28,6 @@ import time
 import traceback
 import json
 import itertools
-import enum
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial, cached_property
@@ -123,10 +122,12 @@ from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperi
     NetworkPacketLossExperiment, NetworkCorruptExperiment, NetworkBandwidthLimitExperiment
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
+from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
 from sdcm.utils.nemesis_utils import node_operations
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -177,23 +178,10 @@ EXCLUSIVE_NEMESIS_NAMES = (
     "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
 )
 
-NEMESIS_TARGET_SELECTION_LOCK = Lock()
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
 
 DISRUPT_METHOD_IDENTIFY_REGEX = re.compile(r"self\.(?P<method_name>disrupt_[0-9A-Za-z_]+?)\(.*\)", re.MULTILINE)
-
-
-class NEMESIS_TARGET_POOLS(enum.Enum):
-    data_nodes = "data_nodes"
-    zero_nodes = "zero_nodes"
-    all_nodes = "nodes"
-
-
-class DefaultValue:
-    """
-    This is class is intended to be used as default value for the cases when None is not applicable
-    """
 
 
 def target_data_nodes(func: Callable) -> Callable:
@@ -283,6 +271,11 @@ class Nemesis:
         self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
+
+        if not hasattr(self.tester, 'nemesis_allocator'):
+            raise RuntimeError("NemesisNodeAllocator was not initialized on the tester object.")
+        self.node_allocator: NemesisNodeAllocator = self.tester.nemesis_allocator
+
         self.log.debug('Instantiated %s nemesis with %d seed', self.__class__.__name__, self.nemesis_seed)
 
     def _init_num_deletions_factor(self):
@@ -333,23 +326,25 @@ class Nemesis:
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
 
-    @staticmethod
     @contextmanager
-    def run_nemesis(node_list: list['BaseNode'], nemesis_label: str):
+    def run_nemesis(self, nemesis_label: str, node_list: list[BaseNode] | None = None):
         """
         pick a node out of a `node_list`, and mark is as running_nemesis
         for the duration of this context
         """
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            free_nodes = [node for node in node_list if not node.running_nemesis]
-            assert free_nodes, f"couldn't find nodes for running:`{nemesis_label}`, are all nodes running nemesis ?"
-            node = random.choice(free_nodes)
-            node.running_nemesis = nemesis_label
+        reserved_node = None
         try:
-            yield node
+            reserved_node, reason = self.node_allocator.select_target_node(
+                nemesis_name=nemesis_label,
+                pool_type=self._target_node_pool_type,
+                filter_seed=self.filter_seed,
+                node_list=node_list)
+            if not reserved_node:
+                raise UnsupportedNemesis(f"Could not reserve a node for '{nemesis_label}'.\n{reason}")
+            yield reserved_node
         finally:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
+            if reserved_node:
+                self.node_allocator.release_busy_node(reserved_node, nemesis_label)
 
     def use_nemesis_seed(self):
         if self.nemesis_seed:
@@ -377,55 +372,18 @@ class Nemesis:
         DisruptionEvent(nemesis_name=disrupt, severity=severity, **data).publish()
 
     def switch_target_node(self, node: BaseNode):
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            self.target_node.running_nemesis = None
-            self.target_node = None
-            node.running_nemesis = self.current_disruption
+        if self.node_allocator.switch_target_node(
+                old_node=self.target_node, new_node=node, nemesis_name=self.current_disruption
+        ):
             self.target_node = node
-
-    def set_current_running_nemesis(self, node):
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            node.running_nemesis = self.current_disruption
-
-    @staticmethod
-    def unset_current_running_nemesis(node):
-        if node is not None:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
+        else:
+            raise UnsupportedNemesis(
+                f"{self.current_disruption}: failed to switch target node {self.target_node.name} to {node.name} "
+                "(it is already busy).")
 
     def set_target_node_pool_type(self, pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes):
         """Set pool type to choose nodes for target node """
         self._target_node_pool_type = pool_type
-
-    def _get_target_nodes(
-            self,
-            is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
-            dc_idx: Optional[int] = None,
-            rack: Optional[int] = None) -> list:
-        """
-        Filters and return nodes from target node pool that has no running nemesis on them
-        Target node pool could be set with method 'set_target_node_pool' to use
-        only data_nodes, zero_token nodes or any set of nodes.
-        It can filter node by following criteria: is_seed, dc_idx, rack
-        Same mechanism works for other parameters, if multiple criteria provided it will return nodes
-        that match all of them.
-        if is_seed is None - it will ignore seed status of the nodes
-        if is_seed is True - it will pick only seed nodes
-        if is_seed is False - it will pick only non-seed nodes
-        if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
-          otherwise it will act as if is_seed is None
-        """
-        if is_seed is DefaultValue:
-            is_seed = False if self.filter_seed else None
-        self.log.debug("Target node pool type: %s", self._target_node_pool_type)
-        nodes = [node for node in getattr(self.cluster, self._target_node_pool_type.value) if not node.running_nemesis]
-        if is_seed is not None:
-            nodes = [node for node in nodes if node.is_seed == is_seed]
-        if dc_idx is not None:
-            nodes = [node for node in nodes if node.dc_idx == dc_idx]
-        if rack is not None:
-            nodes = [node for node in nodes if node.rack == rack]
-        return nodes
 
     def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
                         is_seed: Union[bool, DefaultValue, None] = DefaultValue,
@@ -438,31 +396,28 @@ class Nemesis:
         if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
           otherwise it will act as if is_seed is None
         """
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            # first give up the current target node
-            if self.target_node:
-                self.target_node.running_nemesis = None
+        if self.target_node:
+            self.node_allocator.release_busy_node(self.target_node, self.current_disruption)
+            self.target_node = None
 
-            nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
-            if not nodes:
-                dc_str = '' if dc_idx is None else f'dc {dc_idx} '
-                rack_str = '' if rack is None else f'rack {rack} '
-                raise UnsupportedNemesis(
-                    f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
-            if allow_only_last_node_in_rack:
-                self.target_node = nodes[-1]
-            else:
-                self.target_node = random.choice(nodes)
+        disruption_name = current_disruption or self.current_disruption
+        selected_node, reason = self.node_allocator.select_target_node(
+            nemesis_name=disruption_name,
+            pool_type=self._target_node_pool_type,
+            filter_seed=self.filter_seed,
+            is_seed=is_seed,
+            dc_idx=dc_idx,
+            rack=rack,
+            allow_only_last_node_in_rack=allow_only_last_node_in_rack)
 
+        if selected_node:
+            self.target_node = selected_node
             if current_disruption:
-                self.target_node.running_nemesis = current_disruption
                 self.set_current_disruption(current_disruption)
-            elif self.current_disruption:
-                self.target_node.running_nemesis = self.current_disruption
-            else:
-                raise ValueError("current_disruption is not set")
-            self.log.info('Current Target: %s with running nemesis: %s',
-                          self.target_node, self.target_node.running_nemesis)
+            self.log.info('%s: target node selected by allocator - %s', disruption_name, self.target_node)
+        else:
+            self.target_node = None
+            raise UnsupportedNemesis(f"{disruption_name}: could not allocate node.\n{reason}")
 
     @raise_event_on_failure
     def run(self, interval=None, cycles_count: int = -1):
@@ -483,7 +438,9 @@ class Nemesis:
                     self.log.warning("Skipping unsupported nemesis: %s", exc)
                     cur_interval = 0
                 finally:
-                    self.unset_current_running_nemesis(self.target_node)
+                    if self.target_node:
+                        self.node_allocator.release_busy_node(self.target_node, self.current_disruption)
+                        self.target_node = None
                     self.termination_event.wait(timeout=cur_interval)
         except KillNemesis:
             self.log.debug("Nemesis thread [%s] stopped by KillNemesis", id(self))
@@ -1180,7 +1137,7 @@ class Nemesis:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
                 count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
-        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
+        self.node_allocator.mark_node_as_busy(new_node, self.current_disruption)
 
         # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
         # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
@@ -1226,24 +1183,21 @@ class Nemesis:
 
         new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
-        for new_node in new_nodes:
-            self.set_current_running_nemesis(node=new_node)
-        try:
-            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
-                self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
-            self.cluster.set_seeds()
-            self.cluster.update_seed_provider()
-        except (NodeSetupFailed, NodeSetupTimeout):
-            self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
-            for node in new_nodes:
-                self.cluster.nodes.remove(node)
-            self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
-            raise
-        for new_node in new_nodes:
-            new_node.wait_native_transport()
-        self.cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
-        for new_node in new_nodes:
-            self.unset_current_running_nemesis(node=new_node)
+        with self.node_allocator.mark_node_as_busy(new_nodes, self.current_disruption):
+            try:
+                with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
+                    self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+                self.cluster.set_seeds()
+                self.cluster.update_seed_provider()
+            except (NodeSetupFailed, NodeSetupTimeout):
+                self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
+                for node in new_nodes:
+                    self.cluster.nodes.remove(node)
+                self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
+                raise
+            for new_node in new_nodes:
+                new_node.wait_native_transport()
+            self.cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
         InfoEvent(message="FinishEvent - New Nodes are up and normal").publish()
         return new_nodes
 
@@ -1254,7 +1208,7 @@ class Nemesis:
 
     def _nodetool_decommission(self, add_node=True):
         if self._is_it_on_kubernetes():
-            self.unset_current_running_nemesis(self.target_node)
+            self.node_allocator.release_busy_node(self.target_node, self.current_disruption)
             self.set_target_node(allow_only_last_node_in_rack=True)
 
         target_is_seed = self.target_node.is_seed
@@ -1267,18 +1221,16 @@ class Nemesis:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
             new_node = self._add_and_init_new_cluster_nodes(**add_node_kwargs)[0]
-            # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
-            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-            if new_node.is_seed != target_is_seed:
-                new_node.set_seed_flag(target_is_seed)
-                self.cluster.update_seed_provider()
-            if dc_topology_rf_change:
-                dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
-            try:
+            with self.node_allocator.mark_node_as_busy(new_node, self.current_disruption):
+                # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
+                # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+                # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+                if new_node.is_seed != target_is_seed:
+                    new_node.set_seed_flag(target_is_seed)
+                    self.cluster.update_seed_provider()
+                if dc_topology_rf_change:
+                    dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
                 self.nodetool_cleanup_on_all_nodes_parallel()
-            finally:
-                self.unset_current_running_nemesis(new_node)
         return new_node
 
     @target_all_nodes
@@ -1487,9 +1439,9 @@ class Nemesis:
             dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
         new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
-        if dc_topology_rf_change:
-            dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
-        self.unset_current_running_nemesis(new_node)
+        with self.node_allocator.mark_node_as_busy(new_node, self.current_disruption):
+            if dc_topology_rf_change:
+                dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
 
         # NOTE: wait for all other neighbour pods become ready
         for neighbour_scylla_pod in neighbour_scylla_pods:
@@ -1572,7 +1524,7 @@ class Nemesis:
             wait_for_old_node_to_removed()
 
         finally:
-            self.unset_current_running_nemesis(new_node)
+            self.node_allocator.release_busy_node(new_node, self.current_disruption)
             if is_old_node_seed:
                 new_node.set_seed_flag(True)
                 self.cluster.update_seed_provider()
@@ -3619,7 +3571,7 @@ class Nemesis:
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
 
-        with Nemesis.run_nemesis(node_list=up_normal_nodes, nemesis_label="RemoveNodeAddNode") as verification_node:
+        with self.run_nemesis(nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes) as verification_node:
             self._remove_node_add_node(verification_node=verification_node, node_to_remove=node_to_remove)
 
     def _remove_node_add_node(self, verification_node, node_to_remove, remove_node_host_id=None):
@@ -3657,7 +3609,7 @@ class Nemesis:
         @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
         def remove_node():
             removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
-            with Nemesis.run_nemesis(node_list=self.cluster.nodes, nemesis_label="RemoveNodeAddNode") as rnd_node:
+            with self.run_nemesis(nemesis_label="RemoveNodeAddNode") as rnd_node:
                 self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
                               .format(rnd_node.ip_address, host_id))
                 with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
@@ -3711,17 +3663,15 @@ class Nemesis:
         if self.target_node._is_zero_token_node:
             new_node_args.update({"is_zero_node": True})
         new_node = self._add_and_init_new_cluster_nodes(**new_node_args)[0]
-        # in case the removed node was not last seed.
-        if node_to_remove.is_seed and num_of_seed_nodes > 1:
-            new_node.set_seed_flag(True)
-            self.cluster.update_seed_provider()
-        # after add_node, the left nodes have data that isn't part of their tokens anymore.
-        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-        try:
+        with self.node_allocator.mark_nodes_as_busy(new_node, self.current_disruption):
+            # in case the removed node was not last seed.
+            if node_to_remove.is_seed and num_of_seed_nodes > 1:
+                new_node.set_seed_flag(True)
+                self.cluster.update_seed_provider()
+            # after add_node, the left nodes have data that isn't part of their tokens anymore.
+            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
             self.nodetool_cleanup_on_all_nodes_parallel()
-        finally:
-            self.unset_current_running_nemesis(new_node)
 
     @target_all_nodes
     def disrupt_network_reject_inter_node_communication(self):
@@ -3998,10 +3948,10 @@ class Nemesis:
 
             self.log.info('Decommission might complete before stopping it. Re-add a new node')
             new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
-            if new_node.is_seed != target_is_seed:
-                new_node.set_seed_flag(target_is_seed)
-                self.cluster.update_seed_provider()
-            self.unset_current_running_nemesis(new_node)
+            with self.node_allocator.mark_nodes_as_busy(new_node, self.current_disruption):
+                if new_node.is_seed != target_is_seed:
+                    new_node.set_seed_flag(target_is_seed)
+                    self.cluster.update_seed_provider()
             return new_node
 
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.DECOMMISSION,
@@ -4031,7 +3981,7 @@ class Nemesis:
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), \
-                self.run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
+                self.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node, \
                 FailedDecommissionOperationMonitoring(target_node=self.target_node,
                                                       verification_node=verification_node,
                                                       timeout=full_operations_timeout):
@@ -4165,7 +4115,8 @@ class Nemesis:
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
-        wait_no_tablets_migration_running(nodes[0])
+        with self.node_allocator.mark_nodes_as_busy(nodes, self.current_disruption):
+            wait_no_tablets_migration_running(nodes[0])
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
@@ -4194,7 +4145,7 @@ class Nemesis:
         if exact_nodes:
             nodes_to_decommission = exact_nodes
             for node in exact_nodes:
-                self.set_current_running_nemesis(node=node)
+                self.node_allocator.mark_node_as_busy(node, self.current_disruption)
         else:
             for idx in range(nodes_number):
                 if self._is_it_on_kubernetes():
@@ -4702,6 +4653,7 @@ class Nemesis:
         else:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
                 1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
+        self.node_allocator.mark_node_as_busy(new_node, self.current_disruption)
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -4791,10 +4743,6 @@ class Nemesis:
                 status = self.tester.db_cluster.get_nodetool_status()
                 new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
                 assert new_dc_list, "new datacenter was not registered"
-                # Mark a new node as "running nemesis" to prevent it be marked as "target node" by parallel nemesis.
-                # This new node should not be unset as running nemesis because the node will be terminated in the end of nemesis
-                # and removed from the list of nodes
-                self.set_current_running_nemesis(new_node)
                 new_dc_name = new_dc_list[0]
                 for keyspace in system_keyspaces + ["keyspace_new_dc"]:
                     strategy = ReplicationStrategy.get(node, keyspace)
@@ -4820,6 +4768,7 @@ class Nemesis:
 
             self.cluster.decommission(new_node)
             node_added = False
+            self.node_allocator.release_busy_node(new_node, self.current_disruption)
 
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
             assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
@@ -5082,8 +5031,7 @@ class Nemesis:
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
         cql_query_executor_node = random.choice(free_nodes)
-        self.set_current_running_nemesis(cql_query_executor_node)
-        try:
+        with self.node_allocator.mark_node_as_busy(cql_query_executor_node, self.current_disruption):
             ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=cql_query_executor_node,
                                                             filter_empty_tables=True, filter_out_mv=True,
                                                             filter_out_table_with_counter=True)
@@ -5126,8 +5074,6 @@ class Nemesis:
                                                   min_duration=300, max_duration=2400)
                 finally:
                     drop_materialized_view(session, ks_name, view_name)
-        finally:
-            self.unset_current_running_nemesis(cql_query_executor_node)
 
     def disrupt_toggle_audit_syslog(self):
         self._disrupt_toggle_audit(store="syslog")
@@ -5255,34 +5201,35 @@ class Nemesis:
         new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
-        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
+        with self.node_allocator.mark_node_as_busy(new_node, self.current_disruption):
+            terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
+                                                                             seed=self.nemesis_seed)
 
-        terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
-                                                                         seed=self.nemesis_seed)
+            bootstrapabortmanager = NodeBootstrapAbortManager(
+                bootstrap_node=new_node, verification_node=self.target_node)
 
-        bootstrapabortmanager = NodeBootstrapAbortManager(bootstrap_node=new_node, verification_node=self.target_node)
+            with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), ignore_raft_transport_failing():
+                bootstrapabortmanager.run_bootstrap_and_abort_with_action(
+                    terminate_pattern, abort_action=new_node.stop_scylla)
+                bootstrapabortmanager.clean_and_restart_bootstrap_after_abort()
 
-        with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), ignore_raft_transport_failing():
-            bootstrapabortmanager.run_bootstrap_and_abort_with_action(
-                terminate_pattern, abort_action=new_node.stop_scylla)
-            bootstrapabortmanager.clean_and_restart_bootstrap_after_abort()
+                if not new_node.db_up() or (new_node.db_up() and not self.target_node.raft.is_cluster_topology_consistent()):
+                    bootstrapabortmanager.clean_unbootstrapped_node()
+                    raise BootstrapStreamErrorFailure(
+                        f"Node {new_node.name} failed to bootstrap. See log for more details")
 
-            if not new_node.db_up() or (new_node.db_up() and not self.target_node.raft.is_cluster_topology_consistent()):
-                bootstrapabortmanager.clean_unbootstrapped_node()
-                raise BootstrapStreamErrorFailure(f"Node {new_node.name} failed to bootstrap. See log for more details")
+            if new_node.db_up() and self.target_node.raft.is_cluster_topology_consistent():
+                self.log.info("Wait 5 minutes with new topology")
+                time.sleep(300)
+                self.log.info("Decommission added node")
+                decommission_timeout = 7200
+                monitoring_decommission_timeout = decommission_timeout + 100
+                un_nodes = self.cluster.get_nodes_up_and_normal()
+                with self.run_nemesis(nemesis_label="BootstrapStreaminError", node_list=un_nodes) as verification_node, \
+                        FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
+                                                              timeout=monitoring_decommission_timeout):
 
-        if new_node.db_up() and self.target_node.raft.is_cluster_topology_consistent():
-            self.log.info("Wait 5 minutes with new topology")
-            time.sleep(300)
-            self.log.info("Decommission added node")
-            decommission_timeout = 7200
-            monitoring_decommission_timeout = decommission_timeout + 100
-            un_nodes = self.cluster.get_nodes_up_and_normal()
-            with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
-                    FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
-                                                          timeout=monitoring_decommission_timeout):
-
-                self.cluster.decommission(new_node, timeout=decommission_timeout)
+                    self.cluster.decommission(new_node, timeout=decommission_timeout)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
         with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
@@ -5334,7 +5281,7 @@ class Nemesis:
         election_wait_timeout = random.choice([5, 10, 15])
         self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
         for num_of_restart in range(num_of_restarts):
-            with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="search coordinator") as verification_node:
+            with self.run_nemesis(nemesis_label="search coordinator") as verification_node:
                 coordinator_node = get_topology_coordinator_node(verification_node)
             if coordinator_node != self.target_node and coordinator_node.running_nemesis:
                 raise UnsupportedNemesis(
@@ -5345,8 +5292,7 @@ class Nemesis:
             self.target_node.stop_scylla()
             self.log.debug("Wait random timeout %s to new coordinator will be elected", election_wait_timeout)
             time.sleep(election_wait_timeout)
-            with self.run_nemesis(node_list=self.cluster.nodes,
-                                  nemesis_label="search coordinator") as verification_node:
+            with self.run_nemesis(nemesis_label="search coordinator") as verification_node:
                 new_coordinator_node = get_topology_coordinator_node(verification_node)
             self.log.debug("New coordinator node: %s, %s", new_coordinator_node, new_coordinator_node.name)
             self.target_node.start_scylla()
@@ -5389,8 +5335,8 @@ class Nemesis:
                 session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_name}", timeout=300)
 
         simulate_node_unavailability = node_operations.block_scylla_ports if use_iptables else node_operations.pause_scylla_with_sigstop
-        with self.run_nemesis(node_list=self.cluster.nodes,
-                              nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
+        with self.run_nemesis(
+                nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
             stack.enter_context(node_operations.block_loaders_payload_for_scylla_node(
                 self.target_node, loader_nodes=self.loaders.nodes))
             stack.callback(drop_keyspace, node=working_node)
