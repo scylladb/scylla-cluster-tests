@@ -144,7 +144,7 @@ class LongevityPipelineTest:
     @cached_property
     def pattern_rsync_sct_dir(self):
         return f"rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete " \
-               f"{self.sct_base_path} ubuntu@1.1.1.1:/home/ubuntu/"
+            f"{self.sct_base_path} ubuntu@1.1.1.1:/home/ubuntu/"
 
     @cached_property
     def step_name_prefix(self):
@@ -157,7 +157,7 @@ class LongevityPipelineTest:
     @cached_property
     def create_runner_cmd(self):
         return f'create-runner-instance --cloud-provider {self.backend} --region eu-north-1 --availability-zone a ' \
-               f'--test-id {self.test_id} --duration 465'
+            f'--test-id {self.test_id} --duration 465'
 
     @cached_property
     def run_test_cmd(self):

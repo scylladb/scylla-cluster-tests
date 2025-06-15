@@ -160,7 +160,7 @@ class FullscanOperationBase:
                     msg = repr(exc)
                     self.current_operation_stat.exceptions.append(repr(exc))
                     msg = f"{msg} while running " \
-                          f"Nemesis: {self.db_node.running_nemesis}" if self.db_node.running_nemesis else msg
+                        f"Nemesis: {self.db_node.running_nemesis}" if self.db_node.running_nemesis else msg
                     scan_op_event.message = msg
 
                     if self.db_node.running_nemesis or any(s in msg.lower() for s in ERROR_SUBSTRINGS):

@@ -331,7 +331,7 @@ def upgrade_scylla_manager(
 
 def _create_stopped_repair_task_with_manual_argument(mgr_cluster, arg_string):
     res = mgr_cluster.sctool.run(cmd=f"repair -c {mgr_cluster.id} {arg_string}",
-                                     parse_table_res=False)
+                                 parse_table_res=False)
     assert not res.stderr, f"Task creation failed: {res.stderr}"
     task_id = res.stdout.split('\n')[0]
     repair_task = RepairTask(task_id=task_id, cluster_id=mgr_cluster.id,
