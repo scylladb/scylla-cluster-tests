@@ -15,7 +15,7 @@
 import logging
 from typing import Literal, List, Union, Optional
 
-from pydantic import Field, validator, BaseModel
+from pydantic import Field, field_validator, BaseModel
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.sct_config import SCTConfiguration
@@ -56,7 +56,7 @@ class SeedProvider(BaseModel):
     ]
     parameters: List[dict] = None
 
-    @validator("class_name", pre=True, always=True)
+    @field_validator("class_name", mode='before')
     def set_class_name(cls, class_name: str):
         if class_name.startswith('org.apache.cassandra.locator.'):
             return class_name
