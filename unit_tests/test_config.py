@@ -1117,6 +1117,13 @@ class ConfigurationTests(unittest.TestCase):
         conf.is_enterprise = True
         conf.update_config_based_on_version()
 
+    def test_37_verify_protected_db_nodes(self):
+        os.environ['SCT_PROTECTED_DB_NODES'] = '[1, 2]'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        assert conf['protected_db_nodes'] == [1, 2]
+
 
 if __name__ == "__main__":
     unittest.main()
