@@ -2745,6 +2745,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-subtests"
+version = "0.14.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs", marker = "sys_platform != 'win32'" },
+    { name = "pytest", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/59/30/6ec8dfc678ddfd1c294212bbd7088c52d3f7fbf3f05e6d8a440c13b9741a/pytest_subtests-0.14.2.tar.gz", hash = "sha256:7154a8665fd528ee70a76d00216a44d139dc3c9c83521a0f779f7b0ad4f800de", size = 18083, upload-time = "2025-06-13T10:50:01.636Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/d4/9bf12e59fb882b0cf4f993871e1adbee094802224c429b00861acee1a169/pytest_subtests-0.14.2-py3-none-any.whl", hash = "sha256:8da0787c994ab372a13a0ad7d390533ad2e4385cac167b3ac501258c885d0b66", size = 9115, upload-time = "2025-06-13T10:50:00.543Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -3183,6 +3196,7 @@ dependencies = [
     { name = "pygithub", marker = "sys_platform != 'win32'" },
     { name = "pytest", marker = "sys_platform != 'win32'" },
     { name = "pytest-random-order", marker = "sys_platform != 'win32'" },
+    { name = "pytest-subtests", marker = "sys_platform != 'win32'" },
     { name = "python-jenkins", marker = "sys_platform != 'win32'" },
     { name = "pyyaml", marker = "sys_platform != 'win32'" },
     { name = "pyzmq", marker = "sys_platform != 'win32'" },
@@ -3246,6 +3260,7 @@ requires-dist = [
     { name = "pygithub", specifier = "==2.1.1" },
     { name = "pytest", specifier = "==8.3.4" },
     { name = "pytest-random-order", specifier = "==1.0.4" },
+    { name = "pytest-subtests", specifier = "==0.14.2" },
     { name = "python-jenkins", specifier = "==1.7.0" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "pyzmq", specifier = "==26.2.0" },
