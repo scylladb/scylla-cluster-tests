@@ -276,9 +276,6 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
     def _fix_hdr_files(self):
         LOGGER.debug('Fixing HDR files')
         allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
-        # everything should be stopped here, but we continue with no need to push our luck approach
-        # Note: we will explicitly held a mutex here, because in a case, where get_results is called from multiple
-        # threads, the second thread might get ahead of us and not all hdr files will be fixed.
         for loader in self.loaders:
             for cpu_idx in range(self.stress_num):
                 for work_type, tag in self.WORK_TYPES.items():

@@ -48,89 +48,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
-    # def make_uuid_dir_for_hdr_files(self):
-    #     uuid_val = uuid.uuid4()
-    #     dir_name = os.path.join(self.loaders.logdir, f'hdrh-{uuid_val}')
-    #     self.directory_for_hdr_files = dir_name
-    #     os.makedirs(dir_name, exist_ok=True)
-
-    # def remove_old_hdr_files(self, stress_num):
-    #     for loader in self.loaders.nodes:
-    #         loader_index = loader.node_index
-    #         for work_type in work_types:
-    #             for stress_idx in range(0, stress_num):
-    #                 dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
-    #                 if os.path.isfile(dst_pth):
-    #                     self.log.debug(f'Removing hdr file {dst_pth}')
-    #                     try:
-    #                         os.remove(dst_pth)
-    #                     except Exception:
-    #                         pass
-    #     del self.directory_for_hdr_files
-
-    # def initialize_hdr_loggers(self, stress_num):
-    #     self.hdrh_logger_contextes = []
-    #     for loader in self.loaders.nodes:
-    #         loader_index = loader.node_index
-    #         for work_type in work_types:
-    #             for stress_idx in range(0, stress_num):
-    #                 hdrh_logger = HDRHistogramFileLogger(
-    #                     node=loader,
-    #                     remote_log_file=f'/tmp/hdr-output-directory/{loader_index}/{stress_idx}/hdrh-{work_type}.hdr',
-    #                     target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr_'),
-    #                 )
-    #                 hdrh_logger.start()
-    #                 self.hdrh_logger_contextes.append(hdrh_logger)
-
-    # def terminate_hdr_loggers(self):
-    #     for hdrh_logger in self.hdrh_logger_contextes:
-    #         hdrh_logger.stop()
-
-    # def update_hdr_files(self, stress_num):
-    #     allowed_chars = frozenset('+,./0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')
-    #     for loader in self.loaders.nodes:
-    #         loader_index = loader.node_index
-    #         for work_type, tag in work_types.items():
-    #             tag_text = f'Tag={tag}'
-    #             for stress_idx in range(0, stress_num):
-    #                 dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{stress_idx}-{work_type}-{loader_index}.hdr')
-    #                 src_pth = dst_pth + '_'
-    #                 if os.path.isfile(src_pth):
-    #                     with open(src_pth, 'r', encoding='utf8') as input:
-    #                         data = input.readlines()
-    #                     data2 = []
-    #                     ignored_tail_lines = 0
-    #                     for d in data:
-    #                         d = d.strip()
-    #                         if d.startswith('#[Logging for:'):
-    #                             if data2:
-    #                                 self.log.debug(f'File {src_pth} removing previous content ({len(data2)} lines)')
-    #                             data2 = []
-    #                         if d.startswith('#') or d.startswith("'"):
-    #                             data2.append(d)
-    #                         elif d.startswith('tail: '):
-    #                             ignored_tail_lines += 1
-    #                         else:
-    #                             d2 = set(d)
-    #                             if d2 - allowed_chars:
-    #                                 self.log.warning(f'File {src_pth} ignoring line `{d}`, because of invalid characters')
-    #                             else:
-    #                                 if d[0].isdigit() or d[0] == '.':
-    #                                     data2.append(f'{tag_text},{d}')
-    #                                 else:
-    #                                     data2.append(d)
-    #                     removed = len(data) - len(data2)
-    #                     self.log.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
-    #                     if data2:
-    #                         with open(dst_pth, 'w', encoding='utf8') as output:
-    #                             for d in data2:
-    #                                 output.write(d)
-    #                                 output.write('\n')
-    #                 else:
-    #                     self.log.debug(f'File {src_pth} does not exist, skipping update')
-
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
-        #self.make_uuid_dir_for_hdr_files()
         self.hdr_tags = ['read', 'write']
         self.row_name_override = row_name
         if test_name.endswith('_read'):
@@ -157,7 +75,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             return self._workload(*args, **kwargs)
 
         ret = execute_workload_with_latency_calculator_decorator(self, hdr_workload=hdr_workload, test_name=test_name, stress_num=stress_num, **kwargs)
-        #self.remove_old_hdr_files(stress_num=stress_num)
         return ret
     
     def _workload(self, stress_cmd, stress_num=1, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
@@ -430,23 +347,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_write = mode == 'full' or mode == 'basic' or mode == 'basic-write'
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
-
-        running_time_multiplier_text = ''
-        try:
-            vvv = self.params.get('alternator_running_time_multiplier')
-        except:
-            vvv = 'not found 1'
-        self.log.error(f'QWERTY vvv1 `{vvv}`')
-        try:
-            vvv = self.get('alternator_running_time_multiplier')
-        except:
-            vvv = 'not found 2'
-        self.log.error(f'QWERTY vvv2 `{vvv}`')
-        try:
-            vvv = os.environ.get('ALTERNATOR_RUNNING_TIME_MULTIPLIER')
-        except:
-            vvv = 'not found 3'
-        self.log.error(f'QWERTY vvv3 `{vvv}`')
 
         try:
             running_time_multiplier_text = self.params.get('alternator_running_time_multiplier')
