@@ -435,8 +435,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='with-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-always-lwt')
 
-        self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
-                                    alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.pre_create_alternator_tables()
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
 
         self.create_cql_ks_and_table(field_number=10)
