@@ -22,7 +22,7 @@ from sdcm.cluster import UserRemoteCredentials
 from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
 from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuilderBase
 from sdcm.provision.common.user_data import UserDataBuilderBase
-from sdcm.provision.network_configuration import network_interfaces_count
+from sdcm.provision.network_configuration import network_interfaces_count, ssh_connection_ip_type
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, EC2NetworkConfiguration
 
@@ -144,6 +144,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return {
             'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],
             'Groups': self._ec2_security_group_ids[self.region_id],
+            'AssociatePublicIpAddress': interface_index == 0 and (self.params.get('intra_node_comm_public') or ssh_connection_ip_type(self.params) == 'public')
         }
 
     @property
