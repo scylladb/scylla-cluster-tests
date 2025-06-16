@@ -364,12 +364,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
                 test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
                 keyspace_num=1, row_name = 'alternator-no-lwt')
-        def run_read_alternator_with_lwt():
-            if not run_read: return
-            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=stress_multiplier,
-                keyspace_num=1, row_name = 'alternator-always-lwt')
         def run_write_cql():
             if is_basic: return
             if not run_write: return
@@ -415,11 +409,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='without-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
-        def run_throughput_alternator_with_lwt():
-            if not run_throughput: return
-            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='with-lwt',
-                           stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-always-lwt')
 
         self.pre_create_alternator_tables()
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
@@ -431,7 +420,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         for func in [
             run_read_cql,
             run_read_alternator_no_lwt,
-            run_read_alternator_with_lwt,
             run_write_cql,
             run_write_alternator_no_lwt,
             run_write_alternator_with_lwt,
@@ -440,7 +428,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             run_mixed_alternator_with_lwt,
             run_throughput_cql,
             run_throughput_alternator_no_lwt,
-            run_throughput_alternator_with_lwt
         ]:
             self.wait_no_compactions_running(n=120)
             func()

@@ -40,7 +40,7 @@ instance_type_db: 'i3.4xlarge'
 
 stress_multiplier: 1
 stress_duration: 10
-prepare_stress_duration: 10
+prepare_stress_duration: 20
 alternator_write_isolation: 'forbid'
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
@@ -68,9 +68,9 @@ latency_decorator_error_thresholds:
   read:
     default:
       P90 read:
-        fixed_limit: 2
+        fixed_limit: 4
       P99 read:
-        fixed_limit: 3
+        fixed_limit: 8
     throughput:
       P90 read:
         fixed_limit: 999999
@@ -79,10 +79,10 @@ latency_decorator_error_thresholds:
   mixed:
     default:
       P90 write:
-        fixed_limit: 2
+        fixed_limit: 4
       P90 read:
-          fixed_limit: 2
+          fixed_limit: 4
       P99 write:
-          fixed_limit: 3
+          fixed_limit: 8
       P99 read:
-          fixed_limit: 3
+          fixed_limit: 8

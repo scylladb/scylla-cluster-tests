@@ -40,7 +40,7 @@ instance_type_db: 'i3.4xlarge'
 
 stress_multiplier: 1
 stress_duration: 30
-prepare_stress_duration: 10
+prepare_stress_duration: 20
 alternator_write_isolation: 'forbid'
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
