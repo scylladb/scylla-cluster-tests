@@ -27,6 +27,7 @@ from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.wait import wait_for
 
@@ -141,14 +142,58 @@ class ScyllaBenchThread(DockerBasedStressThread):
         #       Another "raw" tag/metric is ignored because it is coordinated omission affected
         #       and not really needed having 'coordinated omission fixed' latency one.
         self.hdr_tags = ["co-fixed"]
+        self.stress_tool_name = "scylla-bench"
+
+    @staticmethod
+    def _parse_help_text(result):
+        """
+            Parses the help text output from the stress tool to extract available suboptions.
+
+            Args:
+                result (str): The help text output as a string.
+
+            Returns:
+                list: A list of suboption names found in the help text.
+        """
+        # Example of scylla-bench help text:
+        #    -bypass-cache
+        #         Execute queries with the "BYPASS CACHE" CQL clause
+        #    -client-compression
+        #         use compression for client-coordinator communication (default true)
+        return re.findall(r'(-[\w-]+?) ', result)
+
+    def build_rack_option(self, loader_rack, loader=None):
+        rack_option_cmd = f"{self.rack_option_name}={loader_rack} "
+        rack_option_cmd += self.get_datacenter_name_for_loader(loader)
+        return rack_option_cmd
+
+    @retrying(n=2, sleep_time=1, raise_on_exceeded=False, message="Failed to get scylla-bench usage", allowed_exceptions=(ValueError,))
+    def get_stress_usage_text(self, loader, option):
+        result = loader.run(
+            cmd=f'scylla-bench --help {option}',
+            timeout=self.timeout,
+            ignore_status=True)
+        # scylla-bench deliberately sends its help text to stderr, even when it exits with returncode=0.
+        # stderr is the default in Go. Should be fixed in the future.
+        usage = result.stderr or result.stdout
+        LOGGER.debug("Available suboptions for '%s': %s", option, usage)
+
+        if "Usage of scylla-bench:" in usage:
+            # Extract the usage text after "Usage of scylla-bench:"
+            usage_text = usage.split("Usage of scylla-bench:")[1].strip()
+            LOGGER.debug("Scylla-bench usage for '%s' option: %s", option, usage_text)
+            return usage_text
+        else:
+            LOGGER.warning("Failed to get scylla-bench usage for '%s' option. Stderr: %s\nStdout: %s",
+                           option, result.stderr.strip(), result.stdout.strip())
+            raise ValueError(f"Failed to get scylla-bench usage for '{option}' option.")
 
     def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
         if self.connection_bundle_file:
             stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
         else:
-            # Select first seed node to send the scylla-bench cmds
-            ips = ",".join([n.cql_address for n in self.node_list])
-            stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
+            stress_cmd = self.adjust_cmd_node_option(
+                stress_cmd, loader, cmd_runner, stress_node_option_name="-nodes", help_option="")
 
             if self.params.get("client_encrypt"):
                 for ssl_file in loader.ssl_conf_dir.iterdir():

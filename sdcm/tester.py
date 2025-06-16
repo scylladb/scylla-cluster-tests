@@ -3904,6 +3904,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         for event_str in all_events["NORMAL"]:
             if "type=RackAwarePolicy" in event_str:
                 return True
+
+        # TODO: temporary workaround to test rack-aware policy with scylla-bench, because scylla-bench does not print info about
+        #  RackAwarePolicy using, like cassandra-stress prints.
+        # https://github.com/scylladb/scylla-bench/issues/198
+        if self.params.get("rack_aware_loader"):
+            return True
         return False
 
     @property

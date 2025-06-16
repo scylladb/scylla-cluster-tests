@@ -85,6 +85,7 @@ class CassandraStressThread(DockerBasedStressThread):
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
         self.set_hdr_tags(stress_cmd)
+        self.stress_tool_name = "cassandra-stress"
 
     def set_stress_operation(self, stress_cmd):
         if " mixed " in stress_cmd:
@@ -140,41 +141,27 @@ class CassandraStressThread(DockerBasedStressThread):
             stress_cmd = stress_cmd.replace(" -schema ", f" -schema 'compaction(strategy={self.compaction_strategy})' ")
         return stress_cmd
 
-    def adjust_cmd_node_option(self, stress_cmd, loader, cmd_runner):
-        if self.node_list and '-node' not in stress_cmd:
-            stress_cmd += " -node "
-            if self.loader_set.test_config.MULTI_REGION:
-                # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
-                # not for loader nodes. So call next function for DB nodes
-                datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
-                if loader_dc := datacenter_name_per_region.get(loader.region):
-                    stress_cmd += f"datacenter={loader_dc} "
-                else:
-                    LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
-                                 loader.region, datacenter_name_per_region)
-
-            node_list = self.node_list
-            if self.params.get("rack_aware_loader"):
-                # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
-                rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
-                by_region_rack_names = self.loader_set.get_rack_names_per_datacenter_from_rack_mapping(rack_names)
-                if any(len(racks) > 1 for racks in by_region_rack_names.values()) and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
-                    if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
-                        stress_cmd += f"rack={loader_rack} "
-                        node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(
-                            db_nodes=self.node_list).get((str(loader.region), str(loader.rack)))
-
-            node_ip_list = [n.cql_address for n in node_list]
-
-            stress_cmd += ",".join(node_ip_list)
-        return stress_cmd
-
     def adjust_cmd_connection_options(self, stress_cmd: str, loader, cmd_runner) -> str:
         if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
             stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
         else:
             stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
+
+    @staticmethod
+    def _parse_help_text(result):
+        """
+            Parses the help text output from the stress tool to extract available suboptions.
+
+            Args:
+                result (str): The help text output as a string.
+
+            Returns:
+                list: A list of suboption names found in the help text.
+        """
+        # Usage of cassandra-stress:
+        #   Usage: -node [datacenter=?] [rack=?] [whitelist] [file=?] []
+        return re.findall(r' *\[([\w-]+?)[=?]*] *', result)
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
@@ -223,20 +210,6 @@ class CassandraStressThread(DockerBasedStressThread):
         if len(new_error_suboptions) == len(current_error_suboptions):
             return stress_cmd
         return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
-
-    def _get_available_suboptions(self, loader, option, _cache={}):  # noqa: B006
-        if cached_value := _cache.get(option):
-            return cached_value
-        try:
-            result = loader.run(
-                cmd=f'cassandra-stress help {option} | grep "^Usage:"',
-                timeout=self.timeout,
-                ignore_status=True).stdout
-        except Exception:  # noqa: BLE001
-            return []
-        findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
-        _cache[option] = findings
-        return findings
 
     @staticmethod
     def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # noqa: B006

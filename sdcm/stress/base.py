@@ -54,6 +54,9 @@ class DockerBasedStressThread:
         self.stop_test_on_failure = stop_test_on_failure
         self.hdr_tags = []
         self.stress_operation = self.set_stress_operation(stress_cmd)
+        self.stress_tool_name = ""
+        self.datacenter_option_name = "datacenter"
+        self.rack_option_name = "rack"
 
         if "k8s" not in self.params.get("cluster_backend") and self.docker_image_name:
             for loader in self.loader_set.nodes:
@@ -173,6 +176,129 @@ class DockerBasedStressThread:
     def _build_log_file_id(loader_idx, cpu_idx, keyspace_idx):
         keyspace_suffix = f"-k{keyspace_idx}" if keyspace_idx else ""
         return f"l{loader_idx}-c{cpu_idx}{keyspace_suffix}-{uuid.uuid4()}"
+
+    def get_stress_usage_text(self, loader, option):
+        result = loader.run(
+            cmd=f'{self.stress_tool_name} help {option} | grep "^Usage:"',
+            timeout=self.timeout,
+            ignore_status=True).stdout
+        LOGGER.debug("Available suboptions for '%s', '%s': %s", self.stress_tool_name, option, result)
+        return result
+
+    @staticmethod
+    def _parse_help_text(result):
+        """
+            Parses the help text output from the stress tool to extract available suboptions.
+
+            Args:
+                result (str): The help text output as a string.
+
+            Returns:
+                list: A list of suboption names found in the help text.
+        """
+        raise NotImplementedError("Subclasses must implement _parse_help_text method to parse help text output.")
+
+    def _get_available_suboptions(self, loader, option, _cache=None):
+        """
+        Returns a list of available suboptions for the stress tool.
+        This is a placeholder method and should be overridden in subclasses.
+        """
+        if _cache is None:
+            _cache = {}
+
+        if cached_value := _cache.get(option):
+            return cached_value
+
+        try:
+            result = self.get_stress_usage_text(loader, option)
+        except Exception:  # noqa: BLE001
+            return []
+
+        findings = self._parse_help_text(result)
+        LOGGER.debug("Parsed suboptions for '%s': %s", option, findings)
+        _cache[option] = findings
+        LOGGER.debug("Cached suboptions for '%s': %s", option, _cache[option])
+        return findings
+
+    def build_rack_option(self, loader_rack, loader=None):
+        rack_option_cmd = f"{self.rack_option_name}={loader_rack} "
+        return rack_option_cmd
+
+    def get_datacenter_name_for_loader(self, loader):
+        datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+        datacenter_cmd = ""
+        if loader_dc := datacenter_name_per_region.get(loader.region):
+            datacenter_cmd = f" {self.datacenter_option_name}={loader_dc} "
+        else:
+            LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                         loader.region, datacenter_name_per_region)
+        return datacenter_cmd
+
+    def adjust_cmd_node_option(self, stress_cmd, loader, cmd_runner, stress_node_option_name="-node", help_option="-node"):
+        """
+            Adjusts the stress command to include node and rack options based on the current configuration.
+
+            This method modifies the provided `stress_cmd` string to specify which database nodes and racks
+            should be targeted by the stress tool. It appends node IPs and, if applicable, rack and datacenter
+            information to the command. The adjustments depend on the loader's region, rack, and the test
+            configuration parameters.
+
+            Args:
+                stress_cmd (str): The initial stress command to be adjusted.
+                loader: The loader node object for which the command is being constructed.
+                cmd_runner: The object used to run commands on the loader.
+                stress_node_option_name (str, optional): The name of the node option to use in the stress command. Defaults to "-node".
+                help_option (str, optional): The help option to query available suboptions. Defaults to "-node".
+
+            Returns:
+                str: The adjusted stress command string with node and rack options appended as needed.
+        """
+        LOGGER.debug("Start adjusting stress command to use nodes: %s", stress_cmd)
+        datacenter_cmd, rack_option_cmd = "", ""
+        if self.node_list and stress_node_option_name not in stress_cmd:
+            stress_cmd += f" {stress_node_option_name} "
+            LOGGER.debug("Adjusting stress command to use nodes: %s", stress_cmd)
+
+            node_list = self.node_list
+            LOGGER.debug("Node list to use in stress command: %s", node_list)
+            help_text = self._get_available_suboptions(cmd_runner, help_option)
+            self.datacenter_option_name = next(
+                (opt for opt in help_text if self.datacenter_option_name in opt), self.datacenter_option_name)
+            LOGGER.debug("Datacenter option name: %s", self.datacenter_option_name)
+            if self.params.get("rack_aware_loader"):
+                self.rack_option_name = next(
+                    (opt for opt in help_text if self.rack_option_name in opt), self.rack_option_name)
+                LOGGER.debug("Rack option name: %s", self.rack_option_name)
+                LOGGER.debug("Rack-aware loader is enabled, trying to pin stress command to rack")
+                # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
+                rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
+                by_region_rack_names = self.loader_set.get_rack_names_per_datacenter_from_rack_mapping(rack_names)
+                if any(len(racks) > 1 for racks in by_region_rack_names.values()) and self.rack_option_name in help_text:
+                    LOGGER.debug("Loader rack: %s", loader.rack)
+                    LOGGER.debug("Rack names for loader region: %s",
+                                 rack_names.get((str(loader.region), str(loader.rack))))
+                    if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
+                        rack_option_cmd = self.build_rack_option(loader_rack, loader)
+                        LOGGER.debug("Rack value for stress command:  %s", rack_option_cmd)
+                        node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(
+                            db_nodes=self.node_list).get((str(loader.region), str(loader.rack)))
+                        LOGGER.debug("Nodes list: %s", node_list)
+
+            if self.loader_set.test_config.MULTI_REGION and f"{self.datacenter_option_name}=" not in rack_option_cmd:
+                # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
+                # not for loader nodes. So call next function for DB nodes
+                datacenter_cmd = self.get_datacenter_name_for_loader(loader)
+
+            node_ip_list = [n.cql_address for n in node_list]
+            LOGGER.debug("Node IPs to use in stress command: %s", node_ip_list)
+
+            stress_cmd += ",".join(node_ip_list)
+            if datacenter_cmd:
+                stress_cmd += f"{datacenter_cmd}"
+            if rack_option_cmd:
+                stress_cmd += f" {rack_option_cmd}"
+        LOGGER.debug("Final stress command: %s", stress_cmd)
+        return stress_cmd
 
 
 def format_stress_cmd_error(exc: Exception) -> str:

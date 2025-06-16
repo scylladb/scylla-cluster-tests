@@ -1,0 +1,16 @@
+# This configuration is created to be run on top of "longevity-twcs-3h.yaml"
+test_duration: 180
+stress_duration: 120
+#pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'};"
+
+# One loader per DC is must for RACK validation tests
+n_loaders: 1
+#availability_zone: 'a,b'
+simulated_racks: 2
+
+rack_aware_loader: true
+
+# teardown validators
+teardown_validators:
+  rackaware:
+    enabled: true
