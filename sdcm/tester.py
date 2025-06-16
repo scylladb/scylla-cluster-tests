@@ -77,6 +77,7 @@ from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
+from sdcm.utils.argus import create_proxy_argus_s3_url
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_services, \
@@ -3732,7 +3733,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
         if email_data:
-            email_data['grafana_screenshots'] = grafana_screenshots
+            email_data['grafana_screenshots'] = [create_proxy_argus_s3_url(scr, True) for scr in grafana_screenshots]
             email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
