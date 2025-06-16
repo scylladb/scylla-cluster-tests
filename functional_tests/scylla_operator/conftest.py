@@ -27,7 +27,7 @@ from deepdiff import DeepDiff
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.utils import version_utils
-
+from sdcm.sct_events.setup import start_events_device
 
 TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
 LOGGER = logging.getLogger(__name__)
@@ -75,10 +75,14 @@ def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
     tester_inst.setUpClass()
+    tester_inst._init_logging()
+    start_events_device(log_dir=tester_inst.logdir, _registry=getattr(
+        tester_inst, "_registry", None) or tester_inst.events_processes_registry)
     tester_inst.setUp()
     yield tester_inst
     with contextlib.suppress(Exception):
         tester_inst.tearDown()
+    tester_inst.stop_event_device()
     with contextlib.suppress(Exception):
         tester_inst.tearDownClass()
 
