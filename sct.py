@@ -54,7 +54,7 @@ from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_
     update_sct_runner_tags, list_sct_runners
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
-from sdcm.utils.argus import argus_offline_collect_events, get_argus_client
+from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1283,7 +1283,8 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             #  current_cluster_type will be "warning"
             if cluster_type == 'sct-runner' and cluster_type not in link:
                 current_cluster_type = link.split("/")[-1].split("-")[0]
-            table.add_row([current_cluster_type, link])
+            table.add_row([current_cluster_type, create_proxy_argus_s3_url(
+                link).format(collector.test_id, link.split("/")[-1])])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
