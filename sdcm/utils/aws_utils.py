@@ -18,6 +18,7 @@ from functools import cached_property
 from typing import List, Dict
 
 import boto3
+import botocore
 from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.literals import ArchitectureTypeType
@@ -404,7 +405,7 @@ class PublicIpNotReady(Exception):
     pass
 
 
-@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
+@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady, botocore.exceptions.ClientError),
           message="Waiting for instance to get public ip")
 def ec2_instance_wait_public_ip(instance):
     instance.reload()
