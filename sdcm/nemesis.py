@@ -165,7 +165,6 @@ from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
-
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
 NEMESIS_LOCK = Lock()
@@ -212,7 +211,6 @@ def target_all_nodes(func: Callable) -> Callable:
 
 
 class Nemesis:
-
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
     # i.e. adding/removing nodes/data centers
@@ -284,6 +282,21 @@ class Nemesis:
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
         self.log.debug('Instantiated %s nemesis with %d seed', self.__class__.__name__, self.nemesis_seed)
+
+    def properties(self) -> dict:
+        instance_dict = object.__getattribute__(self, '__dict__')
+        class_attrs = {}
+        for attr_name in dir(self.__class__):
+            if not attr_name.startswith('_') and attr_name not in ('additional_params', 'additional_configs'):
+                try:
+                    attr_value = getattr(self.__class__, attr_name)
+                    if not callable(attr_value):
+                        class_attrs[attr_name] = attr_value
+                except (AttributeError, TypeError):
+                    continue
+
+        combined_dict = {**class_attrs, **instance_dict}
+        return combined_dict
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
@@ -776,8 +789,8 @@ class Nemesis:
     def disrupt_restart_then_repair_node(self):
         with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
                             line="Can't find a column family with UUID", node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
-                           line="Can't find a column family with UUID", node=self.target_node):
+                DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
+                               line="Can't find a column family with UUID", node=self.target_node):
             with DbNodeLogger(self.cluster.nodes, "restart node", target_node=self.target_node):
                 self.target_node.restart()
 
@@ -1091,7 +1104,7 @@ class Nemesis:
     @decorate_with_context(ignore_ycsb_connection_refused)
     @target_all_nodes
     def disrupt_nodetool_drain(self):
-        result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+        result = self.target_node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True)
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
                                       warning_event_on_exception=(Exception,))
 
@@ -2065,7 +2078,7 @@ class Nemesis:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
                 keyspaces.extend([row.lower()
-                                 for row in result_rows if not row.lower().startswith(("system", "audit"))])
+                                  for row in result_rows if not row.lower().startswith(("system", "audit"))])
             for ks in keyspaces:
                 to_be_skipped = tables_to_skip.get(ks, None)
                 if to_be_skipped is None:
@@ -2319,7 +2332,7 @@ class Nemesis:
                             SimpleStatement(
                                 f"SELECT pk, ck, writetime(v) FROM {mv_table_name} WHERE pk = {pk} AND ck = {ck}")).one()
                         assert not result or result.writetime_v != ts, f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), " \
-                            f"row still exists in MV (!!!), timestamp used: {ts}"
+                                                                       f"row still exists in MV (!!!), timestamp used: {ts}"
                     except InvalidRequest:
                         mv_not_configured = True
 
@@ -3164,15 +3177,15 @@ class Nemesis:
             with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
                                 line="repair's stream failed: streaming::stream_exception",
                                 node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="Can not find stream_manager",
-                               node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="is aborted",
-                               node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="Failed to repair",
-                               node=self.target_node):
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="Can not find stream_manager",
+                                   node=self.target_node), \
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="is aborted",
+                                   node=self.target_node), \
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="Failed to repair",
+                                   node=self.target_node):
                 with DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node):
                     self.target_node.remoter.run(
                         "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
@@ -3694,7 +3707,7 @@ class Nemesis:
                 self.log.debug(
                     f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
                 node = next((n for n in self.cluster.dead_nodes_list if n.ip_address ==
-                            node_to_remove.ip_address), None)
+                             node_to_remove.ip_address), None)
                 if node:
                     self.cluster.dead_nodes_list.remove(node)
                 else:
@@ -3832,11 +3845,11 @@ class Nemesis:
             if match_type == 'random':
                 probability = random.choice(['0.0001', '0.001', '0.01', '0.1', '0.3', '0.6', '0.8', '0.9'])
                 return f'randomly chosen packet with {probability} probability', \
-                       f'-m statistic --mode {mode} --probability {probability}'
+                    f'-m statistic --mode {mode} --probability {probability}'
             elif match_type == 'nth':
                 every = random.choice(['2', '4', '8', '16', '32', '64', '128'])
                 return f'every {every} packet', \
-                       f'-m statistic --mode {mode} --every {every} --packet 0'
+                    f'-m statistic --mode {mode} --every {every} --packet 0'
         elif match_type == 'limit':
             period = random.choice(['second', 'minute'])
             pkts_per_period = random.choice({
@@ -3844,11 +3857,11 @@ class Nemesis:
                 'minute': [2, 10, 40, 80]
             }.get(period))
             return f'string of {pkts_per_period} very first packets every {period}', \
-                   f'-m limit --limit {pkts_per_period}/{period}'
+                f'-m limit --limit {pkts_per_period}/{period}'
         elif match_type == 'connbytes':
             bytes_from = random.choice(['100', '200', '400', '800', '1600', '3200', '6400', '12800', '1280000'])
             return f'every packet from connection that total byte counter exceeds {bytes_from}', \
-                   f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
+                f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
         return 'every packet', ''
 
     @staticmethod
@@ -3868,7 +3881,7 @@ class Nemesis:
                 'icmp-admin-prohibited'
             ])
             return f'rejected with {reject_with}', \
-                   f'{target_type} --reject-with {reject_with}'
+                f'{target_type} --reject-with {reject_with}'
         return 'dropped', f'{target_type}'
 
     def _run_commands_wait_and_cleanup(
@@ -3951,15 +3964,15 @@ class Nemesis:
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="This node was decommissioned and will not rejoin",
                             node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="Fail to send STREAM_MUTATION_DONE",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
-                           line="streaming::stream_exception",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="got error in row level repair",
-                           node=self.target_node):
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="Fail to send STREAM_MUTATION_DONE",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                               line="streaming::stream_exception",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="got error in row level repair",
+                               node=self.target_node):
             while time.time() - start_time < timeout:
                 if list(log_follower):
                     time.sleep(delay)
@@ -3975,6 +3988,7 @@ class Nemesis:
         a new node in its place in case it was.
         4. Trigger a rebuild on the decommissioned node.
         """
+
         def decommission_post_action():
             """
             Verify that the decommission ocurred, was interrupted and
@@ -4156,7 +4170,8 @@ class Nemesis:
         will be skipped.
         """
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
-        with ignore_scrub_invalid_errors(), adaptive_timeout(Operations.SCRUB, self.target_node, timeout=HOUR_IN_SEC * 48):
+        with ignore_scrub_invalid_errors(), adaptive_timeout(Operations.SCRUB, self.target_node,
+                                                             timeout=HOUR_IN_SEC * 48):
             for ks in self.cluster.get_test_keyspaces():
                 self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
@@ -4382,7 +4397,7 @@ class Nemesis:
                 time.sleep(2)
                 node.remoter.run(f'nodetool upgradesstables -a -- {keyspace_name} {table_name}', verbose=True)
 
-        @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, ))
+        @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError,))
         def check_encryption_fact(sstable_util_instance, expected_bool_value):
             sstable_util_instance.check_that_sstables_are_encrypted(expected_bool_value=expected_bool_value)
 
@@ -4472,7 +4487,7 @@ class Nemesis:
         if not self.cluster.params.get('server_encrypt'):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
-        @timeout_decor(timeout=600, allowed_exceptions=(LogContentNotFound, ))
+        @timeout_decor(timeout=600, allowed_exceptions=(LogContentNotFound,))
         def check_ssl_reload_log(node_system_log):
             if not list(node_system_log):
                 raise LogContentNotFound('Reload SSL message not found in node log')
@@ -4549,7 +4564,7 @@ class Nemesis:
         memory_limit = self.target_node.k8s_cluster.scylla_memory_limit
         # If a container's memory usage increases too quickly the OOM killer is invoked
         # so reduce ramp to ~2GB/s: time_to_reach = memory (in GB) /2
-        time_to_reach_secs = int(convert_memory_value_from_k8s_to_units(memory_limit)/2)
+        time_to_reach_secs = int(convert_memory_value_from_k8s_to_units(memory_limit) / 2)
         duration = 100 + time_to_reach_secs
         self.log.info('Try to allocate 90% available memory')
         experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
@@ -4773,7 +4788,7 @@ class Nemesis:
         self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
         self.tester.create_keyspace("keyspace_new_dc", replication_factor={
-                                    datacenters[0]: min(3, len(self.cluster.data_nodes))})
+            datacenters[0]: min(3, len(self.cluster.data_nodes))})
         node_added = False
         with ExitStack() as context_manager:
             def finalizer(exc_type, *_):
@@ -5011,7 +5026,7 @@ class Nemesis:
             prometheus_stats=prometheus_stats,
             num_of_partitions=dataset_size,
             cassandra_stress_column_definition=column_definition,
-            service_levels_amount=MAX_ALLOWED_SERVICE_LEVELS-created_service_levels)
+            service_levels_amount=MAX_ALLOWED_SERVICE_LEVELS - created_service_levels)
 
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
@@ -5281,7 +5296,6 @@ class Nemesis:
             with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
                     FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
                                                           timeout=monitoring_decommission_timeout):
-
                 self.cluster.decommission(new_node, timeout=decommission_timeout)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
@@ -5711,7 +5725,6 @@ class NoOpMonkey(Nemesis):
 
 
 class AddRemoveDcNemesis(Nemesis):
-
     disruptive = True
     kubernetes = False
     run_with_gemini = False
@@ -6592,7 +6605,6 @@ class CDCStressorMonkey(Nemesis):
 
 
 class DecommissionStreamingErrMonkey(Nemesis):
-
     disruptive = True
     topology_changes = True
 
@@ -6601,7 +6613,6 @@ class DecommissionStreamingErrMonkey(Nemesis):
 
 
 class RebuildStreamingErrMonkey(Nemesis):
-
     disruptive = True
 
     def disrupt(self):
@@ -6609,7 +6620,6 @@ class RebuildStreamingErrMonkey(Nemesis):
 
 
 class RepairStreamingErrMonkey(Nemesis):
-
     disruptive = True
 
     def disrupt(self):
@@ -6750,7 +6760,6 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(Nemesis):
 
 
 class CreateIndexNemesis(Nemesis):
-
     disruptive = False
     schema_changes = True
     free_tier_set = True
@@ -6761,7 +6770,6 @@ class CreateIndexNemesis(Nemesis):
 
 
 class AddRemoveMvNemesis(Nemesis):
-
     disruptive = True
     schema_changes = True
     free_tier_set = True
@@ -6783,7 +6791,6 @@ class ToggleAuditNemesisSyslog(Nemesis):
 
 
 class BootstrapStreamingErrorNemesis(Nemesis):
-
     disruptive = True
     topology_changes = True
     supports_high_disk_utilization = True
@@ -6810,7 +6817,6 @@ class EndOfQuotaNemesis(Nemesis):
 
 
 class GrowShrinkZeroTokenNode(Nemesis):
-
     disruptive = True
     schema_changes = False
     free_tier_set = False
@@ -6821,7 +6827,6 @@ class GrowShrinkZeroTokenNode(Nemesis):
 
 
 class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
-
     disruptive = True
     topology_changes = True
     supports_high_disk_utilization = True

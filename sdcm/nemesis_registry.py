@@ -47,15 +47,19 @@ class NemesisRegistry:
         for nemesis in list_of_nemesis:
             if nemesis in self.excluded_list:
                 continue
-            evaluator.context = dict(**nemesis.__dict__, **{nemesis.__name__: True})
-            if logical_phrase and "disrupt_" in logical_phrase and (method_name := get_disrupt_method_from_class(nemesis)):
-                # if the `logical_phrase` has a method name of any disrupt method
-                # we look it up for the specific class and add it to the context
-                # so we can match on those as well
-                # example: 'disrupt_create_index or disrupt_drop_index'
-                evaluator.context[method_name] = True
-            if not logical_phrase or evaluator.visit(expression_ast):
+
+            instance = nemesis.__new__(nemesis)
+            evaluator.context = instance.properties()
+            evaluator.context[nemesis.__name__] = True
+            if logical_phrase:
+                if "disrupt_" in logical_phrase and (method_name := get_disrupt_method_from_class(nemesis)):
+                    evaluator.context[method_name] = True
+
+                if evaluator.visit(expression_ast):
+                    nemesis_subclasses.append(nemesis)
+            else:
                 nemesis_subclasses.append(nemesis)
+
         return nemesis_subclasses
 
     def get_disrupt_methods(self, logical_phrase: str | None = None) -> List[DisruptMethod]:
