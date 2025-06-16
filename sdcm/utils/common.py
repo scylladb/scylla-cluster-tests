@@ -67,6 +67,7 @@ from prettytable import PrettyTable
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
+from sdcm.utils.argus import create_proxy_argus_s3_url
 from sdcm.utils.aws_utils import (
     AwsArchType,
     EksClusterForCleaner,
@@ -357,7 +358,7 @@ def list_logs_by_test_id(test_id):
             if log_type in log_file:
                 results.append({"file_path": log_file,
                                 "type": log_type,
-                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file),
+                                "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
                                 "date": convert_to_date(log_file.split('/')[1])
                                 })
                 break
