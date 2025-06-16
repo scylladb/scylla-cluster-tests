@@ -348,23 +348,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
 
-        try:
-            running_time_multiplier_text = self.params.get('alternator_running_time_multiplier')
-            running_time_multiplier = float(running_time_multiplier_text)
-            self.log.debug(f'running_time_multiplier set to value {running_time_multiplier}')
-        except:
-            running_time_multiplier = 1.0
-            if running_time_multiplier_text:
-                self.log.warning(f'invalid format for running_time_multiplier `{running_time_multiplier_text}`, ignoring value')
-            else:
-                self.log.debug(f'running_time_multiplier not set, using value of 1')
-
-        if is_basic:
-            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(360 * running_time_multiplier)} -p operationcount={int(2000000 * running_time_multiplier)}"
-            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(360 * running_time_multiplier)} -p operationcount={int(4000000 * running_time_multiplier)}"
-        else:
-            cmd_add_params = f" -target 15000 -p maxexecutiontime={int(2400 * running_time_multiplier)} -p operationcount={int(20000000 * running_time_multiplier)}"
-            cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(2400 * running_time_multiplier)} -p operationcount={int(40000000 * running_time_multiplier)}"
+        duration = self.params.get('stress_duration')
+        cmd_add_params = f" -target 15000 -p maxexecutiontime={int(60 * duration)}"
+        cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(60 * duration)}"
 
         def run_read_cql():
             if is_basic: return

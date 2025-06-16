@@ -1761,10 +1761,6 @@ class SCTConfiguration(dict):
              help="Workload name, can be: write|read|mixed|unset."
                   "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
                   "If unset, workload is taken from test name."),
-
-        dict(name="alternator_running_time_multiplier", env="ALTERNATOR_RUNNING_TIME_MULTIPLIER", type=float,
-             help="Load multiplier for performance regression alternator tests. Setting to less than 1 reduces load,"
-                  "setting above - increases multiplicatively."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
