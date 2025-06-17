@@ -71,11 +71,6 @@ latency_decorator_error_thresholds:
         fixed_limit: 4
       P99 read:
         fixed_limit: 8
-    throughput:
-      P90 read:
-        fixed_limit: 999999
-      P99 read:
-        fixed_limit: 999999
   mixed:
     default:
       P90 write:
@@ -86,3 +81,8 @@ latency_decorator_error_thresholds:
           fixed_limit: 8
       P99 read:
           fixed_limit: 8
+  throughput:
+    P90 read:
+      fixed_limit: 999999
+    P99 read:
+      fixed_limit: 999999
