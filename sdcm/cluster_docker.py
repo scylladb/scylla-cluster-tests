@@ -456,6 +456,14 @@ class DockerMonitoringNode(cluster.BaseNode):
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
 
+    @property
+    def vm_region(self):
+        return "docker"
+
+    @property
+    def region(self):
+        return "docker"
+
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
     def __init__(self,
