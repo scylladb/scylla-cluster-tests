@@ -8,6 +8,7 @@ import pytest
 from sdcm.nemesis import Nemesis, SisyphusMonkey
 from sdcm.nemesis_registry import NemesisRegistry
 from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
+from unit_tests.nemesis.test_registry import FlagClass
 from unit_tests.test_tester import ClusterTesterForTests
 
 
@@ -23,7 +24,7 @@ class TestNemesisClass(Nemesis):
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
         super().__init__(tester_obj, termination_event, *args, nemesis_selector=nemesis_selector,
                          nemesis_seed=nemesis_seed, **kwargs)
-        self.nemesis_registry = NemesisRegistry(base_class=TestNemesisClass)
+        self.nemesis_registry = NemesisRegistry(base_class=TestNemesisClass, flag_class=FlagClass)
 
     def disrupt_method_a(self):
         print(self.COMMON_STRING + "a")
