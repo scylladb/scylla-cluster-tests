@@ -5094,10 +5094,12 @@ class Nemesis:
             view_name = f'{base_table_name}_view'
             with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
                 primary_key_columns = get_column_names(
-                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
+                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True, filter_out_mv_unsupported=True)
                 # selecting a supported column for creating a materialized-view (not a collection type).
                 column = get_random_column_name(session=session, ks=ks_name,
-                                                cf=base_table_name, filter_out_collections=True, filter_out_static_columns=True)
+                                                cf=base_table_name, filter_out_collections=True,
+                                                filter_out_static_columns=True,
+                                                filter_out_mv_unsupported=True)
                 if not column:
                     raise UnsupportedNemesis(
                         'A supported column for creating MV is not found. nemesis can\'t run')
