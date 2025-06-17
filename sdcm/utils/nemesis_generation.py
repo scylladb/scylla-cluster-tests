@@ -15,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 def generate_nemesis_yaml(file_opener=open):
     """Generates both nemesis.yaml and nemesis_classes.yml"""
-    registry = NemesisRegistry(Nemesis, COMPLEX_NEMESIS)
+    registry = NemesisRegistry(Nemesis, NemesisFlags, COMPLEX_NEMESIS)
     class_properties, method_properties = registry.gather_properties()
     sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
     with file_opener(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
