@@ -58,6 +58,20 @@ repos:
         pass_filenames: false
         files: (?x)(sdcm/sct_config.py|defaults/.*.yaml)
 
+    -   id: create-nemesis-yaml
+        name: create-nemesis-yaml
+        entry: ./sct.py create-nemesis-yaml
+        language: system
+        pass_filenames: false
+        files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py)
+
+    -   id: create-nemesis-pipelines
+        name: create-nemesis-pipelines
+        entry: ./sct.py create-nemesis-pipelines
+        language: system
+        pass_filenames: false
+        files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py|templates/.*.j2)
+
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v9.22.0
   hooks:
