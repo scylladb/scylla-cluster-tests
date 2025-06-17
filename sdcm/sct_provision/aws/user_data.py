@@ -47,8 +47,8 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
          and use nvme disks otherwise
         """
         if self.params.get("data_volume_disk_num") > 0:
-            return DataDeviceType.ATTACHED.value
-        return DataDeviceType.INSTANCE_STORE.value
+            return "attached"
+        return "instance_store"
 
     @computed_field
     @property
@@ -56,7 +56,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         """
         Tell scylla setup to create RAID0 or RAID5 on disks
         """
-        return self.params.get("raid_level") or RaidLevelType.RAID0
+        return RaidLevelType(self.params.get("raid_level") or 0)
 
     @computed_field
     @property

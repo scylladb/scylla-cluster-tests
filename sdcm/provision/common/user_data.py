@@ -13,13 +13,12 @@
 
 import abc
 from enum import Enum
+from typing import Literal
 
 from sdcm.provision.common.builders import AttrBuilder
 
 
-class DataDeviceType(str, Enum):
-    ATTACHED = 'attached'
-    INSTANCE_STORE = 'instance_store'
+DataDeviceType = Literal['attached', 'instance_store']
 
 
 class RaidLevelType(int, Enum):
