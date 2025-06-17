@@ -24,7 +24,8 @@ RUN microdnf -y update && \
         sudo \
     	openssh-server \
  		docker-ce-cli \
-        rsync && \
+        rsync \
+        procps-ng && \
     microdnf clean all && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
     echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \
