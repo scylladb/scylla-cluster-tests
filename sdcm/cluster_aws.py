@@ -57,8 +57,8 @@ from sdcm.wait import exponential_retry
 LOGGER = logging.getLogger(__name__)
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
+INSTANCE_PROVISION_SPOT = 'spot'
 INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
-INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
@@ -169,8 +169,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
-        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
-                                          spot_max_price_percentage=self.params.get('spot_max_price'))
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
         spot_params = dict(instance_type=instance_type or self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
@@ -248,9 +247,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instances = None
 
         if self.instance_provision.lower() == 'spot' or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
-            instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT_LOW_PRICE]
+            instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT]
         else:
-            # If self.instance_provision == "spot_low_price"
             instances_provision_fallbacks = [self.instance_provision]
 
         if self.params.get('instance_provision_fallback_on_demand'):
@@ -307,16 +305,16 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             count_spot = count - count_on_demand
 
             if count_spot > 0:
-                self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
+                self.instance_provision = INSTANCE_PROVISION_SPOT
                 instances.extend(self._create_spot_instances(
                     count_spot, interfaces, ec2_user_data, dc_idx, instance_type=instance_type))
             if count_on_demand > 0:
-                self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
+                self.instance_provision = INSTANCE_PROVISION_SPOT
                 instances.extend(self._create_on_demand_instances(
                     count_on_demand, interfaces, ec2_user_data, dc_idx, instance_type=instance_type))
             self.instance_provision = 'mixed'
         elif isinstance(self, LoaderSetAWS):
-            self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
+            self.instance_provision = INSTANCE_PROVISION_SPOT
             instances = self._create_spot_instances(
                 count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type)
         elif isinstance(self, MonitorSetAWS):
@@ -332,8 +330,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
         availability_zone = self.params.get('availability_zone').split(",")[az_idx] if az_idx is not None else None
-        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
-                                          spot_max_price_percentage=self.params.get('spot_max_price'))
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, running=True,
                                      region_name=self.region_names[dc_idx], group_as_region=True, availability_zone=availability_zone)
         instances = results[self.region_names[dc_idx]]
