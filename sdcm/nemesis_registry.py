@@ -2,7 +2,7 @@ import ast
 import inspect
 import re
 from functools import lru_cache
-from typing import List, TypeVar, Callable, Dict, Tuple
+from typing import List, TypeVar, Callable, Dict, Tuple, Any
 
 from sdcm.utils.ast_utils import BooleanEvaluator
 
@@ -27,9 +27,10 @@ class NemesisRegistry:
     All searches are done through a logical phrase (e.g. "not disruptive")
     """
 
-    def __init__(self, base_class: SourceType, excluded_list: List[SourceType] | None = None):
+    def __init__(self, base_class: SourceType, flag_class: Any, excluded_list: List[SourceType] | None = None):
         super().__init__()
         self.base_class = base_class
+        self.flag_class = flag_class
         self.excluded_list = excluded_list or []
 
     def filter_subclasses(self, list_of_nemesis: List[SourceType], logical_phrase: str | None = None) -> List[SourceType]:
@@ -47,7 +48,9 @@ class NemesisRegistry:
         for nemesis in list_of_nemesis:
             if nemesis in self.excluded_list:
                 continue
-            evaluator.context = dict(**nemesis.__dict__, **{nemesis.__name__: True})
+            context = dict(**self.flag_class.__dict__, **{nemesis.__name__: True})
+            context.update(**nemesis.__dict__)
+            evaluator.context = {key: value for key, value in context.items() if not key.startswith("__")}
             if logical_phrase and "disrupt_" in logical_phrase and (method_name := get_disrupt_method_from_class(nemesis)):
                 # if the `logical_phrase` has a method name of any disrupt method
                 # we look it up for the specific class and add it to the context
@@ -90,7 +93,9 @@ class NemesisRegistry:
         method_properties = {}
         for subclass in self.get_subclasses():
             properties_list = {}
-            for attribute in subclass.__dict__.keys():
+            nemesis_params = dict(**self.flag_class.__dict__)
+            nemesis_params.update(subclass.__dict__)
+            for attribute in nemesis_params.keys():
                 if attribute[:2] != "__" and attribute not in ("additional_params", "additional_configs"):
                     value = getattr(subclass, attribute)
                     if not callable(value):
