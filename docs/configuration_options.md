@@ -946,7 +946,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** N/A
+**default:** {'tablets_initial_scale_factor': 10}
 
 **type:** dict_or_str
 
@@ -998,11 +998,11 @@ Run nemesis during prepare stage of the test
 
 ## **nemesis_seed** / SCT_NEMESIS_SEED
 
-A seed number in order to repeat nemesis sequence as part of SisyphusMonkey
+A seed number in order to repeat nemesis sequence as part of SisyphusMonkey.<br>Can provide a list of seeds for multiple nemesis
 
 **default:** N/A
 
-**type:** int
+**type:** int_or_space_separated_ints
 
 
 ## **nemesis_add_node_cnt** / SCT_NEMESIS_ADD_NODE_CNT
@@ -1029,7 +1029,7 @@ Used for scale test: max size of the cluster
 
 **default:** N/A
 
-**type:** int
+**type:** int_or_space_separated_ints
 
 
 ## **space_node_threshold** / SCT_SPACE_NODE_THRESHOLD
@@ -1084,6 +1084,15 @@ Seed number for gemini command
 **default:** N/A
 
 **type:** int
+
+
+## **gemini_log_cql_statements** / SCT_GEMINI_LOG_CQL_STATEMENTS
+
+Log CQL statements to file
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **gemini_table_options** / SCT_GEMINI_TABLE_OPTIONS
@@ -1291,15 +1300,6 @@ root disk size in Gb for sct-runner
 **default:** N/A
 
 **type:** str (appendable)
-
-
-## **spot_max_price** / SCT_SPOT_MAX_PRICE
-
-The max percentage of the on demand price we set for spot/fleet instances
-
-**default:** N/A
-
-**type:** float
 
 
 ## **extra_network_interface** / SCT_EXTRA_NETWORK_INTERFACE
@@ -2642,13 +2642,15 @@ By default, the tablets feature is disabled. With this parameter, created for th
 
 **type:** boolean
 
+
 ## **enable_views_with_tablets_on_upgrade** / SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE
 
-Enables creating materialized views in keyspaces using tablets by adding an experimental feature. It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades where we create such views. In particular, in 6.2 tablets are enabled by default, so for the 6.2 -> 2025.1 upgrade, it should also be enabled when using defaults.
+Enables creating materialized views in keyspaces using tablets by adding an experimental feature.It should not be used when upgrading to versions before 2025.1 and it should be used for upgradeswhere we create such views.
 
-**default:** False
+**default:** N/A
 
 **type:** boolean
+
 
 ## **upgrade_node_packages** / SCT_UPGRADE_NODE_PACKAGES
 
@@ -2843,7 +2845,7 @@ Run post behavior actions in sct teardown step
 
 Failure/post test behavior, i.e. what to do with the db cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2861,7 +2863,7 @@ Failure/post test behavior, i.e. what to do with the loader cloud instances at t
 
 Failure/post test behavior, i.e. what to do with the monitor cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -2870,7 +2872,7 @@ Failure/post test behavior, i.e. what to do with the monitor cloud instances at 
 
 Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.<br><br>'destroy' - Destroy k8s cluster and credentials (default)<br>'keep' - Keep k8s cluster running and leave credentials alone<br>'keep-on-failure' - Keep k8s cluster if testrun failed
 
-**default:** keep-on-failure
+**default:** destroy
 
 **type:** str (appendable)
 
@@ -3165,7 +3167,7 @@ Flag for running db node benchmarks before the tests
 
 ## **nemesis_selector** / SCT_NEMESIS_SELECTOR
 
-nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: ["disruptive and not sla"] # simple one<br>nemesis_selector: ["disruptive and not (sla or limited or manager_operation or config_changes)"] # complex one<br>```
+nemesis_selector gets a list of logical expression based on "nemesis properties" and filters IN all the nemesis that has<br>example of logical expression:<br>```yaml<br>nemesis_selector: "disruptive and not sla" # simple one<br>nemesis_selector: "disruptive and not (sla or limited or manager_operation or config_changes)" # complex one<br>```
 
 **default:** N/A
 
@@ -3370,6 +3372,15 @@ Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate ra
 **type:** int
 
 
+## **rack_aware_loader** / SCT_RACK_AWARE_LOADER
+
+When enabled, loaders will look for nodes on the same rack.
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **use_dns_names** / SCT_USE_DNS_NAMES
 
 Use dns names instead of ip addresses for nodes in cluster
@@ -3455,7 +3466,7 @@ configuration for setup up kafka connectors
 
 Run scylla-doctor in artifact tests
 
-**default:** N/A
+**default:** True
 
 **type:** boolean
 
