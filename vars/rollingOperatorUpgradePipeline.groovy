@@ -49,8 +49,22 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
                    description: 'if true, enable operator tls, and install haproxy ingress controller',
                    name: 'k8s_enable_tls')
+<<<<<<< HEAD
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+            string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
+                   description: 'if true, install haproxy ingress controller and use it',
+                   name: 'k8s_enable_sni')
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
+                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+=======
+            string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
+                   description: 'if true, install haproxy ingress controller and use it',
+                   name: 'k8s_enable_sni')
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+                   description: 'spot|on_demand|spot_fleet',
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
                    name: 'provision_type')
             choice(choices: ["${pipelineParams.get('post_behavior_db_nodes', 'destroy')}", 'keep', 'keep-on-failure'],
                    name: 'post_behavior_db_nodes')

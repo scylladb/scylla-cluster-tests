@@ -6,8 +6,14 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
+<<<<<<< HEAD:jenkins-pipelines/longevity-10gb-3h-ipv6.jenkinsfile
     ip_ssh_connections: 'ipv6',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-10gb-3h.yaml'
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests):jenkins-pipelines/oss/artifacts/artifacts-amazon2023.jenkinsfile
+    provision_type: 'spot_low_price',
+=======
+    provision_type: 'spot',
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests):jenkins-pipelines/oss/artifacts/artifacts-amazon2023.jenkinsfile
 
 )

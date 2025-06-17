@@ -4,9 +4,21 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
+<<<<<<< HEAD:jenkins-pipelines/artifacts-debian10.jenkinsfile
     test_config: 'test-cases/artifacts/debian10.yaml',
     backend: 'gce',
     provision_type: 'spot',
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests):jenkins-pipelines/oss/artifacts/artifacts-amazon2023-arm.jenkinsfile
+    test_config: '''["test-cases/artifacts/amazon2023.yaml", "configurations/arm/amazon2023.yaml"]''',
+    backend: 'aws',
+    region: 'eu-west-1',
+    provision_type: 'spot_low_price',
+=======
+    test_config: '''["test-cases/artifacts/amazon2023.yaml", "configurations/arm/amazon2023.yaml"]''',
+    backend: 'aws',
+    region: 'eu-west-1',
+    provision_type: 'spot',
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests):jenkins-pipelines/oss/artifacts/artifacts-amazon2023-arm.jenkinsfile
 
     timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

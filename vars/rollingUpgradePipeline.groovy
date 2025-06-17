@@ -38,8 +38,18 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
 
+<<<<<<< HEAD
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
+                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+=======
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+                   description: 'on_demand|spot_fleet|spot',
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
