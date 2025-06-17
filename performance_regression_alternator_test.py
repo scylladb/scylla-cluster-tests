@@ -51,7 +51,15 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
         self.hdr_tags = ['read', 'write']
         self.row_name_override = row_name
-        if test_name.endswith('_read'):
+        if test_name.endswith('_throughput_read'):
+            self.params['workload_name'] = 'throughput'
+            cycle_name = 'throughput-read'
+            hdr_workload = PerformanceTestWorkload.READ
+        elif test_name.endswith('_throughput_write'):
+            self.params['workload_name'] = 'throughput'
+            cycle_name = 'throughput-write'
+            hdr_workload = PerformanceTestWorkload.WRITE
+        elif test_name.endswith('_read'):
             self.params['workload_name'] = 'read'
             cycle_name = '100% read'
             hdr_workload = PerformanceTestWorkload.READ
@@ -63,14 +71,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
             hdr_workload = PerformanceTestWorkload.MIXED
-        elif test_name.endswith('_throughput_read'):
-            self.params['workload_name'] = 'throughput'
-            cycle_name = 'throughput-read'
-            hdr_workload = PerformanceTestWorkload.READ
-        elif test_name.endswith('_throughput_write'):
-            self.params['workload_name'] = 'throughput'
-            cycle_name = 'throughput-write'
-            hdr_workload = PerformanceTestWorkload.WRITE
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
             
