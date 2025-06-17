@@ -7,7 +7,7 @@ artifactsPipeline(
     test_config: '''["test-cases/artifacts/ubuntu2404.yaml", "configurations/arm/ubuntu2404.yaml"]''',
     backend: 'aws',
     region: 'eu-west-1',
-    provision_type: 'spot_low_price',
+    provision_type: 'spot',
 
     timeout: [time: 35, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

@@ -994,13 +994,6 @@ root disk size in Gb for sct-runner
 **default:** N/A
 
 
-## **spot_max_price** / SCT_SPOT_MAX_PRICE
-
-The max percentage of the on demand price we set for spot/fleet instances
-
-**default:** N/A
-
-
 ## **extra_network_interface** / SCT_EXTRA_NETWORK_INTERFACE
 
 if true, create extra network interface on each node
