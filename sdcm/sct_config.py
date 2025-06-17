@@ -793,9 +793,6 @@ class SCTConfiguration(dict):
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
              help=""),
 
-        dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
-             help="The max percentage of the on demand price we set for spot/fleet instances"),
-
         dict(name="extra_network_interface", env="SCT_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
 
@@ -2109,7 +2106,7 @@ class SCTConfiguration(dict):
         self['user_prefix'] = re.sub(r"[^a-zA-Z0-9-]", "-", self['user_prefix'])
 
         # 11) validate that supported instance_provision selected
-        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price']:
+        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
         # 12) validate authenticator parameters
