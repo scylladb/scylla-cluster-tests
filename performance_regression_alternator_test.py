@@ -360,6 +360,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_write_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-write'
 
         duration = self.params.get('stress_duration')
+        if duration < 5:
+            duration = 5
+        duration -= 3 # to have some wiggle room, because we actually might wait for compaction and stuff
         cmd_add_params = f" -target 15000 -p maxexecutiontime={int(60 * duration)}"
         cmd_add_throughput_params = f" -target 999999 -p maxexecutiontime={int(60 * duration)}"
 
