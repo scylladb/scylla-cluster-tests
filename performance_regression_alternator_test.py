@@ -63,10 +63,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
             hdr_workload = PerformanceTestWorkload.MIXED
-        elif test_name.endswith('_throughput'):
+        elif test_name.endswith('_throughput_read'):
             self.params['workload_name'] = 'throughput'
-            cycle_name = 'throughput'
+            cycle_name = 'throughput-read'
             hdr_workload = PerformanceTestWorkload.READ
+        elif test_name.endswith('_throughput_write'):
+            self.params['workload_name'] = 'throughput'
+            cycle_name = 'throughput-write'
+            hdr_workload = PerformanceTestWorkload.WRITE
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
             
@@ -315,6 +319,12 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
     def test_basic_throughput(self):
         self.run_basic_or_full_test('basic-throughput')
 
+    def test_basic_throughput_read(self):
+        self.run_basic_or_full_test('basic-throughput-read')
+
+    def test_basic_throughput_write(self):
+        self.run_basic_or_full_test('basic-throughput-write')
+
     def run_basic_or_full_test(self, mode):
         """
         Test steps:
@@ -346,7 +356,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_read = mode == 'full' or mode == 'basic' or mode == 'basic-read'
         run_write = mode == 'full' or mode == 'basic' or mode == 'basic-write'
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
-        run_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput'
+        run_read_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-read'
+        run_write_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-write'
 
         duration = self.params.get('stress_duration')
         cmd_add_params = f" -target 15000 -p maxexecutiontime={int(60 * duration)}"
@@ -398,17 +409,28 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
                            stress_cmd=base_cmd_m + cmd_add_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-always-lwt')
-        def run_throughput_cql():
+        def run_read_throughput_cql():
             if is_basic: return
-            if not run_throughput: return
+            if not run_read_throughput: return
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_throghput', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
+                test_name=self.id() + '_throughput_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
                 stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
-        def run_throughput_alternator_no_lwt():
-            if not run_throughput: return
+        def run_read_throughput_alternator_no_lwt():
+            if not run_read_throughput: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throghput', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput', sub_type='without-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
+        def run_write_throughput_cql():
+            if is_basic: return
+            if not run_write_throughput: return
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(
+                test_name=self.id() + '_throughput_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_throughput_params,
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False, row_name = 'cql')
+        def run_write_throughput_alternator_no_lwt():
+            if not run_write_throughput: return
+            self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput', sub_type='without-lwt',
+                           stress_cmd=base_cmd_w + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         self.pre_create_alternator_tables()
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
@@ -426,8 +448,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             run_mixed_cql,
             run_mixed_alternator_no_lwt,
             run_mixed_alternator_with_lwt,
-            run_throughput_cql,
-            run_throughput_alternator_no_lwt,
+            run_read_throughput_cql,
+            run_read_throughput_alternator_no_lwt,
+            run_write_throughput_cql,
+            run_write_throughput_alternator_no_lwt,
         ]:
             self.wait_no_compactions_running(n=120)
             func()
