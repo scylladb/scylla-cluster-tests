@@ -315,24 +315,6 @@ class PrometheusDBStats:
         else:
             return res
 
-    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
-        """
-        Get Scylla CPU scheduler runtime from PrometheusDB
-
-        :return: list of tuples (unix time, op/s)
-        """
-        if not self._check_start_end_time(start_time, end_time):
-            return {}
-        # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) ' \
-            'by (group, instance)' % (node_ip, irate_sample_sec)
-        results = self.query(query=query, start=start_time, end=end_time)
-        res = defaultdict(dict)
-        for item in results:
-            res[item['metric']['instance']].update({item['metric']['group']:
-                                                    [float(runtime[1]) for runtime in item['values']]})
-        return res
-
     def get_scylla_io_queue_total_operations(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
         """
         Get Scylla CPU scheduler runtime from PrometheusDB
@@ -350,26 +332,6 @@ class PrometheusDBStats:
         for item in results:
             res[item['metric']['instance']].update({item['metric']['class']:
                                                     [float(runtime[1]) for runtime in item['values']]})
-        return res
-
-    def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):
-        """
-        Get scylla_scheduler_shares from PrometheusDB
-
-        :return: list of tuples (unix time, op/s)
-        """
-        if not self._check_start_end_time(start_time, end_time):
-            return {}
-        # the query is taken from the Grafana Dashborad definition
-        query = 'avg(scylla_scheduler_shares{group=~"sl:.*", instance="%s"} ) by (group, instance)' % node_ip
-        results = self.query(query=query, start=start_time, end=end_time)
-        res = {}
-        for item in results:
-            try:
-                res[item['metric']['group']] = {int(i[1]) for i in item['values']}
-            except Exception as error:  # noqa: BLE001
-                # average value may be returned not integer. Ignore it
-                LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
         return res
 
     def get_scylla_storage_proxy_replica_cross_shard_ops(self, start_time, end_time):
