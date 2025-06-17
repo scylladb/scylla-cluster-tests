@@ -17,7 +17,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.utils.common import get_scylla_ami_versions
 from sdcm.ec2_client import EC2ClientWrapper
-
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 
 AWS_REGION = "us-east-1"
 
@@ -69,6 +69,11 @@ def aws_region(keystore_configure) -> AwsRegion:
     # hence we configure the region first
     _aws_region = AwsRegion(region_name=AWS_REGION)
     _aws_region.configure()
+
+    # when provisioning on_demend this is part of the checks
+    iam = boto3.client("iam", region_name=AWS_REGION)
+    iam.create_instance_profile(InstanceProfileName="qa-scylla-manager-backup-instance-profile")
+
     return _aws_region
 
 
@@ -90,7 +95,8 @@ def test_02_keystore_sync(tmp_path) -> None:
         assert stat.S_IMODE(file.stat().st_mode) == 0o600
 
 
-def test_03_provision(aws_region: AwsRegion) -> None:
+@pytest.mark.parametrize("instance_provision", ["on_demand", "spot", "spot_fleet"])
+def test_03_provision(aws_region: AwsRegion, instance_provision: str) -> None:
 
     # test AWS provision flow
 
@@ -103,6 +109,7 @@ def test_03_provision(aws_region: AwsRegion) -> None:
     os.environ['SCT_N_MONITORS_NODES'] = '1'
     os.environ['SCT_N_LOADERS'] = '1'
     os.environ['SCT_LOGS_TRANSPORT'] = 'ssh'
+    os.environ['SCT_INSTANCE_PROVISION'] = instance_provision
 
     # we need to set the monitor id, otherwise it will fail on every update of it
     os.environ['SCT_AMI_ID_MONITOR'] = 'scylladb-monitor-4-8-0-2024-08-06t03-34-43z'
@@ -134,6 +141,8 @@ def test_05_ec2_client_spot(aws_region: AwsRegion) -> None:
         instance_type='m5.xlarge',
         image_id='ami-760aaa0f',
         region_name=aws_region.region_name,
+        tag_specifications=[{"ResourceType": "spot-instances-request",
+                             "Tags": tags_as_ec2_tags({"Name": "test-spot-instance"})}],
         network_if=[{'DeviceIndex': 0,
                      'SubnetId': 'subnet-0a1b2c3d4e5f6g7h8',
                      'AssociatePublicIpAddress': True}],

@@ -138,7 +138,12 @@ class AWSCluster(cluster.BaseCluster):
                       KeyName=self._credentials[dc_idx].key_pair_name,
                       BlockDeviceMappings=self._ec2_block_device_mappings,
                       NetworkInterfaces=interfaces,
-                      InstanceType=instance_type or self._ec2_instance_type)
+                      InstanceType=instance_type or self._ec2_instance_type,
+                      TagSpecifications=[{
+                          'ResourceType': 'instance',
+                          'Tags': tags_as_ec2_tags(self.tags)
+                      }]
+                      )
         instance_profile = self.instance_profile_name
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
@@ -167,17 +172,19 @@ class AWSCluster(cluster.BaseCluster):
     def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, instance_type=None, is_zero_node=False):
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
-        spot_params = dict(instance_type=instance_type or self._ec2_instance_type,
-                           image_id=self._ec2_ami_id[dc_idx],
-                           region_name=subnet_info['AvailabilityZone'],
-                           network_if=interfaces,
-                           key_pair=self._credentials[dc_idx].key_pair_name,
-                           user_data=ec2_user_data,
-                           count=count,
-                           block_device_mappings=self._ec2_block_device_mappings,
-                           aws_instance_profile=self.instance_profile_name,
-                           placement_group_name=self.placement_group_name,)
-
+        spot_params = dict(
+            instance_type=instance_type or self._ec2_instance_type,
+            image_id=self._ec2_ami_id[dc_idx],
+            region_name=subnet_info["AvailabilityZone"],
+            network_if=interfaces,
+            key_pair=self._credentials[dc_idx].key_pair_name,
+            user_data=ec2_user_data,
+            count=count,
+            block_device_mappings=self._ec2_block_device_mappings,
+            aws_instance_profile=self.instance_profile_name,
+            placement_group_name=self.placement_group_name,
+            tag_specifications=[{"Tags": tags_as_ec2_tags(self.tags)}],
+        )
         limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
         request_cnt = 1
         tail_cnt = 0
