@@ -43,7 +43,7 @@ def call(Map pipelineParams) {
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
+                   description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
