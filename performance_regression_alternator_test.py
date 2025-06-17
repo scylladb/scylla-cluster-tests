@@ -418,7 +418,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         def run_read_throughput_alternator_no_lwt():
             if not run_read_throughput: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_read', sub_type='without-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
         def run_write_throughput_cql():
             if is_basic: return
@@ -429,7 +429,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         def run_write_throughput_alternator_no_lwt():
             if not run_write_throughput: return
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_write', sub_type='without-lwt',
                            stress_cmd=base_cmd_w + cmd_add_throughput_params, stress_num=stress_multiplier, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         self.pre_create_alternator_tables()
