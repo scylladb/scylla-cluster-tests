@@ -184,16 +184,6 @@ class ClusterBase(BaseModel):
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
 
-    def _spot_low_price(self, region_id: int) -> float:
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
-
-        aws_pricing = AWSPricing()
-        on_demand_price = float(aws_pricing.get_on_demand_instance_price(
-            region_name=self._region(region_id),
-            instance_type=self._instance_type,
-        ))
-        return on_demand_price * self.params.get('spot_max_price')
-
     def provision_plan(self, region_id: int, availability_zone: str) -> ProvisionPlan:
         return ProvisionPlanBuilder(
             initial_provision_type=self._instance_provision,
@@ -201,7 +191,6 @@ class ClusterBase(BaseModel):
             fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
             availability_zone=availability_zone,
-            spot_low_price=self._spot_low_price(region_id),
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 

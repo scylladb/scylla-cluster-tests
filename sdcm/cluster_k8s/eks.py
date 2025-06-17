@@ -830,8 +830,7 @@ class MonitorSetEKS(MonitorSetAWS):
         # az_idx is not used as we specify az's for k8s cluster while we don't create instances in multi-az.
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
-        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
-                                          spot_max_price_percentage=self.params.get('spot_max_price'))
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         results = list_instances_aws(
             tags_dict={'MonitorId': self.monitor_id, 'NodeType': self.node_type},
             region_name=self.region_names[dc_idx],
