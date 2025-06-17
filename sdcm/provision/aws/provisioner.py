@@ -20,6 +20,7 @@ from typing import List, Optional, Union
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by_id, set_tags_on_instances, \
     wait_for_provision_request_done, create_spot_fleet_instance_request, \
@@ -99,6 +100,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             tags: List[TagsType]) -> List[Instance]:
         instance_parameters_dict = instance_parameters.dict(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        instance_parameters_dict['TagSpecifications'] = [
+            {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}]
+
         LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
                     provision_parameters.region_name,
                     instance_parameters.ImageId,
@@ -153,6 +160,19 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
+
+        instance_parameters_dict = instance_parameters.model_dump(
+            exclude_none=True,
+            exclude_unset=True,
+            exclude_defaults=True,
+            encode_user_data=True,
+        )
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        instance_parameters_dict['TagSpecifications'] = [
+            {"ResourceType": "spot-fleet-request", "Tags": tags_as_ec2_tags(tags[0])}]
+
         request_id = create_spot_fleet_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
@@ -245,6 +265,11 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        tag_specifications = [{"ResourceType": "spot-instances-request", "Tags": tags_as_ec2_tags(tags[0])},]
+
         request_ids = create_spot_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
@@ -256,6 +281,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             ),
             full_availability_zone=self._full_availability_zone_name(provision_parameters),
             valid_until=self._spot_valid_until,
+            tag_specifications=tag_specifications,
         )
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,

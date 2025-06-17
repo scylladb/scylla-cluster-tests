@@ -16,14 +16,26 @@ import contextlib
 import datetime
 import time
 from textwrap import dedent
-from typing import Any, Callable, List, Dict, Optional
+from typing import (
+    Any,
+    Callable,
+    List,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 import boto3
 from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.service_resource import Instance
-from mypy_boto3_ec2.type_defs import InstanceTypeDef, SpotFleetLaunchSpecificationTypeDef, \
-    RequestSpotLaunchSpecificationTypeDef, SpotFleetRequestConfigDataTypeDef
+from mypy_boto3_ec2.type_defs import (
+    InstanceTypeDef,
+    SpotFleetLaunchSpecificationTypeDef,
+    RequestSpotLaunchSpecificationTypeDef,
+    SpotFleetRequestConfigDataTypeDef,
+    TagSpecificationTypeDef,
+)
 
 from sdcm.provision.aws.constants import SPOT_REQUEST_TIMEOUT, SPOT_REQUEST_WAITING_TIME, STATUS_FULFILLED, \
     SPOT_STATUS_UNEXPECTED_ERROR, SPOT_PRICE_TOO_LOW, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
@@ -221,6 +233,7 @@ def create_spot_instance_request(
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
+        tag_specifications: Sequence[TagSpecificationTypeDef] = None
 ) -> List[str]:
     params = {
         'DryRun': False,
@@ -228,6 +241,7 @@ def create_spot_instance_request(
         'Type': 'one-time',
         'LaunchSpecification': instance_parameters,
         'AvailabilityZoneGroup': full_availability_zone,
+        'TagSpecifications': tag_specifications,
     }
     if valid_until:
         params['ValidUntil'] = valid_until
