@@ -73,6 +73,8 @@ def registry():
         ("flag_c", {CustomNemesisC}),
         ("flag_d", {CustomNemesisD}),
         ("flag_common", {CustomNemesisA, CustomNemesisB, CustomNemesisD}),
+        ("", {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisD}),
+        (None, {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisD})
     ],
 )
 def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_classes):
