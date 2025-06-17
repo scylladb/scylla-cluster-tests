@@ -140,7 +140,6 @@
 | **<a href="#user-content-ami_monitor_user" name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a href="#user-content-ami_loader_user" name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
 | **<a href="#user-content-ami_db_cassandra_user" name="ami_db_cassandra_user">ami_db_cassandra_user</a>**  |  | N/A | SCT_AMI_DB_CASSANDRA_USER
-| **<a href="#user-content-spot_max_price" name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | N/A | SCT_SPOT_MAX_PRICE
 | **<a href="#user-content-extra_network_interface" name="extra_network_interface">extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_EXTRA_NETWORK_INTERFACE
 | **<a href="#user-content-aws_instance_profile_name_db" name="aws_instance_profile_name_db">aws_instance_profile_name_db</a>**  | This is the name of the instance profile to set on all db instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME_DB
 | **<a href="#user-content-aws_instance_profile_name_loader" name="aws_instance_profile_name_loader">aws_instance_profile_name_loader</a>**  | This is the name of the instance profile to set on all loader instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME_LOADER

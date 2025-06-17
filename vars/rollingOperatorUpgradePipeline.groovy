@@ -50,7 +50,7 @@ def call(Map pipelineParams) {
                    description: 'if true, enable operator tls, and install haproxy ingress controller',
                    name: 'k8s_enable_tls')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+                   description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
             choice(choices: ["${pipelineParams.get('post_behavior_db_nodes', 'destroy')}", 'keep', 'keep-on-failure'],
                    name: 'post_behavior_db_nodes')

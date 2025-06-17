@@ -7,7 +7,7 @@ artifactsPipeline(
     test_config: '''["test-cases/artifacts/oel9.yaml", "configurations/aws/new_ssh_key.yaml"]''',
     backend: 'aws',
     region: 'eu-west-1',
-    provision_type: 'spot_low_price',
+    provision_type: 'spot',
 
     timeout: [time: 60, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

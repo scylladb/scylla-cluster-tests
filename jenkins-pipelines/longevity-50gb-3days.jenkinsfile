@@ -8,5 +8,5 @@ longevityPipeline(
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml'
-
+    provision_type: 'spot',
 )
