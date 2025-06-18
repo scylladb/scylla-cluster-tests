@@ -1350,9 +1350,10 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             test_id = file.read().strip()
         email_results_file = os.path.join(testrun_dir, "email_data.json")
         if not os.path.exists(email_results_file):
+            LOGGER.error(f"QWERTY file {email_results_file} doesnt exist")
             email_results_file = "email_data.json" if os.path.exists("email_data.json") else None
         if not email_results_file:
-            LOGGER.error("Results file not found")
+            LOGGER.error(f"QWERTY Results file not found - tried file {email_results_file}. ")
         else:
             test_results = read_email_data_from_file(email_results_file)
     else:
