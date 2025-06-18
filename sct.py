@@ -1379,7 +1379,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         return
     job_name = os.environ.get('JOB_NAME', '')
-    if reporter := test_results.get("reporter", "") and reporter != "NoneType":
+    if reporter := test_results.get("reporter", ""):
         test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
         if 'longevity' in job_name:
