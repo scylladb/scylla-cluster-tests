@@ -184,7 +184,7 @@ class SlaUtils:
                 # empty, like:
                 # {'status': 'success', 'data': {'resultType': 'matrix', 'result': []}}
                 WorkloadPrioritisationEvent.EmptyPrometheusData(message=f'Failed to get io_queue_total_operations data from '
-                                                                        f'Prometheus for node {node_ip}',
+                                                                f'Prometheus for node {node_ip}',
                                                                 severity=Severity.WARNING).publish()
                 continue
 
@@ -355,7 +355,7 @@ class SlaUtils:
         if dev is None:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'Can\'t compare expected and actual shares ratio. Expected: {expected_ratio}. '
-                        f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
+                f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
         elif dev > self.VALID_DEVIATION_PRC:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'{msg}. Actual ratio ({actual_ratio}) is not as expected ({expected_ratio})',

@@ -75,9 +75,9 @@ class PartitionsValidationAttributes:
     def get_count_pk_rows_query(self, key: str, ignore_limit_rows_number: bool = False) -> str:
         limit_query = f' LIMIT {self.limit_rows_number}' if not ignore_limit_rows_number and self.limit_rows_number else ''
         count_pk_rows_cmd = f'select count(*) from {self.table_name} where ' \
-                            f'{self.primary_key_column} = {key}' \
-                            f'{limit_query}' \
-                            ' using timeout 5m'
+            f'{self.primary_key_column} = {key}' \
+            f'{limit_query}' \
+            ' using timeout 5m'
         return count_pk_rows_cmd
 
     def collect_partitions_info(self, ignore_limit_rows_number: bool = False) -> dict[int, int] | None:
@@ -195,7 +195,7 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
     """
     keyspace, table = ks_cf.split('.')
     cmd = f"SELECT clustering_order from system_schema.columns WHERE keyspace_name = '{keyspace}' " \
-          f"and table_name = '{table}' and column_name = '{ck_name}'"
+        f"and table_name = '{table}' and column_name = '{ck_name}'"
     cql_result = session.execute(cmd)
     clustering_order = cql_result.current_rows[0].clustering_order
     LOGGER.info('Retrieved a clustering-order of: %s for table %s', clustering_order, ks_cf)

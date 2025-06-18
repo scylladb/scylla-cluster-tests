@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE_TAG=3.10.12-slim-bullseye
+ARG PYTHON_IMAGE_TAG=3.13.4-slim-bullseye
 
 FROM python:$PYTHON_IMAGE_TAG AS apt_base
 ENV DEBIAN_FRONTEND=noninteractive
