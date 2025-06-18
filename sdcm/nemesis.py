@@ -230,6 +230,7 @@ class NemesisFlags:
     manager_operation: bool = False  # flag that signals that the nemesis uses scylla manager
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
+    sla: bool = False               # flag that signal that nemesis is used for SLA tests
 
 
 class Nemesis(NemesisFlags):
