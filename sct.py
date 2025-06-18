@@ -296,6 +296,10 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     add_file_logger()
 
     user_param = {"RunByUser": user} if user else {}
+    if user:
+        os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
+        os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
+        os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
 
     if not post_behavior and user and not test_id and not logdir:
         click.echo(f"Clean all resources belong to user `{user}'")
@@ -362,6 +366,11 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
     if all([not get_all, not get_all_running, not user, not test_id]):
         click.echo(list_resources.get_help(ctx))
         sys.exit(1)
+
+    if get_all_running or user:
+        os.environ['SCT_REGION_NAME'] = os.environ.get('SCT_REGION_NAME', '')
+        os.environ['SCT_GCE_DATACENTER'] = os.environ.get('SCT_GCE_DATACENTER', '')
+        os.environ['SCT_AZURE_REGION_NAME'] = os.environ.get('SCT_AZURE_REGION_NAME', '')
 
     if get_all_running:
         table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"]
