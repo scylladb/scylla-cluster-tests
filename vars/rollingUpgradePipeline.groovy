@@ -294,7 +294,9 @@ def call(Map pipelineParams) {
                                                             if [[ ${pipelineParams.use_preinstalled_scylla} != null ]] ; then
                                                                 export SCT_USE_PREINSTALLED_SCYLLA="${pipelineParams.use_preinstalled_scylla}"
                                                             fi
-                                                            export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                            if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
+                                                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                            fi
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
                                                             if [[ ${pipelineParams.gce_image_db} != null ]] ; then
