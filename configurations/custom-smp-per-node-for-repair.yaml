@@ -1,0 +1,6 @@
+smp_per_db_node_mapping: [16, 16, 16, 12]
+
+hinted_handoff: 'disabled'
+
+append_scylla_yaml:
+  enable_tablets: false
