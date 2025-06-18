@@ -5680,7 +5680,6 @@ class SisyphusMonkey(Nemesis):
 class SslHotReloadingNemesis(Nemesis):
     disruptive = False
     config_changes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_hot_reloading_internode_certificate()
@@ -5716,7 +5715,6 @@ class NoOpMonkey(Nemesis):
 class AddRemoveDcNemesis(Nemesis):
 
     disruptive = True
-    kubernetes = False
     run_with_gemini = False
     limited = True
     topology_changes = True
@@ -5745,7 +5743,6 @@ class AddRemoveRackNemesis(Nemesis):
 
 class StopWaitStartMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     limited = True
     zero_node_changes = True
@@ -5756,7 +5753,6 @@ class StopWaitStartMonkey(Nemesis):
 
 class StopStartMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     limited = True
 
@@ -5806,7 +5802,6 @@ class RestartThenRepairNodeMonkey(Nemesis):
 
 class MultipleHardRebootNodeMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     free_tier_set = True
 
@@ -5816,7 +5811,6 @@ class MultipleHardRebootNodeMonkey(Nemesis):
 
 class HardRebootNodeMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     limited = True
     free_tier_set = True
@@ -5827,7 +5821,6 @@ class HardRebootNodeMonkey(Nemesis):
 
 class SoftRebootNodeMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     limited = True
     free_tier_set = True
@@ -5849,7 +5842,6 @@ class DrainerMonkey(Nemesis):
 class CorruptThenRepairMonkey(Nemesis):
     disruptive = True
     kubernetes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_destroy_data_then_repair()
@@ -5895,7 +5887,6 @@ class MajorCompactionMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_major_compaction()
@@ -5906,7 +5897,6 @@ class RefreshMonkey(Nemesis):
     run_with_gemini = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=False)
@@ -5917,7 +5907,6 @@ class LoadAndStreamMonkey(Nemesis):
     run_with_gemini = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_load_and_stream()
@@ -5927,7 +5916,6 @@ class RefreshBigMonkey(Nemesis):
     disruptive = False
     run_with_gemini = False
     kubernetes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=True)
@@ -5945,7 +5933,6 @@ class EnospcMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc()
@@ -5954,7 +5941,6 @@ class EnospcMonkey(Nemesis):
 class EnospcAllNodesMonkey(Nemesis):
     disruptive = True
     kubernetes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc(all_nodes=True)
@@ -5964,7 +5950,6 @@ class NodeToolCleanupMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
@@ -5975,7 +5960,6 @@ class TruncateMonkey(Nemesis):
     kubernetes = True
     limited = True
     free_tier_set = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_truncate()
@@ -5985,7 +5969,6 @@ class TruncateLargeParititionMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     free_tier_set = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_truncate_large_partition()
@@ -6146,7 +6129,6 @@ class ModifyTableMonkey(Nemesis):
     limited = True
     schema_changes = True
     free_tier_set = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_modify_table()
@@ -6160,7 +6142,6 @@ class AddDropColumnMonkey(Nemesis):
     limited = True
     schema_changes = True
     free_tier_set = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_add_drop_column()
@@ -6180,7 +6161,6 @@ class ToggleGcModeMonkey(Nemesis):
     disruptive = False
     schema_changes = True
     free_tier_set = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_toggle_table_gc_mode()
@@ -6222,7 +6202,6 @@ class MgmtRepair(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.log.info('disrupt_mgmt_repair_cli Nemesis begin')
@@ -6235,7 +6214,6 @@ class MgmtCorruptThenRepair(Nemesis):
     manager_operation = True
     disruptive = True
     kubernetes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_mgmt_corrupt_then_repair()
@@ -6245,7 +6223,6 @@ class AbortRepairMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_abort_repair()
@@ -6364,7 +6341,6 @@ class OperatorNodetoolFlushAndReshard(Nemesis):
 
 class ScyllaKillMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     free_tier_set = True
 
@@ -6385,7 +6361,6 @@ class SnapshotOperations(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_snapshot_operations()
@@ -6403,7 +6378,6 @@ class NodeRestartWithResharding(Nemesis):
 
 class ClusterRollingRestart(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     free_tier_set = True
 
@@ -6413,7 +6387,6 @@ class ClusterRollingRestart(Nemesis):
 
 class RollingRestartConfigChangeInternodeCompression(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     full_cluster_restart = True
     config_changes = True
 
@@ -6423,7 +6396,6 @@ class RollingRestartConfigChangeInternodeCompression(Nemesis):
 
 class ClusterRollingRestartRandomOrder(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
     free_tier_set = True
 
@@ -6443,7 +6415,6 @@ class TopPartitions(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_show_toppartitions()
@@ -6636,7 +6607,6 @@ class CorruptThenScrubMonkey(Nemesis):
 
 class MemoryStressMonkey(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     free_tier_set = True
 
     def disrupt(self):
@@ -6654,7 +6624,6 @@ class ResetLocalSchemaMonkey(Nemesis):
 
 class StartStopMajorCompaction(Nemesis):
     disruptive = False
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_start_stop_major_compaction()
@@ -6669,7 +6638,6 @@ class StartStopScrubCompaction(Nemesis):
 
 class StartStopCleanupCompaction(Nemesis):
     disruptive = False
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_start_stop_cleanup_compaction()
@@ -6776,7 +6744,6 @@ class AddRemoveMvNemesis(Nemesis):
 
 class ToggleAuditNemesisSyslog(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     schema_changes = True
     config_changes = True
     free_tier_set = True
@@ -6789,7 +6756,6 @@ class BootstrapStreamingErrorNemesis(Nemesis):
 
     disruptive = True
     topology_changes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_bootstrap_streaming_error()
@@ -6797,7 +6763,6 @@ class BootstrapStreamingErrorNemesis(Nemesis):
 
 class DisableBinaryGossipExecuteMajorCompaction(Nemesis):
     disruptive = True
-    supports_high_disk_utilization = True
     kubernetes = True
 
     def disrupt(self):
@@ -6815,8 +6780,6 @@ class EndOfQuotaNemesis(Nemesis):
 class GrowShrinkZeroTokenNode(Nemesis):
 
     disruptive = True
-    schema_changes = False
-    free_tier_set = False
     zero_node_changes = True
 
     def disrupt(self):
@@ -6827,7 +6790,6 @@ class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
 
     disruptive = True
     topology_changes = True
-    supports_high_disk_utilization = True
 
     def disrupt(self):
         self.disrupt_serial_restart_elected_topology_coordinator()
@@ -6836,7 +6798,6 @@ class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
 class IsolateNodeWithProcessSignalNemesis(Nemesis):
     disruptive = True
     topology_changes = True
-    kubernetes = False
 
     def disrupt(self):
         self.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node()
@@ -6845,7 +6806,6 @@ class IsolateNodeWithProcessSignalNemesis(Nemesis):
 class IsolateNodeWithIptableRuleNemesis(Nemesis):
     disruptive = True
     topology_changes = True
-    kubernetes = False
 
     def disrupt(self):
         self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
