@@ -23,10 +23,14 @@ def createRunConfiguration(String backend) {
         configuration.azure_region_name = 'eastus'
         configuration.availability_zone = ''
     } else if (backend == 'docker') {
+        // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
+        configuration.scylla_version = 'latest'
+        configuration.docker_image = 'scylladb/scylla-nightly'
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
         if (scylla_version.endsWith('latest')) {
             configuration.scylla_version = 'latest'
+            configuration.docker_image = 'scylladb/scylla-nightly'
             configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
             configuration.k8s_scylla_operator_chart_version = 'latest'
             configuration.k8s_enable_tls = 'false'
