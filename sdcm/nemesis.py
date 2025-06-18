@@ -5078,7 +5078,8 @@ class Nemesis(NemesisFlags):
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
             ks, cf = random.choice(ks_cf_list).split('.')
-            column = get_random_column_name(session, ks, cf, filter_out_static_columns=True)
+            column = get_random_column_name(session, ks, cf, filter_out_static_columns=True,
+                                            filter_out_column_types=['counter'])
             if not column:
                 raise UnsupportedNemesis("No column found to create index on")
             try:
@@ -5114,6 +5115,7 @@ class Nemesis(NemesisFlags):
             if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
                 raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
 
+        unsupported_primary_key_columns = ['duration', 'counter']
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
@@ -5130,10 +5132,13 @@ class Nemesis(NemesisFlags):
             view_name = f'{base_table_name}_view'
             with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
                 primary_key_columns = get_column_names(
-                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
+                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True,
+                    filter_out_column_types=unsupported_primary_key_columns)
                 # selecting a supported column for creating a materialized-view (not a collection type).
                 column = get_random_column_name(session=session, ks=ks_name,
-                                                cf=base_table_name, filter_out_collections=True, filter_out_static_columns=True)
+                                                cf=base_table_name, filter_out_collections=True,
+                                                filter_out_static_columns=True,
+                                                filter_out_column_types=unsupported_primary_key_columns)
                 if not column:
                     raise UnsupportedNemesis(
                         'A supported column for creating MV is not found. nemesis can\'t run')
