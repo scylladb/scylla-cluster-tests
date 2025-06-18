@@ -16,7 +16,17 @@ def call(Map params, String region){
 
     export SCT_CONFIG_FILES=${test_config}
     export SCT_CLUSTER_BACKEND="${params.backend}"
+<<<<<<< HEAD
 
+||||||| parent of 12f9dfea4 (fix(pipelines): don't set `instance_provision` with null)
+
+    export SCT_INSTANCE_PROVISION=${params.provision_type}
+
+=======
+    if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
+        export SCT_INSTANCE_PROVISION=${params.provision_type}
+    fi
+>>>>>>> 12f9dfea4 (fix(pipelines): don't set `instance_provision` with null)
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
         export SCT_REGION_NAME=${current_region}
     fi
