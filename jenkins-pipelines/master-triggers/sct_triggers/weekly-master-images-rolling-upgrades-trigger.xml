@@ -70,7 +70,7 @@ gce_project=gcp-sct-project-1</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../rolling-upgrade/rolling-upgrade-ami-test,../rolling-upgrade/rolling-upgrade-ami-arm-test,../rolling-upgrade/rolling-upgrade-azure-image-test,../rolling-upgrade/rolling-upgrade-alternator-test,../rolling-upgrade/rolling-upgrade-gce-image-test,../rolling-upgrade/rolling-upgrade-debian11-test,../rolling-upgrade/rolling-upgrade-ubuntu2004-test,../rolling-upgrade/rolling-upgrade-ubuntu2204-test,../rolling-upgrade/rolling-upgrade-ubuntu2404-test</projects>
+          <projects>../rolling-upgrade/rolling-upgrade-ami-test,../rolling-upgrade/rolling-upgrade-ami-arm-test,../rolling-upgrade/rolling-upgrade-azure-image-test,../rolling-upgrade/rolling-upgrade-alternator-test,../rolling-upgrade/rolling-upgrade-gce-image-test,../rolling-upgrade/rolling-upgrade-debian11-test,../rolling-upgrade/rolling-upgrade-ubuntu2204-test,../rolling-upgrade/rolling-upgrade-ubuntu2404-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
