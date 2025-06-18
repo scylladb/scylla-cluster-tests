@@ -624,7 +624,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_20_user_data_format_version_gce_3(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_GCE_IMAGE_DB'] = ('https://www.googleapis.com/compute/v1/projects/'
-                                          'ubuntu-os-cloud/global/images/family/ubuntu-2004-lts')
+                                          'ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64')
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
