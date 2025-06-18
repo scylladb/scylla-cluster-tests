@@ -583,6 +583,8 @@ def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
     # pylint: disable=too-many-return-statements,too-many-branches
+    LOGGER.info(f"QWERTY Building email reporter for test: {name}")
+
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:

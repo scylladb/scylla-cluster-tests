@@ -1380,6 +1380,8 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         return
     job_name = os.environ.get('JOB_NAME', '')
     if reporter := test_results.get("reporter", ""):
+        old_reporter = reporter
+        LOGGER.warning(f"QWERTY Found reporter ({old_reporter})")
         test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
         if 'longevity' in job_name:
@@ -1388,7 +1390,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
 
         reporter = build_reporter(reporter, email_recipients, testrun_dir)
         if not reporter:
-            LOGGER.warning("No reporter found")
+            LOGGER.warning(f"No reporter found ({old_reporter})")
             sys.exit(1)
         try:
             reporter.send_report(test_results)
