@@ -11,14 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-
-import re
 import json
-import time
-import shutil
 import logging
 import os.path
+import re
+import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from functools import cached_property
@@ -33,8 +32,8 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluste
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.system import InstanceStatusEvent
 from sdcm.utils.common import (
     get_keyspace_partition_ranges,
@@ -42,8 +41,8 @@ from sdcm.utils.common import (
     parse_nodetool_listsnapshots,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.nemesis_utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
-
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
@@ -796,6 +795,100 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=True, filter_out_mv=True)
     assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
+
+
+@pytest.fixture
+def prepared_keyspaces(docker_scylla, params):
+
+    cluster = DummyScyllaCluster([docker_scylla])
+    cluster.params = params
+
+    with cluster.cql_connection_patient(docker_scylla) as session:
+        ks = "testks"
+        base_cf = "test_table"
+        counter_cf = "counter_table"
+
+        session.execute(f"""
+            CREATE KEYSPACE IF NOT EXISTS {ks}
+            WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': 1}};
+        """)
+
+        session.execute(f"""
+            CREATE TABLE IF NOT EXISTS {ks}.{base_cf} (
+                id uuid PRIMARY KEY,
+                txt text,
+                tags list<text>,
+                kv map<text, text>,
+                nums set<int>,
+                d duration
+            );
+        """)
+
+        session.execute(f"""
+            CREATE TABLE IF NOT EXISTS {ks}.{counter_cf} (
+                id uuid PRIMARY KEY,
+                cnt counter
+            );
+        """)
+
+    return cluster, ks, base_cf, counter_cf
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        # All regular (non-PK) columns
+        ({"is_primary_key": False}, {"txt", "tags", "kv", "nums", "d"}),
+
+        # Filter out collections
+        ({"is_primary_key": False, "filter_out_collections": True}, {"txt", "d"}),
+
+        # Filter out unsupported types
+        ({"is_primary_key": False, "filter_out_column_types": ["duration"]}, {"txt", "tags", "kv", "nums"}),
+
+        # Filter out collections + unsupported types
+        (
+            {"is_primary_key": False, "filter_out_collections": True, "filter_out_column_types": ["duration"]},
+            {"txt"}
+        ),
+
+        # Get PK column
+        ({"is_primary_key": True}, {"id"}),
+
+        # Filter out PK column by type
+        ({"is_primary_key": True, "filter_out_column_types": ["uuid"]}, set()),
+    ]
+)
+@pytest.mark.integration
+def test_general_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    cluster, ks, base_cf, _ = prepared_keyspaces
+    with cluster.cql_connection_patient(cluster.nodes[0]) as session:
+        result = set(get_column_names(session, ks, base_cf, **kwargs))
+        assert result == expected
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        # Regular counter column (non-PK)
+        ({"is_primary_key": False}, {"cnt"}),
+
+        # Filter out counter type (non-PK)
+        ({"is_primary_key": False, "filter_out_column_types": ["counter"]}, set()),
+
+        # Get PK column
+        ({"is_primary_key": True}, {"id"}),
+
+        # Filter out PK column by type
+        ({"is_primary_key": True, "filter_out_column_types": ["uuid"]}, set()),
+    ]
+)
+@pytest.mark.integration
+def test_counter_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    cluster, ks, _, counter_cf = prepared_keyspaces
+    with cluster.cql_connection_patient(cluster.nodes[0]) as session:
+        result = set(get_column_names(session, ks, counter_cf, **kwargs))
+        assert result == expected
 
 
 @pytest.mark.integration
