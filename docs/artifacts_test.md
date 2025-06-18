@@ -92,9 +92,9 @@ hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2204.yaml
 ```
 
-## Ubuntu 20.04 LTS (focal)
+## Ubuntu 24.04 LTS (noble)
 ```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2004.yaml
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2404.yaml
 ```
 
 ## AMI
