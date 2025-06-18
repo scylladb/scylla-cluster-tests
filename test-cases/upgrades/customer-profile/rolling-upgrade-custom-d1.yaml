@@ -18,9 +18,6 @@ gce_n_local_ssd_disk_db: 2
 gce_pd_ssd_disk_size_db: 750
 gce_setup_hybrid_raid: true
 
-gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts'
-use_preinstalled_scylla: false
-
 scylla_d_overrides_files: [
   'scylla-qa-internal/custom_d1/workload1/scylla.d/n2-highmem-8/cpuset.conf',
   'scylla-qa-internal/custom_d1/workload1/scylla.d/memory.conf',
