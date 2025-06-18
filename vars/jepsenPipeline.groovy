@@ -193,7 +193,9 @@ def call(Map pipelineParams) {
                                 export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                 export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                 export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
+                                    export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                fi
                                 export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
 
                                 echo "start test ......."
