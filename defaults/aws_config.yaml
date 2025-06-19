@@ -1,6 +1,13 @@
 instance_provision: 'spot'
+<<<<<<< HEAD
 spot_max_price: 0.80
 instance_provision_fallback_on_demand: false
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+spot_max_price: 0.80
+instance_provision_fallback_on_demand: true
+=======
+instance_provision_fallback_on_demand: true
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'

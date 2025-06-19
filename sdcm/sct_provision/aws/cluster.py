@@ -183,6 +183,7 @@ class ClusterBase(BaseModel):
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
 
+<<<<<<< HEAD
     def _spot_low_price(self, region_id: int) -> float:
         from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
 
@@ -193,6 +194,19 @@ class ClusterBase(BaseModel):
         ))
         return on_demand_price * self.params.get('spot_max_price')
 
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+    def _spot_low_price(self, region_id: int) -> float:
+        from sdcm.utils.pricing import AWSPricing
+
+        aws_pricing = AWSPricing()
+        on_demand_price = float(aws_pricing.get_on_demand_instance_price(
+            region_name=self._region(region_id),
+            instance_type=self._instance_type,
+        ))
+        return on_demand_price * self.params.get('spot_max_price')
+
+=======
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
     def provision_plan(self, region_id: int, availability_zone: str) -> ProvisionPlan:
         return ProvisionPlanBuilder(
             initial_provision_type=self._instance_provision,
@@ -200,7 +214,13 @@ class ClusterBase(BaseModel):
             fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
             availability_zone=availability_zone,
+<<<<<<< HEAD
             spot_low_price=self._spot_low_price(region_id),
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+            spot_low_price=self._spot_low_price(
+                region_id) if self._instance_provision == ProvisionType.SPOT_LOW_PRICE else None,
+=======
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 
