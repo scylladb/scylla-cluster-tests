@@ -222,6 +222,7 @@ def create_spot_instance_request(
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
+        tag_specifications: Optional[List[Dict[str, str]]] = None
 ) -> List[str]:
     params = {
         'DryRun': False,
@@ -229,6 +230,7 @@ def create_spot_instance_request(
         'Type': 'one-time',
         'LaunchSpecification': instance_parameters,
         'AvailabilityZoneGroup': full_availability_zone,
+        'TagSpecifications': tag_specifications,
     }
     if price:
         params['SpotPrice'] = str(price)

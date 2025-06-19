@@ -72,7 +72,7 @@ class EC2ClientWrapper():
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # noqa: PLR0913
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
-                               aws_instance_profile=None, placement_group_name=None):
+                               aws_instance_profile=None, placement_group_name=None, tag_specifications=None):
         """
         Create a spot instance request
         :return: list of request id-s
@@ -86,7 +86,8 @@ class EC2ClientWrapper():
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
                                            },
-                      ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
+                      ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5),
+                      TagSpecifications=tag_specifications,
                       )
         self.add_placement_group_name_param(params['LaunchSpecification'], placement_group_name)
         if aws_instance_profile:
@@ -109,21 +110,23 @@ class EC2ClientWrapper():
         return request_ids
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                            block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
+                            block_device_mappings=None, aws_instance_profile=None, placement_group_name=None, tag_specifications=None):
 
         spot_price = self._get_spot_price(instance_type)
-        fleet_config = {'LaunchSpecifications':
-                        [
-                            {'ImageId': image_id,
-                             'InstanceType': instance_type,
-                             'NetworkInterfaces': network_if,
-                             'Placement': {'AvailabilityZone': region_name},
-                             },
-                        ],
-                        'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
-                        'SpotPrice': str(spot_price['desired']),
-                        'TargetCapacity': count,
-                        }
+        fleet_config = {
+            "LaunchSpecifications": [
+                {
+                    "ImageId": image_id,
+                    "InstanceType": instance_type,
+                    "NetworkInterfaces": network_if,
+                    "Placement": {"AvailabilityZone": region_name},
+                    "TagSpecifications": tag_specifications,
+                },
+            ],
+            "IamFleetRole": "arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role",
+            "SpotPrice": str(spot_price["desired"]),
+            "TargetCapacity": count,
+        }
         self.add_placement_group_name_param(fleet_config['LaunchSpecifications'][0], placement_group_name)
         if aws_instance_profile:
             fleet_config['LaunchSpecifications'][0]['IamInstanceProfile'] = {'Name': aws_instance_profile}
@@ -259,8 +262,9 @@ class EC2ClientWrapper():
         tags += tags_as_ec2_tags(TestConfig().common_tags())
         self._client.create_tags(Resources=instance_ids, Tags=tags)
 
-    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',
-                              count=1, duration=0, block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
+    def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # noqa: PLR0913
+                              count=1, duration=0, block_device_mappings=None, aws_instance_profile=None, placement_group_name=None,
+                              tag_specifications=None):
         """
         Create spot instances
 
@@ -274,9 +278,14 @@ class EC2ClientWrapper():
         :param duration: (optional) instance life time in minutes(multiple of 60)
         :param aws_instance_profile: instance profile granting access to S3 objects
         :param placement_group_name: to create instances in the placement group
+        :param block_device_mappings: block device mappings for the instance
+        :param tag_specifications: tags to be added to the instances
 
         :return: list of instance id-s
         """
+        tag_specifications = tag_specifications or []
+        # Ensure tags are applied to correct resource type
+        tag_specifications[0]['ResourceType'] = 'spot-instances-request'
 
         spot_price = self._get_spot_price(instance_type)
 
@@ -284,7 +293,8 @@ class EC2ClientWrapper():
                                                   key_pair, user_data, count, duration,
                                                   block_device_mappings=block_device_mappings,
                                                   aws_instance_profile=aws_instance_profile,
-                                                  placement_group_name=placement_group_name)
+                                                  placement_group_name=placement_group_name,
+                                                  tag_specifications=tag_specifications)
         instance_ids, resp = self._wait_for_request_done(request_ids)
 
         if not instance_ids:
@@ -300,7 +310,7 @@ class EC2ClientWrapper():
         return instances
 
     def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
-                          block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
+                          block_device_mappings=None, aws_instance_profile=None, placement_group_name=None, tag_specifications=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -313,14 +323,18 @@ class EC2ClientWrapper():
         :param block_device_mappings:
         :param aws_instance_profile: instance profile granting access to S3 objects
         :param placement_group_name: to create instances in the placement group
-
+        :param tag_specifications: tags to be added to the instances
         :return: list of instance id-s
         """
+
+        tag_specifications = tag_specifications or []
+        tag_specifications[0]['ResourceType'] = 'spot-fleet-request'  # Ensure tags are applied to correct resource type
 
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
                                               user_data, count, block_device_mappings=block_device_mappings,
                                               aws_instance_profile=aws_instance_profile,
-                                              placement_group_name=placement_group_name)
+                                              placement_group_name=placement_group_name,
+                                              tag_specifications=tag_specifications)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = resp if resp in [FLEET_LIMIT_EXCEEDED_ERROR,
