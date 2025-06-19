@@ -65,11 +65,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
                 count=count,
                 tags=tags,
             )
-        # None spot instances are called On-Demand instances in AWS naming
-        if provision_parameters.price:
-            raise ValueError("AWS does not support price targeting for on-demand instances")
-        if provision_parameters.duration:
-            LOGGER.info("AWS does not support duration for on-demand instances")
         return self._provision_on_demand_instances(
             provision_parameters=provision_parameters,
             instance_parameters=instance_parameters,
@@ -161,7 +156,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
         request_id = create_spot_fleet_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
-            price=provision_parameters.price,
             fleet_role=self._iam_fleet_role,
             instance_parameters=instance_parameters.dict(
                 exclude_none=True,
@@ -254,7 +248,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
         request_ids = create_spot_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
-            price=getattr(provision_parameters, 'price', None),
             instance_parameters=instance_parameters.dict(
                 exclude_none=True,
                 exclude_unset=True,
