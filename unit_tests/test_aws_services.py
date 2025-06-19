@@ -16,6 +16,7 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.utils.common import get_scylla_ami_versions
+from sdcm.ec2_client import EC2ClientWrapper
 
 
 AWS_REGION = "us-east-1"
@@ -124,3 +125,19 @@ def test_04_get_scylla_ami_versions() -> None:
                                         'ami-0b676a2642ece0ba8',
                                         'ami-760aaa0f',
                                         'ami-04c1efb7a7322d71e'}
+
+
+def test_05_ec2_client_spot(aws_region: AwsRegion) -> None:
+
+    ec2 = EC2ClientWrapper(region_name=aws_region.region_name)
+    instances = ec2.create_spot_instances(
+        instance_type='m5.xlarge',
+        image_id='ami-760aaa0f',
+        region_name=aws_region.region_name,
+        network_if=[{'DeviceIndex': 0,
+                     'SubnetId': 'subnet-0a1b2c3d4e5f6g7h8',
+                     'AssociatePublicIpAddress': True}],
+    )
+    assert len(instances) == 1
+    assert instances[0].image_id == 'ami-760aaa0f'
+    assert instances[0].instance_type == 'm5.xlarge'
