@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent, HardTimeoutEvent
-from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
+from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ArgusAdaptiveTimeoutStore, \
     NodeLoadInfoServices
 from sdcm.utils.features import is_tablets_feature_enabled
 
@@ -156,7 +156,7 @@ class TimeoutMonitor:
 
 @contextmanager
 def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, F821
-                     stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+                     stats_storage: AdaptiveTimeoutStore = ArgusAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.
@@ -168,16 +168,21 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
 
     _, timeout_func, required_arg_names = operation.value
     args = {arg: kwargs[arg] for arg in required_arg_names}
-
+    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+    if store_metrics:
+        metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
     if tablet_sensitive_op:
         args['tablets_enabled'] = tablets_enabled
-    result = timeout_func(node_info_service=NodeLoadInfoServices().get(node), **args)
+    result = timeout_func(node_info_service=metrics, **args)
     if tablet_sensitive_op:
         (soft_timeout, hard_timeout), load_metrics = result
     else:
         soft_timeout, load_metrics = result
         hard_timeout = None
-    load_metrics.update(TestInfoServices.get(node))
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
 
     start_time = time.monotonic()
     timeout_occurred = False
@@ -202,8 +207,8 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
             SoftTimeoutEvent(operation=operation.name, soft_timeout=soft_timeout, duration=duration).publish_or_dump()
 
         try:
-            if load_metrics:
+            if load_metrics and store_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=soft_timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)
+            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc, exc_info=True)
