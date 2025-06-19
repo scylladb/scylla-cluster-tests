@@ -13,7 +13,6 @@ class ProvisionParameters(BaseModel):  # pylint: disable=too-few-public-methods
     region_name: str
     availability_zone: str
     spot: bool  # Signals on whether instance could be revoked by cloud provider
-    duration: float = None  # Tells cloud provider on how much time you lock provisioned instances
 
 
 class InstanceParamsBase(BaseModel):  # pylint: disable=too-few-public-methods

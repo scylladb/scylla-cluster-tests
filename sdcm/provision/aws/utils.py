@@ -200,14 +200,12 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
 def create_spot_fleet_instance_request(
         region_name: str,
         count: int,
-        price: float,
         fleet_role: str,
         instance_parameters: SpotFleetLaunchSpecificationTypeDef,
         valid_until: datetime.datetime = None) -> str:
     params = SpotFleetRequestConfigDataTypeDef(
         LaunchSpecifications=[instance_parameters],
         IamFleetRole=fleet_role,
-        SpotPrice=str(price),
         TargetCapacity=count,
     )
     if valid_until:
@@ -220,7 +218,6 @@ def create_spot_fleet_instance_request(
 def create_spot_instance_request(
         region_name: str,
         count: int,
-        price: Optional[float],
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
@@ -232,8 +229,6 @@ def create_spot_instance_request(
         'LaunchSpecification': instance_parameters,
         'AvailabilityZoneGroup': full_availability_zone,
     }
-    if price:
-        params['SpotPrice'] = str(price)
     if valid_until:
         params['ValidUntil'] = valid_until
     resp = ec2_clients[region_name].request_spot_instances(**params)
