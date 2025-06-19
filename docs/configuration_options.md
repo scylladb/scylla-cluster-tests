@@ -987,6 +987,7 @@ root disk size in Gb for sct-runner
 **default:** N/A
 
 
+<<<<<<< HEAD
 ## **spot_max_price** / SCT_SPOT_MAX_PRICE
 
 The max percentage of the on demand price we set for spot/fleet instances
@@ -994,6 +995,18 @@ The max percentage of the on demand price we set for spot/fleet instances
 **default:** N/A
 
 
+||||||| parent of 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
+## **spot_max_price** / SCT_SPOT_MAX_PRICE
+
+The max percentage of the on demand price we set for spot/fleet instances
+
+**default:** N/A
+
+**type:** float
+
+
+=======
+>>>>>>> 2f9de3c34 (fix(aws): remove usage of pricing in spot/fleet requests)
 ## **extra_network_interface** / SCT_EXTRA_NETWORK_INTERFACE
 
 if true, create extra network interface on each node
