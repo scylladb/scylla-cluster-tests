@@ -76,8 +76,8 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'on_demand|spot|spot_fleet',
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
+                   description: 'on_demand|spot_low_price|spot',
                    name: 'provision_type')
             separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",

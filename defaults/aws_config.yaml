@@ -1,4 +1,5 @@
 instance_provision: 'spot'
+spot_max_price: 0.80
 instance_provision_fallback_on_demand: true
 region_name:
   - eu-west-1

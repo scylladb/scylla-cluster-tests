@@ -26,6 +26,7 @@ LOGGER = logging.getLogger(__name__)
 
 class ProvisionType(str, Enum):
     ON_DEMAND = 'on_demand'
+    SPOT_LOW_PRICE = 'spot_low_price'
     SPOT = 'spot'
 
 
@@ -35,6 +36,7 @@ class ProvisionPlanBuilder(BaseModel):
     fallback_provision_on_demand: bool
     region_name: str
     availability_zone: str
+    spot_low_price: float | None = None
     provisioner: InstanceProvisionerBase
 
     @property
@@ -56,12 +58,27 @@ class ProvisionPlanBuilder(BaseModel):
         )
 
     @property
+    def _provision_request_spot_low_price(self) -> ProvisionParameters:
+        return ProvisionParameters(
+            name='Spot(Low Price)',
+            spot=True,
+            region_name=self.region_name,
+            availability_zone=self.availability_zone,
+            price=self.spot_low_price
+        )
+
+    @property
     def _provision_steps(self) -> List[ProvisionParameters]:
         if self.initial_provision_type == ProvisionType.ON_DEMAND:
             return [self._provision_request_on_demand]
         provision_plan = []
         if self.initial_provision_type == ProvisionType.SPOT:
             provision_plan.extend([
+                self._provision_request_spot,
+            ])
+        elif self.initial_provision_type == ProvisionType.SPOT_LOW_PRICE:
+            provision_plan.extend([
+                self._provision_request_spot_low_price,
                 self._provision_request_spot,
             ])
         if self.fallback_provision_on_demand:

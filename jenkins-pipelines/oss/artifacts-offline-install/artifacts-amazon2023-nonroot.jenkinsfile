@@ -9,7 +9,7 @@ artifactsPipeline(
     region: 'eu-west-1',
     nonroot_offline_install: true,
 
-    provision_type: 'spot',
+    provision_type: 'spot_low_price',
 
     timeout: [time: 60, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

@@ -51,12 +51,14 @@ class CreateSpotFleetError(ClientError):
 
 class EC2ClientWrapper():
 
-    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None):
+    def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
         self._resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
         self.region_name = region_name
         self._timeout = timeout  # request timeout in seconds
+        self._price_index = 1.5
         self._wait_interval = 5  # seconds
+        self.spot_max_price_percentage = spot_max_price_percentage
 
     def _get_ec2_client(self, region_name=None) -> EC2Client:
         try:
@@ -68,7 +70,7 @@ class EC2ClientWrapper():
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
 
-    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, key_pair='',  # noqa: PLR0913
+    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # noqa: PLR0913
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
                                aws_instance_profile=None, placement_group_name=None):
         """
@@ -79,6 +81,7 @@ class EC2ClientWrapper():
         params = dict(DryRun=False,
                       InstanceCount=count,
                       Type=request_type,
+                      SpotPrice=str(spot_price),
                       LaunchSpecification={'ImageId': image_id,
                                            'InstanceType': instance_type,
                                            'NetworkInterfaces': network_if,
@@ -108,18 +111,19 @@ class EC2ClientWrapper():
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,
                             block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
 
-        fleet_config = {
-            "LaunchSpecifications": [
-                {
-                    "ImageId": image_id,
-                    "InstanceType": instance_type,
-                    "NetworkInterfaces": network_if,
-                    "Placement": {"AvailabilityZone": region_name},
-                },
-            ],
-            "IamFleetRole": "arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role",
-            "TargetCapacity": count,
-        }
+        spot_price = self._get_spot_price(instance_type)
+        fleet_config = {'LaunchSpecifications':
+                        [
+                            {'ImageId': image_id,
+                             'InstanceType': instance_type,
+                             'NetworkInterfaces': network_if,
+                             'Placement': {'AvailabilityZone': region_name},
+                             },
+                        ],
+                        'IamFleetRole': 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role',
+                        'SpotPrice': str(spot_price['desired']),
+                        'TargetCapacity': count,
+                        }
         self.add_placement_group_name_param(fleet_config['LaunchSpecifications'][0], placement_group_name)
         if aws_instance_profile:
             fleet_config['LaunchSpecifications'][0]['IamInstanceProfile'] = {'Name': aws_instance_profile}
@@ -136,6 +140,20 @@ class EC2ClientWrapper():
         request_id = resp['SpotFleetRequestId']
         LOGGER.debug('Spot fleet request: %s', request_id)
         return request_id
+
+    def _get_spot_price(self, instance_type):
+        """
+        Calculate spot price for bidding
+        :return: spot bid price
+        """
+        LOGGER.info('Calculating spot price based on OnDemand price')
+        from sdcm.utils.pricing import AWSPricing
+        aws_pricing = AWSPricing()
+        on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
+
+        price = dict(max=on_demand_price, desired=on_demand_price * self.spot_max_price_percentage)
+        LOGGER.info('Spot bid price: %s', price)
+        return price
 
     def _is_request_fulfilled(self, request_ids):
         """
@@ -259,7 +277,10 @@ class EC2ClientWrapper():
 
         :return: list of instance id-s
         """
-        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if,
+
+        spot_price = self._get_spot_price(instance_type)
+
+        request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
                                                   key_pair, user_data, count, duration,
                                                   block_device_mappings=block_device_mappings,
                                                   aws_instance_profile=aws_instance_profile,
