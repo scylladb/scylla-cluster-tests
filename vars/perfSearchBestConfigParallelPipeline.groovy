@@ -35,7 +35,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'on_demand|spot_fleet|spot',
+                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",

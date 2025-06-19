@@ -8,7 +8,7 @@ artifactsPipeline(
 
     test_config: 'test-cases/artifacts/gce-image-persistent-disk.yaml',
     backend: 'gce',
-    instance_provision: 'spot',
+    instance_provision: 'spot_low_price',
 
     timeout: [time: 45, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',

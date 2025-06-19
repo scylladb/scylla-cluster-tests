@@ -1,5 +1,6 @@
 # TODO: Go over it and fix detauls
 instance_provision: 'spot'
+spot_max_price: 0.60
 instance_provision_fallback_on_demand: true
 azure_region_name:
   - eastus
