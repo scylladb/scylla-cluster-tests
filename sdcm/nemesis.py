@@ -3044,6 +3044,11 @@ class Nemesis(NemesisFlags):
             assert is_passed, (
                 "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed")
 
+        # self.log.info("Cleaning up restored keyspace '%s'", chosen_snapshot_info["keyspace_name"])
+        # drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{chosen_snapshot_info["keyspace_name"]}";'
+        # self.target_node.run_cqlsh(drop_ks_stmt)
+
+
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
         existing_backup_tasks = mgr_cluster.backup_task_list
@@ -3362,7 +3367,8 @@ class Nemesis(NemesisFlags):
             return f'snapshot {selected_keyspace} -cf {tables}'
 
         functions_map = [(_few_tables,), (_full_snapshot,), (_ks_snapshot, True), (_ks_snapshot, False)]
-        snapshot_option = random.choice(functions_map)
+        #snapshot_option = random.choice(functions_map)
+        snapshot_option = (_full_snapshot,)
 
         try:
             nodetool_cmd = snapshot_option[0]() if len(snapshot_option) == 1 else snapshot_option[0](snapshot_option[1])
@@ -5668,14 +5674,15 @@ for name, member in inspect.getmembers(Nemesis, lambda x: inspect.isfunction(x) 
 
 
 class SisyphusMonkey(Nemesis):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
-        self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.disruptions_list = self.build_disruptions_by_selector(self.nemesis_selector)
+    #     self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
     def disrupt(self):
-        self.call_next_nemesis()
-
+        # self.call_next_nemesis()
+        self.disrupt_mgmt_restore()
+        self.disrupt_snapshot_operations()
 
 class SslHotReloadingNemesis(Nemesis):
     disruptive = False
