@@ -38,10 +38,10 @@ def call(Map pipelineParams) {
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
             string(defaultValue: '',
-                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   description: 'ScyllaDB packages repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
                    name: 'new_scylla_repo')
             string(defaultValue: '',
-                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   description: 'ScyllaDB packages repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
                    name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
