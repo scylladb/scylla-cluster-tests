@@ -50,7 +50,7 @@ def call(Map pipelineParams) {
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
+                   description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
 
             // Post Behavior Configuration

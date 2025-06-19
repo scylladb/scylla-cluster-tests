@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 artifactsPipeline(
     test_config: 'test-cases/artifacts/ami.yaml',
     backend: 'aws',
-    provision_type: 'spot_low_price',
+    provision_type: 'spot',
     availability_zone: 'c',  // Since ARM processors aren't available in zone 'a' (the default) at the moment.
 
     timeout: [time: 45, unit: 'MINUTES'],
