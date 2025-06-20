@@ -7,6 +7,7 @@ import pytest
 
 from sdcm.nemesis import Nemesis, SisyphusMonkey
 from sdcm.nemesis_registry import NemesisRegistry
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from unit_tests.nemesis.fake_cluster import FakeTester, PARAMS, Cluster, Node
 from unit_tests.nemesis.test_registry import FlagClass
 from unit_tests.test_tester import ClusterTesterForTests
@@ -122,6 +123,9 @@ def test_add_sisyphus_with_filter_in_parallel_nemesis_run():
                                          "flag_c"]
     tester.params["nemesis_exclude_disabled"] = True
     tester.params["nemesis_multiply_factor"] = 1
+
+    tester.nemesis_allocator = NemesisNodeAllocator(tester)
+
     nemesises = tester.get_nemesis_class()
 
     expected_selectors = ["flag_common", "flag_common and not flag_a",  "flag_c"]
