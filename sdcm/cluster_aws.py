@@ -367,7 +367,10 @@ class AWSCluster(cluster.BaseCluster):
         return ec2_user_data
 
     def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None, is_zero_node=False):
-        nodes = [node for node in self.nodes if node.dc_idx == dc_idx and node.rack == az_idx]
+        is_rack_simulated = self.params.get("simulated_racks")
+        # find if nodes in given az already exist
+        # skip node.rack comparison if racks are simulated to prevent issue when rack was removed
+        nodes = [node for node in self.nodes if node.dc_idx == dc_idx and (node.rack == az_idx or is_rack_simulated)]
         if nodes:
             return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node)
         if self.test_config.REUSE_CLUSTER:
