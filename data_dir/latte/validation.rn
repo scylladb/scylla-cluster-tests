@@ -1,0 +1,195 @@
+// This rune script shows how we can do followig:
+// - Validate the number of returned rows in 'SELECT' queries
+// - Validate that the 'SELECT COUNT(...)' queries return integer equal to the expected rows number
+// - Do above for partitions of any size using 'partitions preset' latte feature
+// - Do above using prepared and non-prepared statements
+//
+// USAGE:
+// 1) Create schema:
+// $ latte schema workloads/validation.rn 172.17.0.2
+//
+// 2) Populate DB:
+// $ latte run workloads/validation.rn -q \
+//     -d 1000 -r 1000 -P row_count=1000 \
+//     -P rows_per_partition=1 -P partition_sizes="\"50:4,50:6\"" \
+//     -f insert -- 172.17.0.2
+//
+// 3) Do select queries with validation
+//
+// 3a) Get one row
+// $ latte run workloads/validation.rn -q \
+//     -d 1000 -r 1000 -P row_count=1000 \
+//     -P rows_per_partition=1 -P partition_sizes="\"50:4,50:6\"" \
+//     -f get -- 172.17.0.2
+//
+// 3b) Get many rows
+// $ latte run workloads/validation.rn -q \
+//     -d 1000 -r 1000 -P row_count=1000 \
+//     -P rows_per_partition=1 -P partition_sizes="\"50:4,50:6\"" \
+//     -f get_many -- 172.17.0.2
+//
+// 3c) Count
+// $ latte run workloads/validation.rn -q \
+//     -d 1000 -r 1000 -P row_count=1000 \
+//     -P rows_per_partition=1 -P partition_sizes="\"50:4,50:6\"" \
+//     -f count -- 172.17.0.2
+
+use latte::*;
+
+const ROW_COUNT = latte::param!("row_count", 1000000);
+const OFFSET = latte::param!("offset", 0);
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1);
+// NOTE: 'partition_sizes' defines set of 'percent:multiplier' pairs to create multi-row partitions
+// of different sizes. Example: '95:1,4:2,1:4'
+const PARTITION_SIZES = latte::param!("partition_sizes", "100:1");
+
+const USE_PREPARED_STATEMENTS = latte::param!("use_prepared_statements", true);
+
+const DELETE_START_INDEX = latte::param!("delete_start_index", 0);
+const DELETE_END_INDEX = latte::param!("delete_end_index", 0);
+
+const KEYSPACE = "latte";
+const TABLE = "validation";
+
+const P_STMT = #{
+    "INSERT": #{
+        "NAME": "p_stmt_validation__insert",
+        "CQL": `INSERT INTO ${KEYSPACE}.${TABLE}(pk, ck) VALUES (:pk, :ck)`,
+    },
+    "GET": #{
+        "NAME": "p_stmt_validation__get",
+        "CQL": `SELECT pk, ck FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk LIMIT 1`,
+    },
+    "GET_MANY": #{
+        "NAME": "p_stmt_validation__get_many",
+        "CQL": `SELECT pk, ck FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk LIMIT :max_limit`,
+    },
+    "COUNT": #{
+        "NAME": "p_stmt_validation__count",
+        "CQL": `SELECT COUNT(*) FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk`,
+    },
+    "DELETE": #{
+        "NAME": "p_stmt_validation__delete",
+        "CQL": `DELETE FROM ${KEYSPACE}.${TABLE} WHERE pk = :pk`,
+    },
+};
+
+pub async fn schema(db) {
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = {
+        'class': 'NetworkTopologyStrategy', 'replication_factor': ${REPLICATION_FACTOR} }`).await?;
+
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE}(
+        pk bigint,
+        ck bigint,
+        PRIMARY KEY (pk, ck)
+    ) WITH CLUSTERING ORDER BY (ck ASC)`).await?;
+}
+
+pub async fn erase(db) {
+    db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?
+}
+
+pub async fn prepare(db) {
+    db.init_partition_row_distribution_preset(
+        "main", ROW_COUNT, ROWS_PER_PARTITION, PARTITION_SIZES,
+    ).await?;
+    db.prepare(P_STMT.INSERT.NAME, P_STMT.INSERT.CQL).await?;
+    db.prepare(P_STMT.GET.NAME, P_STMT.GET.CQL).await?;
+    db.prepare(P_STMT.GET_MANY.NAME, P_STMT.GET_MANY.CQL).await?;
+    db.prepare(P_STMT.COUNT.NAME, P_STMT.COUNT.CQL).await?;
+    db.prepare(P_STMT.DELETE.NAME, P_STMT.DELETE.CQL).await?;
+}
+
+// User functions
+
+pub async fn insert(db, i) { // validation is not applicable
+    let idx = i % ROW_COUNT + OFFSET;
+    let partition = db.get_partition_info("main", idx).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let ck = hash(idx);
+    if USE_PREPARED_STATEMENTS {
+        db.execute_prepared(P_STMT.INSERT.NAME, [pk, ck]).await?
+    } else {
+        db.execute(P_STMT.INSERT.CQL.replace(":pk", `${pk}`).replace(":ck", `${ck}`)).await?
+    }
+}
+
+pub async fn insert_or_delete(db, i) { // validation is not applicable
+    let idx = i % ROW_COUNT + OFFSET;
+    let do_delete = if idx > 0 && idx >= DELETE_START_INDEX && idx <= DELETE_END_INDEX { true } else { false };
+    let partition = db.get_partition_info("main", idx).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let ck = hash(idx);
+    if do_delete {
+        println!(
+            "DEBUG: [{time}] DELETE a row for index: {idx}",
+            time=now_timestamp(), idx=idx,
+        );
+        if USE_PREPARED_STATEMENTS {
+            db.execute_prepared(P_STMT.DELETE.NAME, [pk]).await?
+        } else {
+            db.execute(P_STMT.DELETE.CQL.replace(":pk", `${pk}`)).await?
+        }
+    } else {
+        if USE_PREPARED_STATEMENTS {
+            db.execute_prepared(P_STMT.INSERT.NAME, [pk, ck]).await?
+        } else {
+            db.execute(P_STMT.INSERT.CQL.replace(":pk", `${pk}`).replace(":ck", `${ck}`)).await?
+        }
+    }
+}
+
+pub async fn get(db, i) { // make sure that we have only 1 row no matter how big partitions
+    let idx = i % ROW_COUNT + OFFSET;
+    let expect_deleted = if idx > 0 && idx >= DELETE_START_INDEX && idx <= DELETE_END_INDEX { true } else { false };
+    let partition = db.get_partition_info("main", idx).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let custom_err = "expected to get only 1 row"; // optional
+    let validation_vec = [1, custom_err];
+    if expect_deleted {
+        custom_err = `Queries for indexes (${DELETE_START_INDEX}-${DELETE_END_INDEX}) were expected to return no rows`;
+        validation_vec = [0, custom_err];
+        println!(
+            "DEBUG: [{time}] GET a row for index: {idx} expecting 0 rows",
+            time=now_timestamp(), idx=idx,
+        );
+    }
+    if USE_PREPARED_STATEMENTS {
+        db.execute_prepared_with_validation(P_STMT.GET.NAME, [pk], validation_vec).await?
+    } else {
+        db.execute_with_validation(P_STMT.GET.CQL.replace(":pk", `${pk}`), validation_vec).await?
+    }
+}
+
+pub async fn get_many(db, i) { // make sure that we have rows num as expected
+    let idx = i % ROW_COUNT + OFFSET;
+    let partition = db.get_partition_info("main", idx).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let max_limit = partition.rows_num + 10; // make it be bigger than the expected value
+    let validation_vec = [partition.rows_num];
+    if USE_PREPARED_STATEMENTS {
+        db.execute_prepared_with_validation(P_STMT.GET_MANY.NAME, [pk, max_limit], validation_vec).await?
+    } else {
+        let cql = P_STMT.GET_MANY.CQL.replace(":pk", `${pk}`).replace(":max_limit", `${max_limit}`);
+        db.execute_with_validation(cql, validation_vec).await?
+    }
+}
+
+pub async fn count(db, i) { // checks that 'select count' integer result equals to the expected value
+    let idx = i % ROW_COUNT + OFFSET;
+    let partition = db.get_partition_info("main", idx).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let custom_err = "custom very useful err msg for 'count' function"; // optional
+    let validation_vec = [partition.rows_num, custom_err];
+    if USE_PREPARED_STATEMENTS {
+        db.execute_prepared_with_validation(P_STMT.COUNT.NAME, [pk], validation_vec).await?
+    } else {
+        db.execute_with_validation(P_STMT.COUNT.CQL.replace(":pk", `${pk}`), validation_vec).await?
+    }
+}
