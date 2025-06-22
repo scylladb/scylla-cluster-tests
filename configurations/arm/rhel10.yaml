@@ -1,0 +1,5 @@
+ami_id_db_scylla: 'resolve:owner:309956199498/arm64/RHEL-10*arm64*'
+instance_type_db: 'im4gn.xlarge'
+use_preinstalled_scylla: false
+# enhanced network isn't supported
+append_scylla_setup_args: ' --no-ec2-check '
