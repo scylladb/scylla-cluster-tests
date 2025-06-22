@@ -1,0 +1,19 @@
+backtrace_decoding: false
+cluster_backend: 'aws'
+ami_db_scylla_user: 'ec2-user'
+ami_id_db_scylla: 'resolve:owner:309956199498/x86_64/RHEL-10*x86_64*'
+instance_type_db: 'i4i.large'
+root_disk_size_db: 50
+instance_provision: 'spot'
+instance_provision_fallback_on_demand: true
+logs_transport: 'vector'
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+test_duration: 60
+user_prefix: 'artifacts-rhel10'
+use_preinstalled_scylla: false
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'

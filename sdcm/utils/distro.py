@@ -33,7 +33,7 @@ class DistroBase(enum.Enum):
 # (enum_prefix, os name, versions list (format is either "major.minor" or "major"), boolean - debian_like == True else rhel_like)
 KNOWN_OS = (
     ("CENTOS", "centos", ["7", "8", "9"], DistroBase.RHEL),
-    ("RHEL", "rhel", ["7", "8", "9"], DistroBase.RHEL),
+    ("RHEL", "rhel", ["7", "8", "9", "10"], DistroBase.RHEL),
     ("OEL", "ol", ["7", "8", "9"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2023"], DistroBase.RHEL),
     ("ROCKY", "rocky", ["8", "9"], DistroBase.RHEL),
