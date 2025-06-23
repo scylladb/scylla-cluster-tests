@@ -10,9 +10,15 @@
 # See LICENSE for more details.
 #
 #
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from cassandra.cluster import Session
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 CONSISTENT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
 CONSISTENT_CLUSTER_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"
@@ -75,12 +81,12 @@ def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
     return CONSISTENT_TOPOLOGY_CHANGES_FEATURE in get_enabled_features(session)
 
 
-def is_tablets_feature_enabled(node) -> bool:
+def is_tablets_feature_enabled(node: BaseNode) -> bool:
     """ Check whether tablets enabled
     """
     with node.remote_scylla_yaml() as scylla_yaml:
         # for backward compatibility of 2024.1 and earlier
-        scylla_conf = scylla_yaml.dict()
+        scylla_conf = scylla_yaml.model_dump()
         if "tablets" in (scylla_conf.get("experimental_features") or []):
             return True
         if scylla_conf.get("enable_tablets"):
