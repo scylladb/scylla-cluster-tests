@@ -400,6 +400,58 @@ def clean_dedicate_hosts(region_name):
     print("region %s deleted %d kept %d" % (region_name, count_deleted_hosts, count_kept_hosts))
 
 
+def clean_unattached_security_groups(region_name: str):
+    """
+    Clean unattached security groups in the specified AWS region.
+    """
+    deleted = 0
+
+    if VERBOSE:
+        print(f"Checking region: {region_name} for unattached security groups")
+    session = boto3.Session()
+    ec2 = session.client('ec2', region_name=region_name)
+
+    # Use paginators for security groups
+    sg_paginator = ec2.get_paginator('describe_security_groups')
+    groups = []
+    for page in sg_paginator.paginate():
+        groups.extend(page['SecurityGroups'])
+
+    # Use paginators for network interfaces
+    ni_paginator = ec2.get_paginator('describe_network_interfaces')
+    interfaces = []
+    for page in ni_paginator.paginate():
+        interfaces.extend(page['NetworkInterfaces'])
+
+    attached_group_ids = set()
+    for iface in interfaces:
+        for sg in iface.get('Groups', []):
+            attached_group_ids.add(sg['GroupId'])
+
+    for group in groups:
+        tags = group.get('Tags', [])
+        # Skip default and specific security groups, and one tagged with 'keep:alive'
+        if (group['GroupName'] in ('default', 'SCT-2-sg', 'SCT-builder-ssh-sg')
+                or {'Key': 'keep', 'Value': 'alive'} in tags):
+            continue
+        if group['GroupId'] not in attached_group_ids:
+            deleted += 1
+            if VERBOSE:
+                print(
+                    f"Found unattached security group: {group['GroupId']} ({group['GroupName']}) in {region_name}\ntags: {tags}")
+            if not DRY_RUN:
+                try:
+                    ec2.delete_security_group(GroupId=group['GroupId'])
+                    if VERBOSE:
+                        print(f"Deleted security group: {group['GroupId']}")
+                except Exception as e:  # noqa: BLE001
+                    print(f"Failed to delete {group['GroupId']}: {e}")
+            else:
+                print(f"DRY RUN: would delete security group: {group['GroupId']} ({group['GroupName']})")
+    if VERBOSE:
+        print(f"Deleted {deleted} SGs in region: {region_name}")
+
+
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('ec2_stop')
     arg_parser.add_argument("--duration", type=int,
@@ -442,3 +494,4 @@ if __name__ == "__main__":
         clean_ips(region)
         clean_capacity_reservations(region)
         clean_dedicate_hosts(region)
+        clean_unattached_security_groups(region)
