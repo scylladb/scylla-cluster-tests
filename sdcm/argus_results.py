@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import json
+import logging
 import time
 from datetime import timezone, datetime
 
@@ -21,6 +22,8 @@ from argus.client.generic_result import GenericResultTable, ColumnMetadata, Resu
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
+
+LOGGER = logging.getLogger(__name__)
 
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
