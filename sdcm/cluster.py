@@ -1872,11 +1872,12 @@ class BaseNode(AutoSshContainerMixin):
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.install_package('gnupg2')
-            self.remoter.sudo("mkdir -p /etc/apt/keyrings")
+            self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
                 self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --keyserver-options timeout=10 --recv-keys {apt_key}",
                                   retry=3)
+            self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
         self.update_repo_cache()
 
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
@@ -1893,10 +1894,11 @@ class BaseNode(AutoSshContainerMixin):
         self.remoter.sudo(f"chmod 644 {repo_path}")
 
         if self.distro.is_debian_like:
-            self.remoter.sudo("mkdir -p /etc/apt/keyrings")
+            self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
                 self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
+            self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
             self.remoter.sudo("apt-get update", ignore_status=True)
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
@@ -2080,7 +2082,6 @@ class BaseNode(AutoSshContainerMixin):
 
         self.download_scylla_repo(scylla_repo)
         # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
-        self.install_package(package_name="rsync")
         if self.distro.is_rhel_like:
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if (self.distro.is_centos9 or self.distro.is_rhel8 or self.distro.is_oel8 or self.distro.is_rocky8 or

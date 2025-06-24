@@ -20,6 +20,7 @@ import shutil
 import tempfile
 import time
 import threading
+from path import Path
 
 from invoke.watchers import StreamWatcher
 from invoke.runners import Result
@@ -184,7 +185,7 @@ class RemoteCmdRunnerBase(CommandRunner):
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def receive_files(self, src: str, dst: str, delete_dst: bool = False,
-                      preserve_perm: bool = True, preserve_symlinks: bool = False, timeout: float = 300):
+                      preserve_perm: bool = True, preserve_symlinks: bool = False, timeout: float = 300, sudo=False):
         """
         Copy files from the remote host to a local path.
 
@@ -209,7 +210,7 @@ class RemoteCmdRunnerBase(CommandRunner):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param timeout: Timeout in seconds.
-
+        :param sudo: If True, the copy process will be run with sudo on the remote host.
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed.
         """
         self.log.debug('<%s>: Receive files (src) %s -> (dst) %s', self.hostname, src, dst)
@@ -227,7 +228,7 @@ class RemoteCmdRunnerBase(CommandRunner):
                 remote_source = self._encode_remote_paths(src)
                 local_dest = quote(dst)
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
-                                             delete_dst, preserve_symlinks, timeout)
+                                             delete_dst, preserve_symlinks, timeout, sudo=sudo)
                 result = LocalCmdRunner().run(rsync, timeout=timeout)
                 self.log.debug(result.exited)
                 try_scp = False
@@ -248,6 +249,18 @@ class RemoteCmdRunnerBase(CommandRunner):
                 remote_source = self._encode_remote_paths(remote_source,
                                                           escape=False)
                 local_dest = quote(dst)
+                temp_remote = None
+                if sudo:
+                    # If sudo is used, we need to copy to a temporary location
+                    # and then move it to the final destination.
+                    temp_remote = Path(f"/home/{self.user}/sct_scp.tmp")
+                    res = self.run(
+                        f"mkdir -p {temp_remote} && sudo cp -r --parents {' '.join(src)} {temp_remote} && sudo chown -R {self.user}:{self.user} {temp_remote}",  ignore_status=True)
+                    assert res.ok, f"Failed to create temp directory and copy  {src} to it"
+
+                    remote_source = [temp_remote / s.lstrip('/') for s in src]
+                    remote_source = self._encode_remote_paths(remote_source, escape=False)
+
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 try:
                     result = LocalCmdRunner().run(scp, timeout=timeout)
@@ -255,6 +268,10 @@ class RemoteCmdRunnerBase(CommandRunner):
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
+                if sudo:
+                    files_to_delete = " ".join(quote(temp_remote / s.lstrip("/")) for s in src)
+                    res = self.sudo(f"rm -rf {files_to_delete}", ignore_status=True)
+                    assert res.ok, "Failed to remove temporary directory {temp_remote}"
                 self.log.debug("<%s>: Command %s with status %s", self.hostname, result.command, result.exited)
                 if result.exited:
                     files_received = False
@@ -273,7 +290,7 @@ class RemoteCmdRunnerBase(CommandRunner):
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def send_files(self, src: str,
-                   dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False) -> bool:
+                   dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False, sudo=False) -> bool:
         """
         Copy files from a local path to the remote host.
 
@@ -296,6 +313,7 @@ class RemoteCmdRunnerBase(CommandRunner):
         :param preserve_symlinks: Try to preserve symlinks instead of
             transforming them into files/dirs on copy.
         :param verbose: Log commands being used and their outputs.
+        :param sudo: If True, the copy process will be run with sudo on the remote host.
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed
         """
@@ -315,7 +333,7 @@ class RemoteCmdRunnerBase(CommandRunner):
             try:
                 local_sources = [quote(os.path.expanduser(path)) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
-                                             delete_dst, preserve_symlinks)
+                                             delete_dst, preserve_symlinks, sudo=sudo)
                 LocalCmdRunner().run(rsync)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as details:
@@ -358,8 +376,21 @@ class RemoteCmdRunnerBase(CommandRunner):
                     cmd = "mkdir %s" % dst
                     self.run(cmd, verbose=verbose)
 
+            temp_remote = None
+
             local_sources = self._make_rsync_compatible_source(src, True)
             if local_sources:
+                if sudo:
+                    # If sudo is used, we need to copy to a temporary location
+                    # and then move it to the final destination.
+                    temp_remote = Path(f"/home/{self.user}/sct_scp.tmp")
+
+                    remote_dest = temp_remote = temp_remote / dst.lstrip('/')
+                    res = self.run(f"mkdir -p {temp_remote.parent}", ignore_status=True)
+                    assert res.ok, f"Failed to create temp directory {temp_remote}"
+
+                    remote_dest = self._encode_remote_paths([remote_dest], escape=False)
+
                 scp = self._make_scp_cmd(local_sources, remote_dest)
                 try:
                     result = LocalCmdRunner().run(scp)
@@ -367,6 +398,10 @@ class RemoteCmdRunnerBase(CommandRunner):
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
+                if sudo:
+                    res = self.sudo(f"cp -a {temp_remote} {dst} && rm -rf {temp_remote}", ignore_status=True)
+                    assert res.ok, f"Failed to move {temp_remote} to {dst}"
+
                 self.log.debug('<%s>: Command %s with status %s', self.hostname, result.command, result.exited)
                 if result.exited:
                     files_sent = False
@@ -410,7 +445,7 @@ class RemoteCmdRunnerBase(CommandRunner):
         key_option = ''
         if self.key_file:
             key_option = '-i %s' % os.path.expanduser(self.key_file)
-        command = ("scp -r -o StrictHostKeyChecking=no -o BatchMode=yes "
+        command = ("scp -q -r -o StrictHostKeyChecking=no -o BatchMode=yes "
                    "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
                    "-o UserKnownHostsFile=%s -P %d %s %s %s %s")
         proxy_cmd = ''
@@ -515,7 +550,7 @@ class RemoteCmdRunnerBase(CommandRunner):
             set_file_privs(dest)
 
     def _make_rsync_cmd(
-            self, src: list, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300) -> str:
+            self, src: list, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300, sudo=False) -> str:
         """
         Given a list of source paths and a destination path, produces the
         appropriate rsync command for copying them. Remote paths must be
@@ -538,8 +573,12 @@ class RemoteCmdRunnerBase(CommandRunner):
             symlink_flag = ""
         else:
             symlink_flag = "-L"
-        command = "rsync %s %s --timeout=%s --rsh='%s' -az %s %s"
-        return command % (symlink_flag, delete_flag, timeout, ssh_cmd,
+        if sudo:
+            sudo_cmd = "--rsync-path='sudo rsync'"
+        else:
+            sudo_cmd = ""
+        command = "rsync %s %s %s --timeout=%s --rsh='%s' -az %s %s"
+        return command % (symlink_flag, sudo_cmd, delete_flag, timeout, ssh_cmd,
                           " ".join(src), dst)
 
     def _make_proxy_cmd(self):
