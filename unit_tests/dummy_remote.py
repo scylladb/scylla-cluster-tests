@@ -39,7 +39,7 @@ class DummyRemote:
         return True
 
     @staticmethod
-    def receive_files(src, dst):
+    def receive_files(src, dst,  *_, **__):
         shutil.copy(src, dst)
         return True
 
