@@ -45,12 +45,6 @@ SSL_USER_KEY_FILE = SSL_CONF_DIR / TLSAssets.CLIENT_KEY
 REPAIR_TIMEOUT_SEC = 7200  # 2 hours
 
 
-new_command_structure_minimum_version = LooseVersion("3.0")
-forcing_tls_minimum_version = LooseVersion("3.2.6")
-
-# TODO: remove these checks once manager 2.6 is no longer supported
-
-
 class ScyllaManagerBase:
 
     def __init__(self, id, manager_node):
@@ -74,18 +68,12 @@ class ManagerTask:
         return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
     def stop(self):
-        if self.sctool.is_v3_cli:
-            cmd = "stop {} -c {}".format(self.id, self.cluster_id)
-        else:
-            cmd = "task stop {} -c {}".format(self.id, self.cluster_id)
+        cmd = f"stop {self.id} -c {self.cluster_id}"
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         return self.wait_and_get_final_status(timeout=30, step=3)
 
     def start(self, continue_task=True):
-        if self.sctool.is_v3_cli:
-            cmd = "start {} -c {}".format(self.id, self.cluster_id)
-        else:
-            cmd = "task start {} -c {}".format(self.id, self.cluster_id)
+        cmd = f"start {self.id} -c {self.cluster_id}"
         if not continue_task:
             cmd += " --no-continue"
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
@@ -169,11 +157,7 @@ class ManagerTask:
         # ├──────────────────────────────────────┼────────────────────────┼──────────┼────────┤
         # │ 3e32bcc3-c5c1-11ec-85ad-02f351adfaf7 │ 27 Apr 22 00:30:30 UTC │ 15s      │ DONE   │
         # ╰──────────────────────────────────────┴────────────────────────┴──────────┴────────╯
-        if self.sctool.is_v3_cli:
-            return self.get_task_info_dict()["history"]
-        cmd = "task history {} -c {}".format(self.id, self.cluster_id)
-        res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
-        return res  # or can be specified like: self.get_property(parsed_table=res, column_name='status')
+        return self.get_task_info_dict()["history"]
 
     @property
     def next_run(self):
@@ -181,19 +165,14 @@ class ManagerTask:
         Gets the task's next run value
         """
         # ╭──────────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
-        # │ task                                             │ next run                      │ ret. │ properties │ status │
+        # │ task                                             │ Next                          │ ret. │ properties │ status │
         # ├──────────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
         # │ healthcheck/7fb6f1a7-aafc-4950-90eb-dc64729e8ecb │ 18 Nov 18 20:32:08 UTC (+15s) │ 0    │            │ NEW    │
         # │ repair/22b68423-4332-443d-b8b4-713005ea6049      │ 19 Nov 18 00:00:00 UTC (+7d)  │ 3    │            │ NEW    │
         # ╰──────────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
-        if self.sctool.is_v3_cli:
-            cmd = "tasks -c {}".format(self.cluster_id)
-        else:
-            cmd = "task list -c {}".format(self.cluster_id)
+        cmd = f"tasks -c {self.cluster_id}"
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
-        if self.sctool.is_v3_cli:
-            return self.get_property(parsed_table=res, column_name='Next')
-        return self.get_property(parsed_table=res, column_name='next run')
+        return self.get_property(parsed_table=res, column_name='Next')
 
     @property
     def latest_run_id(self):
@@ -222,10 +201,7 @@ class ManagerTask:
         """
         Gets the task's status
         """
-        if self.sctool.is_v3_cli:
-            cmd = "tasks -c {}".format(self.cluster_id)
-        else:
-            cmd = "task list -c {}".format(self.cluster_id)
+        cmd = f"tasks -c {self.cluster_id}"
         # expecting output of:
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                        │ next run                      │ ret. │ properties │ status │
@@ -299,10 +275,7 @@ class ManagerTask:
         # │ 35.86.127.236 │      99% │ 944.800M │ 944.764M │            0 │      0 │
         # │ 44.200.32.210 │     100% │ 944.777M │ 944.777M │            0 │      0 │
         # ╰───────────────┴──────────┴──────────┴──────────┴──────────────┴────────╯
-        if self.sctool.is_v3_cli:
-            cmd = f" -c {self.cluster_id} progress {self.id}"
-        else:
-            cmd = f" -c {self.cluster_id} task progress {self.id}"
+        cmd = f" -c {self.cluster_id} progress {self.id}"
         res = self.sctool.run(cmd=cmd, **kwargs)
         return res
 
@@ -804,10 +777,7 @@ class ManagerCluster(ScyllaManagerBase):
 
     def delete_task(self, task: ManagerTask):
         task_id = task.id
-        if self.sctool.is_v3_cli:
-            cmd = "stop --delete {} -c {}".format(task_id, self.id)
-        else:
-            cmd = "-c {} task delete {}".format(self.id, task_id)
+        cmd = f"stop --delete {task_id} -c {self.id}"
         LOGGER.debug("Task Delete command to execute is: {}".format(cmd))
         self.sctool.run(cmd=cmd, parse_table_res=False)
         LOGGER.debug("Deleted the task '{}' successfully!". format(task_id))
@@ -840,10 +810,7 @@ class ManagerCluster(ScyllaManagerBase):
         return self.get_property(parsed_table=self._cluster_list, column_name='name')
 
     def _get_task_list(self):
-        if self.sctool.is_v3_cli:
-            cmd = "tasks -c {}".format(self.id)
-        else:
-            cmd = "task list -c {}".format(self.id)
+        cmd = f"tasks -c {self.id}"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     def _get_task_list_filtered(self, prefix, task_class):
@@ -1387,10 +1354,6 @@ class SCTool:
         date_obj = datetime.datetime.strptime(date_str, "%Y%m%d")
         timestamp = int(date_obj.timestamp())
         return timestamp
-
-    @property
-    def is_v3_cli(self):
-        return self.parsed_client_version >= new_command_structure_minimum_version
 
 
 class ScyllaMgmt:
