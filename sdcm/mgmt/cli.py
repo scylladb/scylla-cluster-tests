@@ -72,6 +72,10 @@ class ManagerTask:
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         return self.wait_and_get_final_status(timeout=30, step=3)
 
+    def disable(self):
+        cmd = f"stop {self.id} -c {self.cluster_id} --disable"
+        self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+
     def start(self, continue_task=True):
         cmd = f"start {self.id} -c {self.cluster_id}"
         if not continue_task:
@@ -809,26 +813,31 @@ class ManagerCluster(ScyllaManagerBase):
         # ╰──────────────────────────────────────┴──────┴─────────────╯
         return self.get_property(parsed_table=self._cluster_list, column_name='name')
 
-    def _get_task_list(self):
-        cmd = f"tasks -c {self.id}"
+    def _get_task_list(self, all_tasks: bool = False):
+        cmd = "tasks -c {}".format(self.id)
+        if all_tasks:
+            cmd += " -a"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def _get_task_list_filtered(self, prefix, task_class):
-        """
-        Gets the Cluster's  Task list
+    def _get_task_list_filtered(self, prefix, task_class, include_disabled: bool = False):
+        """Gets the Cluster's Task list
+        If all_tasks is True, disabled tasks is counted as well (such tasks have asterisk prefix in the name).
         """
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                        │ next run                      │ ret. │ properties │ status │
         # ├─────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
         # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 26 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
         # │ backup/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
+        # | *backup/2a4125d6-5d5a-45b9-9d8d-dec038b3732 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
         task_list = []
-        table_res = self._get_task_list()
-        if len(table_res) > 1:
-            task_row_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}")]
-            for row in task_row_list:
-                task_list.append(task_class(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
+        table_res = self._get_task_list(all_tasks=include_disabled)
+        for row in table_res[1:]:
+            task_name = row[0].lstrip('*')
+            if task_name.startswith(prefix):
+                task_list.append(
+                    task_class(task_id=task_name, cluster_id=self.id, manager_node=self.manager_node)
+                )
         return task_list
 
     @property
@@ -838,6 +847,10 @@ class ManagerCluster(ScyllaManagerBase):
     @property
     def backup_task_list(self):
         return self._get_task_list_filtered('backup/', BackupTask)
+
+    @property
+    def backup_task_list_all(self):
+        return self._get_task_list_filtered('backup/', BackupTask, include_disabled=True)
 
     def get_healthcheck_task(self):
         healthcheck_id = self.sctool.get_table_value(parsed_table=self._get_task_list(), column_name="task",
