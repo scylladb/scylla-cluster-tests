@@ -330,7 +330,6 @@ class ArtifactsTest(ClusterTester):
                                   compaction=compaction_strategy, sstable_size=sstable_size)
 
     def test_scylla_service(self):  # noqa: PLR0915
-
         self.run_pre_create_schema()
 
         backend = self.params.get("cluster_backend")

@@ -213,13 +213,15 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
                                     new_session=True, watchers=watchers)
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
-    def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300):
+    def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300, sudo: bool = False):
+        # NOTE: sudo parameter is not used here, because we are using kubectl cp command, and not sure if it needed yet
         KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod_name}:{src}", dst,
                                 container=self.container, timeout=timeout)
         return True
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
-    def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
+    def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False, sudo: bool = False):
+        # NOTE: sudo parameter is not used here, because we are using kubectl cp command, and not sure if it needed yet
         with KEY_BASED_LOCKS.get_lock(f"k8s--{self.kluster.name}--{self.namespace}--{self.pod_name}"):
             KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}",
                                     container=self.container, timeout=300)
@@ -626,13 +628,13 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         return connection
 
     def receive_files(self, src, dst, delete_dst=False,
-                      preserve_perm=True, preserve_symlinks=False, timeout=300):
+                      preserve_perm=True, preserve_symlinks=False, timeout=300, sudo=False):
         # TODO: may be implemented if we want to copy files which exist in the image
         #       because this runner doesn't imply execution of commands on the already
         #       running pod.
         raise NotImplementedError()
 
-    def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
+    def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False, sudo=False):
         """Mount single files to a 'dynamic'aly created pods.
 
         'src' and 'dst' params must contain filename.
