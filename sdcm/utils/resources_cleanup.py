@@ -22,6 +22,7 @@ import boto3
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -54,6 +55,15 @@ from sdcm.utils.gce_utils import (
 
 
 LOGGER = logging.getLogger('utils')
+
+
+def init_argus_client(test_id: str):
+    try:
+        argus_client = get_argus_client(run_id=test_id)
+    except ArgusError as exc:
+        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
+        argus_client = MagicMock()
+    return argus_client
 
 
 def clean_cloud_resources(tags_dict, config=None, dry_run=False):
@@ -111,6 +121,8 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
     if cluster_backend in ('docker', ''):
         clean_resources_docker(tags_dict, dry_run=dry_run)
+    if cluster_backend in ('xcloud',):
+        clean_clusters_scylla_cloud(tags_dict, config)
     return True
 
 
@@ -162,11 +174,6 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
                 tags_dict=tags_dict, region_name=region, group_as_region=True)
     else:
         aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
-    try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-    except ArgusError as exc:
-        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-        argus_client = MagicMock()
 
     for region, instance_list in aws_instances.items():
         if not instance_list:
@@ -184,6 +191,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
+                argus_client = init_argus_client(tags_dict.get("TestId"))
                 terminate_resource_in_argus(client=argus_client, resource_name=name)
                 LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
@@ -387,11 +395,6 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
     def delete_instance(instance_with_tags: tuple[GceInstance, dict]):
         instance, tags_dict = instance_with_tags
         LOGGER.info("Going to delete: %s (%s project)", instance.name, os.environ.get("SCT_GCE_PROJECT"))
-        try:
-            argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-        except ArgusError as exc:
-            LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-            argus_client = MagicMock()
 
         if not dry_run:
             instances_client, info = get_gce_compute_instances_client()
@@ -399,6 +402,7 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
                                           project=info['project_id'],
                                           zone=instance.zone.split('/')[-1])
             res.done()
+            argus_client = init_argus_client(tags_dict.get("TestId"))
             terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
@@ -414,11 +418,7 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
     :return: None
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
-    try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-    except ArgusError as exc:
-        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-        argus_client = MagicMock()
+
     provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""), regions=regions)
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
@@ -435,6 +435,7 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
                         provisioner.test_id, provisioner.region)
             if not dry_run:
                 provisioner.cleanup(wait=False)
+                argus_client = init_argus_client(tags_dict.get("TestId"))
                 for instance in instances_to_clean:
                     terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
         else:
@@ -564,3 +565,55 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                 except Exception as ex:
                     LOGGER.debug("Failed to delete placement group: %s", str(ex))
                     raise
+
+
+def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = False) -> None:
+    """Clean up Scylla Cloud resources (clusters) based on tags"""
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+
+    if dry_run:
+        LOGGER.info("DRY RUN: No actual resources will be deleted")
+
+    api_client = ScyllaCloudAPIClient(api_url=config.cloud_env_credentials['base_url'],
+                                      auth_token=config.cloud_env_credentials['api_token'])
+
+    account_id = api_client.get_account_details().get('accountId')
+    clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+    LOGGER.info("Found %s cluster(s) in Scylla Cloud account", len(clusters))
+
+    clusters_to_delete = []
+    test_id = tags_dict.get('TestId')
+    # TODO: uncomment after adding tags/metadata to a cloud cluster is implemented
+    # run_by_user = tags_dict.get('RunByUser', '').replace('.', '-')
+    for cluster_data in clusters:
+        cluster_name = cluster_data.get('clusterName', '')
+        cluster_id = cluster_data.get('id')
+
+        should_delete = False
+        if test_id and str(test_id)[:8] in cluster_name:
+            should_delete = True
+        # TODO: uncomment after adding tags/metadata to a cloud cluster is implemented
+        # elif run_by_user and run_by_user in cluster_name:
+        #     should_delete = True
+
+        if should_delete:
+            clusters_to_delete.append({'id': cluster_id, 'name': cluster_name})
+
+    if not clusters_to_delete:
+        LOGGER.info("No clusters found matching the cleanup criteria")
+        return
+
+    LOGGER.info("Found %s cluster(s) to delete", len(clusters_to_delete))
+
+    for cluster in clusters_to_delete:
+        cluster_id, cluster_name = cluster['id'], cluster['name']
+        LOGGER.info("Going to delete cluster %s (ID: %s)", cluster_name, cluster_id)
+
+        if not dry_run:
+            try:
+                api_client.delete_cluster(account_id=account_id, cluster_id=cluster_id, cluster_name=cluster_name)
+
+                argus_client = init_argus_client(tags_dict.get("TestId"))
+                terminate_resource_in_argus(client=argus_client, resource_name=cluster_name)
+            except Exception as e:  # noqa: BLE001
+                LOGGER.error(f"Failed to delete cluster {cluster_name}: {e}")

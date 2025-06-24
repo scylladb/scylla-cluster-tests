@@ -402,7 +402,7 @@ class BaseNode(AutoSshContainerMixin):
         self._init_port_mapping()
 
         self.set_keep_alive()
-        if self.node_type == "db" and not self.is_kubernetes() \
+        if self.node_type == "db" and not self.is_kubernetes() and not self.is_cloud() \
                 and self.parent_cluster.params.get("print_kernel_callstack"):
             if self.is_docker():
                 LOGGER.warning("Enabling the 'print_kernel_callstack' on docker backend is not supported")
@@ -817,6 +817,10 @@ class BaseNode(AutoSshContainerMixin):
 
     @staticmethod
     def is_gce() -> bool:
+        return False
+
+    @staticmethod
+    def is_cloud() -> bool:
         return False
 
     def scylla_pkg(self):

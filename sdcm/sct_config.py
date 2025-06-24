@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+from functools import cached_property
 
 import yaml
 import copy
@@ -36,6 +37,9 @@ from pydantic import BaseModel
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.keystore import KeyStore
+from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
@@ -234,6 +238,7 @@ class SCTConfiguration(dict):
         'aws', 'aws-siren', 'k8s-local-kind-aws', 'k8s-eks',
         'gce', 'gce-siren', 'k8s-local-kind-gce', 'k8s-gke',
         'k8s-local-kind',
+        'xcloud',
     ]
 
     config_options = [
@@ -1785,6 +1790,18 @@ class SCTConfiguration(dict):
 
         dict(name="adaptive_timeout_store_metrics", env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS", type=boolean,
              help="Store adaptive timeout metrics in Argus. Disabled for performance tests only."),
+
+        dict(name="xcloud_credentials_path", env="SCT_XCLOUD_CREDENTIALS_PATH", type=str,
+             help="Path to Scylla Cloud credentials file, if stored locally"),
+
+        dict(name="xcloud_env", env="SCT_XCLOUD_ENV", type=str,
+             help="Scylla Cloud environment (e.g., lab)."),
+
+        dict(name="xcloud_provider", env="SCT_XCLOUD_PROVIDER", type=str,
+             help="Cloud provider for Scylla Cloud deployment (aws, gce)"),
+
+        dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
+             help="Replication factor for Scylla Cloud cluster (default: 3)"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1850,6 +1867,8 @@ class SCTConfiguration(dict):
                     'k8s_scylla_cluster_name', 'k8s_loader_cluster_name',
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
                     'eks_cluster_version', 'eks_nodegroup_role_arn'],
+
+        'xcloud': ['user_prefix', 'xcloud_env', 'xcloud_provider', 'scylla_version'],
     }
 
     defaults_config_files = {
@@ -1870,11 +1889,17 @@ class SCTConfiguration(dict):
             sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/gce_config.yaml'), sct_abs_path('defaults/k8s_gke_config.yaml')],
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
+        "xcloud": [sct_abs_path('defaults/cloud_config.yaml')],
     }
 
     per_provider_multi_region_params = {
         "aws": ['region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'],
         "gce": ['gce_datacenter', 'n_db_nodes']
+    }
+
+    xcloud_per_provider_required_params = {
+        "aws": ['region_name', 'instance_type_db'],
+        "gce": ['gce_datacenter', 'gce_instance_type_db'],
     }
 
     stress_cmd_params = [
@@ -1912,6 +1937,8 @@ class SCTConfiguration(dict):
         backend = env.get('cluster_backend')
         backend_config_files = [sct_abs_path('defaults/test_default.yaml')]
         if backend:
+            if backend == 'xcloud':
+                backend_config_files += self.defaults_config_files[env.get('xcloud_provider', 'aws')]
             backend_config_files += self.defaults_config_files[str(backend)]
         self.multi_region_params = self.per_provider_multi_region_params.get(str(backend), [])
 
@@ -2305,6 +2332,27 @@ class SCTConfiguration(dict):
             output.extend(gce_datacenter.split())
         return output
 
+    @cached_property
+    def cloud_provider_params(self) -> dict:
+        cloud_provider = self.get('xcloud_provider').lower()
+        if cloud_provider == 'aws':
+            return {
+                'region': self.region_names[0],
+                'instance_type_db': self.get('instance_type_db')}
+        elif cloud_provider == 'gce':
+            return {
+                'region': self.gce_datacenters[0],
+                'instance_type_db': self.get('gce_instance_type_db')}
+        return {}
+
+    @cached_property
+    def cloud_env_credentials(self) -> dict:
+        if creds_file := self.get('xcloud_credentials_path'):
+            creds = get_cloud_rest_credentials_from_file(creds_file)
+        else:
+            creds = KeyStore().get_cloud_rest_credentials(self.get('xcloud_env'))
+        return creds
+
     @property
     def environment(self) -> dict:
         return self._load_environment_variables()
@@ -2489,6 +2537,8 @@ class SCTConfiguration(dict):
             self._check_multi_region_params(backend)
         if backend == 'docker':
             self._validate_docker_backend_parameters()
+        if backend == 'xcloud':
+            self._validate_cloud_backend_parameters()
 
         self._verify_data_volume_configuration(backend)
 
@@ -2612,6 +2662,9 @@ class SCTConfiguration(dict):
         if backend in self.available_backends:
             if backend in ('aws', 'gce') and self.get("db_type") == "cloud_scylla":
                 backend += "-siren"
+            if backend == 'xcloud':
+                self.backend_required_params[backend] += self.xcloud_per_provider_required_params[self.get(
+                    'xcloud_provider')]
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
             raise ValueError("Unsupported backend [{}]".format(backend))
@@ -2667,7 +2720,7 @@ class SCTConfiguration(dict):
             options_must_exist += ['docker_image']
         elif backend == 'baremetal':
             options_must_exist += ['db_nodes_public_ip']
-        elif 'k8s' in backend:
+        elif 'k8s' in backend or backend == 'xcloud':
             options_must_exist += ['scylla_version']
 
         if not options_must_exist:
@@ -2814,6 +2867,9 @@ class SCTConfiguration(dict):
             docker_repo = self.get('docker_image')
             scylla_version = self.get('scylla_version')
             _is_enterprise = 'enterprise' in docker_repo
+        elif backend == 'xcloud':
+            scylla_version = self.get('scylla_version')
+            _is_enterprise = is_enterprise(scylla_version)
         self.scylla_version = scylla_version
         self.is_enterprise = _is_enterprise
         self.update_argus_with_version(scylla_version, "scylla-server-target")
@@ -2976,6 +3032,62 @@ class SCTConfiguration(dict):
         zones = racks_count * regions
         if loaders >= zones:
             raise ValueError("Rack-aware validation requires zones without loaders.")
+
+    def _validate_cloud_backend_parameters(self):
+        cloud_api_client = ScyllaCloudAPIClient(
+            api_url=self.cloud_env_credentials['base_url'],
+            auth_token=self.cloud_env_credentials['api_token'],
+            raise_for_status=True)
+
+        # validate if selected cloud provider is supported
+        cloud_provider = self.get('xcloud_provider')
+        if cloud_provider not in ['aws', 'gce']:
+            raise ValueError(f"Unsupported Scylla Cloud provider: {cloud_provider}. Must be 'aws' or 'gce'")
+
+        # validate if selected Scylla version is supported
+        supported_versions = [
+            v['version'] for v in cloud_api_client.get_scylla_versions()['scyllaVersions']
+            if v['newCluster'] == 'ENABLED'
+        ]
+        if (selected_version := self.get('scylla_version')) not in supported_versions:
+            raise ValueError(f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
+                             f"Currently supported versions: {', '.join(supported_versions)}")
+
+        # validate if selected region is supported by the cloud provider
+        provider_id = cloud_api_client.cloud_provider_ids[CloudProviderType(cloud_provider.upper())]
+        supported_regions = [
+            r['externalId'] for r in cloud_api_client.get_regions(
+                cloud_provider_id=provider_id)['regions']
+        ]
+        region_name = (self.region_names if cloud_provider == 'aws' else self.gce_datacenters)[0]
+        if region_name not in supported_regions:
+            raise ValueError(f"Selected region '{region_name}' is not supported by cloud provider '{cloud_provider}'.\n"
+                             f"Supported regions for '{cloud_provider}': {', '.join(supported_regions)}")
+
+        # validate if instance types are supported in the selected region
+        region_id = cloud_api_client.get_region_id_by_name(
+            cloud_provider_id=provider_id, region_name=region_name)
+        supported_instances = [
+            i['externalId'] for i in cloud_api_client.get_instance_types(
+                cloud_provider_id=provider_id, region_id=region_id)['instances']
+        ]
+        db_instance_type = self.get('instance_type_db' if cloud_provider == 'aws' else 'gce_instance_type_db')
+        if db_instance_type not in supported_instances:
+            raise ValueError(
+                f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
+                f"cloud provider '{cloud_provider}'.\n"
+                f"Supported instance types: {', '.join(supported_instances)}")
+
+        rf = self.get('xcloud_replication_factor')
+        n_nodes = self.get('n_db_nodes')
+        if rf is None:
+            self['xcloud_replication_factor'] = n_nodes
+        elif rf > n_nodes:
+            raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+
+        if self.get('n_monitor_nodes') > 0:
+            self.log.warning("Cloud provides built-in monitoring. Setting n_monitor_nodes to 0.")
+            self['n_monitor_nodes'] = 0
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
