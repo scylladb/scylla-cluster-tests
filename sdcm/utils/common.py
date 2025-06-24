@@ -282,7 +282,7 @@ class S3Storage():
                                                                                       file_name=file_name,
                                                                                       bucket_name=bucket_name)
 
-    def upload_file(self, file_path, dest_dir=''):
+    def upload_file(self, file_path, dest_dir='', public=True):
         s3_url = self.generate_url(file_path, dest_dir)
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
@@ -291,8 +291,9 @@ class S3Storage():
                                      Key=s3_obj,
                                      Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
-            LOGGER.info("Set public read access")
-            self.set_public_access(key=s3_obj)
+            if public:
+                LOGGER.info("Set public read access")
+                self.set_public_access(key=s3_obj)
             return s3_url
         except Exception as details:  # noqa: BLE001
             LOGGER.debug("Unable to upload to S3: %s", details)
