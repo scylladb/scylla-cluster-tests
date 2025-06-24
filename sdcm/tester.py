@@ -48,6 +48,7 @@ from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -60,6 +61,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
@@ -1139,7 +1141,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         db_cluster = db_cluster or self.db_cluster
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
-        if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") == "baremetal":
+        if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") in ("baremetal", "xcloud"):
             # TODO: move this skip to siren-tools when possible
             self.log.warning("Skipping this function due this job run from Siren cloud!")
             return
@@ -1975,6 +1977,46 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
+    def get_cluster_cloud(self, loader_info, db_info):
+        cloud_api_client = ScyllaCloudAPIClient(
+            api_url=self.params.cloud_env_credentials['base_url'],
+            auth_token=self.params.cloud_env_credentials['api_token'],
+            raise_for_status=True)
+
+        user_prefix = self.params.get('user_prefix')
+
+        if db_info['n_nodes'] is None:
+            n_db_nodes = self.params.get('n_db_nodes')
+            if isinstance(n_db_nodes, int):
+                db_info['n_nodes'] = [n_db_nodes]
+            elif isinstance(n_db_nodes, str):
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
+
+        if loader_info['n_nodes'] is None:
+            n_loader_nodes = self.params.get('n_loaders')
+            if isinstance(n_loader_nodes, int):
+                loader_info['n_nodes'] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):
+                loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
+
+        self.log.info("Creating Scylla Cloud cluster")
+        self.db_cluster = ScyllaCloudCluster(
+            cloud_api_client=cloud_api_client,
+            user_prefix=user_prefix,
+            n_nodes=db_info['n_nodes'][0],
+            params=self.params,
+            add_nodes=True)
+
+        # TODO: implement loaders provisioning in Scylla Cloud
+        self.loaders = None
+
+        # TODO: implement routing of monitoring data to SCT monitor instance
+        self.monitors = NoMonitorSet()
+
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
 
@@ -2014,6 +2056,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         elif cluster_backend == 'azure':
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
+        elif cluster_backend == 'xcloud':
+            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info)
 
         # NOTE: following starts processing of the monitoring inbound events which will be posted
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
@@ -3870,6 +3914,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
             region_name = "N/A"
+        elif backend == "xcloud":
+            scylla_instance_type = self.params.get("cloud_instance_type_db") or "Unknown"
+            region_name = self.params.get("cloud_region")
         else:
             self.log.error("Don't know how to get instance type for the '%s' backend.", backend)
             scylla_instance_type = "N/A"

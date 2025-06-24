@@ -3613,3 +3613,39 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **default:** True
 
 **type:** boolean
+
+
+## **xcloud_credentials_path** / SCT_XCLOUD_CREDENTIALS_PATH
+
+Path to Scylla Cloud credentials file, if stored locally
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_env** / SCT_XCLOUD_ENV
+
+Scylla Cloud environment (e.g., lab).
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_provider** / SCT_XCLOUD_PROVIDER
+
+Cloud provider for Scylla Cloud deployment (aws, gce)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
+
+Replication factor for Scylla Cloud cluster (default: 3)
+
+**default:** N/A
+
+**type:** int
