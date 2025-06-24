@@ -70,7 +70,7 @@ class LoggerBase(metaclass=ABCMeta):
 
 
 class SSHLoggerBase(LoggerBase):
-    RETRIEVE_LOG_MESSAGE_TEMPLATE = "Reading Scylla logs from {since}"
+    RETRIEVE_LOG_MESSAGE_TEMPLATE = "SSHLogger reading {log_file} from {since}"
     VERBOSE_RETRIEVE = True
     READINESS_CHECK_DELAY = 10  # seconds
 
@@ -105,7 +105,8 @@ class SSHLoggerBase(LoggerBase):
         return self._remoter.is_up()
 
     def _retrieve(self, since: str) -> None:
-        self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(since=since or "the beginning"))
+        self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(
+            log_file=self._target_log_file, since=since or "the beginning"))
         try:
             self._remoter.run(
                 cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
@@ -157,13 +158,11 @@ class HDRHistogramFileLogger(SSHLoggerBase):
     def stop(self, timeout: float | None = None) -> None:
         with self._lock:
             self._termination_event.set()
-            thread_cancelled = self._thread.cancel()
-            LOGGER.debug("Is thread cancelled?: %s, target_log_file: %s", thread_cancelled, self.target_log_file)
-            self._child_thread.shutdown(wait=False, cancel_futures=True)
-            LOGGER.debug("Is thread shutdown?: %s, target_log_file: %s", self._thread.running(), self.target_log_file)
-            self._started = False
+            # ensure the tail command to be stopped
+            self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
             if self._thread.running():
                 self._thread.cancel()
+            self._started = False
 
     @cached_property
     def _logger_cmd_template(self) -> str:
@@ -214,12 +213,6 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                 time.sleep(self.READINESS_CHECK_DELAY)
             te_is_set = self._termination_event.is_set()
             LOGGER.debug("_termination_event is set?: %s. %s", te_is_set, self._remote_log_file)
-
-    def _is_ready_to_retrieve(self) -> bool:
-        LOGGER.debug("Before remoter is_up. %s", self._remote_log_file)
-        is_up = self._remoter.is_up()
-        LOGGER.debug("After remoter is_up. Result: %s. %s", is_up, self._remote_log_file)
-        return is_up
 
     def __enter__(self):
         self.start()

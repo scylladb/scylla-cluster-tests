@@ -3088,6 +3088,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
+        self.log.debug("Threads and processes at the end of the test:")
+        for t in threading.enumerate():
+            self.log.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
