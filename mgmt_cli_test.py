@@ -1620,6 +1620,45 @@ class ManagerSanityTests(
         self.log.info('finishing test_manager_sanity_vnodes_tablets_cluster')
 
 
+class ManagerInCloudTests(
+    ManagerBackupTests,
+    ManagerRestoreTests,
+    ManagerRepairTests,
+    ManagerHealthCheckTests
+):
+    def setUp(self):
+        super().setUp()
+        if not self.is_cloud_cluster:
+            raise ValueError("The test is applicable only for Scylla Cloud clusters")
+
+    def prepare_cloud_manager(self):
+        self.log.info("Grant admin permissions to scylla_manager user")
+        self.grant_admin_permissions_to_scylla_manager()
+
+        self.log.info("Disable scheduled backup task to not interfere")
+        self.disable_scheduled_backup_task()
+
+    def test_manager_sanity_cloud(self):
+        """Pretty similar to Manager Sanity test adopted (extended) to be run with Scylla Cloud clusters.
+        The test is not so extensive as the regular test_manager_sanity test, because its purpose is to verify
+        Manager-ScyllaDB in Cloud compatibility and basic functionality. Thus, only basic (backup, restore, repair
+        health-check) verifications are performed.
+        """
+        self.prepare_cloud_manager()
+
+        self.log.info("Generate load and wait for results")
+        self.generate_load_and_wait_for_results()
+
+        with self.subTest('Basic Backup and Restore Test'):
+            self.test_basic_backup()
+        with self.subTest('Repair Multiple Keyspace Types'):
+            self.test_repair_multiple_keyspace_types()
+        with self.subTest('Mgmt cluster Health Check'):
+            self.test_cluster_healthcheck()
+        with self.subTest('Backup Multiple KS\' and Tables'):
+            self.test_backup_multiple_ks_tables()
+
+
 class ManagerRollbackTests(ManagerTestFunctionsMixIn):
 
     def test_mgmt_repair_nemesis(self):
