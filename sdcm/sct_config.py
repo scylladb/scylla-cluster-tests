@@ -35,6 +35,7 @@ from pydantic import BaseModel
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
@@ -233,6 +234,7 @@ class SCTConfiguration(dict):
         'aws', 'aws-siren', 'k8s-local-kind-aws', 'k8s-eks',
         'gce', 'gce-siren', 'k8s-local-kind-gce', 'k8s-gke',
         'k8s-local-kind',
+        'cloud',
     ]
 
     config_options = [
@@ -1778,6 +1780,56 @@ class SCTConfiguration(dict):
 
         dict(name="adaptive_timeout_store_metrics", env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS", type=boolean,
              help="Store adaptive timeout metrics in Argus. Disabled for performance tests only."),
+
+        dict(name="cloud_api_url", env="SCT_CLOUD_API_URL", type=str,
+             help="Scylla Cloud API endpoint URL (e.g., https://app.ext.lab.scylla.cloud/api)"),
+
+        dict(name="cloud_api_token", env="SCT_CLOUD_API_TOKEN", type=str,
+             help="Scylla Cloud API authentication token"),
+
+        dict(name="cloud_account_id", env="SCT_CLOUD_ACCOUNT_ID", type=int,
+             help="Scylla Cloud account ID"),
+
+        dict(name="cloud_credentials_path", env="SCT_CLOUD_CREDENTIALS_PATH", type=str,
+             help="Path to Scylla Cloud credentials file, if stored locally"),
+
+        dict(name="cloud_env", env="SCT_CLOUD_ENV", type=str,
+             help="""Scylla Cloud environment (e.g., lab).
+                  WARNING: environment specific credentials will be read from keystore (s3 or local file) and
+                  will override 'cloud_api_url', 'cloud_api_token' and 'cloud_account_id' parameters"""),
+
+        dict(name="cloud_provider", env="SCT_CLOUD_PROVIDER", type=str,
+             help="Cloud provider for Scylla Cloud deployment (aws, gcp)"),
+
+        dict(name="cloud_region", env="SCT_CLOUD_REGION", type=str,
+             help="Cloud region for Scylla Cloud deployment (e.g., us-east-1, us-central1, etc.)"),
+
+        dict(name="cloud_instance_type_db", env="SCT_CLOUD_INSTANCE_TYPE", type=str,
+             help="Instance type for Scylla Cloud db nodes (e.g., i3.large, n2-highmem-4, etc.)"),
+
+        dict(name="cloud_instance_type_loader", env="SCT_CLOUD_INSTANCE_TYPE_LOADER", type=str,
+             help="Instance type for Scylla Cloud loader nodes (e.g., i3.large, n2-highmem-4, etc.)"),
+
+        dict(name="cloud_use_byoa", env="SCT_CLOUD_USE_BYOA", type=boolean,
+             help="Use Bring Your Own Account for Scylla Cloud deployment"),
+
+        dict(name="cloud_byoa_account_id", env="SCT_CLOUD_BYOA_ACCOUNT_ID", type=str,
+             help="Account ID for BYOA deployment"),
+
+        dict(name="cloud_cluster_network", env="SCT_CLOUD_CLUSTER_NETWORK", type=str,
+             help="CIDR block for Scylla Cloud cluster network (e.g., 10.0.0.0/16)"),
+
+        dict(name="cloud_replication_factor", env="SCT_CLOUD_REPLICATION_FACTOR", type=int,
+             help="Replication factor for Scylla Cloud cluster (default: 3)"),
+
+        dict(name="cloud_allowed_ips", env="SCT_CLOUD_ALLOWED_IPS", type=str_or_list,
+             help="List of allowed IP addresses/CIDR blocks for cluster access"),
+
+        dict(name="cloud_enable_dns", env="SCT_CLOUD_ENABLE_DNS", type=boolean,
+             help="Enable DNS association for Scylla Cloud cluster"),
+
+        dict(name="cloud_free_trial", env="SCT_CLOUD_FREE_TRIAL", type=boolean,
+             help="Use free trial for Scylla Cloud cluster"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1843,6 +1895,9 @@ class SCTConfiguration(dict):
                     'k8s_scylla_cluster_name', 'k8s_loader_cluster_name',
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
                     'eks_cluster_version', 'eks_nodegroup_role_arn'],
+
+        'cloud': ['user_prefix', 'cloud_api_url', 'cloud_account_id', 'cloud_api_token', 'cloud_provider',
+                  'cloud_region', 'cloud_instance_type_db', 'cloud_instance_type_loader'],
     }
 
     defaults_config_files = {
@@ -1863,6 +1918,7 @@ class SCTConfiguration(dict):
             sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/gce_config.yaml'), sct_abs_path('defaults/k8s_gke_config.yaml')],
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
+        "cloud": [sct_abs_path('defaults/cloud_config.yaml')],
     }
 
     per_provider_multi_region_params = {
@@ -1895,6 +1951,7 @@ class SCTConfiguration(dict):
         self.scylla_version = None
         self.scylla_version_upgrade_target = None
         self.is_enterprise = False
+        self.cloud_api_client = None
 
         self.log = logging.getLogger(__name__)
         env = self._load_environment_variables()
@@ -2238,6 +2295,22 @@ class SCTConfiguration(dict):
                     raise ValueError(f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                                      f"or a list with the same length as perf_gradual_throttle_steps for {workload}")
 
+        # 22 Read cloud backend credentials, if a specific cloud environment is set
+        if cluster_backend == "cloud" and (cloud_env := self.get('cloud_env')):
+            if creds_file := self.get('cloud_credentials_path'):
+                from sdcm.utils.cloud_api_utils import get_cloud_rest_credentials_from_file
+                creds = get_cloud_rest_credentials_from_file(creds_file, cloud_env)
+            else:
+                from sdcm.keystore import KeyStore
+                creds = KeyStore().get_cloud_rest_credentials(cloud_env)
+            self.update({
+                'cloud_api_url': creds.get('base_url'),
+                'cloud_account_id': creds.get('account_id'),
+                'cloud_api_token': creds.get('api_token')
+            })
+            self.cloud_api_client = ScyllaCloudAPIClient(
+                api_url=self['cloud_api_url'], auth_token=self['cloud_api_token'], raise_for_status=True)
+
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path('defaults/docker_images'))
         if docker_images_dir.is_dir():
@@ -2482,6 +2555,8 @@ class SCTConfiguration(dict):
             self._check_multi_region_params(backend)
         if backend == 'docker':
             self._validate_docker_backend_parameters()
+        if backend == 'cloud':
+            self._validate_cloud_backend_parameters()
 
         self._verify_data_volume_configuration(backend)
 
@@ -2660,7 +2735,7 @@ class SCTConfiguration(dict):
             options_must_exist += ['docker_image']
         elif backend == 'baremetal':
             options_must_exist += ['db_nodes_public_ip']
-        elif 'k8s' in backend:
+        elif 'k8s' in backend or backend == 'cloud':
             options_must_exist += ['scylla_version']
 
         if not options_must_exist:
@@ -2807,6 +2882,9 @@ class SCTConfiguration(dict):
             docker_repo = self.get('docker_image')
             scylla_version = self.get('scylla_version')
             _is_enterprise = 'enterprise' in docker_repo
+        elif backend == 'cloud':
+            scylla_version = self.get('scylla_version') or self.cloud_api_client.current_scylla_version
+            _is_enterprise = is_enterprise(scylla_version)
         self.scylla_version = scylla_version
         self.is_enterprise = _is_enterprise
         self.update_argus_with_version(scylla_version, "scylla-server-target")
@@ -2969,6 +3047,68 @@ class SCTConfiguration(dict):
         zones = racks_count * regions
         if loaders >= zones:
             raise ValueError("Rack-aware validation requires zones without loaders.")
+
+    def _validate_cloud_backend_parameters(self):
+        # validate if selected cloud provider is supported
+        cloud_provider = self.get('cloud_provider')
+        if cloud_provider not in ['aws', 'gcp']:
+            raise ValueError(f"Unsupported Scylla Cloud provider: {cloud_provider}. Must be 'aws' or 'gcp'")
+
+        # validate if selected Scylla version is supported
+        supported_versions = [
+            v['version'] for v in self.cloud_api_client.get_scylla_versions()['scyllaVersions']
+            if v['newCluster'] == 'ENABLED'
+        ]
+        if (selected_version := self.get('scylla_version')) not in supported_versions:
+            raise ValueError(f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
+                             f"Currently supported versions: {', '.join(supported_versions)}")
+
+        # validate if selected region is supported by the cloud provider
+        provider_id = self.cloud_api_client.cloud_provider_ids[CloudProviderType(cloud_provider.upper())]
+        supported_regions = [
+            r['externalId'] for r in self.cloud_api_client.get_regions(
+                cloud_provider_id=provider_id)['regions']
+        ]
+        region_name = self.get('cloud_region')
+        if region_name not in supported_regions:
+            raise ValueError(f"Selected region '{region_name}' is not supported by cloud provider '{cloud_provider}'.\n"
+                             f"Supported regions for '{cloud_provider}': {', '.join(supported_regions)}")
+
+        # validate if instance types are supported in the selected region
+        region_id = self.cloud_api_client.get_region_id_by_name(
+            cloud_provider_id=provider_id, region_name=region_name)
+        supported_instances = [
+            i['externalId'] for i in self.cloud_api_client.get_instance_types(
+                cloud_provider_id=provider_id, region_id=region_id)['instances']
+        ]
+        if (db_instance_type := self.get('cloud_instance_type_db')) not in supported_instances:
+            raise ValueError(
+                f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
+                f"cloud provider '{cloud_provider}'.\n"
+                f"Supported instance types: {', '.join(supported_instances)}")
+        if (loader_instance_type := self.get('cloud_instance_type_loader')) not in supported_instances:
+            raise ValueError(
+                f"Loader instance type '{loader_instance_type}' is not supported in region '{region_name}' for "
+                f"cloud provider '{cloud_provider}'.\n"
+                f"Supported instance types: {', '.join(supported_instances)}")
+
+        rf = self.get('cloud_replication_factor')
+        n_nodes = self.get('n_db_nodes')
+        if rf is None:
+            self['cloud_replication_factor'] = n_nodes
+        elif rf > n_nodes:
+            raise ValueError(f"cloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+
+        if self.get('n_monitor_nodes') > 0:
+            self.log.warning("Cloud provides built-in monitoring. Setting n_monitor_nodes to 0.")
+            self['n_monitor_nodes'] = 0
+
+        # ensure that client is allowed to access the cloud API
+        client_ip = self.cloud_api_client.client_ip
+        current_allowed_ips = self.get('cloud_allowed_ips') or []
+        if client_ip not in current_allowed_ips:
+            current_allowed_ips.append(f"{client_ip}/32")
+            self['cloud_allowed_ips'] = current_allowed_ips
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
