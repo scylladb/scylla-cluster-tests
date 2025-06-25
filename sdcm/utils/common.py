@@ -39,7 +39,7 @@ import traceback
 import ctypes
 import shlex
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
 from contextlib import closing, contextmanager
@@ -252,6 +252,7 @@ class S3Storage():
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
     num_download_attempts = 5
+    s3_host_name_regex = re.compile(r"https?://([a-zA-Z0-9-]+\.s3\.amazonaws\.com)")
 
     def __init__(self, bucket=None):
         if bucket:
@@ -312,6 +313,18 @@ class S3Storage():
         acl_obj.put(ACL='', AccessControlPolicy={'Grants': grants, 'Owner': acl_obj.owner})
 
     def download_file(self, link, dst_dir):
+        """Download file from S3 bucket or Argus proxy link."""
+
+        if not self.s3_host_name_regex.match(urlparse(link).hostname):
+            # get the actual s3 link from Argus first
+            creds = KeyStore().get_argus_rest_credentials()
+            headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
+
+            response = requests.head(link, allow_redirects=True, headers=headers)
+            link = response.history[-1].headers.get('location', link)
+            # remove query parameters from the link, we don't need them for S3 download
+            link = urljoin(link, urlparse(link).path)
+
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
         file_name = os.path.basename(key_name)
         try:
