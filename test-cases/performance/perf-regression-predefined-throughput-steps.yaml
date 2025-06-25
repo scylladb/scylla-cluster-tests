@@ -34,6 +34,14 @@ stress_cmd_m: [
   "cassandra-stress mixed  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
 ]
 
+# Read the entire data set to ensure disk only reads
+stress_cmd_read_disk: [
+  "cassandra-stress read  cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..162500001",
+  "cassandra-stress read  cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=162500002..325000002",
+  "cassandra-stress read  cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=325000003..487500003",
+  "cassandra-stress read  cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=487500004..650000004"
+]
+
 round_robin: true
 
 n_db_nodes: 3
