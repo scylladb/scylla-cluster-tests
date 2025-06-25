@@ -29,7 +29,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
-from ..performance_regression_test import PerformanceTestWorkload
+from performance_regression_test import PerformanceTestWorkload
 
 LOGGER = logging.getLogger(__name__)
 

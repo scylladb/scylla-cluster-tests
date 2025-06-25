@@ -86,14 +86,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if save_stats:
             self.create_test_stats(test_name=test_name, sub_type=sub_type,
                                    doc_id_with_timestamp=True, append_sub_test_to_name=False)
-
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
-
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
-
 
     def create_alternator_table(self, schema, alternator_write_isolation):
         node = self.db_cluster.nodes[0]
