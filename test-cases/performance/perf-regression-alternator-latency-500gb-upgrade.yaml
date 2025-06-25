@@ -43,7 +43,6 @@ dynamodb_primarykey_type: HASH_AND_RANGE
 
 user_prefix: 'perf-alternator-latency-upgrade'
 space_node_threshold: 644245094
-ami_id_db_scylla_desc: 'VERSION_DESC'
 
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'

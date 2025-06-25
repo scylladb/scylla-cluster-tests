@@ -49,7 +49,7 @@ user_prefix: 'perf-alternator-latency'
 space_node_threshold: 644245094
 
 use_hdrhistogram: true
-stress_target: 15000
+alternator_perf_stress_target: 15000
 
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'

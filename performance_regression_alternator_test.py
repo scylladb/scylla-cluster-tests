@@ -49,28 +49,22 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_operation_errors())
 
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
-        self.hdr_tags = ['read', 'write']
         self.row_name_override = row_name
         if test_name.endswith('_throughput_read'):
             self.params['workload_name'] = 'throughput'
             cycle_name = 'throughput-read'
-            hdr_workload = PerformanceTestWorkload.READ
         elif test_name.endswith('_throughput_write'):
             self.params['workload_name'] = 'throughput'
             cycle_name = 'throughput-write'
-            hdr_workload = PerformanceTestWorkload.WRITE
         elif test_name.endswith('_read'):
             self.params['workload_name'] = 'read'
             cycle_name = '100% read'
-            hdr_workload = PerformanceTestWorkload.READ
         elif test_name.endswith('_write'):
             self.params['workload_name'] = 'write'
             cycle_name = '100% write'
-            hdr_workload = PerformanceTestWorkload.WRITE
         elif test_name.endswith('_mixed'):
             self.params['workload_name'] = 'mixed'
             cycle_name = '50% read 50% write'
-            hdr_workload = PerformanceTestWorkload.MIXED
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
             
@@ -78,11 +72,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
             return self._workload(*args, **kwargs)
 
-        ret = execute_workload_with_latency_calculator_decorator(self, hdr_workload=hdr_workload, test_name=test_name, stress_num=stress_num, **kwargs)
+        ret = execute_workload_with_latency_calculator_decorator(self, test_name=test_name, stress_num=stress_num, **kwargs)
         return ret
     
     def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',
-                  save_stats=True, is_alternator=True, hdr_workload=None):
+                  save_stats=True, is_alternator=True):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
 
@@ -96,9 +90,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
         self.get_stress_results(queue=stress_queue, store_results=True)
-        if self.params['use_hdrhistogram']:
-            assert hdr_workload is not None, "hdr_workload must be provided when use_hdrhistogram is True"
-            self.build_histogram(hdr_workload, hdr_tags=self.hdr_tags)
 
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
@@ -439,7 +430,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         )
         duration = self.params.get('stress_duration') / len(tests_to_run)
         try:
-            target = self.params.get('stress_target')
+            target = self.params.get('alternator_perf_stress_target')
             self.log.info(f"Using target {target} for stress tests.")
         except KeyError:
             target = 15000

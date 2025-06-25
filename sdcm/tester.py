@@ -2184,7 +2184,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                 timeout=timeout,
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
-                                round_robin=round_robin, params=self.params).run()
+                                round_robin=round_robin, params=self.params,
+                                cluster_tester=self).run()
 
     def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):

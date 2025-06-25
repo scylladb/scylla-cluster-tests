@@ -262,9 +262,9 @@ class SCTConfiguration(dict):
                   Time in minutes, Time of execution for stress commands from stress_cmd parameters
                   and is used in test duration calculation
              """),
-        dict(name="stress_target", env="SCT_STRESS_TARGET", type=int,
+        dict(name="alternator_perf_stress_target", env="SCT_ALTERNATOR_PERF_STRESS_TARGET", type=int,
              help="""
-                  Number of operations per second to achieve in stress commands.
+                  Number of operations per second to achieve in stress commands for alternator testing.
              """),
         dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_space_separated_ints,
              help="""Number list of database data nodes in multiple data centers. To use with

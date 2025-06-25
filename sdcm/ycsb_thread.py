@@ -29,6 +29,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
+from ..performance_regression_test import PerformanceTestWorkload
 
 LOGGER = logging.getLogger(__name__)
 
@@ -125,13 +126,14 @@ class YcsbStressThread(DockerBasedStressThread):
         'WRITE': 'write',
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cluster_tester, **kwargs):
         super().__init__(*args, **kwargs)
         uuid_val = uuid.uuid4()
         self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{uuid_val}')
         LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
         os.makedirs(self.directory_for_hdr_files, exist_ok=True)
         self.hdrh_logger_contextes = []
+        self.cluster_tester = cluster_tester
 
     def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
@@ -415,6 +417,22 @@ class YcsbStressThread(DockerBasedStressThread):
                     retry=0,
                 )
                 result = self.parse_final_output(result)
+                if self.params['use_hdrhistogram']:
+                    if self.cluster_tester is None:
+                        LOGGER.error('Cluster self is not set, cannot build HDR histograms')
+                    else:
+                        hdr_workload = None
+                        if self.params['workload_name'] == 'read':
+                            hdr_workload = PerformanceTestWorkload.READ
+                        elif self.params['workload_name'] == 'write':
+                            hdr_workload = PerformanceTestWorkload.WRITE
+                        elif self.params['workload_name'] == 'mixed':
+                            hdr_workload = PerformanceTestWorkload.MIXED
+                        else:
+                            LOGGER.error(f'Unknown workload name: {self.params["workload_name"]}, hdr histograms will not be built')
+                        if hdr_workload is not None:
+                            self.cluster_tester.build_histogram(hdr_workload, hdr_tags=['read', 'write'])
+
             except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
                 ycsb_failure_event = YcsbStressEvent.failure(
