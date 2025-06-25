@@ -67,7 +67,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             cycle_name = '50% read 50% write'
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
-            
+
         @latency_calculator_decorator(cycle_name=cycle_name)
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
             return self._workload(*args, **kwargs)
@@ -340,6 +340,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         run_mixed = mode == 'full' or mode == 'basic' or mode == 'basic-mixed'
         run_read_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-read'
         run_write_throughput = mode == 'full' or mode == 'basic' or mode == 'basic-throoughput' or mode == 'basic-throughput-write'
+        self.hdr_tags = [ 'read', 'write' ]
 
 
         def run_read_cql():
