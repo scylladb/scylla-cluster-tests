@@ -132,7 +132,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         """
         workload_type = "read_disk_only"
         workload = Workload(workload_type=workload_type,
-                            cs_cmd_tmpl=self.params.get('stress_cmd_read_disk'),
+                            cs_cmd_tmpl=self.params.get('stress_read_cmd'),
                             cs_cmd_warm_up=None,
                             num_threads=self.params["perf_gradual_threads"][workload_type],
                             throttle_steps=self.throttle_steps(workload_type),
