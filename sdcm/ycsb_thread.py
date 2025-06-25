@@ -29,7 +29,6 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
-from performance_regression_test import PerformanceTestWorkload
 
 LOGGER = logging.getLogger(__name__)
 
@@ -421,6 +420,9 @@ class YcsbStressThread(DockerBasedStressThread):
                     if self.cluster_tester is None:
                         LOGGER.error('Cluster self is not set, cannot build HDR histograms')
                     else:
+                        # we need to import it here due to cyclic import issues
+                        from performance_regression_test import PerformanceTestWorkload
+
                         hdr_workload = None
                         if self.params['workload_name'] == 'read':
                             hdr_workload = PerformanceTestWorkload.READ
