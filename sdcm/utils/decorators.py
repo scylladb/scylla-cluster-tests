@@ -241,8 +241,6 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 workload = 'write'
             elif 'mixed' in test_name:
                 workload = 'mixed'
-            elif '_throughput' in test_name:
-                workload = 'throughput'
             elif tester.params.get('workload_name'):
                 workload = tester.params['workload_name']
             else:

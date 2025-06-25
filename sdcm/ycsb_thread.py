@@ -125,13 +125,14 @@ class YcsbStressThread(DockerBasedStressThread):
         'WRITE': 'write',
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cluster_tester, **kwargs):
         super().__init__(*args, **kwargs)
         uuid_val = uuid.uuid4()
         self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{uuid_val}')
         LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
         os.makedirs(self.directory_for_hdr_files, exist_ok=True)
         self.hdrh_logger_contextes = []
+        self.cluster_tester = cluster_tester
 
     def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
@@ -222,7 +223,8 @@ class YcsbStressThread(DockerBasedStressThread):
             stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
-
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd += " -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-"
         return stress_cmd
 
     @staticmethod
@@ -266,10 +268,16 @@ class YcsbStressThread(DockerBasedStressThread):
         return ret
     
     def get_results(self):
+        LOGGER.info(f'QWERTY calling get_results()')
         results = super().get_results()
+        LOGGER.info(f'QWERTY got results')
         if self.params.get("use_hdrhistogram"):
             self._terminate_hdr_loggers()
             self._fix_hdr_files()
+            if self.cluster_tester is None:
+                LOGGER.error('Cluster self is not set, cannot build HDR histograms')
+            else:
+                self.cluster_tester.build_histogram(self.params['workload_name'], hdr_tags=['read', 'write'])
         return results
     
     def _fix_hdr_files(self):
@@ -399,8 +407,10 @@ class YcsbStressThread(DockerBasedStressThread):
 
         result = {}
         ycsb_failure_event = ycsb_finish_event = None
+        LOGGER.info(f'{id(self)} starting YCSB stress command: {node_cmd}')
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
+                LOGGER.info(f'{id(self)} running YCSB stress command: {node_cmd}')
                 result = cmd_runner.run(
                     cmd=node_cmd,
                     timeout=self.timeout + self.shutdown_timeout,
@@ -415,7 +425,10 @@ class YcsbStressThread(DockerBasedStressThread):
                     retry=0,
                 )
                 result = self.parse_final_output(result)
+                LOGGER.info(f'{id(self)} YCSB stress command finished')
+                LOGGER.info(f'{id(self)} YCSB stress command result: {result}')
             except Exception as exc:
+                LOGGER.exception(f'{id(self)} YCSB stress command failed')
                 errors_str = format_stress_cmd_error(exc)
                 ycsb_failure_event = YcsbStressEvent.failure(
                     node=cmd_runner_name,
@@ -426,8 +439,9 @@ class YcsbStressThread(DockerBasedStressThread):
                 ycsb_failure_event.publish()
                 raise
             finally:
+                LOGGER.info(f'{id(self)} YCSB stress command finished, cleaning up')
                 ycsb_finish_event = YcsbStressEvent.finish(
                     node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name)
                 ycsb_finish_event.publish()
-
+        LOGGER.info(f'{id(self)} YCSB stress command done')
         return loader, result, ycsb_failure_event or ycsb_finish_event

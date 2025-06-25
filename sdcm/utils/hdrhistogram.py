@@ -3,6 +3,7 @@ import os.path
 import time
 import logging
 import multiprocessing
+import traceback
 from typing import Any
 from dataclasses import asdict, dataclass, make_dataclass
 from concurrent.futures.process import ProcessPoolExecutor
@@ -203,6 +204,7 @@ class _HdrRangeHistogramBuilder:
         return self._get_summary_for_operation_by_hdr_tag(histogram)
 
     def _build_histogram_from_file(self, hdr_file: str, hdr_tag: str) -> _HdrRangeHistogram | None:
+        LOGGER.info(f'QWERTY building histogram from file {hdr_file} with tag {hdr_tag}')
         def analyze_hdr_file():
             """
             :return: tuple(tag_not_found, file_with_correct_time_interval)
@@ -213,6 +215,7 @@ class _HdrRangeHistogramBuilder:
             if not (next_hist := hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
                                                                         range_end_time_sec=self.end_time,
                                                                         absolute=self.absolute_time)):
+                LOGGER.info(f'QWERTY no histogram entry found in file {hdr_file} starting from {self.start_time} ending at {self.end_time} absolute_time={self.absolute_time}')
                 return True, False
 
             tag_not_found = True
@@ -220,6 +223,8 @@ class _HdrRangeHistogramBuilder:
             while next_hist:
                 tag = next_hist.get_tag()
                 if tag == hdr_tag:
+                    if tag_not_found:
+                        LOGGER.info(f'QWERTY found histogram entry with tag {hdr_tag} in file {hdr_file}')
                     if histogram.get_start_time_stamp() == 0:
                         histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
                     histogram.add(next_hist)
@@ -228,6 +233,7 @@ class _HdrRangeHistogramBuilder:
                 next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
                                                                    range_end_time_sec=self.end_time,
                                                                    absolute=self.absolute_time)
+            LOGGER.info(f'QWERTY finished reading file {hdr_file} with tag {hdr_tag}, tag_not_found={tag_not_found} file_with_correct_time_interval={file_with_correct_time_interval}')
             return tag_not_found, file_with_correct_time_interval
 
         if not os.path.exists(hdr_file):
@@ -239,11 +245,13 @@ class _HdrRangeHistogramBuilder:
         _, file_with_correct_time_interval = analyze_hdr_file()
 
         if not file_with_correct_time_interval:
+            LOGGER.info(f'QWERTY the file {hdr_file} does not include the time interval from `{self.start_time}` to `{self.end_time}`')
             # Keep this message for future debug
             LOGGER.debug("The file '%s' does not include the time interval from `%s` to `%s`",
                          hdr_file, self.start_time, self.end_time)
             return None
 
+        LOGGER.info(f'QWERTY collected histogram from file {hdr_file} with tag {hdr_tag}: {histogram}')
         # Keep this message for future debug
         LOGGER.debug("Collect data from the file '%s' (time interval from `%s` to `%s`)",
                      hdr_file, self.start_time, self.end_time)
@@ -260,8 +268,14 @@ class _HdrRangeHistogramBuilder:
         """
         if not base_path:
             base_path = os.path.abspath(os.path.curdir)
+        LOGGER.info(f'QWERTY looking for hdr files in {base_path} with pattern {self.hdrh_files_pattern}')
         hdr_files = []
         for hdr_file in glob.glob(self.hdrh_files_pattern, root_dir=base_path, recursive=True):
+            try:
+                size = os.stat(os.path.join(base_path, hdr_file)).st_size
+            except:
+                size = -1
+            LOGGER.info(f'QWERTY found hdr file {os.path.join(base_path, hdr_file)} in {base_path}, size {size}')
             hdr_files.append(os.path.join(base_path, hdr_file))
         return hdr_files
 
@@ -280,6 +294,7 @@ class _HdrRangeHistogramBuilder:
 
             final_hst.start_time = min(final_hst.start_time, hst.start_time)
             final_hst.end_time = max(final_hst.end_time, hst.end_time)
+        LOGGER.info(f'QWERTY merged histograms with tag {final_hst.hdr_tag} result {final_hst}')
         return final_hst
 
     def _build_histogram_from_dir(self, base_path: str, hdr_tag: str, ) -> _HdrRangeHistogram:
@@ -297,6 +312,7 @@ class _HdrRangeHistogramBuilder:
                 continue
 
             file_range_histogram = self._build_histogram_from_file(hdr_file, hdr_tag)
+            LOGGER.info(f'QWERTY collected histogram from file {hdr_file} with tag {hdr_tag}: {file_range_histogram}')
             if file_range_histogram:
                 collected_histograms.append(file_range_histogram)
         return self._merge_range_histograms(collected_histograms)
@@ -312,12 +328,13 @@ class _HdrRangeHistogramBuilder:
         #    Examples: 'fn--write', 'fn--write-batch', 'fn--get', 'fn--get-many', 'fn--read'.
         # 3) 'scylla-bench' has identical tag names for reads and writes - 'co-fixed' and 'raw'.
         #    It doesn't have 'mixed' workload type, so it's mode should be used for detecting the tag data type.
-        # 4) NOT_SUPPORTED: 'ycsb', it supports HDR histograms, but doesn't use tags in it.
-        #    So, the 'ycsb' case should be handled separately.
+        # 4) 'ycsb', it supports HDR histograms, but doesn't use tags in it.
+        #    We add tag to files ourselves.
         hdr_tag = hdr_tag.lower().strip()
+        LOGGER.info(f'QWERTY checking hdr_tag {hdr_tag} for workload type detection')
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
-        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan", "mixed")):
+        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan")):
             return "READ"
         elif self.stress_operation in ("WRITE", "READ"):
             # branch for the scylla-bench case with its 'co-fixed' and 'raw' tags
@@ -350,16 +367,27 @@ class _HdrRangeHistogramBuilder:
         return None
 
     def build_histogram_summary_by_tag(self, path: str, hdr_tag: str) -> dict[str, dict[str, int]] | None:
-        if os.path.exists(path) and os.path.isfile(path):
-            histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
-            if not histogram:
+        LOGGER.info(f'QWERTY running build_histogram_summary_by_tag for tag {hdr_tag} in path {path}')
+        try:
+            if os.path.exists(path) and os.path.isfile(path):
+                histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
+                if not histogram:
+                    LOGGER.info(f'QWERTY exiting with None for tag {hdr_tag} in path {path}')
+                    return None
+            elif os.path.exists(path) and os.path.isdir(path):
+                histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
+            else:
+                LOGGER.info(f'QWERTY exiting with None for tag {hdr_tag} in path {path}')
                 return None
-        elif os.path.exists(path) and os.path.isdir(path):
-            histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
-        else:
-            return None
 
-        return self._get_summary_for_operation_by_hdr_tag(histogram)
+            val = self._get_summary_for_operation_by_hdr_tag(histogram)
+            LOGGER.info(f'QWERTY exiting with value {val} for tag {hdr_tag} in path {path}')
+            return val
+        except Exception as exc:
+            LOGGER.exception("QWERTY unhandled exception while building histogram summary for tag '%s' in path '%s': %s",
+                             hdr_tag, path, exc)
+            LOGGER.error(traceback.format_exc())
+            raise
 
     def _build_histograms_summary_with_interval_by_tag(
             self, path: str, hdr_tag: str,

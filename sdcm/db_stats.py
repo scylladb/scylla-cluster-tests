@@ -729,6 +729,7 @@ class TestStatsMixin(Stats):
     def update_hdrhistograms(self, histogram_name, histogram_data):
         if "histograms" not in self._stats['results']:
             self._stats['results']['histograms'] = {}
+        LOGGER.info(f'QWERTY histogram_name: {histogram_name}, histogram_data: {histogram_data}')
         if histogram_name not in self._stats['results']['histograms']:
             self._stats['results']['histograms'][histogram_name] = [histogram_data]
         else:
