@@ -271,6 +271,10 @@ class YcsbStressThread(DockerBasedStressThread):
         if self.params.get("use_hdrhistogram"):
             self._terminate_hdr_loggers()
             self._fix_hdr_files()
+            if self.cluster_tester is None:
+                LOGGER.error('Cluster self is not set, cannot build HDR histograms')
+            else:
+                self.cluster_tester.build_histogram(self.params['workload_name'], hdr_tags=['read', 'write'])
         return results
     
     def _fix_hdr_files(self):
@@ -416,11 +420,6 @@ class YcsbStressThread(DockerBasedStressThread):
                     retry=0,
                 )
                 result = self.parse_final_output(result)
-                if self.params['use_hdrhistogram']:
-                    if self.cluster_tester is None:
-                        LOGGER.error('Cluster self is not set, cannot build HDR histograms')
-                    else:
-                        self.cluster_tester.build_histogram(self.params['workload_name'], hdr_tags=['read', 'write'])
 
             except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
