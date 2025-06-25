@@ -374,6 +374,12 @@ class BaseNode(AutoSshContainerMixin):
     def network_configuration(self):
         raise NotImplementedError()
 
+    def do_default_installations(self):
+        """
+        Install default packages for all types of nodes
+        """
+        self.install_package('rsync')
+
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
@@ -388,6 +394,7 @@ class BaseNode(AutoSshContainerMixin):
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
             self.configure_remote_logging()
+        self.do_default_installations()
         self.start_task_threads()
         if self.test_config.REUSE_CLUSTER:
             ContainerManager.destroy_unregistered_containers(self)
