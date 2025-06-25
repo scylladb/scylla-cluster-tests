@@ -142,13 +142,68 @@ class ScyllaBenchThread(DockerBasedStressThread):
         #       and not really needed having 'coordinated omission fixed' latency one.
         self.hdr_tags = ["co-fixed"]
 
+    def get_datacenter_name_for_loader(self, loader):
+        datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+        datacenter_cmd = ""
+        if loader_dc := datacenter_name_per_region.get(loader.region):
+            datacenter_cmd = f" -datacenter={loader_dc} "
+        else:
+            LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                         loader.region, datacenter_name_per_region)
+        return datacenter_cmd
+
+    def adjust_cmd_node_option(self, stress_cmd, loader, cmd_runner):
+        """
+            Adjusts the stress command to include node and rack options based on the current configuration.
+            This method modifies the provided `stress_cmd` string to specify which database nodes and racks
+            should be targeted by the stress tool. It appends node IPs and, if applicable, rack and datacenter
+            information to the command. The adjustments depend on the loader's region, rack, and the test
+            configuration parameters.
+            Args:
+                stress_cmd (str): The initial stress command to be adjusted.
+                loader: The loader node object for which the command is being constructed.
+                cmd_runner: The object used to run commands on the loader.
+            Returns:
+                str: The adjusted stress command string with node and rack options appended as needed.
+        """
+        LOGGER.debug("Start adjusting stress command to use nodes: %s", stress_cmd)
+        dc_options_cmd = ""
+        if self.params.get("rack_aware_loader"):
+            LOGGER.debug("Rack-aware loader is enabled, trying to pin stress command to rack")
+            # if there are multiple rack/AZs configured, we'll try to configue s-b to pin to them
+            rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
+            by_region_rack_names = self.loader_set.get_rack_names_per_datacenter_from_rack_mapping(rack_names)
+            if any(len(racks) > 1 for racks in by_region_rack_names.values()):
+                if not (loader_rack := rack_names.get((str(loader.region), str(loader.rack)))):
+                    # NOTE: fail fast if we cannot find proper rack value when rack-awareness is enabled
+                    raise ValueError(
+                        f"Rack name not found for loader {loader} in region {loader.region} and rack {loader.rack}")
+
+                dc_options_cmd = f"-rack={loader_rack} "
+                LOGGER.debug("Rack value for stress command:  %s", dc_options_cmd)
+
+        if self.loader_set.test_config.MULTI_REGION or dc_options_cmd:
+            # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
+            # not for loader nodes. So call next function for DB nodes
+            if not (loader_dc := self.get_datacenter_name_for_loader(loader)):
+                # NOTE: fail fast if we cannot find datacenter name
+                raise ValueError(f"Datacenter name not found for loader {loader} in region {loader.region}")
+            dc_options_cmd += loader_dc
+
+        node_ip_list = [n.cql_address for n in self.node_list]
+
+        stress_cmd += f" -nodes {','.join(node_ip_list)}"
+        if dc_options_cmd:
+            stress_cmd += f" {dc_options_cmd}"
+        LOGGER.debug("Final stress command: %s", stress_cmd)
+        return stress_cmd
+
     def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
         if self.connection_bundle_file:
             stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
         else:
             # Select first seed node to send the scylla-bench cmds
-            ips = ",".join([n.cql_address for n in self.node_list])
-            stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
+            stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
 
             if self.params.get("client_encrypt"):
                 for ssl_file in loader.ssl_conf_dir.iterdir():
