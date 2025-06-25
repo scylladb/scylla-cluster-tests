@@ -133,6 +133,12 @@ def call(Map pipelineParams) {
                      '\tSCT_USE_MGMT=false'
                      ),
                  name: 'extra_environment_variables')
+            booleanParam(defaultValue: false,
+                         description: 'if true, use job throttling to limit the number of concurrent builds',
+                         name: 'use_job_throttling')
+            string(defaultValue: null,
+                description: 'if set would override the default job throttling category',
+                name: 'job_throttle_category')
 
             // BYO ScyllaDB Configuration
             separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
@@ -258,6 +264,9 @@ def call(Map pipelineParams) {
                         } else {
                             sub_tests = [pipelineParams.test_name]
                         }
+                        // select the step function to use for throttling, if not throttling, it's a no-op
+                        def throttle_closure = params.use_job_throttling ? this.&throttle : { labels, closure -> closure() }
+                        def job_throttle_category = params.job_throttle_category ?: "SCT-perf-${builder.region}"
                         for (t in sub_tests) {
                             def perf_test
                             def sub_test = t
@@ -495,7 +504,9 @@ def call(Map pipelineParams) {
                                 }
                             }
                         }
-                        parallel tasks
+                        throttle_closure([job_throttle_category]) {
+                            parallel tasks
+                        }
                     }
                 }
             }
