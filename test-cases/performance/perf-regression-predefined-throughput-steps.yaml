@@ -47,7 +47,8 @@ round_robin: true
 n_db_nodes: 3
 n_loaders: 4
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i7i.4xlarge'
+force_run_iotune: true
 instance_type_loader: 'c7i.8xlarge'
 instance_type_monitor: 't3.small'
 use_capacity_reservation: true
