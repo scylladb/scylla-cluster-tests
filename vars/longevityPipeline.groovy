@@ -57,7 +57,9 @@ def call(Map pipelineParams) {
 	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
             string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
-            string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
+            string(defaultValue: '',
+                   description: 'ScyllaDB packages repository e.g., http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   name: 'scylla_repo')
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
