@@ -26,7 +26,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
 
-from performance_regression_test import PerformanceRegressionTest, PerformanceTestWorkload
+from performance_regression_test import PerformanceRegressionTest
 from upgrade_test import UpgradeTest
 from typing import Optional, Literal
 

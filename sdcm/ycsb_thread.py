@@ -420,20 +420,7 @@ class YcsbStressThread(DockerBasedStressThread):
                     if self.cluster_tester is None:
                         LOGGER.error('Cluster self is not set, cannot build HDR histograms')
                     else:
-                        # we need to import it here due to cyclic import issues
-                        from performance_regression_test import PerformanceTestWorkload
-
-                        hdr_workload = None
-                        if self.params['workload_name'] == 'read':
-                            hdr_workload = PerformanceTestWorkload.READ
-                        elif self.params['workload_name'] == 'write':
-                            hdr_workload = PerformanceTestWorkload.WRITE
-                        elif self.params['workload_name'] == 'mixed':
-                            hdr_workload = PerformanceTestWorkload.MIXED
-                        else:
-                            LOGGER.error(f'Unknown workload name: {self.params["workload_name"]}, hdr histograms will not be built')
-                        if hdr_workload is not None:
-                            self.cluster_tester.build_histogram(hdr_workload, hdr_tags=['read', 'write'])
+                        self.cluster_tester.build_histogram(self.params['workload_name'], hdr_tags=['read', 'write'])
 
             except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
