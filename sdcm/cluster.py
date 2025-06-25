@@ -374,6 +374,14 @@ class BaseNode(AutoSshContainerMixin):
     def network_configuration(self):
         raise NotImplementedError()
 
+    def do_default_installations(self):
+        """
+        Install default packages for all types of nodes
+        """
+
+        # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
+        self.install_package('rsync')
+
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
@@ -388,6 +396,7 @@ class BaseNode(AutoSshContainerMixin):
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
             self.configure_remote_logging()
+        self.do_default_installations()
         self.start_task_threads()
         if self.test_config.REUSE_CLUSTER:
             ContainerManager.destroy_unregistered_containers(self)
@@ -2081,7 +2090,6 @@ class BaseNode(AutoSshContainerMixin):
         self.log.info("Installing Scylla...")
 
         self.download_scylla_repo(scylla_repo)
-        # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
         if self.distro.is_rhel_like:
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if (self.distro.is_centos9 or self.distro.is_rhel8 or self.distro.is_oel8 or self.distro.is_rocky8 or

@@ -15,6 +15,9 @@ class DummyNode(sdcm.cluster.BaseNode):
         super().init()
         self.remoter.stop()
 
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
+
     def _get_private_ip_address(self):
         # Expected node name like : node1, node2, node3 ...
         return '127.0.0.%s' % self.name.replace('node', '')

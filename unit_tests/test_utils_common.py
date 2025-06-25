@@ -126,6 +126,9 @@ class DummyNode(BaseNode):
         self.remoter.stop()
         self.remoter = Remoter(self.system_log)
 
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
+
     def _set_keep_duration(self, duration_in_hours: int) -> None:
         pass
 
