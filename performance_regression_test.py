@@ -835,13 +835,13 @@ class PerformanceRegressionTest(ClusterTester):
         end_time = time.time()
 
         histogram_total_data = self.get_hdrhistogram(
-            hdr_tags=hdr_tags, stress_operation=workload.value,
+            hdr_tags=hdr_tags, stress_operation=workload,
             start_time=start_time, end_time=end_time)
         self.update_hdrhistograms(histogram_name="test_histogram",
                                   histogram_data=histogram_total_data)
 
         histogram_data_by_interval = self.get_hdrhistogram_by_interval(
-            hdr_tags=hdr_tags, stress_operation=workload.value,
+            hdr_tags=hdr_tags, stress_operation=workload,
             start_time=start_time, end_time=end_time)
 
         self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
