@@ -76,7 +76,7 @@ class VirtualMachineProvider:
                 "network_profile": {
                     "network_interfaces": [{
                         "id": nic_id,
-                        "properties": {"deleteOption": "Delete"}
+                        "properties": {"deleteOption": "Detach"}
                     }],
                 },
             }
@@ -126,6 +126,7 @@ class VirtualMachineProvider:
                 if err.code == 'OperationPreempted':
                     raise OperationPreemptedError(err)  # spot instance preemption, abort provision immediately
             except AzureError as err:
+                LOGGER.error("Error when waiting for creation of VM %s: %s", definition.name, str(err))
                 error_to_raise = err
         if error_to_raise:
             raise ProvisionError(error_to_raise)
