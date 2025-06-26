@@ -215,6 +215,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 raise ValueError(
                     f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'")
 
+            row_name = getattr(_self, 'row_name_override', None)
             # Keep for debug purposes
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
@@ -240,6 +241,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 workload = 'write'
             elif 'mixed' in test_name:
                 workload = 'mixed'
+            elif '_throughput' in test_name:
+                workload = 'throughput'
             elif tester.params.get('workload_name'):
                 workload = tester.params['workload_name']
             else:
@@ -299,7 +302,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         workload=workload,
                         name="Steady State",
                         description="Latencies without any operation running",
-                        cycle=0,
+                        cycle=row_name or 0,
                         result=result,
                         start_time=start,
                         error_thresholds=error_thresholds,
@@ -311,7 +314,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     workload=workload,
                     name=f"{func_name}",
                     description=legend or "",
-                    cycle=len(latency_results[func_name]['cycles']),
+                    cycle=row_name or len(latency_results[func_name]['cycles']),
                     result=result,
                     start_time=start,
                     error_thresholds=error_thresholds,
