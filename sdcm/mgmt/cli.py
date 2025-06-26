@@ -559,6 +559,13 @@ class ManagerCluster(ScyllaManagerBase):
     def __init__(self, manager_node, cluster_id=None, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
+
+        # If the manager_node is an instance of CloudManagerNode class (comes from siren-tests),
+        # then the Manager cluster is considered a Cloud cluster.
+        # Since the class CloudManagerNode comes from another framework (siren-tests) which is in place only for runs
+        # with Cloud cluster (when the integration is used), more solid isinstance() check can be used here.
+        self.is_cloud_cluster = manager_node.__class__.__name__ == "CloudManagerNode"
+
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
 
@@ -689,8 +696,15 @@ class ManagerCluster(ScyllaManagerBase):
         if cron is not None:
             cmd += " --cron '{}' ".format(" ".join(cron))
 
-        with DbNodeLogger([self.manager_node], f"start scylla-manager task {cmd}", target_node=self.manager_node):
+        if self.is_cloud_cluster:
+            # Do not log the command for Cloud clusters, since the manager_node object coming from siren-tests
+            # is missing some of the methods and attributes (such as log_message(), private_ip_address, name)
+            # required for DbNodeLogger to work properly.
             res = self.sctool.run(cmd=cmd, parse_table_res=False)
+        else:
+            with DbNodeLogger([self.manager_node], f"start scylla-manager task {cmd}", target_node=self.manager_node):
+                res = self.sctool.run(cmd=cmd, parse_table_res=False)
+
         if not res:
             raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
 
