@@ -493,7 +493,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
             eks_table.align = "l"
             eks_table.sortby = 'CreateTime'
             for cluster in eks_clusters:
-                tags = gce_meta_to_dict(cluster.extra['metadata'])
+                tags = cluster.metadata
                 eks_table.add_row([cluster.name,
                                    tags.get('TestId', 'N/A') if tags else "N/A",
                                    cluster.region_name,
