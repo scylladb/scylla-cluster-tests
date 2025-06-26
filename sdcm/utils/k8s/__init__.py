@@ -378,7 +378,7 @@ class KubernetesOps:
                 run_kubectl(temp_file.name)
 
     @classmethod
-    def copy_file(cls, kluster, src, dst, container=None, timeout=KUBECTL_TIMEOUT):
+    def copy_file(cls, kluster, src, dst, container=None, timeout=KUBECTL_TIMEOUT, sudo=False):
         command = ["cp", src, dst]
         if container:
             command.extend(("-c", container))

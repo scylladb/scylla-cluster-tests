@@ -91,15 +91,17 @@ class LocalCmdRunner(CommandRunner):
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def receive_files(
             self, src: str, dst: str, delete_dst: bool = False, preserve_perm: bool = True,
-            preserve_symlinks: bool = False, timeout: float = 300) -> bool:
+            preserve_symlinks: bool = False, timeout: float = 300, sudo: bool = False) -> bool:
         if src == dst:
             return True
-        return self.run(f'cp {src} {dst}', timeout=timeout).ok
+        sudo = 'sudo ' if sudo else ''
+        return self.run(f"{sudo} cp {src} {dst}", timeout=timeout).ok
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def send_files(
             self, src: str, dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False,
-            timeout: float = 300) -> bool:
+            timeout: float = 300, sudo: bool = False) -> bool:
         if src == dst:
             return True
-        return self.run(f'cp {src} {dst}', timeout=timeout).ok
+        sudo = "sudo " if sudo else ""
+        return self.run(f"{sudo} cp {src} {dst}", timeout=timeout).ok

@@ -446,6 +446,9 @@ class DummyNode(BaseNode):
                 network_interfaces=self.network_interfaces,
                 scylla_network_config=self.parent_cluster.params["scylla_network_config"])
 
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
+
     @property
     def network_interfaces(self):
         return [NetworkInterface(ipv4_public_address=self._public_ip_address[0],

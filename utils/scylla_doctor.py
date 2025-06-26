@@ -167,7 +167,7 @@ class ScyllaDoctor:
         return False
 
     def analyze_and_verify_results(self):
-        scylla_doctor_result = json.loads(self.node.remoter.run(f"cat {self.json_result_file}").stdout.strip())
+        scylla_doctor_result = json.loads(self.node.remoter.sudo(f"cat {self.json_result_file}").stdout.strip())
 
         LOGGER.debug("Scylla-doctor output: %s", pprint.pformat(scylla_doctor_result))
 

@@ -24,6 +24,9 @@ class DummyNode(BaseNode):
         super().init()
         self.remoter.stop()
 
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
+
     def wait_for_cloud_init(self):
         pass
 
