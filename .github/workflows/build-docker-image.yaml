@@ -30,7 +30,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-    if: github.actor == 'renovate[bot]' || (needs.check_org_membership.outputs.isTeamMember == 'true' && contains(github.event.pull_request.labels.*.name, 'New Hydra Version'))
+    if: ( github.actor == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
