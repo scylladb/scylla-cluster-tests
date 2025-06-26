@@ -86,9 +86,17 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if save_stats:
             self.create_test_stats(test_name=test_name, sub_type=sub_type,
                                    doc_id_with_timestamp=True, append_sub_test_to_name=False)
+        self.log.info(f'QWERTY starting stress cmd: {stress_cmd}')
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
                                               prefix=prefix, stats_aggregate_cmds=False)
-        self.get_stress_results(queue=stress_queue, store_results=True)
+        self.log.info(f'QWERTY started stress cmd: {stress_cmd}')
+        try:
+            self.get_stress_results(queue=stress_queue, store_results=True)
+        except:
+            self.log.exception(f'QWERTY stress cmd failed: {stress_cmd}')
+            self.log.error(traceback.format_exc())
+            raise
+        self.log.info(f'QWERTY completed stress cmd: {stress_cmd}')
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
@@ -137,6 +145,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
     @optional_stage('perf_preload_data')
     def preload_data(self, compaction_strategy=None):
+        self.log.info(f'QWERTY preloading data')
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
@@ -175,6 +184,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                     ))
 
             for stress in stress_queue:
+                self.log.info(f'QWERTY stopping loader')
                 self.get_stress_results(queue=stress, store_results=False)
 
             self.update_test_details()
