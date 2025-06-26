@@ -3,6 +3,7 @@ import os.path
 import time
 import logging
 import multiprocessing
+import traceback
 from typing import Any
 from dataclasses import asdict, dataclass, make_dataclass
 from concurrent.futures.process import ProcessPoolExecutor
@@ -350,16 +351,26 @@ class _HdrRangeHistogramBuilder:
         return None
 
     def build_histogram_summary_by_tag(self, path: str, hdr_tag: str) -> dict[str, dict[str, int]] | None:
-        if os.path.exists(path) and os.path.isfile(path):
-            histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
-            if not histogram:
+        LOGGER.info(f'QWERTY running build_histogram_summary_by_tag for tag {hdr_tag} in path {path}')
+        try:
+            if os.path.exists(path) and os.path.isfile(path):
+                histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
+                if not histogram:
+                    LOGGER.info(f'QWERTY exiting with None for tag {hdr_tag} in path {path}')
+                    return None
+            elif os.path.exists(path) and os.path.isdir(path):
+                histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
+            else:
+                LOGGER.info(f'QWERTY exiting with None for tag {hdr_tag} in path {path}')
                 return None
-        elif os.path.exists(path) and os.path.isdir(path):
-            histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
-        else:
-            return None
 
-        return self._get_summary_for_operation_by_hdr_tag(histogram)
+            val = self._get_summary_for_operation_by_hdr_tag(histogram)
+            LOGGER.info(f'QWERTY exiting with value {val} for tag {hdr_tag} in path {path}')
+            return val
+        except Exception as exc:
+            LOGGER.exception("unhandled exception while building histogram summary for tag '%s' in path '%s': %s",
+                             hdr_tag, path, exc)
+            LOGGER.error(traceback.format_exc())
 
     def _build_histograms_summary_with_interval_by_tag(
             self, path: str, hdr_tag: str,
