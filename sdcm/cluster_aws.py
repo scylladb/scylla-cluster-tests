@@ -49,6 +49,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import to_inet_ntop_format
 from sdcm.wait import exponential_retry
 
@@ -388,6 +389,7 @@ class AWSCluster(cluster.BaseCluster):
         self.log.info('Found no provisioned instances. Provision them.')
         return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type, is_zero_node=is_zero_node)
 
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, is_zero_node=False):
         if not count:
             return []
@@ -924,7 +926,15 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             extra_network_interface=network_interfaces_count(params) > 1)
         self.version = '2.1'
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None, is_zero_node=False):
+    def add_nodes(self,
+                  count,
+                  ec2_user_data='',
+                  dc_idx=0,
+                  rack=0,
+                  enable_auto_bootstrap=False,
+                  instance_type=None,
+                  is_zero_node=False,
+                  **kwargs):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
                 ec2_user_data = re.sub(r'(--totalnodes\s)(\d*)(\s)',
@@ -950,7 +960,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             rack=rack,
             enable_auto_bootstrap=enable_auto_bootstrap,
             instance_type=instance_type,
-            is_zero_node=is_zero_node
+            is_zero_node=is_zero_node,
+            **kwargs
         )
         return added_nodes
 
@@ -1024,7 +1035,14 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             except Exception as exc:  # noqa: BLE001
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(self,
+                  count,
+                  ec2_user_data='',
+                  dc_idx=0,
+                  rack=0,
+                  enable_auto_bootstrap=False,
+                  instance_type=None,
+                  **kwargs):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
@@ -1041,6 +1059,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             dc_idx=dc_idx,
             rack=rack,
             instance_type=instance_type,
+            **kwargs
         )
         return added_nodes
 
