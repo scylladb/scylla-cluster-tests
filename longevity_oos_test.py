@@ -16,7 +16,7 @@ from cassandra.query import SimpleStatement
 from contextlib import ExitStack, contextmanager
 from time import sleep, time
 from longevity_test import LongevityTest
-from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
+from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
 from sdcm.remote.libssh2_client.exceptions import Failure, UnexpectedExit
 from sdcm.sct_events import Severity
@@ -271,6 +271,17 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         # read some data with CL=THREE
         self.run_stress()
+
+    def test_oos_file_based_streaming_decommission(self):
+        """
+        Fill the cluster to 90%
+        Decommission one node
+        """
+        self.run_prepare_write_cmd()
+        sleep(600)
+
+        node1 = self.db_cluster.nodes[0]
+        self.db_cluster.decommission(node1, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
     def test_oos_si_scale_out(self):
         """
