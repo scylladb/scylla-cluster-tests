@@ -32,7 +32,7 @@ import itertools
 import json
 import shlex
 from decimal import Decimal, ROUND_UP
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
+from typing import List, Literal, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
 from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
@@ -4050,6 +4050,8 @@ def wait_for_init_wrap(method):
     @wraps(method)
     def wrapper(*args, **kwargs):
         cl_inst = args[0]
+        if not hasattr(cl_inst, 'nodeup_stats'):
+            setattr(cl_inst, 'nodeup_stats', {})
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
 
@@ -4093,16 +4095,21 @@ def wait_for_init_wrap(method):
             task_queue.put((_node, exception_details))
             task_queue.task_done()
 
-        def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
+        def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list, operation: Literal['setup', 'startup'] = 'setup'):
             time_elapsed = time.perf_counter() - start_time
             try:
                 node, setup_exception = task_queue.get(block=True, timeout=5)
+
                 if setup_exception:
                     raise NodeSetupFailed(
                         node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
+                time_elapsed = time.perf_counter() - start_time
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
+                cl_inst.nodeup_stats[node.name] = {
+                    f'{operation}_time': int(time_elapsed),
+                }
             except queue.Empty:
                 pass
             if timeout and time_elapsed / 60 > timeout:
@@ -4158,7 +4165,7 @@ def wait_for_init_wrap(method):
                 else:
                     node_startup(node, startup_queue)
             while len(startup_results) != len(node_list):
-                verify_node_setup_or_startup(start_time, startup_queue, startup_results)
+                verify_node_setup_or_startup(start_time, startup_queue, startup_results, operation='startup')
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
                 with timeit_and_log(cl_inst.log, "wait up and normal in cluster wrap init"):
