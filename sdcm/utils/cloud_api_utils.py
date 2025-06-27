@@ -25,6 +25,6 @@ def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
     if not path.exists():
         raise ValueError(f"Scylla Cloud REST credentials file not found: {file_path}")
 
-    with path.open('r', encoding='utf-8') as creds_file:
+    with path.open("r", encoding="utf-8") as creds_file:
         creds = json.load(creds_file)
     return creds

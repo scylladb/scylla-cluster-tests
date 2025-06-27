@@ -59,6 +59,7 @@ class UDA(BaseModel):
     UDF/UDA testing desing doc: https://docs.google.com/document/d/16GTe1bLmMBC5IVCjC_nY-UNnMCLr_3V2C6K6tiYPstQ
     /edit?usp=sharing
     """
+
     name: str
     args: str
     return_type: str
@@ -68,14 +69,15 @@ class UDA(BaseModel):
     initial_condition: str
 
     def get_create_query_string(self, ks: str) -> str:
-        query_string = f"CREATE AGGREGATE {ks}.{self.name}" \
-            f"({self.args}) SFUNC {self.accumulator_udf.name} " \
-            f'STYPE {self.accumulator_udf.return_type} '
+        query_string = (
+            f"CREATE AGGREGATE {ks}.{self.name}"
+            f"({self.args}) SFUNC {self.accumulator_udf.name} "
+            f"STYPE {self.accumulator_udf.return_type} "
+        )
         if self.reduce_udf:
             query_string += f"REDUCEFUNC {self.reduce_udf.name} "
 
-        query_string += f"FINALFUNC {self.final_udf.name} " \
-            f"INITCOND {self.initial_condition};"
+        query_string += f"FINALFUNC {self.final_udf.name} INITCOND {self.initial_condition};"
         return query_string
 
     @classmethod
@@ -85,12 +87,7 @@ class UDA(BaseModel):
             accumulator_udf = UDFS.get((input_yaml.get("accumulator_udf_name", None)))
             reduce_udf = UDFS.get((input_yaml.get("reduce_udf_name", None)))
             final_udf = UDFS.get((input_yaml.get("final_udf_name", None)))
-            return UDA(
-                accumulator_udf=accumulator_udf,
-                reduce_udf=reduce_udf,
-                final_udf=final_udf,
-                **input_yaml
-            )
+            return UDA(accumulator_udf=accumulator_udf, reduce_udf=reduce_udf, final_udf=final_udf, **input_yaml)
 
 
 def _load_all_udas() -> dict[str, UDA]:

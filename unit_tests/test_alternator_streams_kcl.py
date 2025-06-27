@@ -27,37 +27,27 @@ pytestmark = [
 
 
 @pytest.mark.skip("test isn't yet fully working")
-def test_01_kcl_with_ycsb(
-    request, docker_scylla, events, params
-):
-    params.update(dict(
-        dynamodb_primarykey_type="HASH_AND_RANGE",
-        alternator_use_dns_routing=True,
-        alternator_port=ALTERNATOR_PORT,
-        alternator_enforce_authorization=True,
-        alternator_access_key_id='alternator',
-        alternator_secret_access_key='password',
-        docker_network='ycsb_net',
-    ))
+def test_01_kcl_with_ycsb(request, docker_scylla, events, params):
+    params.update(
+        dict(
+            dynamodb_primarykey_type="HASH_AND_RANGE",
+            alternator_use_dns_routing=True,
+            alternator_port=ALTERNATOR_PORT,
+            alternator_enforce_authorization=True,
+            alternator_access_key_id="alternator",
+            alternator_secret_access_key="password",
+            docker_network="ycsb_net",
+        )
+    )
     loader_set = LocalLoaderSetDummy(params=params)
     num_of_keys = 1000
     # 1. start kcl thread and ycsb at the same time
-    ycsb_cmd = (
-        f"bin/ycsb load dynamodb  -P workloads/workloada -p recordcount={num_of_keys} -p dataintegrity=true "
-        f"-p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5"
-    )
-    ycsb_thread = YcsbStressThread(
-        loader_set, ycsb_cmd, node_list=[docker_scylla], timeout=600, params=params
-    )
+    ycsb_cmd = f"bin/ycsb load dynamodb  -P workloads/workloada -p recordcount={num_of_keys} -p dataintegrity=true -p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5"
+    ycsb_thread = YcsbStressThread(loader_set, ycsb_cmd, node_list=[docker_scylla], timeout=600, params=params)
 
     kcl_cmd = f"hydra-kcl -t usertable -k {num_of_keys}"
-    kcl_thread = KclStressThread(
-        loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=params
-    )
-    stress_cmd = (
-        'table_compare interval=20; src_table="alternator_usertable".usertable; '
-        'dst_table="alternator_usertable-dest"."usertable-dest"'
-    )
+    kcl_thread = KclStressThread(loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=params)
+    stress_cmd = 'table_compare interval=20; src_table="alternator_usertable".usertable; dst_table="alternator_usertable-dest"."usertable-dest"'
     compare_sizes = CompareTablesSizesThread(
         loader_set=loader_set,
         stress_cmd=stress_cmd,
@@ -93,14 +83,8 @@ def test_01_kcl_with_ycsb(
     error_log_content_before = events.get_event_log_file("error.log")
 
     # 2. do read with dataintegrity=true
-    cmd = (
-        f"bin/ycsb run dynamodb -P workloads/workloada -p recordcount={num_of_keys} -p insertorder=uniform "
-        f"-p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5 -p dataintegrity=true "
-        f"-p operationcount={num_of_keys}"
-    )
-    ycsb_thread2 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params
-    )
+    cmd = f"bin/ycsb run dynamodb -P workloads/workloada -p recordcount={num_of_keys} -p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5 -p dataintegrity=true -p operationcount={num_of_keys}"
+    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params)
 
     def cleanup_thread2():
         ycsb_thread2.kill()

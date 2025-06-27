@@ -15,7 +15,8 @@ from textwrap import dedent
 
 
 def configure_syslogng_target_script(hostname: str = "") -> str:
-    return dedent("""
+    return dedent(
+        """
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
         s/source /\\nsource /g" | grep -P "^source.*system\\(\\)" | cut -d" " -f2`
 
@@ -45,7 +46,8 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
                 sed -i -r "s/destination\\(remote_sct\\);[ \\t]*\\}};/destination\\(remote_sct\\); rewrite\\(r_host\\); \\}};/" /etc/syslog-ng/syslog-ng.conf
             fi
         fi
-        """.format(hostname=hostname))
+        """.format(hostname=hostname)
+    )
 
 
 def configure_vector_target_script(host: str, port: int) -> str:
@@ -85,8 +87,10 @@ def configure_vector_target_script(host: str, port: int) -> str:
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:
-    return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
+    return (
+        f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+'
         f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
+    )
 
 
 def configure_sshd_script():
