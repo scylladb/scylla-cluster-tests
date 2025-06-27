@@ -87,6 +87,7 @@ class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     # small_table_threshold enable small table optimization for tables of size lower than given threshold.
     # Supported units [B, MiB, GiB, TiB] (default "1GiB").
     small_table_threshold: str = None
+    ignore_down_hosts: bool = None
 
 
 @dataclass
@@ -289,6 +290,7 @@ class OperatorManagerCluster(ManagerCluster):
 
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
                                             fail_fast=None, intensity=None, parallel=None,
+                                            ignore_down_hosts=False,
                                             name=None) -> ScyllaOperatorRepairTask:
         if name is None:
             name = self._pick_original_name(
@@ -302,6 +304,7 @@ class OperatorManagerCluster(ManagerCluster):
             keyspace=keyspace,
             interval=interval,
             num_retries=num_retries,
+            ignore_down_hosts=ignore_down_hosts,
         )
         try:
             self.scylla_cluster.add_scylla_cluster_value('/spec/repairs', so_repair_task.to_dict())
@@ -310,7 +313,7 @@ class OperatorManagerCluster(ManagerCluster):
             raise
         return so_repair_task
 
-    def create_repair_task(self, dc_list=None,
+    def create_repair_task(self, dc_list=None, ignore_down_hosts=False,
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
                            intensity=None, parallel=None, name=None) -> RepairTask:
         # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the repair one.
@@ -318,9 +321,11 @@ class OperatorManagerCluster(ManagerCluster):
 
         # TBD: After https://github.com/scylladb/scylla-operator/issues/272 is solved,
         #   replace RepairTask with ScyllaOperatorRepairTask and move relate logic there
-        so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
+        so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace,
+                                                           ignore_down_hosts=ignore_down_hosts, interval=interval,
                                                            num_retries=num_retries, fail_fast=fail_fast,
                                                            intensity=intensity, parallel=parallel, name=name)
+        LOGGER.info("Created repair task with parameters: %s", so_task.to_dict())
         return wait_for(lambda: self.get_mgr_repair_task(so_task), step=2, timeout=300)
 
     def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> Optional[RepairTask]:
