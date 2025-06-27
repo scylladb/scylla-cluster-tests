@@ -50,7 +50,7 @@ class KeyStore:
         return json.loads(self.get_file_contents(json_file))
 
     def download_file(self, filename, dest_filename):
-        with open(dest_filename, 'wb') as file_obj:
+        with open(dest_filename, "wb") as file_obj:
             file_obj.write(self.get_file_contents(filename))
 
     def get_email_credentials(self):
@@ -58,19 +58,19 @@ class KeyStore:
 
     def get_elasticsearch_token(self) -> dict[str, str]:
         conf_dict = self.get_json("es_token.json")
-        conf_dict.pop('kibana_url', None)
-        conf_dict.pop('es_url', None)
+        conf_dict.pop("kibana_url", None)
+        conf_dict.pop("es_url", None)
         return conf_dict
 
     def get_gcp_credentials(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
+        project = os.environ.get("SCT_GCE_PROJECT") or "gcp-sct-project-1"
         return self.get_json(f"{project}.json")
 
     def get_dbaaslab_gcp_credentials(self):
         return self.get_json("gcp-scylladbaaslab.json")
 
     def get_gcp_service_accounts(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
+        project = os.environ.get("SCT_GCE_PROJECT") or "gcp-sct-project-1"
         return self.get_json(f"{project}_service_accounts.json")
 
     def get_scylladb_upload_credentials(self):
@@ -80,9 +80,11 @@ class KeyStore:
         return self.get_json("qa_users.json")
 
     def get_ssh_key_pair(self, name):
-        return SSHKey(name=name,
-                      public_key=self.get_file_contents(file_name=f"{name}.pub"),
-                      private_key=self.get_file_contents(file_name=name))
+        return SSHKey(
+            name=name,
+            public_key=self.get_file_contents(file_name=f"{name}.pub"),
+            private_key=self.get_file_contents(file_name=name),
+        )
 
     def get_ec2_ssh_key_pair(self):
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
@@ -140,7 +142,7 @@ class KeyStore:
         if len(md5s) == 1:
             return '"{}"'.format(md5s[0].hexdigest())
 
-        digests = b''.join(m.digest() for m in md5s)
+        digests = b"".join(m.digest() for m in md5s)
         digests_md5 = hashlib.md5(digests)
         return '"{}-{}"'.format(digests_md5.hexdigest(), len(md5s))
 
@@ -151,7 +153,7 @@ class KeyStore:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         dl_flag = True
         try:
-            with open(path, 'rb') as file_obj:
+            with open(path, "rb") as file_obj:
                 if tag == self.calculate_s3_etag(file_obj):
                     dl_flag = False
         except FileNotFoundError:
@@ -169,11 +171,13 @@ class KeyStore:
 
     def get_object_etag(self, key):
         obj = self.s3_client.head_object(Bucket=KEYSTORE_S3_BUCKET, Key=key)
-        return obj.get('ETag')
+        return obj.get("ETag")
 
 
 def pub_key_from_private_key_file(key_file):
     try:
         return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-rsa"
     except paramiko.ssh_exception.SSHException:
-        return paramiko.ed25519key.Ed25519Key.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-ed25519"
+        return paramiko.ed25519key.Ed25519Key.from_private_key_file(
+            os.path.expanduser(key_file)
+        ).get_base64(), "ssh-ed25519"

@@ -27,7 +27,7 @@ class PrometheusAlertManagerEvent(ContinuousEvent):
         "state",
         "alert_name",
     )
-    continuous_hash_fields = ('node', 'starts_at', 'alert_name')
+    continuous_hash_fields = ("node", "starts_at", "alert_name")
 
     def __init__(self, raw_alert: dict, severity: Severity = Severity.NORMAL):
         self.annotations = raw_alert.get("annotations") or {}
@@ -51,9 +51,10 @@ class PrometheusAlertManagerEvent(ContinuousEvent):
 
     @property
     def msgfmt(self) -> str:
-        fmt = super().msgfmt + ": alert_name={0.alert_name} node={0.node} start={0.starts_at} " \
-                               "end={0.ends_at} description={0.description} updated={0.updated_at} " \
-                               "state={0.state} fingerprint={0.fingerprint} labels={0.labels}"
+        fmt = (
+            super().msgfmt
+            + ": alert_name={0.alert_name} node={0.node} start={0.starts_at} end={0.ends_at} description={0.description} updated={0.updated_at} state={0.state} fingerprint={0.fingerprint} labels={0.labels}"
+        )
         return fmt
 
     def __eq__(self, other):

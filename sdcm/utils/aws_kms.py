@@ -25,8 +25,8 @@ LOGGER = logging.getLogger(__name__)
 class AwsKms:
     NUM_OF_KMS_KEYS = 3
     KMS_KEYS_TAGS = {
-        'Purpose': 'Rotation',
-        'UsedBy': 'QA',
+        "Purpose": "Rotation",
+        "UsedBy": "QA",
     }
 
     def __init__(self, region_names):
@@ -35,39 +35,40 @@ class AwsKms:
         self.region_names = region_names if isinstance(region_names, (list, tuple)) else [region_names]
         self.mapping = {
             region_name: {
-                'client': boto3.client('kms', region_name=region_name),
-                'kms_key_ids': [],
-                'kms_keys_aliases': {},
-            } for region_name in self.region_names
+                "client": boto3.client("kms", region_name=region_name),
+                "kms_key_ids": [],
+                "kms_keys_aliases": {},
+            }
+            for region_name in self.region_names
         }
         self.num_of_tags_to_match = len(self.KMS_KEYS_TAGS)
 
     def create_kms_key(self, region_name):
         LOGGER.info("Creating KMS key in the '%s' region", region_name)
-        kms_key = self.mapping[region_name]['client'].create_key(
-            Description='qa-kms-key-for-rotation',
-            Tags=[{'TagKey': k, 'TagValue': v} for k, v in self.KMS_KEYS_TAGS.items()],
+        kms_key = self.mapping[region_name]["client"].create_key(
+            Description="qa-kms-key-for-rotation",
+            Tags=[{"TagKey": k, "TagValue": v} for k, v in self.KMS_KEYS_TAGS.items()],
         )
-        self.mapping[region_name]['kms_key_ids'].append(kms_key['KeyMetadata']['KeyId'])
+        self.mapping[region_name]["kms_key_ids"].append(kms_key["KeyMetadata"]["KeyId"])
 
     def get_kms_key_tags(self, kms_key_id, region_name):
         try:
-            tags = self.mapping[region_name]['client'].list_resource_tags(KeyId=kms_key_id, Limit=999)['Tags']
-            return {tag['TagKey']: tag['TagValue'] for tag in tags}
+            tags = self.mapping[region_name]["client"].list_resource_tags(KeyId=kms_key_id, Limit=999)["Tags"]
+            return {tag["TagKey"]: tag["TagValue"] for tag in tags}
         except botocore.exceptions.ClientError as exc:
             LOGGER.debug(exc.response)
-            if any(msg in exc.response['Error']['Code'] for msg in ('AccessDeniedException', 'NotFound')):
+            if any(msg in exc.response["Error"]["Code"] for msg in ("AccessDeniedException", "NotFound")):
                 return {}
             raise
 
     def get_kms_keys(self, region_name, next_marker=None):
-        client, kwargs = self.mapping[region_name]['client'], {'Limit': 30}
+        client, kwargs = self.mapping[region_name]["client"], {"Limit": 30}
         if next_marker:
-            kwargs['Marker'] = next_marker
+            kwargs["Marker"] = next_marker
         kms_keys = client.list_keys(**kwargs)
-        for kms_key in kms_keys['Keys']:
-            current_kms_key_id = kms_key['KeyId']
-            if not client.describe_key(KeyId=current_kms_key_id)['KeyMetadata']['Enabled']:
+        for kms_key in kms_keys["Keys"]:
+            current_kms_key_id = kms_key["KeyId"]
+            if not client.describe_key(KeyId=current_kms_key_id)["KeyMetadata"]["Enabled"]:
                 continue
             yield current_kms_key_id
         if kms_keys.get("NextMarker"):
@@ -75,7 +76,7 @@ class AwsKms:
 
     def find_or_create_suitable_kms_keys(self, only_find=False):
         for region_name in self.region_names:
-            if self.NUM_OF_KMS_KEYS <= len(self.mapping[region_name]['kms_key_ids']):
+            if self.NUM_OF_KMS_KEYS <= len(self.mapping[region_name]["kms_key_ids"]):
                 continue
             for current_kms_key_id in self.get_kms_keys(region_name):
                 current_kms_key_tags = self.get_kms_key_tags(current_kms_key_id, region_name)
@@ -87,12 +88,12 @@ class AwsKms:
                         break
                     kms_key_tags_match_counter += 1
                 if kms_key_tags_match_counter >= self.num_of_tags_to_match:
-                    self.mapping[region_name]['kms_key_ids'].append(current_kms_key_id)
-                if self.NUM_OF_KMS_KEYS == len(self.mapping[region_name]['kms_key_ids']):
+                    self.mapping[region_name]["kms_key_ids"].append(current_kms_key_id)
+                if self.NUM_OF_KMS_KEYS == len(self.mapping[region_name]["kms_key_ids"]):
                     break
             if only_find:
                 continue
-            while self.NUM_OF_KMS_KEYS > len(self.mapping[region_name]['kms_key_ids']):
+            while self.NUM_OF_KMS_KEYS > len(self.mapping[region_name]["kms_key_ids"]):
                 self.create_kms_key(region_name)
 
     def get_next_kms_key(self, kms_key_alias_name, region_name):
@@ -127,13 +128,15 @@ class AwsKms:
             kms_key_id = self.get_next_kms_key(kms_key_alias_name, region_name)
             LOGGER.info(
                 "Creating '%s' alias for the '%s' KMS key in the '%s' region",
-                kms_key_alias_name, kms_key_id, region_name)
+                kms_key_alias_name,
+                kms_key_id,
+                region_name,
+            )
             try:
-                self.mapping[region_name]['client'].create_alias(
-                    AliasName=kms_key_alias_name, TargetKeyId=kms_key_id)
+                self.mapping[region_name]["client"].create_alias(AliasName=kms_key_alias_name, TargetKeyId=kms_key_id)
             except botocore.exceptions.ClientError as exc:
                 LOGGER.debug(exc.response)
-                if not ('AlreadyExistsException' in exc.response['Error']['Code'] and tolerate_already_exists):
+                if not ("AlreadyExistsException" in exc.response["Error"]["Code"] and tolerate_already_exists):
                     raise
 
     def rotate_kms_key(self, kms_key_alias_name):
@@ -142,17 +145,19 @@ class AwsKms:
             new_kms_key_id = self.get_next_kms_key(kms_key_alias_name, region_name)
             LOGGER.info(
                 "Assigning the '%s' alias to the '%s' KMS key in the '%s' region",
-                kms_key_alias_name, new_kms_key_id, region_name)
-            self.mapping[region_name]['client'].update_alias(
-                AliasName=kms_key_alias_name, TargetKeyId=new_kms_key_id)
+                kms_key_alias_name,
+                new_kms_key_id,
+                region_name,
+            )
+            self.mapping[region_name]["client"].update_alias(AliasName=kms_key_alias_name, TargetKeyId=new_kms_key_id)
 
     def delete_alias(self, kms_key_alias_name, tolerate_errors=True):
         LOGGER.info("Deleting the '%s' alias in the KMS", kms_key_alias_name)
         for region_name in self.region_names:
             try:
-                self.mapping[region_name]['client'].delete_alias(AliasName=kms_key_alias_name)
-                if kms_key_alias_name in self.mapping[region_name]['kms_keys_aliases']:
-                    self.mapping[region_name]['kms_keys_aliases'].remove(kms_key_alias_name)
+                self.mapping[region_name]["client"].delete_alias(AliasName=kms_key_alias_name)
+                if kms_key_alias_name in self.mapping[region_name]["kms_keys_aliases"]:
+                    self.mapping[region_name]["kms_keys_aliases"].remove(kms_key_alias_name)
             except botocore.exceptions.ClientError as exc:
                 LOGGER.debug(exc.response)
                 if not tolerate_errors:
@@ -171,7 +176,7 @@ class AwsKms:
                 if not self.mapping[region_name].get("kms_key_ids"):
                     self.find_or_create_suitable_kms_keys(only_find=True)
                 kms_keys = self.mapping[region_name].get("kms_key_ids", [])
-                current_client = self.mapping[region_name]['client']
+                current_client = self.mapping[region_name]["client"]
                 for kms_key_id in kms_keys:
                     LOGGER.info("KMS: %s[region '%s'][key '%s'] read aliases", dry_run_prefix, region_name, kms_key_id)
                     current_aliases = current_client.list_aliases(KeyId=kms_key_id, Limit=999)["Aliases"]
@@ -183,14 +188,19 @@ class AwsKms:
                         if not current_alias_name.startswith("alias/testid-"):
                             LOGGER.info(
                                 "KMS: %s[region '%s'][key '%s'] ignore the '%s' alias as not matching",
-                                dry_run_prefix, region_name, kms_key_id, current_alias_name)
+                                dry_run_prefix,
+                                region_name,
+                                kms_key_id,
+                                current_alias_name,
+                            )
                             continue
                         if current_alias_creation_date < alias_allowed_date:
                             tags_dict = {
-                                "TestId": current_alias_name.split('alias/testid-')[-1],
+                                "TestId": current_alias_name.split("alias/testid-")[-1],
                             }
                             aws_instances = list_instances_aws(
-                                tags_dict=tags_dict, region_name=region_name, group_as_region=False)
+                                tags_dict=tags_dict, region_name=region_name, group_as_region=False
+                            )
                             alias_is_unused = True
                             for aws_instance in aws_instances:
                                 aws_instance_tags = {item["Key"]: item["Value"] for item in aws_instance.get("Tags")}
@@ -199,22 +209,27 @@ class AwsKms:
                                     break
                             if not alias_is_unused:
                                 LOGGER.info(
-                                    "KMS: %s[region '%s'][key '%s'] Found old alias -> '%s' (%s)."
-                                    " Skip it because related DB nodes still exist.",
-                                    dry_run_prefix, region_name, kms_key_id,
-                                    current_alias_name, current_alias_creation_date)
+                                    "KMS: %s[region '%s'][key '%s'] Found old alias -> '%s' (%s). Skip it because related DB nodes still exist.",
+                                    dry_run_prefix,
+                                    region_name,
+                                    kms_key_id,
+                                    current_alias_name,
+                                    current_alias_creation_date,
+                                )
                                 continue
                             LOGGER.info(
                                 "KMS: %s[region '%s'][key '%s'] %s old alias -> '%s' (%s)",
-                                dry_run_prefix, region_name, kms_key_id,
+                                dry_run_prefix,
+                                region_name,
+                                kms_key_id,
                                 ("found" if dry_run else "deleting"),
-                                current_alias_name, current_alias_creation_date)
+                                current_alias_name,
+                                current_alias_creation_date,
+                            )
                             if not dry_run:
                                 self.delete_alias(current_alias_name, tolerate_errors=tolerate_errors)
             except botocore.exceptions.ClientError as exc:
-                LOGGER.info(
-                    "KMS: failed to process old aliases in the '%s' region: %s",
-                    region_name, exc.response)
+                LOGGER.info("KMS: failed to process old aliases in the '%s' region: %s", region_name, exc.response)
                 if not tolerate_errors:
                     raise
         LOGGER.info("KMS: finished cleaning up old aliases")

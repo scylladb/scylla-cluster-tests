@@ -16,7 +16,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ArgusError(Exception):
-
     def __init__(self, message: str, *args: list) -> None:
         self._message = message
         super().__init__(*args)
@@ -42,7 +41,8 @@ def get_argus_client(run_id: UUID | str) -> ArgusSCTClient:
         raise ArgusError("Malformed UUID provided")
     creds = KeyStore().get_argus_rest_credentials()
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
+        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+    )
 
     return argus_client
 
@@ -75,7 +75,9 @@ def argus_offline_collect_events(client: ArgusSCTClient) -> None:
 
 def create_proxy_argus_s3_url(url: str, general: bool = False) -> str:
     if general:
-        if match := re.match(r"(https:\/\/)?(?P<bucket>[\w\-]*)\.s3(?P<region>\.[\w\-\d]*)?\.amazonaws.com\/(?P<key>.+)", url):
+        if match := re.match(
+            r"(https:\/\/)?(?P<bucket>[\w\-]*)\.s3(?P<region>\.[\w\-\d]*)?\.amazonaws.com\/(?P<key>.+)", url
+        ):
             return f"https://argus.scylladb.com/api/v1/s3/{match.group('bucket')}/{match.group('key')}"
         return url
 

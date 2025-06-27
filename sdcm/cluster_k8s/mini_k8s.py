@@ -58,11 +58,11 @@ CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
 CNI_CALICO_VERSION = "v3.24.5"
 HELM_VERSION = "v3.12.1"
 LOGGER = logging.getLogger(__name__)
-POOL_LABEL_NAME = 'minimal-k8s-nodepool'
+POOL_LABEL_NAME = "minimal-k8s-nodepool"
 
 
 class MinimalK8SNodePool(CloudK8sNodePool):
-    k8s_cluster: 'LocalKindCluster'
+    k8s_cluster: "LocalKindCluster"
 
     def deploy(self) -> None:
         self.is_deployed = True
@@ -84,13 +84,14 @@ class MinimalK8SNodePool(CloudK8sNodePool):
         memory_base = 1.5
         return (
             cpu_per_member
-            + COMMON_CONTAINERS_RESOURCES['cpu']
-            + OPERATOR_CONTAINERS_RESOURCES['cpu']
-            + SCYLLA_MANAGER_AGENT_RESOURCES['cpu'],
-            memory_base + memory_for_cpu
-            + COMMON_CONTAINERS_RESOURCES['memory']
-            + OPERATOR_CONTAINERS_RESOURCES['memory']
-            + SCYLLA_MANAGER_AGENT_RESOURCES['memory'],
+            + COMMON_CONTAINERS_RESOURCES["cpu"]
+            + OPERATOR_CONTAINERS_RESOURCES["cpu"]
+            + SCYLLA_MANAGER_AGENT_RESOURCES["cpu"],
+            memory_base
+            + memory_for_cpu
+            + COMMON_CONTAINERS_RESOURCES["memory"]
+            + OPERATOR_CONTAINERS_RESOURCES["memory"]
+            + SCYLLA_MANAGER_AGENT_RESOURCES["memory"],
         )
 
 
@@ -131,10 +132,8 @@ class MinimalK8SOps:
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
         node.remoter.sudo(
-            'bash -cxe \"helm version'
-            f' || (curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"'
-            '  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin)'
-            '\"')
+            f'bash -cxe "helm version || (curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin)"'
+        )
 
         # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
         for i in range(7, 41):
@@ -156,7 +155,7 @@ class MinimalK8SOps:
             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
             add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
-            {f'usermod -a -G docker {target_user}' if target_user else ''}
+            {f"usermod -a -G docker {target_user}" if target_user else ""}
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
 
@@ -181,18 +180,25 @@ class MinimalK8SOps:
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     POOL_LABEL_NAME = POOL_LABEL_NAME
 
-    def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
-                 cluster_uuid: str = None, **_):
+    def __init__(
+        self,
+        mini_k8s_version,
+        params: dict,
+        user_prefix: str = "",
+        region_name: str = None,
+        cluster_uuid: str = None,
+        **_,
+    ):
         self.software_version = mini_k8s_version
         super().__init__(params=params, user_prefix=user_prefix, region_name=region_name, cluster_uuid=cluster_uuid)
 
     @property
     def is_kubectl_installed(self) -> None:
-        return self.host_node.remoter.run('ls /usr/local/bin/kubectl || ls /usr/bin/kubectl', ignore_status=True).ok
+        return self.host_node.remoter.run("ls /usr/local/bin/kubectl || ls /usr/bin/kubectl", ignore_status=True).ok
 
     @property
     def is_docker_installed(self) -> None:
-        return self.host_node.remoter.run('ls /usr/local/bin/docker || ls /usr/bin/docker', ignore_status=True).ok
+        return self.host_node.remoter.run("ls /usr/local/bin/docker || ls /usr/bin/docker", ignore_status=True).ok
 
     def setup_prerequisites(self):
         self.log.info("Install prerequisites to %s", self.host_node)
@@ -206,14 +212,15 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         self.log.info("Install kubectl to %s", self.host_node)
         MinimalK8SOps.setup_kubectl(node=self.host_node, kubectl_version=self.local_kubectl_version)
 
-    def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None,
-                                       cluster_name: str = None) -> HelmValues:
+    def get_scylla_cluster_helm_values(
+        self, cpu_limit, memory_limit, pool_name: str = None, cluster_name: str = None
+    ) -> HelmValues:
         values = super().get_scylla_cluster_helm_values(
-            cpu_limit=cpu_limit, memory_limit=memory_limit,
-            pool_name=pool_name, cluster_name=cluster_name)
-        values.set('cpuset', False)
-        values.set('developerMode', False)
-        values.set('hostNetworking', False)
+            cpu_limit=cpu_limit, memory_limit=memory_limit, pool_name=pool_name, cluster_name=cluster_name
+        )
+        values.set("cpuset", False)
+        values.set("developerMode", False)
+        values.set("hostNetworking", False)
         return values
 
     def create_kubectl_config(self):
@@ -225,8 +232,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
             if not os.path.exists(kube_path):
                 os.makedirs(kube_path, exist_ok=True)
             if self._target_user:
-                self.host_node.remoter.sudo(
-                    f'bash -cxe "chown -R {self._target_user}:{self._target_user} {kube_path}"')
+                self.host_node.remoter.sudo(f'bash -cxe "chown -R {self._target_user}:{self._target_user} {kube_path}"')
         # NOTE: export KinD's cluster kubeconfig to 2 places for the following reasons:
         #       - The non-default path will be used only by test.
         #       - The default path may be used by user anytime for any K8S cluster
@@ -285,7 +291,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def host_node(self) -> 'BaseNode':  # noqa: F821
+    def host_node(self) -> "BaseNode":  # noqa: F821
         """
         Host where kind/k3d/minikube is running
         """
@@ -329,7 +335,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @cached_property
     def minio_images(self):
-        with open(LOCAL_MINIO_DIR + '/values.yaml', mode='r', encoding='utf8') as minio_config_stream:
+        with open(LOCAL_MINIO_DIR + "/values.yaml", mode="r", encoding="utf8") as minio_config_stream:
             minio_config = yaml.safe_load(minio_config_stream)
             return [
                 f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
@@ -338,15 +344,14 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @cached_property
     def static_local_volume_provisioner_image(self):
-        with open(LOCAL_PROVISIONER_FILE, mode='r', encoding='utf8') as provisioner_config_stream:
+        with open(LOCAL_PROVISIONER_FILE, mode="r", encoding="utf8") as provisioner_config_stream:
             for doc in yaml.safe_load_all(provisioner_config_stream):
                 if doc["kind"] != "DaemonSet":
                     continue
                 try:
                     return doc["spec"]["template"]["spec"]["containers"][0]["image"]
                 except Exception as exc:  # noqa: BLE001
-                    self.log.warning(
-                        "Could not read the static local volume provisioner image: %s", exc)
+                    self.log.warning("Could not read the static local volume provisioner image: %s", exc)
         return ""
 
     @cached_property
@@ -367,9 +372,9 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         ingress_images = set()
         for root, _, subfiles in os.walk(INGRESS_CONTROLLER_CONFIG_PATH):
             for subfile in subfiles:
-                if not subfile.endswith('yaml'):
+                if not subfile.endswith("yaml"):
                     continue
-                with open(os.path.join(root, subfile), mode='r', encoding='utf8') as file_stream:
+                with open(os.path.join(root, subfile), mode="r", encoding="utf8") as file_stream:
                     for doc in yaml.safe_load_all(file_stream):
                         if doc["kind"] != "Deployment":
                             continue
@@ -377,14 +382,13 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
                             try:
                                 ingress_images.add(container["image"])
                             except Exception as exc:  # noqa: BLE001
-                                self.log.warning(
-                                    "Could not read the ingress controller related image: %s", exc)
+                                self.log.warning("Could not read the ingress controller related image: %s", exc)
         return ingress_images
 
     @property
     def scylla_image(self):
-        docker_repo = self.params.get('docker_image')
-        scylla_version = self.params.get('scylla_version')
+        docker_repo = self.params.get("docker_image")
+        scylla_version = self.params.get("scylla_version")
         if not scylla_version or not docker_repo:
             return ""
         return f"{docker_repo}:{scylla_version}"
@@ -418,19 +422,13 @@ class LocalMinimalClusterBase(MinimalClusterBase):
         self.software_version = software_version
         self.node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         super().__init__(
-            mini_k8s_version=software_version,
-            user_prefix=user_prefix,
-            region_name="local-dc-1",
-            params=params)
+            mini_k8s_version=software_version, user_prefix=user_prefix, region_name="local-dc-1", params=params
+        )
 
     @cached_property
     def host_node(self):
         node = LocalK8SHostNode(
-            name=f"{self.node_prefix}-1",
-            parent_cluster=self,
-            base_logdir=self.logdir,
-            dc_idx=0,
-            rack=1
+            name=f"{self.node_prefix}-1", parent_cluster=self, base_logdir=self.logdir, dc_idx=0, rack=1
         )
         node.init()
         return node
@@ -447,42 +445,43 @@ class LocalMinimalClusterBase(MinimalClusterBase):
     def _target_user(self) -> str:
         return getpass.getuser()
 
-    def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
-                                    use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
+    def upgrade_kubernetes_platform(
+        self, pod_objects: list[cluster.BaseNode], use_additional_scylla_nodepool: bool
+    ) -> (str, CloudK8sNodePool):
         return ""
 
 
 class LocalKindCluster(LocalMinimalClusterBase):
     docker_pull: Callable
     docker_tag: Callable
-    host_node: 'BaseNode'  # noqa: F821
+    host_node: "BaseNode"  # noqa: F821
     scylla_image: Optional[str]
     software_version: str
     _target_user: str
-    _create_kubectl_config_cmd: str = '/var/tmp/kind export kubeconfig'
+    _create_kubectl_config_cmd: str = "/var/tmp/kind export kubeconfig"
 
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:
         allowed_labels_on_scylla_node = [
-            ('k8s-app', 'kindnet'),
-            ('k8s-app', 'kube-proxy'),
-            ('k8s-app', 'calico-node'),
-            ('app', 'static-local-volume-provisioner'),
-            ('scylla/cluster', self.k8s_scylla_cluster_name),
+            ("k8s-app", "kindnet"),
+            ("k8s-app", "kube-proxy"),
+            ("k8s-app", "calico-node"),
+            ("app", "static-local-volume-provisioner"),
+            ("scylla/cluster", self.k8s_scylla_cluster_name),
         ]
-        if self.params.get('k8s_use_chaos_mesh'):
-            allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
-        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
-            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'local-csi-driver'))
+        if self.params.get("k8s_use_chaos_mesh"):
+            allowed_labels_on_scylla_node.append(("app.kubernetes.io/component", "chaos-daemon"))
+        if self.params.get("k8s_local_volume_provisioner_type") != "static":
+            allowed_labels_on_scylla_node.append(("app.kubernetes.io/name", "local-csi-driver"))
         return allowed_labels_on_scylla_node
 
     @property
     def is_k8s_software_installed(self) -> bool:
-        return self.host_node.remoter.run('ls /var/tmp/kind', ignore_status=True).ok
+        return self.host_node.remoter.run("ls /var/tmp/kind", ignore_status=True).ok
 
     @property
     def is_k8s_software_running(self) -> bool:
-        return self.host_node.remoter.run('/var/tmp/kind get kubeconfig', ignore_status=True).ok
+        return self.host_node.remoter.run("/var/tmp/kind get kubeconfig", ignore_status=True).ok
 
     def setup_k8s_software(self):
         script = dedent(f"""
@@ -498,7 +497,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         audit_log_path_option = ""
         if self.params.get("k8s_log_api_calls"):
             audit_log_path_option = f"audit-log-path: {DST_APISERVER_AUDIT_LOG}"
-        pod_subnet, service_subnet = '10.16.0.0/16', '10.19.0.0/16'
+        pod_subnet, service_subnet = "10.16.0.0/16", "10.19.0.0/16"
         script_start_part = f"""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
@@ -545,10 +544,11 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
         """
         for node_pool_type, node_num in (
-                (self.AUXILIARY_POOL_NAME, self.params.get("k8s_n_auxiliary_nodes") or 2),
-                (self.SCYLLA_POOL_NAME, self.params.get("n_db_nodes")),
-                (self.LOADER_POOL_NAME, self.params.get("n_loaders")),
-                (self.MONITORING_POOL_NAME, self.params.get("k8s_n_monitor_nodes"))):
+            (self.AUXILIARY_POOL_NAME, self.params.get("k8s_n_auxiliary_nodes") or 2),
+            (self.SCYLLA_POOL_NAME, self.params.get("n_db_nodes")),
+            (self.LOADER_POOL_NAME, self.params.get("n_loaders")),
+            (self.MONITORING_POOL_NAME, self.params.get("k8s_n_monitor_nodes")),
+        ):
             for _ in range(node_num):
                 script_start_part += f"""
           - role: worker
@@ -568,9 +568,11 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
     def setup_pod_network_connectivity(self):
         target_route_regex = re.compile(
-            r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2} via \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} .*")
-        route_lines = self.host_node.remoter.run(
-            "docker exec kind-control-plane /bin/bash -c 'ip r'").stdout.split("\n")
+            r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2} via \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} .*"
+        )
+        route_lines = self.host_node.remoter.run("docker exec kind-control-plane /bin/bash -c 'ip r'").stdout.split(
+            "\n"
+        )
         for route_line in route_lines:
             if not target_route_regex.match(route_line):
                 continue
@@ -579,31 +581,33 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.host_node.remoter.run(f"sudo bash -c '{route_cmd}'")
 
     def stop_k8s_software(self):
-        self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
+        self.host_node.remoter.run("/var/tmp/kind delete cluster", ignore_status=True)
 
     def load_images(self, images_list: [str]):
         for image in images_list:
             self.docker_pull(image)
-            self.host_node.remoter.run(
-                f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {image}", ignore_status=True)
 
     def on_deploy_completed(self):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         # first setup CNI plugin, otherwise everything else might get broken
         cni_images_to_cache = []
-        for image_repo in ('kube-controllers', 'cni', 'node'):
+        for image_repo in ("kube-controllers", "cni", "node"):
             cni_images_to_cache.append(f"calico/{image_repo}:{CNI_CALICO_VERSION}")
 
-        if not self.params.get('reuse_cluster'):
+        if not self.params.get("reuse_cluster"):
             self.load_images(cni_images_to_cache)
 
-        self.apply_file(CNI_CALICO_CONFIG, environ={
-            "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
-        })
+        self.apply_file(
+            CNI_CALICO_CONFIG,
+            environ={
+                "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
+            },
+        )
 
         images_to_cache.extend(self.cert_manager_images)
-        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+        if self.params.get("k8s_local_volume_provisioner_type") != "static":
             images_to_cache.append(self.dynamic_local_volume_provisioner_image)
         elif provisioner_image := self.static_local_volume_provisioner_image:
             images_to_cache.append(provisioner_image)
@@ -617,24 +621,23 @@ class LocalKindCluster(LocalMinimalClusterBase):
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
                 try:
-                    new_scylla_image_tag = version_utils.transform_non_semver_scylla_version_to_semver(
-                        scylla_image_tag)
+                    new_scylla_image_tag = version_utils.transform_non_semver_scylla_version_to_semver(scylla_image_tag)
                     images_to_retag[self.scylla_image] = f"{scylla_image_repo}:{new_scylla_image_tag}"
                 except ValueError as exc:
                     self.log.warning(
                         "Failed to transform non-semver scylla version '%s' to a semver-like one:\n%s",
-                        scylla_image_tag, str(exc))
+                        scylla_image_tag,
+                        str(exc),
+                    )
 
             images_to_cache.append(self.scylla_image)
         if self.params.get("use_mgmt"):
             images_to_cache.extend(self.minio_images)
-            images_to_cache.append(
-                f"scylladb/scylla-manager-agent:{SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER}")
+            images_to_cache.append(f"scylladb/scylla-manager-agent:{SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER}")
             if self.params.get("mgmt_docker_image"):
                 images_to_cache.append(self.params.get("mgmt_docker_image"))
         if self.params.get("scylla_mgmt_agent_version"):
-            images_to_cache.append(
-                "scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
+            images_to_cache.append("scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
         if self.params.get("k8s_enable_sni"):
             images_to_cache.extend(self.ingress_controller_images)
 
@@ -645,20 +648,18 @@ class LocalKindCluster(LocalMinimalClusterBase):
         # except ValueError as exc:
         #     self.log.warning("scylla-operator image won't be cached. Error: %s", str(exc))
 
-        if not self.params.get('reuse_cluster'):
+        if not self.params.get("reuse_cluster"):
             self.load_images(images_to_cache)
 
         if new_scylla_image_tag:
-            self.params['scylla_version'] = new_scylla_image_tag
+            self.params["scylla_version"] = new_scylla_image_tag
         for src_image, dst_image in images_to_retag.items():
             self.docker_tag(src_image, dst_image)
-            self.host_node.remoter.run(
-                f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
+            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
 
         self.setup_pod_network_connectivity()
 
-    def install_static_local_volume_provisioner(
-            self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
+    def install_static_local_volume_provisioner(self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
         if not isinstance(node_pools, list):
             node_pools = [node_pools]
         pool_names = ",".join([current_pool.name for current_pool in node_pools])
@@ -666,35 +667,34 @@ class LocalKindCluster(LocalMinimalClusterBase):
         # NOTE: create static dirs on the KinD Scylla K8S nodes
         #       which will be used by the static local volume provisioner.
         node_names = self.kubectl(
-            f"get nodes -l '{POOL_LABEL_NAME} in ({pool_names})' "
-            "--no-headers -o custom-columns=:.metadata.name").stdout.split()
+            f"get nodes -l '{POOL_LABEL_NAME} in ({pool_names})' --no-headers -o custom-columns=:.metadata.name"
+        ).stdout.split()
         for node_name in node_names:
             path = f"/mnt/raid-disks/disk0/pv-on-{node_name}"
             self.host_node.remoter.run(
-                f"docker exec {node_name} /bin/bash "
-                f" -c \"mkdir -p {path} && mount --bind {path}{{,}}\"")
+                f'docker exec {node_name} /bin/bash  -c "mkdir -p {path} && mount --bind {path}{{,}}"'
+            )
         super().install_static_local_volume_provisioner(node_pools=node_pools)
 
     def gather_k8s_logs(self) -> None:
         if self.params.get("k8s_log_api_calls"):
             # NOTE: export K8S API server log files to the SCT log dir
-            src_container_path, log_prefix = DST_APISERVER_AUDIT_LOG.rsplit('/', maxsplit=1)
+            src_container_path, log_prefix = DST_APISERVER_AUDIT_LOG.rsplit("/", maxsplit=1)
             log_prefix = log_prefix.split(".")[0]
             dst_subdir = "kube-apiserver"
             try:
                 self.host_node.remoter.run(
-                    f"docker cp kind-control-plane:{src_container_path} {self.logdir} "
-                    f"&& mkdir -p {self.logdir}/{dst_subdir} "
-                    f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
+                    f"docker cp kind-control-plane:{src_container_path} {self.logdir} && mkdir -p {self.logdir}/{dst_subdir} && mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}"
+                )
             except Exception as exc:  # noqa: BLE001
                 self.log.warning(
-                    "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
-                    src_container_path, exc)
+                    "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s", src_container_path, exc
+                )
         super().gather_k8s_logs()
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
-    parent_cluster: 'LocalMinimalScyllaPodCluster'
+    parent_cluster: "LocalMinimalScyllaPodCluster"
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
@@ -707,8 +707,8 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
     @property
     def docker_id(self):
         return self.host_remoter.run(
-            f'docker ps -q --filter "label=io.kubernetes.pod.name={self.name}" '
-            f'--filter "label=io.kubernetes.container.name=scylla"').stdout.strip()
+            f'docker ps -q --filter "label=io.kubernetes.pod.name={self.name}" --filter "label=io.kubernetes.container.name=scylla"'
+        ).stdout.strip()
 
     def restart(self):
         self.host_remoter.run(f"docker restart {self.docker_id}")
@@ -722,12 +722,17 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
 
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """Represents scylla cluster hosted on locally running minimal k8s clusters such as k3d, minikube or kind"""
+
     PodContainerClass = LocalMinimalScyllaPodContainer
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):
-        @retrying(n=iterations, sleep_time=sleep_time,
-                  allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
-                  message="Waiting for nodes to join the cluster", timeout=timeout)
+        @retrying(
+            n=iterations,
+            sleep_time=sleep_time,
+            allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
+            message="Waiting for nodes to join the cluster",
+            timeout=timeout,
+        )
         def _wait_for_nodes_up_and_normal(self):
             super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 

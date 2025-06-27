@@ -11,18 +11,18 @@ def get_latest_tarball_url(package_name: str) -> tuple[str, str]:
     url = f"https://pypi.org/pypi/{package_name}/json"
     response = requests.get(url)
     data = response.json()
-    version = data['info']['version']
-    for file_info in data['urls']:
-        if file_info['filename'].endswith('.tar.gz'):
-            return file_info['url'], version
+    version = data["info"]["version"]
+    for file_info in data["urls"]:
+        if file_info["filename"].endswith(".tar.gz"):
+            return file_info["url"], version
     raise Exception(f"No .tar.gz file found for {package_name}")
 
 
 def download_tarball(url: str, dest_folder: Path) -> Path:
     """Downloads the tarball to the destination folder."""
-    tarball_path = dest_folder / url.split('/')[-1]
+    tarball_path = dest_folder / url.split("/")[-1]
     response = requests.get(url, stream=True)
-    with open(tarball_path, 'wb') as f:
+    with open(tarball_path, "wb") as f:
         f.write(response.content)
     return tarball_path
 
@@ -35,27 +35,21 @@ def remove_old_files(project_root: Path):
 
 
 def extract_core_files(tarball_path: Path, extract_to: Path, version: str) -> None:
-    command = [
-        'tar',
-        '--strip-components=1',
-        '-xzf', tarball_path,
-        '-C', extract_to,
-        f'argus_alm-{version}/argus'
-    ]
+    command = ["tar", "--strip-components=1", "-xzf", tarball_path, "-C", extract_to, f"argus_alm-{version}/argus"]
     subprocess.run(command, check=True)
 
 
 def create_version_file(extract_to: Path, version: str):
     """Creates a 'version' file with the current version."""
-    version_file_path = extract_to / 'version'
-    with open(version_file_path, 'w') as f:
+    version_file_path = extract_to / "version"
+    with open(version_file_path, "w") as f:
         f.write(f"{version}\n")
 
 
 def create_how_to_update_file(extract_to: Path):
     """Creates 'how_to_update.md' with predefined content."""
-    how_to_update_path = extract_to / 'how_to_update.md'
-    with open(how_to_update_path, 'w') as f:
+    how_to_update_path = extract_to / "how_to_update.md"
+    with open(how_to_update_path, "w") as f:
         f.write("run `python utils/update_argus_client.py` to update Argus Client\n")
 
 

@@ -32,30 +32,27 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                             "test_details.start_time": {
                                 "gte": (datetime.datetime.utcnow() - datetime.timedelta(days=days)).timestamp(),
                                 "lte": datetime.datetime.utcnow().timestamp(),
-                                "boost": 2.0
+                                "boost": 2.0,
                             }
                         }
                     },
-                    {
-                        "term": {
-                            "test_details.job_name.keyword": job_name
-                        }
-                    }
+                    {"term": {"test_details.job_name.keyword": job_name}},
                 ]
             }
         },
-        "size": 10000
+        "size": 10000,
     }
 
     res = elastic_search.search(index=index_name, body=query)
-    for hit in res['hits']['hits']:
-        document_id = hit['_id']
+    for hit in res["hits"]["hits"]:
+        document_id = hit["_id"]
         print(f"Document ID: {document_id}")
-        workload = hit['_source']['test_details']['sub_type']
+        workload = hit["_source"]["test_details"]["sub_type"]
         client = ArgusSCTClient(
-            document_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
+            document_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+        )
         try:
-            latency_during_ops = hit['_source']['latency_during_ops']
+            latency_during_ops = hit["_source"]["latency_during_ops"]
         except KeyError:
             print(f"Document {document_id} does not have latency_during_ops key")
             continue
@@ -63,11 +60,11 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
 
         def sort_func(item):
             try:
-                hdr_summary = item[1]['cycles'][0]['hdr_summary']
+                hdr_summary = item[1]["cycles"][0]["hdr_summary"]
             except KeyError:  # Steady state is first
                 return 0
             try:
-                return hdr_summary.get('WRITE', hdr_summary.get('READ'))['start_time']
+                return hdr_summary.get("WRITE", hdr_summary.get("READ"))["start_time"]
             except KeyError as exc:
                 print(f"error while geting start time in {hdr_summary}", exc)
                 return 1
@@ -81,13 +78,22 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                     print(f"Would send {operation} - {workload} - latencies - cycle 0 to Argus")
                     continue
                 try:
-                    start_time = result["hdr_summary"].get("READ", result["hdr_summary"].get("WRITE"))[
-                        "start_time"] / 1000
-                    send_result_to_argus(argus_client=client, workload=workload, name=operation,
-                                         description=description, cycle=0, result=result, start_time=start_time)
+                    start_time = (
+                        result["hdr_summary"].get("READ", result["hdr_summary"].get("WRITE"))["start_time"] / 1000
+                    )
+                    send_result_to_argus(
+                        argus_client=client,
+                        workload=workload,
+                        name=operation,
+                        description=description,
+                        cycle=0,
+                        result=result,
+                        start_time=start_time,
+                    )
                 except argus.client.base.ArgusClientError:
                     print(
-                        f"Failed to send {operation} - {workload} - latencies to Argus: {hit['_source']['test_details']['job_url']}")
+                        f"Failed to send {operation} - {workload} - latencies to Argus: {hit['_source']['test_details']['job_url']}"
+                    )
                 continue
             for idx, cycle in enumerate(latency_during_ops[operation]["cycles"], start=1):
                 start_time = cycle["hdr_summary"].get("READ", cycle["hdr_summary"].get("WRITE"))["start_time"]
@@ -103,17 +109,18 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                         description=latency_during_ops[operation]["legend"] or "",
                         cycle=idx,
                         result=cycle,
-                        start_time=start_time
+                        start_time=start_time,
                     )
                 except RuntimeError:
                     # happens when no EventsDevice is running and trying to raise SCT event
                     pass
                 except argus.client.base.ArgusClientError:
                     print(
-                        f"Failed to send {operation} - {workload} - latencies - cycle {idx} to Argus: {hit['_source']['test_details']['job_url']}")
+                        f"Failed to send {operation} - {workload} - latencies - cycle {idx} to Argus: {hit['_source']['test_details']['job_url']}"
+                    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Migrates latency decorator results from ES to Argus"""
     migrate_to_prod = False  # set to True to migrate to production Argus
     dry_run = True  # set to True to simulate the migration without actually sending the data to Argus
@@ -121,16 +128,10 @@ if __name__ == '__main__':
     # can take job name by clicking a specific run in Argus and copying the job name (without the run number)
     job_name = "scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis"
     if not migrate_to_prod:
-        creds = {
-            "token": "<token for local environment>",
-            "baseUrl": "http://localhost:5000"
-        }
+        creds = {"token": "<token for local environment>", "baseUrl": "http://localhost:5000"}
     else:
         key_store = KeyStore()
         creds = key_store.get_argus_rest_credentials()
 
     for index in ["latency-during-ops-write", "latency-during-ops-read", "latency-during-ops-mixed"]:
-        migrate(creds=creds, days=days_back,
-                index_name=index,
-                job_name=job_name,
-                dry_run=dry_run)
+        migrate(creds=creds, days=days_back, index_name=index, job_name=job_name, dry_run=dry_run)
