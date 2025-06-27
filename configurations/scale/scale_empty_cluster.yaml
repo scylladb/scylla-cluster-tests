@@ -1,11 +1,11 @@
 test_duration: 6000
-n_db_nodes: 1
+n_db_nodes: 50
 add_node_cnt: 1
-cluster_target_size: 100
+cluster_target_size: 200
 n_loaders: 0
 
 
-user_prefix: 'cluster-scale-10-100-test'
+user_prefix: 'cluster-scale-50-200-test'
 nemesis_class_name: 'NoOpMonkey'
 # This is in order to start the basic cluster faster
 use_legacy_cluster_init: false
