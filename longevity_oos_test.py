@@ -17,7 +17,7 @@ from contextlib import ExitStack, contextmanager
 from time import sleep, time
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
-from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
+from sdcm.mgmt.common import DEFAULT_TASK_TIMEOUT, ScyllaManagerError, TaskStatus
 from sdcm.remote.libssh2_client.exceptions import Failure, UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -60,6 +60,12 @@ def ignore_repair_errors():
             new_severity=Severity.NORMAL,
             event_class=NodetoolEvent,
             regex=".*Repair service is disabled. No repairs will be started until it's re-enabled.*",
+            extra_time_to_expiration=60
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.NORMAL,
+            event_class=TestFrameworkEvent,
+            regex=".*Failed on waiting until task.*",
             extra_time_to_expiration=60
         ))
         yield
@@ -156,7 +162,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         threshold_node = max(self.db_cluster.nodes, key=get_node_disk_usage)
         with ignore_repair_errors():
             result = threshold_node.run_nodetool("repair", warning_event_on_exception=(
-                UnexpectedExit, Failure), error_message="Expected error.")
+                UnexpectedExit, Failure), error_message="Expected error.", timeout=DEFAULT_TASK_TIMEOUT)
             assert result is None, "Repair should be disabled at this point"
 
         self.scale_out()
@@ -179,7 +185,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         threshold_node = max(self.db_cluster.nodes, key=get_node_disk_usage)
         with ignore_repair_errors():
             result = threshold_node.run_nodetool("cluster repair", warning_event_on_exception=(
-                UnexpectedExit, Failure), error_message="Expected error.")
+                UnexpectedExit, Failure), error_message="Expected error.", timeout=DEFAULT_TASK_TIMEOUT)
             assert result is None, "Repair should be disabled at this point"
 
         self.scale_out()
@@ -195,19 +201,24 @@ class LongevityOutOfSpaceTest(LongevityTest):
         Repair should succeed on the node that reached the 98% threshold
         """
         self.run_prepare_write_cmd()
+        self.log.info("OOS_REPAIR - reached 90%")
 
         with ignore_stress_errors():
             self.run_stress()
+        self.log.info("OOS_REPAIR - reached 98%")
 
         with ignore_repair_errors():
             try:
                 self.manager_repair()
-            except ScyllaManagerError as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.log.error(f"Expected error during manager repair: {exc}")
+        self.log.info("OOS_REPAIR - After first repair")
 
         self.scale_out()
+        self.log.info("OOS_REPAIR - Scaled out")
 
         self.manager_repair()
+        self.log.info("OOS_REPAIR - After second repair")
 
     def test_oos_compaction_scale_out(self):
         """
