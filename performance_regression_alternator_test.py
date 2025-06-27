@@ -449,7 +449,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         )
         duration = self.params.get('stress_duration') / len(tests_to_run)
         try:
-            target = self.params.get('alternator_perf_stress_target')
+            target = self.params.get('alternator_stress_rate')
             self.log.info(f"Using target {target} for stress tests.")
         except KeyError:
             target = 15000

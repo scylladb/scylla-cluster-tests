@@ -60,7 +60,7 @@ Time in minutes, Time of execution for stress commands from stress_cmd parameter
 **type:** int
 
 
-## **alternator_perf_stress_target** / SCT_ALTERNATOR_PERF_STRESS_TARGET
+## **alternator_stress_rate** / SCT_ALTERNATOR_STRESS_RATE
 
 Number of operations per second to achieve in stress commands for alternator testing.
 
