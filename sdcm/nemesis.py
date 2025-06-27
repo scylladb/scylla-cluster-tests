@@ -1918,7 +1918,7 @@ class Nemesis:
                 self.action_log_scope("Start nodetool repair", target=node.name):
             node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
-    def run_repair_on_nodes(self, nodes: list, publish_event=True):
+    def run_repair_on_nodes(self, nodes: list,  ignore_down_hosts=False, publish_event=True):
         """
         Execute a nodetool repair on the specified nodes, disregarding errors that may
         arise from failed or unavailable nodes during the process.
@@ -1931,7 +1931,7 @@ class Nemesis:
                 except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.warning(f"Repair failed to complete on node: {node}, with error: {str(err)}")
         else:
-            self._mgmt_repair_cli()
+            self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts)
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
@@ -3145,9 +3145,10 @@ class Nemesis:
         self._mgmt_repair_cli()
 
     @latency_calculator_decorator(legend="Scylla-Manger repair")
-    def _mgmt_repair_cli(self):
+    def _mgmt_repair_cli(self, ignore_down_hosts=None):
+        self.log.debug("Manager repair started")
         mgr_cluster = self.cluster.get_cluster_manager()
-        mgr_task = mgr_cluster.create_repair_task()
+        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
         if task_final_status != TaskStatus.DONE:
             progress_full_string = mgr_task.progress_string(
