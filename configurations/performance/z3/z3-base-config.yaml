@@ -1,0 +1,9 @@
+use_preinstalled_scylla: false  # temporarily before Scylla supports Z3
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 0
+gce_root_disk_type_loader: 'pd-ssd'
+gce_instance_type_monitor: 'n2-highmem-16'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-2025-1-2'  # keep the same system packages as in N2 test (before Scylla supports Z3)
+user_prefix: 'perf-regression-z3'
+gce_project: 'gcp-local-ssd-latency'
+gce_network: 'qa-vpc'
