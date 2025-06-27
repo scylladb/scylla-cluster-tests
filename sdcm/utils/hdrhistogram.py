@@ -334,7 +334,7 @@ class _HdrRangeHistogramBuilder:
         LOGGER.info(f'QWERTY checking hdr_tag {hdr_tag} for workload type detection')
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
-        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan", "mixed")):
+        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan")):
             return "READ"
         elif self.stress_operation in ("WRITE", "READ"):
             # branch for the scylla-bench case with its 'co-fixed' and 'raw' tags
