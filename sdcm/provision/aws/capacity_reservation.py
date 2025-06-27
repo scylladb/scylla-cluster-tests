@@ -31,13 +31,14 @@ class SCTCapacityReservation:
     """Class for managing capacity reservations for AWS instances.
 
     Serves namespacing for capacity reservations and provides methods for creating and cancelling reservations."""
+
     reservations: Dict[str, Dict[str, str]] = {}
 
     @staticmethod
     def _get_cr_request_based_on_sct_config(params) -> Tuple[dict[str, int], int]:
         instance_counts = defaultdict(int)
         nemesis_node_count = params.get("nemesis_add_node_cnt") or 0
-        cluster_max_size = (params.get("cluster_target_size") or params.get("n_db_nodes"))
+        cluster_max_size = params.get("cluster_target_size") or params.get("n_db_nodes")
 
         if params.get("use_zero_nodes"):
             zero_token_nodes = params.get("n_db_zero_token_nodes")
@@ -65,27 +66,18 @@ class SCTCapacityReservation:
             LOGGER.info("Capacity reservation is not enabled. Skipping reservation.")
             return
         test_id = params.get("test_id")
-        ec2 = boto3.client('ec2', region_name=params.region_names[0])
+        ec2 = boto3.client("ec2", region_name=params.region_names[0])
         reservations = ec2.describe_capacity_reservations(
-            Filters=[
-                {
-                    'Name': 'tag:test_id',
-                    'Values': [test_id]
-                },
-                {
-                    'Name': 'state',
-                    'Values': ['active']
-                }
-            ]
+            Filters=[{"Name": "tag:test_id", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
         )
         result = {}
         availability_zone = params.get("availability_zone")
-        for reservation in reservations['CapacityReservations']:
-            availability_zone = reservation['AvailabilityZone'][-1]
-            instance_type = reservation['InstanceType']
+        for reservation in reservations["CapacityReservations"]:
+            availability_zone = reservation["AvailabilityZone"][-1]
+            instance_type = reservation["InstanceType"]
             if availability_zone not in result:
                 result[availability_zone] = {}
-            result[availability_zone][instance_type] = reservation['CapacityReservationId']
+            result[availability_zone][instance_type] = reservation["CapacityReservationId"]
         if result:
             LOGGER.info("Found capacity reservations: %s", result)
             params["availability_zone"] = availability_zone
@@ -96,18 +88,17 @@ class SCTCapacityReservation:
     @staticmethod
     def _get_supported_availability_zones(ec2, instance_types: List[str], initial_az: str) -> List[str]:
         response = ec2.describe_instance_type_offerings(
-            LocationType='availability-zone',
+            LocationType="availability-zone",
             Filters=[
-                {
-                    'Name': 'instance-type',
-                    'Values': list(instance_types)
-                },
-            ]
+                {"Name": "instance-type", "Values": list(instance_types)},
+            ],
         )
-        offerings = response['InstanceTypeOfferings']
+        offerings = response["InstanceTypeOfferings"]
         azs = set.intersection(
-            *[{offering['Location'] for offering in offerings if offering['InstanceType'] == instance_type}
-              for instance_type in instance_types]
+            *[
+                {offering["Location"] for offering in offerings if offering["InstanceType"] == instance_type}
+                for instance_type in instance_types
+            ]
         )
         azs = list(azs)
         try:  # put initial az as first one to try
@@ -121,18 +112,19 @@ class SCTCapacityReservation:
     @staticmethod
     def is_capacity_reservation_enabled(params: dict) -> bool:
         """Returns True if capacity reservation is enabled."""
-        is_single_dc = str(params.get("n_db_nodes")).isdigit() or params.get('simulated_regions') > 0
-        return (params.get("cluster_backend") == "aws"
-                and params.get("test_id")
-                and not params.get("reuse_cluster")
-                and params.get('use_capacity_reservation') is True
-                and params.get('instance_provision') == 'on_demand'
-                and is_single_dc)
+        is_single_dc = str(params.get("n_db_nodes")).isdigit() or params.get("simulated_regions") > 0
+        return (
+            params.get("cluster_backend") == "aws"
+            and params.get("test_id")
+            and not params.get("reuse_cluster")
+            and params.get("use_capacity_reservation") is True
+            and params.get("instance_provision") == "on_demand"
+            and is_single_dc
+        )
 
     @classmethod
     def reserve(cls, params) -> None:
-        """Reserves capacity for given test params: detects required instance types and counts and creates capacity reservations.
-        """
+        """Reserves capacity for given test params: detects required instance types and counts and creates capacity reservations."""
         if not cls.is_capacity_reservation_enabled(params):
             LOGGER.info("Capacity reservation is not enabled. Skipping reservation.")
             return
@@ -142,21 +134,15 @@ class SCTCapacityReservation:
             return
         region = params.region_names[0]
         test_id = params.get("test_id")
-        ec2 = boto3.client('ec2', region_name=region)
+        ec2 = boto3.client("ec2", region_name=region)
         placement_group_arn = None
 
         if params.get("use_placement_group"):
-            response = ec2.describe_placement_groups(
-                Filters=[
-                    {
-                        'Name': 'tag:TestId',
-                        'Values': [test_id]
-                    }
-                ]
-            )
-            if response['PlacementGroups']:
-                placement_group_arn = [group['GroupArn']
-                                       for group in response['PlacementGroups'] if group['State'] == 'available'][0]
+            response = ec2.describe_placement_groups(Filters=[{"Name": "tag:TestId", "Values": [test_id]}])
+            if response["PlacementGroups"]:
+                placement_group_arn = [
+                    group["GroupArn"] for group in response["PlacementGroups"] if group["State"] == "available"
+                ][0]
                 LOGGER.info("Using placement group '%s' for capacity reservation.", placement_group_arn)
             else:
                 LOGGER.error("Available placement group not found while should.")
@@ -164,14 +150,21 @@ class SCTCapacityReservation:
         request, duration = cls._get_cr_request_based_on_sct_config(params)
         LOGGER.info("Creating capacity reservation for test %s with request: %s", test_id, request)
         reservations = {}
-        for availability_zone in cls._get_supported_availability_zones(ec2=ec2, instance_types=list(request.keys()),
-                                                                       initial_az=region+params.get("availability_zone")):
+        for availability_zone in cls._get_supported_availability_zones(
+            ec2=ec2, instance_types=list(request.keys()), initial_az=region + params.get("availability_zone")
+        ):
             reservations[availability_zone[-1]] = {}
             LOGGER.info("Creating capacity reservation in %s", availability_zone)
             for instance_type, instance_count in request.items():
-                cr_id = cls._create(ec2=ec2, test_id=test_id, availability_zone=availability_zone,
-                                    instance_type=instance_type, instance_count=instance_count, duration=duration,
-                                    placement_group_arn=placement_group_arn)
+                cr_id = cls._create(
+                    ec2=ec2,
+                    test_id=test_id,
+                    availability_zone=availability_zone,
+                    instance_type=instance_type,
+                    instance_count=instance_count,
+                    duration=duration,
+                    placement_group_arn=placement_group_arn,
+                )
                 if cr_id:
                     reservations[availability_zone[-1]][instance_type] = cr_id
                     LOGGER.info("Capacity reservation created for %s", instance_type)
@@ -187,8 +180,12 @@ class SCTCapacityReservation:
             if reservations:
                 params["availability_zone"] = availability_zone[-1]
                 cls.reservations = reservations
-                LOGGER.info("Capacity reservations created in '%s' az: %s for duration: %s",
-                            availability_zone, reservations, duration)
+                LOGGER.info(
+                    "Capacity reservations created in '%s' az: %s for duration: %s",
+                    availability_zone,
+                    reservations,
+                    duration,
+                )
                 return
 
         raise CapacityReservationError("Failed to create capacity reservation in any availability zone.")
@@ -199,7 +196,9 @@ class SCTCapacityReservation:
         return cls.reservations[availability_zone][instance_type]
 
     @staticmethod
-    def _create(ec2, test_id, availability_zone, instance_type, instance_count, duration, placement_group_arn=None) -> str | None:
+    def _create(
+        ec2, test_id, availability_zone, instance_type, instance_count, duration, placement_group_arn=None
+    ) -> str | None:
         additional_params = {}
         if placement_group_arn:
             additional_params["PlacementGroupArn"] = placement_group_arn
@@ -207,35 +206,25 @@ class SCTCapacityReservation:
         try:
             response = ec2.create_capacity_reservation(
                 InstanceType=instance_type,
-                InstancePlatform='Linux/UNIX',
-                InstanceMatchCriteria='targeted',
+                InstancePlatform="Linux/UNIX",
+                InstanceMatchCriteria="targeted",
                 AvailabilityZone=availability_zone,
                 InstanceCount=instance_count,
-                EndDateType='limited',
+                EndDateType="limited",
                 EndDate=datetime.utcnow() + timedelta(minutes=duration),
                 TagSpecifications=[
                     {
-                        'ResourceType': 'capacity-reservation',
-                        'Tags': [
-                            {
-                                'Key': 'test_id',
-                                'Value': test_id
-                            },
-                            {
-                                'Key': 'RunByUser',
-                                'Value': get_username()
-                            },
-                            {
-                                'Key': 'JenkinsJobTag',
-                                'Value': os.environ.get('BUILD_TAG')
-                            }
-
-                        ]
+                        "ResourceType": "capacity-reservation",
+                        "Tags": [
+                            {"Key": "test_id", "Value": test_id},
+                            {"Key": "RunByUser", "Value": get_username()},
+                            {"Key": "JenkinsJobTag", "Value": os.environ.get("BUILD_TAG")},
+                        ],
                     },
                 ],
-                **additional_params
+                **additional_params,
             )
-            return response['CapacityReservation']['CapacityReservationId']
+            return response["CapacityReservation"]["CapacityReservationId"]
         except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to create capacity reservation for %s. Error: %s", instance_type, exc)
             return None
@@ -246,7 +235,7 @@ class SCTCapacityReservation:
         if not cls.reservations:
             LOGGER.info("No capacity reservations to cancel.")
             return
-        ec2 = boto3.client('ec2', region_name=params.region_names[0])
+        ec2 = boto3.client("ec2", region_name=params.region_names[0])
         cls._cancel_reservations(ec2, cls.reservations)
         cls.reservations = {}
 
@@ -270,30 +259,28 @@ class SCTCapacityReservation:
             return
 
         def cancel_region(region):
-            ec2 = boto3.client('ec2', region_name=region)
+            ec2 = boto3.client("ec2", region_name=region)
             try:
                 reservations = ec2.describe_capacity_reservations(
-                    Filters=[
-                        {
-                            'Name': 'tag:test_id',
-                            'Values': [test_id]
-                        },
-                        {
-                            'Name': 'state',
-                            'Values': ['active']
-                        }
-                    ]
+                    Filters=[{"Name": "tag:test_id", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
                 )
-                if not reservations['CapacityReservations']:
+                if not reservations["CapacityReservations"]:
                     LOGGER.info("There are no CRs to remove in region %s.", region)
-                for reservation in reservations['CapacityReservations']:
+                for reservation in reservations["CapacityReservations"]:
                     try:
-                        ec2.cancel_capacity_reservation(CapacityReservationId=reservation['CapacityReservationId'])
-                        LOGGER.info("Capacity reservation %s in region %s cancelled successfully.",
-                                    reservation['CapacityReservationId'], region)
+                        ec2.cancel_capacity_reservation(CapacityReservationId=reservation["CapacityReservationId"])
+                        LOGGER.info(
+                            "Capacity reservation %s in region %s cancelled successfully.",
+                            reservation["CapacityReservationId"],
+                            region,
+                        )
                     except ClientError as exp:
-                        LOGGER.error("Failed to cancel capacity reservation %s in region %s. Error: %s",
-                                     reservation['CapacityReservationId'], region, exp)
+                        LOGGER.error(
+                            "Failed to cancel capacity reservation %s in region %s. Error: %s",
+                            reservation["CapacityReservationId"],
+                            region,
+                            exp,
+                        )
 
             except ClientError as exp:
                 LOGGER.error("Failed to describe capacity reservations in region %s. Error: %s", region, exp)

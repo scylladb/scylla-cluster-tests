@@ -57,16 +57,39 @@ class CqlStressCassandraStressEventsPublisher(FileFollowerThread):
 
 
 class CqlStressCassandraStressThread(CassandraStressThread):
-    DOCKER_IMAGE_PARAM_NAME = 'stress_image.cql-stress-cassandra-stress'
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.cql-stress-cassandra-stress"
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # noqa: PLR0913
-                 profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
-                 params=None):
-        super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
-                         stress_num=stress_num, node_list=node_list,
-                         round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params,
-                         keyspace_num=keyspace_num, keyspace_name=keyspace_name, profile=profile,
-                         client_encrypt=client_encrypt, compaction_strategy=compaction_strategy)
+    def __init__(  # noqa: PLR0913
+        self,
+        loader_set,
+        stress_cmd,
+        timeout,
+        stress_num=1,
+        keyspace_num=1,
+        keyspace_name="",
+        compaction_strategy="",
+        profile=None,
+        node_list=None,
+        round_robin=False,
+        client_encrypt=False,
+        stop_test_on_failure=True,
+        params=None,
+    ):
+        super().__init__(
+            loader_set=loader_set,
+            stress_cmd=stress_cmd,
+            timeout=timeout,
+            stress_num=stress_num,
+            node_list=node_list,
+            round_robin=round_robin,
+            stop_test_on_failure=stop_test_on_failure,
+            params=params,
+            keyspace_num=keyspace_num,
+            keyspace_name=keyspace_name,
+            profile=profile,
+            client_encrypt=client_encrypt,
+            compaction_strategy=compaction_strategy,
+        )
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
@@ -75,33 +98,32 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         stress_cmd = self.adjust_cmd_keyspace_name(stress_cmd, keyspace_idx)
         stress_cmd = self.adjust_cmd_compaction_strategy(stress_cmd)
 
-        if '-col' in stress_cmd:
+        if "-col" in stress_cmd:
             # In cassandra-stress, '-col n=' parameter defines number of columns called (C0, C1, ..., Cn) respectively.
             # It accepts a distribution as value, however, only 'FIXED' distribution is accepted for the cql mode.
             # In cql-stress, we decided to accept a number instead.
             # To support the c-s syntax in test-cases files, we replace occurrences
             # of n=FIXED(k) to n=k.
-            stress_cmd = re.sub(r' (\'?)n=[\s]*fixed\(([0-9]+)\)(\'?)', r' \1n=\2\3',
-                                stress_cmd, flags=re.IGNORECASE)
+            stress_cmd = re.sub(r" (\'?)n=[\s]*fixed\(([0-9]+)\)(\'?)", r" \1n=\2\3", stress_cmd, flags=re.IGNORECASE)
 
-        if '-pop' in stress_cmd and "seq=" in stress_cmd:
+        if "-pop" in stress_cmd and "seq=" in stress_cmd:
             # '-pop seq=x..y' syntax is not YET supported by cql-stress.
             # TODO remove when seq=x..y syntax is supported.
             LOGGER.warning(
-                "-pop seq=x..y syntax is not YET supported by cql-stress-cassandra-stress. Replacing seq=x..y with dist=SEQ(x..y).")
-            stress_cmd = re.sub(r' seq=[\s]*([\d]+\.\.[\d]+)',
-                                r" 'dist=SEQ(\1)'", stress_cmd)
+                "-pop seq=x..y syntax is not YET supported by cql-stress-cassandra-stress. Replacing seq=x..y with dist=SEQ(x..y)."
+            )
+            stress_cmd = re.sub(r" seq=[\s]*([\d]+\.\.[\d]+)", r" 'dist=SEQ(\1)'", stress_cmd)
 
         credentials = self.loader_set.get_db_auth()
-        if credentials and 'user=' not in stress_cmd:
-            if '-mode' in stress_cmd:
+        if credentials and "user=" not in stress_cmd:
+            if "-mode" in stress_cmd:
                 # put the credentials into the right place into -mode section
-                stress_cmd = re.sub(r'(-mode.*?)(-)?', r'\1 user={} password={} \2'.format(*credentials), stress_cmd)
+                stress_cmd = re.sub(r"(-mode.*?)(-)?", r"\1 user={} password={} \2".format(*credentials), stress_cmd)
             else:
-                stress_cmd += ' -mode user={} password={} '.format(*credentials)
+                stress_cmd += " -mode user={} password={} ".format(*credentials)
 
-        if self.client_encrypt and 'transport' not in stress_cmd:
-            transport_str = cql_stress_transport_str(self.params.get('peer_verification'))
+        if self.client_encrypt and "transport" not in stress_cmd:
+            transport_str = cql_stress_transport_str(self.params.get("peer_verification"))
             stress_cmd += f" -transport '{transport_str}'"
 
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
@@ -115,37 +137,32 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         cleanup_context = contextlib.nullcontext()
         os.makedirs(loader.logdir, exist_ok=True)
 
-        stress_cmd_opt = self.stress_cmd.split(
-            "cql-stress-cassandra-stress", 1)[1].split(None, 1)[0]
+        stress_cmd_opt = self.stress_cmd.split("cql-stress-cassandra-stress", 1)[1].split(None, 1)[0]
 
         log_id = self._build_log_file_id(loader_idx, cpu_idx, keyspace_idx)
-        log_file_name = os.path.join(
-            loader.logdir, f'cql-stress-cassandra-stress-{stress_cmd_opt}-{log_id}.log')
+        log_file_name = os.path.join(loader.logdir, f"cql-stress-cassandra-stress-{stress_cmd_opt}-{log_id}.log")
 
-        LOGGER.debug('cql-stress-cassandra-stress local log: %s', log_file_name)
+        LOGGER.debug("cql-stress-cassandra-stress local log: %s", log_file_name)
         remote_hdr_file_name = f"hdrh-cscs-{stress_cmd_opt}-{log_id}.hdr"
         LOGGER.debug("cql-stress-cassandra-stress remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
         LOGGER.debug("cql-stress-cassandra-stress HDR local file %s", local_hdr_file_name)
         loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
         remote_hdr_file_name_full_path = loader.remoter.run(
-            f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False).stdout.strip()
+            f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False
+        ).stdout.strip()
         cmd_runner_name = loader.ip_address
 
         cpu_options = ""
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                    command_line="-c 'tail -f /dev/null'",
-                                                    extra_docker_opts=f'{cpu_options} '
-                                                    '--network=host '
-                                                    '--security-opt seccomp=unconfined '
-                                                    f'--label shell_marker={self.shell_marker}'
-                                                    f' --entrypoint /bin/bash'
-                                                    f' -w /'
-                                                    f' -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}'
-                                                    )
+        cmd_runner = cleanup_context = RemoteDocker(
+            loader,
+            self.docker_image_name,
+            command_line="-c 'tail -f /dev/null'",
+            extra_docker_opts=f"{cpu_options} --network=host --security-opt seccomp=unconfined --label shell_marker={self.shell_marker} --entrypoint /bin/bash -w / -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}",
+        )
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
 
         if self.params.get("use_hdrhistogram"):
@@ -157,54 +174,60 @@ class CqlStressCassandraStressThread(CassandraStressThread):
             )
         else:
             hdrh_logger_context = contextlib.nullcontext()
-        LOGGER.info('Stress command:\n%s', stress_cmd)
+        LOGGER.info("Stress command:\n%s", stress_cmd)
 
-        tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
+        tag = f"TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}"
 
         if self.stress_num > 1:
-            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}'
+            node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}"
         else:
-            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
-        node_cmd = f'echo {tag}; {node_cmd}'
+            node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}"
+        node_cmd = f"echo {tag}; {node_cmd}"
         if self.client_encrypt:
             for ssl_file in loader.ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
-                    cmd_runner.send_files(str(ssl_file),
-                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
-                                          verbose=True)
+                    cmd_runner.send_files(str(ssl_file), str(SCYLLA_SSL_CONF_DIR / ssl_file.name), verbose=True)
         try:
-            prefix,  *_ = stress_cmd.split("cql-stress-cassandra-stress", maxsplit=1)
+            prefix, *_ = stress_cmd.split("cql-stress-cassandra-stress", maxsplit=1)
             reporter = CqlStressCassandraStressVersionReporter(
-                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
+                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client()
+            )
             reporter.report()
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect cql-stress-cassandra-stress version information", exc_info=True)
         result = None
-        with cleanup_context, \
-                CqlStressCassandraStressExporter(instance_name=cmd_runner_name,
-                                                 metrics=nemesis_metrics_obj(),
-                                                 stress_operation=stress_cmd_opt,
-                                                 stress_log_filename=log_file_name,
-                                                 loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                CqlStressCassandraStressEventsPublisher(node=loader, log_filename=log_file_name) as publisher, \
-                CqlStressCassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
-                                              log_file_name=log_file_name) as cs_stress_event, \
-                CqlStressHDRExporter(instance_name=cmd_runner_name,
-                                     hdr_tags=self.hdr_tags,
-                                     metrics=nemesis_metrics_obj(),
-                                     stress_operation=stress_cmd_opt,
-                                     stress_log_filename=local_hdr_file_name,
-                                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                hdrh_logger_context:
+        with (
+            cleanup_context,
+            CqlStressCassandraStressExporter(
+                instance_name=cmd_runner_name,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=stress_cmd_opt,
+                stress_log_filename=log_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            CqlStressCassandraStressEventsPublisher(node=loader, log_filename=log_file_name) as publisher,
+            CqlStressCassandraStressEvent(
+                node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name
+            ) as cs_stress_event,
+            CqlStressHDRExporter(
+                instance_name=cmd_runner_name,
+                hdr_tags=self.hdr_tags,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=stress_cmd_opt,
+                stress_log_filename=local_hdr_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            hdrh_logger_context,
+        ):
             publisher.event_id = cs_stress_event.event_id
             try:
                 # prolong timeout by 5% to avoid killing cassandra-stress process
                 hard_timeout = self.timeout + int(self.timeout * 0.05)
                 with SoftTimeoutContext(timeout=self.timeout, operation="cql-stress-cassandra-stress"):
-                    result = cmd_runner.run(
-                        cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
+                    result = cmd_runner.run(cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # noqa: BLE001
-                self.configure_event_on_failure(
-                    stress_event=cs_stress_event, exc=exc)
+                self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 
         return loader, result, cs_stress_event

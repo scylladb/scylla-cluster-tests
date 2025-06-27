@@ -53,7 +53,7 @@ from sdcm.utils.gce_utils import (
 )
 
 
-LOGGER = logging.getLogger('utils')
+LOGGER = logging.getLogger("utils")
 
 
 def clean_cloud_resources(tags_dict, config=None, dry_run=False):
@@ -69,25 +69,25 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
 
-    cluster_backend = config.get("cluster_backend") or ''
+    cluster_backend = config.get("cluster_backend") or ""
     aws_regions = config.region_names
-    gce_projects = [config.get("gce_project") or 'gcp-sct-project-1']
+    gce_projects = [config.get("gce_project") or "gcp-sct-project-1"]
 
     if cluster_backend.startswith("k8s-local"):
         LOGGER.info("No remote resources are expected in the local K8S setups. Skipping.")
         return
-    if cluster_backend in ('k8s-eks', ''):
+    if cluster_backend in ("k8s-eks", ""):
         clean_clusters_eks(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_launch_templates_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_load_balancers_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_cloudformation_stacks_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-    if cluster_backend in ('k8s-gke', ''):
+    if cluster_backend in ("k8s-gke", ""):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
                 clean_clusters_gke(tags_dict, dry_run=dry_run)
                 clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
 
-    if cluster_backend in ('aws', 'k8s-eks', ''):
+    if cluster_backend in ("aws", "k8s-eks", ""):
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if config.region_names:
             SCTCapacityReservation.get_cr_from_aws(config, force_fetch=True)
@@ -98,18 +98,18 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        if cluster_backend == 'aws' and not dry_run:
+        if cluster_backend == "aws" and not dry_run:
             clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
-    if cluster_backend in ('gce', 'k8s-gke', ''):
+    if cluster_backend in ("gce", "k8s-gke", ""):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
                 clean_instances_gce(tags_dict, dry_run=dry_run)
-    if cluster_backend in ('azure', ''):
+    if cluster_backend in ("azure", ""):
         azure_regions = config.get("azure_region_name") or []
         if isinstance(azure_regions, str):
             azure_regions = [region for azure_region in azure_regions for region in azure_region.split(" ")]
         clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
-    if cluster_backend in ('docker', ''):
+    if cluster_backend in ("docker", ""):
         clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
 
@@ -158,8 +158,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     if regions:
         aws_instances = {}
         for region in regions:
-            aws_instances |= list_instances_aws(
-                tags_dict=tags_dict, region_name=region, group_as_region=True)
+            aws_instances |= list_instances_aws(tags_dict=tags_dict, region_name=region, group_as_region=True)
     else:
         aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
     try:
@@ -172,12 +171,12 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
         if not instance_list:
             LOGGER.info("There are no instances to remove in AWS region %s", region)
             continue
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         for instance in instance_list:
-            tags = aws_tags_to_dict(instance.get('Tags'))
+            tags = aws_tags_to_dict(instance.get("Tags"))
             name = tags.get("Name", "N/A")
             node_type = tags.get("NodeType")
-            instance_id = instance['InstanceId']
+            instance_id = instance["InstanceId"]
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
@@ -185,7 +184,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 terminate_resource_in_argus(client=argus_client, resource_name=name)
-                LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
+                LOGGER.debug("Done. Result: %s\n", response["TerminatingInstances"])
 
 
 def clean_elastic_ips_aws(tags_dict, regions=None, dry_run=False):
@@ -200,8 +199,7 @@ def clean_elastic_ips_aws(tags_dict, regions=None, dry_run=False):
     if regions:
         aws_instances = {}
         for region in regions:
-            aws_instances |= list_elastic_ips_aws(
-                tags_dict=tags_dict, region_name=region, group_as_region=True)
+            aws_instances |= list_elastic_ips_aws(tags_dict=tags_dict, region_name=region, group_as_region=True)
     else:
         aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
 
@@ -209,14 +207,14 @@ def clean_elastic_ips_aws(tags_dict, regions=None, dry_run=False):
         if not eip_list:
             LOGGER.info("There are no EIPs to remove in AWS region %s", region)
             continue
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         for eip in eip_list:
-            association_id = eip.get('AssociationId')
+            association_id = eip.get("AssociationId")
             if association_id and not dry_run:
                 response = client.disassociate_address(AssociationId=association_id)
                 LOGGER.debug("disassociate_address. Result: %s\n", response)
-            allocation_id = eip['AllocationId']
-            LOGGER.info("Going to release '%s' [public_ip={%s}]", allocation_id, eip['PublicIp'])
+            allocation_id = eip["AllocationId"]
+            LOGGER.info("Going to release '%s' [public_ip={%s}]", allocation_id, eip["PublicIp"])
             if not dry_run:
                 response = client.release_address(AllocationId=allocation_id)
                 LOGGER.debug("Done. Result: %s\n", response)
@@ -234,8 +232,7 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
     if regions:
         aws_instances = {}
         for region in regions:
-            aws_instances |= list_test_security_groups(
-                tags_dict=tags_dict, region_name=region, group_as_region=True)
+            aws_instances |= list_test_security_groups(tags_dict=tags_dict, region_name=region, group_as_region=True)
     else:
         aws_instances = list_test_security_groups(tags_dict=tags_dict, group_as_region=True)
 
@@ -243,9 +240,9 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
         if not sg_list:
             LOGGER.info("There are no SGs to remove in AWS region %s", region)
             continue
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         for security_group in sg_list:
-            group_id = security_group.get('GroupId')
+            group_id = security_group.get("GroupId")
             LOGGER.info("Going to delete '%s'", group_id)
             if not dry_run:
                 try:
@@ -258,9 +255,8 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
 def clean_aws_kms_alias(tags_dict, region_names):
     # NOTE: try to delete KMS key alias which could be created by the AWS-KMS nemesis
     test_id = tags_dict.get("TestId", "TestIdNotFound")
-    if any(('db' in node_type for node_type in tags_dict.get("NodeType", []))):
-        AwsKms(region_names=region_names).delete_alias(
-            f"alias/testid-{test_id}", tolerate_errors=True)
+    if any(("db" in node_type for node_type in tags_dict.get("NodeType", []))):
+        AwsKms(region_names=region_names).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)
     else:
         LOGGER.info("Skip AWS KMS alias deletion because DB nodes deletion was not scheduled")
 
@@ -286,13 +282,13 @@ def clean_load_balancers_aws(tags_dict, regions=None, dry_run=False):
         if not elb_list:
             LOGGER.info("There are no ELBs to remove in AWS region %s", region)
             continue
-        client = boto3.client('elb', region_name=region)
+        client = boto3.client("elb", region_name=region)
         for elb in elb_list:
-            arn = elb.get('ResourceARN')
+            arn = elb.get("ResourceARN")
             LOGGER.info("Going to delete '%s'", arn)
             if not dry_run:
                 try:
-                    response = client.delete_load_balancer(LoadBalancerName=arn.split('/')[1])
+                    response = client.delete_load_balancer(LoadBalancerName=arn.split("/")[1])
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
@@ -319,13 +315,13 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
         if not stacks_list:
             LOGGER.info("There are no cloudformation stacks to remove in AWS region %s", region)
             continue
-        client = boto3.client('cloudformation', region_name=region)
+        client = boto3.client("cloudformation", region_name=region)
         for stack in stacks_list:
-            arn = stack.get('ResourceARN')
+            arn = stack.get("ResourceARN")
             LOGGER.info("Going to delete '%s'", arn)
             if not dry_run:
                 try:
-                    response = client.delete_stack(StackName=arn.split('/')[1])
+                    response = client.delete_stack(StackName=arn.split("/")[1])
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
@@ -352,9 +348,7 @@ def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
         for current_lt in lt_list:
             current_lt_name = current_lt.get("LaunchTemplateName")
             current_lt_id = current_lt.get("LaunchTemplateId")
-            LOGGER.info(
-                "Going to delete LaunchTemplate, ID: '%s', Name: '%s'",
-                current_lt_id, current_lt_name)
+            LOGGER.info("Going to delete LaunchTemplate, ID: '%s', Name: '%s'", current_lt_id, current_lt_name)
             if dry_run:
                 continue
             try:
@@ -365,7 +359,9 @@ def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
                 response = ec2_client.delete_launch_template(**deletion_args)
                 LOGGER.info(
                     "Successfully deleted '%s' LaunchTemplate. Response: %s\n",
-                    (current_lt_name or current_lt_id), response)
+                    (current_lt_name or current_lt_id),
+                    response,
+                )
             except Exception as ex:  # noqa: BLE001
                 LOGGER.info("Failed to delete the '%s' LaunchTemplate: %s", deletion_args, str(ex))
 
@@ -395,15 +391,16 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
 
         if not dry_run:
             instances_client, info = get_gce_compute_instances_client()
-            res = instances_client.delete(instance=instance.name,
-                                          project=info['project_id'],
-                                          zone=instance.zone.split('/')[-1])
+            res = instances_client.delete(
+                instance=instance.name, project=info["project_id"], zone=instance.zone.split("/")[-1]
+            )
             res.done()
             terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
-    ParallelObject(map(lambda i: (i, tags_dict), gce_instances_to_clean),
-                   timeout=60).run(delete_instance, ignore_exceptions=False)
+    ParallelObject(map(lambda i: (i, tags_dict), gce_instances_to_clean), timeout=60).run(
+        delete_instance, ignore_exceptions=False
+    )
 
 
 def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
@@ -431,15 +428,18 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
             else:
                 instances_to_clean.append(instance)
         if len(all_instances) == len(instances_to_clean):
-            LOGGER.info("Cleaning everything for test id: %s in region: %s",
-                        provisioner.test_id, provisioner.region)
+            LOGGER.info("Cleaning everything for test id: %s in region: %s", provisioner.test_id, provisioner.region)
             if not dry_run:
                 provisioner.cleanup(wait=False)
                 for instance in instances_to_clean:
                     terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
         else:
-            LOGGER.info("test id %s from %s - instances to clean: %s",
-                        provisioner.test_id, provisioner.region, [inst.name for inst in instances_to_clean])
+            LOGGER.info(
+                "test id %s from %s - instances to clean: %s",
+                provisioner.test_id,
+                provisioner.region,
+                [inst.name for inst in instances_to_clean],
+            )
             if not dry_run:
                 for instance in instances_to_clean:
                     instance.terminate(wait=False)
@@ -457,8 +457,9 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
 
     def delete_cluster(cluster):
         if not dry_run:
-            LOGGER.info("Going to delete %s GKE cluster from the %s project",
-                        cluster.name, os.environ.get("SCT_GCE_PROJECT"))
+            LOGGER.info(
+                "Going to delete %s GKE cluster from the %s project", cluster.name, os.environ.get("SCT_GCE_PROJECT")
+            )
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
@@ -474,13 +475,20 @@ def clean_orphaned_gke_disks(tags_dict: dict, dry_run: bool = False) -> None:
     try:
         gke_cleaner = GkeCleaner()
         orphaned_disks = gke_cleaner.list_orphaned_gke_disks()
-        LOGGER.info("Found following orphaned GKE disks in the %s project: %s",
-                    os.environ.get("SCT_GCE_PROJECT"), orphaned_disks)
+        LOGGER.info(
+            "Found following orphaned GKE disks in the %s project: %s",
+            os.environ.get("SCT_GCE_PROJECT"),
+            orphaned_disks,
+        )
         if not dry_run:
             for zone, disk_names in orphaned_disks.items():
                 gke_cleaner.clean_disks(disk_names=disk_names, zone=zone)
-                LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone (%s project): %s",
-                            zone, os.environ.get("SCT_GCE_PROJECT"), disk_names)
+                LOGGER.info(
+                    "Deleted following orphaned GKE disks in the '%s' zone (%s project): %s",
+                    zone,
+                    os.environ.get("SCT_GCE_PROJECT"),
+                    disk_names,
+                )
     except Exception as exc:  # noqa: BLE001
         LOGGER.error(exc)
 
@@ -492,17 +500,20 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
     eks_clusters_to_clean = list_clusters_eks(tags_dict=tags_dict, regions=regions)
 
     if not eks_clusters_to_clean:
-        LOGGER.info("There are no EKS clusters to remove in %s region(s)" % ','.join(regions) or 'all')
+        LOGGER.info("There are no EKS clusters to remove in %s region(s)" % ",".join(regions) or "all")
         return
 
     def delete_cluster(cluster):
         if not dry_run:
-            LOGGER.info("Going to delete '%s' EKS cluster in the '%s' region.",
-                        cluster.name, cluster.region_name)
+            LOGGER.info("Going to delete '%s' EKS cluster in the '%s' region.", cluster.name, cluster.region_name)
             try:
                 res = cluster.destroy()
-                LOGGER.info("'%s' EKS cluster in the '%s' region has been deleted. Response=%s",
-                            cluster.name, cluster.region_name, res)
+                LOGGER.info(
+                    "'%s' EKS cluster in the '%s' region has been deleted. Response=%s",
+                    cluster.name,
+                    cluster.region_name,
+                    res,
+                )
             except Exception as exc:  # noqa: BLE001
                 LOGGER.error(exc)
 
@@ -510,7 +521,7 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
 
 
 def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):
-    critical_events = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
+    critical_events = get_testrun_status(params.get("TestId"), logdir, only_critical=True)
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
 
@@ -524,14 +535,20 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
                 node_types_to_cleanup.append(node_type)
             continue
         elif action_type["action"] == "keep-on-failure" and not critical_events:
-            LOGGER.info("Post behavior %s for %s. No critical events found. Schedule cleanup.",
-                        action_type["action"], cluster_nodes_type)
+            LOGGER.info(
+                "Post behavior %s for %s. No critical events found. Schedule cleanup.",
+                action_type["action"],
+                cluster_nodes_type,
+            )
             for node_type in action_type["node_types"]:
                 node_types_to_cleanup.append(node_type)
             continue
         else:
-            LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
-                        action_type["action"], cluster_nodes_type)
+            LOGGER.info(
+                "Post behavior %s for %s. Test run Failed. Keep resources running",
+                action_type["action"],
+                cluster_nodes_type,
+            )
             continue
     clean_cloud_resources(params | {"NodeType": node_types_to_cleanup}, config=config, dry_run=dry_run)
 
@@ -545,7 +562,8 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         aws_placement_groups = {}
         for region in regions:
             aws_placement_groups |= list_placement_groups_aws(
-                tags_dict=tags_dict, region_name=region, group_as_region=True)
+                tags_dict=tags_dict, region_name=region, group_as_region=True
+            )
     else:
         aws_placement_groups = list_placement_groups_aws(tags_dict=tags_dict, group_as_region=True)
 
@@ -553,7 +571,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         if not instance_list:
             LOGGER.debug("There are no placement groups to remove in AWS region %s", region)
             continue
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         for instance in instance_list:
             name = instance.get("GroupName")
             LOGGER.info("Going to delete placement group '{name} ".format(name=name))
