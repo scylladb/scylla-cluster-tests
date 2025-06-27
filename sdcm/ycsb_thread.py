@@ -223,7 +223,8 @@ class YcsbStressThread(DockerBasedStressThread):
             stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
-
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd += " -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-"
         return stress_cmd
 
     @staticmethod

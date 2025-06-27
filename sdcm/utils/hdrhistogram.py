@@ -328,8 +328,8 @@ class _HdrRangeHistogramBuilder:
         #    Examples: 'fn--write', 'fn--write-batch', 'fn--get', 'fn--get-many', 'fn--read'.
         # 3) 'scylla-bench' has identical tag names for reads and writes - 'co-fixed' and 'raw'.
         #    It doesn't have 'mixed' workload type, so it's mode should be used for detecting the tag data type.
-        # 4) NOT_SUPPORTED: 'ycsb', it supports HDR histograms, but doesn't use tags in it.
-        #    So, the 'ycsb' case should be handled separately.
+        # 4) 'ycsb', it supports HDR histograms, but doesn't use tags in it.
+        #    We tag files ourselves.
         hdr_tag = hdr_tag.lower().strip()
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"

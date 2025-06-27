@@ -704,3 +704,4 @@ class DockerComposeLogger(CommandClusterLoggerBase):
     @cached_property
     def _logger_cmd(self) -> str:
         return f"{self._cluster.compose_context} logs --no-color --tail=1000 >>{self._target_log_file}"
+
