@@ -25,9 +25,9 @@ from typing import List
 
 
 TIMERS = {
-    'perf': time.perf_counter,
-    'monotonic': time.monotonic,
-    'proc': time.process_time,
+    "perf": time.perf_counter,
+    "monotonic": time.monotonic,
+    "proc": time.process_time,
 }
 
 
@@ -51,11 +51,12 @@ class ProfileableProcess(multiprocessing.Process):
     >>> p2.join(3)
 
     """
+
     _profile = None
     _profile_factory = None
 
     def init(self):
-        ProfileableProcess._bind_profile(self, getattr(self, '_name', 'UnknownProcess'))
+        ProfileableProcess._bind_profile(self, getattr(self, "_name", "UnknownProcess"))
         ProfileableProcess.init_run(self)
 
     @staticmethod
@@ -63,7 +64,7 @@ class ProfileableProcess(multiprocessing.Process):
         original_run_method = obj.run
 
         def modified_run():
-            profile = getattr(obj, '_profile', None)
+            profile = getattr(obj, "_profile", None)
             if profile:
                 profile = profile.fork()
                 profile.set_global_main_profile(profile)
@@ -71,7 +72,8 @@ class ProfileableProcess(multiprocessing.Process):
             original_run_method()
             if profile:
                 profile.create_stats()
-        setattr(obj, 'run', modified_run)
+
+        setattr(obj, "run", modified_run)
 
     def _bind_profile(self, group_name):
         if ProfileableProcess._profile_factory:
@@ -124,15 +126,16 @@ class ProfileableThread(threading.Thread):
     >>> p2.join(3)
 
     """
+
     _profile = None
     _profile_factory = None
 
     @staticmethod
     def init(obj):
-        if getattr(obj, '_profile', None) is None:
+        if getattr(obj, "_profile", None) is None:
             ProfileableThread.init_profile(obj)
 
-        if obj.run.__name__ != 'modified_run':
+        if obj.run.__name__ != "modified_run":
             ProfileableThread.init_run(obj)
 
     @staticmethod
@@ -140,13 +143,14 @@ class ProfileableThread(threading.Thread):
         original_run_method = obj.run
 
         def modified_run():
-            profile = getattr(obj, '_profile', None)
+            profile = getattr(obj, "_profile", None)
             if profile:
                 profile.enable()
             original_run_method()
             if profile:
                 profile.create_stats()
-        setattr(obj, 'run', modified_run)
+
+        setattr(obj, "run", modified_run)
 
     def _bootstrap_inner(self):
         ProfileableThread.init(self)
@@ -154,10 +158,10 @@ class ProfileableThread(threading.Thread):
 
     @staticmethod
     def init_profile(obj):
-        if obj.__class__.__name__ == '_DummyThread':
+        if obj.__class__.__name__ == "_DummyThread":
             profile_group_name = multiprocessing.current_process()._name
         else:
-            profile_group_name = getattr(obj, '_name', 'UnknownThread')
+            profile_group_name = getattr(obj, "_name", "UnknownThread")
         ProfileableThread._bind_profile(obj, profile_group_name)
 
     @staticmethod
@@ -189,8 +193,7 @@ def _get_timer_from_str(timer_name):
 
 
 class StatsHolder:
-    """ A class that is designed to hold stats that could be fed to pstats.Stats
-    """
+    """A class that is designed to hold stats that could be fed to pstats.Stats"""
 
     def __init__(self, stats):
         self.stats = self._stats = stats
@@ -209,8 +212,8 @@ class ProfileBase(cProfile.Profile):
 
     def __init__(self, *args, **kwargs):
         new_kwargs = kwargs.copy()
-        new_kwargs['timer'] = _get_timer_from_str(new_kwargs.get('timer', None))
-        self._group_name = new_kwargs.pop('group_name', None)
+        new_kwargs["timer"] = _get_timer_from_str(new_kwargs.get("timer", None))
+        self._group_name = new_kwargs.pop("group_name", None)
         super().__init__(*args, **new_kwargs)
         if args:
             self._args = args
@@ -219,8 +222,8 @@ class ProfileBase(cProfile.Profile):
 
     def enable(self, subcalls=None, builtins=None):
         if not self._enabled:
-            subcalls = self._kwargs.get('subcalls', True) if subcalls is None else subcalls
-            builtins = self._kwargs.get('builtins', True) if builtins is None else builtins
+            subcalls = self._kwargs.get("subcalls", True) if subcalls is None else subcalls
+            builtins = self._kwargs.get("builtins", True) if builtins is None else builtins
             super().enable(subcalls, builtins)
             self._enabled = True
 
@@ -246,22 +249,22 @@ class ProfileBase(cProfile.Profile):
 
 
 class ThreadProfile(ProfileBase):
-    """ A class derived from cProfile.Profile, adopted to ProfilerFactory needs as a profile for threads
-    """
-    _type = 'thread'
+    """A class derived from cProfile.Profile, adopted to ProfilerFactory needs as a profile for threads"""
+
+    _type = "thread"
 
     def get_stats_holder(self):
-        if getattr(self, 'stats', None):
+        if getattr(self, "stats", None):
             return StatsHolder(self.stats)
         return None
 
 
 class ProcessProfile(ProfileBase):
-    """ A class derived from cProfile.Profile, adopted to ProfilerFactory needs as a profile for processes
-    """
+    """A class derived from cProfile.Profile, adopted to ProfilerFactory needs as a profile for processes"""
+
     # TBD: ProcessProfile won't get it's stats unless process is stopped to address that it is necessary to have
     # thread inside that proccess that will disable, create and dump stats by the command from master profile.
-    _type = 'process'
+    _type = "process"
 
     def __init__(self, *args, queue=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -272,7 +275,7 @@ class ProcessProfile(ProfileBase):
             self._master = True
             self._queue = multiprocessing.Queue()
 
-    def fork(self) -> 'ProcessProfile':
+    def fork(self) -> "ProcessProfile":
         """
         Make a slave fork of a main profile and passed queue down to it
         To be used inside of process context, so that slave profile could send profile stats
@@ -324,7 +327,7 @@ class ProfilerFactory:
         tuna /tmp/123/stats.bin
     """
 
-    def __init__(self, target_dir: str, subcalls=True, builtins=True, timer: str = 'proc'):
+    def __init__(self, target_dir: str, subcalls=True, builtins=True, timer: str = "proc"):
         self._profiles = {}
         self._subcalls = subcalls
         self._builtins = builtins
@@ -339,7 +342,7 @@ class ProfilerFactory:
             ProfileableThread.set_global_profile_factory(self)
             ProfileableThread.activate()
         if main:
-            self.get_profile('main').enable()
+            self.get_profile("main").enable()
         if autodump:
             atexit.register(self.stop_and_dump)
 
@@ -350,11 +353,13 @@ class ProfilerFactory:
 
     def get_profile(self, group_name, is_process=False):
         if is_process:
-            profile = ProcessProfile(timer=self._timer, subcalls=self._subcalls,
-                                     builtins=self._builtins, group_name=group_name)
+            profile = ProcessProfile(
+                timer=self._timer, subcalls=self._subcalls, builtins=self._builtins, group_name=group_name
+            )
         else:
-            profile = ThreadProfile(timer=self._timer, subcalls=self._subcalls,
-                                    builtins=self._builtins, group_name=group_name)
+            profile = ThreadProfile(
+                timer=self._timer, subcalls=self._subcalls, builtins=self._builtins, group_name=group_name
+            )
         self._store_profile(group_name, profile)
         return profile
 
@@ -387,13 +392,13 @@ class ProfilerFactory:
 
     def _dump_text_stats(self, *stat_holders, dst=None):
         dst.write("=============== ncalls ===============\n")
-        self._dump_stats(*stat_holders, dst=dst, binary=False, sort='ncalls')
+        self._dump_stats(*stat_holders, dst=dst, binary=False, sort="ncalls")
         dst.write("=============== tottime ===============\n")
-        self._dump_stats(*stat_holders, dst=dst, binary=False, sort='tottime')
+        self._dump_stats(*stat_holders, dst=dst, binary=False, sort="tottime")
         dst.write("=============== pcalls ===============\n")
-        self._dump_stats(*stat_holders, dst=dst, binary=False, sort='pcalls')
+        self._dump_stats(*stat_holders, dst=dst, binary=False, sort="pcalls")
         dst.write("=============== cumtime ===============\n")
-        self._dump_stats(*stat_holders, dst=dst, binary=False, sort='cumtime')
+        self._dump_stats(*stat_holders, dst=dst, binary=False, sort="cumtime")
 
     def dump_stats(self):
         stats_holders = {}
@@ -415,11 +420,11 @@ class ProfilerFactory:
             if os.path.exists(group_dir):
                 shutil.rmtree(group_dir, ignore_errors=True)
             os.makedirs(group_dir, exist_ok=True)
-            with open(os.path.join(group_dir, 'stats.txt'), 'w', encoding="utf-8") as stat_file:
+            with open(os.path.join(group_dir, "stats.txt"), "w", encoding="utf-8") as stat_file:
                 self._dump_text_stats(*stat_holders, dst=stat_file)
-            with open(os.path.join(group_dir, 'stats.bin'), 'wb') as stat_file:
+            with open(os.path.join(group_dir, "stats.bin"), "wb") as stat_file:
                 self._dump_stats(*stat_holders, dst=stat_file, binary=True)
-        with open(os.path.join(self._target_dir, 'stats.txt'), 'w', encoding="utf-8") as stat_file:
+        with open(os.path.join(self._target_dir, "stats.txt"), "w", encoding="utf-8") as stat_file:
             self._dump_text_stats(*total_stats, dst=stat_file)
-        with open(os.path.join(self._target_dir, 'stats.bin'), 'wb') as stat_file:
+        with open(os.path.join(self._target_dir, "stats.bin"), "wb") as stat_file:
             self._dump_stats(*total_stats, dst=stat_file, binary=True)
