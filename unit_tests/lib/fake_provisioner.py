@@ -21,6 +21,7 @@ from sdcm.provision.provisioner import Provisioner, VmInstance, InstanceDefiniti
 
 class FakeProvisioner(Provisioner):
     """Fake provisioner for tests purposes. Imitates provisioner api by creating fake provisioners in memory."""
+
     _provisioners = {}
 
     def __new__(cls, test_id: str, region: str, availability_zone: str, **_) -> Provisioner:
@@ -35,28 +36,30 @@ class FakeProvisioner(Provisioner):
         super().__init__(test_id, region, availability_zone)
         self._instances: Dict[str, VmInstance] = getattr(self, "_instances", {})
 
-    def get_or_create_instance(self,
-                               definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT
-                               ) -> VmInstance:
+    def get_or_create_instance(
+        self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT
+    ) -> VmInstance:
         if v_m := self._instances.get(definition.name):
             return v_m
-        v_m = VmInstance(name=definition.name, region=self.region,
-                         user_name=definition.user_name,
-                         ssh_key_name=definition.ssh_key.name,
-                         public_ip_address='123.123.123.123',
-                         private_ip_address='10.10.10.10', tags=definition.tags,
-                         pricing_model=pricing_model,
-                         image=definition.image_id,
-                         creation_time=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc),
-                         _provisioner=self)
+        v_m = VmInstance(
+            name=definition.name,
+            region=self.region,
+            user_name=definition.user_name,
+            ssh_key_name=definition.ssh_key.name,
+            public_ip_address="123.123.123.123",
+            private_ip_address="10.10.10.10",
+            tags=definition.tags,
+            pricing_model=pricing_model,
+            image=definition.image_id,
+            creation_time=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc),
+            _provisioner=self,
+        )
         self._instances[definition.name] = v_m
         return v_m
 
-    def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+    def get_or_create_instances(
+        self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT
+    ) -> List[VmInstance]:
         return [self.get_or_create_instance(definition, pricing_model) for definition in definitions]
 
     def list_instances(self) -> List[VmInstance]:

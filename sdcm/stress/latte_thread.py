@@ -34,8 +34,8 @@ from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
-LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
-LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
+LATTE_FN_NAME_RE = "(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)"
+LATTE_TAG_RE = r"--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b"
 LOGGER = logging.getLogger(__name__)
 
 
@@ -92,7 +92,6 @@ def get_latte_operation_type(stress_cmd):
 
 
 class LatteStressThread(DockerBasedStressThread):
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
     def set_stress_operation(self, stress_cmd):
@@ -100,30 +99,26 @@ class LatteStressThread(DockerBasedStressThread):
 
     def build_stress_cmd(self, cmd_runner, loader, hosts):
         # extract the script so we know which files to mount into the docker image
-        script_name_regx = re.compile(r'([/\w-]*\.rn)')
+        script_name_regx = re.compile(r"([/\w-]*\.rn)")
         script_name = script_name_regx.search(self.stress_cmd).group(0)
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
             cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
 
-        ssl_config = ''
-        if self.params['client_encrypt']:
+        ssl_config = ""
+        if self.params["client_encrypt"]:
             for ssl_file in loader.ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
-                    cmd_runner.send_files(str(ssl_file),
-                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
-                                          verbose=True)
+                    cmd_runner.send_files(str(ssl_file), str(SCYLLA_SSL_CONF_DIR / ssl_file.name), verbose=True)
 
-            ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} '
-                           f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} '
-                           f'--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}')
+            ssl_config += f" --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} --ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} --ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}"
 
-            if self.params['peer_verification']:
-                ssl_config += ' --ssl-peer-verification'
+            if self.params["peer_verification"]:
+                ssl_config += " --ssl-peer-verification"
 
-        auth_config = ''
+        auth_config = ""
         if credentials := self.loader_set.get_db_auth():
-            auth_config = f' --user {credentials[0]} --password {credentials[1]}'
+            auth_config = f" --user {credentials[0]} --password {credentials[1]}"
 
         datacenter, rack = "", ""
         if self.params.get("rack_aware_loader"):
@@ -140,28 +135,30 @@ class LatteStressThread(DockerBasedStressThread):
             else:
                 LOGGER.error(
                     "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
-                    loader.region, datacenter_name_per_region)
+                    loader.region,
+                    datacenter_name_per_region,
+                )
                 if rack:
                     # NOTE: fail fast if we cannot find proper dc value when rack-awareness is enabled
                     raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
 
         custom_schema_params = ""
-        if latte_schema_parameters := self.params['latte_schema_parameters']:
+        if latte_schema_parameters := self.params["latte_schema_parameters"]:
             # NOTE: string parameters in latte must be wrapped into escaped double-quotes: foo="\"bar\""
             for k, v in latte_schema_parameters.items():
                 processed_v = v
                 try:
                     processed_v = int(v)
                 except Exception:  # noqa: BLE001
-                    if v not in ('true', 'false'):
+                    if v not in ("true", "false"):
                         processed_v = r"\"%s\"" % v
                 custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
         cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} {auth_config}{custom_schema_params} -- {hosts}',
+            cmd=f"latte schema {script_name} {ssl_config} {auth_config}{custom_schema_params} -- {hosts}",
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q '
+        stress_cmd = f"{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q "
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
@@ -180,21 +177,22 @@ class LatteStressThread(DockerBasedStressThread):
         :param result: output of latte stats
         :return: dict
         """
-        ops_regex = re.compile(r'\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s')
-        latency_99_regex = re.compile(r'\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s')
+        ops_regex = re.compile(r"\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s")
+        latency_99_regex = re.compile(r"\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s")
         latency_mean_regex = re.compile(
-            r'\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
+            r"\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)"
+        )
 
-        output = {'latency 99th percentile': 0, 'latency mean': 0, 'op rate': 0}
+        output = {"latency 99th percentile": 0, "latency mean": 0, "op rate": 0}
         for line in result.stdout.split("SUMMARY STATS")[-1].splitlines():
             if match := ops_regex.match(line):
-                output['op rate'] = match.groupdict()['op_rate']
+                output["op rate"] = match.groupdict()["op_rate"]
                 continue
             if match := latency_99_regex.match(line):
-                output['latency 99th percentile'] = float(match.groupdict()['latency_99th_percentile'])
+                output["latency 99th percentile"] = float(match.groupdict()["latency_99th_percentile"])
                 continue
             if match := latency_mean_regex.match(line):
-                output['latency mean'] = float(match.groupdict()['latency_mean'])
+                output["latency mean"] = float(match.groupdict()["latency_mean"])
                 continue
 
         # output back to strings
@@ -211,8 +209,9 @@ class LatteStressThread(DockerBasedStressThread):
 
         first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [self.stress_operation])[0]
         log_file_name = os.path.join(
-            loader.logdir, 'latte%s-l%s-c%s-%s.log' % (first_tag_or_op, loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('latte benchmarking tool local log: %s', log_file_name)
+            loader.logdir, "latte%s-l%s-c%s-%s.log" % (first_tag_or_op, loader_idx, cpu_idx, uuid.uuid4())
+        )
+        LOGGER.debug("latte benchmarking tool local log: %s", log_file_name)
 
         # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
         log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
@@ -223,15 +222,16 @@ class LatteStressThread(DockerBasedStressThread):
 
         loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
         remote_hdr_file_name_full_path = loader.remoter.run(
-            f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False,
+            f"realpath $HOME/{remote_hdr_file_name}",
+            ignore_status=False,
+            verbose=False,
         ).stdout.strip()
         cmd_runner = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
             command_line="-c 'tail -f /dev/null'",
             extra_docker_opts=(
-                f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
-                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+                f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker} -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
             ),
         )
         hosts = " ".join([i.cql_address for i in self.node_list])
@@ -264,27 +264,30 @@ class LatteStressThread(DockerBasedStressThread):
 
         LOGGER.debug("running: %s", stress_cmd)
         result, keyspace_holder = {}, LatteKeyspaceHolder()
-        with cleanup_context, \
-                hdrh_logger_context, \
-                LatteExporter(
-                    keyspace=keyspace_holder,
-                    instance_name=loader.ip_address,
-                    metrics=nemesis_metrics_obj(),
-                    stress_operation=self.stress_operation,
-                    stress_log_filename=log_file_name,
-                    loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                LatteHDRExporter(
-                    keyspace=keyspace_holder,
-                    instance_name=loader.ip_address,
-                    hdr_tags=self.hdr_tags,
-                    metrics=nemesis_metrics_obj(),
-                    stress_operation=self.stress_operation,
-                    stress_log_filename=local_hdr_file_name,
-                    loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                LatteStressEvent(
-                    node=loader,
-                    stress_cmd=stress_cmd,
-                    log_file_name=log_file_name) as latte_stress_event:
+        with (
+            cleanup_context,
+            hdrh_logger_context,
+            LatteExporter(
+                keyspace=keyspace_holder,
+                instance_name=loader.ip_address,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=self.stress_operation,
+                stress_log_filename=log_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            LatteHDRExporter(
+                keyspace=keyspace_holder,
+                instance_name=loader.ip_address,
+                hdr_tags=self.hdr_tags,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=self.stress_operation,
+                stress_log_filename=local_hdr_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            LatteStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as latte_stress_event,
+        ):
             try:
                 result = cmd_runner.run(
                     cmd=stress_cmd,

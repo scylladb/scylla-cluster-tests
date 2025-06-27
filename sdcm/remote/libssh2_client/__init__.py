@@ -27,21 +27,31 @@ from ssh2.channel import Channel
 from ssh2.exceptions import AuthenticationError
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
 
-from .exceptions import AuthenticationException, UnknownHostException, ConnectError, PKeyFileError, UnexpectedExit, \
-    CommandTimedOut, FailedToReadCommandOutput, ConnectTimeout, FailedToRunCommand, OpenChannelTimeout
+from .exceptions import (
+    AuthenticationException,
+    UnknownHostException,
+    ConnectError,
+    PKeyFileError,
+    UnexpectedExit,
+    CommandTimedOut,
+    FailedToReadCommandOutput,
+    ConnectTimeout,
+    FailedToRunCommand,
+    OpenChannelTimeout,
+)
 from .result import Result
 from .session import Session
 from .timings import Timings, NullableTiming
 
 
-__all__ = ['Session', 'Timings', 'Client', 'Channel', 'FailedToRunCommand']
+__all__ = ["Session", "Timings", "Client", "Channel", "FailedToRunCommand"]
 
 
-LINESEP = b'\n'
+LINESEP = b"\n"
 
 
 class __DEFAULT__:
-    """ Default value for function attribute when None is not an option """
+    """Default value for function attribute when None is not an option"""
 
 
 class StreamWatcher(ABC):
@@ -74,19 +84,26 @@ class SSHReaderThread(Thread):
 
     def run(self):
         try:
-            self._read_output(self._session, self._channel, self._timeout,
-                              self._timeout_read_data, self.stdout, self.stderr)
+            self._read_output(
+                self._session, self._channel, self._timeout, self._timeout_read_data, self.stdout, self.stderr
+            )
         except Exception as exc:  # noqa: BLE001
             self.raised = exc
 
     def _read_output(
-            self, session: Session, channel: Channel, timeout: NullableTiming, timeout_read_data: NullableTiming,
-            stdout_stream: Queue, stderr_stream: Queue):
+        self,
+        session: Session,
+        channel: Channel,
+        timeout: NullableTiming,
+        timeout_read_data: NullableTiming,
+        stdout_stream: Queue,
+        stderr_stream: Queue,
+    ):
         """Reads data from ssh session, split it into lines and forward lines into stderr ad stdout pipes
         It is required for it to be fast, that is why there is code duplications and non-pythonic code
         """
 
-        stdout_remainder = stderr_remainder = b''
+        stdout_remainder = stderr_remainder = b""
         if timeout is None:
             end_time = float_info.max
         else:
@@ -147,8 +164,7 @@ class KeepAliveThread(Thread):
     def run(self):
         while self._session and self._keep_running.is_set():
             try:
-                time_to_wait = self._session.eagain(
-                    self._session.keepalive_send, timeout=self._keepalive_timeout)
+                time_to_wait = self._session.eagain(self._session.keepalive_send, timeout=self._keepalive_timeout)
             except Exception:  # noqa: BLE001
                 time_to_wait = self._keepalive_timeout
             sleep(time_to_wait)
@@ -173,10 +189,11 @@ class FloodPreventingFacility(dict):
     Get a lock from the store based on that hash, if there is no one - create it.
     The lock is `BoundedSemaphore`, a lock with acquire limit equals to `limit` attribute.
     """
+
     # TODO: Does not support multiprocessing, look at multiprocessing.Queue.__getstate__ as example
     limit: int = 5
-    _hash_items: str = 'host'
-    _hash_items_splitted: list = ['host']
+    _hash_items: str = "host"
+    _hash_items_splitted: list = ["host"]
 
     def __init__(self, limit: int = None, hash_items: str = None):
         if limit is not None:
@@ -193,7 +210,7 @@ class FloodPreventingFacility(dict):
     @hash_items.setter
     def hash_items(self, hash_items: str):
         self._hash_items = hash_items
-        self._hash_items_splitted = hash_items.split(',')
+        self._hash_items_splitted = hash_items.split(",")
 
     def __reduce__(self):
         return self.__class__, (self.limit, self.hash_items)
@@ -205,12 +222,11 @@ class FloodPreventingFacility(dict):
         """
         lock_hash = []
         for hash_item in self._hash_items_splitted:
-            lock_hash.append(getattr(session, hash_item, 'NONE'))
-        return '|'.join(lock_hash)
+            lock_hash.append(getattr(session, hash_item, "NONE"))
+        return "|".join(lock_hash)
 
     def get_lock(self, session: object) -> BoundedSemaphore:
-        """Get a lock from the store based on that hash, if there is no any - create it and return.
-        """
+        """Get a lock from the store based on that hash, if there is no any - create it and return."""
         lock_hash = self._get_hash(session)
         with self._read_lock:
             lock = self.get(lock_hash, None)
@@ -219,17 +235,15 @@ class FloodPreventingFacility(dict):
         return lock
 
     def acquire(self, session: object, blocking: bool = True):
-        """Get a lock from the store based on the hash, if there is no any - create it and acquire.
-        """
+        """Get a lock from the store based on the hash, if there is no any - create it and acquire."""
         self.get_lock(session).acquire(blocking)
 
     def release(self, session: object):
-        """Get a lock from the store based on the hash and release it.
-        """
+        """Get a lock from the store based on the hash and release it."""
         self[self._get_hash(session)].release()
 
 
-DEFAULT_FLOOD_PREVENTING = FloodPreventingFacility(hash_items='host', limit=2)
+DEFAULT_FLOOD_PREVENTING = FloodPreventingFacility(hash_items="host", limit=2)
 
 
 class Client:
@@ -283,10 +297,20 @@ class Client:
     timings: Timings = Timings()
     flood_preventing: FloodPreventingFacility = DEFAULT_FLOOD_PREVENTING
 
-    def __init__(self, host: str, user: str, password: str = None,
-                 port: int = None, pkey: str = None, allow_agent: bool = None, forward_ssh_agent: bool = None,
-                 proxy_host: str = None, keepalive_seconds: int = None, timings: Timings = None,
-                 flood_preventing: FloodPreventingFacility = None):
+    def __init__(
+        self,
+        host: str,
+        user: str,
+        password: str = None,
+        port: int = None,
+        pkey: str = None,
+        allow_agent: bool = None,
+        forward_ssh_agent: bool = None,
+        proxy_host: str = None,
+        keepalive_seconds: int = None,
+        timings: Timings = None,
+        flood_preventing: FloodPreventingFacility = None,
+    ):
         self.host = host
         self.user = user
         if password is not None:
@@ -313,8 +337,18 @@ class Client:
 
     def __reduce__(self):
         return self.__class__, (
-            self.host, self.user, self.password, self.port, self.pkey, self.allow_agent, self.forward_ssh_agent,
-            self.proxy_host, self.keepalive_seconds, self.timings, self.flood_preventing)
+            self.host,
+            self.user,
+            self.password,
+            self.port,
+            self.pkey,
+            self.allow_agent,
+            self.forward_ssh_agent,
+            self.proxy_host,
+            self.keepalive_seconds,
+            self.timings,
+            self.flood_preventing,
+        )
 
     def __enter__(self):
         return self
@@ -343,7 +377,8 @@ class Client:
             with self.session.lock:
                 self.session.keepalive_config(False, self.timings.keepalive_timeout)
             self.keepalive_thread = KeepAliveThread(
-                self.session, keepalive_timeout=self.timings.keepalive_sending_timeout)
+                self.session, keepalive_timeout=self.timings.keepalive_sending_timeout
+            )
             self.keepalive_thread.start()
 
     def _auth(self):
@@ -361,10 +396,13 @@ class Client:
 
     def _pkey_auth(self):
         self.session.eagain(
-            self.session.userauth_publickey_fromfile, args=(
+            self.session.userauth_publickey_fromfile,
+            args=(
                 self.user,
                 self._validate_pkey_path(self.pkey, self.host),
-                self.password if self.password is not None else ''))
+                self.password if self.password is not None else "",
+            ),
+        )
 
     @staticmethod
     def _validate_pkey_path(pkey: str, host: str = None) -> Optional[str]:
@@ -372,9 +410,7 @@ class Client:
             return None
         pkey = normpath(expanduser(pkey))
         if not exists(pkey):
-            msg = "File %s does not exist. " \
-                  "Please use either absolute or relative to user directory " \
-                  "paths like '~/.ssh/my_key' for pkey parameter"
+            msg = "File %s does not exist. Please use either absolute or relative to user directory paths like '~/.ssh/my_key' for pkey parameter"
             ex = PKeyFileError(msg, pkey)
             ex.host = host
             raise ex
@@ -383,8 +419,8 @@ class Client:
     def _password_auth(self):
         try:
             self.session.eagain(
-                self.session.userauth_password,
-                args=(self.user, self.password), timeout=self.timings.auth_timeout)
+                self.session.userauth_password, args=(self.user, self.password), timeout=self.timings.auth_timeout
+            )
         except Exception as error:  # noqa: BLE001
             raise AuthenticationException("Password authentication failed") from error
 
@@ -421,8 +457,15 @@ class Client:
             raise ConnectError("Error connecting to host '%s:%s' - %s" % (host, port, str(error_type))) from ex
 
     @staticmethod
-    def _process_output(watchers: List[StreamWatcher], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
-                        reader: SSHReaderThread, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming):
+    def _process_output(
+        watchers: List[StreamWatcher],
+        encoding: str,
+        stdout_stream: StringIO,
+        stderr_stream: StringIO,
+        reader: SSHReaderThread,
+        timeout: NullableTiming,
+        timeout_read_data_chunk: NullableTiming,
+    ):
         """Separate different approach for the case when watchers are present, since watchers are slow,
           we can loose data due to the socket buffer limit, if endpoint sending it faster than watchers can read it.
         To avoid that we run `SSHReaderThread` thread that picks data up from the socket, splits it into lines
@@ -443,7 +486,7 @@ class Client:
             if stdout_stream is not None and reader.stdout.qsize():
                 try:
                     stdout = reader.stdout.get(timeout=timeout_read_data_chunk)
-                    data = stdout.decode(encoding, errors='ignore') + '\n'
+                    data = stdout.decode(encoding, errors="ignore") + "\n"
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
@@ -453,7 +496,7 @@ class Client:
             if stderr_stream is not None and reader.stderr.qsize():
                 try:
                     stderr = reader.stderr.get(timeout=timeout_read_data_chunk)
-                    data = stderr.decode(encoding) + '\n'
+                    data = stderr.decode(encoding) + "\n"
                     stderr_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
@@ -466,8 +509,14 @@ class Client:
 
     @staticmethod
     def _process_output_no_watchers(
-            session: Session, channel: Channel, encoding: str, stdout_stream: StringIO,
-            stderr_stream: StringIO, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming) -> bool:
+        session: Session,
+        channel: Channel,
+        encoding: str,
+        stdout_stream: StringIO,
+        stderr_stream: StringIO,
+        timeout: NullableTiming,
+        timeout_read_data_chunk: NullableTiming,
+    ) -> bool:
         eof_result = stdout_size = stderr_size = LIBSSH2_ERROR_EAGAIN
         if timeout:
             end_time = perf_counter() + timeout
@@ -489,15 +538,13 @@ class Client:
         return True
 
     def check_if_alive(self, timeout: NullableTiming = __DEFAULT__):
-        """Check and return if endpoint is capable of running commands
-        """
+        """Check and return if endpoint is capable of running commands"""
         if timeout is __DEFAULT__:
             timeout = self.timings.check_if_alive_timeout
-        return self.run('true', timeout=timeout).ok
+        return self.run("true", timeout=timeout).ok
 
     def connect(self, timeout: NullableTiming = __DEFAULT__):
-        """Connect to the endpoint, initiate ssh and authenticate.
-        """
+        """Connect to the endpoint, initiate ssh and authenticate."""
         if timeout is __DEFAULT__:
             timeout = self.timings.connect_timeout
         if not timeout:
@@ -522,7 +569,7 @@ class Client:
                 except Exception as exc:  # noqa: BLE001
                     self.disconnect()
                     if perf_counter() > end_time:
-                        ex_msg = f'Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}'
+                        ex_msg = f"Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}"
                         raise ConnectTimeout(ex_msg) from exc
             delay = next(delays_iter, delay)
             sleep(delay)
@@ -554,8 +601,17 @@ class Client:
             self.sock = None
 
     def run(
-            self, command: str, warn: bool = False, encoding: str = 'utf-8',
-            hide=True, watchers=None, env=None, replace_env=False, in_stream=False, timeout=None) -> Result:
+        self,
+        command: str,
+        warn: bool = False,
+        encoding: str = "utf-8",
+        hide=True,
+        watchers=None,
+        env=None,
+        replace_env=False,
+        in_stream=False,
+        timeout=None,
+    ) -> Result:
         """Run command, wait till it ends and return result in Result class.
         If `watchers` are defined it runs `SSHReaderThread` that reads data from the socket and forwards it to Queue.
         If `hide` is True it does not collect stdout and stderr.
@@ -570,19 +626,19 @@ class Client:
         stderr = StringIO()
         # TODO: Implement replace_env
         if env is None:
-            shell = '/bin/bash'
+            shell = "/bin/bash"
         else:
-            shell = env.get('SHELL', '/bin/bash')
+            shell = env.get("SHELL", "/bin/bash")
         result = Result(
             command=command,
             encoding=encoding,
             env=env,
-            hide=('stderr', 'stdout') if hide else (),
+            hide=("stderr", "stdout") if hide else (),
             pty=False,
             exited=None,
             shell=shell,
-            stdout='',
-            stderr=''
+            stdout="",
+            stderr="",
         )
         channel: Optional[Channel] = None
         try:
@@ -591,19 +647,27 @@ class Client:
             channel = self.open_channel()
         except Exception as exc:  # noqa: BLE001
             return self._complete_run(
-                channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
+                channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr
+            )
         try:
             self._apply_env(channel, env)
         except Exception as exc:  # noqa: BLE001
             return self._complete_run(
-                channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
+                channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr
+            )
         if watchers:
             reader = SSHReaderThread(self.session, channel, timeout, self.timings.interactive_read_data_chunk_timeout)
             try:
-
                 self.execute(command, channel=channel, use_pty=False)
-                self._process_output(watchers, encoding, stdout, stderr, reader, timeout,
-                                     self.timings.interactive_read_data_chunk_timeout)
+                self._process_output(
+                    watchers,
+                    encoding,
+                    stdout,
+                    stderr,
+                    reader,
+                    timeout,
+                    self.timings.interactive_read_data_chunk_timeout,
+                )
             except Exception as exc:  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
             if reader.is_alive():
@@ -615,8 +679,8 @@ class Client:
             try:
                 self.execute(command, channel=channel, use_pty=False)
                 timeout_reached = not self._process_output_no_watchers(
-                    self.session, channel, encoding, stdout, stderr, timeout,
-                    self.timings.read_data_chunk_timeout)
+                    self.session, channel, encoding, stdout, stderr, timeout, self.timings.read_data_chunk_timeout
+                )
             except Exception as exc:  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
         return self._complete_run(channel, exception, timeout_reached, timeout, result, warn, stdout, stderr)
@@ -627,11 +691,18 @@ class Client:
             for var, val in env.items():
                 channel.setenv(str(var), str(val))
 
-    def _complete_run(self, channel: Channel, exception: Exception,
-                      timeout_reached: NullableTiming, timeout: NullableTiming, result: Result, warn,
-                      stdout: StringIO, stderr: StringIO) -> Result:
-        """Complete executing command and return result, no matter what had happened.
-        """
+    def _complete_run(
+        self,
+        channel: Channel,
+        exception: Exception,
+        timeout_reached: NullableTiming,
+        timeout: NullableTiming,
+        result: Result,
+        warn,
+        stdout: StringIO,
+        stderr: StringIO,
+    ) -> Result:
+        """Complete executing command and return result, no matter what had happened."""
         exit_status = None
         result.stdout = stdout.getvalue()
         result.stderr = stderr.getvalue()
@@ -640,11 +711,11 @@ class Client:
                 with self.session.lock:
                     channel.close()
             except Exception as exc:  # noqa: BLE001
-                print(f'Failed to close channel due to the following error: {exc}')
+                print(f"Failed to close channel due to the following error: {exc}")
             try:
                 self.session.eagain(channel.wait_closed, timeout=self.timings.channel_close_timeout)
             except Exception as exc:  # noqa: BLE001
-                print(f'Failed to close channel due to the following error: {exc}')
+                print(f"Failed to close channel due to the following error: {exc}")
             exit_status = channel.get_exit_status()
             self.session.drop_channel(channel)
             result.exited = exit_status
@@ -658,8 +729,7 @@ class Client:
         return result
 
     def execute(self, cmd: str, use_pty: bool = False, channel: Channel = None) -> Channel:
-        """Execute command on remote server
-        """
+        """Execute command on remote server"""
         channel = self.open_channel() if channel is None else channel
         if use_pty:
             self.session.eagain(channel.pty)
@@ -687,26 +757,23 @@ class Client:
             sleep(delay)
             current_time = perf_counter()
             if current_time > end_time:
-                raise OpenChannelTimeout(f'Failed to open channel in {timeout} seconds')
+                raise OpenChannelTimeout(f"Failed to open channel in {timeout} seconds")
         # Multiple forward requests result in ChannelRequestDenied
         # errors, flag is used to avoid this.
         if self.forward_ssh_agent and not self.forward_requested:
-            if not hasattr(chan, 'request_auth_agent'):
-                warn("Requested SSH Agent forwarding but libssh2 version used "
-                     "does not support it - ignoring")
+            if not hasattr(chan, "request_auth_agent"):
+                warn("Requested SSH Agent forwarding but libssh2 version used does not support it - ignoring")
                 return chan
             self.session.eagain(chan.request_auth_agent)
             self.forward_requested = True
         return chan
 
     def close_channel(self, channel: Channel):
-        """Close ssh channel, opened by `open_channel`
-        """
+        """Close ssh channel, opened by `open_channel`"""
         self.session.eagain(channel.close, timeout=self.timings.close_channel_timeout)
 
     open = connect
 
     def close(self):
-        """Close ssh connection, opened by `open` or `connect`
-        """
+        """Close ssh connection, opened by `open` or `connect`"""
         self.disconnect()

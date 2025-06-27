@@ -24,10 +24,20 @@ from sdcm.test_config import TestConfig
 
 def test_can_create_basic_scylla_instance_definition_from_sct_config():
     """Test for azure_region_definition_builder"""
-    EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
-                            "SCT_N_DB_NODES", "SCT_USER_PREFIX",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES"])
+    EnvConfig = namedtuple(
+        "EnvConfig",
+        [
+            "SCT_CLUSTER_BACKEND",
+            "SCT_TEST_ID",
+            "SCT_CONFIG_FILES",
+            "SCT_AZURE_REGION_NAME",
+            "SCT_N_DB_NODES",
+            "SCT_USER_PREFIX",
+            "SCT_AZURE_IMAGE_DB",
+            "SCT_N_LOADERS",
+            "SCT_N_MONITORS_NODES",
+        ],
+    )
 
     test_id = "3923f974-bf0e-4c3c-9f52-3f6473b8a0b6"
     test_config = TestConfig()
@@ -39,10 +49,9 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_USER_PREFIX="unit",
-        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
-                           "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
+        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
         SCT_N_LOADERS="2 0",
-        SCT_N_MONITORS_NODES="1"
+        SCT_N_MONITORS_NODES="1",
     )
 
     os.environ.update(env_config._asdict())
@@ -51,16 +60,20 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
     # TODO: switch to  get_azure_ssh_key_pair()
     #  temporary using gce keypair, until replacing keys in jenkins, and all backend would be using same key (including runners)
     ssh_key = KeyStore().get_gce_ssh_key_pair()
-    prefix = config.get('user_prefix')
+    prefix = config.get("user_prefix")
     builder = region_definition_builder.get_builder(params=config, test_config=test_config)
     region_definitions = builder.build_all_region_definitions()
 
-    instance_definition = InstanceDefinition(name=f"{prefix}-db-node-{test_config.test_id()[:8]}-eastus-1",
-                                             image_id=env_config.SCT_AZURE_IMAGE_DB,
-                                             type="Standard_L8s_v3", user_name="scyllaadm", root_disk_size=30,
-                                             tags=tags | {"NodeType": "scylla-db", "keep_action": "terminate",
-                                                          'NodeIndex': '1', "TestId": test_config.test_id()},
-                                             ssh_key=ssh_key)
+    instance_definition = InstanceDefinition(
+        name=f"{prefix}-db-node-{test_config.test_id()[:8]}-eastus-1",
+        image_id=env_config.SCT_AZURE_IMAGE_DB,
+        type="Standard_L8s_v3",
+        user_name="scyllaadm",
+        root_disk_size=30,
+        tags=tags
+        | {"NodeType": "scylla-db", "keep_action": "terminate", "NodeIndex": "1", "TestId": test_config.test_id()},
+        ssh_key=ssh_key,
+    )
     assert len(region_definitions) == 2
     actual_region_definition = region_definitions[0]
 

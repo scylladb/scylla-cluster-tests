@@ -18,13 +18,22 @@ from typing import Optional, Any
 from pydantic import Field, computed_field
 
 from sdcm.provision.helpers.certificate import (
-    install_client_certificate, CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, CA_CERT_FILE,
-    SERVER_CERT_FILE, SERVER_KEY_FILE, SCYLLA_SSL_CONF_DIR)
-from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
-    ServerEncryptionOptions
+    install_client_certificate,
+    CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE,
+    CA_CERT_FILE,
+    SERVER_CERT_FILE,
+    SERVER_KEY_FILE,
+    SCYLLA_SSL_CONF_DIR,
+)
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    ScyllaYamlAttrBuilderBase,
+    ClientEncryptionOptions,
+    ServerEncryptionOptions,
+)
 from sdcm.utils.common import get_data_dir_path
 
-CQLSHRC_FILE = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
+CQLSHRC_FILE = get_data_dir_path("ssl_conf", "client", "cqlshrc")
 
 
 @lru_cache(maxsize=1)
@@ -32,25 +41,27 @@ def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = Fals
     config = configparser.ConfigParser()
     config.read(cqlshrc_file)
     if client_encrypt:
-        if not config['connection']:
-            config['connection'] = {}
-        config['connection']['ssl'] = 'true'
-    config['ssl'] = {
-        'validate': 'true' if client_encrypt else 'false',
-        'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
-        'userkey': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}',
-        'usercert': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}'
+        if not config["connection"]:
+            config["connection"] = {}
+        config["connection"]["ssl"] = "true"
+    config["ssl"] = {
+        "validate": "true" if client_encrypt else "false",
+        "certfile": f"{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}",
+        "userkey": f"{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}",
+        "usercert": f"{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}",
     }
-    with open(cqlshrc_file, 'w', encoding='utf-8') as file:
+    with open(cqlshrc_file, "w", encoding="utf-8") as file:
         config.write(file)
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
 
+
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption
     """
+
     node: Any = Field(exclude=True)
 
     @cached_property
@@ -61,26 +72,26 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     @computed_field
     @property
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
-        if not self.params.get('client_encrypt'):
+        if not self.params.get("client_encrypt"):
             return None
-        update_cqlshrc(client_encrypt=self.params.get('client_encrypt'))
+        update_cqlshrc(client_encrypt=self.params.get("client_encrypt"))
         return ClientEncryptionOptions(
             enabled=True,
             certificate=str(self._ssl_files_path / CLIENT_FACING_CERTFILE.name),
             keyfile=str(self._ssl_files_path / CLIENT_FACING_KEYFILE.name),
             truststore=str(self._ssl_files_path / CA_CERT_FILE.name),
-            require_client_auth=self.params.get('client_encrypt_mtls')
+            require_client_auth=self.params.get("client_encrypt_mtls"),
         )
 
     @computed_field
     @property
     def server_encryption_options(self) -> Optional[ServerEncryptionOptions]:
-        if not self.params.get('internode_encryption') or not self.params.get('server_encrypt'):
+        if not self.params.get("internode_encryption") or not self.params.get("server_encrypt"):
             return None
         return ServerEncryptionOptions(
-            internode_encryption=self.params.get('internode_encryption'),
+            internode_encryption=self.params.get("internode_encryption"),
             certificate=str(self._ssl_files_path / SERVER_CERT_FILE.name),
             keyfile=str(self._ssl_files_path / SERVER_KEY_FILE.name),
             truststore=str(self._ssl_files_path / CA_CERT_FILE.name),
-            require_client_auth=self.params.get('server_encrypt_mtls')
+            require_client_auth=self.params.get("server_encrypt_mtls"),
         )

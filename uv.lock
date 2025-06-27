@@ -175,19 +175,6 @@ wheels = [
 ]
 
 [[package]]
-name = "autopep8"
-version = "2.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pycodestyle", marker = "sys_platform != 'win32'" },
-    { name = "tomli", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/52/65556a5f917a4b273fd1b705f98687a6bd721dbc45966f0f6687e90a18b0/autopep8-2.3.1.tar.gz", hash = "sha256:8d6c87eba648fdcfc83e29b788910b8643171c395d9c4bcf115ece035b9c9dda", size = 92064, upload-time = "2024-06-23T05:15:55.401Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/9e/f0beffe45b507dca9d7540fad42b316b2fd1076dc484c9b1f23d9da570d7/autopep8-2.3.1-py2.py3-none-any.whl", hash = "sha256:a203fe0fcad7939987422140ab17a930f684763bf7335bdb6709991dd7ef6c2d", size = 45667, upload-time = "2024-06-23T05:15:51.29Z" },
-]
-
-[[package]]
 name = "aws-sam-translator"
 version = "1.97.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3197,7 +3184,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "autopep8", marker = "sys_platform != 'win32'" },
     { name = "pre-commit", marker = "sys_platform != 'win32'" },
     { name = "pycodestyle", marker = "sys_platform != 'win32'" },
     { name = "ruff", marker = "sys_platform != 'win32'" },
@@ -3260,7 +3246,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "autopep8", specifier = "==2.3.1" },
     { name = "pre-commit", specifier = "==4.0.1" },
     { name = "pycodestyle", specifier = "==2.12.0" },
     { name = "ruff", specifier = "==0.11.13" },

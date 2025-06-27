@@ -27,7 +27,7 @@ from unit_tests.provisioner.fake_azure_service import FakeAzureService
 
 @pytest.fixture(scope="session")
 def azure_service(tmp_path_factory) -> AzureService:
-    run_on_real_azure = False   # make it True to test with real Azure
+    run_on_real_azure = False  # make it True to test with real Azure
     if run_on_real_azure:
         # When true this becomes e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)
         return AzureService()
@@ -45,19 +45,28 @@ def fallback_on_demand():
 
 @pytest.fixture
 def params():
-    EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
-                            "SCT_N_DB_NODES",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE",
-                            "SCT_IP_SSH_CONNECTIONS"])
+    EnvConfig = namedtuple(
+        "EnvConfig",
+        [
+            "SCT_CLUSTER_BACKEND",
+            "SCT_TEST_ID",
+            "SCT_CONFIG_FILES",
+            "SCT_AZURE_REGION_NAME",
+            "SCT_N_DB_NODES",
+            "SCT_AZURE_IMAGE_DB",
+            "SCT_N_LOADERS",
+            "SCT_N_MONITORS_NODES",
+            "SCT_AVAILABILITY_ZONE",
+            "SCT_IP_SSH_CONNECTIONS",
+        ],
+    )
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
         SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
-        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/"
-                           "scylla-images/providers/Microsoft.Compute/images/scylla-2024.1.9-x86_64-2024-08-30T04-49-46",
+        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/scylla-2024.1.9-x86_64-2024-08-30T04-49-46",
         SCT_N_LOADERS="2 0",
         SCT_N_MONITORS_NODES="1",
         SCT_AVAILABILITY_ZONE="a",

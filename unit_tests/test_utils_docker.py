@@ -19,8 +19,16 @@ import unittest
 from unittest.mock import Mock, patch, mock_open, sentinel
 from collections import namedtuple
 
-from sdcm.utils.docker_utils import _Name, ContainerManager, \
-    DockerException, NotFound, ImageNotFound, NullResource, Retry, ContainerAlreadyRegistered
+from sdcm.utils.docker_utils import (
+    _Name,
+    ContainerManager,
+    DockerException,
+    NotFound,
+    ImageNotFound,
+    NullResource,
+    Retry,
+    ContainerAlreadyRegistered,
+)
 
 build_args = {}
 
@@ -29,8 +37,8 @@ class DummyDockerClient:
     class api:
         @staticmethod
         def build(*args, **kwargs):
-            build_args['123456'] = (args, kwargs)
-            return '''{"stream": "Successfully built 123456"}'''
+            build_args["123456"] = (args, kwargs)
+            return """{"stream": "Successfully built 123456"}"""
 
     class containers:
         @staticmethod
@@ -54,12 +62,15 @@ class DummyDockerClient:
     class images:
         @staticmethod
         def build(*args, **kwargs):
-            return (args, kwargs,), [{"stream": "blah"}]
+            return (
+                args,
+                kwargs,
+            ), [{"stream": "blah"}]
 
         @staticmethod
         def get(image_tag):
             if image_tag == "123456":
-                return build_args['123456']
+                return build_args["123456"]
 
             raise ImageNotFound("not found")
 
@@ -105,12 +116,14 @@ class DummyContainer:
 
 
 class DummyNode:
-    tags = {"key1": "value1", }
+    tags = {
+        "key1": "value1",
+    }
 
     def __init__(self):
         self._containers = {}
         # empty params, now part of ContainerManager api to allow access to SCT configuration
-        self.parent_cluster = namedtuple('cluster', field_names='params')(params={})
+        self.parent_cluster = namedtuple("cluster", field_names="params")(params={})
 
     @staticmethod
     def c3_container_run_args(**kwargs):
@@ -149,7 +162,7 @@ class TestName(unittest.TestCase):
         self.assertEqual(name.full, "foo:bar")
         self.assertEqual(name.family, "foo")
         self.assertEqual(name.member, "bar")
-        self.assertEqual(name.member_as_args, ("bar", ))
+        self.assertEqual(name.member_as_args, ("bar",))
         self.assertEqual(str(name), "foo:bar")
         self.assertTrue(name)
 
@@ -162,8 +175,9 @@ class TestContainerManager(unittest.TestCase):
 
     def test_get_docker_client(self):
         with self.subTest("Default Docker client"):
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"),
-                             ContainerManager.default_docker_client)
+            self.assertEqual(
+                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
+            )
 
         with self.subTest("Docker client without name argument"):
             self.node.None_docker_client = Mock()
@@ -176,8 +190,9 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (None)"):
             self.node.docker_client = None
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"),
-                             ContainerManager.default_docker_client)
+            self.assertEqual(
+                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
+            )
 
         with self.subTest("Node-wide Docker client (not callable)"):
             self.node.docker_client = sentinel.node_property_docker_client
@@ -185,8 +200,9 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (callable, return None)"):
             self.node.docker_client = Mock(return_value=None)
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2"),
-                             ContainerManager.default_docker_client)
+            self.assertEqual(
+                ContainerManager.get_docker_client(self.node, "c2"), ContainerManager.default_docker_client
+            )
             self.node.docker_client.assert_called_once_with()
 
         with self.subTest("Node-wide Docker client (callable)"):
@@ -196,8 +212,9 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Node-wide Docker client (callable, with member)"):
             self.node.docker_client.reset_mock()
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2:blah"),
-                             sentinel.node_callable_docker_client)
+            self.assertEqual(
+                ContainerManager.get_docker_client(self.node, "c2:blah"), sentinel.node_callable_docker_client
+            )
             self.node.docker_client.assert_called_once_with()
 
         with self.subTest("Docker client per container family (None)"):
@@ -229,8 +246,9 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("Docker client per container family (callable, with member)"):
             self.node.docker_client = Mock(return_value=None)
             self.node.c2_docker_client = Mock(return_value=None)
-            self.assertEqual(ContainerManager.get_docker_client(self.node, "c2:blah"),
-                             ContainerManager.default_docker_client)
+            self.assertEqual(
+                ContainerManager.get_docker_client(self.node, "c2:blah"), ContainerManager.default_docker_client
+            )
             self.node.c2_docker_client.assert_called_once_with("blah")
             self.node.docker_client.assert_called_once_with()
 
@@ -257,9 +275,19 @@ class TestContainerManager(unittest.TestCase):
 
     @patch("time.sleep", int)
     def test_wait_for_status(self):
-        statuses = iter(("exited", "exited", "running", "mark1",
-                         "running", "running", "exited", "mark2", ) +
-                        ("exited", ) * 20)
+        statuses = iter(
+            (
+                "exited",
+                "exited",
+                "running",
+                "mark1",
+                "running",
+                "running",
+                "exited",
+                "mark2",
+            )
+            + ("exited",) * 20
+        )
 
         def status():
             return next(statuses)
@@ -284,7 +312,15 @@ class TestContainerManager(unittest.TestCase):
     def test_get_ip_address(self):
         no_ip_address = dict(NetworkSettings=dict(IPAddress=""))
         ip_address = dict(NetworkSettings=dict(IPAddress="10.0.0.1"))
-        ip_addresses = iter((no_ip_address, no_ip_address, ip_address, "mark", ) + (no_ip_address, ) * 10)
+        ip_addresses = iter(
+            (
+                no_ip_address,
+                no_ip_address,
+                ip_address,
+                "mark",
+            )
+            + (no_ip_address,) * 10
+        )
 
         def attrs():
             return next(ip_addresses)
@@ -302,7 +338,11 @@ class TestContainerManager(unittest.TestCase):
             self.assertRaises(Retry, ContainerManager.get_ip_address, self.node, "c1")
 
     def test_get_container_port(self):
-        self.container.ports = {"9999/tcp": [{"HostIp": "0.0.0.0", "HostPort": 1111}, ]}
+        self.container.ports = {
+            "9999/tcp": [
+                {"HostIp": "0.0.0.0", "HostPort": 1111},
+            ]
+        }
 
         with self.subTest("Try to get port for non-existent container"):
             self.assertRaises(NotFound, ContainerManager.get_container_port, self.node, "c2", 9999)
@@ -315,7 +355,14 @@ class TestContainerManager(unittest.TestCase):
             self.assertEqual(ContainerManager.get_container_port(self.node, "c1", "9999"), 1111)
 
     def test_get_environ(self):
-        self.container.get_attrs = lambda: {"Config": {"Env": ["A", "B=1", ]}}
+        self.container.get_attrs = lambda: {
+            "Config": {
+                "Env": [
+                    "A",
+                    "B=1",
+                ]
+            }
+        }
 
         with self.subTest("Try to get env for non-existent container"):
             self.assertRaises(NotFound, ContainerManager.get_environ, self.node, "c2")
@@ -324,8 +371,16 @@ class TestContainerManager(unittest.TestCase):
             self.assertEqual(ContainerManager.get_environ(self.node, "c1"), {"A": None, "B": "1"})
 
     def test_get_containers_by_prefix(self):
-        self.assertEqual(ContainerManager.get_containers_by_prefix("blah"),
-                         ((), {"all": True, "filters": {"name": "blah*"}, }, ))
+        self.assertEqual(
+            ContainerManager.get_containers_by_prefix("blah"),
+            (
+                (),
+                {
+                    "all": True,
+                    "filters": {"name": "blah*"},
+                },
+            ),
+        )
 
     def test_get_container_name_by_id(self):
         with self.subTest("Try to get name of non-existent container"):
@@ -340,35 +395,75 @@ class TestContainerManager(unittest.TestCase):
 
         with self.subTest("Test no *_container_run_args hook available"):
             container2 = ContainerManager.run_container(self.node, "c2", arg1="value1", arg2="value2")
-            self.assertEqual(container2.run_args,
-                             ((), {"detach": True, "labels": self.node.tags, "arg1": "value1", "arg2": "value2", }, ))
+            self.assertEqual(
+                container2.run_args,
+                (
+                    (),
+                    {
+                        "detach": True,
+                        "labels": self.node.tags,
+                        "arg1": "value1",
+                        "arg2": "value2",
+                    },
+                ),
+            )
             self.assertEqual(ContainerManager.get_container(self.node, "c2"), container2)
 
         with self.subTest("Test no *_container_run_args hook available and member name"):
             c2another = ContainerManager.run_container(self.node, "c2:another", arg1="value1", arg2="value2")
             self.assertNotEqual(container2, c2another)
-            self.assertEqual(c2another.run_args,
-                             ((), {"detach": True, "labels": self.node.tags, "arg1": "value1", "arg2": "value2", }, ))
+            self.assertEqual(
+                c2another.run_args,
+                (
+                    (),
+                    {
+                        "detach": True,
+                        "labels": self.node.tags,
+                        "arg1": "value1",
+                        "arg2": "value2",
+                    },
+                ),
+            )
             self.assertEqual(ContainerManager.get_container(self.node, "c2"), container2)
             self.assertEqual(ContainerManager.get_container(self.node, "c2:another"), c2another)
 
         with self.subTest("Test with *_container_run_args hook"):
             container3 = ContainerManager.run_container(self.node, "c3", blah="name")
-            self.assertEqual(container3.run_args,
-                             ((), {"detach": True, "labels": self.node.tags, "name": "blah", }, ))
+            self.assertEqual(
+                container3.run_args,
+                (
+                    (),
+                    {
+                        "detach": True,
+                        "labels": self.node.tags,
+                        "name": "blah",
+                    },
+                ),
+            )
             self.assertEqual(ContainerManager.get_container(self.node, "c3"), container3)
 
         with self.subTest("Test with *_container_run_args hook and member name"):
             c3another = ContainerManager.run_container(self.node, "c3:another", blah="name")
-            self.assertEqual(c3another.run_args,
-                             ((), {"detach": True, "labels": self.node.tags, "name": "blah-another", }, ))
+            self.assertEqual(
+                c3another.run_args,
+                (
+                    (),
+                    {
+                        "detach": True,
+                        "labels": self.node.tags,
+                        "name": "blah-another",
+                    },
+                ),
+            )
             self.assertEqual(ContainerManager.get_container(self.node, "c3"), container3)
             self.assertEqual(ContainerManager.get_container(self.node, "c3:another"), c3another)
 
         with self.subTest("Verify that all containers are there"):
             set1 = {self.container, container2, c2another, container3, c3another}
-            set2 = {ContainerManager.get_container(self.node, name)
-                    for name in ("c1", "c2", "c2:another", "c3", "c3:another")}
+            set2 = {
+                ContainerManager.get_container(self.node, name)
+                for name in ("c1", "c2", "c2:another", "c3", "c3:another")
+            }
             self.assertSetEqual(set1, set2)
             self.assertEqual(len(set1), 5)
 
@@ -395,8 +490,9 @@ class TestContainerManager(unittest.TestCase):
 
     def test_ssh_copy_id(self):
         with self.subTest("Copy SSH pub key to non-existent container"):
-            self.assertRaises(NotFound,
-                              ContainerManager.ssh_copy_id, self.node, "c2", user="root", key_file="/root/.ssh/id_rsa")
+            self.assertRaises(
+                NotFound, ContainerManager.ssh_copy_id, self.node, "c2", user="root", key_file="/root/.ssh/id_rsa"
+            )
 
         with self.subTest("Copy SSH pub key"):
             self.container.exec_run = Mock()
@@ -420,27 +516,49 @@ class TestContainerManager(unittest.TestCase):
             self.container.exec_run.return_value.output = b"blah"
 
             with patch("paramiko.rsakey.RSAKey.from_private_key_file") as rsa_key_mock:
-                self.assertRaisesRegex(DockerException, "blah",
-                                       ContainerManager.ssh_copy_id,
-                                       self.node, "c1", user=sentinel.ssh_user, key_file="lala.key")
+                self.assertRaisesRegex(
+                    DockerException,
+                    "blah",
+                    ContainerManager.ssh_copy_id,
+                    self.node,
+                    "c1",
+                    user=sentinel.ssh_user,
+                    key_file="lala.key",
+                )
 
     def test_register_container(self):
         c2_container = DummyContainer()
 
         with self.subTest("Try to register registered container"):
-            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
-                                   ContainerManager.register_container,
-                                   self.node, "c2", container=self.container)
+            self.assertRaisesRegex(
+                ContainerAlreadyRegistered,
+                "container .* registered already",
+                ContainerManager.register_container,
+                self.node,
+                "c2",
+                container=self.container,
+            )
 
         with self.subTest("Try to register registered container with replace=True"):
-            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
-                                   ContainerManager.register_container,
-                                   self.node, "c2", container=self.container, replace=True)
+            self.assertRaisesRegex(
+                ContainerAlreadyRegistered,
+                "container .* registered already",
+                ContainerManager.register_container,
+                self.node,
+                "c2",
+                container=self.container,
+                replace=True,
+            )
 
         with self.subTest("Try to replace container"):
-            self.assertRaisesRegex(ContainerAlreadyRegistered, "another container registered",
-                                   ContainerManager.register_container,
-                                   self.node, "c1", container=c2_container)
+            self.assertRaisesRegex(
+                ContainerAlreadyRegistered,
+                "another container registered",
+                ContainerManager.register_container,
+                self.node,
+                "c1",
+                container=c2_container,
+            )
 
         with self.subTest("Force container replacement"):
             ContainerManager.register_container(self.node, "c1", container=c2_container, replace=True)
@@ -451,9 +569,15 @@ class TestContainerManager(unittest.TestCase):
             self.assertEqual(ContainerManager.get_container(self.node, "c2"), self.container)
 
         with self.subTest("Try to force container replacement with container registered with another name"):
-            self.assertRaisesRegex(ContainerAlreadyRegistered, "container .* registered already",
-                                   ContainerManager.register_container,
-                                   self.node, "c1", container=self.container, replace=True)
+            self.assertRaisesRegex(
+                ContainerAlreadyRegistered,
+                "container .* registered already",
+                ContainerManager.register_container,
+                self.node,
+                "c1",
+                container=self.container,
+                replace=True,
+            )
 
     def test_unregister_container(self):
         with self.subTest("Unregister non-existent name"):
@@ -483,21 +607,30 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("Node-wide dockerfile args"):
             self.node.c2_container_image_tag = Mock(return_value="hello-world:latest")
             self.node.container_image_dockerfile_args = Mock(return_value="blah")
-            self.assertRaisesRegex(AssertionError, "Dockerfile",
-                                   ContainerManager.build_container_image, self.node, "c2")
+            self.assertRaisesRegex(
+                AssertionError, "Dockerfile", ContainerManager.build_container_image, self.node, "c2"
+            )
             self.node.c2_container_image_tag.assert_called_once_with()
 
         with self.subTest("No build args"):
             self.node.c2_container_image_tag.reset_mock()
             self.node.c2_container_image_dockerfile_args = Mock(return_value={"path": "."})
             image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
-            self.assertEqual(image, ((), dict(tag="hello-world:latest",
-                                              path=".",
-                                              labels=self.node.tags,
-                                              pull=True,
-                                              rm=True,
-                                              arg1="value1",
-                                              arg2="value2")))
+            self.assertEqual(
+                image,
+                (
+                    (),
+                    dict(
+                        tag="hello-world:latest",
+                        path=".",
+                        labels=self.node.tags,
+                        pull=True,
+                        rm=True,
+                        arg1="value1",
+                        arg2="value2",
+                    ),
+                ),
+            )
             self.node.c2_container_image_tag.assert_called_once_with("another")
             self.node.c2_container_image_dockerfile_args.assert_called_once_with("another")
 
@@ -506,13 +639,21 @@ class TestContainerManager(unittest.TestCase):
             self.node.c2_container_image_dockerfile_args.reset_mock()
             self.node.c2_container_image_build_args = lambda **kw: {v: k for k, v in kw.items()}
             image = ContainerManager.build_container_image(self.node, "c2:another", arg1="value1", arg2="value2")
-            self.assertEqual(image, ((), dict(tag="hello-world:latest",
-                                              path=".",
-                                              labels=self.node.tags,
-                                              pull=True,
-                                              rm=True,
-                                              value1="arg1",
-                                              value2="arg2")))
+            self.assertEqual(
+                image,
+                (
+                    (),
+                    dict(
+                        tag="hello-world:latest",
+                        path=".",
+                        labels=self.node.tags,
+                        pull=True,
+                        rm=True,
+                        value1="arg1",
+                        value2="arg2",
+                    ),
+                ),
+            )
             self.node.c2_container_image_tag.assert_called_once_with("another")
             self.node.c2_container_image_dockerfile_args.assert_called_once_with("another")
 
@@ -547,7 +688,13 @@ class TestContainerManager(unittest.TestCase):
         mock_file.assert_called_once_with("another", "ab")
         mock_file().write.assert_called_once_with("container logs")
 
-        self.assertEqual(members, [None, "another", ])
+        self.assertEqual(
+            members,
+            [
+                None,
+                "another",
+            ],
+        )
         self.assertEqual(ContainerManager.get_container(self.node, "c1:another"), c1another)
         self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
         self.assertRaises(NotFound, ContainerManager.destroy_container, self.node, "c1")
@@ -577,27 +724,27 @@ class TestContainerManager(unittest.TestCase):
             self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
 
     def test_destroy_unregistered_containers(self):
-        tags = {'TestId': 'test123', 'Name': 'nodeA'}
+        tags = {"TestId": "test123", "Name": "nodeA"}
 
         r_c1, r_c2, nr_c = [DummyContainer() for _ in range(3)]
         r_c1.get_attrs = lambda: {"Config": {"Labels": {}}}
         r_c2.get_attrs = nr_c.get_attrs = lambda: {"Config": {"Labels": tags}}
 
         node = DummyNode()
-        node.tags, node.name = tags, tags['Name']
+        node.tags, node.name = tags, tags["Name"]
         node._containers["r_c1"] = r_c1  # register not-labeled container for the node
         node._containers["r_c2"] = r_c2  # register labeled container for the node
 
         def stub_list(*args, **kwargs):
-            filters = kwargs.get('filters', {})
+            filters = kwargs.get("filters", {})
             filter_dict = {}
-            for label in filters['label']:
-                key, val = label.split('=')
+            for label in filters["label"]:
+                key, val = label.split("=")
                 filter_dict[key] = val
 
             filtered_containers = []
             for container in (r_c1, r_c2, nr_c):
-                container_labels = container.attrs['Config']['Labels']
+                container_labels = container.attrs["Config"]["Labels"]
                 if all(container_labels.get(key) == val for key, val in filter_dict.items()):
                     filtered_containers.append(container)
 
@@ -605,7 +752,7 @@ class TestContainerManager(unittest.TestCase):
 
         r_c1.remove, r_c2.remove, nr_c.remove = Mock(), Mock(), Mock()
         # temporarily patch dummy default_docker_client.containers.list to be able to filter containers by labels
-        with patch.object(ContainerManager.default_docker_client.containers, 'list', new=stub_list):
+        with patch.object(ContainerManager.default_docker_client.containers, "list", new=stub_list):
             ContainerManager.destroy_unregistered_containers(node)
 
         with self.subTest("Not-registered labeled container destroyed"):

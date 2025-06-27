@@ -22,51 +22,51 @@ from sdcm.sct_config import SCTConfiguration
 
 
 SEED_PROVIDERS = [
-    'org.apache.cassandra.locator.SimpleSeedProvider',
-    'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
-    'org.apache.cassandra.locator.Ec2Snitch',
-    'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-    'org.apache.cassandra.locator.GoogleCloudSnitch',
-    'org.apache.cassandra.locator.RackInferringSnitch',
-    'SimpleSeedProvider',
-    'GossipingPropertyFileSnitch',
-    'Ec2Snitch',
-    'Ec2MultiRegionSnitch',
-    'GoogleCloudSnitch',
-    'RackInferringSnitch',
+    "org.apache.cassandra.locator.SimpleSeedProvider",
+    "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
+    "org.apache.cassandra.locator.Ec2Snitch",
+    "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+    "org.apache.cassandra.locator.GoogleCloudSnitch",
+    "org.apache.cassandra.locator.RackInferringSnitch",
+    "SimpleSeedProvider",
+    "GossipingPropertyFileSnitch",
+    "Ec2Snitch",
+    "Ec2MultiRegionSnitch",
+    "GoogleCloudSnitch",
+    "RackInferringSnitch",
 ]
-SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
+SASLAUTHD_AUTHENTICATOR = "com.scylladb.auth.SaslauthdAuthenticator"
 LOGGER = logging.getLogger(__file__)
 
 
 class SeedProvider(BaseModel):
     class_name: Literal[
-        'org.apache.cassandra.locator.SimpleSeedProvider',
-        'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
-        'org.apache.cassandra.locator.Ec2Snitch',
-        'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-        'org.apache.cassandra.locator.GoogleCloudSnitch',
-        'org.apache.cassandra.locator.RackInferringSnitch',
-        'SimpleSeedProvider',
-        'GossipingPropertyFileSnitch',
-        'Ec2Snitch',
-        'Ec2MultiRegionSnitch',
-        'GoogleCloudSnitch',
-        'RackInferringSnitch',
+        "org.apache.cassandra.locator.SimpleSeedProvider",
+        "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
+        "org.apache.cassandra.locator.Ec2Snitch",
+        "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+        "org.apache.cassandra.locator.GoogleCloudSnitch",
+        "org.apache.cassandra.locator.RackInferringSnitch",
+        "SimpleSeedProvider",
+        "GossipingPropertyFileSnitch",
+        "Ec2Snitch",
+        "Ec2MultiRegionSnitch",
+        "GoogleCloudSnitch",
+        "RackInferringSnitch",
     ]
     parameters: List[dict] = None
 
-    @field_validator("class_name", mode='before')
+    @field_validator("class_name", mode="before")
     def set_class_name(cls, class_name: str):
-        if class_name.startswith('org.apache.cassandra.locator.'):
+        if class_name.startswith("org.apache.cassandra.locator."):
             return class_name
-        return 'org.apache.cassandra.locator.' + class_name
+        return "org.apache.cassandra.locator." + class_name
 
 
 class ServerEncryptionOptions(BaseModel):
-    internode_encryption: Literal['all', 'none', 'dc', 'rack'] = 'none'
-    certificate: str = 'conf/scylla.crt'
-    keyfile: str = 'conf/scylla.key'
+    internode_encryption: Literal["all", "none", "dc", "rack"] = "none"
+    certificate: str = "conf/scylla.crt"
+    keyfile: str = "conf/scylla.key"
     truststore: str = None
     priority_string: str = None
     require_client_auth: bool = False
@@ -74,8 +74,8 @@ class ServerEncryptionOptions(BaseModel):
 
 class ClientEncryptionOptions(BaseModel):
     enabled: bool = False
-    certificate: str = 'conf/scylla.crt'
-    keyfile: str = 'conf/scylla.key'
+    certificate: str = "conf/scylla.crt"
+    keyfile: str = "conf/scylla.key"
     truststore: str = None
     priority_string: str = None
     require_client_auth: bool = False
@@ -88,22 +88,22 @@ class RequestSchedulerOptions(BaseModel):
 
 
 EndPointSnitchType = Literal[
-    'org.apache.cassandra.locator.SimpleSnitch',
-    'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
-    'org.apache.cassandra.locator.PropertyFileSnitch',
-    'org.apache.cassandra.locator.Ec2Snitch',
-    'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-    'org.apache.cassandra.locator.RackInferringSnitch',
-    'org.apache.cassandra.locator.GoogleCloudSnitch',
-    'org.apache.cassandra.locator.AzureSnitch',
-    'SimpleSnitch',
-    'GossipingPropertyFileSnitch',
-    'PropertyFileSnitch',
-    'Ec2Snitch',
-    'Ec2MultiRegionSnitch',
-    'RackInferringSnitch',
-    'GoogleCloudSnitch',
-    'AzureSnitch',
+    "org.apache.cassandra.locator.SimpleSnitch",
+    "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
+    "org.apache.cassandra.locator.PropertyFileSnitch",
+    "org.apache.cassandra.locator.Ec2Snitch",
+    "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+    "org.apache.cassandra.locator.RackInferringSnitch",
+    "org.apache.cassandra.locator.GoogleCloudSnitch",
+    "org.apache.cassandra.locator.AzureSnitch",
+    "SimpleSnitch",
+    "GossipingPropertyFileSnitch",
+    "PropertyFileSnitch",
+    "Ec2Snitch",
+    "Ec2MultiRegionSnitch",
+    "RackInferringSnitch",
+    "GoogleCloudSnitch",
+    "AzureSnitch",
 ]
 
 
@@ -112,27 +112,27 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
 
     @property
     def _cluster_backend(self) -> str:
-        return self.params.get('cluster_backend')
+        return self.params.get("cluster_backend")
 
     @property
-    def _cloud_provider(self) -> Literal['aws', 'gce', 'azure', None]:
-        for provider in ['aws', 'gce', 'azure']:
+    def _cloud_provider(self) -> Literal["aws", "gce", "azure", None]:
+        for provider in ["aws", "gce", "azure"]:
             if provider in self._cluster_backend:
                 return provider
         if self._cluster_backend == "k8s-eks":
-            return 'aws'
+            return "aws"
         if self._cluster_backend == "k8s-gke":
-            return 'gce'
+            return "gce"
         return None
 
     @property
     def _regions(self) -> List[str]:
-        if self._cloud_provider == 'aws':
-            regions = self.params.get('region_name')
-        elif self._cloud_provider == 'gce':
-            regions = self.params.get('gce_datacenter')
-        elif self._cloud_provider == 'azure':
-            regions = self.params.get('region_name')
+        if self._cloud_provider == "aws":
+            regions = self.params.get("region_name")
+        elif self._cloud_provider == "gce":
+            regions = self.params.get("gce_datacenter")
+        elif self._cloud_provider == "azure":
+            regions = self.params.get("region_name")
         else:
             regions = []
         if isinstance(regions, list):
@@ -156,25 +156,28 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         """
         Analog of TestConfig.INTRA_NODE_COMM_PUBLIC
         """
-        return self.params.get('intra_node_comm_public')
+        return self.params.get("intra_node_comm_public")
 
     @property
     def _authenticator(self) -> Optional[str]:
-        return self.params.get('authenticator')
+        return self.params.get("authenticator")
 
     @property
     def _is_authenticator_valid(self) -> bool:
-        return self._authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator', SASLAUTHD_AUTHENTICATOR]
+        return self._authenticator in ["AllowAllAuthenticator", "PasswordAuthenticator", SASLAUTHD_AUTHENTICATOR]
 
     @property
     def _authorizer(self) -> Optional[str]:
-        return self.params.get('authorizer')
+        return self.params.get("authorizer")
 
     @property
-    def _default_endpoint_snitch(self) -> Literal[
-            'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-            'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
-            'org.apache.cassandra.locator.Ec2Snitch']:
-        if self._cluster_backend == 'aws':
-            return 'org.apache.cassandra.locator.Ec2Snitch'
-        return 'org.apache.cassandra.locator.GossipingPropertyFileSnitch'
+    def _default_endpoint_snitch(
+        self,
+    ) -> Literal[
+        "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+        "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
+        "org.apache.cassandra.locator.Ec2Snitch",
+    ]:
+        if self._cluster_backend == "aws":
+            return "org.apache.cassandra.locator.Ec2Snitch"
+        return "org.apache.cassandra.locator.GossipingPropertyFileSnitch"

@@ -22,7 +22,7 @@ class NetworkInterface:
 
 
 class ScyllaNetworkConfiguration:
-    LISTEN_ALL = '0.0.0.0'
+    LISTEN_ALL = "0.0.0.0"
 
     def __init__(self, network_interfaces, scylla_network_config):
         self.network_interfaces = network_interfaces
@@ -40,24 +40,35 @@ class ScyllaNetworkConfiguration:
 
     @property
     def broadcast_rpc_address(self):
-        if broadcast_rpc_address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_rpc_address"]:
+        if broadcast_rpc_address_config := [
+            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_rpc_address"
+        ]:
             return self.get_ip_by_address_config(address_config=broadcast_rpc_address_config[0])
         else:
             return self.rpc_address
 
     @property
     def broadcast_address(self):
-        if broadcast_address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
+        if broadcast_address_config := [
+            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"
+        ]:
             return self.get_ip_by_address_config(address_config=broadcast_address_config[0])
 
         return self.listen_address
 
     @property
     def dns_private_name(self):
-        if broadcast_address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
-            if not (interface := [conf for conf in self.network_interfaces if broadcast_address_config[0]["nic"] == conf.device_index]):
-                raise NetworkInterfaceNotFound(f"Not found network interface with device_index {broadcast_address_config[0]['nic']}. "
-                                               f"Check 'scylla_network_config' definition in the test configuration")
+        if broadcast_address_config := [
+            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"
+        ]:
+            if not (
+                interface := [
+                    conf for conf in self.network_interfaces if broadcast_address_config[0]["nic"] == conf.device_index
+                ]
+            ):
+                raise NetworkInterfaceNotFound(
+                    f"Not found network interface with device_index {broadcast_address_config[0]['nic']}. Check 'scylla_network_config' definition in the test configuration"
+                )
             return interface[0].dns_private_name
 
         return self.network_interfaces[0].dns_private_name
@@ -67,7 +78,8 @@ class ScyllaNetworkConfiguration:
         # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
         # broadcast_address. Keep this output in correlation with `nodetool status`
         broadcast_address_config = [
-            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]
+            conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"
+        ]
         if broadcast_address_config[0]["ip_type"] == "ipv6":
             return "ipv6"
         else:
@@ -78,7 +90,9 @@ class ScyllaNetworkConfiguration:
         """
         IP is used to connect from test to DB/monitor instances
         """
-        if test_communication_address_config := [conf for conf in self.scylla_network_config if conf["address"] == "test_communication"]:
+        if test_communication_address_config := [
+            conf for conf in self.scylla_network_config if conf["address"] == "test_communication"
+        ]:
             return self.get_ip_by_address_config(address_config=test_communication_address_config[0])
 
         return self.broadcast_address
@@ -97,14 +111,21 @@ class ScyllaNetworkConfiguration:
         # if broadcast_address.device_name if found
         # else empty string.
         if address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
-            return "".join([ni.device_name for ni in self.network_interfaces if ni.device_index == address_config[0]['nic']])
+            return "".join(
+                [ni.device_name for ni in self.network_interfaces if ni.device_index == address_config[0]["nic"]]
+            )
         # Workaround for k8s, while it does not support `scylla_network_config`
-        return self.network_interfaces[0].device_name if self.network_interfaces and self.network_interfaces[0].device_name else ""
+        return (
+            self.network_interfaces[0].device_name
+            if self.network_interfaces and self.network_interfaces[0].device_name
+            else ""
+        )
 
     def get_ip_by_address_config(self, address_config: dict) -> str:
         if not (interface := [conf for conf in self.network_interfaces if address_config["nic"] == conf.device_index]):
-            raise NetworkInterfaceNotFound(f"Not found network interface with device_index {address_config['nic']}. "
-                                           f"Check 'scylla_network_config' definition in the test configuration")
+            raise NetworkInterfaceNotFound(
+                f"Not found network interface with device_index {address_config['nic']}. Check 'scylla_network_config' definition in the test configuration"
+            )
 
         interface = interface[0]
 
@@ -115,16 +136,20 @@ class ScyllaNetworkConfiguration:
         if address_config.get("use_dns"):
             return interface.dns_private_name
 
-        match address_config['ip_type']:
+        match address_config["ip_type"]:
             case "ipv4":
                 # AWS allows to have a few private IPv4 addresses per interface. For
                 # now the first one address is picking, until we have anything else defined/implemented
-                return interface.ipv4_public_address if address_config["public"] else interface.ipv4_private_addresses[0]
+                return (
+                    interface.ipv4_public_address if address_config["public"] else interface.ipv4_private_addresses[0]
+                )
 
             case "ipv6":
                 # AWS allows to have a few IPv6 addresses per interface. For
                 # now the first one address is picking, until we have anything else defined/implemented
-                return interface.ipv6_public_addresses[0] if address_config["public"] else interface.ipv6_private_address
+                return (
+                    interface.ipv6_public_addresses[0] if address_config["public"] else interface.ipv6_private_address
+                )
 
 
 def is_ip_ssh_connections_ipv6(params):
@@ -146,7 +171,7 @@ def network_interfaces_count(params):
 def ssh_connection_ip_type(params):
     if scylla_network_config := params.get("scylla_network_config"):
         ssh_ip_type = [conf for conf in scylla_network_config if conf["address"] == "test_communication"][0]
-        match ssh_ip_type['ip_type']:
+        match ssh_ip_type["ip_type"]:
             case "ipv6":
                 return "ipv6"
             case "ipv4":
