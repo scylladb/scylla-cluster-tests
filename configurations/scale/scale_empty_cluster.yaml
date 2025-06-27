@@ -1,7 +1,7 @@
 test_duration: 6000
-n_db_nodes: 50
+n_db_nodes: 1
 add_node_cnt: 1
-cluster_target_size: 200
+cluster_target_size: 100
 n_loaders: 0
 
 
