@@ -680,7 +680,7 @@ class ManagerCluster(ScyllaManagerBase):
 
     def create_repair_task(self, dc_list=None,
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
-                           intensity=None, parallel=None, cron=None, start_date=None):
+                           intensity=None, parallel=None, cron=None, start_date=None, ignore_down_hosts=False):
         # the interval string:
         # Amount of time after which a successfully completed task would be run again. Supported time units include:
         #
@@ -711,6 +711,8 @@ class ManagerCluster(ScyllaManagerBase):
         # TODO: remove start-date once 2.6 is no longer supported
         if cron is not None:
             cmd += " --cron '{}' ".format(" ".join(cron))
+        if ignore_down_hosts:
+            cmd += " --ignore-down-hosts"
 
         with DbNodeLogger([self.manager_node], f"start scylla-manager task {cmd}", target_node=self.manager_node):
             res = self.sctool.run(cmd=cmd, parse_table_res=False)
