@@ -1,4 +1,5 @@
 import logging
+import re
 import os
 from pathlib import Path
 from uuid import UUID
@@ -70,3 +71,17 @@ def argus_offline_collect_events(client: ArgusSCTClient) -> None:
         event_category = EventsInfo(severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
         events_sorted.append(event_category)
     client.submit_events(events_sorted)
+
+
+def create_proxy_argus_s3_url(url: str, general: bool = False) -> str:
+    if general:
+        if match := re.match(r"(https:\/\/)?(?P<bucket>[\w\-]*)\.s3(?P<region>\.[\w\-\d]*)?\.amazonaws.com\/(?P<key>.+)", url):
+            return f"https://argus.scylladb.com/api/v1/s3/{match.group('bucket')}/{match.group('key')}"
+        return url
+
+    if url.endswith(".png"):
+        url_format = "https://argus.scylladb.com/api/v1/tests/scylla-cluster-tests/{}/screenshot/{}"
+    else:
+        url_format = "https://argus.scylladb.com/api/v1/tests/scylla-cluster-tests/{}/log/{}/download"
+
+    return url_format
