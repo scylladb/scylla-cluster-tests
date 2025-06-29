@@ -586,7 +586,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
         return [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
 
-    def set_tags(self, instance_ids, memo={}):  # pylint: disable=dangerous-default-value
+    def set_tags(self, instance_ids, memo={}):  # pylint: disable=dangerous-default-value  # noqa: B006
         if not instance_ids:
             return
         if isinstance(instance_ids, str):
@@ -609,7 +609,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         # So, we add it for each node explicitly.
         self.set_tags(self._get_all_instance_ids())
 
-    def set_security_groups(self, instance_id, memo={}):  # pylint: disable=dangerous-default-value
+    def set_security_groups(self, instance_id, memo={}):  # pylint: disable=dangerous-default-value  # noqa: B006
         if not instance_id or instance_id in memo:
             return
         with EC2_INSTANCE_UPDATE_LOCK:

@@ -814,7 +814,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         f"--version {new_chart_version} --destination {tmpdir}")
                     crd_basedir = os.path.join(tmpdir, 'scylla-operator/crds')
                     for current_file in os.listdir(crd_basedir):
-                        if not (current_file.endswith(".yaml") or current_file.endswith(".yml")):
+                        if not current_file.endswith((".yaml", ".yml")):
                             continue
                         self.apply_file(
                             os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
@@ -1241,8 +1241,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             # NOTE: we should use at max 7 from each 8 cores.
             #       i.e 28/32 , 21/24 , 14/16 and 7/8
             new_cpu_limit = math.ceil(cpu_limit / 8) * 7
-            if new_cpu_limit < cpu_limit:
-                cpu_limit = new_cpu_limit
+            cpu_limit = min(cpu_limit, new_cpu_limit)
             cpu_limit = cpu_limit // self.tenants_number or 1
             self.scylla_cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         else:
