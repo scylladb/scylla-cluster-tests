@@ -30,3 +30,5 @@ store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
 custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
+
+adaptive_timeout_store_metrics: false

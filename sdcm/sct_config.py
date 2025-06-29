@@ -1744,6 +1744,9 @@ class SCTConfiguration(dict):
              help="Workload name, can be: write|read|mixed|unset."
                   "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
                   "If unset, workload is taken from test name."),
+
+        dict(name="adaptive_timeout_store_metrics", env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS", type=boolean,
+             help="Store adaptive timeout metrics in Argus. Disabled for performance tests only."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
