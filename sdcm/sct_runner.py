@@ -138,7 +138,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.8"  # Version of the Image
+    VERSION = "1.11"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -227,6 +227,9 @@ class SctRunner(ABC):
             apt-get -qq update
             apt-get -qq install --no-install-recommends python3-pip htop screen tree
             pip3 install awscli
+
+            # disable unattended-upgrades
+            sudo systemctl disable --now unattended-upgrades
 
             # Install Docker.
             apt-get -qq install --no-install-recommends \
