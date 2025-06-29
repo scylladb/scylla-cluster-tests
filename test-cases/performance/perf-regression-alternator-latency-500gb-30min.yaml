@@ -51,3 +51,5 @@ backtrace_decoding: false
 
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
+
+adaptive_timeout_store_metrics: false

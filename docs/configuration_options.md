@@ -3568,3 +3568,12 @@ Workload name, can be: write|read|mixed|unset.Used for e.g. latency_calculator_d
 **default:** N/A
 
 **type:** str (appendable)
+
+
+## **adaptive_timeout_store_metrics** / SCT_ADAPTIVE_TIMEOUT_STORE_METRICS
+
+Store adaptive timeout metrics in Argus. Disabled for performance tests only.
+
+**default:** True
+
+**type:** boolean

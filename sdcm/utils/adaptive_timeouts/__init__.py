@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent
-from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
+from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ArgusAdaptiveTimeoutStore, \
     NodeLoadInfoServices
 
 LOGGER = logging.getLogger(__name__)
@@ -84,8 +84,8 @@ class TestInfoServices:
 
 
 @contextmanager
-def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
-                     stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, F821
+                     stats_storage: AdaptiveTimeoutStore = ArgusAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.
@@ -96,9 +96,21 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
     for arg in operation.value[2]:
         assert arg in kwargs, f"Argument '{arg}' is required for operation {operation.name}"
         args[arg] = kwargs[arg]
-    timeout, load_metrics = operation.value[1](node_info_service=NodeLoadInfoServices().get(node), **args)
+
+    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+
+    if store_metrics:
+        metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
+
+    timeout, load_metrics = operation.value[1](node_info_service=metrics, **args)
     load_metrics = load_metrics | TestInfoServices.get(node)
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
+
     start_time = time.time()
+
     timeout_occurred = False
     try:
         yield timeout
@@ -113,8 +125,8 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
             timeout_occurred = True
             SoftTimeoutEvent(operation=operation.name, soft_timeout=timeout, duration=duration).publish_or_dump()
         try:
-            if load_metrics:
+            if load_metrics and store_metrics:
                 stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
                                     timeout=timeout, timeout_occurred=timeout_occurred)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)
+            LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc, exc_info=True)

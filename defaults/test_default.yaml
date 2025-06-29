@@ -311,3 +311,5 @@ mgmt_snapshots_preparer_params:
   num_of_rows: ''
   sequence_start: ''
   sequence_end: ''
+
+adaptive_timeout_store_metrics: true
