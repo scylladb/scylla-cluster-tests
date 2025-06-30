@@ -1,1 +1,2 @@
 perf_simple_query_extra_command: '--write'
+custom_es_index: 'microbenchmarkingtest_write'
