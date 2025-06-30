@@ -53,7 +53,7 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
         except (ValueError, SocketRecvError):  # under high load it can throw these errors, on next try it will be ok
             pass
 
-    def eagain(self, func, args=(), kwargs={},  # pylint: disable=dangerous-default-value
+    def eagain(self, func, args=(), kwargs={},  # pylint: disable=dangerous-default-value  # noqa: B006
                timeout: NullableTiming = None) -> int:
         """Running function followed by simple_select up until it return anything but `LIBSSH2_ERROR_EAGAIN`"""
         with self.lock:

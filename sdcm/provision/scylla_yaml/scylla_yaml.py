@@ -208,7 +208,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
             return authenticator
-        if authenticator.startswith('org.apache.cassandra.auth.') or authenticator.startswith('com.scylladb.auth.'):
+        if authenticator.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
             return authenticator
         if authenticator in ['PasswordAuthenticator', 'AllowAllAuthenticator']:
             return 'org.apache.cassandra.auth.' + authenticator
@@ -229,7 +229,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
             return authorizer
-        if authorizer.startswith('org.apache.cassandra.auth.') or authorizer.startswith('com.scylladb.auth.'):
+        if authorizer.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
             return authorizer
         if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
             return 'org.apache.cassandra.auth.' + authorizer
@@ -349,15 +349,15 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
+        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         exclude_unset: bool = False,
-        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-    ) -> 'DictStrAny':
+        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
+    ) -> 'DictStrAny':  # noqa: F821
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)

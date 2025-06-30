@@ -213,8 +213,7 @@ class ManagerTask:
         timezone = date_list[0][date_list[0].rindex(" ") + 1:]
         for date_string in date_list:
             converted_date = datetime.datetime.strptime(date_string[:date_string.rindex(" ")], time_format)
-            if converted_date > converted_max_date:
-                converted_max_date = converted_date
+            converted_max_date = max(converted_max_date, converted_date)
         return f"{datetime.datetime.strftime(converted_max_date, time_format)} {timezone}"
 
     @property
@@ -1177,8 +1176,7 @@ class SCTool:
         if filtered_lines:
             if '╭' in res.stdout:
                 filtered_lines = [line.replace('│', "|") for line in filtered_lines if
-                                  not (line.startswith('╭') or line.startswith('├') or line.startswith(
-                                      '╰'))]  # filter out the dashes lines
+                                  not line.startswith(('╭', '├', '╰'))]  # filter out the dashes lines
             else:
                 filtered_lines = [line for line in filtered_lines if
                                   not line.startswith('+')]  # filter out the dashes lines

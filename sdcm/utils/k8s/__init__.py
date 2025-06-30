@@ -300,7 +300,8 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @classmethod
     def kubectl(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False, verbose: bool = True):
+                remoter: Optional['KubernetesCmdRunner'] = None,  # noqa: F821
+                ignore_status: bool = False, verbose: bool = True):
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
@@ -308,7 +309,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @classmethod
     def kubectl_multi_cmd(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                          remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
+                          remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,  # noqa: F821
                           verbose: bool = True):
         total_command = ' '.join(command)
         final_command = []
@@ -869,7 +870,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_kluster.region_name})
 
     @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
-    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value
+    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value  # noqa: B006
         try:
             now = time.time()
             if cache.get("last_call_at", 0) + 5 > now:

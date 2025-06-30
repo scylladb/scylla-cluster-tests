@@ -257,7 +257,7 @@ class NodeLoadInfoServices(metaclass=Singleton):  # pylint: disable=too-few-publ
     def __init__(self):
         self._services: dict[str, NodeLoadInfoService] = {}
 
-    def get(self, node: "BaseNode") -> NodeLoadInfoService:
+    def get(self, node: "BaseNode") -> NodeLoadInfoService:  # noqa: F821
         if node not in self._services:
             self._services[node.name] = NodeLoadInfoService(node.remoter, node.name, node.scylla_version_detailed)
         if self._services[node.name].remoter != node.remoter:
