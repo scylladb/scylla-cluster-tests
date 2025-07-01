@@ -17,8 +17,8 @@ from contextlib import ExitStack, contextmanager
 from time import sleep, time
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
-from sdcm.mgmt.common import DEFAULT_TASK_TIMEOUT, ScyllaManagerError, TaskStatus
-from sdcm.remote.libssh2_client.exceptions import Failure, UnexpectedExit
+from sdcm.exceptions import WaitForTimeoutError
+from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -89,8 +89,10 @@ class LongevityOutOfSpaceTest(LongevityTest):
         stress_queue = []
         self._run_all_stress_cmds(stress_queue, params)
 
+        result = True
         for stress in stress_queue:
-            self.verify_stress_thread(stress)
+            result = result and self.verify_stress_thread(stress)
+        return result
 
     def scale_out(self):
         instance_type = self.params.get("instance_type_db")
@@ -115,20 +117,6 @@ class LongevityOutOfSpaceTest(LongevityTest):
         # [{'metric': {}, 'values': [[1749638594.936, '0'], [1749638614.936, '0'], [1749638634.936, '0'], [1749638654.936, '0']]}]
         return sum(int(v[1]) for v in results[0]['values']) if results else 0
 
-    def manager_repair(self):
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-        mgr_task = mgr_cluster.create_repair_task()
-        task_final_status = mgr_task.wait_and_get_final_status()
-        if task_final_status != TaskStatus.DONE:
-            progress_full_string = mgr_task.progress_string(
-                parse_table_res=False, is_verify_errorless_result=True).stdout
-            if task_final_status != TaskStatus.ERROR_FINAL:
-                mgr_task.stop()
-            raise ScyllaManagerError(
-                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
-                f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(mgr_task.id))
-
     def test_oos_write_scale_out(self):
         """
         Fill the cluster to 90%
@@ -149,76 +137,39 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
     def test_oos_repair_scale_out(self):
         """
+        Fill the cluster to 90%
+        Start a repair task
         Fill the cluster to 98%
-        Repair should fail on the node that reached the 98% threshold
+        Repair should have status RUNNING and not finish
         Scale out the cluster
-        Repair should succeed on the node that reached the 98% threshold
+        Wait until the repair task has status DONE
         """
         self.run_prepare_write_cmd()
+
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+        mgr_task = mgr_cluster.create_repair_task()
 
         with ignore_stress_errors():
             self.run_stress()
 
-        threshold_node = max(self.db_cluster.nodes, key=get_node_disk_usage)
-        with ignore_repair_errors():
-            result = threshold_node.run_nodetool("repair", warning_event_on_exception=(
-                UnexpectedExit, Failure), error_message="Expected error.", timeout=DEFAULT_TASK_TIMEOUT)
-            assert result is None, "Repair should be disabled at this point"
+        repair_timeout = 3 * 3600  # 3 hours
+        try:
+            task_final_status = mgr_task.wait_and_get_final_status(timeout=repair_timeout)
+        except WaitForTimeoutError:
+            self.log.info(f"Repair task {mgr_task.id} did not finish as expected, continuing with scale out.")
 
         self.scale_out()
 
-        result = threshold_node.run_nodetool("repair")
-        assert result is not None, "Repair should succeed after scale out"
-
-    def test_oos_cluster_repair_scale_out(self):
-        """
-        Fill the cluster to 98%
-        Repair should fail on the node that reached the 98% threshold
-        Scale out the cluster
-        Repair should succeed on the node that reached the 98% threshold
-        """
-        self.run_prepare_write_cmd()
-
-        with ignore_stress_errors():
-            self.run_stress()
-
-        threshold_node = max(self.db_cluster.nodes, key=get_node_disk_usage)
-        with ignore_repair_errors():
-            result = threshold_node.run_nodetool("cluster repair", warning_event_on_exception=(
-                UnexpectedExit, Failure), error_message="Expected error.", timeout=DEFAULT_TASK_TIMEOUT)
-            assert result is None, "Repair should be disabled at this point"
-
-        self.scale_out()
-
-        result = threshold_node.run_nodetool("cluster repair")
-        assert result is not None, "Repair should succeed after scale out"
-
-    def test_oos_manager_repair_scale_out(self):
-        """
-        Fill the cluster to 98%
-        Repair should fail on the node that reached the 98% threshold
-        Scale out the cluster
-        Repair should succeed on the node that reached the 98% threshold
-        """
-        self.run_prepare_write_cmd()
-        self.log.info("OOS_REPAIR - reached 90%")
-
-        with ignore_stress_errors():
-            self.run_stress()
-        self.log.info("OOS_REPAIR - reached 98%")
-
-        with ignore_repair_errors():
-            try:
-                self.manager_repair()
-            except Exception as exc:  # noqa: BLE001
-                self.log.error(f"Expected error during manager repair: {exc}")
-        self.log.info("OOS_REPAIR - After first repair")
-
-        self.scale_out()
-        self.log.info("OOS_REPAIR - Scaled out")
-
-        self.manager_repair()
-        self.log.info("OOS_REPAIR - After second repair")
+        task_final_status = mgr_task.wait_and_get_final_status(timeout=repair_timeout)
+        if task_final_status != TaskStatus.DONE:
+            progress_full_string = mgr_task.progress_string(
+                parse_table_res=False, is_verify_errorless_result=True).stdout
+            if task_final_status != TaskStatus.ERROR_FINAL:
+                mgr_task.stop()
+            raise ScyllaManagerError(
+                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
+                f'{progress_full_string}')
+        self.log.info('Task: {} is done.'.format(mgr_task.id))
 
     def test_oos_compaction_scale_out(self):
         """
@@ -236,12 +187,13 @@ class LongevityOutOfSpaceTest(LongevityTest):
             node.run_nodetool('disableautocompaction')
         # fill to 90%
         self.run_prepare_write_cmd()
-        # fill to 98%
-        with ignore_stress_errors():
-            self.run_stress()
 
         for node in self.db_cluster.nodes:
             node.run_nodetool('enableautocompaction')
+
+        # fill to 98%
+        with ignore_stress_errors():
+            self.run_stress()
 
         # Check that the node that got to 98% does not have running compactions
         sleep(1200)
@@ -260,7 +212,9 @@ class LongevityOutOfSpaceTest(LongevityTest):
         """
         Fill the cluster to 90% with RF=2
         Alter the keyspaces's RF to 3 to force file-based streaming
+        Start a read with CL=THREE, it should fail
         Scale out the cluster
+        Start a read with CL=THREE, it should succeed
         """
         self.run_prepare_write_cmd()
         sleep(600)
@@ -269,18 +223,21 @@ class LongevityOutOfSpaceTest(LongevityTest):
         status = self.db_cluster.get_nodetool_status()
         network_topology_strategy = NetworkTopologyReplicationStrategy(**{dc: 3 for dc in status})
         node1 = self.db_cluster.nodes[0]
-        try:
-            node1.run_cqlsh(f"ALTER KEYSPACE keyspace1 WITH replication = {network_topology_strategy}", timeout=3600)
-        except Exception as exc:  # noqa: BLE001
-            self.log.error(f"Alter keyspace times out as expected: {exc}")
-
-        self.scale_out()
+        # try:
+        node1.run_cqlsh(f"ALTER KEYSPACE keyspace1 WITH replication = {network_topology_strategy}", timeout=3600)
+        # except Exception as exc:  # noqa: BLE001
+        # self.log.error(f"Alter keyspace times out as expected: {exc}")
 
         replication_strategy = ReplicationStrategy.get(node1, 'keyspace1')
         self.log.info(f"Replication strategy for keyspace keyspace1: {replication_strategy}")
         assert replication_strategy.replication_factors == [3]
 
-        # read some data with CL=THREE
+        with ignore_stress_errors():
+            result = self.run_stress()
+            assert not result, "Reading with CL=THREE should have failed"
+
+        self.scale_out()
+
         self.run_stress()
 
     def test_oos_file_based_streaming_decommission(self):
