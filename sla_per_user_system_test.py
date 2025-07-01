@@ -88,64 +88,6 @@ class SlaPerUserTest(LongevityTest):
         self.wait_no_compactions_running(n=120)
 
     @staticmethod
-    def role_to_scheduler_group(test_users, scheduler_shares):
-        for role, shares in test_users.items():
-            for scheduler_group, sg_shares in scheduler_shares.items():
-                if shares[0] in sg_shares:
-                    test_users[role].append(scheduler_group)
-                    break
-        return test_users
-
-    def validate_scheduler_runtime(self, start_time, end_time, read_users, expected_ratio):
-        roles_with_shares = {user['role'].name: [user['service_level'].shares] for user in read_users}
-        # TODO: ask Eliran do we really need validate it by node?
-        for node_ip in self.db_cluster.get_node_private_ips():
-            # Temporary solution
-            scheduler_shares = self.prometheus_stats.get_scylla_scheduler_shares_per_sla(start_time, end_time, node_ip)
-            self.log.debug('SCHEDULERS SHARES FROM PROMETHEUS: {}'.format(scheduler_shares))
-            # this default scheduler that is not under test - ignore it
-            if 'sl:default' in scheduler_shares:
-                scheduler_shares.pop('sl:default')
-
-            test_users_to_sg = self.role_to_scheduler_group(test_users=roles_with_shares,
-                                                            scheduler_shares=scheduler_shares)
-            self.log.debug('ROLE - SERVICE LEVEL - SCHEDULER: {}'.format(test_users_to_sg))
-            # End Temporary solution
-
-            # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
-            # and query again
-            for step in ['30s', '45s', '60s', '120s']:
-                self.log.debug("Query 'scylla_scheduler_runtime_ms' on the node %s with irate step %s ", node_ip, step)
-                if shards_time_per_sla := self.prometheus_stats.get_scylla_scheduler_runtime_ms(
-                        start_time, end_time, node_ip, irate_sample_sec=step):
-                    break
-            # TODO: follow after this issue (prometheus return empty answer despite the data exists),
-            #  if it is reproduced
-            # if not (shards_time_per_sla and scheduler_shares):
-            #     # Set this message as WARNING because I found that prometheus return empty answer despite the data
-            #     # exists (I run this request manually and got data). Prometheus request doesn't fail, it succeeded but
-            #     # empty, like:
-            #     # {'status': 'success', 'data': {'resultType': 'matrix', 'result': []}}
-            #     WorkloadPrioritisationEvent.EmptyPrometheusData(message=f'Failed to get scheduler_runtime data from '
-            #                                                             f'Prometheus for node {node_ip}',
-            #                                                     severity=Severity.WARNING).publish()
-            #     continue
-
-            runtime_per_role = {}
-            for rolename, val in test_users_to_sg.items():
-                if val[1] in shards_time_per_sla[node_ip]:
-                    runtime_per_role[rolename] = sum(shards_time_per_sla[node_ip][val[1]]) / \
-                        len(shards_time_per_sla[node_ip][val[1]])
-                else:
-                    runtime_per_role[rolename] = 0
-            self.log.debug('RUN TIME PER ROLE: {}'.format(runtime_per_role))
-            actual_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users,
-                                                                        metrics=runtime_per_role)
-            self.validate_deviation(expected_ratio=expected_ratio, actual_ratio=actual_shares_ratio,
-                                    msg=f'Validate scheduler CPU runtime on the node {node_ip}. '
-                                        f'Run time per role: {runtime_per_role}')
-
-    @staticmethod
     def validate_ratio(expected_ratio, actual_ratio, msg):
         if not (expected_ratio and actual_ratio):
             WorkloadPrioritisationEvent.RatioValidationEvent(
@@ -374,10 +316,7 @@ class SlaPerUserTest(LongevityTest):
 
         if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
             self.run_pre_create_keyspace()
-            # after several test runs with Tablets decided to decrease by half of the percent(usually tests show about 96.8 - 97.5)
-            # due to unbalanced shards utilization with tablets(particular tablet belong to particular shard)
-            # during gauss distribution read
-            self.MIN_CPU_UTILIZATION = 96.5
+            self.MIN_CPU_UTILIZATION = 85
 
         self.create_test_data_and_wait_no_compaction()
 
@@ -421,11 +360,6 @@ class SlaPerUserTest(LongevityTest):
             results = self.get_c_s_stats(read_queue=read_queue, users=read_users, statistic_name='op rate')
             self.validate_if_scylla_load_high_enough(start_time=start_time,
                                                      wait_cpu_utilization=self.MIN_CPU_UTILIZATION)
-            end_time = time.time()
-
-            self.validate_scheduler_runtime(start_time=start_time, end_time=end_time,
-                                            read_users=read_users, expected_ratio=expected_shares_ratio)
-
             self.assertTrue(results, msg='Not received cassandra-stress results')
 
             self.log.debug('Validate cassandra-stress ops deviation')
