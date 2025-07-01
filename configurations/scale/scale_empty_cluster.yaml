@@ -1,7 +1,7 @@
 test_duration: 6000
-n_db_nodes: 1
+n_db_nodes: 20
 add_node_cnt: 1
-cluster_target_size: 100
+cluster_target_size: 200
 n_loaders: 0
 
 instance_type_db: 'i4i.2xlarge'
