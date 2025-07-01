@@ -19,6 +19,7 @@ from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.exceptions import WaitForTimeoutError
 from sdcm.mgmt.common import ScyllaManagerError, TaskStatus
+from sdcm.remote.libssh2_client.exceptions import UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -251,10 +252,10 @@ class LongevityOutOfSpaceTest(LongevityTest):
         status = self.db_cluster.get_nodetool_status()
         network_topology_strategy = NetworkTopologyReplicationStrategy(**{dc: 3 for dc in status})
         node1 = self.db_cluster.nodes[0]
-        # try:
-        node1.run_cqlsh(f"ALTER KEYSPACE keyspace1 WITH replication = {network_topology_strategy}", timeout=3600)
-        # except Exception as exc:  # noqa: BLE001
-        # self.log.error(f"Alter keyspace times out as expected: {exc}")
+        try:
+            node1.run_cqlsh(f"ALTER KEYSPACE keyspace1 WITH replication = {network_topology_strategy}", timeout=3600)
+        except UnexpectedExit as exc:
+            self.log.error(f"Alter keyspace times out as expected: {exc}")
 
         replication_strategy = ReplicationStrategy.get(node1, 'keyspace1')
         self.log.info(f"Replication strategy for keyspace keyspace1: {replication_strategy}")
