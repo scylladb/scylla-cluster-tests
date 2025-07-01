@@ -51,7 +51,7 @@ API_VERSIONS = {
     "Microsoft.Network/networkSecurityGroups": "2021-02-01",
     "Microsoft.Network/publicIPAddresses": "2021-02-01",
     "Microsoft.Network/virtualNetworks": "2021-02-01",
-    'Microsoft.Network/virtualNetworks/subnets': "2021-02-01",
+    "Microsoft.Network/virtualNetworks/subnets": "2021-02-01",
     "Microsoft.Resources/resourceGroups": "2021-04-01",
 }
 
@@ -105,9 +105,10 @@ class AzureService(metaclass=Singleton):
 
     @cached_property
     def blob(self) -> BlobServiceClient:
-        return BlobServiceClient(account_url=self.blob_account_url,
-                                 credential=AzureNamedKeyCredential(name=self.blob_credentials['account'],
-                                                                    key=self.blob_credentials['key']))
+        return BlobServiceClient(
+            account_url=self.blob_account_url,
+            credential=AzureNamedKeyCredential(name=self.blob_credentials["account"], key=self.blob_credentials["key"]),
+        )
 
     @cached_property
     def subscription(self) -> SubscriptionClient:
@@ -158,15 +159,19 @@ class AzureService(metaclass=Singleton):
         for disk in virtual_machine.storage_profile.data_disks:
             resources.append(self.get_by_id(resource_id=disk.id, api_version=API_VERSIONS["Microsoft.Compute/disks"]))
         for iface in virtual_machine.network_profile.network_interfaces:
-            resources.append(self.get_by_id(
-                resource_id=iface.id,
-                api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
-            ))
+            resources.append(
+                self.get_by_id(
+                    resource_id=iface.id,
+                    api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
+                )
+            )
             if public_ip := self._get_ip_configuration_dict(network_interface_id=iface.id).get("publicIPAddress"):
-                resources.append(self.get_by_id(
-                    resource_id=public_ip["id"],
-                    api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
-                ))
+                resources.append(
+                    self.get_by_id(
+                        resource_id=public_ip["id"],
+                        api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
+                    )
+                )
         return resources
 
     def delete_resource(self, resource: Resource) -> None:
@@ -207,9 +212,9 @@ class AzureService(metaclass=Singleton):
         return chain.from_iterable(paged_query())
 
 
-def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
-                         running: bool = False,
-                         verbose: bool = False) -> list[VirtualMachine]:
+def list_instances_azure(
+    tags_dict: Optional[dict[str, str]] = None, running: bool = False, verbose: bool = False
+) -> list[VirtualMachine]:
     query_bits = [
         "Resources",
         "where resourceGroup startswith 'SCT-'",  # look in `SCT-*' resource groups only
@@ -225,7 +230,7 @@ def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
     if verbose:
         LOGGER.info("Going to list Azure instances")
     azure_service = AzureService()
-    res = azure_service.resource_graph_query(query=' | '.join(query_bits))
+    res = azure_service.resource_graph_query(query=" | ".join(query_bits))
     get_virtual_machine = azure_service.compute.virtual_machines.get
     instances = [get_virtual_machine(resource_group_name=vm["resourceGroup"], vm_name=vm["name"]) for vm in res]
     if verbose:

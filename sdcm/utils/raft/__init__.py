@@ -74,39 +74,32 @@ class RaftFeatureOperations(Protocol):
     @property
     def is_enabled(self) -> bool:
         """
-                    Please do not use this method in simple statements like:
-                        if not current_node.raft.is_enabled
-                    move logic into separate methods of RaftFeature/NoRaft
-                    classes instead
-                """
+        Please do not use this method in simple statements like:
+            if not current_node.raft.is_enabled
+        move logic into separate methods of RaftFeature/NoRaft
+        classes instead
+        """
         ...
 
-    def get_status(self) -> str:
-        ...
+    def get_status(self) -> str: ...
 
-    def is_ready(self) -> bool:
-        ...
+    def is_ready(self) -> bool: ...
 
-    def get_group0_members(self) -> list[str]:
-        ...
+    def get_group0_members(self) -> list[str]: ...
 
-    def get_group0_non_voters(self) -> list[dict[str, str]]:
-        ...
+    def get_group0_non_voters(self) -> list[dict[str, str]]: ...
 
-    def clean_group0_garbage(self, raise_exception: bool = False) -> None:
-        ...
+    def clean_group0_garbage(self, raise_exception: bool = False) -> None: ...
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> [HealthEventsGenerator | None]:
-        ...
+        self, group0_members: list[dict[str, str]], tokenring_members: list[dict[str, str]]
+    ) -> [HealthEventsGenerator | None]: ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
         backend = self._node.parent_cluster.params["cluster_backend"]
         if backend not in BACKEND_TIMEOUTS:
             backend = "aws"
-        return MessageTimeout(message_position.log_message,
-                              BACKEND_TIMEOUTS[backend][message_position.position])
+        return MessageTimeout(message_position.log_message, BACKEND_TIMEOUTS[backend][message_position.position])
 
     def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
         random.seed(seed)
@@ -134,10 +127,10 @@ class Raft(RaftFeatureOperations):
         return True
 
     def get_status(self) -> str:
-        """ get raft status """
+        """get raft status"""
         with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
             row = session.execute("SELECT * FROM system.scylla_local WHERE key = 'group0_upgrade_state'").one()
-            return getattr(row, 'value', "")
+            return getattr(row, "value", "")
 
     def is_ready(self) -> bool:
         """check if raft running
@@ -157,12 +150,13 @@ class Raft(RaftFeatureOperations):
                     return []
                 raft_group0_id = row.value
 
-                rows = session.execute(f"select server_id, can_vote from system.raft_state  \
-                                        where group_id = {raft_group0_id} and disposition = 'CURRENT'").all()
+                rows = session.execute(
+                    f"select server_id, can_vote from system.raft_state  \
+                                        where group_id = {raft_group0_id} and disposition = 'CURRENT'"
+                ).all()
 
                 for row in rows:
-                    group0_members.append({"host_id": str(row.server_id),
-                                           "voter": row.can_vote})
+                    group0_members.append({"host_id": str(row.server_id), "voter": row.can_vote})
         except Exception as exc:  # pylint: disable=broad-except
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
@@ -173,7 +167,7 @@ class Raft(RaftFeatureOperations):
     def get_group0_non_voters(self) -> list[str]:
         LOGGER.debug("Get group0 members in status non-voter")
         # Add host id which cann't vote after decommission was aborted because it is fast rebooted / terminated")
-        return [member['host_id'] for member in self.get_group0_members() if not member['voter']]
+        return [member["host_id"] for member in self.get_group0_members() if not member["voter"]]
 
     def get_diff_group0_token_ring_members(self) -> list[str]:
         LOGGER.debug("Get diff group0 from token ring")
@@ -198,20 +192,22 @@ class Raft(RaftFeatureOperations):
             removing_host_id = host_ids.pop(0)
             ingore_dead_nodes_opt = f"--ignore-dead-nodes {','.join(host_ids)}" if host_ids else ""
 
-            result = self._node.run_nodetool(f"removenode {removing_host_id} {ingore_dead_nodes_opt}",
-                                             ignore_status=True,
-                                             verbose=True,
-                                             retry=3)
+            result = self._node.run_nodetool(
+                f"removenode {removing_host_id} {ingore_dead_nodes_opt}", ignore_status=True, verbose=True, retry=3
+            )
             if not result.ok:
-                LOGGER.error("Removenode with host_id %s failed with %s",
-                             removing_host_id, result.stdout + result.stderr)
+                LOGGER.error(
+                    "Removenode with host_id %s failed with %s", removing_host_id, result.stdout + result.stderr
+                )
             if not host_ids:
                 break
 
         if missing_host_ids := self.get_diff_group0_token_ring_members():
             token_ring_members = self._node.get_token_ring_members()
             group0_members = self.get_group0_members()
-            error_msg = f"Token ring {token_ring_members} and group0 {group0_members} are differs on: {missing_host_ids}"
+            error_msg = (
+                f"Token ring {token_ring_members} and group0 {group0_members} are differs on: {missing_host_ids}"
+            )
             LOGGER.error(error_msg)
             if raise_exception:
                 raise Group0MembersNotConsistentWithTokenRingMembersException(error_msg)
@@ -220,49 +216,63 @@ class Raft(RaftFeatureOperations):
     @staticmethod
     def get_severity_change_filters_scylla_start_failed(timeout: int | None = None) -> tuple:
         return (
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=r".*storage_service - decommission.*Operation failed",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=r".*node_ops - decommission.*seastar::sleep_aborted",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=r".*This node was decommissioned and will not rejoin the ring",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=r".*This node was decommissioned and will not rejoin the ring",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=r".*Startup failed: std::runtime_error.*is removed from the cluster",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=r".*gossip - is_safe_for_restart.*status=LEFT",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=r".*init - Startup failed: std::runtime_error.*already exists, cancelling join",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=r".*init - Startup failed: std::runtime_error.*repair_reason=bootstrap.*aborted_by_user=true",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent,
-                                        regex=".*init - Startup failed.*"),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=r".*node_ops - bootstrap.*Operation failed.*seastar::abort_requested_exception",
-                                        extra_time_to_expiration=timeout),
-
-
-
-
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                regex=r".*storage_service - decommission.*Operation failed",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                regex=r".*node_ops - decommission.*seastar::sleep_aborted",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                regex=r".*This node was decommissioned and will not rejoin the ring",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                regex=r".*This node was decommissioned and will not rejoin the ring",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                regex=r".*Startup failed: std::runtime_error.*is removed from the cluster",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                regex=r".*gossip - is_safe_for_restart.*status=LEFT",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                regex=r".*init - Startup failed: std::runtime_error.*already exists, cancelling join",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                regex=r".*init - Startup failed: std::runtime_error.*repair_reason=bootstrap.*aborted_by_user=true",
+                extra_time_to_expiration=timeout,
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING, event_class=DatabaseLogEvent, regex=".*init - Startup failed.*"
+            ),
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                regex=r".*node_ops - bootstrap.*Operation failed.*seastar::abort_requested_exception",
+                extra_time_to_expiration=timeout,
+            ),
         )
 
     def is_cluster_topology_consistent(self) -> bool:
@@ -279,36 +289,37 @@ class Raft(RaftFeatureOperations):
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> HealthEventsGenerator:
-        LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
-                     self._node.name, self._node.host_id)
+        self, group0_members: list[dict[str, str]], tokenring_members: list[dict[str, str]]
+    ) -> HealthEventsGenerator:
+        LOGGER.debug(
+            "Check group0 and token ring consistency on node %s (host_id=%s)...", self._node.name, self._node.host_id
+        )
         token_ring_node_ids = [member["host_id"] for member in tokenring_members]
         for member in group0_members:
             if member["voter"] and member["host_id"] in token_ring_node_ids:
                 continue
-            error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
-                f"can_vote {member['voter']} and " \
-                f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
-                f"Inconsistency between group0: {group0_members} " \
+            error_message = (
+                f"Node {self._node.name} has group0 member with host_id {member['host_id']} with "
+                f"can_vote {member['voter']} and "
+                f"presents in token ring {member['host_id'] in token_ring_node_ids}. "
+                f"Inconsistency between group0: {group0_members} "
                 f"and tokenring: {tokenring_members}"
+            )
             LOGGER.error(error_message)
             yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
                 severity=Severity.ERROR,
                 node=self._node.name,
                 error=error_message,
             )
-        LOGGER.debug("Group0 and token-ring are consistent on node %s (host_id=%s)...",
-                     self._node.name, self._node.host_id)
+        LOGGER.debug(
+            "Group0 and token-ring are consistent on node %s (host_id=%s)...", self._node.name, self._node.host_id
+        )
 
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
-        TopologyOperations.DECOMMISSION: [
-            MessagePosition("DECOMMISSIONING: unbootstrap starts", LogPosition.BEGIN)],
-        TopologyOperations.BOOTSTRAP: [
-            MessagePosition("entering BOOTSTRAP mode", LogPosition.BEGIN)
-        ]
+        TopologyOperations.DECOMMISSION: [MessagePosition("DECOMMISSIONING: unbootstrap starts", LogPosition.BEGIN)],
+        TopologyOperations.BOOTSTRAP: [MessagePosition("entering BOOTSTRAP mode", LogPosition.BEGIN)],
     }
 
     def __init__(self, node: "BaseNode") -> None:
@@ -350,8 +361,8 @@ class NoRaft(RaftFeatureOperations):
         return len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> Generator[None, None, None]:
+        self, group0_members: list[dict[str, str]], tokenring_members: list[dict[str, str]]
+    ) -> Generator[None, None, None]:
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
         yield None
@@ -360,13 +371,14 @@ class NoRaft(RaftFeatureOperations):
 def get_raft_mode(node) -> Raft | NoRaft:
     with node.remote_scylla_yaml() as scylla_yaml:
         if node.is_kubernetes():
-            consistent_cluster_management = scylla_yaml.get('consistent_cluster_management')
+            consistent_cluster_management = scylla_yaml.get("consistent_cluster_management")
         else:
             consistent_cluster_management = scylla_yaml.consistent_cluster_management
         node.log.debug("consistent_cluster_management : %s", consistent_cluster_management)
         return Raft(node) if consistent_cluster_management else NoRaft(node)
 
 
-__all__ = ["get_raft_mode",
-           "Group0MembersNotConsistentWithTokenRingMembersException",
-           ]
+__all__ = [
+    "get_raft_mode",
+    "Group0MembersNotConsistentWithTokenRingMembersException",
+]

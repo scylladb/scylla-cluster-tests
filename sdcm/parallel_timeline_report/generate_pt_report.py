@@ -26,16 +26,21 @@ from jinja2 import Environment, FileSystemLoader
 
 LOGGER = logging.getLogger(__name__)
 
-env = Environment(
-    loader=FileSystemLoader(Path(__file__).parent.resolve() / 'templates'),
-    autoescape=True
-)
+env = Environment(loader=FileSystemLoader(Path(__file__).parent.resolve() / "templates"), autoescape=True)
 
 
 class EventGroup(Enum):
-    NODES_RELATED_EVENTS = ["ScyllaServerStatusEvent", "RepairEvent", "JMXServiceEvent", "DatabaseLogEvent",
-                            "BootstrapEvent", "NodetoolEvent", "DisruptionEvent", "InstanceStatusEvent",
-                            "CompactionEvent"]
+    NODES_RELATED_EVENTS = [
+        "ScyllaServerStatusEvent",
+        "RepairEvent",
+        "JMXServiceEvent",
+        "DatabaseLogEvent",
+        "BootstrapEvent",
+        "NodetoolEvent",
+        "DisruptionEvent",
+        "InstanceStatusEvent",
+        "CompactionEvent",
+    ]
     PROMETHEUS_EVENTS = ["PrometheusAlertManagerEvent"]
     SCT_EVENTS = ["InfoEvent", "ClusterHealthValidatorEvent"]
     STRESS_EVENTS = ["CassandraStressEvent", "CassandraStressLogEvent"]
@@ -125,9 +130,9 @@ class Event:
         elif self.event_dict["base"] == "CassandraStressEvent":
             label_string = f"cmd: {self.event_dict['stress_cmd']}, node: {self.event_dict['node']}"
         elif self.event_dict["base"] == "CassandraStressLogEvent":
-            label_string = self.event_dict['node']
+            label_string = self.event_dict["node"]
         else:
-            label_string = self.event_dict['base']
+            label_string = self.event_dict["base"]
         return label_string
 
     def _create_chart_value(self) -> str:
@@ -145,7 +150,7 @@ class Event:
         elif self.event_dict["base"] == "CompactionEvent":
             label_string = f"table: {self.event_dict['table']}"
         else:
-            label_string = self.event_dict['base']
+            label_string = self.event_dict["base"]
         return label_string
 
 
@@ -163,9 +168,9 @@ class ParallelTimelinesReportGenerator:
 
     def read_events_file(self) -> None:
         if not self.events_file.exists():
-            LOGGER.critical("File \"%s\" not found!", self.events_file)
+            LOGGER.critical('File "%s" not found!', self.events_file)
             sys.exit(1)
-        LOGGER.info("Starting to read file \"%s\"...", self.events_file)
+        LOGGER.info('Starting to read file "%s"...', self.events_file)
         with self.events_file.open(encoding="utf-8") as file:
             for line in file:
                 event = Event(event_dict=json.loads(line))
@@ -177,15 +182,17 @@ class ParallelTimelinesReportGenerator:
                 if not self.test_id and event.base == "InfoEvent" and "TEST_START" in event.message:
                     self.test_id = event.message.split("=")[-1]
                 self.events.append(event)
-            LOGGER.info("File \"%s\" has been read successfully. %d rows have been processed.",
-                        self.events_file, len(self.events))
+            LOGGER.info(
+                'File "%s" has been read successfully. %d rows have been processed.', self.events_file, len(self.events)
+            )
 
     def prepare_scylla_nodes_event_data(self) -> None:
         scylla_nodes_events = self._process_raw_data(events_to_process=EventGroup.NODES_RELATED_EVENTS.value)
         if scylla_nodes_events:
             LOGGER.info("Preparing Scylla node-related event data...")
-            scylla_nodes_events_sorted = sorted(scylla_nodes_events,
-                                                key=lambda x: (int(x.node_name.split("-")[1]), x.base))
+            scylla_nodes_events_sorted = sorted(
+                scylla_nodes_events, key=lambda x: (int(x.node_name.split("-")[1]), x.base)
+            )
 
             group_dict = {}
             stat_dict = {}
@@ -195,29 +202,32 @@ class ParallelTimelinesReportGenerator:
 
             for key, value in group_dict.items():
                 self._process_chart_data(event_list=value, group_name=key)
-            stat_string = ', '.join([f"{key}={value}" for key, value in stat_dict.items()])
+            stat_string = ", ".join([f"{key}={value}" for key, value in stat_dict.items()])
             LOGGER.info("All Scylla node-related event data have been successfully prepared")
             LOGGER.info("Total number of node-related events processed: %s", stat_string)
 
     def prepare_prometheus_event_data(self) -> None:
         prometheus_events_data = self._process_raw_data(events_to_process=EventGroup.PROMETHEUS_EVENTS.value)
         if prometheus_events_data:
-            prometheus_events_data_sorted = sorted(prometheus_events_data, key=lambda x: (x.original_node_name,
-                                                                                          x.alert_name))
+            prometheus_events_data_sorted = sorted(
+                prometheus_events_data, key=lambda x: (x.original_node_name, x.alert_name)
+            )
             self._process_chart_data(event_list=prometheus_events_data_sorted, group_name="Prometheus events")
 
     def prepare_sct_event_data(self) -> None:
         sct_events_data = self._process_raw_data(events_to_process=EventGroup.SCT_EVENTS.value)
         if sct_events_data:
-            sct_events_data_sorted = sorted(sct_events_data,
-                                            key=lambda x: (x.base, x.original_node_name, x.nemesis_name))
+            sct_events_data_sorted = sorted(
+                sct_events_data, key=lambda x: (x.base, x.original_node_name, x.nemesis_name)
+            )
             self._process_chart_data(event_list=sct_events_data_sorted, group_name="SCT events")
 
     def prepare_stress_event_data(self) -> None:
         stress_events_data = self._process_raw_data(events_to_process=EventGroup.STRESS_EVENTS.value)
         if stress_events_data:
-            stress_events_data_sorted = sorted(stress_events_data, key=lambda x: (x.base, x.original_node_name,
-                                                                                  x.stress_cmd))
+            stress_events_data_sorted = sorted(
+                stress_events_data, key=lambda x: (x.base, x.original_node_name, x.stress_cmd)
+            )
             self._process_chart_data(event_list=stress_events_data_sorted, group_name="Stress events")
 
     def _process_chart_data(self, event_list: List[Event], group_name: str) -> None:
@@ -249,29 +259,26 @@ class ParallelTimelinesReportGenerator:
         stat_dict = {}
 
         # Prepare self.chart_data structure. Add new group dictionary.
-        self.chart_data.append({"group": group_name,
-                                "data": []})
+        self.chart_data.append({"group": group_name, "data": []})
         current_chart_group = self.chart_data[-1]["data"]
 
         # Fill self.chart_data with data
         for event in event_list:
             if event.chart_label not in [item["label"] for item in current_chart_group]:
-                current_chart_group.append({"label": event.chart_label,
-                                            "data": []})
-            self._append_group_data(group_name=group_name,
-                                    event_data=event)
+                current_chart_group.append({"label": event.chart_label, "data": []})
+            self._append_group_data(group_name=group_name, event_data=event)
             stat_dict[event.base] = stat_dict.setdefault(event.base, 0) + 1
-        stat_string = ', '.join([f"{key}={value}" for key, value in stat_dict.items()])
+        stat_string = ", ".join([f"{key}={value}" for key, value in stat_dict.items()])
         LOGGER.info("All %s data have been successfully prepared.", group_name)
         LOGGER.info("Number of events processed: %s", stat_string)
 
     def _append_group_data(self, group_name: str, event_data: Event) -> None:
-        group_by_name_list = list(filter(lambda x: x['group'] == group_name, self.chart_data))
+        group_by_name_list = list(filter(lambda x: x["group"] == group_name, self.chart_data))
         for data in group_by_name_list[0]["data"]:
             if event_data.chart_label == data["label"]:
-                data["data"].append({"timeRange": [event_data.begin_timestamp,
-                                                   event_data.end_timestamp],
-                                     "val": event_data.chart_value})
+                data["data"].append(
+                    {"timeRange": [event_data.begin_timestamp, event_data.end_timestamp], "val": event_data.chart_value}
+                )
 
     def _process_raw_data(self, events_to_process: list) -> List[Event]:
         """
@@ -282,7 +289,7 @@ class ParallelTimelinesReportGenerator:
         end_event_id_set = set()
         begin_event_id_set = set()
         begin_events = []
-        events_string = ', '.join(events_to_process)
+        events_string = ", ".join(events_to_process)
         LOGGER.info("Processing raw data for events: %s.", events_string)
         selected_events = list(filter(lambda x: x.base in events_to_process, self.events))
         for event in selected_events:
@@ -291,9 +298,10 @@ class ParallelTimelinesReportGenerator:
                 continue
             if not event.begin_timestamp:
                 LOGGER.warning("Empty begin_timestamp for event name=%s, id=%s", event.base, event.event_id)
-            elif not event.end_timestamp and event.period_type == 'end':
-                LOGGER.warning("Empty end_timestamp when period_type=end for event name=%s, id=%s", event.base,
-                               event.event_id)
+            elif not event.end_timestamp and event.period_type == "end":
+                LOGGER.warning(
+                    "Empty end_timestamp when period_type=end for event name=%s, id=%s", event.base, event.event_id
+                )
             # Processing of event records with period_type = None or period_type in ["end", "one-time"]
             elif event.period_type != "begin":
                 if event.period_type == "end":
@@ -322,16 +330,20 @@ class ParallelTimelinesReportGenerator:
         else:
             report_file_name = self.default_report_file_name
         report_file = self.events_file.parent / report_file_name
-        LOGGER.info("Creating report file \"%s\"", report_file)
+        LOGGER.info('Creating report file "%s"', report_file)
         max_line_height = 20
         label_count = 0
         for group in self.chart_data:
             label_count += len(group["data"])
         max_height = max_line_height * label_count + 200
         template = env.get_template(self.template)
-        rendered_template = template.render(chart_data=self.chart_data, max_height=max_height,
-                                            max_line_height=max_line_height, test_id=self.test_id,
-                                            cluster_name=self.cluster_name)
+        rendered_template = template.render(
+            chart_data=self.chart_data,
+            max_height=max_height,
+            max_line_height=max_line_height,
+            test_id=self.test_id,
+            cluster_name=self.cluster_name,
+        )
         with report_file.open("w", encoding="utf-8") as file:
             file.write(rendered_template)
         LOGGER.info("Report file has been successfully created")
@@ -351,8 +363,7 @@ def setup_logging():
     if not log_dir.exists():
         log_dir.mkdir()
     formatter = logging.Formatter("[%(asctime)s] - (%(levelname)s): %(message)s")
-    file_handler = logging.FileHandler(f"{log_dir}/pt_report_generator_"
-                                       f"{datetime.now().strftime('%d%m%Y_%H%M%S')}.log")
+    file_handler = logging.FileHandler(f"{log_dir}/pt_report_generator_{datetime.now().strftime('%d%m%Y_%H%M%S')}.log")
     file_handler.setFormatter(formatter)
     file_handler.setLevel(log_level)
     root_logger = logging.getLogger()

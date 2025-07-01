@@ -31,11 +31,9 @@ def test_01_latte_schema(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte schema docker/latte/workloads/workload.rn")
+    cmd = "latte schema docker/latte/workloads/workload.rn"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -52,11 +50,9 @@ def test_02_latte_load(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte load docker/latte/workloads/workload.rn")
+    cmd = "latte load docker/latte/workloads/workload.rn"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -73,11 +69,9 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report")
+    cmd = "latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -111,15 +105,18 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 @pytest.mark.integration
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
-    params['client_encrypt'] = True
+    params["client_encrypt"] = True
 
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte run -d 10s docker/latte/workloads/workload.rn --generate-report")
+    cmd = "latte run -d 10s docker/latte/workloads/workload.rn --generate-report"
 
     latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5,
+        loader_set,
+        cmd,
+        node_list=[docker_scylla],
+        timeout=5,
         params=params,
     )
 
@@ -143,8 +140,12 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
 
 def test_05_latte_parse_final_output():
     latte = LatteStressThread(
-        loader_set=["fake-loader"], stress_cmd="fake", timeout=1,
-        node_list=["fake-db-node-1"], params={"cluster_backend": "aws"})
+        loader_set=["fake-loader"],
+        stress_cmd="fake",
+        timeout=1,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "aws"},
+    )
     with open(sct_abs_path("data_dir/latte_stress_output.log"), "r", encoding="utf-8") as latte_output:
         stress_result = type("FakeStressResult", (), {"stdout": latte_output.read()})
 

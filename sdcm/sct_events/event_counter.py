@@ -24,13 +24,18 @@ from functools import partial
 from sdcm.sct_events.base import T_log_event
 
 from sdcm.sct_events.events_device import get_events_main_device
-from sdcm.sct_events.events_processes import \
-    EVENTS_COUNTER_ID, EventsProcessesRegistry, BaseEventsProcess, \
-    start_events_process, get_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_COUNTER_ID,
+    EventsProcessesRegistry,
+    BaseEventsProcess,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+)
 
 
 LOGGER = logging.getLogger(__name__)
-REACTOR_MS_REGEX = re.compile(r'Reactor stalled for\s(\d+)\sms')
+REACTOR_MS_REGEX = re.compile(r"Reactor stalled for\s(\d+)\sms")
 EVENT_COUNTER_DIR = "event_stats"
 
 
@@ -49,12 +54,8 @@ class EventStatHandler:  # pylint: disable=too-few-public-methods
 
     def update_stat(self, stat: dict):
         if not stat:
-            return {"event": self._event_name,
-                    "counter": 1}
-        return {
-            "event": self._event_name,
-            "counter": stat["counter"] + 1
-        }
+            return {"event": self._event_name, "counter": 1}
+        return {"event": self._event_name, "counter": stat["counter"] + 1}
 
     def _save_event(self):
         node = self._event.node
@@ -79,18 +80,14 @@ class ReactorStallEventStatHandler(EventStatHandler):  # pylint: disable=too-few
     def update_stat(self, stat: dict):
         self._save_event()
         if not stat:
-            stat = {"event": self._event_name,
-                    "counter": 0,
-                    "ms": {}}
+            stat = {"event": self._event_name, "counter": 0, "ms": {}}
         stall_ms = 0
         if match := REACTOR_MS_REGEX.search(self._event.line):
             stall_ms = int(match.group(1))
         interval = self._get_interval(stall_ms)
         stat["ms"].update({interval: stat["ms"].get(interval, 0) + 1})
         stat["counter"] += 1
-        return {"event": self._event_name,
-                "counter": stat["counter"],
-                "ms": stat["ms"]}
+        return {"event": self._event_name, "counter": stat["counter"], "ms": stat["ms"]}
 
 
 EventStatHandleMapper = {
@@ -99,7 +96,6 @@ EventStatHandleMapper = {
 
 
 class EventsCounter(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Process):
-
     def __init__(self, _registry: EventsProcessesRegistry):
         base_dir: Path = get_events_main_device(_registry=_registry).events_log_base_dir
         self.events_stat_dir = base_dir / Path(EVENT_COUNTER_DIR)
@@ -119,8 +115,9 @@ class EventsCounter(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Pr
                     if event_stat_data.event_types and event.__class__ in event_stat_data.event_types:
                         handler = EventStatHandleMapper.get(event.__class__.__name__, EventStatHandler)
                         stat = event_stat_data.stats.setdefault(event.__class__.__name__, {})
-                        event_stat_data.stats.update({event.__class__.__name__: handler(
-                            event, event_stat_data.save_dir).update_stat(stat)})
+                        event_stat_data.stats.update(
+                            {event.__class__.__name__: handler(event, event_stat_data.save_dir).update_stat(stat)}
+                        )
                         self.counters_register[cm_id] = event_stat_data
 
     def add_counter(self, counter_id: str, event_stat_data: EventStatData):
@@ -146,7 +143,7 @@ class EventCounterContextManager:
         self._id = f"{uuid4()}"
 
         if not isinstance(event_type, tuple):
-            event_type = (event_type, )
+            event_type = (event_type,)
 
         self._event_type = event_type
         self._counter_device = get_events_counter(_registry=_registry)
@@ -154,11 +151,8 @@ class EventCounterContextManager:
         self._save_file_path = self._events_stat_dir / Path(name)
 
     def start_event_counter(self) -> None:
-        LOGGER.debug("Start count events type %s by CounterEvent with id %s",
-                     self._event_type, self._id)
-        event_stat_data = EventStatData(event_types=self._event_type,
-                                        save_dir=self._save_file_path,
-                                        stats={})
+        LOGGER.debug("Start count events type %s by CounterEvent with id %s", self._event_type, self._id)
+        event_stat_data = EventStatData(event_types=self._event_type, save_dir=self._save_file_path, stats={})
         self._counter_device.add_counter(self._id, event_stat_data)
 
     def stop_event_counter(self):
@@ -179,5 +173,8 @@ class EventCounterContextManager:
         self.stop_event_counter()
 
 
-__all__ = ("EventsCounter",
-           "start_events_counter", "get_events_counter", )
+__all__ = (
+    "EventsCounter",
+    "start_events_counter",
+    "get_events_counter",
+)

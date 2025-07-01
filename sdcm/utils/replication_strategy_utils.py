@@ -6,6 +6,7 @@ from contextlib import ContextDecorator
 from typing import Callable, Dict, TYPE_CHECKING
 
 from sdcm.utils.cql_utils import cql_quote_if_needed
+
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
@@ -13,7 +14,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ReplicationStrategy:  # pylint: disable=too-few-public-methods
-
     @classmethod
     def from_string(cls, replication_string):
         # To solve the problem when another curly braces were added (tablets related).
@@ -34,12 +34,12 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
         raise ValueError(f"Couldn't find such replication strategy: {replication_value}")
 
     @classmethod
-    def get(cls, node: 'BaseNode', keyspace: str):
+    def get(cls, node: "BaseNode", keyspace: str):
         create_ks_statement = node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
         return ReplicationStrategy.from_string(create_ks_statement)
 
-    def apply(self, node: 'BaseNode', keyspace: str):
-        cql = f'ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}'
+    def apply(self, node: "BaseNode", keyspace: str):
+        cql = f"ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}"
         with node.parent_cluster.cql_connection_patient(node) as session:
             session.execute(cql)
 
@@ -51,8 +51,7 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
 
 
 class SimpleReplicationStrategy(ReplicationStrategy):
-
-    class_: str = 'SimpleStrategy'
+    class_: str = "SimpleStrategy"
 
     def __init__(self, replication_factor: int):
         self._replication_factor = replication_factor
@@ -66,8 +65,7 @@ class SimpleReplicationStrategy(ReplicationStrategy):
 
 
 class NetworkTopologyReplicationStrategy(ReplicationStrategy):
-
-    class_: str = 'NetworkTopologyStrategy'
+    class_: str = "NetworkTopologyStrategy"
 
     def __init__(self, default_rf: int | None = None, **replication_factors: int):
         if default_rf is not None:
@@ -79,7 +77,7 @@ class NetworkTopologyReplicationStrategy(ReplicationStrategy):
             raise ValueError("At least one replication factor should be provided or default_rf should be set")
 
     def __str__(self):
-        factors = ', '.join([f"'{key}': {value}" for key, value in self.replication_factors_per_dc.items()])
+        factors = ", ".join([f"'{key}': {value}" for key, value in self.replication_factors_per_dc.items()])
         return f"{{'class': '{self.class_}', {factors}}}"
 
     @property
@@ -88,8 +86,7 @@ class NetworkTopologyReplicationStrategy(ReplicationStrategy):
 
 
 class LocalReplicationStrategy(ReplicationStrategy):
-
-    class_: str = 'LocalStrategy'
+    class_: str = "LocalStrategy"
 
     def __str__(self):
         return f"{{'class': '{self.class_}'}}"
@@ -100,9 +97,9 @@ replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationS
 
 class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disable=invalid-name
     """Context manager that allows to set replication strategy
-     and preserves all modified keyspaces for automatic rollback on exit."""
+    and preserves all modified keyspaces for automatic rollback on exit."""
 
-    def __init__(self, node: 'BaseNode') -> None:
+    def __init__(self, node: "BaseNode") -> None:
         self.node = node
         self.preserved: Dict[str, ReplicationStrategy] = {}
 

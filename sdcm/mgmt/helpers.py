@@ -12,11 +12,11 @@ REPLICATION_DICT_KEYS_PATTERN = re.compile(r"'([^']+)':")
 
 
 def get_schema_create_statements_from_snapshot(
-        bucket: str,
-        mgr_cluster_id: str,
-        snapshot_tag: str,
-        exclude_system_ks: bool = True,
-        exclude_roles: bool = True,
+    bucket: str,
+    mgr_cluster_id: str,
+    snapshot_tag: str,
+    exclude_system_ks: bool = True,
+    exclude_roles: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Parses schema information from a snapshot file and extracts CQL statements for keyspaces, tables, views and other
     entities. Excludes entries related to system keyspaces and roles if the corresponding flags are set to True.
@@ -40,7 +40,7 @@ def get_schema_create_statements_from_snapshot(
     else:
         raise FileNotFoundError(f"Schema file for snapshot {snapshot_tag} not found in {s3_dir_with_schema_json}")
 
-    with gzip.open(schema_filename, 'rt', encoding='utf-8') as gz_file:
+    with gzip.open(schema_filename, "rt", encoding="utf-8") as gz_file:
         schema = json.load(gz_file)
 
     keyspace_statements = []
@@ -81,4 +81,4 @@ def get_dc_name_from_ks_statement(ks_statement: str) -> list[str]:
     replication_block = CREATE_KS_REPLICATION_BLOCK_PATTERN.search(ks_statement).group(1)
     _keys = REPLICATION_DICT_KEYS_PATTERN.findall(replication_block)
 
-    return [key for key in _keys if key != 'class']
+    return [key for key in _keys if key != "class"]

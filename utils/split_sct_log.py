@@ -36,8 +36,11 @@ with open(input_dir / "sct.log", "r", encoding="utf-8") as sct_log:
     idx = 0  # pylint: disable=invalid-name
     line = sct_log.readline()
     time = get_time(line)
-    part_file = open(input_dir / "parts" / f"{idx:03d}_{time}_start.log", "w",  # pylint: disable=consider-using-with
-                     encoding="utf-8")
+    part_file = open(  # pylint: disable=consider-using-with
+        input_dir / "parts" / f"{idx:03d}_{time}_start.log",
+        "w",
+        encoding="utf-8",
+    )
     part_file.write(line)
     for line in sct_log.readlines():
         if ">>>>>Started random_disrupt_method" in line:
@@ -47,6 +50,7 @@ with open(input_dir / "sct.log", "r", encoding="utf-8") as sct_log:
             time = get_time(line)
             part_file.close()
             part_file = open(  # pylint: disable=consider-using-with
-                input_dir / "parts" / f"{idx:03d}_{time}_{name[:-1]}.log", "w", encoding="utf-8")
+                input_dir / "parts" / f"{idx:03d}_{time}_{name[:-1]}.log", "w", encoding="utf-8"
+            )
         part_file.write(line)
     part_file.close()

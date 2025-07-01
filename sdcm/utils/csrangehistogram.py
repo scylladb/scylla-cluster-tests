@@ -36,8 +36,14 @@ class CSWorkloadTypes(Enum):
 
 
 def make_cs_range_histogram_summary(  # pylint: disable=too-many-arguments,unused-argument
-        workload: CSWorkloadTypes, pattern: str = "", base_path="", start_time: int | float = 0, end_time: int | float = sys.maxsize,
-        absolute_time: bool = True, tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, dict[str, int]]]:
+    workload: CSWorkloadTypes,
+    pattern: str = "",
+    base_path="",
+    start_time: int | float = 0,
+    end_time: int | float = sys.maxsize,
+    absolute_time: bool = True,
+    tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY,
+) -> list[dict[str, dict[str, int]]]:
     """
     Build Range Histogram Summary with time interval (start_time, end_time)
     from provided hdr log file.
@@ -51,8 +57,14 @@ def make_cs_range_histogram_summary(  # pylint: disable=too-many-arguments,unuse
 
 
 def make_cs_range_histogram_summary_by_interval(  # pylint: disable=too-many-arguments,unused-argument
-        workload: CSWorkloadTypes, path: str, start_time: int | float, end_time: int | float, interval=TIME_INTERVAL,
-        absolute_time=True, tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, dict[str, int]]]:
+    workload: CSWorkloadTypes,
+    path: str,
+    start_time: int | float,
+    end_time: int | float,
+    interval=TIME_INTERVAL,
+    absolute_time=True,
+    tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY,
+) -> list[dict[str, dict[str, int]]]:
     """
     Build set of time range histograms (as list) from
     single file or files search by pattern in provided
@@ -66,8 +78,11 @@ def make_cs_range_histogram_summary_by_interval(  # pylint: disable=too-many-arg
 
 
 def make_cs_range_histogram_summary_from_log_line(
-        workload: CSWorkloadTypes, log_line: str, hst_log_start_time: float,
-        tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, dict[str, int]]:
+    workload: CSWorkloadTypes,
+    log_line: str,
+    hst_log_start_time: float,
+    tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY,
+) -> dict[str, dict[str, int]]:
     """
     Build time range histogram Summary from singe hdr log file line
     log line example:
@@ -85,27 +100,23 @@ class _CSHistogramThroughputTags(Enum):
     READ = "READ-st"
 
 
-TAG_PAIRS = {"WRITE": [_CSHistogramThroughputTags.WRITE.value, CSHistogramTags.WRITE.value],
-             "READ": [_CSHistogramThroughputTags.READ.value, CSHistogramTags.READ.value]}
+TAG_PAIRS = {
+    "WRITE": [_CSHistogramThroughputTags.WRITE.value, CSHistogramTags.WRITE.value],
+    "READ": [_CSHistogramThroughputTags.READ.value, CSHistogramTags.READ.value],
+}
 
 
 _CSHISTOGRAM_TAGS_MAPPING = {
     CSHistogramTagTypes.LATENCY: {
         CSWorkloadTypes.WRITE: [CSHistogramTags.WRITE],
         CSWorkloadTypes.READ: [CSHistogramTags.READ],
-        CSWorkloadTypes.MIXED: [
-            CSHistogramTags.WRITE,
-            CSHistogramTags.READ
-        ]
+        CSWorkloadTypes.MIXED: [CSHistogramTags.WRITE, CSHistogramTags.READ],
     },
     CSHistogramTagTypes.THROUGHPUT: {
         CSWorkloadTypes.WRITE: [_CSHistogramThroughputTags.WRITE],
         CSWorkloadTypes.READ: [_CSHistogramThroughputTags.READ],
-        CSWorkloadTypes.MIXED: [
-            _CSHistogramThroughputTags.WRITE,
-            _CSHistogramThroughputTags.READ
-        ]
-    }
+        CSWorkloadTypes.MIXED: [_CSHistogramThroughputTags.WRITE, _CSHistogramThroughputTags.READ],
+    },
 }
 
 
@@ -120,9 +131,11 @@ def _generate_percentile_name(percentile: int):
     return f"percentile_{percentile}".replace(".", "_")
 
 
-_HistorgramSummary = make_dataclass("HistorgramSummary",
-                                    [(_generate_percentile_name(perc), float) for perc in PERCENTILES],
-                                    bases=(_HistorgramSummaryBase,))
+_HistorgramSummary = make_dataclass(
+    "HistorgramSummary",
+    [(_generate_percentile_name(perc), float) for perc in PERCENTILES],
+    bases=(_HistorgramSummaryBase,),
+)
 
 
 class _CSHistogram(HdrHistogram):
@@ -131,9 +144,13 @@ class _CSHistogram(HdrHistogram):
     SIGNIFICANT = 3
 
     def __init__(self, *args, **kwargs):
-        super().__init__(lowest_trackable_value=_CSHistogram.LOWEST,
-                         highest_trackable_value=_CSHistogram.HIGHEST,
-                         significant_figures=_CSHistogram.SIGNIFICANT, *args, **kwargs)
+        super().__init__(
+            lowest_trackable_value=_CSHistogram.LOWEST,
+            highest_trackable_value=_CSHistogram.HIGHEST,
+            significant_figures=_CSHistogram.SIGNIFICANT,
+            *args,
+            **kwargs,
+        )
 
 
 @dataclass
@@ -145,9 +162,9 @@ class _CSRangeHistogram:
 
 
 class _CSRangeHistogramBuilder:
-    def __init__(self, workload: CSWorkloadTypes, tag_type: CSHistogramTagTypes,
-                 start_time: int = 0,
-                 end_time: int = sys.maxsize):
+    def __init__(
+        self, workload: CSWorkloadTypes, tag_type: CSHistogramTagTypes, start_time: int = 0, end_time: int = sys.maxsize
+    ):
         self.workload = workload
         self.tag_type = tag_type
         if self.workload and self.tag_type:
@@ -155,7 +172,7 @@ class _CSRangeHistogramBuilder:
         self.start_time = start_time
         self.end_time = end_time
 
-# defaults
+        # defaults
         self.cs_files_pattern = "*/cs-hdr-*.hdr"
         self.absolute_time = True
 
@@ -164,15 +181,16 @@ class _CSRangeHistogramBuilder:
         Build Range Histogram Summary from provided hdr logs files path
         """
         with ProcessPoolExecutor(max_workers=len(self.hdr_tags)) as executor:
-            futures = [
-                executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
+            futures = [executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
         scan_results = {}
         for future in futures:
             if result := future.result():
                 scan_results.update(result)
         return [scan_results]
 
-    def build_histograms_summary_with_interval(self, path: str, interval=TIME_INTERVAL) -> list[dict[str, dict[str, int]]]:  # pylint: disable=too-many-locals
+    def build_histograms_summary_with_interval(  # pylint: disable=too-many-locals
+        self, path: str, interval=TIME_INTERVAL
+    ) -> list[dict[str, dict[str, int]]]:
         """
         Build Several Range Histogram Summaries from provided hdr logs files path splitted by interval
         """
@@ -187,15 +205,23 @@ class _CSRangeHistogramBuilder:
         interval_num = 0
         start_intervals = range(start_ts, end_ts, window_step)
 
-        max_workers = len(start_intervals)*len(self.hdr_tags)
+        max_workers = len(start_intervals) * len(self.hdr_tags)
         max_workers = PROCESS_LIMIT if max_workers > PROCESS_LIMIT else max_workers
 
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             for start_interval in start_intervals:
                 end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
                 for hdr_tag in self.hdr_tags:
-                    futures.append(executor.submit(self._build_histograms_summary_with_interval_by_tag,
-                                                   path, hdr_tag, start_interval, end_interval, interval_num))
+                    futures.append(
+                        executor.submit(
+                            self._build_histograms_summary_with_interval_by_tag,
+                            path,
+                            hdr_tag,
+                            start_interval,
+                            end_interval,
+                            interval_num,
+                        )
+                    )
                 interval_num += 1
             results = {}
             for future in futures:
@@ -227,10 +253,7 @@ class _CSRangeHistogramBuilder:
         histogram.set_end_time_stamp(hst_end_ts)
         histogram.decode_and_add(encoded_hist)
 
-        histogram = _CSRangeHistogram(start_time=hst_start_ts,
-                                      end_time=hst_end_ts,
-                                      histogram=histogram,
-                                      hdr_tag=tag)
+        histogram = _CSRangeHistogram(start_time=hst_start_ts, end_time=hst_end_ts, histogram=histogram, hdr_tag=tag)
 
         return _CSRangeHistogramBuilder._get_summary_for_operation_by_hdr_tag(histogram)
 
@@ -250,9 +273,11 @@ class _CSRangeHistogramBuilder:
             file_with_correct_time_interval: bool - HDR file keep the data for different time interval
             """
             hdr_reader = HistogramLogReader(hdr_file, _CSHistogram())
-            if not (next_hist := hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
-                                                                        range_end_time_sec=self.end_time,
-                                                                        absolute=self.absolute_time)):
+            if not (
+                next_hist := hdr_reader.get_next_interval_histogram(
+                    range_start_time_sec=self.start_time, range_end_time_sec=self.end_time, absolute=self.absolute_time
+                )
+            ):
                 return True, False
 
             tag_not_found = True
@@ -265,9 +290,9 @@ class _CSRangeHistogramBuilder:
                     histogram.add(next_hist)
                     tag_not_found = False
 
-                next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
-                                                                   range_end_time_sec=self.end_time,
-                                                                   absolute=self.absolute_time)
+                next_hist = hdr_reader.get_next_interval_histogram(
+                    range_start_time_sec=self.start_time, range_end_time_sec=self.end_time, absolute=self.absolute_time
+                )
             return tag_not_found, file_with_correct_time_interval
 
         if not os.path.exists(hdr_file):
@@ -280,13 +305,21 @@ class _CSRangeHistogramBuilder:
 
         if not file_with_correct_time_interval:
             # Keep this message for future debug
-            LOGGER.debug("The file '%s' does not include the time interval from `%s` to `%s`",
-                         hdr_file, self.start_time, self.end_time)
+            LOGGER.debug(
+                "The file '%s' does not include the time interval from `%s` to `%s`",
+                hdr_file,
+                self.start_time,
+                self.end_time,
+            )
             return None
 
         # Keep this message for future debug
-        LOGGER.debug("Collect data from the file '%s' (time interval from `%s` to `%s`)",
-                     hdr_file, self.start_time, self.end_time)
+        LOGGER.debug(
+            "Collect data from the file '%s' (time interval from `%s` to `%s`)",
+            hdr_file,
+            self.start_time,
+            self.end_time,
+        )
         # When c-s load runs without fixed/throttle, the histogram data with WRITE-rt/READ-rt (latency) tags is not created in the HDR file.
         # In this case all statistics will be reported with WRITE-st/READ-st (throughput) tags.
         # It is according to the cassandra-stress code.
@@ -302,14 +335,14 @@ class _CSRangeHistogramBuilder:
         if histogram.get_start_time_stamp() == 0:
             return None
 
-        return _CSRangeHistogram(start_time=self.start_time,
-                                 end_time=self.end_time,
-                                 histogram=histogram, hdr_tag=histogram.get_tag())
+        return _CSRangeHistogram(
+            start_time=self.start_time, end_time=self.end_time, histogram=histogram, hdr_tag=histogram.get_tag()
+        )
 
     def _get_list_of_hdr_files(self, base_path: str) -> list[str]:
         """
-            find all hdr log file by pattern like glob wc
-            in profided by base_path dir.
+        find all hdr log file by pattern like glob wc
+        in profided by base_path dir.
         """
         if not base_path:
             base_path = os.path.abspath(os.path.curdir)
@@ -321,7 +354,7 @@ class _CSRangeHistogramBuilder:
     @staticmethod
     def _merge_range_histograms(range_histograms: list[_CSRangeHistogram]) -> _CSRangeHistogram:
         """
-            Merge several time range histogram to one containg summary result.
+        Merge several time range histogram to one containg summary result.
         """
         if not range_histograms:
             return _CSRangeHistogram(start_time=0, end_time=0, histogram=None, hdr_tag=None)
@@ -335,12 +368,16 @@ class _CSRangeHistogramBuilder:
             final_hst.end_time = max(final_hst.end_time, hst.end_time)
         return final_hst
 
-    def _build_histogram_from_dir(self, base_path: str, hdr_tag: str, ) -> _CSRangeHistogram:
+    def _build_histogram_from_dir(
+        self,
+        base_path: str,
+        hdr_tag: str,
+    ) -> _CSRangeHistogram:
         """
-            search in dir from 'base_path' with provided pattern or
-            default global pattern 'CS_HDR_FILE_WC' hdr log files
-            and build Range Histogram with time interval (start_time, end_time)
-            For timestamps is used absolute time in ms since epoch start
+        search in dir from 'base_path' with provided pattern or
+        default global pattern 'CS_HDR_FILE_WC' hdr log files
+        and build Range Histogram with time interval (start_time, end_time)
+        For timestamps is used absolute time in ms since epoch start
         """
         collected_histograms: list[_CSRangeHistogram] = []
         hdr_files = self._get_list_of_hdr_files(base_path)
@@ -352,16 +389,18 @@ class _CSRangeHistogramBuilder:
 
     @staticmethod
     def _get_summary_for_operation_by_hdr_tag(histogram: _CSRangeHistogram) -> dict[str, dict[str, int]] | None:
-        if histogram.histogram and (parsed_summary := _CSRangeHistogramBuilder._convert_raw_histogram(histogram.histogram,
-                                                                                                      histogram.start_time,
-                                                                                                      histogram.end_time)):
+        if histogram.histogram and (
+            parsed_summary := _CSRangeHistogramBuilder._convert_raw_histogram(
+                histogram.histogram, histogram.start_time, histogram.end_time
+            )
+        ):
             return {histogram.hdr_tag[:-3]: asdict(parsed_summary)}
         return None
 
     @staticmethod
-    def _convert_raw_histogram(histogram: _CSHistogram,
-                               base_start_ts: float = 0.0,
-                               base_end_ts: float = 0.0) -> "_HistorgramSummary":
+    def _convert_raw_histogram(
+        histogram: _CSHistogram, base_start_ts: float = 0.0, base_end_ts: float = 0.0
+    ) -> "_HistorgramSummary":
         percentiles_data = {}
         if percentiles := histogram.get_percentile_to_value_dict(PERCENTILES):
             for perc, value in percentiles.items():
@@ -371,27 +410,27 @@ class _CSRangeHistogramBuilder:
                 start_time=histogram.get_start_time_stamp() or base_start_ts,
                 end_time=histogram.get_end_time_stamp() or base_end_ts,
                 stddev=histogram.get_stddev(),
-                **percentiles_data)
+                **percentiles_data,
+            )
         return None
 
     def build_histogram_summary_by_tag(self, path: str, hdr_tag: str) -> dict[str, dict[str, int]] | None:
         if os.path.exists(path) and os.path.isfile(path):
-            histogram = self._build_histogram_from_file(
-                hdr_file=path, hdr_tag=hdr_tag)
+            histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
         elif os.path.exists(path) and os.path.isdir(path):
-            histogram = self._build_histogram_from_dir(
-                base_path=path, hdr_tag=hdr_tag)
+            histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
         else:
             return None
 
         return _CSRangeHistogramBuilder._get_summary_for_operation_by_hdr_tag(histogram)
 
     @staticmethod
-    def _build_histograms_summary_with_interval_by_tag(path: str, hdr_tag: str, start_interval: int,
-                                                       end_interval: int, interval_num: int) -> dict[str, Any] | None:
-
-        result = _CSRangeHistogramBuilder(None, None, start_interval,
-                                          end_interval).build_histogram_summary_by_tag(path, hdr_tag)
+    def _build_histograms_summary_with_interval_by_tag(
+        path: str, hdr_tag: str, start_interval: int, end_interval: int, interval_num: int
+    ) -> dict[str, Any] | None:
+        result = _CSRangeHistogramBuilder(None, None, start_interval, end_interval).build_histogram_summary_by_tag(
+            path, hdr_tag
+        )
         if result:
             return {"interval_num": interval_num, "result": result}
         return None

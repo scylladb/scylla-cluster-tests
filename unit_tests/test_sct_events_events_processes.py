@@ -15,8 +15,11 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from sdcm.sct_events.events_processes import \
-    EventsProcessesRegistry, create_default_events_process_registry, get_default_events_process_registry
+from sdcm.sct_events.events_processes import (
+    EventsProcessesRegistry,
+    create_default_events_process_registry,
+    get_default_events_process_registry,
+)
 
 
 class FakeProcess:  # pylint: disable=too-few-public-methods

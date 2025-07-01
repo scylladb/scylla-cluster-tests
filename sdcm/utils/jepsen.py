@@ -33,12 +33,24 @@ class JepsenResults:
     tags = {}
 
     def jepsen_container_run_args(self) -> dict:
-        exposed_port = get_free_port(ports_to_try=(JEPSEN_RESULTS_PORT, 0, ))
-        return dict(image=JEPSEN_IMAGE,
-                    entrypoint="/bin/cat",
-                    tty=True,
-                    name=f"{self.name}-jepsen",
-                    ports={f"{JEPSEN_RESULTS_PORT}/tcp": {"HostIp": "0.0.0.0", "HostPort": exposed_port, }, })
+        exposed_port = get_free_port(
+            ports_to_try=(
+                JEPSEN_RESULTS_PORT,
+                0,
+            )
+        )
+        return dict(
+            image=JEPSEN_IMAGE,
+            entrypoint="/bin/cat",
+            tty=True,
+            name=f"{self.name}-jepsen",
+            ports={
+                f"{JEPSEN_RESULTS_PORT}/tcp": {
+                    "HostIp": "0.0.0.0",
+                    "HostPort": exposed_port,
+                },
+            },
+        )
 
     @cached_property
     def _jepsen_container(self) -> Container:

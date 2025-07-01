@@ -39,11 +39,11 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 
 LOGGER = logging.getLogger(__name__)
 
-FS_SIZE_METRIC = 'node_filesystem_size_bytes'
-FS_SIZE_METRIC_OLD = 'node_filesystem_size'
-AVAIL_SIZE_METRIC = 'node_filesystem_avail_bytes'
-AVAIL_SIZE_METRIC_OLD = 'node_filesystem_avail'
-KB_SIZE = 2 ** 10
+FS_SIZE_METRIC = "node_filesystem_size_bytes"
+FS_SIZE_METRIC_OLD = "node_filesystem_size"
+AVAIL_SIZE_METRIC = "node_filesystem_avail_bytes"
+AVAIL_SIZE_METRIC_OLD = "node_filesystem_avail"
+KB_SIZE = 2**10
 MB_SIZE = KB_SIZE * 1024
 GB_SIZE = MB_SIZE * 1024
 SCYLLA_DIR = "/var/lib/scylla"
@@ -56,9 +56,11 @@ class CassandraStressCmdParseError(Exception):
         self.exception = repr(ex)
 
     def __str__(self):
-        return dedent("""
+        return dedent(
+            """
             Stress command: '{0.command}'
-            Error: {0.exception}""".format(self))
+            Error: {0.exception}""".format(self)
+        )
 
     def __repr__(self):
         return self.__str__()
@@ -66,7 +68,7 @@ class CassandraStressCmdParseError(Exception):
 
 def stddev(lst):
     mean = float(sum(lst)) / len(lst)
-    return sqrt(sum((x - mean)**2 for x in lst) / len(lst))
+    return sqrt(sum((x - mean) ** 2 for x in lst) / len(lst))
 
 
 def get_stress_cmd_params(cmd):
@@ -77,53 +79,48 @@ def get_stress_cmd_params(cmd):
     """
 
     # pylint: disable=too-many-branches
-    cmd_params = {
-        "raw_cmd": cmd
-    }
+    cmd_params = {"raw_cmd": cmd}
     try:
-        cmd = cmd.strip().split('cassandra-stress')[1].strip()
-        if cmd.split(' ')[0] in ['read', 'write', 'mixed', 'counter_write', 'user']:
-            cmd_params['command'] = cmd.split(' ')[0]
-            if 'no-warmup' in cmd:
-                cmd_params['no-warmup'] = True
+        cmd = cmd.strip().split("cassandra-stress")[1].strip()
+        if cmd.split(" ")[0] in ["read", "write", "mixed", "counter_write", "user"]:
+            cmd_params["command"] = cmd.split(" ")[0]
+            if "no-warmup" in cmd:
+                cmd_params["no-warmup"] = True
 
-            match = re.search(r'(cl\s?=\s?\w+)', cmd)
+            match = re.search(r"(cl\s?=\s?\w+)", cmd)
             if match:
-                cmd_params['cl'] = match.group(0).split('=')[1].strip()
+                cmd_params["cl"] = match.group(0).split("=")[1].strip()
 
-            match = re.search(r'(duration\s?=\s?\w+)', cmd)
+            match = re.search(r"(duration\s?=\s?\w+)", cmd)
             if match:
-                cmd_params['duration'] = match.group(0).split('=')[1].strip()
+                cmd_params["duration"] = match.group(0).split("=")[1].strip()
 
-            match = re.search(r'( n\s?=\s?\w+)', cmd)
+            match = re.search(r"( n\s?=\s?\w+)", cmd)
             if match:
-                cmd_params['n'] = match.group(0).split('=')[1].strip()
-            match = re.search(r'profile=(\S+)\s+', cmd)
+                cmd_params["n"] = match.group(0).split("=")[1].strip()
+            match = re.search(r"profile=(\S+)\s+", cmd)
             if match:
-                cmd_params['profile'] = match.group(1).strip()
-                match = re.search(r'ops(\S+)\s+', cmd)
+                cmd_params["profile"] = match.group(1).strip()
+                match = re.search(r"ops(\S+)\s+", cmd)
                 if match:
-                    cmd_params['ops'] = match.group(1).split('=')[0].strip('(')
+                    cmd_params["ops"] = match.group(1).split("=")[0].strip("(")
 
-            for temp in cmd.split(' -')[1:]:
+            for temp in cmd.split(" -")[1:]:
                 try:
                     key, value = temp.split(" ", 1)
                 except ValueError as ex:
                     LOGGER.warning("%s:%s", temp, ex)
                 else:
                     cmd_params[key] = value.strip().replace("'", "")
-            if 'rate' in cmd_params:
+            if "rate" in cmd_params:
                 # split rate section on separate items
-                if 'threads' in cmd_params['rate']:
-                    cmd_params['rate threads'] = \
-                        re.search(r'(threads\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                if 'throttle' in cmd_params['rate']:
-                    cmd_params['throttle threads'] =\
-                        re.search(r'(throttle\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                if 'fixed' in cmd_params['rate']:
-                    cmd_params['fixed threads'] =\
-                        re.search(r'(fixed\s?=\s?(\w+))', cmd_params['rate']).group(2)
-                del cmd_params['rate']
+                if "threads" in cmd_params["rate"]:
+                    cmd_params["rate threads"] = re.search(r"(threads\s?=\s?(\w+))", cmd_params["rate"]).group(2)
+                if "throttle" in cmd_params["rate"]:
+                    cmd_params["throttle threads"] = re.search(r"(throttle\s?=\s?(\w+))", cmd_params["rate"]).group(2)
+                if "fixed" in cmd_params["rate"]:
+                    cmd_params["fixed threads"] = re.search(r"(fixed\s?=\s?(\w+))", cmd_params["rate"]).group(2)
+                del cmd_params["rate"]
 
         return cmd_params
     except Exception as ex:
@@ -136,12 +133,23 @@ def get_stress_bench_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-    cmd = cmd.strip().split('scylla-bench')[1].strip()
+    cmd = cmd.strip().split("scylla-bench")[1].strip()
     cmd_params = {}
-    for key in ['partition-count', 'clustering-row-count', 'clustering-row-size', 'mode',
-                'workload', 'concurrency', 'max-rate', 'connection-count', 'replication-factor',
-                'timeout', 'client-compression', 'duration']:
-        match = re.search(r'(-' + key + r'\s+([^-| ]+))', cmd)
+    for key in [
+        "partition-count",
+        "clustering-row-count",
+        "clustering-row-size",
+        "mode",
+        "workload",
+        "concurrency",
+        "max-rate",
+        "connection-count",
+        "replication-factor",
+        "timeout",
+        "client-compression",
+        "duration",
+    ]:
+        match = re.search(r"(-" + key + r"\s+([^-| ]+))", cmd)
         if match:
             cmd_params[key] = match.group(2).strip()
     return cmd_params
@@ -153,10 +161,10 @@ def get_stress_harry_cmd_params(cmd):
     :param cmd: stress cmd
     :return: dict with params
     """
-    cmd = cmd.split('cassandra-harry')[1].strip()
+    cmd = cmd.split("cassandra-harry")[1].strip()
     cmd_params = {}
-    for key in ['run-time', 'run-time-unit']:
-        match = re.search(fr'(-{key}\s+([^-| ]+))', cmd)
+    for key in ["run-time", "run-time-unit"]:
+        match = re.search(rf"(-{key}\s+([^-| ]+))", cmd)
         if match:
             cmd_params[key] = match.group(2).strip()
     return cmd_params
@@ -169,26 +177,22 @@ def get_ycsb_cmd_params(cmd):
     :return: dict with params
     """
 
-    cmd_params = {
-        "raw_cmd": cmd
-    }
+    cmd_params = {"raw_cmd": cmd}
 
-    threads_regex = re.compile(r'-threads\s*(.*?)[\s$]')
+    threads_regex = re.compile(r"-threads\s*(.*?)[\s$]")
     key_value_regex = re.compile(r"-p\s.*?(?P<key>.*?)=(?P<value>.*?)(\s|$)")
     for match in key_value_regex.finditer(cmd):
         match_dict = match.groupdict()
-        cmd_params[match_dict['key']] = match_dict['value']
+        cmd_params[match_dict["key"]] = match_dict["value"]
     match = threads_regex.search(cmd)
     if match:
-        cmd_params['threads'] = match.group(1)
+        cmd_params["threads"] = match.group(1)
     return cmd_params
 
 
 def get_raw_cmd_params(cmd):
     cmd = cmd.strip()
-    cmd_params = {
-        'raw_cmd': cmd
-    }
+    cmd_params = {"raw_cmd": cmd}
     return cmd_params
 
 
@@ -201,12 +205,11 @@ def get_cdcreader_cmd_params(cmd):
 
 
 class PrometheusDBStats:
-    def __init__(self, host, port=9090, protocol='http', alternator=None):
+    def __init__(self, host, port=9090, protocol="http", alternator=None):
         self.host = host
         self.port = port
         self.protocol = protocol
-        self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(
-            protocol, normalize_ipv6_url(host), port)
+        self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(protocol, normalize_ipv6_url(host), port)
         self.config = self.get_configuration()
         self.alternator = alternator
 
@@ -217,8 +220,8 @@ class PrometheusDBStats:
     @retrying(n=5, sleep_time=7, allowed_exceptions=(requests.ConnectionError, requests.HTTPError))
     def request(self, url, post=False):
         kwargs = {}
-        if self.protocol == 'https':
-            kwargs['verify'] = False
+        if self.protocol == "https":
+            kwargs["verify"] = False
         if post:
             response = requests.post(url, **kwargs)
         else:
@@ -234,8 +237,9 @@ class PrometheusDBStats:
         return None
 
     def get_configuration(self):
-        result = self.request(url="{}://{}:{}/api/v1/status/config".format(
-            self.protocol, normalize_ipv6_url(self.host), self.port))
+        result = self.request(
+            url="{}://{}:{}/api/v1/status/config".format(self.protocol, normalize_ipv6_url(self.host), self.port)
+        )
         configs = yaml.safe_load(result["data"]["yaml"])
         LOGGER.debug("Parsed Prometheus configs: %s", configs)
         new_scrape_configs = {}
@@ -259,7 +263,8 @@ class PrometheusDBStats:
         if not scrap_metrics_step:
             scrap_metrics_step = self.scylla_scrape_interval
         _query = "{url}{query}&start={start}&end={end}&step={scrap_metrics_step}".format(
-            url=url, query=query, start=start, end=end, scrap_metrics_step=scrap_metrics_step)
+            url=url, query=query, start=start, end=end, scrap_metrics_step=scrap_metrics_step
+        )
         LOGGER.debug("Query to PrometheusDB: %s", _query)
         result = self.request(url=_query)
         if result:
@@ -271,8 +276,9 @@ class PrometheusDBStats:
     @staticmethod
     def _check_start_end_time(start_time, end_time):
         if end_time - start_time < 120:
-            LOGGER.warning("Time difference too low to make a query [start_time: %s, end_time: %s", start_time,
-                           end_time)
+            LOGGER.warning(
+                "Time difference too low to make a query [start_time: %s, end_time: %s", start_time, end_time
+            )
             return False
         return True
 
@@ -316,7 +322,7 @@ class PrometheusDBStats:
         else:
             return res
 
-    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
+    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip, irate_sample_sec="30s"):
         """
         Get Scylla CPU scheduler runtime from PrometheusDB
 
@@ -325,13 +331,16 @@ class PrometheusDBStats:
         if not self._check_start_end_time(start_time, end_time):
             return {}
         # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) ' \
-            'by (group, instance)' % (node_ip, irate_sample_sec)
+        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) by (group, instance)' % (
+            node_ip,
+            irate_sample_sec,
+        )
         results = self.query(query=query, start=start_time, end=end_time)
         res = defaultdict(dict)
         for item in results:
-            res[item['metric']['instance']].update({item['metric']['group']:
-                                                    [float(runtime[1]) for runtime in item['values']]})
+            res[item["metric"]["instance"]].update(
+                {item["metric"]["group"]: [float(runtime[1]) for runtime in item["values"]]}
+            )
         return res
 
     def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):  # pylint: disable=invalid-name
@@ -348,7 +357,7 @@ class PrometheusDBStats:
         res = {}
         for item in results:
             try:
-                res[item['metric']['group']] = {int(i[1]) for i in item['values']}
+                res[item["metric"]["group"]] = {int(i[1]) for i in item["values"]}
             except Exception as error:  # pylint: disable=broad-except
                 # average value may be returned not integer. Ignore it
                 LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
@@ -369,22 +378,22 @@ class PrometheusDBStats:
         assert latency_type in ["read", "write"]
         if not self._check_start_end_time(start_time, end_time):
             return []
-        query = "histogram_quantile(0.99, sum(rate(scylla_storage_proxy_" \
+        query = (
+            "histogram_quantile(0.99, sum(rate(scylla_storage_proxy_"
             "coordinator_%s_latency_bucket{}[30s])) by (le))" % latency_type
+        )
         return self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
 
     def get_latency_read_99(self, start_time, end_time, scrap_metrics_step=None):
-        return self.get_latency(start_time, end_time, latency_type="read",
-                                scrap_metrics_step=scrap_metrics_step)
+        return self.get_latency(start_time, end_time, latency_type="read", scrap_metrics_step=scrap_metrics_step)
 
     def get_latency_write_99(self, start_time, end_time, scrap_metrics_step=None):
-        return self.get_latency(start_time, end_time, latency_type="write",
-                                scrap_metrics_step=scrap_metrics_step)
+        return self.get_latency(start_time, end_time, latency_type="write", scrap_metrics_step=scrap_metrics_step)
 
     def create_snapshot(self):
         url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
         result = self.request(url, True)
-        LOGGER.debug('Request result: {}'.format(result))
+        LOGGER.debug("Request result: {}".format(result))
         return result
 
     @staticmethod
@@ -396,32 +405,33 @@ class PrometheusDBStats:
         #  instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla",
         #  instance=~".*?10.0.79.46.*?"}
         node_capacity_query_postfix = self.generate_node_capacity_query_postfix(node)
-        filesystem_capacity_query = f'{FS_SIZE_METRIC}{node_capacity_query_postfix}'
-        used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC}{node_capacity_query_postfix}'
+        filesystem_capacity_query = f"{FS_SIZE_METRIC}{node_capacity_query_postfix}"
+        used_capacity_query = f"{filesystem_capacity_query}-{AVAIL_SIZE_METRIC}{node_capacity_query_postfix}"
         LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
 
-        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
-                                 end=int(time.time()))
+        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
         if not fs_size_res:
             LOGGER.warning("No results from Prometheus query: %s", filesystem_capacity_query)
             return 0
             # assert fs_size_res, "No results from Prometheus"
         if not fs_size_res[0]:  # if no returned values - try the old metric names.
-            filesystem_capacity_query = f'{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
-            used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
+            filesystem_capacity_query = f"{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}"
+            used_capacity_query = f"{filesystem_capacity_query}-{AVAIL_SIZE_METRIC_OLD}{node_capacity_query_postfix}"
             LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
-            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
-                                     end=int(time.time()))
+            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
 
         assert fs_size_res[0], "Could not resolve capacity query result."
         LOGGER.debug("used_capacity_query: %s", used_capacity_query)
-        used_cap_res = self.query(query=used_capacity_query, start=int(time.time()) - 5,
-                                  end=int(time.time()))
+        used_cap_res = self.query(query=used_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
         assert used_cap_res, "No results from Prometheus"
         used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(MB_SIZE)
         used_size_gb = round(float(used_size_mb / 1024), 2)
-        LOGGER.debug("The used filesystem capacity on node %s is: %s MB/ %s GB",
-                     node.public_ip_address, used_size_mb, used_size_gb)
+        LOGGER.debug(
+            "The used filesystem capacity on node %s is: %s MB/ %s GB",
+            node.public_ip_address,
+            used_size_mb,
+            used_size_gb,
+        )
         return used_size_gb
 
     def get_filesystem_total_size_gb(self, node) -> float:
@@ -430,15 +440,13 @@ class PrometheusDBStats:
         :return: FS size in GB
         """
         node_capacity_query_postfix = self.generate_node_capacity_query_postfix(node)
-        filesystem_capacity_query = f'{FS_SIZE_METRIC}{node_capacity_query_postfix}'
-        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
-                                 end=int(time.time()))
+        filesystem_capacity_query = f"{FS_SIZE_METRIC}{node_capacity_query_postfix}"
+        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
         assert fs_size_res, "No results from Prometheus"
         if not fs_size_res[0]:  # if no returned values - try the old metric names.
-            filesystem_capacity_query = f'{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
+            filesystem_capacity_query = f"{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}"
             LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
-            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
-                                     end=int(time.time()))
+            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
         assert fs_size_res[0], "Could not resolve capacity query result."
         LOGGER.debug("fs_size_res: %s", fs_size_res)
         fs_size_gb = float(fs_size_res[0]["values"][0][1]) / float(GB_SIZE)
@@ -500,8 +508,9 @@ class Stats:
 
     def exists(self) -> Optional[bool]:
         if not self.elasticsearch:
-            LOGGER.error("Failed to check for test stats existence: ES connection is not created (doc_id=%s)",
-                         self._test_id)
+            LOGGER.error(
+                "Failed to check for test stats existence: ES connection is not created (doc_id=%s)", self._test_id
+            )
             return None
         try:
             return self.elasticsearch.exists(
@@ -519,19 +528,20 @@ class TestStatsMixin(Stats):
     """
     This mixin is responsible for saving test details and statistics in database.
     """
+
     KEYS = {
-        'test_details': {},
-        'setup_details': {},
-        'versions': {},
-        'results': {},
-        'nemesis': {},
-        'errors': [],
-        'coredumps': {},
+        "test_details": {},
+        "setup_details": {},
+        "versions": {},
+        "results": {},
+        "nemesis": {},
+        "errors": [],
+        "coredumps": {},
     }
-    PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
-    PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
-    STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
-    STRESS_STATS_TOTAL = ('op rate', 'Total errors')
+    PROMETHEUS_STATS = ("throughput", "latency_read_99", "latency_write_99")
+    PROMETHEUS_STATS_UNITS = {"throughput": "op/s", "latency_read_99": "us", "latency_write_99": "us"}
+    STRESS_STATS = ("op rate", "latency mean", "latency 99th percentile")
+    STRESS_STATS_TOTAL = ("op rate", "Total errors")
 
     def _create_test_id(self, doc_id_with_timestamp=False):
         """Return doc_id equal unified test-id
@@ -548,7 +558,7 @@ class TestStatsMixin(Stats):
         # avoid cyclic-decencies between cluster and db_stats
         doc_id = self.test_config.test_id()
         # NOTE: 'cluster_index' is needed in case of multi-tenant perf test on K8S
-        if hasattr(self, 'cluster_index'):
+        if hasattr(self, "cluster_index"):
             doc_id += f"--{self.cluster_index}"
         if doc_id_with_timestamp:
             doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
@@ -561,105 +571,123 @@ class TestStatsMixin(Stats):
         versions = {}
         node = self.db_cluster.nodes[0]
         try:
-            if node.scylla_version_detailed and 'build-id' in node.scylla_version_detailed:
-                build_id = node.scylla_version_detailed.split('with build-id ')[-1].strip()
+            if node.scylla_version_detailed and "build-id" in node.scylla_version_detailed:
+                build_id = node.scylla_version_detailed.split("with build-id ")[-1].strip()
             else:
                 build_id = node.get_scylla_build_id()
 
             # handle offline installer case
-            if self.params.get('unified_package'):
-                match = re.search(r'(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)', node.scylla_version_detailed)
+            if self.params.get("unified_package"):
+                match = re.search(r"(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)", node.scylla_version_detailed)
                 if match:
-                    versions['scylla-server'] = versions.get('scylla-server', {}) | {'version': match.group(2),
-                                                                                     'date': match.group(4),
-                                                                                     'commit_id': match.group(5),
-                                                                                     'build_id': build_id if build_id else ''}
+                    versions["scylla-server"] = versions.get("scylla-server", {}) | {
+                        "version": match.group(2),
+                        "date": match.group(4),
+                        "commit_id": match.group(5),
+                        "build_id": build_id if build_id else "",
+                    }
             else:
                 if node.distro.is_rhel_like:
-                    version_cmd = 'rpm -qa |grep scylla'
+                    version_cmd = "rpm -qa |grep scylla"
                 else:
                     version_cmd = "dpkg -l |grep scylla|awk '{print $2 \"-\" $3}'"
                 versions_output = node.remoter.run(version_cmd).stdout.splitlines()
                 for line in versions_output:
-                    for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
-                                    'scylla-enterprise-server', 'scylla-enterprise-tools']:
-                        match = re.search(r'(%s-([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
+                    for package in [
+                        "scylla-jmx",
+                        "scylla-server",
+                        "scylla-tools",
+                        "scylla-enterprise-jmx",
+                        "scylla-enterprise-server",
+                        "scylla-enterprise-tools",
+                    ]:
+                        match = re.search(r"(%s-([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)" % package, line)
                         if match:
-                            versions[package.replace('-enterprise', '')] = {'version': match.group(2),
-                                                                            'date': match.group(4),
-                                                                            'commit_id': match.group(5),
-                                                                            'build_id': build_id if build_id else ''}
+                            versions[package.replace("-enterprise", "")] = {
+                                "version": match.group(2),
+                                "date": match.group(4),
+                                "commit_id": match.group(5),
+                                "build_id": build_id if build_id else "",
+                            }
         except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.exception('Failed getting scylla versions: %s', ex)
+            LOGGER.exception("Failed getting scylla versions: %s", ex)
 
         # append Scylla build mode in scylla_versions
-        versions['scylla-server'] = versions.get('scylla-server', {}) | {'build_mode': node.scylla_build_mode}
+        versions["scylla-server"] = versions.get("scylla-server", {}) | {"build_mode": node.scylla_build_mode}
 
         return versions
 
     def get_setup_details(self):
-        exclude_details = ['send_email', 'email_recipients', 'es_url', 'es_password', 'reuse_cluster']
+        exclude_details = ["send_email", "email_recipients", "es_url", "es_password", "reuse_cluster"]
         setup_details = {}
-        is_gce = self.params.get('cluster_backend') == 'gce'
+        is_gce = self.params.get("cluster_backend") == "gce"
 
         test_params = self.params.items()
 
         for key, value in test_params:
-            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
+            if key in exclude_details or (isinstance(key, str) and key.startswith("stress_cmd")):  # pylint: disable=no-else-continue
                 continue
             else:
-                if is_gce and key in \
-                        ['instance_type_loader',  # pylint: disable=no-else-continue
-                         'instance_type_monitor',
-                         'instance_type_db']:
+                if is_gce and key in [  # pylint: disable=no-else-continue
+                    "instance_type_loader",
+                    "instance_type_monitor",
+                    "instance_type_db",
+                ]:
                     # exclude these params from gce run
                     continue
-                elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
+                elif key == "n_db_nodes" and isinstance(value, str) and re.search(r"\s", value):  # multidc
+                    setup_details["n_db_nodes"] = sum([int(i) for i in value.split()])
                 else:
                     setup_details[key] = value
 
-        if self.params.get('cluster_backend') == 'aws':
+        if self.params.get("cluster_backend") == "aws":
             setup_details["ami_tags_db_scylla"] = []
             region_names = self.params.region_names
-            ami_list = self.params.get('ami_id_db_scylla').split()
+            ami_list = self.params.get("ami_id_db_scylla").split()
             for ami_id, region_name in zip(ami_list, region_names):
                 tags = get_ami_tags(ami_id, region_name)
                 setup_details["ami_tags_db_scylla"].append(tags)
 
-        new_scylla_packages = self.params.get('update_db_packages')
-        setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
-        setup_details['cpu_platform'] = 'UNKNOWN'
+        new_scylla_packages = self.params.get("update_db_packages")
+        setup_details["packages_updated"] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
+        setup_details["cpu_platform"] = "UNKNOWN"
         if is_gce and self.db_cluster:
             if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):  # pylint: disable=protected-access
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform  # pylint: disable=protected-access
+                setup_details["cpu_platform"] = self.db_cluster.nodes[0]._instance.cpu_platform  # pylint: disable=protected-access
             else:
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
-                    'cpuPlatform', 'UNKNOWN')
+                setup_details["cpu_platform"] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
+                    "cpuPlatform", "UNKNOWN"
+                )
 
-        setup_details['db_cluster_node_details'] = {}
-        setup_details['sysctl_output'] = []
+        setup_details["db_cluster_node_details"] = {}
+        setup_details["sysctl_output"] = []
         return setup_details
 
     def get_test_details(self):
         test_details = {}
-        test_details['sct_git_commit'] = get_git_commit_id()
-        test_details['job_name'] = get_job_name()
-        test_details['job_url'] = get_job_url()
-        test_details['start_host'] = platform.node()
-        test_details['test_duration'] = self.params.get(key='test_duration')
-        test_details['start_time'] = int(time.time())
-        test_details['grafana_snapshots'] = []
-        test_details['grafana_screenshots'] = []
-        test_details['grafana_annotations'] = []
-        test_details['prometheus_data'] = ""
-        test_details['test_id'] = self.test_config.test_id()
-        test_details['log_files'] = {}
+        test_details["sct_git_commit"] = get_git_commit_id()
+        test_details["job_name"] = get_job_name()
+        test_details["job_url"] = get_job_url()
+        test_details["start_host"] = platform.node()
+        test_details["test_duration"] = self.params.get(key="test_duration")
+        test_details["start_time"] = int(time.time())
+        test_details["grafana_snapshots"] = []
+        test_details["grafana_screenshots"] = []
+        test_details["grafana_annotations"] = []
+        test_details["prometheus_data"] = ""
+        test_details["test_id"] = self.test_config.test_id()
+        test_details["log_files"] = {}
         return test_details
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
-                          doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None, test_index=None):
-
+    def create_test_stats(  # pylint: disable=too-many-arguments
+        self,
+        sub_type=None,
+        specific_tested_stats=None,
+        doc_id_with_timestamp=False,
+        append_sub_test_to_name=True,
+        test_name=None,
+        test_index=None,
+    ):
         if not self.create_stats:
             return
         if test_index:
@@ -668,50 +696,50 @@ class TestStatsMixin(Stats):
             self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id(doc_id_with_timestamp)
         self._stats = self._init_stats()
-        self._stats['setup_details'] = self.get_setup_details()
-        self._stats['versions'] = self.get_scylla_versions()
-        self._stats['test_details'] = self.get_test_details()
+        self._stats["setup_details"] = self.get_setup_details()
+        self._stats["versions"] = self.get_scylla_versions()
+        self._stats["test_details"] = self.get_test_details()
         test_name = test_name if test_name else self.id()
         if sub_type:
-            self._stats['test_details']['sub_type'] = sub_type
+            self._stats["test_details"]["sub_type"] = sub_type
         if sub_type and append_sub_test_to_name:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(test_name, sub_type)
+            self._stats["test_details"]["test_name"] = "{}_{}".format(test_name, sub_type)
         else:
-            self._stats['test_details']['test_name'] = test_name
+            self._stats["test_details"]["test_name"] = test_name
         for stat in self.PROMETHEUS_STATS:
-            self._stats['results'][stat] = {}
+            self._stats["results"][stat] = {}
         if specific_tested_stats:
-            self._stats['results'].update(specific_tested_stats)
+            self._stats["results"].update(specific_tested_stats)
             self.log.info("Creating specific tested stats of: {}".format(specific_tested_stats))
         self.create()
 
-    def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
-        section = '{prefix}{stresser}'.format(prefix=prefix, stresser=stresser)
-        if section not in self._stats['test_details']:
-            self._stats['test_details'][section] = [] if aggregate else {}
+    def update_stress_cmd_details(self, cmd, prefix="", stresser="cassandra-stress", aggregate=True):
+        section = "{prefix}{stresser}".format(prefix=prefix, stresser=stresser)
+        if section not in self._stats["test_details"]:
+            self._stats["test_details"][section] = [] if aggregate else {}
         if stresser == "cassandra-stress":
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
         elif stresser == "cassandra-harry":
             cmd_params = get_stress_harry_cmd_params(cmd)
-        elif stresser == 'ycsb':
+        elif stresser == "ycsb":
             cmd_params = get_ycsb_cmd_params(cmd)
-        elif stresser in ['gemini', 'ndbench']:
+        elif stresser in ["gemini", "ndbench"]:
             cmd_params = get_raw_cmd_params(cmd)
-        elif stresser == 'gemini':
+        elif stresser == "gemini":
             cmd_params = get_gemini_cmd_params(cmd)
-        elif stresser == 'cdcreader':
+        elif stresser == "cdcreader":
             cmd_params = get_cdcreader_cmd_params(cmd)
         else:
             cmd_params = None
             self.log.warning("Unknown stresser: %s" % stresser)
         if cmd_params:
             if aggregate:
-                self._stats['test_details'][section].append(cmd_params)
+                self._stats["test_details"][section].append(cmd_params)
             else:
-                self._stats['test_details'][section].update(cmd_params)
-            self.update(dict(test_details=self._stats['test_details']))
+                self._stats["test_details"][section].update(cmd_params)
+            self.update(dict(test_details=self._stats["test_details"]))
 
     def _calc_stats(self, ps_results):
         try:
@@ -735,53 +763,54 @@ class TestStatsMixin(Stats):
     @retrying(n=5, sleep_time=0, message="Retrying on getting prometheus stats")
     def get_prometheus_stats(self, alternator=False, scrap_metrics_step=None):
         self.log.info("Calculating throughput stats from PrometheusDB...")
-        prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address,
-                                                alternator=alternator)
+        prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address, alternator=alternator)
         offset = 120  # 2 minutes offset
         start = int(self._stats["test_details"]["start_time"] + offset)
         end = int(time.time() - offset)
         prometheus_stats = {}
         for stat in self.PROMETHEUS_STATS:
             stat_calc_func = getattr(prometheus_db_stats, "get_" + stat)
-            prometheus_stats[stat] = self._calc_stats(ps_results=stat_calc_func(start_time=start, end_time=end,
-                                                                                scrap_metrics_step=scrap_metrics_step))
-        self._stats['results'].update(prometheus_stats)
+            prometheus_stats[stat] = self._calc_stats(
+                ps_results=stat_calc_func(start_time=start, end_time=end, scrap_metrics_step=scrap_metrics_step)
+            )
+        self._stats["results"].update(prometheus_stats)
         return prometheus_stats
 
     def update_hdrhistograms(self, histogram_name, histogram_data):
-        if "histograms" not in self._stats['results']:
-            self._stats['results']['histograms'] = {}
-        if histogram_name not in self._stats['results']['histograms']:
-            self._stats['results']['histograms'][histogram_name] = [histogram_data]
+        if "histograms" not in self._stats["results"]:
+            self._stats["results"]["histograms"] = {}
+        if histogram_name not in self._stats["results"]["histograms"]:
+            self._stats["results"]["histograms"][histogram_name] = [histogram_data]
         else:
-            self._stats['results']['histograms'][histogram_name].extend(histogram_data)
+            self._stats["results"]["histograms"][histogram_name].extend(histogram_data)
 
-        self.update(dict(results=self._stats['results']))
+        self.update(dict(results=self._stats["results"]))
 
     def update_stress_results(self, results, calculate_stats=True):
-        if 'stats' not in self._stats['results']:
-            self._stats['results']['stats'] = results
+        if "stats" not in self._stats["results"]:
+            self._stats["results"]["stats"] = results
         else:
-            self._stats['results']['stats'].extend(results)
+            self._stats["results"]["stats"].extend(results)
         if calculate_stats:
             self.calculate_stats_average()
             self.calculate_stats_total()
-        self.update(dict(results=self._stats['results']))
+        self.update(dict(results=self._stats["results"]))
 
     def _convert_stat(self, stat, stress_result):
-        if stat not in stress_result or stress_result[stat] == 'NaN':
+        if stat not in stress_result or stress_result[stat] == "NaN":
             self.log.warning("Stress stat not found: '%s'", stat)
             return 0
         try:
             return float(stress_result[stat])
         except Exception as details:  # pylint: disable=broad-except
-            self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
-                             "Discarding stat." % (stress_result[stat], stat, details))
+            self.log.warning(
+                "Error in conversion of '%s' for stat '%s': '%s'Discarding stat." % (stress_result[stat], stat, details)
+            )
         return 0
 
     def _calc_stat_total(self, stat):
         total = 0
-        for stress_result in self._stats['results']['stats']:
+        for stress_result in self._stats["results"]["stats"]:
             stat_val = self._convert_stat(stat=stat, stress_result=stress_result)
             if not stat_val:
                 return 0  # discarding all stat results completely if one of the results is bad
@@ -792,24 +821,31 @@ class TestStatsMixin(Stats):
         # calculate average stats
         average_stats = {}
         for stat in self.STRESS_STATS:
-            average_stats[stat] = ''  # default
+            average_stats[stat] = ""  # default
             total = self._calc_stat_total(stat=stat)
             if total:
-                average_stats[stat] = round(total / len(self._stats['results']['stats']), 1)
-        self._stats['results']['stats_average'] = average_stats
+                average_stats[stat] = round(total / len(self._stats["results"]["stats"]), 1)
+        self._stats["results"]["stats_average"] = average_stats
 
     def calculate_stats_total(self):
         total_stats = {}
         for stat in self.STRESS_STATS_TOTAL:
-            total_stats[stat] = ''  # default
+            total_stats[stat] = ""  # default
             total = self._calc_stat_total(stat=stat)
             if total:
                 total_stats[stat] = total
-        self._stats['results']['stats_total'] = total_stats
+        self._stats["results"]["stats_total"] = total_stats
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False,
-                            scrap_metrics_step=None):
+    def update_test_details(
+        self,
+        errors=None,
+        coredumps=None,
+        scylla_conf=False,
+        extra_stats=None,
+        alternator=False,
+        scrap_metrics_step=None,
+    ):
         if not self.create_stats:
             return
 
@@ -839,13 +875,18 @@ class TestStatsMixin(Stats):
 
         if self.monitors and self.monitors.nodes:
             if self.params.get("store_perf_results"):
-                update_data["results"] = self.get_prometheus_stats(alternator=alternator,
-                                                                   scrap_metrics_step=scrap_metrics_step)
+                update_data["results"] = self.get_prometheus_stats(
+                    alternator=alternator, scrap_metrics_step=scrap_metrics_step
+                )
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_details["start_time"])
-            test_details.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                                 "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                                 "grafana_annotations": self.monitors.upload_annotations_to_s3(),
-                                 "prometheus_data": self.monitors.download_monitor_data(), })
+            test_details.update(
+                {
+                    "grafana_screenshots": grafana_dataset.get("screenshots", []),
+                    "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                    "grafana_annotations": self.monitors.upload_annotations_to_s3(),
+                    "prometheus_data": self.monitors.download_monitor_data(),
+                }
+            )
 
         if self.db_cluster and self.db_cluster.nodes:
             node = self.db_cluster.nodes[0]
@@ -866,11 +907,19 @@ class TestStatsMixin(Stats):
             }
             if scylla_conf and "scylla_args" not in setup_details:
                 scylla_server_conf = f"/etc/{'sysconfig' if node.distro.is_rhel_like else 'default'}/scylla-server"
-                setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
-                                      "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
-                                      "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
+                setup_details.update(
+                    {
+                        "scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
+                        "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
+                        "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"),
+                    }
+                )
             sysctl_excludes = (
-                'net.bridge', 'net.ipv', 'net.netfilter', 'kernel.sched_', 'sunrpc',
+                "net.bridge",
+                "net.ipv",
+                "net.netfilter",
+                "kernel.sched_",
+                "sunrpc",
             )
             for node in self.db_cluster.nodes:
                 result = node.get_sysctl_properties()
@@ -881,8 +930,8 @@ class TestStatsMixin(Stats):
                     #           'illegal_argument_exception',
                     #           'Limit of total fields [1000] has been exceeded')
                     setup_details["sysctl_output"].append(
-                        {key: value for key, value in result.items()
-                         if not any(tag in key for tag in sysctl_excludes)})
+                        {key: value for key, value in result.items() if not any(tag in key for tag in sysctl_excludes)}
+                    )
 
         self.update(update_data)
 
@@ -905,4 +954,4 @@ class TestStatsMixin(Stats):
         return None
 
     def get_test_start_time(self):
-        return self._stats['test_details'].get('start_time', None)
+        return self._stats["test_details"].get("start_time", None)

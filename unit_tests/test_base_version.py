@@ -19,7 +19,7 @@ from sdcm.utils.version_utils import ComparableScyllaVersion
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module, import-error
 
 
-def general_test(scylla_repo='', linux_distro='', cloud_provider=None):
+def general_test(scylla_repo="", linux_distro="", cloud_provider=None):
     scylla_version = None
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
@@ -29,104 +29,106 @@ def general_test(scylla_repo='', linux_distro='', cloud_provider=None):
 
 
 class TestBaseVersion(unittest.TestCase):
-    download_url_base = 'http://downloads.scylladb.com'
-    url_base = f'{download_url_base}/unstable/scylla'
+    download_url_base = "http://downloads.scylladb.com"
+    url_base = f"{download_url_base}/unstable/scylla"
 
     def test_master(self):
-        scylla_repo = self.url_base + '/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
         assert len(version_list) == 1
-        assert ComparableScyllaVersion(version_list[0]) > '5.4'
+        assert ComparableScyllaVersion(version_list[0]) > "5.4"
 
     def test_ubuntu_22_azure_5_3(self):
-        scylla_repo = self.url_base + '/branch-5.3/deb/unified/2023-05-23T22:36:08Z/scylladb-5.3/scylla.list'
-        linux_distro = 'ubuntu-jammy'
-        cloud_provider = 'azure'
+        scylla_repo = self.url_base + "/branch-5.3/deb/unified/2023-05-23T22:36:08Z/scylladb-5.3/scylla.list"
+        linux_distro = "ubuntu-jammy"
+        cloud_provider = "azure"
         version_list = general_test(scylla_repo, linux_distro, cloud_provider)
-        self.assertEqual(version_list, ['5.2'])
+        self.assertEqual(version_list, ["5.2"])
 
     def test_ubuntu_22_azure_2023_1(self):
-        scylla_repo = self.url_base +\
-            '-enterprise/enterprise-2023.1/deb/unified/2023-05-17T23:03:35Z/scylladb-2023.1/scylla.list'
-        linux_distro = 'ubuntu-jammy'
-        cloud_provider = 'azure'
+        scylla_repo = (
+            self.url_base + "-enterprise/enterprise-2023.1/deb/unified/2023-05-17T23:03:35Z/scylladb-2023.1/scylla.list"
+        )
+        linux_distro = "ubuntu-jammy"
+        cloud_provider = "azure"
         version_list = general_test(scylla_repo, linux_distro, cloud_provider)
-        assert set(version_list) == {'5.2', '2023.1'}
+        assert set(version_list) == {"5.2", "2023.1"}
 
     def test_4_5_with_centos8(self):
-        scylla_repo = self.url_base + '/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos-8'
+        scylla_repo = self.url_base + "/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos-8"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'4.4', '4.5'}
+        assert set(version_list) == {"4.4", "4.5"}
 
     def test_4_5(self):
-        scylla_repo = self.url_base + '/4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "/4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'4.4', '4.5'}
+        assert set(version_list) == {"4.4", "4.5"}
 
     def test_5_0(self):
-        scylla_repo = self.url_base + '/branch-5.0/rpm/centos/2023-01-21T02:51:18Z/scylla.repo'
-        linux_distro = 'centos-8'
+        scylla_repo = self.url_base + "/branch-5.0/rpm/centos/2023-01-21T02:51:18Z/scylla.repo"
+        linux_distro = "centos-8"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'4.6', '5.0'}
+        assert set(version_list) == {"4.6", "5.0"}
 
     def test_5_1(self):
-        scylla_repo = self.url_base + '/branch-5.1/deb/unified/2023-01-21T02:35:18Z/scylladb-5.1/scylla.list'
-        linux_distro = 'ubuntu-focal'
+        scylla_repo = self.url_base + "/branch-5.1/deb/unified/2023-01-21T02:35:18Z/scylladb-5.1/scylla.list"
+        linux_distro = "ubuntu-focal"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'5.0', '5.1'}
+        assert set(version_list) == {"5.0", "5.1"}
 
     def test_enterprise(self):
-        scylla_repo = self.url_base + '-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
         assert len(version_list) == 1
-        assert ComparableScyllaVersion(version_list[0]) >= '2024.1'
+        assert ComparableScyllaVersion(version_list[0]) >= "2024.1"
 
     def test_2021_1(self):
-        scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'4.3', '2020.1', '2021.1'}
+        assert set(version_list) == {"4.3", "2020.1", "2021.1"}
 
     def test_2021_1_with_centos8(self):
-        scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos-8'
+        scylla_repo = self.url_base + "-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo"
+        linux_distro = "centos-8"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'4.3', '2021.1'}
+        assert set(version_list) == {"4.3", "2021.1"}
 
     def test_2022_1_with_centos8(self):
-        scylla_repo = self.url_base + \
-            '-enterprise/enterprise-2022.1/deb/unified/2022-06-03T00:22:55Z/scylladb-2022.1/scylla.list'
-        linux_distro = 'centos-8'
+        scylla_repo = (
+            self.url_base + "-enterprise/enterprise-2022.1/deb/unified/2022-06-03T00:22:55Z/scylladb-2022.1/scylla.list"
+        )
+        linux_distro = "centos-8"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'5.0', '2021.1', '2022.1'}
+        assert set(version_list) == {"5.0", "2021.1", "2022.1"}
 
     def test_2022_2(self):
-        scylla_repo = self.url_base + '-enterprise/enterprise-2022.2/rpm/centos/2022-10-09T10:39:11Z/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "-enterprise/enterprise-2022.2/rpm/centos/2022-10-09T10:39:11Z/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'5.1', '2022.1', '2022.2'}
+        assert set(version_list) == {"5.1", "2022.1", "2022.2"}
 
     def test_2024_1(self):
-        scylla_repo = self.url_base + '-enterprise/enterprise-2024.1/rpm/centos/latest/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "-enterprise/enterprise-2024.1/rpm/centos/latest/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'5.4', '2022.2', '2023.1', '2024.1'}
+        assert set(version_list) == {"5.4", "2022.2", "2023.1", "2024.1"}
 
     def test_2024_2(self):
-        scylla_repo = self.url_base + '-enterprise/enterprise-2024.2/rpm/centos/latest/scylla.repo'
-        linux_distro = 'centos'
+        scylla_repo = self.url_base + "-enterprise/enterprise-2024.2/rpm/centos/latest/scylla.repo"
+        linux_distro = "centos"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'2024.1', '2024.2', '6.0'}
+        assert set(version_list) == {"2024.1", "2024.2", "6.0"}
 
     def test_2024_2_ubuntu(self):
-        scylla_repo = self.url_base + '-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list'
-        linux_distro = 'ubuntu-focal'
+        scylla_repo = self.url_base + "-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list"
+        linux_distro = "ubuntu-focal"
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'6.0', '2024.1', '2024.2'}
+        assert set(version_list) == {"6.0", "2024.1", "2024.2"}
 
 
 if __name__ == "__main__":

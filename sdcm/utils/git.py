@@ -1,6 +1,7 @@
 """
 Simple git wrappers that provide useful information about current repository
 """
+
 import subprocess
 import logging
 from typing import TypedDict
@@ -8,8 +9,9 @@ from typing import TypedDict
 LOGGER = logging.getLogger(__name__)
 
 
-GitStatus = TypedDict('GitStatus', {'branch.oid': str, 'branch.head': str,
-                      'branch.upstream': str | None, 'upstream.url': str | None})
+GitStatus = TypedDict(
+    "GitStatus", {"branch.oid": str, "branch.head": str, "branch.upstream": str | None, "upstream.url": str | None}
+)
 
 
 def get_git_commit_id() -> str:
@@ -38,8 +40,9 @@ def get_git_status_info() -> GitStatus:
         #    # branch.head add-argus-branch-tracking
         #    # branch.upstream origin/add-argus-branch-tracking
         #    # branch.ab +0 -0
-        status_proc = subprocess.run(args=["git", "status", "-b", "--porcelain=v2",
-                                     ".nothing"], check=True, capture_output=True)
+        status_proc = subprocess.run(
+            args=["git", "status", "-b", "--porcelain=v2", ".nothing"], check=True, capture_output=True
+        )
         output = status_proc.stdout.decode(encoding="utf-8").strip()
         git_status: GitStatus = {}
         for line in (line for line in output.split("\n") if line.startswith("#")):
@@ -79,7 +82,8 @@ def get_git_status_info() -> GitStatus:
         #    Example output:
         #    gh:k0machi/scylla-cluster-tests
         origin_proc = subprocess.run(
-            args=["git", "config", "--get", f"remote.{remote}.url"], check=True, capture_output=True)
+            args=["git", "config", "--get", f"remote.{remote}.url"], check=True, capture_output=True
+        )
         output = origin_proc.stdout.decode(encoding="utf-8").strip()
         git_status["upstream.url"] = output.strip()
 

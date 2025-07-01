@@ -20,11 +20,12 @@ class Result:  # pylint: disable=too-many-instance-attributes
     A copy-cat from invoke.runners.Result
 
     """
+
     stdout: str
     stderr: str
-    encoding: str = 'utf8'
-    command: str = ''
-    shell: str = ''
+    encoding: str = "utf8"
+    command: str = ""
+    shell: str = ""
     exited: int = None
     env: dict = field(default_factory=dict)
     pty: bool = False
@@ -51,9 +52,7 @@ class Result:  # pylint: disable=too-many-instance-attributes
             ret.append(
                 """=== {} ===
 {}
-""".format(
-                    stream, val.rstrip()
-                )
+""".format(stream, val.rstrip())
                 if val
                 else "(no {})".format(stream)
             )
