@@ -19,17 +19,16 @@ from sdcm.rest.compaction_manager_client import CompactionManagerClient
 
 
 class FakeRemoter:
-
-    def run(self,
-            cmd: str,
-            timeout: int,
-            retry: int,
-            ) -> Result:
+    def run(
+        self,
+        cmd: str,
+        timeout: int,
+        retry: int,
+    ) -> Result:
         return Result(stdout=cmd, stderr="", exited=0)
 
 
 class FakeNode:
-
     @property
     def remoter(self):
         return FakeRemoter()

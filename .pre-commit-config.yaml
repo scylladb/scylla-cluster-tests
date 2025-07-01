@@ -37,9 +37,9 @@ repos:
 
 -   repo: local
     hooks:
-    -   id: autopep8
-        name: autopep8
-        entry: autopep8 -i -j 2 --max-line-length=120 --ignore=E226,E24,W50,W690,E402,E731
+    -   id: ruff-format
+        name: ruff-format
+        entry: ruff format
         language: system
         types: [python]
         exclude: '(\.sh$|argus/.*)'

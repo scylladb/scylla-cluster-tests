@@ -18,7 +18,6 @@ from sdcm.sct_events.base import SctEvent
 
 # pylint: disable=too-few-public-methods
 class EventHandler(abc.ABC):
-
     def __init__(self):
         """Initializes event handler"""
 

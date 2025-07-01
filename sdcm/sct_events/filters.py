@@ -21,11 +21,13 @@ from sdcm.sct_events.base import SctEvent, SctEventProtocol, BaseFilter, LogEven
 
 
 class DbEventsFilter(BaseFilter):
-    def __init__(self,
-                 db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
-                 line: Optional[str] = None,
-                 node: Optional = None,
-                 extra_time_to_expiration: Optional[int] = 0):
+    def __init__(
+        self,
+        db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
+        line: Optional[str] = None,
+        node: Optional = None,
+        extra_time_to_expiration: Optional[int] = 0,
+    ):
         super().__init__()
 
         self.filter_type = db_event.type
@@ -58,26 +60,27 @@ class DbEventsFilter(BaseFilter):
 
     @property
     def msgfmt(self) -> str:
-        output = ['{0.base}']
+        output = ["{0.base}"]
         if self.filter_type:
-            output.append('type={0.filter_type}')
+            output.append("type={0.filter_type}")
         if self.filter_line:
-            output.append('line={0.filter_line}')
+            output.append("line={0.filter_line}")
         if self.filter_node:
-            output.append('node={0.filter_node}')
-        return '(' + (' '.join(output)) + ')'
+            output.append("node={0.filter_node}")
+        return "(" + (" ".join(output)) + ")"
 
 
 class EventsFilter(BaseFilter):
-    def __init__(self,
-                 event_class: Optional[Type[SctEventProtocol] | Type[SctEvent]] = None,
-                 regex: Optional[Union[str, re.Pattern]] = None,
-                 extra_time_to_expiration: Optional[int] = 0):
-
-        assert event_class or regex, \
-            "Should call with event_class or regex, or both"
-        assert not event_class or issubclass(event_class, SctEvent), \
+    def __init__(
+        self,
+        event_class: Optional[Type[SctEventProtocol] | Type[SctEvent]] = None,
+        regex: Optional[Union[str, re.Pattern]] = None,
+        extra_time_to_expiration: Optional[int] = 0,
+    ):
+        assert event_class or regex, "Should call with event_class or regex, or both"
+        assert not event_class or issubclass(event_class, SctEvent), (
             "event_class should be a class inherits from SctEvent"
+        )
 
         super().__init__()
 
@@ -115,20 +118,22 @@ class EventsFilter(BaseFilter):
 
     @property
     def msgfmt(self) -> str:
-        output = ['{0.base}']
+        output = ["{0.base}"]
         if self.event_class:
-            output.append('event_class={0.event_class}')
+            output.append("event_class={0.event_class}")
         if self.regex:
-            output.append('regex={0.regex}')
-        return '(' + (' '.join(output)) + ')'
+            output.append("regex={0.regex}")
+        return "(" + (" ".join(output)) + ")"
 
 
 class EventsSeverityChangerFilter(EventsFilter):
-    def __init__(self,
-                 new_severity: Severity,
-                 event_class: Optional[Type[SctEvent]] = None,
-                 regex: Optional[str] = None,
-                 extra_time_to_expiration: Optional[int] = None):
+    def __init__(
+        self,
+        new_severity: Severity,
+        event_class: Optional[Type[SctEvent]] = None,
+        regex: Optional[str] = None,
+        extra_time_to_expiration: Optional[int] = None,
+    ):
         super().__init__(event_class=event_class, regex=regex, extra_time_to_expiration=extra_time_to_expiration)
 
         self.new_severity = new_severity

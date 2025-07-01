@@ -25,7 +25,9 @@ from sdcm.utils.syslogng import SyslogNGContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
+class LocalHost(
+    SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin
+):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
@@ -33,8 +35,10 @@ class LocalHost(SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMi
 
     @property
     def ldap_ports(self) -> Optional[dict]:
-        return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
-                'ldap_ssl_port': ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT)}
+        return {
+            "ldap_port": ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
+            "ldap_ssl_port": ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT),
+        }
 
     def destroy(self) -> None:
         ContainerManager.destroy_all_containers(self)

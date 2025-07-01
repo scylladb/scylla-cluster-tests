@@ -32,10 +32,7 @@ from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 class FakeSCTConfiguration(SCTConfiguration):
     def _load_environment_variables(self):
-        return {
-            'config_files': ['test-cases/PR-provision-test-docker.yaml'],
-            'cluster_backend': 'docker'
-        }
+        return {"config_files": ["test-cases/PR-provision-test-docker.yaml"], "cluster_backend": "docker"}
 
 
 # pylint: disable=too-many-instance-attributes
@@ -51,18 +48,13 @@ class ClusterTesterForTests(ClusterTester):
     def __init__(self, *args):
         self.logdir = tempfile.mkdtemp()
         self.events_processes_registry = EventsProcessesRegistry(log_dir=self.logdir)
-        self.events_processes_registry_patcher = \
-            unittest.mock.patch("sdcm.sct_events.base.SctEvent._events_processes_registry",
-                                self.events_processes_registry)
+        self.events_processes_registry_patcher = unittest.mock.patch(
+            "sdcm.sct_events.base.SctEvent._events_processes_registry", self.events_processes_registry
+        )
         self.events_processes_registry_patcher.start()
         configure_logging(
-            formatters={
-                'default': {
-                    '()': MultilineMessagesFormatter,
-                    'format': '%(message)s'
-                }
-            },
-            variables={'log_dir': self.logdir}
+            formatters={"default": {"()": MultilineMessagesFormatter, "format": "%(message)s"}},
+            variables={"log_dir": self.logdir},
         )
         super().__init__(*args)
 
@@ -115,11 +107,12 @@ class ClusterTesterForTests(ClusterTester):
         event_summary = self.event_summary  # pylint: disable=pointless-statement
         shutil.rmtree(self.logdir)
         for event_category, total_events in event_summary.items():
-            assert len(events_by_category[event_category]) == total_events, \
-                f"{event_category}: Contains ({len(events_by_category[event_category])}) while " \
+            assert len(events_by_category[event_category]) == total_events, (
+                f"{event_category}: Contains ({len(events_by_category[event_category])}) while "
                 f"({total_events}) expected:\n{''.join(events_by_category[event_category])}"
+            )
             assert final_event.events[event_category][0] == events_by_category[event_category][-1]
-        if final_event.test_status == 'SUCCESS':
+        if final_event.test_status == "SUCCESS":
             assert unittest_final_event is None
             assert str(final_event) in sct_log
         else:
@@ -155,7 +148,7 @@ class ClusterTesterForTests(ClusterTester):
     def sct_log(self):
         if self._sct_log:
             return self._sct_log
-        with open(os.path.join(self.logdir, 'sct.log'), encoding="utf-8") as log_file:
+        with open(os.path.join(self.logdir, "sct.log"), encoding="utf-8") as log_file:
             output = log_file.read()
         self._sct_log = output
         return output
@@ -184,11 +177,11 @@ class ClusterTesterForTests(ClusterTester):
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
     def test(self):
-        with self.subTest('SUBTEST1'):
-            raise ValueError('Subtest1 failed')
-        with self.subTest('SUBTEST2'):
-            raise ValueError('Subtest2 failed')
-        raise ValueError('Main test also failed')
+        with self.subTest("SUBTEST1"):
+            raise ValueError("Subtest1 failed")
+        with self.subTest("SUBTEST2"):
+            raise ValueError("Subtest2 failed")
+        raise ValueError("Main test also failed")
 
     @silence()
     def send_email(self):
@@ -198,10 +191,10 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         super()._validate_results()
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 2}
-        assert 'Subtest1 failed' in self.events['ERROR'][0]
-        assert 'send_email' in self.events['ERROR'][1]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 2}
+        assert "Subtest1 failed" in self.events["ERROR"][0]
+        assert "send_email" in self.events["ERROR"][1]
+        assert self.final_event.test_status == "FAILED"
 
 
 class CriticalErrorNotCaughtTest(ClusterTesterForTests):
@@ -209,9 +202,9 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
     def test():
         try:
             ClusterHealthValidatorEvent.NodeStatus(
-                node='node-1',
-                message='Failed by some reason',
-                error='Reason to fail',
+                node="node-1",
+                message="Failed by some reason",
+                error="Reason to fail",
                 severity=Severity.CRITICAL,
             ).publish()
             end_time = time.time() + 2
@@ -224,18 +217,18 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
         super()._validate_results()
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
-        assert len(self.events['CRITICAL']) == 1
-        assert 'ClusterHealthValidatorEvent' in self.events['CRITICAL'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert len(self.events["CRITICAL"]) == 1
+        assert "ClusterHealthValidatorEvent" in self.events["CRITICAL"][0]
+        assert self.final_event.test_status == "FAILED"
 
 
 class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
     def test(self):
-        with self.subTest('SUBTEST1'):
-            assert False, 'Subtest1 failed'
-        with self.subTest('SUBTEST2'):
-            assert False, 'Subtest2 failed'
-        assert False, 'Main test also failed'
+        with self.subTest("SUBTEST1"):
+            assert False, "Subtest1 failed"
+        with self.subTest("SUBTEST2"):
+            assert False, "Subtest2 failed"
+        assert False, "Main test also failed"
 
     @silence()
     def send_email(self):
@@ -245,10 +238,10 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         super()._validate_results()
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 2}
-        assert 'Subtest1 failed' in self.events['ERROR'][0]
-        assert 'send_email' in self.events['ERROR'][1]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 2}
+        assert "Subtest1 failed" in self.events["ERROR"][0]
+        assert "send_email" in self.events["ERROR"][1]
+        assert self.final_event.test_status == "FAILED"
 
 
 class TeardownFailsTest(ClusterTesterForTests):
@@ -261,9 +254,9 @@ class TeardownFailsTest(ClusterTesterForTests):
 
     def _validate_results(self):
         super()._validate_results()
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'send_email' in self.final_event.events['ERROR'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert "send_email" in self.final_event.events["ERROR"][0]
+        assert self.final_event.test_status == "FAILED"
 
 
 class SetupFailsTest(ClusterTesterForTests):
@@ -272,7 +265,7 @@ class SetupFailsTest(ClusterTesterForTests):
         self.addCleanup(self._validate_results)
 
     def update_certificates(self):
-        raise RuntimeError('update_certificates failed')
+        raise RuntimeError("update_certificates failed")
 
     def test(self):
         pass
@@ -284,23 +277,21 @@ class SetupFailsTest(ClusterTesterForTests):
     def _validate_results(self):
         super()._validate_results()
         self._remove_errors_from_unittest_results(self._outcome)
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'update_certificates failed' in self.final_event.events['ERROR'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert "update_certificates failed" in self.final_event.events["ERROR"][0]
+        assert self.final_event.test_status == "FAILED"
 
 
 class TestErrorTest(ClusterTesterForTests):
     def test(self):
         TestFrameworkEvent(
-            source=self.__class__.__name__,
-            source_method='test',
-            message="Something went wrong"
+            source=self.__class__.__name__, source_method="test", message="Something went wrong"
         ).publish()
 
     def _validate_results(self):
         super()._validate_results()
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert self.final_event.test_status == "FAILED"
 
 
 class SuccessTest(ClusterTesterForTests):
@@ -309,18 +300,18 @@ class SuccessTest(ClusterTesterForTests):
 
     def _validate_results(self):
         super()._validate_results()
-        assert self.event_summary == {'NORMAL': 2}
-        assert self.final_event.test_status == 'SUCCESS'
+        assert self.event_summary == {"NORMAL": 2}
+        assert self.final_event.test_status == "SUCCESS"
 
 
 class SubtestsSuccessTest(ClusterTesterForTests):
     def test(self):
-        with self.subTest('SUBTEST1'):
+        with self.subTest("SUBTEST1"):
             pass
-        with self.subTest('SUBTEST2'):
+        with self.subTest("SUBTEST2"):
             pass
 
     def _validate_results(self):
         super()._validate_results()
-        assert self.event_summary == {'NORMAL': 2}
-        assert self.final_event.test_status == 'SUCCESS'
+        assert self.event_summary == {"NORMAL": 2}
+        assert self.final_event.test_status == "SUCCESS"

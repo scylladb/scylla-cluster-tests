@@ -24,8 +24,7 @@ import logging
 from enum import Enum
 from json import JSONEncoder
 from types import new_class  # pylint: disable=no-name-in-module
-from typing import \
-    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
+from typing import Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
 from keyword import iskeyword
 from weakref import proxy as weakproxy
 from datetime import datetime, timezone
@@ -127,25 +126,27 @@ class SctEvent:
         return cls._abstract
 
     @classmethod
-    def add_subevent_type(cls,
-                          name: str,
-                          /, *,
-                          abstract: bool = False,
-                          mixin: Optional[Type] = None,
-                          **kwargs) -> None:
-
+    def add_subevent_type(cls, name: str, /, *, abstract: bool = False, mixin: Optional[Type] = None, **kwargs) -> None:
         # Check if we can add a new sub-event type:
         #   1) only 2 levels of sub-events allowed (i.e., `Event.TYPE.subtype')
         assert len(cls.__name__.split(".")) < 3, "max level of the event's nesting is already reached"
 
         #   2) name of sub-event should be a correct Python identifier.
-        assert name.isidentifier() and not iskeyword(name), \
+        assert name.isidentifier() and not iskeyword(name), (
             "name of an SCT event type should be a valid Python identifier and not a keyword"
+        )
 
         #   3) Base event shouldn't have an attribute with same name.
         assert not hasattr(cls, name), f"SCT event type {cls} already has attribute `{name}'"
 
-        bases = (cls, ) if mixin is None else (mixin, cls, )
+        bases = (
+            (cls,)
+            if mixin is None
+            else (
+                mixin,
+                cls,
+            )
+        )
         init_index = 0 if mixin is None or "__init__" in vars(mixin) else 1  # check if mixin has own `__init__()'
         nesting_level = "type" if cls.type is None else "subtype"
 
@@ -154,10 +155,12 @@ class SctEvent:
             name=f"{cls.__name__}.{name}",
             bases=bases,
             kwds={"abstract": bool(abstract)},
-            exec_body=lambda ns: ns.update({
-                nesting_level: name,
-                "__init__": partialmethod(bases[init_index].__init__, **kwargs),
-            })
+            exec_body=lambda ns: ns.update(
+                {
+                    nesting_level: name,
+                    "__init__": partialmethod(bases[init_index].__init__, **kwargs),
+                }
+            ),
         )
 
         # For pickling to work, the __module__ variable needs to be set to the same as base class.
@@ -170,7 +173,11 @@ class SctEvent:
     def _formatted_timestamp(timestamp: float) -> str:
         try:
             return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        except (TypeError, OverflowError, OSError,):
+        except (
+            TypeError,
+            OverflowError,
+            OSError,
+        ):
             LOGGER.exception("Failed to format a timestamp: %r", timestamp)
             return "0000-00-00 <UnknownTimestamp>"
 
@@ -202,13 +209,13 @@ class SctEvent:
                 concatenated_context.append(event_context[context_name])
             elif isinstance(event_context, SctEvent) and context_name in event_context.subcontext_fmt:
                 concatenated_context.append(event_context.subcontext_fmt[context_name])
-        return ','.join(concatenated_context)
+        return ",".join(concatenated_context)
 
     @property
     def msgfmt(self):
         fmt = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
 
-        if during_nemesis := self.concatenate_subcontext_for_message(context_name='nemesis_name'):
+        if during_nemesis := self.concatenate_subcontext_for_message(context_name="nemesis_name"):
             fmt += f" during_nemesis={during_nemesis}"
 
         return fmt
@@ -216,6 +223,7 @@ class SctEvent:
     def add_subcontext(self):
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+
         # Add subcontext for event with ERROR and CRITICAL severity only
         if self.severity.value < 3:
             return
@@ -271,6 +279,7 @@ class SctEvent:
                 self.publish()
             else:
                 from sdcm.sct_events.file_logger import get_events_logger
+
                 get_events_logger(_registry=self._events_processes_registry).write_event(self)
         elif default_logger:
             default_logger.error(str(self))
@@ -291,10 +300,13 @@ class SctEvent:
         return []
 
     def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
-        return json.dumps({
-            **self.attribute_with_value_for_json(attributes_list=["base", "type", "subtype"]),
-            **self.__getstate__(),
-        }, cls=encoder)
+        return json.dumps(
+            {
+                **self.attribute_with_value_for_json(attributes_list=["base", "type", "subtype"]),
+                **self.__getstate__(),
+            },
+            cls=encoder,
+        )
 
     def attribute_with_value_for_json(self, attributes_list: list, event: SctEvent = None) -> dict:
         return dict(zip(attributes_list, [getattr(event or self, field) for field in attributes_list]))
@@ -305,8 +317,10 @@ class SctEvent:
         attrs = self.attribute_with_value_for_json(attributes_list=attr_list)
 
         if subcontext := getattr(self, "subcontext"):
-            attrs["subcontext"] = [self.attribute_with_value_for_json(attributes_list=event.subcontext_fields,
-                                                                      event=event) for event in subcontext]
+            attrs["subcontext"] = [
+                self.attribute_with_value_for_json(attributes_list=event.subcontext_fields, event=event)
+                for event in subcontext
+            ]
         else:
             attrs["subcontext"] = []
         return attrs
@@ -315,8 +329,9 @@ class SctEvent:
         return self.formatter(self.msgfmt, self)
 
     def __eq__(self, other):
-        return (isinstance(other, type(self)) or isinstance(self, type(other))) \
-            and self.__getstate__() == other.__getstate__()
+        return (
+            isinstance(other, type(self)) or isinstance(self, type(other))
+        ) and self.__getstate__() == other.__getstate__()
 
     def __del__(self):
         if self._ready_to_publish:
@@ -328,7 +343,6 @@ class SctEvent:
 
 
 class InformationalEvent(SctEvent, abstract=True):
-
     def __init__(self, severity: Severity = Severity.UNKNOWN):
         super().__init__(severity=severity)
         self.period_type = EventPeriod.INFORMATIONAL.value
@@ -356,7 +370,11 @@ def _max_severity(keys: Tuple[str, ...], name: str) -> Severity:
 
 def max_severity(event: SctEvent) -> Severity:
     return _max_severity(
-        keys=(event.base, f"{event.base}.{event.type}", f"{event.base}.{event.type}.{event.subtype}", ),
+        keys=(
+            event.base,
+            f"{event.base}.{event.type}",
+            f"{event.base}.{event.type}.{event.subtype}",
+        ),
         name=type(event).__name__,
     )
 
@@ -364,7 +382,7 @@ def max_severity(event: SctEvent) -> Severity:
 def print_critical_events() -> None:
     critical_event_lines = []
     for event_name in SctEvent._sct_event_types_registry.max_severities:
-        if _max_severity(keys=(event_name, ), name=event_name) == Severity.CRITICAL:
+        if _max_severity(keys=(event_name,), name=event_name) == Severity.CRITICAL:
             critical_event_lines.append(f"  * {event_name}")
     LOGGER.info("The run can be interrupted by following critical events:\n%s\n\n", "\n".join(critical_event_lines))
 
@@ -424,11 +442,9 @@ class LogEventProtocol(SctEventProtocol, Protocol[T_log_event]):
     backtrace: Optional[str]
     raw_backtrace: Optional[str]
 
-    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
-        ...
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event: ...
 
-    def clone(self: T_log_event) -> T_log_event:
-        ...
+    def clone(self: T_log_event) -> T_log_event: ...
 
 
 class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
@@ -438,7 +454,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         # .* patterns works extremely slow, on big log message pattern evaluation can take >1s
         #   in order to keep log reading fast we must avoid them at all costs
         if regex:
-            assert '.*'.count(regex) < 2
+            assert ".*".count(regex) < 2
         self.regex = regex
         self.node = None
         self.line = None
@@ -509,7 +525,17 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         return fmt
 
 
-__all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
-           "LogEvent", "LogEventProtocol", "T_log_event",
-           "add_severity_limit_rules", "max_severity", "print_critical_events",
-           "InformationalEvent", "EventPeriod")
+__all__ = (
+    "SctEvent",
+    "SctEventProtocol",
+    "SystemEvent",
+    "BaseFilter",
+    "LogEvent",
+    "LogEventProtocol",
+    "T_log_event",
+    "add_severity_limit_rules",
+    "max_severity",
+    "print_critical_events",
+    "InformationalEvent",
+    "EventPeriod",
+)
