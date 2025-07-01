@@ -99,3 +99,9 @@ class BannedQueryExecUnexpectedSuccess(Exception):
 
 class Group0LimitedVotersFeatureNotEnableOnNodes(Exception):
     """Raise if feature group0_limited_voters is enabled on nodes"""
+
+
+class TestFailedByEvents(Exception):
+    """
+    Exception raised when a test fails due to events.
+    """

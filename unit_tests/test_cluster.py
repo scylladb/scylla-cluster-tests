@@ -58,12 +58,16 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         self.added_password_suffix = False
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
+        self.name = 'dummy_db_cluster'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         for _ in range(count):
             self.nodes += [self.nodes[-1]]
 
     def wait_for_init(*_, node_list=None, verbose=False, timeout=None, **__):
+        pass
+
+    def validate_seeds_on_all_nodes(self):
         pass
 
 
