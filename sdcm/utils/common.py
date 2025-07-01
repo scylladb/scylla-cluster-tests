@@ -315,7 +315,7 @@ class S3Storage():
     def download_file(self, link, dst_dir):
         """Download file from S3 bucket or Argus proxy link."""
 
-        if not self.s3_host_name_regex.match(urlparse(link).hostname):
+        if not self.s3_host_name_regex.match(link):
             # get the actual s3 link from Argus first
             creds = KeyStore().get_argus_rest_credentials()
             headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
