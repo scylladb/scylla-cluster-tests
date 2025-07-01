@@ -29,6 +29,7 @@ from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.nemesis_utils.indexes import create_index, get_column_names, get_random_column_name, verify_query_by_index_works, wait_for_index_to_be_built, wait_for_view_to_be_built
 from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy, ReplicationStrategy
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from threading import Thread
 
 
 @contextmanager
@@ -134,6 +135,33 @@ class LongevityOutOfSpaceTest(LongevityTest):
         self.scale_out()
 
         self.run_stress()
+
+    def test_oos_write_restart(self):
+        """
+        Fill the cluster to 90%
+        Start another write, that would need more space than available
+        During this write, restart a node
+        Write should fail, but the cluster should not crash
+        """
+        self.run_prepare_write_cmd()
+
+        with ignore_stress_errors():
+            stress_thread = Thread(target=self.run_stress)
+            stress_thread.start()
+
+            while stress_thread.is_alive():
+                # check if any node has reached 97% and restart that node
+                self.log.info("Checking disk usage on nodes...")
+                for node in self.db_cluster.nodes:
+                    disk_usage = get_node_disk_usage(node)
+                    if disk_usage >= 97:
+                        self.log.info(f"Node {node.name} has reached 97% disk usage, restarting it.")
+                        node.stop_scylla(verify_down=True)
+                        node.start_scylla(verify_up=True)
+                        break
+                sleep(60)
+
+            stress_thread.join()
 
     def test_oos_repair_scale_out(self):
         """
