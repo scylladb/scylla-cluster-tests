@@ -17,14 +17,14 @@ import itertools
 from botocore.exceptions import ClientError
 
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.common import all_aws_regions
+from sdcm.sct_config import SCTConfiguration
 
 LOG = logging.getLogger(__name__)
 
 
 class AwsVpcPeering:
     def __init__(self, regions=None):
-        regions = regions or all_aws_regions(cached=True)
+        regions = regions or SCTConfiguration.aws_supported_regions
         self.regions = [AwsRegion(r) for r in regions]
 
     @staticmethod
