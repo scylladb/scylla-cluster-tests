@@ -3088,6 +3088,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
+        threading._threading_atexits.clear()
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):

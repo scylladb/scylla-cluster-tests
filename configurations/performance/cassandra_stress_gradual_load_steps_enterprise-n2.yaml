@@ -4,5 +4,5 @@
 ##   - a single-element list or integer (applied to all throttle steps)
 ##   - a list with the same length as perf_gradual_throttle_steps[load] (one thread count per step).
 perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900}
-perf_gradual_throttle_steps: {"read": ['960000', '980000', '1000000', '1020000', '1040000', '1060000', '1080000', '1100000'], "mixed": ['470000', '480000', '490000', '500000', '510000', '520000', '530000'], "write": ['340000', '350000', '360000', '370000']}  # where every value is in ops
+perf_gradual_throttle_steps: {"read": [ '500000', '510000', '520000', '530000', '540000', '550000', '560000'], "mixed": ['470000', '480000', '490000', '500000', '510000', '520000', '530000'], "write": ['230000', '240000', '250000', '260000']}  # where every value is in ops
 perf_gradual_step_duration: {"read": '10m', "write": None, "mixed": '15m'}
