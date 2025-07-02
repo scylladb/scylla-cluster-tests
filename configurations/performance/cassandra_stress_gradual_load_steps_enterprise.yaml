@@ -1,5 +1,5 @@
 # Define load ops for steps
 perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900, "read_disk_only": 620}
 perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled'],
-                              "read_disk_only": ['230000','2500000', '270000', '290000', '310000']}  # where every value is in ops
-perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '20m'}
+                              "read_disk_only": ['230000','240000','250000','260000', '270000', '280000', '290000', '300000', '310000','320000','330000']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '10m'}
