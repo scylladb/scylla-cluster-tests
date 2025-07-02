@@ -151,8 +151,6 @@ class LongevityOutOfSpaceTest(LongevityTest):
             stress_thread.start()
 
             while stress_thread.is_alive():
-                # check if any node has reached 97% and restart that node
-                self.log.info("Checking disk usage on nodes...")
                 for node in self.db_cluster.nodes:
                     disk_usage = get_node_disk_usage(node)
                     if disk_usage >= 97:
@@ -175,11 +173,21 @@ class LongevityOutOfSpaceTest(LongevityTest):
         """
         self.run_prepare_write_cmd()
 
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-        mgr_task = mgr_cluster.create_repair_task()
-
         with ignore_stress_errors():
-            self.run_stress()
+            stress_thread = Thread(target=self.run_stress)
+            stress_thread.start()
+
+            while stress_thread.is_alive():
+                # check if any node has reached 97% and restart that node
+                self.log.info("Checking disk usage on nodes...")
+                for node in self.db_cluster.nodes:
+                    disk_usage = get_node_disk_usage(node)
+                    if disk_usage >= 95:
+                        self.log.info(f"Node {node.name} has reached 95% disk usage, starting repair task.")
+                        mgr_cluster = self.db_cluster.get_cluster_manager()
+                        mgr_task = mgr_cluster.create_repair_task()
+                        break
+                sleep(60)
 
         repair_timeout = 3 * 3600  # 3 hours
         try:
