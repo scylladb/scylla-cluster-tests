@@ -17,6 +17,7 @@ import time
 from sdcm.sct_events import Severity
 from sdcm.sct_events.handlers import EventHandler
 from sdcm.sct_events.loaders import CassandraStressLogEvent, SchemaDisagreementErrorEvent
+from sdcm.utils.argus import create_proxy_argus_s3_url
 from sdcm.utils.sstable.s3_uploader import upload_sstables_to_s3
 
 LOGGER = logging.getLogger(__name__)
@@ -45,8 +46,9 @@ class SchemaDisagreementHandler(EventHandler):
                 gossip_info = gossip_info or node.get_gossip_info()
                 peers_info = peers_info or node.get_peers_info()
                 try:
-                    link = upload_sstables_to_s3(node, keyspace='system_schema', test_id=tester_obj.test_id)
-                    event.add_sstable_link(link)
+                    link = upload_sstables_to_s3(node, keyspace='system_schema',
+                                                 test_id=tester_obj.test_id, public=False)
+                    event.add_sstable_link(create_proxy_argus_s3_url(link, True))
                 except Exception as exc:  # noqa: BLE001
                     LOGGER.error("failed to upload system_schema sstables for node %s: %s", node.name, exc)
             event.add_gossip_info(gossip_info)
