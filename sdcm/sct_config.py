@@ -1783,7 +1783,8 @@ class SCTConfiguration(dict):
         'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i'
     ]
     ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
-    aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
+    aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2',
+                             'us-east-1', 'eu-north-1', 'eu-central-1', 'eu-west-3', 'ca-central-1']
 
     def __init__(self):  # noqa: PLR0912, PLR0914, PLR0915
 

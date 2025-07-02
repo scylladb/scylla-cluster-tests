@@ -378,6 +378,9 @@ def list_parallel_timelines_report_urls(test_id: str) -> list[str | None]:
 
 def all_aws_regions(cached=False):
     if cached:
+        # Note: this is a hardcoded list of AWS regions, it may not have all of aws regions.
+        # this list is used for setup of vpc peering, please don't remove or reshuffle it,
+        # only add new regions at the bottom of it
         return [
             'eu-north-1',
             'ap-south-1',
@@ -394,7 +397,7 @@ def all_aws_regions(cached=False):
             'us-east-1',
             'us-east-2',
             'us-west-1',
-            'us-west-2'
+            'us-west-2',
         ]
     else:
         client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
