@@ -210,23 +210,14 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
     def test_oos_compaction_scale_out(self):
         """
-        Disable autocompaction on all nodes
+        Fill the cluster to 90%
         Fill the cluster to 98%
-        Enable autocompaction on all nodes
         There should be no running compactions on the node that reached 98%
         Scale out the cluster
         There should be running compactions on the node that reached 98%
         """
-        # keyspace needs to exist to disable autocompaction
-        self.run_pre_create_keyspace()
-        # disable autocompaction on all nodes
-        for node in self.db_cluster.nodes:
-            node.run_nodetool('disableautocompaction')
         # fill to 90%
         self.run_prepare_write_cmd()
-
-        for node in self.db_cluster.nodes:
-            node.run_nodetool('enableautocompaction')
 
         # fill to 98%
         with ignore_stress_errors():
