@@ -2856,7 +2856,7 @@ class Nemesis(NemesisFlags):
         self._mgmt_backup(backup_specific_tables=False)
 
     @target_data_nodes
-    def disrupt_mgmt_restore(self):
+    def disrupt_mgmt_restore(self):  # noqa: PLR0914
         def get_total_scylla_partition_size():
             result = self.cluster.data_nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
             free_space_size = int(result.stdout.split()[1]) / 1024 ** 2  # Converting to GB
@@ -2987,22 +2987,30 @@ class Nemesis(NemesisFlags):
             #
             # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
             #    keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
+        try:
+            restore_task = mgr_cluster.create_restore_task(restore_data=True,
+                                                           location_list=location_list,
+                                                           snapshot_tag=chosen_snapshot_tag)
+            restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
+            assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
 
-        restore_task = mgr_cluster.create_restore_task(restore_data=True,
-                                                       location_list=location_list,
-                                                       snapshot_tag=chosen_snapshot_tag)
-        restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
-        assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
+            confirmation_stress_template = (
+                persistent_manager_snapshots_dict)[cluster_backend]["confirmation_stress_template"]
+            stress_queue = execute_data_validation_thread(command_template=confirmation_stress_template,
+                                                          keyspace_name=chosen_snapshot_info["keyspace_name"],
+                                                          number_of_rows=chosen_snapshot_info["number_of_rows"])
 
-        confirmation_stress_template = (
-            persistent_manager_snapshots_dict)[cluster_backend]["confirmation_stress_template"]
-        stress_queue = execute_data_validation_thread(command_template=confirmation_stress_template,
-                                                      keyspace_name=chosen_snapshot_info["keyspace_name"],
-                                                      number_of_rows=chosen_snapshot_info["number_of_rows"])
-        for stress in stress_queue:
-            is_passed = self.tester.verify_stress_thread(stress)
-            assert is_passed, (
-                "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed")
+            for stress in stress_queue:
+                is_passed = self.tester.verify_stress_thread(stress)
+                assert is_passed, (
+                    "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed")
+        finally:
+            self.log.info("Cleaning up restored keyspace '%s'", chosen_snapshot_info["keyspace_name"])
+            drop_ks_stmt = f'DROP KEYSPACE IF EXISTS "{chosen_snapshot_info["keyspace_name"]}";'
+            try:
+                self.target_node.run_cqlsh(drop_ks_stmt)
+            except Exception as drop_err:  # noqa: BLE001
+                self.log.warning("Failed to drop restored keyspace: %s", drop_err)
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
