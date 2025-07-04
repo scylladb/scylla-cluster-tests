@@ -12,6 +12,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
+from collections import defaultdict
+import re
 from cassandra.query import SimpleStatement
 from contextlib import ExitStack, contextmanager
 from time import sleep, time
@@ -79,6 +81,24 @@ def get_node_disk_usage(node: BaseNode) -> int:
     return int(result.stdout.strip())
 
 
+def is_node_at_critical_disk_utilization(node: BaseNode):
+    if not hasattr(is_node_at_critical_disk_utilization, "_marks"):
+        is_node_at_critical_disk_utilization._marks = defaultdict(int)
+    marks = is_node_at_critical_disk_utilization._marks
+
+    pattern = re.compile(r"Setting critical disk utilization mode: (true|false)")
+    cdu_mode = False
+
+    with open(node.system_log, encoding="utf-8") as logfile:
+        logfile.seek(marks[node])
+        for line in logfile:
+            if match := pattern.search(line):
+                cdu_mode = match.group(1) == "true"
+        marks[node] = logfile.tell()
+
+    return cdu_mode
+
+
 class LongevityOutOfSpaceTest(LongevityTest):
     def run_stress(self):
         round_robin = self.params.get("round_robin")
@@ -119,7 +139,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         # [{'metric': {}, 'values': [[1749638594.936, '0'], [1749638614.936, '0'], [1749638634.936, '0'], [1749638654.936, '0']]}]
         return sum(int(v[1]) for v in results[0]['values']) if results else 0
 
-    def test_oos_write_scale_out(self):
+    def test_oos_write(self):
         """
         Fill the cluster to 90%
         Start another write, that would need more space than available
@@ -137,7 +157,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         self.run_stress()
 
-    def test_oos_write_restart(self):
+    def test_oos_restart(self):
         """
         Fill the cluster to 90%
         Start another write, that would need more space than available
@@ -150,19 +170,21 @@ class LongevityOutOfSpaceTest(LongevityTest):
             stress_thread = Thread(target=self.run_stress)
             stress_thread.start()
 
-            while stress_thread.is_alive():
+            restarted = False
+            while stress_thread.is_alive() and not restarted:
                 for node in self.db_cluster.nodes:
                     disk_usage = get_node_disk_usage(node)
                     if disk_usage >= 97:
                         self.log.info(f"Node {node.name} has reached 97% disk usage, restarting it.")
                         node.stop_scylla(verify_down=True)
                         node.start_scylla(verify_up=True)
+                        restarted = True
                         break
                 sleep(60)
 
             stress_thread.join()
 
-    def test_oos_repair_scale_out(self):
+    def test_oos_repair(self):
         """
         Fill the cluster to 90%
         Start a repair task
@@ -177,14 +199,15 @@ class LongevityOutOfSpaceTest(LongevityTest):
             stress_thread = Thread(target=self.run_stress)
             stress_thread.start()
 
-            while stress_thread.is_alive():
+            mgr_cluster = self.db_cluster.get_cluster_manager()
+            mgr_task = None
+            while stress_thread.is_alive() and mgr_task is None:
                 # check if any node has reached 97% and restart that node
                 self.log.info("Checking disk usage on nodes...")
                 for node in self.db_cluster.nodes:
                     disk_usage = get_node_disk_usage(node)
                     if disk_usage >= 95:
                         self.log.info(f"Node {node.name} has reached 95% disk usage, starting repair task.")
-                        mgr_cluster = self.db_cluster.get_cluster_manager()
                         mgr_task = mgr_cluster.create_repair_task()
                         break
                 sleep(60)
@@ -208,7 +231,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
                 f'{progress_full_string}')
         self.log.info('Task: {} is done.'.format(mgr_task.id))
 
-    def test_oos_compaction_scale_out(self):
+    def test_oos_compaction(self):
         """
         Fill the cluster to 90%
         Fill the cluster to 98%
@@ -236,7 +259,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         interval = int(end_of_scale_out - start_of_scale_out)
         assert self.get_compactions(threshold_node, interval=interval) != 0
 
-    def test_oos_file_based_streaming_scale_out(self):
+    def test_oos_streaming_rf_change(self):
         """
         Fill the cluster to 90% with RF=2
         Alter the keyspaces's RF to 3 to force file-based streaming
@@ -268,7 +291,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         self.run_stress()
 
-    def test_oos_file_based_streaming_decommission(self):
+    def test_oos_streaming_decommission(self):
         """
         Fill the cluster to 90%
         Decommission one node
@@ -277,9 +300,19 @@ class LongevityOutOfSpaceTest(LongevityTest):
         sleep(600)
 
         node1 = self.db_cluster.nodes[0]
-        self.db_cluster.decommission(node1, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        decommission_thread = Thread(target=self.db_cluster.decommission, args=(node1,),
+                                     kwargs={"timeout": MAX_TIME_WAIT_FOR_DECOMMISSION})
+        decommission_thread.start()
 
-    def test_oos_si_scale_out(self):
+        while decommission_thread.is_alive():
+            if is_node_at_critical_disk_utilization(node1):
+                self.log.info(f"Node {node1.name} is at critical disk utilization, scaling out the cluster.")
+                self.scale_out()
+            sleep(60)
+
+        decommission_thread.join()
+
+    def test_oos_secondary_index(self):
         """
         Fill the cluster to 90%
         Create a secondary index on a column
@@ -313,7 +346,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         with self.db_cluster.cql_connection_patient(node, connect_timeout=300) as session:
             verify_query_by_index_works(session, ks, cf, column)
 
-    def test_oos_mv_scale_out(self):
+    def test_oos_materialized_view(self):
         """
         Fill the cluster to 90%
         Create a materialized view on a table

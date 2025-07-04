@@ -1,12 +1,13 @@
 test_duration: 720
+# This will fill a 3 x i4i.large cluster to 90% disk usage
 prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..120000000",
   "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=120000001..240000000",
   "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=240000001..360000000",
 ]
-
+# This will fill a 3 x i4i.large cluster to an extra 15% disk usage
 stress_cmd: [
-  "cassandra-stress write no-warmup cl=QUORUM n=50000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..50000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=60000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..60000000",
 ]
 
 n_db_nodes: 3
