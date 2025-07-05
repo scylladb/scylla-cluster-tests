@@ -308,6 +308,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
             if is_node_at_critical_disk_utilization(node1):
                 self.log.info(f"Node {node1.name} is at critical disk utilization, scaling out the cluster.")
                 self.scale_out()
+                break
             sleep(60)
 
         decommission_thread.join()
