@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from functools import wraps
 from typing import TYPE_CHECKING, Union
 
+from sdcm.utils.nemesis_utils import unique_disruption_name
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.metaclasses import Singleton
@@ -77,6 +78,32 @@ class NemesisNodeAllocator(metaclass=Singleton):
         if rack is not None:
             filtered = [node for node in filtered if node.rack == rack]
         return filtered
+
+    @contextmanager
+    def run_nemesis(self, nemesis_label: str, node_list: list['BaseNode'] | None = None,
+                    pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes,
+                    filter_seed: bool = False):
+        """
+        Select a node from node_list and mark it as running nemesis for the duration of the context.
+
+        :param nemesis_label: nemesis operation
+        :param node_list: list of candidate nodes (if None, uses all nodes from pool_type)
+        :param pool_type: Type of node pool to select from
+        :param filter_seed: Whether to filter out seed nodes
+        """
+        reserved_node = None
+        unique_nemesis_label = unique_disruption_name(nemesis_label)
+        try:
+            reserved_node = self.select_target_node(
+                nemesis_name=unique_nemesis_label,
+                pool_type=pool_type,
+                filter_seed=filter_seed,
+                node_list=node_list
+            )
+            yield reserved_node
+        finally:
+            if reserved_node:
+                self.unset_running_nemesis(reserved_node, unique_nemesis_label)
 
     def select_target_node(self,
                            nemesis_name: str,

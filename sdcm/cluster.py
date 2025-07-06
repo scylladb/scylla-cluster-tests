@@ -32,7 +32,6 @@ import itertools
 import json
 import shlex
 from decimal import Decimal, ROUND_UP
-from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime, timezone
 from textwrap import dedent
@@ -4739,9 +4738,9 @@ class BaseScyllaCluster:
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
                 try:
-                    nemesis_class = self.nemesis[0] if self.nemesis else getattr(
-                        import_module('sdcm.nemesis'), "Nemesis")
-                    with nemesis_class.run_nemesis(node_list=db_cluster.data_nodes, nemesis_label="KMS encryption check") as target_node:
+                    nemesis_node_allocator = self.test_config.tester_obj().nemesis_allocator
+                    with nemesis_node_allocator.run_nemesis(nemesis_label="KMS encryption check",
+                                                            node_list=db_cluster.data_nodes) as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
                         ks_cf_list = db_cluster.get_non_system_ks_cf_list(
