@@ -7,7 +7,7 @@ prepare_write_cmd: [
 ]
 
 stress_cmd: [
-  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..120000000)'",
+  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..180000000)'",
   "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(=180000001..360000000)'",
   "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(=360000001..540000000)'",
 ]

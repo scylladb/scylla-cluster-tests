@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 from collections import defaultdict
+from itertools import cycle
 import re
 from cassandra.query import SimpleStatement
 from contextlib import ExitStack, contextmanager
@@ -100,7 +101,7 @@ def is_node_at_critical_disk_utilization(node: BaseNode):
 
 
 class LongevityOutOfSpaceTest(LongevityTest):
-    def run_stress(self):
+    def run_stress(self, cmd_name="stress_cmd"):
         round_robin = self.params.get("round_robin")
         stress_cmd = self.params.get("stress_cmd")
 
@@ -116,10 +117,11 @@ class LongevityOutOfSpaceTest(LongevityTest):
             result = result and self.verify_stress_thread(stress)
         return result
 
-    def scale_out(self):
+    def scale_out(self, rack=None):
         instance_type = self.params.get("instance_type_db")
-        added_nodes = self.db_cluster.add_nodes(count=self.db_cluster.racks_count,
-                                                instance_type=instance_type, enable_auto_bootstrap=True, rack=None)
+        nr_nodes = self.db_cluster.racks_count if rack is None else 1
+        added_nodes = self.db_cluster.add_nodes(
+            count=nr_nodes, instance_type=instance_type, enable_auto_bootstrap=True, rack=rack)
         self.monitors.reconfigure_scylla_monitoring()
         up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
         with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
@@ -193,44 +195,54 @@ class LongevityOutOfSpaceTest(LongevityTest):
         Scale out the cluster
         Wait until the repair task has status DONE
         """
-        self.run_prepare_write_cmd()
+        prepare_thread = Thread(target=self.run_prepare_write_cmd)
+        prepare_thread.start()
+        nodes = cycle(self.db_cluster.nodes)
+        while prepare_thread.is_alive():
+            # every 10 minutes, cycle thorough the nodes restart them
+            sleep(600)
+            node = next(nodes)
+            node.stop_scylla(verify_down=True)
+            node.start_scylla(verify_up=True)
 
         with ignore_stress_errors():
             stress_thread = Thread(target=self.run_stress)
             stress_thread.start()
 
             mgr_cluster = self.db_cluster.get_cluster_manager()
-            mgr_task = None
-            while stress_thread.is_alive() and mgr_task is None:
-                # check if any node has reached 97% and restart that node
-                self.log.info("Checking disk usage on nodes...")
+            repair_task = None
+            while stress_thread.is_alive() and repair_task is None:
                 for node in self.db_cluster.nodes:
                     disk_usage = get_node_disk_usage(node)
-                    if disk_usage >= 95:
-                        self.log.info(f"Node {node.name} has reached 95% disk usage, starting repair task.")
-                        mgr_task = mgr_cluster.create_repair_task()
+                    if disk_usage >= 97:
+                        self.log.info(f"Node {node.name} has reached 97% disk usage, starting repair task.")
+                        repair_task = mgr_cluster.create_repair_task()
                         break
                 sleep(60)
             stress_thread.join()
 
         repair_timeout = 3 * 3600  # 3 hours
         try:
-            task_final_status = mgr_task.wait_and_get_final_status(timeout=repair_timeout)
+            task_final_status = repair_task.wait_and_get_final_status(timeout=repair_timeout)
+            TestFrameworkEvent(message="Repair should not finish.", severity=Severity.CRITICAL).publish()
         except WaitForTimeoutError:
-            self.log.info(f"Repair task {mgr_task.id} did not finish as expected, continuing with scale out.")
+            self.log.info(f"Repair task {repair_task.id} did not finish as expected, continuing with scale out.")
+        assert repair_task.status == TaskStatus.RUNNING, f"Repair task {repair_task.id} status is {repair_task.status}, expected RUNNING"
 
         self.scale_out()
 
-        task_final_status = mgr_task.wait_and_get_final_status(timeout=repair_timeout)
+        task_final_status = repair_task.wait_and_get_final_status(timeout=repair_timeout)
         if task_final_status != TaskStatus.DONE:
-            progress_full_string = mgr_task.progress_string(
+            progress_full_string = repair_task.progress_string(
                 parse_table_res=False, is_verify_errorless_result=True).stdout
             if task_final_status != TaskStatus.ERROR_FINAL:
-                mgr_task.stop()
+                repair_task.stop()
             raise ScyllaManagerError(
-                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
+                f'Task: {repair_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
                 f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(mgr_task.id))
+        self.log.info('Task: {} is done.'.format(repair_task.id))
+
+        self.run_stress("stress_cmd_r")
 
     def test_oos_compaction(self):
         """
@@ -308,7 +320,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         while decommission_thread.is_alive():
             if is_node_at_critical_disk_utilization(node1):
                 self.log.info(f"Node {node1.name} is at critical disk utilization, scaling out the cluster.")
-                self.scale_out()
+                self.scale_out(rack=node1.rack)
                 break
             sleep(60)
 

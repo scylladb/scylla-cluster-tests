@@ -7,5 +7,5 @@ longevityPipeline(
     backend: "aws",
     region: 'eu-west-1',
     test_name: 'longevity_oos_test.LongevityOutOfSpaceTest.test_oos_repair',
-    test_config: "test-cases/features/out-of-space-prevention/longevity-out-of-space-prevention.yaml",
+    test_config: "test-cases/features/out-of-space-prevention/longevity-out-of-space-prevention-repair.yaml",
 )
