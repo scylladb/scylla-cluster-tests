@@ -211,6 +211,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
                         mgr_task = mgr_cluster.create_repair_task()
                         break
                 sleep(60)
+            stress_thread.join()
 
         repair_timeout = 3 * 3600  # 3 hours
         try:
