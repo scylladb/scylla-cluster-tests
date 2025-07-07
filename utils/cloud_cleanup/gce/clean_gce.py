@@ -82,14 +82,15 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('gce_cleanup')
     arg_parser.add_argument("--duration", type=int,
                             help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
+                            default=os.environ.get('DURATION', str(DEFAULT_KEEP_HOURS)))
     arg_parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction,
                             help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN', False))
+                            default=os.environ.get('DRY_RUN'))
 
     args = arg_parser.parse_args()
 
     is_dry_run = bool(args.dry_run)
+    DEFAULT_KEEP_HOURS = int(args.duration)
 
     if is_dry_run:
         LOGGER.error("'Dry run' mode on")
