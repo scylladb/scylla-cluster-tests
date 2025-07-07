@@ -1,0 +1,26 @@
+kafka_backend: localstack
+
+kafka_connectors:
+  - source: 'https://github.com/scylladb/scylla-cdc-source-connector/releases/download/v1.1.2/scylla-cdc-source-connector-1.1.2-jar-with-dependencies.jar'
+    name: "QuickstartConnector-url"
+    config:
+      "connector.class": "com.scylladb.cdc.debezium.connector.ScyllaConnector"
+      "scylla.name": "SCTConnectorNamespace"
+      "scylla.table.names": 'keyspace1.standard1'
+      "key.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "value.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "key.converter.schemas.enable": true
+      "value.converter.schemas.enable": true
+      "auto.create.topics.enable": true
+
+  - source: 'hub:scylladb/scylla-cdc-source-connector:1.1.2'
+    name: "QuickstartConnector"
+    config:
+      "connector.class": "com.scylladb.cdc.debezium.connector.ScyllaConnector"
+      "scylla.name": "SCTConnectorNamespace"
+      "scylla.table.names": 'keyspace1.standard1'
+      "key.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "value.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "key.converter.schemas.enable": true
+      "value.converter.schemas.enable": true
+      "auto.create.topics.enable": true
