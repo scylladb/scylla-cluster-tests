@@ -1,7 +1,7 @@
 kafka_backend: localstack
 
 kafka_connectors:
-  - source: 'https://github.com/scylladb/scylla-cdc-source-connector/releases/download/scylla-cdc-source-connector-1.1.2/scylla-cdc-source-connector-1.1.2-jar-with-dependencies.jar'
+  - source: 'https://github.com/scylladb/scylla-cdc-source-connector/releases/download/v1.1.2/scylla-cdc-source-connector-1.1.2-jar-with-dependencies.jar'
     name: "QuickstartConnector-url"
     config:
       "connector.class": "com.scylladb.cdc.debezium.connector.ScyllaConnector"
