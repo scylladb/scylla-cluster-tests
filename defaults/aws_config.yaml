@@ -8,7 +8,7 @@ instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 ami_id_loader: 'scylla-qa-loader-ami-v22-ubuntu22'  # versions: c-s 2024.2.0-rc0, s-b 0.1.21
 # manual on updating monitor images see: docs/monitoring-images.md
-ami_id_monitor: 'scylladb-monitor-4-10-0-2025-05-15t10-29-10z'
+ami_id_monitor: 'scylladb-monitor-4-11-0-2025-07-13t06-48-19z'
 
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
