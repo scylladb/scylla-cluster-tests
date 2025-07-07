@@ -202,6 +202,9 @@ class LongevityOutOfSpaceTest(LongevityTest):
             # every 10 minutes, cycle thorough the nodes restart them
             sleep(600)
             node = next(nodes)
+            if get_node_disk_usage(node) > 80:
+                break
+            self.log.info(f"Restarting node {node.name}")
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
 
