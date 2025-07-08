@@ -125,7 +125,7 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_pkg')
 
             string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|3.4|3.3. Only for upgrade test',
+                   description: 'master_latest|3.5|3.4. Only for upgrade test',
                    name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
