@@ -9,7 +9,7 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
     test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian11.yaml"]''',
 
-    scylla_version: '2024.2',
+    scylla_version: '2025.1',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
