@@ -8,7 +8,7 @@ managerPipeline(
     region: 'us-east-1',
 
     // Upgrade from the previous minor release (the last one)
-    manager_version: '3.4',
+    manager_version: '3.5',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
