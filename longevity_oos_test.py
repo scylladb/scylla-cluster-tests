@@ -103,7 +103,7 @@ def is_node_at_critical_disk_utilization(node: BaseNode):
 class LongevityOutOfSpaceTest(LongevityTest):
     def run_stress(self, cmd_name="stress_cmd"):
         round_robin = self.params.get("round_robin")
-        stress_cmd = self.params.get("stress_cmd")
+        stress_cmd = self.params.get(cmd_name)
 
         if isinstance(stress_cmd, str):
             stress_cmd = [stress_cmd]
