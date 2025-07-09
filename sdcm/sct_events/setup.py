@@ -156,7 +156,7 @@ def enable_default_filters(sct_config: SCTConfiguration):
     # so this error will be reduced to a warning
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                regex=r'.*auth_service - Unexpected exception while revoking all permissions on dropped table: service::group0_concurrent_modification.*').publish()
+                                regex=r'.*auth_service - Unexpected exception while revoking all permissions on dropped (table|keyspace): service::group0_concurrent_modification.*').publish()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
