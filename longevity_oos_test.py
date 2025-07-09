@@ -227,7 +227,8 @@ class LongevityOutOfSpaceTest(LongevityTest):
         repair_timeout = 3 * 3600  # 3 hours
         try:
             task_final_status = repair_task.wait_and_get_final_status(timeout=repair_timeout)
-            TestFrameworkEvent(message="Repair should not finish.", severity=Severity.CRITICAL).publish()
+            TestFrameworkEvent(source=self.__class__.__name__, message="Repair should not finish.",
+                               severity=Severity.CRITICAL).publish()
         except WaitForTimeoutError:
             self.log.info(f"Repair task {repair_task.id} did not finish as expected, continuing with scale out.")
         assert repair_task.status == TaskStatus.RUNNING, f"Repair task {repair_task.id} status is {repair_task.status}, expected RUNNING"
