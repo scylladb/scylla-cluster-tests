@@ -542,6 +542,7 @@ def create_instance(  # noqa: PLR0913
 
     if "z3-highmem" in machine_type:
         instance.scheduling.on_host_maintenance = "MIGRATE"
+        instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
 
     if spot:
         # Set the Spot VM setting
