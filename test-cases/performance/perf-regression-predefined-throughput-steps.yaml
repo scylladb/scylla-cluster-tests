@@ -1,9 +1,9 @@
 test_duration: 500
 prepare_write_cmd: [
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
 ]
 
 stress_cmd_w:  [
