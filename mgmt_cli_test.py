@@ -14,10 +14,7 @@
 
 import random
 import threading
-import uuid
 from enum import Enum
-from functools import partial
-import re
 import time
 from datetime import timedelta
 from docker.errors import InvalidArgument
@@ -31,15 +28,13 @@ from sdcm.mgmt.argus_report import report_to_argus
 from sdcm.mgmt.cli import RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots, get_backup_size
 from sdcm.provision.helpers.certificate import TLSAssets
-from sdcm.cluster import BaseNode
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.aws_utils import AwsIAM
 from sdcm.utils.features import is_tablets_feature_enabled
-from sdcm.utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
-from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node, ParallelObject
+from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.time_utils import ExecutionTimer
-from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
+from sdcm.mgmt.operations import ManagerTestFunctionsMixIn, SnapshotData
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.tablets.common import TabletsConfiguration
@@ -1205,27 +1200,6 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         report_to_argus(self.monitors, self.test_config, ManagerReportType.BACKUP, backup_report, label)
         return task
 
-    def native_backup_and_report(self, label):
-        InfoEvent(message='Starting Native based backup').publish()
-        self.snapshot_ids = {}
-        self.node_backup_size = {}
-        self.base_prefix = f"{self.keyspace}/{self.table}/{str(uuid.uuid4())}"
-        self.s3_endpoint_name = self._get_object_storage_endpoint()["name"]
-        self.backup_bucket_location = self.params.get('backup_bucket_location')
-        self.log.info(
-            f"Starting Native based backup [{self.base_prefix}] using endpoint {self.s3_endpoint_name} to bucket {self.backup_bucket_location}")
-        with ExecutionTimer() as backup_timer:
-            backup_jobs = [partial(self.native_backup, scylla_node=node, )
-                           for node in self.db_cluster.data_nodes]
-            ParallelObject(objects=backup_jobs, timeout=36000).call_objects()
-
-        backup_report = {
-            "Size": format_size(sum(self.node_backup_size.values()) / len(self.node_backup_size.values())),
-            "Time": int(backup_timer.duration.total_seconds()),
-        }
-        self.report_to_argus(ManagerReportType.BACKUP, backup_report, label)
-        clear_snapshot_nodes(cluster=self.db_cluster)
-
     def run_read_stress_and_report(self, label):
         stress_queue = []
 
@@ -1275,43 +1249,3 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
 
         backup_thread.join()
         read_stress_thread.join()
-
-    def _run_stress_batch(self, cmds):
-        stress_queue = []
-        InfoEvent(message=f'Run stress batch of {len(cmds)} commands').publish()
-        params = {'stress_cmd': cmds, 'round_robin': True}
-        self._run_all_stress_cmds(stress_queue, params)
-        return stress_queue
-
-    def _cluster_flush_and_major_compaction(self):
-        InfoEvent(message='Flush cluster then run a major compaction and wait for finish').publish()
-        flush_nodes(cluster=self.db_cluster, keyspace=self.keyspace)
-        major_compaction_nodes(cluster=self.db_cluster, keyspace=self.keyspace, table=self.table)
-        self.wait_no_compactions_running(n=400, sleep_time=60)
-
-    def _align_cluster_data_state(self):
-        clear_snapshot_nodes(cluster=self.db_cluster)
-        self._cluster_flush_and_major_compaction()
-        self.run_fstrim_on_all_db_nodes()
-
-    def native_backup(self, scylla_node: BaseNode):
-        result = scylla_node.run_nodetool('snapshot')
-        snapshot_name = re.findall(r'(\d+)', result.stdout.split("snapshot name")[1])[0]
-        with self.snapshot_list_lock:
-            self.snapshot_ids[scylla_node.uuid] = snapshot_name
-            backup_size_res = scylla_node.remoter.sudo(
-                f"du -sb /var/lib/scylla/data/{self.keyspace}/{self.table}-*/snapshots/{snapshot_name}/")
-            if backup_size_res.stdout:
-                self.node_backup_size[scylla_node.uuid] = int(
-                    backup_size_res.stdout[:backup_size_res.stdout.find("\t")])
-
-        backup_res = scylla_node.run_nodetool(
-            f"backup --endpoint {self.s3_endpoint_name} --bucket {self.backup_bucket_location}  --prefix {self.base_prefix}/{snapshot_name} --keyspace {self.keyspace} --table {self.table} --snapshot {snapshot_name}")
-        if backup_res is not None and backup_res.exit_status != 0:
-            raise Exception(f"Backup failed: {backup_res.stdout}")
-
-    def _get_object_storage_endpoint(self) -> dict | None:
-        if append_scylla_yaml := self.params.get('append_scylla_yaml'):
-            if endpoints := append_scylla_yaml.get("object_storage_endpoints", {}):
-                return endpoints[0]
-        return None
