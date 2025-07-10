@@ -13,6 +13,6 @@ gemini_cmd: |
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 gemini_table_options:
   - "cdc={'enabled': true}"
-gemini_log_cql_statements: false
+gemini_log_cql_statements: true
 
 db_type: scylla
