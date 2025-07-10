@@ -326,6 +326,12 @@ def ignore_raft_transport_failing():
             regex=r".*raft::transport_error \(.*rpc::closed_error \(connection is closed\)",
             extra_time_to_expiration=30
         ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r"raft - \[[0-9a-f-]+\] Transferring snapshot to [0-9a-f-]+ failed with: seastar::rpc::remote_verb_error",
+            extra_time_to_expiration=30
+        ))
         yield
 
 
