@@ -14,18 +14,52 @@
 # Copyright (c) 2025 ScyllaDB
 
 
+from contextlib import contextmanager
+from time import time
+from argus.client.base import ArgusClient
+from argus.client.generic_result import ColumnMetadata, ResultType, StaticGenericResultTable, Status
 from longevity_test import LongevityTest
+from sdcm.argus_results import submit_results_to_argus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from threading import Thread
+import time
+
+SOFT_BALANCE_THRESHOLD = 5
+HARD_BALANCE_THRESHOLD = 8
 
 
 def get_node_disk_usage(node: BaseNode) -> int:
     """Returns disk usage data for a node"""
     result = node.remoter.run("df -h -BG --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
-    return int(result.stdout.strip())
+    return float(result.stdout.strip())
+
+
+@contextmanager
+def periodic_disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClient, interval: int = 900):
+    class DiskUsageResult(StaticGenericResultTable):
+        class Meta:
+            name = "Disk Usage"
+            description = "The disk usage of the nodes in the cluster"
+            Columns = [ColumnMetadata(name=f"node-{node.name[-1]}", unit="%", type=ResultType.FLOAT) for node in nodes]
+
+    def collect_disk_usage():
+        while True:
+            label = time.strftime('%Y-%m-%d %H:%M:%S')
+            data_table = DiskUsageResult()
+            for node in nodes:
+                data_table.add_result(column=f"node-{node.name[-1]}", row=label,
+                                      value=get_node_disk_usage(node), status=Status.UNSET)
+            submit_results_to_argus(argus_client, data_table)
+            time.sleep(interval)
+
+    thread = Thread(target=collect_disk_usage, daemon=True)
+    thread.start()
+    yield
+    thread.join(timeout=1)
 
 
 class LongevityBalancerTest(LongevityTest):
@@ -50,12 +84,10 @@ class LongevityBalancerTest(LongevityTest):
             self.log.info(f"Node {node.name} has storage utilization: {usage}%")
 
         # check if the utilization is balanced by comparing min and max utilization
-        # Assuming a threshold of 5% for balance
-        threshold = 5
         min_utilization = min(usages.values())
         max_utilization = max(usages.values())
         self.log.info(f"Min utilization: {min_utilization}, Max utilization: {max_utilization}")
-        if max_utilization - min_utilization > threshold:
+        if max_utilization - min_utilization > HARD_BALANCE_THRESHOLD:
             TestFrameworkEvent(source="longevity_balancer_test",
                                message=f"Storage utilization is not balanced. Min: {min_utilization}, Max: {max_utilization}",
                                severity=Severity.CRITICAL).publish()
@@ -77,6 +109,7 @@ class LongevityBalancerTest(LongevityTest):
         4. Check the disk usage of each node to ensure they are balanced.
         """
         self.expand_cluster_heterogenous()
-        self.test_custom_time()
-        self.wait_for_balancer()
-        self.check_cluster_balance()
+        with periodic_disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), interval=900):
+            self.test_custom_time()
+            self.wait_for_balancer()
+            self.check_cluster_balance()
