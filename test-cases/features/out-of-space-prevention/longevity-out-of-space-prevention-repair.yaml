@@ -12,8 +12,8 @@ stress_cmd: [
 
 stress_cmd_r: [
   "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..120000000)'",
-  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(=120000001..240000000)'",
-  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(=240000001..360000000)'",
+  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(120000001..240000000)'",
+  "cassandra-stress read cl=THREE duration=30m -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(240000001..360000000)'",
 ]
 
 n_db_nodes: 3
