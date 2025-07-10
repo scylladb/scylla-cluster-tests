@@ -17,12 +17,9 @@ import threading
 from enum import Enum
 import time
 from datetime import timedelta
-from docker.errors import InvalidArgument
 
-from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import (send_manager_snapshot_details_to_argus, send_manager_benchmark_results_to_argus,
-                                ManagerBackupReadResult, ManagerBackupBenchmarkResult, submit_results_to_argus)
+from sdcm.argus_results import (send_manager_snapshot_details_to_argus, send_manager_benchmark_results_to_argus)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.argus_report import report_to_argus
 from sdcm.mgmt.cli import RestoreTask
