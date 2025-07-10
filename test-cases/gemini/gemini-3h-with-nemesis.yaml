@@ -18,7 +18,7 @@ gemini_cmd: |
   --mode mixed
 
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
-gemini_log_cql_statements: false
+gemini_log_cql_statements: true
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i4i.8xlarge'

@@ -83,7 +83,6 @@ class GeminiStressThread(DockerBasedStressThread):
             "test-host-selection-policy": "token-aware",
             "drop-schema": "true",
             "cql-features": "normal",
-            "fail-fast": "true",
             "materialized-views": "false",
             "use-server-timestamps": "true",
             "use-lwt": "false",
@@ -96,10 +95,11 @@ class GeminiStressThread(DockerBasedStressThread):
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
             "partition-key-distribution": "uniform",  # Distribution for hitting the partition
-            # These two are used to control the memory usage of Gemini
-            "token-range-slices": 10000,  # Number of partitions
-            "partition-key-buffer-reuse-size": 128,  # Internal Channel Size per partition value generation
+            "token-range-slices": 10000,
+            "partition-key-buffer-reuse-size": 128,
             "statement-log-file-compression": "zstd",
+            "io-worker-pool": 2048,  # Number of threads to perform IO operations (mainly Scylla reads/writes)
+            "max-errors-to-store": 1000,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
@@ -107,9 +107,15 @@ class GeminiStressThread(DockerBasedStressThread):
         self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
 
     def _generate_gemini_command(self):
-        seed = self.params.get("gemini_seed") or random.randint(1, 100)
+        seed = self.params.get("gemini_seed")
+        if seed is None:
+            seed = random.randint(1, 100)
+
         table_options = self.params.get("gemini_table_options")
-        log_statements = self.params.get("gemini_log_cql_statements") or True
+        log_statements = self.params.get("gemini_log_cql_statements")
+        if log_statements is None:
+            log_statements = True
+
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \

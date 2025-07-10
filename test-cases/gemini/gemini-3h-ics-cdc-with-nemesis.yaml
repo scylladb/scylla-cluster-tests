@@ -21,7 +21,7 @@ gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
 gemini_table_options:
   - "cdc={'enabled': true, 'preimage': true, 'postimage': true}"
   - "compaction={'class': 'IncrementalCompactionStrategy'}"
-gemini_log_cql_statements: false
+gemini_log_cql_statements: true
 
 stress_cdclog_reader_cmd: "cdc-stressor -duration 215m -stream-query-round-duration 30s"
 
