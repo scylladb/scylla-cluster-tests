@@ -20,6 +20,7 @@ from ..test_config import TestConfig
 from ..tester import ClusterTester
 from ..utils.azure_utils import AzureService
 from ..utils.cluster_tools import flush_nodes, major_compaction_nodes, clear_snapshot_nodes
+from ..utils.compaction_ops import CompactionOps
 from ..utils.gce_utils import get_gce_storage_client
 from ..utils.loader_utils import LoaderUtilsMixin
 from ..utils.time_utils import ExecutionTimer
@@ -81,6 +82,11 @@ class ClusterOperations(ClusterTester):
         nodetool_status = self.db_cluster.get_nodetool_status(self.db_cluster.nodes[0])
         rf = {dc_name: len(nodes) for dc_name, nodes in nodetool_status.items()}
         return rf
+
+    def disable_compaction(self):
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
     def _cluster_flush_and_major_compaction(self, keyspace: str, table: str):
         InfoEvent(message='Flush cluster then run a major compaction and wait for finish').publish()
@@ -175,7 +181,21 @@ class BucketOperations(ClusterTester):
     def sync_gs_buckets(source: str, destination: str) -> None:
         LOCALRUNNER.run(f"gsutil -m rsync -r gs://{source} gs://{destination}")
 
-    def copy_backup_snapshot_bucket(self, source: str, destination: str) -> None:
+    def get_region_from_bucket_location(self, location: str) -> str:
+        cluster_backend = self.params.get("cluster_backend")
+
+        if cluster_backend == "aws":
+            # extract region name from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53 to us-east-1
+            return location.split(":")[0].split("_", 1)[1].replace("_", "-").lower()
+        elif cluster_backend == "gce":
+            # extract region name from GCE_US_EAST_1:gcs:scylla-cloud-backup-23-29-6q0i5q to us-east1
+            parts = location.split(":")[0].split("_")[1:]
+            assert len(parts) == 3, f"Can't extract region from location {location}"
+            return f"{parts[0].lower()}-{parts[1].lower()}{parts[2]}"
+        else:
+            raise ValueError(f"Unsupported cluster backend - {cluster_backend}, should be either aws or gce")
+
+    def copy_backup_snapshot_bucket(self, source: str, destination: str, region: str) -> None:
         """Copy bucket with Manager backup snapshots.
         The process consists of two stages - new bucket creation and data sync (original bucket -> newly created).
         The main use case is to make a copy of a bucket created in a test with Cloud (siren) cluster since siren
@@ -201,8 +221,8 @@ class BucketOperations(ClusterTester):
 class SnapshotData:
     """Describes the backup snapshot:
 
-    - bucket: S3 bucket name
-    - tag: snapshot tag, for example 'sm_20240816185129UTC'
+    - locations: backup locations
+    - tag: snapshot tag, for example, 'sm_20240816185129UTC'
     - exp_timeout: expected timeout for the restore operation
     - dataset: dict with snapshot dataset details such as cl, replication, schema, etc.
     - keyspaces: list of keyspaces presented in backup
@@ -211,7 +231,7 @@ class SnapshotData:
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
     """
-    bucket: str
+    locations: list[str]
     tag: str
     exp_timeout: int
     dataset: dict[str, str | int | dict]
@@ -233,7 +253,7 @@ class SnapshotOperations(ClusterTester):
         try:
             snapshot_dict = all_snapshots_dict["sizes"][snapshot_name]
         except KeyError:
-            raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
+            raise ValueError(f"Snapshot data for '{snapshot_name}' was not found in the {snapshots_config} file")
 
         ks_tables_map = {}
         for ks, ts in snapshot_dict["dataset"]["schema"].items():
@@ -241,7 +261,7 @@ class SnapshotOperations(ClusterTester):
             ks_tables_map[ks] = t_names
 
         snapshot_data = SnapshotData(
-            bucket=all_snapshots_dict["bucket"],
+            locations=snapshot_dict["locations"],
             tag=snapshot_dict["tag"],
             exp_timeout=snapshot_dict["exp_timeout"],
             dataset=snapshot_dict["dataset"],
