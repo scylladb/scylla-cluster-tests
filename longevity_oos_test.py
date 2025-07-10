@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 from collections import defaultdict
+import contextlib
 from itertools import cycle
 import re
 from cassandra.query import SimpleStatement
@@ -76,6 +77,18 @@ def ignore_repair_errors():
         yield
 
 
+@contextmanager
+def ignore_oversized_allocation():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.NORMAL,
+            event_class=DatabaseLogEvent,
+            regex=".*seastar_memory - oversized allocation.*",
+            extra_time_to_expiration=60
+        ))
+        yield
+
+
 def get_node_disk_usage(node: BaseNode) -> int:
     """Returns disk usage data for a node"""
     result = node.remoter.run("df -h -BG --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
@@ -101,6 +114,11 @@ def is_node_at_critical_disk_utilization(node: BaseNode):
 
 
 class LongevityOutOfSpaceTest(LongevityTest):
+    def setUp(self):
+        super().setUp()
+        self.stack = contextlib.ExitStack()
+        self.stack.enter_context(ignore_oversized_allocation())
+
     def run_stress(self, cmd_name="stress_cmd"):
         round_robin = self.params.get("round_robin")
         stress_cmd = self.params.get(cmd_name)
