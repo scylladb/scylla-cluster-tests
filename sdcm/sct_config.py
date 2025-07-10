@@ -1220,6 +1220,10 @@ class SCTConfiguration(dict):
              env="SCT_MGMT_SNAPSHOTS_PREPARER_PARAMS", type=dict_or_str,
              help="Custom parameters of c-s write operation used in snapshots preparer"),
 
+        dict(name="mgmt_backup_method",
+             env="SCT_MGMT_BACKUP_METHOD", type=str,
+             help="Backup method (rclone, native or auto) to use for backup in Manager tests"),
+
         # PerformanceRegressionTest
 
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",
@@ -2209,9 +2213,16 @@ class SCTConfiguration(dict):
             self['kafka_connectors'] = [SctKafkaConfiguration(**connector)
                                         for connector in kafka_connectors]
 
-        # 20 Validate Manager agent backup general parameters
+        # 20 Validate Manager related configuration
         if backup_params := self.get("mgmt_agent_backup_config"):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
+
+        backup_method = self.get("mgmt_backup_method")
+        valid_methods = {"rclone", "native", "auto"}
+        if backup_method and backup_method not in valid_methods:
+            raise ValueError(f"Invalid value for mgmt_backup_method: {backup_method}. "
+                             f"Supported values are: {', '.join(valid_methods)}")
+
         # Validate zero token nodes
         if self.get("use_zero_nodes"):
             self._validate_zero_token_backend_support(backend=cluster_backend)
