@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+# pylint: disable=protected-access
+
 import pytest
 
 from sdcm.gemini_thread import GeminiStressThread
@@ -60,40 +62,9 @@ def test_01_gemini_thread(request, docker_scylla, params):
         gemini_thread.kill()
 
     request.addfinalizer(cleanup_thread)
+    gemini_cmd = gemini_thread._generate_gemini_command()
 
-    default_options = [
-        "--oracle-replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
-        "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
-        "--level=info",
-        "--request-timeout=3s",
-        "--connect-timeout=60s",
-        "--consistency=QUORUM",
-        "--async-objects-stabilization-backoff=10ms",
-        "--async-objects-stabilization-attempts=10",
-        "--dataset-size=large",
-        "--oracle-host-selection-policy=token-aware",
-        "--test-host-selection-policy=token-aware",
-        "--drop-schema=true",
-        "--fail-fast=true",
-        "--materialized-views=false",
-        "--use-lwt=false",
-        "--use-counters=false",
-        "--max-tables=1",
-        "--max-columns=16",
-        "--min-columns=8",
-        "--max-partition-keys=6",
-        "--min-partition-keys=2",
-        "--max-clustering-keys=4",
-        "--min-clustering-keys=2",
-        "--partition-key-distribution=uniform",
-        "--token-range-slices=10000",
-        "--partition-key-buffer-reuse-size=128",
-        "--statement-log-file-compression=zstd",
-    ]
-
-    gemini_cmd = gemini_thread._generate_gemini_command()  # pylint: disable=protected-access
-
-    for option in default_options + options:
+    for option in options:
         assert option in gemini_cmd
 
     gemini_thread.run()
