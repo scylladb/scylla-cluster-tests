@@ -9,6 +9,7 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/gce-image.yaml',
     backend: 'gce',
     instance_provision: 'spot',
+    region: 'us-central1',
 
     timeout: [time: 45, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
