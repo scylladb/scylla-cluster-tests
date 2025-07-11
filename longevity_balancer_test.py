@@ -29,7 +29,7 @@ from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from threading import Thread
 
 SOFT_BALANCE_THRESHOLD = 5
-HARD_BALANCE_THRESHOLD = 8
+HARD_BALANCE_THRESHOLD = 10
 
 
 def get_disk_usage(node: BaseNode, prometheus: PrometheusDBStats) -> float:
