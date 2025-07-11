@@ -50,9 +50,17 @@ def periodic_disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClien
         while True:
             label = time.strftime('%Y-%m-%d %H:%M:%S')
             data_table = DiskUsageResult()
+            usages = {node: get_node_disk_usage(node) for node in nodes}
+            delta_usage = max(usages.values()) - min(usages.values())
+            if delta_usage <= SOFT_BALANCE_THRESHOLD:
+                status = Status.PASS
+            elif delta_usage <= HARD_BALANCE_THRESHOLD:
+                status = Status.WARNING
+            else:
+                status = Status.ERROR
             for node in nodes:
                 data_table.add_result(column=f"node-{node.name[-1]}", row=label,
-                                      value=get_node_disk_usage(node), status=Status.UNSET)
+                                      value=usages[node], status=status)
             submit_results_to_argus(argus_client, data_table)
             time.sleep(interval)
 
