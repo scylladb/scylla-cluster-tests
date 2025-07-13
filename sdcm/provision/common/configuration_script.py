@@ -24,6 +24,19 @@ from sdcm.provision.common.utils import (
     restart_syslogng_service,
     install_syslogng_exporter,
     disable_daily_apt_triggers,
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+    configure_syslogng_destination_conf,
+    configure_syslogng_file_source,
+    install_vector_service,
+    configure_vector_target_script,
+=======
+    configure_syslogng_destination_conf,
+    configure_syslogng_file_source,
+    install_vector_service,
+    configure_vector_target_script,
+    install_docker_service,
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -36,6 +49,15 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     logs_transport: str = 'syslog-ng'
     configure_sshd: bool = True
     hostname: str = ''
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+    log_file: str = ''
+    test_config: Any | None = None
+=======
+    log_file: str = ''
+    test_config: Any | None = None
+    install_docker: bool = False
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -94,5 +116,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if self.configure_sshd:
             script += configure_sshd_script()
             script += restart_sshd_service()
+
+        if self.install_docker:
+            script += install_docker_service()
 
         return script

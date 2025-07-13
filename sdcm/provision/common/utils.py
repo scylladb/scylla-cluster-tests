@@ -240,3 +240,112 @@ def disable_daily_apt_triggers():
         fi
     fi
     """)
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+
+
+def configure_syslogng_destination_conf(host: str, port: int, throttle_per_second: int) -> str:
+    return dedent("""
+        write_syslog_ng_destination() {{
+            disk_buffer_option=""
+            if syslog-ng -V | grep -q disk; then
+                disk_buffer_option="disk-buffer(
+                    mem-buf-size(1048576)
+                    disk-buf-size(104857600)
+                    reliable(yes)
+                    dir(\\\"/var/log\\\")
+                )"
+            fi
+
+        cat <<EOF >/etc/syslog-ng/conf.d/remote_sct.conf
+        destination remote_sct {{
+            syslog(
+                "{host}"
+                transport("tcp")
+                port({port})
+                throttle({throttle_per_second})
+                $disk_buffer_option
+            );
+        }};
+        EOF
+        }}
+        """).format(host=host, port=port, throttle_per_second=throttle_per_second)
+
+
+def configure_syslogng_file_source(log_file: str) -> str:
+    """Configures an additional syslog-ng source for ScyllaDB logs from a file."""
+    return dedent(f"""
+        cat <<EOF >/etc/syslog-ng/conf.d/scylla_file_source.conf
+        source s_scylla_file {{
+            file("{log_file}" follow-freq(1) flags(no-parse));
+        }};
+        EOF
+
+        echo "log {{ source(s_scylla_file); filter(filter_sct); destination(remote_sct); rewrite(r_host); }};" >> /etc/syslog-ng/syslog-ng.conf
+    """)
+=======
+
+
+def configure_syslogng_destination_conf(host: str, port: int, throttle_per_second: int) -> str:
+    return dedent("""
+        write_syslog_ng_destination() {{
+            disk_buffer_option=""
+            if syslog-ng -V | grep -q disk; then
+                disk_buffer_option="disk-buffer(
+                    mem-buf-size(1048576)
+                    disk-buf-size(104857600)
+                    reliable(yes)
+                    dir(\\\"/var/log\\\")
+                )"
+            fi
+
+        cat <<EOF >/etc/syslog-ng/conf.d/remote_sct.conf
+        destination remote_sct {{
+            syslog(
+                "{host}"
+                transport("tcp")
+                port({port})
+                throttle({throttle_per_second})
+                $disk_buffer_option
+            );
+        }};
+        EOF
+        }}
+        """).format(host=host, port=port, throttle_per_second=throttle_per_second)
+
+
+def configure_syslogng_file_source(log_file: str) -> str:
+    """Configures an additional syslog-ng source for ScyllaDB logs from a file."""
+    return dedent(f"""
+        cat <<EOF >/etc/syslog-ng/conf.d/scylla_file_source.conf
+        source s_scylla_file {{
+            file("{log_file}" follow-freq(1) flags(no-parse));
+        }};
+        EOF
+
+        echo "log {{ source(s_scylla_file); filter(filter_sct); destination(remote_sct); rewrite(r_host); }};" >> /etc/syslog-ng/syslog-ng.conf
+    """)
+
+
+def install_docker_service():
+    return dedent("""\
+        # Install Docker
+
+        for n in 1 2 3; do
+            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        for n in 1 2 3; do
+            if sh get-docker.sh ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        systemctl enable docker.service
+        systemctl start docker.service
+    """)
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)

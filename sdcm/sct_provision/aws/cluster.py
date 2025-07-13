@@ -279,6 +279,13 @@ class LoaderCluster(ClusterBase):
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             aws_additional_interface=network_interfaces_count(self.params) > 1,
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+            test_config=self._test_config,
+=======
+            test_config=self._test_config,
+            install_docker=True,
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
         ).to_string()
 
 

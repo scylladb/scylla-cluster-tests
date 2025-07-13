@@ -33,8 +33,14 @@ import json
 import ipaddress
 import shlex
 from decimal import Decimal, ROUND_UP
+<<<<<<< HEAD
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
+=======
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
 from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
@@ -3227,7 +3233,7 @@ class BaseCluster:
             self.uuid = self.test_config.test_id()
         else:
             self.uuid = cluster_uuid
-        self.node_type = node_type
+        self.node_type: Literal['scylla-db', 'oracle-db', 'loader', 'monitor'] = node_type
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
@@ -3442,7 +3448,16 @@ class BaseCluster:
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
+<<<<<<< HEAD
                                                   syslog_host_port=self.test_config.get_logging_service_host_port())
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port(),
+                                                  test_config=self.test_config)
+=======
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port(),
+                                                  test_config=self.test_config,
+                                                  install_docker=self.node_type == 'loader')
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):
@@ -5225,6 +5240,7 @@ class BaseLoaderSet():
             node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
 =======
         else:
+<<<<<<< HEAD
             # install docker
             docker_install = dedent("""
                 curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
@@ -5235,6 +5251,18 @@ class BaseLoaderSet():
             node.remoter.run('sudo bash -cxe "%s"' % docker_install)
 >>>>>>> 2bb331adf (fix(loaders): remove `scylla_repo_loader` option)
 
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+            # install docker
+            docker_install = dedent("""
+                curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
+                sh get-docker.sh
+                systemctl enable docker
+                systemctl start docker
+            """)
+            node.remoter.run('sudo bash -cxe "%s"' % docker_install)
+
+=======
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
             node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
         # Login to Docker Hub.
