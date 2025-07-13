@@ -303,15 +303,6 @@ Url to the repo of scylla version to install scylla from for managment tests
 **type:** str (appendable)
 
 
-## **scylla_repo_loader** / SCT_SCYLLA_REPO_LOADER
-
-Url to the repo of scylla version to install c-s for loader
-
-**default:** https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list
-
-**type:** str (appendable)
-
-
 ## **scylla_mgmt_address** / SCT_SCYLLA_MGMT_ADDRESS
 
 Url to the repo of scylla manager version to install for management tests
