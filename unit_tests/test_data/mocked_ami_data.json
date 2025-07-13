@@ -469,5 +469,22 @@
       "Name": "scylla-enterprise-2024.2.2-aarch64-2024-12-22T15-34-53",
       "kernel-version": "5.15.0-1073-aws"
     }
+  },
+  {
+    "ami_id": "ami-0d33050d9d05e2b67",
+    "architecture": "x86_64",
+    "description": "Amazon Linux AMI 2018.03.0.20231218.0 x86_64 HVM ebs",
+    "hypervisor": "xen",
+    "image_type": "machine",
+    "name": "amzn-ami-hvm-2018.03.0.20231218.0-x86_64-ebs",
+    "owner_id": "158855661827",
+    "platform": null,
+    "public": true,
+    "root_device_name": "/dev/xvda",
+    "root_device_type": "ebs",
+    "sriov": "simple",
+    "state": "available",
+    "tags": {},
+    "virtualization_type": "hvm"
   }
 ]

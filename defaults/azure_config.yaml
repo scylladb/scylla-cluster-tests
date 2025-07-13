@@ -9,9 +9,10 @@ user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 azure_instance_type_db: 'Standard_L8s_v3'
 azure_instance_type_loader: 'Standard_F4s_v2'
 azure_instance_type_monitor: 'Standard_D2_v4'
-# get images urn's by running: `az vm image list --output table --all --offer CentOS --publisher OpenLogic`
-azure_image_loader: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
-azure_image_monitor: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
+# base on version 24.04 LTS documented here:
+# https://documentation.ubuntu.com/azure/azure-how-to/instances/find-ubuntu-images/#free-long-term-support-offers
+azure_image_loader: 'Canonical:ubuntu-24_04-lts:server:latest'
+azure_image_monitor: 'Canonical:ubuntu-24_04-lts:server:latest'
 
 availability_zone: ''
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
