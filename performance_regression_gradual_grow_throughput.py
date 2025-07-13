@@ -291,7 +291,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         if not self.exists():
             self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=True)
+            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=False)
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
@@ -305,7 +305,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                                   num_threads=num_threads, step_duration=workload.step_duration)
 
             calculate_result = self._calculate_average_max_latency(results)
-            self.update_test_details(scylla_conf=True)
+            self.update_test_details()
             summary_result = self.check_latency_during_steps(step=current_throttle_step)
             summary_result[current_throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
@@ -350,7 +350,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self.log.debug("total_summary: %s", total_summary)
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
-            perf_analyzer.check_regression(test_id=self.test_id,
+            perf_analyzer.check_regression(test_id=self._test_id,
                                            data=total_summary,
                                            is_gce=is_gce,
                                            email_subject_postfix=self.params.get('email_subject_postfix'))
