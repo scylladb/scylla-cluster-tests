@@ -15,7 +15,6 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-buster'
 use_preinstalled_scylla: false
 user_prefix: 'jepsen'
-scylla_repo_loader: ''
 jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
 jepsen_test_count: 5
 jepsen_test_run_policy: any

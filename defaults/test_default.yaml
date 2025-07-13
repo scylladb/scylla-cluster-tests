@@ -12,8 +12,6 @@ manager_version: '3.6'
 manager_scylla_backend_version: '2025'
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
-
 round_robin: false
 
 append_scylla_args: '--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'

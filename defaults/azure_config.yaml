@@ -18,7 +18,6 @@ root_disk_size_monitor: 50  # GB, remove this field if default disk size should 
 root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 azure_image_username: 'scyllaadm'
 ami_loader_user: 'ubuntu'
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
 ami_monitor_user: 'ubuntu'
 
 ami_id_db_scylla: ''
