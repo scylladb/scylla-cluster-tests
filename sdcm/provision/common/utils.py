@@ -246,3 +246,26 @@ def configure_syslogng_destination_conf(host: str, port: int, throttle_per_secon
         EOF
         }}
         """).format(host=host, port=port, throttle_per_second=throttle_per_second)
+
+
+def install_docker_service():
+    return dedent("""\
+        # Install Docker
+
+        for n in 1 2 3; do
+            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        for n in 1 2 3; do
+            if sh get-docker.sh ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        systemctl enable docker.service
+        systemctl start docker.service
+    """)

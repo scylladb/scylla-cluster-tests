@@ -381,6 +381,7 @@ class LoaderCluster(ClusterBase):
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             aws_additional_interface=network_interfaces_count(self.params) > 1,
+            install_docker=True,
         ).to_string()
 
 
