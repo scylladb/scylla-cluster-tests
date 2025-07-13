@@ -52,6 +52,10 @@ class LocalNode(BaseNode):
         self.remoter = LocalCmdRunner()
         self.logdir = os.path.dirname(__file__)
 
+    @staticmethod
+    def is_docker() -> bool:
+        return True
+
     @property
     def ip_address(self):
         return "127.0.0.1"
