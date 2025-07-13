@@ -203,7 +203,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
 
         if not self.exists():
             self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=True)
+            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=False)
         total_summary = {}
 
         for throttle_step in workload.throttle_steps:
@@ -215,7 +215,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                 stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle, num_threads=workload.num_threads)
 
             calculate_result = self._calculate_average_max_latency(results)
-            self.update_test_details(scylla_conf=True)
+            self.update_test_details()
             summary_result = self.check_latency_during_steps(step=throttle_step)
             summary_result[throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
@@ -260,7 +260,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         self.log.debug("total_summary: %s", total_summary)
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
-            perf_analyzer.check_regression(test_id=self.test_id,
+            perf_analyzer.check_regression(test_id=self._test_id,
                                            data=total_summary,
                                            is_gce=is_gce,
                                            email_subject_postfix=self.params.get('email_subject_postfix'))
