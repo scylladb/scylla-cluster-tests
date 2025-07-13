@@ -637,8 +637,11 @@ class TestStatsMixin(Stats):
 
         if not self.create_stats:
             return
+        custom_es_index = self.params.get("custom_es_index")
         if test_index:
             self._test_index = test_index
+        elif custom_es_index:
+            self._test_index = custom_es_index
         elif not self._test_index:
             self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id(doc_id_with_timestamp)
