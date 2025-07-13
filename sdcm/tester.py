@@ -862,6 +862,42 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return None
 
+    def prepare_azure_kms(self) -> None:
+        cluster_backend = self.params.get('cluster_backend')
+        if cluster_backend == 'azure':
+            if self.params.get('enable_azure_kms'):
+                # Calculate Key Vault URL from test_id
+                test_id = str(self.test_config.test_id())
+                vault_name = f"scylla{test_id[:8]}kv"[:24]
+                vault_url = f"https://{vault_name}.vault.azure.net/"
+                key_name = "scylla-key"
+                self.log.info(f"Preparing Azure KMS configuration for vault: {vault_url}")
+                # Add Azure KMS configuration to append_scylla_yaml
+                append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+                if "azure_hosts" not in append_scylla_yaml:
+                    append_scylla_yaml["azure_hosts"] = {}
+                append_scylla_yaml["azure_hosts"]["scylla-dynamic-vault"] = {
+                    'master_key': f"{vault_url}{key_name}",
+                    'key_cache_expiry': '900s',
+                    'key_cache_refresh': '1260s',
+                }
+                append_scylla_yaml['user_info_encryption'] = {
+                    'enabled': True,
+                    'key_provider': 'AzureKeyProviderFactory',
+                    'azure_host': 'scylla-dynamic-vault',
+                }
+                append_scylla_yaml['system_info_encryption'] = {
+                    'enabled': True,
+                    'cipher_algorithm': 'AES/CBC/PKCS5Padding',
+                    'secret_key_strength': 128,
+                    'key_provider': 'AzureKeyProviderFactory',
+                    'azure_host': 'scylla-dynamic-vault',
+                }
+                self.params["append_scylla_yaml"] = append_scylla_yaml
+                self.log.info(f"Azure Key Vault configured successfully - Vault: {vault_url}, Key: {key_name}")
+            else:
+                self.log.info("Azure KMS not enabled by configuration.")
+
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get('kafka_connectors'):
@@ -989,6 +1025,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
+        self.prepare_azure_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 

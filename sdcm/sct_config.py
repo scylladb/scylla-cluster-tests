@@ -909,6 +909,9 @@ class SCTConfiguration(dict):
         dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str,
              help=""),
 
+        dict(name="enable_azure_kms", env="SCT_ENABLE_AZURE_KMS", type=bool,
+             help="Enable Azure Key Management Service (KMS) for encryption-at-rest"),
+
         # k8s-eks options
         dict(name="eks_service_ipv4_cidr", env="SCT_EKS_SERVICE_IPV4_CIDR", type=str,
              help=""),
