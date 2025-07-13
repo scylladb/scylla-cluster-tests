@@ -4,8 +4,7 @@ gce_network: 'qa-vpc'
 gce_project: '' # empty mean default one, can be overwritten to use different one
 
 gce_image_db: '' # so we can use `scylla_version` as needed
-gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
-# manual on updating monitor images see: docs/monitoring-images.md
+gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
 gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-9-2-2025-03-12t08-45-02z'
 gce_image_username: 'scylla-test'
 
