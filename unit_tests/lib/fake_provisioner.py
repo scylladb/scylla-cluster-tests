@@ -23,7 +23,7 @@ class FakeProvisioner(Provisioner):
     """Fake provisioner for tests purposes. Imitates provisioner api by creating fake provisioners in memory."""
     _provisioners = {}
 
-    def __new__(cls, test_id: str, region: str, availability_zone: str, **_) -> Provisioner:
+    def __new__(cls, test_id: str, region: str, availability_zone: str, enable_azure_kms: bool = False, **_) -> Provisioner:
         region_az = region + availability_zone
         if provisioner := cls._provisioners.get(test_id, {}).get(region_az):
             return provisioner
@@ -31,7 +31,7 @@ class FakeProvisioner(Provisioner):
         cls._provisioners[test_id] = cls._provisioners.get(test_id, {}) | {region_az: provisioner}
         return provisioner
 
-    def __init__(self, test_id: str, region: str, availability_zone: str, **_) -> None:
+    def __init__(self, test_id: str, region: str, availability_zone: str, enable_azure_kms: bool = False, **_) -> None:
         super().__init__(test_id, region, availability_zone)
         self._instances: Dict[str, VmInstance] = getattr(self, "_instances", {})
 

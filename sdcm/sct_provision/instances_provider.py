@@ -66,6 +66,8 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
                                                              test_id=request.test_id,
                                                              region=request.region,
                                                              availability_zone=request.availability_zone,
+                                                             enable_azure_kms=not params.get(
+                                                                 'enterprise_disable_kms'),
                                                              **provisioner_config)
         provision_instances_with_fallback(provisioner=provisioner,
                                           definitions=request.definitions,

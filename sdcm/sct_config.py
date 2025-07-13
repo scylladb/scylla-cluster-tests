@@ -1440,7 +1440,13 @@ class SCTConfiguration(dict):
 
         dict(name="kms_key_rotation_interval", env="SCT_KMS_KEY_ROTATION_INTERVAL", type=int,
              help="The time interval in minutes which gets waited before the KMS key rotation happens."
-                  " Applied when the AWS KMS service is configured to be used."),
+                  " Applied when AWS KMS or Azure KMS service is configured to be used."
+                  " NOTE: Be aware that Azure Key rotations cost $1/rotation."),
+
+        # TODO: AWS KMS needs to support the enable_kms_key_rotation config option
+
+        dict(name="enable_kms_key_rotation", env="SCT_ENABLE_KMS_KEY_ROTATION", type=boolean,
+             help="Enable automatic KMS key rotation (supports Azure for now)"),
 
         dict(name="enterprise_disable_kms", env="SCT_ENTERPRISE_DISABLE_KMS", type=boolean,
              help="An escape hatch to disable KMS for enterprise run, when needed, "
