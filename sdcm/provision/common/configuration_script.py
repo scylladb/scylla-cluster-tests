@@ -30,6 +30,7 @@ from sdcm.provision.common.utils import (
     configure_syslogng_file_source,
     install_vector_service,
     configure_vector_target_script,
+    install_docker_service,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -44,6 +45,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     hostname: str = ''
     log_file: str = ''
     test_config: Any | None = None
+    install_docker: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -136,5 +138,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if self.configure_sshd:
             script += configure_sshd_script()
             script += restart_sshd_service()
+
+        if self.install_docker:
+            script += install_docker_service()
 
         return script
