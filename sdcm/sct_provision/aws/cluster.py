@@ -277,6 +277,7 @@ class LoaderCluster(ClusterBase):
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            install_docker=True,
         ).to_string()
 
 

@@ -19,6 +19,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     user_data_format_version: str = Field(default='2', as_dict=False)
     scylla_yaml_raw: ScyllaYaml = Field(default=None, as_dict=False)
     syslog_host_port: tuple[str, int] = Field(default=None, as_dict=False)
+    install_docker: bool = Field(default=False, exclude=True)
 
     @property
     def scylla_yaml(self) -> dict:
@@ -57,6 +58,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
             disable_ssh_while_running=True,
+            install_docker=self.install_docker,
         ).to_string()
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
 
@@ -110,6 +112,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 class AWSInstanceUserDataBuilder(UserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     syslog_host_port: tuple[str, int] = None
+    install_docker: bool = False
 
     def to_string(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
@@ -119,5 +122,6 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
             disable_ssh_while_running=True,
+            install_docker=self.install_docker,
         ).to_string()
         return post_boot_script

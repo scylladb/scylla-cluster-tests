@@ -24,6 +24,7 @@ from sdcm.provision.common.utils import (
     configure_rsyslog_target_script,
     configure_rsyslog_set_hostname_script,
     restart_rsyslog_service,
+    install_docker_service,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -39,6 +40,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     disable_ssh_while_running: bool = False
     hostname: str = ''
+    install_docker: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -104,6 +106,10 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += restart_sshd_service()
         elif self.disable_ssh_while_running:
             script += 'systemctl start sshd || true\n'
+
+        if self.install_docker:
+            script += install_docker_service()
+
         return script
 
     def _rsyslog_configuration_script(self):
