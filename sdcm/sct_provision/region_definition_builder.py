@@ -29,6 +29,7 @@ from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
 from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
 from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
+from sdcm.sct_provision.user_data_objects.docker_service import DockerUserDataObject
 from sdcm.test_config import TestConfig
 
 
@@ -152,6 +153,7 @@ class DefinitionBuilder(abc.ABC):
             SshdUserDataObject,
             EnableWaLinuxAgent,
             ScyllaUserDataObject,
+            DockerUserDataObject,
         ]
         user_data_objects = [
             klass(test_config=self.test_config, params=self.params,

@@ -24,6 +24,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     scylla_yaml_raw: ScyllaYaml = Field(default=None, exclude=True)
     syslog_host_port: tuple[str, int] | None = Field(default=None, exclude=True)
     test_config: Any = Field(exclude=True)
+    install_docker: bool = Field(default=False, exclude=True)
 
     @computed_field
     @property
@@ -67,6 +68,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
             test_config=self.test_config,
+            install_docker=self.install_docker,
         ).to_string()
         LOGGER.debug("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
@@ -123,6 +125,7 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
     syslog_host_port: tuple[str, int] | None = None
     test_config: Any = Field(exclude=True)
     aws_additional_interface: bool = False
+    install_docker: bool = False
 
     def to_string(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
@@ -132,5 +135,6 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
             test_config=self.test_config,
+            install_docker=self.install_docker,
         ).to_string()
         return post_boot_script
