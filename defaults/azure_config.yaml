@@ -19,7 +19,6 @@ root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra spa
 loader_swap_size: 10240  #10GB SWAP space
 azure_image_username: 'scyllaadm'
 ami_loader_user: 'ubuntu'
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
 ami_monitor_user: 'ubuntu'
 
 ami_id_db_scylla: ''
