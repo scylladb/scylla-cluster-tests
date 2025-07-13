@@ -380,9 +380,6 @@ class SCTConfiguration(dict):
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
 
-        dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
-             help="Url to the repo of scylla version to install c-s for loader"),
-
         dict(name="scylla_mgmt_address", env="SCT_SCYLLA_MGMT_ADDRESS",
              type=str,
              help="Url to the repo of scylla manager version to install for management tests"),
@@ -2037,22 +2034,6 @@ class SCTConfiguration(dict):
                 raise ValueError("'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' "
                                  "or with 'scylla_repo'")
 
-            if (
-                self.get("n_loaders") and
-                not self.get("bare_loaders") and
-                not self.get("scylla_repo_loader") and
-                self.get("cluster_backend") != "aws"
-            ):
-                scylla_linux_distro_loader = self.get('scylla_linux_distro_loader')
-                dist_type_loader = scylla_linux_distro_loader.split('-')[0]
-                dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
-
-                scylla_version_for_loader = "nightly" if scylla_version == "latest" else scylla_version
-
-                self['scylla_repo_loader'] = find_scylla_repo(scylla_version_for_loader,
-                                                              dist_type_loader,
-                                                              dist_version_loader)
-
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
            and self.get("db_type") == "mixed_scylla":
@@ -2088,7 +2069,7 @@ class SCTConfiguration(dict):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
         # 8) resolve repo symlinks
-        for repo_key in ("scylla_repo", "scylla_repo_loader", "new_scylla_repo",):
+        for repo_key in ("scylla_repo", "new_scylla_repo",):
             if self.get(repo_key):
                 self[repo_key] = resolve_latest_repo_symlink(self[repo_key])
 
@@ -2764,7 +2745,7 @@ class SCTConfiguration(dict):
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
-        repos_to_validate = ['scylla_repo_loader']
+        repos_to_validate = []
         if backend in ("aws", "gce", "baremetal"):
             repos_to_validate.extend([
                 'new_scylla_repo',
