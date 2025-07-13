@@ -33,7 +33,7 @@ import json
 import shlex
 from decimal import Decimal, ROUND_UP
 from importlib import import_module
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
 from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
@@ -3291,7 +3291,7 @@ class BaseCluster:
             self.uuid = self.test_config.test_id()
         else:
             self.uuid = cluster_uuid
-        self.node_type = node_type
+        self.node_type: Literal['scylla-db', 'oracle-db', 'loader', 'monitor'] = node_type
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
@@ -3513,7 +3513,8 @@ class BaseCluster:
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
-                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port(),
+                                                  install_docker=self.node_type == 'loader')
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):
@@ -5390,15 +5391,6 @@ class BaseLoaderSet():
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
         else:
-            # install docker
-            docker_install = dedent("""
-                curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
-                sh get-docker.sh
-                systemctl enable docker
-                systemctl start docker
-            """)
-            node.remoter.run('sudo bash -cxe "%s"' % docker_install)
-
             node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
         # Login to Docker Hub.

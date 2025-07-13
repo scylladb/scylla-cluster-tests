@@ -259,3 +259,26 @@ def configure_syslogng_file_source(log_file: str) -> str:
 
         echo "log {{ source(s_scylla_file); filter(filter_sct); destination(remote_sct); rewrite(r_host); }};" >> /etc/syslog-ng/syslog-ng.conf
     """)
+
+
+def install_docker_service():
+    return dedent("""\
+        # Install Docker
+
+        for n in 1 2 3; do
+            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        for n in 1 2 3; do
+            if sh get-docker.sh ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        systemctl enable docker.service
+        systemctl start docker.service
+    """)

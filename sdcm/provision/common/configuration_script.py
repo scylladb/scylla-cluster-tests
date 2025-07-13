@@ -26,7 +26,8 @@ from sdcm.provision.common.utils import (
     install_syslogng_exporter,
     disable_daily_apt_triggers,
     configure_syslogng_destination_conf,
-    configure_syslogng_file_source
+    configure_syslogng_file_source,
+    install_docker_service,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -40,6 +41,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     configure_sshd: bool = True
     hostname: str = ''
     log_file: str = ''
+    install_docker: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -110,5 +112,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if self.configure_sshd:
             script += configure_sshd_script()
             script += restart_sshd_service()
+
+        if self.install_docker:
+            script += install_docker_service()
 
         return script
