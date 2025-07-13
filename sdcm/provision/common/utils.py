@@ -189,3 +189,26 @@ def install_syslogng_service():
             echo "Unsupported distro"
         fi
     """)
+
+
+def install_docker_service():
+    return dedent("""\
+        # Install Docker
+
+        for n in 1 2 3; do
+            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        for n in 1 2 3; do
+            if sh get-docker.sh ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        systemctl enable docker.service
+        systemctl start docker.service
+    """)
