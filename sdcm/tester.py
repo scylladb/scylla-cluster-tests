@@ -49,6 +49,7 @@ from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -886,6 +887,56 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return None
 
+    def prepare_azure_kms(self) -> None:
+        scylla_version = self.params.scylla_version
+        if not scylla_version:
+            return None
+        version_supports_kms = ComparableScyllaVersion(scylla_version) >= '2025.4.0~dev'
+        backend_support_kms = self.params.get('cluster_backend') in ('azure',)
+        kms_configured_in_sct = self.params.get('scylla_encryption_options')
+        test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
+        should_enable_kms = (version_supports_kms and
+                             backend_support_kms and
+                             not kms_configured_in_sct and
+                             not test_uses_oracle and
+                             not self.params.get('enterprise_disable_kms'))
+
+        if should_enable_kms:
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'AzureKeyProviderFactory', 'azure_host': 'scylla-azure-kms'}"
+        if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
+            return None
+        azure_host = (yaml.safe_load(scylla_encryption_options) or {}).get("azure_host") or ''
+        if not azure_host:
+            return None
+
+        test_id = str(self.test_config.test_id())
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        if "azure_hosts" not in append_scylla_yaml:
+            append_scylla_yaml["azure_hosts"] = {}
+
+        regions = self.params.get('azure_region_name')
+        if len(regions) > 1:
+            raise NotImplementedError("Azure KMS multi-dc support is not yet implemented")
+        key_uri = AzureKmsProvider.get_key_uri_for_test(regions[0], test_id)
+
+        append_scylla_yaml["azure_hosts"][azure_host] = {
+            'master_key': key_uri
+        }
+
+        append_scylla_yaml['user_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'AzureKeyProviderFactory',
+            'azure_host': azure_host,
+        }
+        append_scylla_yaml['system_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'AzureKeyProviderFactory',
+            'azure_host': azure_host,
+        }
+
+        self.params["append_scylla_yaml"] = append_scylla_yaml
+        return None
+
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get('kafka_connectors'):
@@ -1015,6 +1066,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
+        self.prepare_azure_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -1113,6 +1165,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             for db_cluster in self.db_clusters_multitenant:
                 if db_cluster:
                     db_cluster.start_kms_key_rotation_thread()
+                    db_cluster.start_azure_kms_key_rotation_thread()
 
             for future in as_completed(futures):
                 future.result()

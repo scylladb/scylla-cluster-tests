@@ -24,11 +24,14 @@ from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Erro
 from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
 from invoke import Result
 
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError, OperationPreemptedError
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
+
+SCT_RESOURCE_GROUP_PREFIX = "SCT-"
 
 
 @dataclass
@@ -36,6 +39,7 @@ class VirtualMachineProvider:
     _resource_group_name: str
     _region: str
     _az: str
+    _enable_azure_kms: bool = False
     _azure_service: AzureService = AzureService()
     _cache: Dict[str, VirtualMachine] = field(default_factory=dict)
 
@@ -80,6 +84,19 @@ class VirtualMachineProvider:
                     }],
                 },
             }
+
+            if self._enable_azure_kms:
+                self._kms_provider = AzureKmsProvider(
+                    self._resource_group_name, self._region, self._az, self._azure_service)
+                # Extract test_id from resource group name
+                test_id = self._resource_group_name.split(SCT_RESOURCE_GROUP_PREFIX)[-1][:36]
+                vault_info = self._kms_provider.get_or_create_keyvault_and_identity(test_id)
+                params["identity"] = {"type": "UserAssigned",
+                                      "user_assigned_identities": {vault_info['identity_id']: {}}}
+                LOGGER.info(f"Azure Key Vault enabled for {definition.name}")
+            else:
+                LOGGER.info(f"Azure Key Vault disabled for {definition.name}")
+
             if definition.user_data is None:
                 # in case we use specialized image, we don't change things like computer_name, usernames, ssh_keys
                 os_profile = {}
