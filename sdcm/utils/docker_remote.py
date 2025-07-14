@@ -162,7 +162,7 @@ class RemoteDocker(BaseNode):
     @cache
     def pull_image(node, image):
         # Login docker-hub before pull, in case node authentication is expired or not logged-in.
-        docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker)
+        docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker())
         remote_cmd = node.remoter.sudo if RemoteDocker.running_in_docker(
             node) and not RemoteDocker.running_in_podman(node) else node.remoter.run
         remote_cmd(f"docker pull {image}", verbose=True, retry=3)
