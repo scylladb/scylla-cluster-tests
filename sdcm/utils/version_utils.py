@@ -843,7 +843,14 @@ def get_branched_repo(scylla_version: str,
         raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
 
     branch_id = branch.replace('branch-', '').replace('enterprise-', '')
-    product = 'scylla-enterprise' if branch == 'enterprise' or is_enterprise(branch_id) else 'scylla'
+    try:
+        is_source_available = ComparableScyllaVersion(branch_id) >= "2025.1.0"
+    except ValueError:
+        is_source_available = True
+    if branch == "enterprise" or (is_enterprise(branch_id) and not is_source_available):
+        product = "scylla-enterprise"
+    else:
+        product = "scylla"
 
     if dist_type == "centos":
         prefix = f"unstable/{product}/{branch}/rpm/centos/{branch_version}/"
