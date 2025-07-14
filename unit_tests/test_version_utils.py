@@ -11,6 +11,7 @@ from sdcm.utils.version_utils import (
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
+    get_branched_repo,
     get_git_tag_from_helm_chart_version,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
@@ -586,3 +587,30 @@ def test_comparable_scylla_operator_versions_compare(version_string_left, versio
 ))
 def test_comparable_scylla_operator_versions_to_str(version_string_input, version_string_output):
     assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
+
+
+@pytest.mark.need_network
+@pytest.mark.integration
+@pytest.mark.parametrize("scylla_version,distro,expected_repo", (
+    ("master:latest", "centos", "unstable/scylla/master/rpm/centos/latest/scylla.repo"),
+    ("branch-2025.3:latest", "centos", "unstable/scylla/branch-2025.3/rpm/centos/latest/scylla.repo"),
+    ("branch-2025.3:latest", "ubuntu", "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list"),
+    ("branch-2025.3:latest", "debian", "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list"),
+    ("branch-2025.2:latest", "centos", "unstable/scylla/branch-2025.2/rpm/centos/latest/scylla.repo"),
+    ("branch-2025.1:latest", "centos", "unstable/scylla/branch-2025.1/rpm/centos/latest/scylla.repo"),
+    ("branch-6.2:latest", "centos", "unstable/scylla/branch-6.2/rpm/centos/latest/scylla.repo"),
+    ("branch-6.1:latest", "centos", "unstable/scylla/branch-6.1/rpm/centos/latest/scylla.repo"),
+    ("branch-6.0:latest", "centos", "unstable/scylla/branch-6.0/rpm/centos/latest/scylla.repo"),
+
+    ("enterprise:latest", "centos", "unstable/scylla-enterprise/enterprise/rpm/centos/latest/scylla.repo"),
+    ("enterprise-2024.2:latest", "centos",
+     "unstable/scylla-enterprise/enterprise-2024.2/rpm/centos/latest/scylla.repo"),
+    ("enterprise-2024.2:latest", "ubuntu",
+     "unstable/scylla-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list"),
+    ("enterprise-2024.1:latest", "debian",
+     "unstable/scylla-enterprise/enterprise-2024.1/deb/unified/latest/scylladb-2024.1/scylla.list"),
+))
+def test_get_branched_repo(scylla_version, distro, expected_repo):
+    expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
+    actual_repo = get_branched_repo(scylla_version, distro)
+    assert actual_repo == expected_template.format(expected_repo)
