@@ -39,14 +39,46 @@ def get_disk_usage(node: BaseNode, prometheus: PrometheusDBStats) -> float:
     :param node: The node to get the disk usage for.
     :param prometheus: The PrometheusDBStats instance to query.
     :return: The disk usage in percentage, or -1 if the query fails."""
+    start, end = time() - 60, time()  # Query the last minute of data
     avail_query = f'sum(node_filesystem_avail_bytes{{mountpoint="/var/lib/scylla", instance=~".*?{node.private_ip_address}.*?", job=~"node_exporter.*"}})'
-    avail_results = prometheus.query(query=avail_query, start=time() - 60, end=time())
+    avail_results = prometheus.query(query=avail_query, start=start, end=end)
     size_query = f'sum(node_filesystem_size_bytes{{mountpoint="/var/lib/scylla", instance=~".*?{node.private_ip_address}.*?", job=~"node_exporter.*"}})'
-    size_results = prometheus.query(query=size_query, start=time() - 60, end=time())
+    size_results = prometheus.query(query=size_query, start=start, end=end)
 
-    avail = float(avail_results[0]['values'][-1][1])
-    size = float(size_results[0]['values'][-1][1])
-    return 100 * (1 - avail / size) if avail_results and size_results else -1
+    try:
+        avail = float(avail_results[0]['values'][-1][1])
+        size = float(size_results[0]['values'][-1][1])
+
+        if avail < 0 or size <= 0:
+            return -1
+
+        return 100 * (1 - avail / size)
+    except (IndexError, ValueError, TypeError):
+        # Catch any errors in case the results are malformed
+        return -1
+
+
+def get_balance_status(node: BaseNode, usages: dict[BaseNode, float]) -> Status:
+    """
+    Determine the balance status of a node based on its disk usage compared its rack.
+
+    :param node: The node to check.
+    :param usages: A dictionary with nodes as keys and their disk usage as values.
+    :return: Status.PASS if the node's disk usage is within the soft balance threshold,
+             Status.WARNING if within the hard balance threshold,
+             Status.ERROR if it exceeds the hard threshold,
+             and STATUS.UNSET if a node's usage is -1 (indicating an error in fetching usage).
+    """
+    this_rack = [v for n, v in usages.items() if n.rack == node.rack]
+    if -1 in this_rack:
+        return Status.UNSET
+    delta_usage = max(this_rack) - min(this_rack)
+    if delta_usage <= SOFT_BALANCE_THRESHOLD:
+        return Status.PASS
+    elif delta_usage <= HARD_BALANCE_THRESHOLD:
+        return Status.WARNING
+    else:
+        return Status.ERROR
 
 
 def disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClient, prometheus: PrometheusDBStats):
@@ -58,6 +90,8 @@ def disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClient, promet
     :param prometheus: The PrometheusDBStats instance to query.
     :return: A dictionary with node names as keys and their disk usage as values.
     """
+    nodes = sorted(nodes, key=lambda n: n.rack)
+
     class DiskUsageResult(StaticGenericResultTable):
         class Meta:
             name = "Disk Usage"
@@ -67,16 +101,9 @@ def disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClient, promet
     label = strftime('%Y-%m-%d %H:%M:%S')
     data_table = DiskUsageResult()
     usages = {node: get_disk_usage(node, prometheus) for node in nodes}
-    delta_usage = max(usages.values()) - min(usages.values())
-    if delta_usage <= SOFT_BALANCE_THRESHOLD:
-        status = Status.PASS
-    elif delta_usage <= HARD_BALANCE_THRESHOLD:
-        status = Status.WARNING
-    else:
-        status = Status.ERROR
     for node in nodes:
         data_table.add_result(column=f"node-{node.name[-1]}", row=label,
-                              value=usages[node], status=status)
+                              value=usages[node], status=get_balance_status(node, usages))
     submit_results_to_argus(argus_client, data_table)
     return usages
 
@@ -118,7 +145,7 @@ class LongevityBalancerTest(LongevityTest):
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
 
     def check_cluster_balance(self):
-        self.log.info("Checking disk usage")
+        self.log.info("Checking final disk usage")
         usages = disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db)
 
         # check if the utilization is balanced by comparing min and max utilization
@@ -152,6 +179,7 @@ class LongevityBalancerTest(LongevityTest):
         4. Check the disk usage of each node to ensure they are balanced.
         """
         self.expand_cluster_heterogenous()
+        sleep(600)
         with self.disk_usage_to_argus(interval=600):
             self.test_custom_time()
             self.wait_for_balancer()
