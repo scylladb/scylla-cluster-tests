@@ -1169,7 +1169,8 @@ class Nemesis(NemesisFlags):
             instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
             add_node_func_args.update({"is_zero_node": is_zero_node, "instance_type": instance_type})
 
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
+        new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         try:
             with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
@@ -4659,7 +4660,8 @@ class Nemesis(NemesisFlags):
             "disruption_name": self.current_disruption,
             **({"is_zero_node": is_zero_node} if is_zero_node else {})
         }
-        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
+        new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)[0]
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -5223,7 +5225,7 @@ class Nemesis(NemesisFlags):
         """
         self.cluster.wait_all_nodes_un()
 
-        new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
+        new_node: BaseNode = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
             count=1,
             dc_idx=self.target_node.dc_idx,
             enable_auto_bootstrap=True,
