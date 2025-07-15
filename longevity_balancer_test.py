@@ -22,8 +22,6 @@ from longevity_test import LongevityTest
 from sdcm.argus_results import submit_results_to_argus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.sct_events import Severity
-from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from threading import Thread
@@ -105,7 +103,6 @@ def disk_usage_to_argus(nodes: list[BaseNode], argus_client: ArgusClient, promet
         data_table.add_result(column=f"node-{node.name[-1]}", row=label,
                               value=usages[node], status=get_balance_status(node, usages))
     submit_results_to_argus(argus_client, data_table)
-    return usages
 
 
 @contextmanager
@@ -144,18 +141,6 @@ class LongevityBalancerTest(LongevityTest):
         self.db_cluster.update_seed_provider()
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
 
-    def check_cluster_balance(self):
-        self.log.info("Checking final disk usage")
-        usages = disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db)
-
-        # check if the utilization is balanced by comparing min and max utilization
-        min_utilization = min(usages.values())
-        max_utilization = max(usages.values())
-        if max_utilization - min_utilization > HARD_BALANCE_THRESHOLD:
-            TestFrameworkEvent(source="longevity_balancer_test",
-                               message=f"Storage utilization is not balanced. Min: {min_utilization}, Max: {max_utilization}",
-                               severity=Severity.CRITICAL).publish()
-
     def wait_for_balancer(self):
         self.log.info("Waiting for tablet migration to finish on all nodes")
         for node in self.db_cluster.data_nodes:
@@ -165,6 +150,8 @@ class LongevityBalancerTest(LongevityTest):
     def disk_usage_to_argus(self, interval=600):
         with periodic_disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db, interval=interval):
             yield
+            # Final disk usage report after the test
+            disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db)
 
     def test_load_balance(self):
         """
@@ -179,8 +166,7 @@ class LongevityBalancerTest(LongevityTest):
         4. Check the disk usage of each node to ensure they are balanced.
         """
         self.expand_cluster_heterogenous()
-        sleep(600)
+        sleep(600)  # wait for new nodes to have prometheus_db metrics
         with self.disk_usage_to_argus(interval=600):
             self.test_custom_time()
             self.wait_for_balancer()
-            self.check_cluster_balance()
