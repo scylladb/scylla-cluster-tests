@@ -1228,7 +1228,8 @@ class Nemesis:
             instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
             add_node_func_args.update({"is_zero_node": is_zero_node, "instance_type": instance_type})
 
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
+        new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
@@ -4704,10 +4705,10 @@ class Nemesis:
 
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         if is_zero_node:
-            new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+            new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
                 1, dc_idx=0, enable_auto_bootstrap=True, is_zero_node=is_zero_node)[0]  # add node
         else:
-            new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+            new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
                 1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
@@ -5279,7 +5280,7 @@ class Nemesis:
         """
         self.cluster.wait_all_nodes_un()
 
-        new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
+        new_node: BaseNode = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
