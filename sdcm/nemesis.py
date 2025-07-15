@@ -1237,7 +1237,8 @@ class Nemesis(NemesisFlags):
             instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
             add_node_func_args.update({"is_zero_node": is_zero_node, "instance_type": instance_type})
 
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
+        new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
@@ -4727,12 +4728,33 @@ class Nemesis(NemesisFlags):
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
+<<<<<<< HEAD
         if is_zero_node:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
                 1, dc_idx=0, enable_auto_bootstrap=True, is_zero_node=is_zero_node)[0]  # add node
         else:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
                 1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
+||||||| parent of 2523f34e4 (feature(skip_on_capacity_issues): check cluster layout before skipping)
+        add_node_func_args = {
+            "count": 1,
+            "dc_idx": 0,
+            "enable_auto_bootstrap": True,
+            "disruption_name": self.current_disruption,
+            **({"is_zero_node": is_zero_node} if is_zero_node else {})
+        }
+        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
+=======
+        add_node_func_args = {
+            "count": 1,
+            "dc_idx": 0,
+            "enable_auto_bootstrap": True,
+            "disruption_name": self.current_disruption,
+            **({"is_zero_node": is_zero_node} if is_zero_node else {})
+        }
+        new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)[0]
+>>>>>>> 2523f34e4 (feature(skip_on_capacity_issues): check cluster layout before skipping)
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -5302,8 +5324,24 @@ class Nemesis(NemesisFlags):
         """
         self.cluster.wait_all_nodes_un()
 
+<<<<<<< HEAD
         new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
+||||||| parent of 2523f34e4 (feature(skip_on_capacity_issues): check cluster layout before skipping)
+        new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
+            count=1,
+            dc_idx=self.target_node.dc_idx,
+            enable_auto_bootstrap=True,
+            rack=self.target_node.rack,
+            disruption_name=self.current_disruption)[0]
+=======
+        new_node: BaseNode = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
+            count=1,
+            dc_idx=self.target_node.dc_idx,
+            enable_auto_bootstrap=True,
+            rack=self.target_node.rack,
+            disruption_name=self.current_disruption)[0]
+>>>>>>> 2523f34e4 (feature(skip_on_capacity_issues): check cluster layout before skipping)
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
 
