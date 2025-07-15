@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+
 import yaml
 import copy
 from copy import deepcopy
@@ -1696,6 +1697,12 @@ class SCTConfiguration(dict):
              Provide number of racks to simulate."""),
         dict(name="rack_aware_loader", env="SCT_RACK_AWARE_LOADER", type=boolean,
              help="When enabled, loaders will look for nodes on the same rack."),
+
+        dict(name="capacity_errors_check_mode", env="SCT_CAPACITY_ERRORS_CHECK_MODE", type=str,
+             choices=["per-initial_config", "disabled"],
+             help="""how to check if to continue test execution when capacity errors are detected.
+                per-initial_config - check if cluster layout is same as initial configuration, if not stop test execution
+                disabled - continue test execution even if capacity errors are detected"""),
 
         dict(name="use_dns_names", env="SCT_USE_DNS_NAMES", type=boolean,
              help="""Use dns names instead of ip addresses for nodes in cluster"""),
