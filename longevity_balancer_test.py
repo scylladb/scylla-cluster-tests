@@ -142,7 +142,6 @@ class LongevityBalancerTest(LongevityTest):
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
 
     def wait_for_balancer(self):
-        self.log.info("Waiting for tablet migration to finish on all nodes")
         for node in self.db_cluster.data_nodes:
             wait_no_tablets_migration_running(node, timeout=3600 * 2)
 
@@ -150,7 +149,7 @@ class LongevityBalancerTest(LongevityTest):
     def disk_usage_to_argus(self, interval=600):
         with periodic_disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db, interval=interval):
             yield
-            # Final disk usage report after the test
+            # Final disk usage report at the end of the test
             disk_usage_to_argus(self.db_cluster.data_nodes, self.test_config.argus_client(), self.prometheus_db)
 
     def test_load_balance(self):
@@ -163,7 +162,7 @@ class LongevityBalancerTest(LongevityTest):
         1. Expand the cluster by adding new nodes.
         2. Run the original test_custom_time to populate the cluster with data.
         3. Wait for tablet migration to finish.
-        4. Check the disk usage of each node to ensure they are balanced.
+        4. Periodically check the disk usage of each node to ensure they are balanced.
         """
         self.expand_cluster_heterogenous()
         sleep(600)  # wait for new nodes to have prometheus_db metrics
