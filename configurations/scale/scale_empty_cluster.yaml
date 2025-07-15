@@ -1,7 +1,7 @@
 test_duration: 6000
-n_db_nodes: 20
+n_db_nodes: 1
 add_node_cnt: 1
-cluster_target_size: 200
+cluster_target_size: 100
 n_loaders: 0
 
 instance_type_db: 'i4i.2xlarge'
@@ -22,7 +22,7 @@ append_scylla_yaml:
   enable_repair_based_node_ops: true
   enable_tablets: false
   tablets_mode_for_new_keyspaces: 'disabled'
-  enable_small_table_optimization_for_rbno: false
+  # enable_small_table_optimization_for_rbno: false
 
 run_fullscan: []
 
