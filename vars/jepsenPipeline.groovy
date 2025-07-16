@@ -34,6 +34,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla repo to run against',
                    name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'GCE image for ScyllaDB ',
+                   name: 'gce_image_db')
 
             string(defaultValue: '',
                    description: 'a link to the git repository with Jepsen Scylla tests',
@@ -177,8 +180,10 @@ def call(Map pipelineParams) {
                                     export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                 elif [[ ! -z "${params.scylla_repo}" ]]; then
                                     export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                elif [[ ! -z "${params.gce_image_db}" ]]; then
+                                    export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
                                 else
-                                    echo "need to choose one of SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                    echo "need to choose one of SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_GCE_IMAGE_DB"
                                     exit 1
                                 fi
 
