@@ -10,8 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-import configparser
-from functools import cached_property, lru_cache
+from functools import cached_property
 from pathlib import Path
 from typing import Optional, Any
 
@@ -22,27 +21,6 @@ from sdcm.provision.helpers.certificate import (
     SERVER_CERT_FILE, SERVER_KEY_FILE, SCYLLA_SSL_CONF_DIR)
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
     ServerEncryptionOptions
-from sdcm.utils.common import get_data_dir_path
-
-CQLSHRC_FILE = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
-
-
-@lru_cache(maxsize=1)
-def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = False) -> None:
-    config = configparser.ConfigParser()
-    config.read(cqlshrc_file)
-    if client_encrypt:
-        if not config['connection']:
-            config['connection'] = {}
-        config['connection']['ssl'] = 'true'
-    config['ssl'] = {
-        'validate': 'true' if client_encrypt else 'false',
-        'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
-        'userkey': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}',
-        'usercert': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}'
-    }
-    with open(cqlshrc_file, 'w', encoding='utf-8') as file:
-        config.write(file)
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
@@ -63,7 +41,6 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
         if not self.params.get('client_encrypt'):
             return None
-        update_cqlshrc(client_encrypt=self.params.get('client_encrypt'))
         return ClientEncryptionOptions(
             enabled=True,
             certificate=str(self._ssl_files_path / CLIENT_FACING_CERTFILE.name),
