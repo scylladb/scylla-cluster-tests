@@ -59,7 +59,7 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-twcs-48h-test,../tier1/longevity-multidc-schema-topology-changes-12h-test,../tier1/longevity-50gb-3days-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test</projects>
+          <projects>../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../tier1/longevity-twcs-48h-test,../tier1/longevity-50gb-3days-test,../tier1/longevity-150gb-asymmetric-cluster-12h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -67,22 +67,7 @@ stress_duration=$stress_duration</properties>
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=$scylla_version
-test_name=jepsen-test-all
-post_behavior_db_nodes=destroy
-post_behavior_monitor_nodes=destroy</properties>
-              <textParamValueOnNewLine>false</textParamValueOnNewLine>
-            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-          </configs>
-          <projects>../tier1/jepsen-all-test</projects>
-          <condition>SUCCESS</condition>
-          <triggerWithNoParameters>false</triggerWithNoParameters>
-          <triggerFromChildProjects>false</triggerFromChildProjects>
-        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
-        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
-          <configs>
-            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=$scylla_version
+              <properties>scylla_version=%(sct_branch)s:latest
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
@@ -90,7 +75,7 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../longevity/longevity-multidc-schema-topology-changes-12h-test</projects>
+          <projects>../tier1/longevity-multidc-schema-topology-changes-12h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
