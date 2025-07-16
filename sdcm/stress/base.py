@@ -85,11 +85,9 @@ class DockerBasedStressThread:
         self.configure_executer()
         for loader in self.loaders:
             for cpu_idx in range(self.stress_num):
-                LOGGER.info(f'QWERTY {id(self)} starting run_stress on loader {loader.node_index}, cpu {cpu_idx}')
                 # Use node_index to identify the loader in the stress command
                 self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader.node_index, cpu_idx))]
 
-        LOGGER.info('QWERTY running')
         return self
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
@@ -99,11 +97,8 @@ class DockerBasedStressThread:
         results = []
         timeout = self.hard_timeout + 120
         LOGGER.debug('Wait for %s stress threads results', self.max_workers)
-        LOGGER.info(f'QWERTY get_results wait')
         for e, future in enumerate(concurrent.futures.as_completed(self.results_futures, timeout=timeout)):
-            LOGGER.info(f'QWERTY {id(self)} waiting for stress thread {e}')
             results.append(future.result())
-        LOGGER.info(f'QWERTY done')
         return results
 
     def parse_results(self) -> tuple[list, dict]:

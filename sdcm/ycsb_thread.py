@@ -268,9 +268,7 @@ class YcsbStressThread(DockerBasedStressThread):
         return ret
     
     def get_results(self):
-        LOGGER.info(f'QWERTY calling get_results()')
         results = super().get_results()
-        LOGGER.info(f'QWERTY got results')
         if self.params.get("use_hdrhistogram"):
             self._terminate_hdr_loggers()
             self._fix_hdr_files()
@@ -289,7 +287,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 for work_type, tag in self.WORK_TYPES.items():
                     tag_text = f'Tag={tag}'
                     dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
-                    src_pth = dst_pth + '_'
+                    src_pth = dst_pth + '.untagged'
                     if os.path.isfile(src_pth):
                         LOGGER.debug(f'Fixing HDR file {src_pth}')
                         with open(src_pth, 'r', encoding='utf8') as input:
@@ -302,15 +300,12 @@ class YcsbStressThread(DockerBasedStressThread):
                                 if data2:
                                     LOGGER.warning(f'File {src_pth} removing previous content ({len(data2)} lines)')
                                 data2 = []
-                            if d.startswith('#') or d.startswith("'"):
-                                data2.append(d)
-                            elif d.startswith('tail: '):
+                            if d.startswith('tail: '):
                                 ignored_tail_lines += 1
+                            elif d[0].isdigit() or d[0] == '.':
+                                data2.append(f'{tag_text},{d}')
                             else:
-                                if d[0].isdigit() or d[0] == '.':
-                                    data2.append(f'{tag_text},{d}')
-                                else:
-                                    data2.append(d)
+                                data2.append(d)
                         removed = len(data) - len(data2)
                         LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), left {len(data2)} lines')
                         if data2:
@@ -326,11 +321,11 @@ class YcsbStressThread(DockerBasedStressThread):
             loader_idx = loader.node_index
             for cpu_idx in range(self.stress_num):
                 for work_type in self.WORK_TYPES:
-                    LOGGER.debug(f'Initializing HDR logger with remote=/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr and target={self.directory_for_hdr_files}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr_')
+                    LOGGER.debug(f'Initializing HDR logger with remote=/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr and target={self.directory_for_hdr_files}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
                     hdrh_logger = HDRHistogramFileLogger(
                         node=loader,
                         remote_log_file=f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr',
-                        target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr_'),
+                        target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged'),
                     )
                     self.hdrh_logger_contextes.append(hdrh_logger)
                     hdrh_logger.start()
@@ -340,7 +335,7 @@ class YcsbStressThread(DockerBasedStressThread):
         for hdrh_logger in self.hdrh_logger_contextes:
             hdrh_logger.stop()
 
-    def _prepare_directory_for_hdr_files(self, loader_idx, cpu_idx):
+    def _prepare_temp_directory_for_hdr_files(self, loader_idx, cpu_idx):
         hdr_files_directory = f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
         LOGGER.debug(f'Preparing HDR files directory: {hdr_files_directory}')
         os.makedirs(hdr_files_directory, exist_ok=True)
@@ -377,7 +372,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
             extra_docker_opts = f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
             if self.params["use_hdrhistogram"]:
-                hdr_files_directory = self._prepare_directory_for_hdr_files(loader_idx, cpu_idx)
+                hdr_files_directory = self._prepare_temp_directory_for_hdr_files(loader_idx, cpu_idx)
                 extra_docker_opts += f' -v {hdr_files_directory}:/tmp/hdr-output-directory:z'
 
             cmd_runner = RemoteDocker(
