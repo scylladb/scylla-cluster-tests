@@ -1,19 +1,50 @@
-test_duration: 1500
-prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=30" ]
-stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=1440m -mode native cql3 -rate threads=20",
-             "cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=1440m -mode native cql3 -rate threads=20"
-            ]
-stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' cl=SERIAL duration=1440m -mode native cql3 -rate threads=20" ]
+test_duration: 360
+
+prepare_write_cmd:
+  - >-
+    latte run -f lwt_insert -P rows_per_partition=1000 -P partition_sizes="\"100:1\"" --rate 5000 --duration=10000000
+    data_dir/latte/lwt_load.rn
+
+
+
+stress_cmd:
+  # TODO: what loader instance should be used? Its not clear needs to be clarified
+  # TODO: check rates
+  - >-
+    latte run -f lwt_upd_one --consistency=SERIAL --threads=1 --rate=500 --concurrency=900 --duration=80m
+    data_dir/latte/lwt_load.rn
+
+  - >-
+    latte run -f lwt_upd_two --consistency=SERIAL --threads=1 --rate=500 --concurrency=900 --duration=80m
+    data_dir/latte/lwt_load.rn
+
+  - >-
+    latte run -f lwt_read --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=80m
+    data_dir/latte/lwt_load.rn
+
+  - >-
+    latte run -f lwt_delete_partitions -P delete_pct=50 --rate 2  --concurrency=10 --duration=80m 
+    data_dir/latte/lwt_load.rn
+
+
+
+#use_mgmt: false
+#enable_argus: false
+#store_perf_results: true
+
 
 n_db_nodes: 6
-n_loaders: 3
+simulated_racks: 3
+n_loaders: 6
 round_robin: true
 
 instance_type_db: 'i4i.large'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
+#nemesis_class_name: 'NoOpMonkey'
 nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
 nemesis_seed: '021'
 nemesis_during_prepare: false
 space_node_threshold: 64424
