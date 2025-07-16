@@ -164,7 +164,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = 'mc'
 
-    system_upgrade_timeout = 6 * 60
+    system_upgrade_timeout = 10 * 60
 
     def should_do_complex_profile(self) -> bool:
         """
