@@ -7,7 +7,7 @@ prepare_write_cmd: [
 ]
 # This will fill a 3 x i4i.large cluster to an extra 15% disk usage
 stress_cmd: [
-  "cassandra-stress write no-warmup cl=QUORUM n=60000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..60000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=60000000 -schema keyspace=keyspace1 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=360000001..420000000",
 ]
 
 stress_cmd_r: [
