@@ -322,6 +322,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'native_transport_port_ssl': None,
                 'num_tokens': None,
                 'override_decommission': None,
+                'object_storage_endpoints': None,
                 'partitioner': None,
                 'permissions_cache_max_entries': None,
                 'permissions_update_interval_in_ms': None,
