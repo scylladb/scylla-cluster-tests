@@ -49,7 +49,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_operation_errors())
 
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
-        self.row_name_override = row_name
         if test_name.endswith('_throughput_read'):
             self.params['workload_name'] = 'throughput'
             cycle_name = 'throughput-read'
@@ -68,7 +67,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         else:
             self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
 
-        @latency_calculator_decorator(cycle_name=cycle_name)
+        @latency_calculator_decorator(cycle_name=cycle_name, row_name=row_name)
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
             return self._workload(*args, **kwargs)
 

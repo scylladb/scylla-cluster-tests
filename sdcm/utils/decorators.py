@@ -180,7 +180,7 @@ def _find_hdr_tags(*args):
 
 
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
-                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None):
+                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None, row_name: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -215,7 +215,6 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 raise ValueError(
                     f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'")
 
-            row_name = getattr(_self, 'row_name_override', None)
             # Keep for debug purposes
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]

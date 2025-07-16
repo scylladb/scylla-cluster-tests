@@ -369,7 +369,7 @@ def clean_dedicate_hosts(region_name):
             print_dedicate_host(_host, "deleting")
             if not DRY_RUN:
                 ec2.release_hosts(HostIds=[_host.get['HostId'], ])
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     count_kept_hosts = 0
