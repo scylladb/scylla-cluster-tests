@@ -586,7 +586,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
                 nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                 current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
-                if current_cluster_size % 10 == 0 and current_cluster_size < 199:
+                if current_cluster_size[0] % 10 == 0 and current_cluster_size[0] < 199:
                     with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
                         session.execute("TRUNCATE system_distributed.cdc_generation_timestamps;")
                         session.execute("TRUNCATE system_distributed.cdc_streams_descriptions_v2;")
