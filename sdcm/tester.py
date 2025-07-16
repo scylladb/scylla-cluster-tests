@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 import shutil
+import configparser
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -67,7 +68,9 @@ from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.provision.helpers.certificate import create_ca, update_certificate, cleanup_ssl_config
+from sdcm.provision.helpers.certificate import (
+    create_ca, update_certificate, cleanup_ssl_config, CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE, CA_CERT_FILE, SCYLLA_SSL_CONF_DIR)
 from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
@@ -204,6 +207,23 @@ def teardown_on_exception(method):
             raise
 
     return wrapper
+
+
+def update_cqlshrc(cqlshrc_file: str) -> None:
+    """Update cqlshrc file according to SSL configuration of the test"""
+    config = configparser.ConfigParser()
+    config.read(cqlshrc_file)
+
+    config.setdefault('connection', {})['ssl'] = 'true'
+    config.setdefault('ssl', {})
+    config['ssl'] = {
+        'validate': 'true',
+        'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
+        'userkey': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}',
+        'usercert': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}'
+    }
+    with open(cqlshrc_file, 'w', encoding='utf-8') as file:
+        config.write(file)
 
 
 class silence:
@@ -983,6 +1003,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if (not self.params.get("cluster_backend").startswith("k8s") and
                 any([self.params.get('client_encrypt'), self.params.get('server_encrypt')])):
             create_ca(self.localhost)
+            if self.params.get('client_encrypt'):
+                cqlshrc_file = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
+                update_cqlshrc(cqlshrc_file)
 
         # download rpms for update_db_packages
         if self.params.get('update_db_packages'):
