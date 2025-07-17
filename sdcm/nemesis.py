@@ -2647,6 +2647,9 @@ class Nemesis(NemesisFlags):
             db_node=self.target_node, filter_out_table_with_counter=True,
             filter_out_mv=True)
 
+        if not ks_cfs:
+            raise UnsupportedNemesis('No non-system user tables found')
+
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         keyspace, table = keyspace_table.split('.')
         compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
