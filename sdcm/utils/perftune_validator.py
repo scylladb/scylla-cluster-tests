@@ -44,16 +44,16 @@ class PerftuneExpectedResult:
                 self.expected_compute_bits: int = number_of_cpu_cores
             case 8:
                 self.expected_irq_bits: int = 1
-            case 12 | 24 | 32:
+            case 12 | 22 | 24 | 32:
                 self.expected_irq_bits: int = 2
             case 16:
                 if self.architecture == "aarch64":
                     self.expected_irq_bits: int = 1
                 else:
                     self.expected_irq_bits: int = 2
-            case 48 | 64:
+            case 44 | 48 | 64:
                 self.expected_irq_bits: int = 4
-            case 80 | 72 | 96 | 128:
+            case 72 | 80 | 88 | 96 | 128 | 176:
                 self.expected_irq_bits: int = 8
 
         if self.expected_compute_bits == 0:
