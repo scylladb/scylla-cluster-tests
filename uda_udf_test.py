@@ -83,15 +83,15 @@ class UDAUDFTest(ClusterTester):
         verifications = [
             UDVerification(name="lua_var_length_counter",
                            query=f"SELECT {self.KEYSPACE_NAME}.lua_var_length_counter(c7_text) AS result "
-                                 f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
+                           f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: len(c7) == query_response.result),
             UDVerification(name="wasm_plus",
                            query=f"SELECT {self.KEYSPACE_NAME}.wasm_plus(c2_int, c3_int) AS result "
-                                 f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
+                           f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: c2 + c3 == query_response.result),
             UDVerification(name="wasm_div",
                            query=f"SELECT {self.KEYSPACE_NAME}.wasm_div(c2_int, c3_int) AS result "
-                                 f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
+                           f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: c2 // c3 == query_response.result)
         ]
         self.log.info("Starting UDF verifications...")

@@ -132,7 +132,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             scylla_date_results_table.append(make_table_line_for_render(result))
         test_stats_for_render = {'test_version':  test_stats['versions']['scylla-server']}
         test_stats_for_render.update({key: round(val, 2) for key, val in test_stats["stats"].items()})
-        subject = (f"{self._get_email_tags(doc,is_gce)} perf_simple_query Microbenchmark - Regression - "
+        subject = (f"{self._get_email_tags(doc, is_gce)} perf_simple_query Microbenchmark - Regression - "
                    f"{test_stats['versions']['scylla-server']['run_date_time']}")
         for_render = {
             "reporter": "PerfSimpleQuery",

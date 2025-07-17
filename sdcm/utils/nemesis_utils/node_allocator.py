@@ -168,7 +168,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
                     message=f"{nemesis_name}: setting running nemesis failed.\nTried to set running nemesis for "
-                            f"node {node.name}, but it was already reserved by '{self.active_nemesis_on_nodes[node]}' nemesis.",
+                    f"node {node.name}, but it was already reserved by '{self.active_nemesis_on_nodes[node]}' nemesis.",
                     severity=Severity.ERROR
                 ).publish()
                 return False
@@ -190,15 +190,15 @@ class NemesisNodeAllocator(metaclass=Singleton):
                     TestFrameworkEvent(
                         source=self.__class__.__name__,
                         message=f"{nemesis_name}: unsetting running nemesis failed.\nTried to unset '{nemesis_name}' "
-                                f"nemesis from node {node.name}, but it was running another "
-                                f"'{self.active_nemesis_on_nodes[node]}' nemesis.",
+                        f"nemesis from node {node.name}, but it was running another "
+                        f"'{self.active_nemesis_on_nodes[node]}' nemesis.",
                         severity=Severity.ERROR
                     ).publish()
             else:
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
                     message=f"{nemesis_name}: unsetting running nemesis failed.\nTried to unset '{nemesis_name}' "
-                            f"nemesis from node {node.name}, but it was not running any nemesis.",
+                    f"nemesis from node {node.name}, but it was not running any nemesis.",
                     severity=Severity.ERROR
                 ).publish()
 
@@ -241,7 +241,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                     TestFrameworkEvent(
                         source=self.__class__.__name__,
                         message=f"{nemesis_name}: switching target node failed.\nDuring switch, old node "
-                                f"{old_node.name} was running another '{self.active_nemesis_on_nodes[old_node]}' nemesis.",
+                        f"{old_node.name} was running another '{self.active_nemesis_on_nodes[old_node]}' nemesis.",
                         severity=Severity.ERROR
                     ).publish()
 

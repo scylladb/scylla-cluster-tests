@@ -72,6 +72,13 @@ repos:
         pass_filenames: false
         files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py|templates/.*.j2)
 
+    -   id: uv-sort
+        name: uv-sort
+        entry: uv-sort
+        language: system
+        pass_filenames: false
+        files: ^pyproject.toml$
+
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v9.22.0
   hooks:

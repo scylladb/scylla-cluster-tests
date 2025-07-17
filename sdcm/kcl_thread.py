@@ -47,7 +47,7 @@ class KclStressThread(DockerBasedStressThread):
         else:
             target_address = self.node_list[0].ip_address
         stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} " \
-                     f"-e http://{target_address}:{self.params.get('alternator_port')} \'"
+            f"-e http://{target_address}:{self.params.get('alternator_port')} \'"
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):

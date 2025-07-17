@@ -173,7 +173,7 @@ class SctLoader(unittest.TestLoader):
         test_cases = super().getTestCaseNames(testCaseClass)
         num_of_cases = len(test_cases)
         assert num_of_cases < 2, f"SCT expect only one test case to be selected, found {num_of_cases}:" \
-                                 f"\n{pprint.pformat(test_cases)}"
+            f"\n{pprint.pformat(test_cases)}"
         return test_cases
 
 
@@ -1055,7 +1055,7 @@ def show_jepsen_results(test_id):
     jepsen = JepsenResults()
     if jepsen.restore_jepsen_data(test_id):
         click.secho(message=f"\nJepsen data restored, starting web server on "
-                            f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
+                    f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
                     fg="green")
         detach = SCT_RUNNER_HOST != "127.0.0.1"
         if not detach:
@@ -1571,10 +1571,10 @@ def configure_aws_peering(regions):
 
 @cli.command("create-runner-image",
              help=f"Create an SCT runner image in the selected cloud region."
-                  f" If the requested region is not a source region"
-                  f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-                  f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
-                  f" source region and then copied to the chosen one.")
+             f" If the requested region is not a source region"
+             f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
+             f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+             f" source region and then copied to the chosen one.")
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
