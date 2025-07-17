@@ -237,7 +237,7 @@ class ArtifactsTest(ClusterTester):
                 "Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False", target=self.node.name)
             return
 
-        describecluster_snitch = self.get_describecluster_info().snitch
+        describecluster_snitch = self.db_cluster.get_describecluster_info(self.node).snitch
         with self.node.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml_snitch = scylla_yaml.endpoint_snitch
         expected_snitches = BACKENDS[backend_name]

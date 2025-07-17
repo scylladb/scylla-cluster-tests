@@ -32,7 +32,8 @@ import itertools
 import json
 import shlex
 from decimal import Decimal, ROUND_UP
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal, \
+    NamedTuple
 from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
@@ -4144,6 +4145,18 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
+class SchemaVersion(NamedTuple):
+    schema_id: str
+    node_ips: List[str]
+
+
+class ClusterInformation(NamedTuple):
+    name: str
+    snitch: str
+    partitioner: str
+    schema_versions: List[SchemaVersion]
+
+
 class BaseScyllaCluster:
     name: str
     nodes: List[BaseNode]
@@ -4535,6 +4548,58 @@ class BaseScyllaCluster:
         proper_yaml_output = "\n".join([line for line in res.stdout.splitlines() if ":" in line])
         info_res = yaml.safe_load(proper_yaml_output)
         return info_res
+
+    def get_describecluster_info(self, node: Optional[BaseNode] = None) -> Optional[ClusterInformation]:
+        """
+        Runs the 'nodetool describecluster' command on a node.
+
+        Example output:
+
+        nodetool describecluster
+
+        Cluster Information:
+             Name: Test Cluster
+             Snitch: org.apache.cassandra.locator.SimpleSnitch
+             Partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+             Schema versions:
+                     86a67fc7-1d7c-3dc3-9be9-9c86b27e2506: [172.17.0.2]
+
+        The output is then packaged into a ClusterInformation
+        namedtuple, for easier access to the fields.
+        """
+        if not node:
+            node = random.choice(self.nodes)
+        describecluster_output = node.run_nodetool(sub_cmd="describecluster")
+
+        if describecluster_output.ok:
+            desc_stdout = describecluster_output.stdout
+            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
+            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
+            partitioner_pattern = re.compile(
+                "((?<=Partitioner: )[\w.]*)")
+            schema_versions_pattern = re.compile(
+                "([a-z0-9-]{36}: \[[\d., ]*\])")
+
+            name = name_pattern.search(desc_stdout).group()
+            snitch = snitch_pattern.search(desc_stdout).group()
+            partitioner = partitioner_pattern.search(desc_stdout).group()
+            schemas = schema_versions_pattern.findall(desc_stdout)
+            schema_versions = []
+            if schemas:
+                for item in schemas:
+                    split = item.split(":")
+                    schema_id = split[0].strip()
+                    node_ips = split[-1].strip()
+                    schema_versions.append(SchemaVersion(schema_id=schema_id, node_ips=node_ips))
+
+            return ClusterInformation(
+                name=name,
+                snitch=snitch,
+                partitioner=partitioner,
+                schema_versions=schema_versions
+            )
+
+        return None
 
     def check_cluster_health(self):
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
