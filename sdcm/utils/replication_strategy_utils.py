@@ -8,6 +8,7 @@ from typing import Callable, Dict, TYPE_CHECKING
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from sdcm.wait import wait_for
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -41,10 +42,27 @@ class ReplicationStrategy:
         create_ks_statement = node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
         return ReplicationStrategy.from_string(create_ks_statement)
 
+    @staticmethod
+    def _is_schema_in_agreement(node: 'BaseNode'):
+        """
+        Checks if all nodes in the cluster are in schema agreement.
+
+        This is determined by verifying that only one unique schema version exists
+        across the cluster. The presence of multiple schema versions indicates that a
+        schema change has not yet propagated to all nodes.
+        """
+
+        cluster_info = node.parent_cluster.get_describecluster_info()
+        if len(cluster_info.schema_versions) == 1:
+            return True
+        return False
+
     def apply(self, node: 'BaseNode', keyspace: str):
         cql = f'ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}'
         with node.parent_cluster.cql_connection_patient(node, connect_timeout=300) as session:
             session.execute(cql, timeout=300)
+
+        wait_for(lambda: self._is_schema_in_agreement(node), step=5, timeout=60)
 
     @property
     def replication_factors(self) -> list:
