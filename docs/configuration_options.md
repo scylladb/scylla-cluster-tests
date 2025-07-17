@@ -3417,6 +3417,15 @@ When enabled, loaders will look for nodes on the same rack.
 **type:** boolean
 
 
+## **capacity_errors_check_mode** / SCT_CAPACITY_ERRORS_CHECK_MODE
+
+how to check if to continue test execution when capacity errors are detected.<br>per-initial_config - check if cluster layout is same as initial configuration, if not stop test execution<br>disabled - continue test execution even if capacity errors are detected
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **use_dns_names** / SCT_USE_DNS_NAMES
 
 Use dns names instead of ip addresses for nodes in cluster
