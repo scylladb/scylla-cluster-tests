@@ -1794,8 +1794,9 @@ def fetch_junit(runner_ip, backend):
 @cli.command("upload", help="Upload arbitrary log/screenshot to s3 corresponding to the test_id")
 @click.option("--test-id", type=str, required=True)
 @click.option("--use-argus/--no-use-argus", default=True)
+@click.option("--public/--no-public", default=False)
 @click.argument("file-path", type=str, required=True)
-def upload_artifact_file(test_id: str, file_path: str, use_argus: bool):
+def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: bool):
     add_file_logger()
     if use_argus:
         params = SCTConfiguration()
@@ -1820,7 +1821,7 @@ def upload_artifact_file(test_id: str, file_path: str, use_argus: bool):
         s3_path = f"{test_id}/{subfolder}"
         LOGGER.info("Going to upload %s to S3...", file.absolute())
         s3 = S3Storage()
-        file_url = s3.upload_file(file.absolute(), s3_path)
+        file_url = s3.upload_file(file.absolute(), s3_path, public)
         LOGGER.info("Uploaded %s to %s", file.absolute(), file_url)
         client.submit_sct_logs([LogLink(log_name=file.name, log_link=file_url)])
         if file.suffix in image_exts:

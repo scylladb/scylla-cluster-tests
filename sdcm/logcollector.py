@@ -1752,4 +1752,4 @@ def upload_archive_to_s3(archive_path: str, storing_path: str) -> Optional[str]:
     if not check_archive(LocalCmdRunner(), archive_path):
         LOGGER.error("File `%s' will not be uploaded", archive_path)
         return None
-    return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path)
+    return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path, public=False)
