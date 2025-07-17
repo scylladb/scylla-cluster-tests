@@ -237,7 +237,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
                     disk_usage = get_node_disk_usage(node)
                     if disk_usage >= 97:
                         self.log.info(f"Node {node.name} has reached 97% disk usage, starting repair task.")
-                        repair_task = mgr_cluster.create_repair_task(keyspace="keyspace1")
+                        repair_task = mgr_cluster.create_repair_task()
                         break
                 sleep(60)
             stress_thread.join()
