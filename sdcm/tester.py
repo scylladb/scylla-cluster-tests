@@ -104,7 +104,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerfo
     LatencyDuringOperationsPerformanceAnalyzer
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
-from sdcm.sct_events.setup import start_events_device, stop_events_device, enable_default_filters
+from sdcm.sct_events.setup import enable_teardown_filters, start_events_device, stop_events_device, enable_default_filters
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
@@ -3036,6 +3036,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def tearDown(self):
         self.teardown_started = True
+        with silence(parent=self, name='Enabling teardown filters'):
+            enable_teardown_filters()
         with silence(parent=self, name='Sending test end event'):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
