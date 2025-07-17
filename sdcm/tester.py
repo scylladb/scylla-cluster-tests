@@ -3404,7 +3404,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                     events=get_events_grouped_by_category(
                                         _registry=self.events_processes_registry))
         with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.load(file)
+            try:
+                self.log.debug(f"Reading file: {file.name}")
+                self.log.debug(f"File content: {file.read()}")
+                latency_results = json.load(file)
+            except json.JSONDecodeError as e:
+                InfoEvent(message=f"Failed to decode JSON: {e}").publish()
+                self.log.error(f"Failed to decode JSON from file {file.name}: {e}")
+                return
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}

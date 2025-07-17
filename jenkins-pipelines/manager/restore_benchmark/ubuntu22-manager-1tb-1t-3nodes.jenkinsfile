@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
     provision_type: 'on_demand',
-    test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_benchmark',
+    test_name: 'scylla_manager_performance_test.ManagerRestoreBenchmarkTests.test_restore_benchmark',
     test_config: '''["test-cases/manager/manager-backup-restore-set-dataset.yaml", "configurations/manager/1TB_dataset.yaml"]''',
     mgmt_reuse_backup_snapshot_name: '1tb_1t_ics',
 
