@@ -296,6 +296,8 @@ class YcsbStressThread(DockerBasedStressThread):
                         ignored_tail_lines = 0
                         for d in data:
                             d = d.strip()
+                            if not d:
+                                continue
                             if d.startswith('#[Logging for:'):
                                 if data2:
                                     LOGGER.warning(f'File {src_pth} removing previous content ({len(data2)} lines)')
@@ -402,10 +404,10 @@ class YcsbStressThread(DockerBasedStressThread):
 
         result = {}
         ycsb_failure_event = ycsb_finish_event = None
-        LOGGER.info(f'{id(self)} starting YCSB stress command: {node_cmd}')
+        LOGGER.debug(f'starting YCSB stress command: {node_cmd}')
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
-                LOGGER.info(f'{id(self)} running YCSB stress command: {node_cmd}')
+                LOGGER.debug(f'running YCSB stress command: {node_cmd}')
                 result = cmd_runner.run(
                     cmd=node_cmd,
                     timeout=self.timeout + self.shutdown_timeout,
@@ -420,10 +422,9 @@ class YcsbStressThread(DockerBasedStressThread):
                     retry=0,
                 )
                 result = self.parse_final_output(result)
-                LOGGER.info(f'{id(self)} YCSB stress command finished')
-                LOGGER.info(f'{id(self)} YCSB stress command result: {result}')
+                LOGGER.debug(f'YCSB stress command finished: {result}')
             except Exception as exc:
-                LOGGER.exception(f'{id(self)} YCSB stress command failed')
+                LOGGER.exception(f'YCSB stress command failed: {exc}')
                 errors_str = format_stress_cmd_error(exc)
                 ycsb_failure_event = YcsbStressEvent.failure(
                     node=cmd_runner_name,
@@ -434,9 +435,9 @@ class YcsbStressThread(DockerBasedStressThread):
                 ycsb_failure_event.publish()
                 raise
             finally:
-                LOGGER.info(f'{id(self)} YCSB stress command finished, cleaning up')
+                LOGGER.debug(f'YCSB stress command finished, cleaning up')
                 ycsb_finish_event = YcsbStressEvent.finish(
                     node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name)
                 ycsb_finish_event.publish()
-        LOGGER.info(f'{id(self)} YCSB stress command done')
+        LOGGER.debug(f'YCSB stress command done')
         return loader, result, ycsb_failure_event or ycsb_finish_event
