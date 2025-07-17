@@ -1,0 +1,9 @@
+gce_instance_type_db: 'c4-highmem-16-lssd'
+gce_root_disk_type_db: 'hyperdisk-balanced' # those doesn't persistent disks
+gce_n_local_ssd_disk_db: 2 # fpr some reason it forces to specify this value (should try 0)
+
+gce_instance_type_loader: 'c3-highcpu-22'
+
+gce_instance_type_monitor: 'n2-highmem-16'
+
+force_run_iotune: true # at least until SMI supports this type of instance
