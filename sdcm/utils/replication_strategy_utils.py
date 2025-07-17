@@ -46,6 +46,8 @@ class ReplicationStrategy:
         with node.parent_cluster.cql_connection_patient(node, connect_timeout=300) as session:
             session.execute(cql, timeout=300)
 
+        node.parent_cluster.wait_for_schema_agreement()
+
     @property
     def replication_factors(self) -> list:
         return [0]

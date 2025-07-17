@@ -80,6 +80,10 @@ class Cluster:
     def cql_connection_patient(node, connect_timeout=None):
         return Cluster.Session()
 
+    @staticmethod
+    def wait_for_schema_agreement(timeout=None):
+        """Mock method that does nothing."""
+
 
 class Node():
 
