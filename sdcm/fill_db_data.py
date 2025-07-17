@@ -3122,8 +3122,12 @@ class FillDatabaseData(ClusterTester):
                     for create_table in item['create_tables']:
                         # Cannot create CDC log for a table keyspace_fill_db_data.order_by_with_in_test,
                         # because keyspace uses tablets. See issue scylladb/scylladb#16317.
-                        if self.enable_cdc_for_tables:
-                            create_table = self._enable_cdc(item, create_table)  # noqa: PLW2901
+
+                        # Comment this step. For some reason with operator tables enabled check doesn't work well
+                        # what results in enabling cdc for tables with Scylla 2025.1 or 2025.2. So, disabling it
+                        # if self.enable_cdc_for_tables:
+                        #     create_table = self._enable_cdc(item, create_table)  # noqa: PLW2901
+
                         # wait a while before creating index, there is a delay of create table for
                         # waiting the schema agreement
                         if 'CREATE INDEX' in create_table.upper():
