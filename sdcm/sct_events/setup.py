@@ -24,7 +24,7 @@ from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.grafana import start_grafana_pipeline
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.loaders import CassandraStressEvent, CassandraStressLogEvent
 from sdcm.sct_events.file_logger import start_events_logger
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_analyzer import start_events_analyzer
@@ -160,6 +160,16 @@ def enable_default_filters(sct_config: SCTConfiguration):
                    line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
                         r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_error"
                         r" \(connection is closed\)\)").publish()
+
+
+def enable_teardown_filters():
+    # If a nemesis happens to start a cassandra stress container just as teardown starts,
+    # it is possible the container is removed faster than the nemesis can be stopped,
+    # and it will try to use it and fail.
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=CassandraStressEvent,
+                                regex=r'.*Error response from daemon: No such container.*',
+                                extra_time_to_expiration=60).publish()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")
