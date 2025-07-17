@@ -3613,3 +3613,147 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **default:** True
 
 **type:** boolean
+
+
+## **cloud_api_url** / SCT_CLOUD_API_URL
+
+Scylla Cloud API endpoint URL (e.g., https://app.ext.lab.scylla.cloud/api)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_api_token** / SCT_CLOUD_API_TOKEN
+
+Scylla Cloud API authentication token
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_account_id** / SCT_CLOUD_ACCOUNT_ID
+
+Scylla Cloud account ID
+
+**default:** N/A
+
+**type:** int
+
+
+## **cloud_credentials_path** / SCT_CLOUD_CREDENTIALS_PATH
+
+Path to Scylla Cloud credentials file, if stored locally
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_env** / SCT_CLOUD_ENV
+
+Scylla Cloud environment (e.g., lab).<br>WARNING: environment specific credentials will be read from keystore (s3 or local file) and<br>will override 'cloud_api_url', 'cloud_api_token' and 'cloud_account_id' parameters
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_provider** / SCT_CLOUD_PROVIDER
+
+Cloud provider for Scylla Cloud deployment (aws, gcp)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_region** / SCT_CLOUD_REGION
+
+Cloud region for Scylla Cloud deployment (e.g., us-east-1, us-central1, etc.)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_instance_type_db** / SCT_CLOUD_INSTANCE_TYPE
+
+Instance type for Scylla Cloud db nodes (e.g., i3.large, n2-highmem-4, etc.)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_instance_type_loader** / SCT_CLOUD_INSTANCE_TYPE_LOADER
+
+Instance type for Scylla Cloud loader nodes (e.g., i3.large, n2-highmem-4, etc.)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_use_byoa** / SCT_CLOUD_USE_BYOA
+
+Use Bring Your Own Account for Scylla Cloud deployment
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **cloud_byoa_account_id** / SCT_CLOUD_BYOA_ACCOUNT_ID
+
+Account ID for BYOA deployment
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_cluster_network** / SCT_CLOUD_CLUSTER_NETWORK
+
+CIDR block for Scylla Cloud cluster network (e.g., 10.0.0.0/16)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **cloud_replication_factor** / SCT_CLOUD_REPLICATION_FACTOR
+
+Replication factor for Scylla Cloud cluster (default: 3)
+
+**default:** N/A
+
+**type:** int
+
+
+## **cloud_allowed_ips** / SCT_CLOUD_ALLOWED_IPS
+
+List of allowed IP addresses/CIDR blocks for cluster access
+
+**default:** N/A
+
+**type:** str_or_list (appendable)
+
+
+## **cloud_enable_dns** / SCT_CLOUD_ENABLE_DNS
+
+Enable DNS association for Scylla Cloud cluster
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **cloud_free_trial** / SCT_CLOUD_FREE_TRIAL
+
+Use free trial for Scylla Cloud cluster
+
+**default:** N/A
+
+**type:** boolean

@@ -1,0 +1,23 @@
+user_prefix: 'sct-cloud'
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 0
+
+use_preinstalled_scylla: true
+use_prepared_loaders: false
+
+use_mgmt: false
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
+cloud_provider: 'aws'
+cloud_region: 'eu-west-1'
+cloud_instance_type_db: 't3.micro'
+cloud_instance_type_loader: 't3.micro'
+use_cloud_manager: true
+
+parallel_node_operations: false
