@@ -80,6 +80,10 @@ class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
     def cql_connection_patient(node):
         return Cluster.Session()
 
+    @staticmethod
+    def wait_for_schema_agreement(timeout=None):
+        """Mock method that does nothing."""
+
 
 class Node():  # pylint: disable=too-few-public-methods
 

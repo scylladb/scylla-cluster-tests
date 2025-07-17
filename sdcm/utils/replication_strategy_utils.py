@@ -43,6 +43,8 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
         with node.parent_cluster.cql_connection_patient(node) as session:
             session.execute(cql)
 
+        node.parent_cluster.wait_for_schema_agreement()
+
     @property
     def replication_factors(self) -> list:  # pylint: disable=no-self-use
         return [0]
