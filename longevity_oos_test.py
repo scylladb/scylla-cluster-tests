@@ -430,3 +430,32 @@ class LongevityOutOfSpaceTest(LongevityTest):
         if len(list(result)) == 0:
             InfoEvent(message=f"Materialized view {ks}.{view_name} does not work. No rows returned for query {query}",
                       severity=Severity.ERROR).publish()
+
+    def test_oos_tablet_rebuild(self):
+        """
+        https://github.com/scylladb/scylladb/issues/24858
+        Scenario:
+
+            lose multiple nodes in a rack
+            nodetool removenode those nodes
+            bootstrap new nodes
+            If tablet rebuild is faster than bootstrap (or if the operator doesn't bootstrap enough nodes) then rebuild will consume all free space.
+        """
+        self.run_prepare_write_cmd()
+        # lose all but one node in the rack
+        rack1 = [n for n in self.db_cluster.nodes if n.rack == self.db_cluster.nodes[0].rack]
+        for node in rack1[1:]:
+            self.log.info(f"Stopping node {node.name} in rack {node.rack}")
+            node.stop_scylla()
+
+        # nodetool removenode those nodes
+        node1 = rack1[0]
+        for node in rack1[1:]:
+            with adaptive_timeout(Operations.REMOVE_NODE, node1, timeout=3600):
+                node1.run_nodetool(f"removenode {node.host_id}", ignore_status=True,
+                                   verbose=True, long_running=True, retry=0)
+        self.monitors.reconfigure_scylla_monitoring()
+
+        # bootstrap new nodes
+        for _ in rack1[1:]:
+            self.scale_out(rack=node1.rack)
