@@ -45,7 +45,7 @@ def _get_new_node_timeout(node_info_service: NodeLoadInfoService,
             return (TABLETS_SOFT_TIMEOUT, TABLETS_HARD_TIMEOUT), node_info
         # For non-tablet cases, use the passed timeout
         return (timeout, None), node_info
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
         return (timeout, None), {}
 

@@ -2208,7 +2208,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                 timeout=timeout,
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
-                                round_robin=round_robin, params=self.params).run()
+                                round_robin=round_robin, params=self.params,
+                                cluster_tester=self).run()
 
     def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
@@ -3793,12 +3794,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        if email_data:
-            email_data['grafana_screenshots'] = grafana_screenshots
-            email_data["reporter"] = self.email_reporter.__class__.__name__
-            self.log.debug('Save email data to file %s', json_file_path)
-            self.log.debug('Email data: %s', email_data)
-            save_email_data_to_file(email_data, json_file_path)
+        email_data['grafana_screenshots'] = grafana_screenshots
+        email_data["reporter"] = self.email_reporter.__class__.__name__
+        self.log.debug('Save email data to file %s', json_file_path)
+        self.log.debug('Email data: %s', email_data)
+        save_email_data_to_file(email_data, json_file_path)
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:

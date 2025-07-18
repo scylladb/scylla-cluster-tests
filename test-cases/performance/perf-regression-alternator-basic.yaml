@@ -1,0 +1,94 @@
+test_duration: 840
+
+prepare_write_cmd:
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=15000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=0 -p insertcount=5000000 -p operationcount=5000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=15000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=5000000 -p insertcount=5000000 -p operationcount=5000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=15000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=10000000 -p insertcount=5000000 -p operationcount=5000000
+
+
+stress_cmd_w: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 500 -p recordcount=15000000
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform -p operationcount=0
+  -p fieldcount=10 -p fieldlength=512
+
+stress_cmd_r: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 500 -p recordcount=15000000
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform -p operationcount=0
+  -p fieldcount=10 -p fieldlength=512
+
+stress_cmd_m: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 500 -p recordcount=15000000
+  -p readproportion=0.3 -p updateproportion=0.5 -p scanproportion=0.2 -p insertproportion=0 -p requestdistribution=uniform -p operationcount=0
+  -p fieldcount=10 -p fieldlength=512
+
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_loader: 'c7i.2xlarge'
+instance_type_monitor: 't3.small'
+instance_type_db: 'i3.4xlarge'
+
+stress_multiplier: 1
+stress_duration: 120
+prepare_stress_duration: 20
+alternator_write_isolation: 'forbid'
+alternator_port: 8080
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+user_prefix: 'perf-alternator-latency'
+space_node_threshold: 644245094
+
+use_hdrhistogram: true
+alternator_stress_rate: 15000
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+
+store_perf_results: true
+email_recipients: ['alternator@scylladb.com']
+
+
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P90 write:
+        fixed_limit: 3
+      P99 write:
+        fixed_limit: 5
+  read:
+    default:
+      P90 read:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 5
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: 5
+      P90 read:
+          fixed_limit: 5
+      P99 write:
+          fixed_limit: 8
+      P99 read:
+          fixed_limit: 8
+  throughput:
+    default:
+      P90 read:
+        fixed_limit: 99999999
+      P99 read:
+        fixed_limit: 99999999
+      P90 write:
+        fixed_limit: 99999999
+      P99 write:
+          fixed_limit: 99999999
