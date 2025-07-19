@@ -186,13 +186,13 @@ class ProvisionerFactory:
     def register_provisioner(self, backend: str, provisioner_class: Provisioner) -> None:
         self._classes[backend] = provisioner_class
 
-    def create_provisioner(self, backend: str, test_id: str, region: str, availability_zone: str, **config) -> Provisioner:
+    def create_provisioner(self, backend: str, test_id: str, region: str, availability_zone: str, enable_azure_kms: bool = False, **config) -> Provisioner:
         """Creates provisioner for given backend, test_id and region and returns it."""
         provisioner = self._classes.get(backend)
         if not provisioner:
             raise ProvisionerError(f"No provisioner found for backend '{backend}'. "
                                    f"Register it with provisioner_factory.register_provisioner method.")
-        return provisioner(test_id, region, availability_zone, **config)
+        return provisioner(test_id, region, availability_zone, enable_azure_kms, **config)
 
     def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:
         """Discovers regions where resources for given test_id are created.
