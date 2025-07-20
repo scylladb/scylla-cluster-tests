@@ -440,7 +440,7 @@ class KubernetesPodWatcher(KubernetesRunner):
             pod_name, result)
         return result
 
-    def _is_pod_failed_or_completed(self, _cache={}) -> bool:  # pylint: disable=dangerous-default-value
+    def _is_pod_failed_or_completed(self, _cache={}) -> bool:  # pylint: disable=dangerous-default-value  # noqa: B006
         last_call_at = _cache.get('last_call_at')
         if last_call_at and time.time() - last_call_at < 3:
             time.sleep(3)

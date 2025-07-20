@@ -47,7 +47,6 @@ class FullScanAggregateCommands(NamedTuple):
 
 class FullscanException(Exception):
     """ Exception during running a fullscan"""
-    ...
 
 
 # pylint: disable=too-many-instance-attributes
