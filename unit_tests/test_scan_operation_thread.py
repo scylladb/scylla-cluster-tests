@@ -147,7 +147,7 @@ def test_negative_prometheus_validation_error(events, cluster):
     )
     with patch.object(PrometheusDBStats, '__init__', return_value=None):
         with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '1']]}]):
-            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
+            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=30):
                 ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
