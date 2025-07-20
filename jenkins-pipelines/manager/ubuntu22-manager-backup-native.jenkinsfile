@@ -6,13 +6,11 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
-    test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
-    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml", "configurations/disable_client_encrypt.yaml", "configurations/object_storage.yaml"]''',
+    test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/object_storage.yaml"]''',
     extra_environment_variables: 'SCT_MGMT_BACKUP_METHOD=native',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
-
-    downstream_jobs_to_run: 'ubuntu24-upgrade-test'
 )
