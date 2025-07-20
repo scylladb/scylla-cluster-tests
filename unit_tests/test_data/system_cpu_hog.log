@@ -1,0 +1,49 @@
+2025-07-16 14:04:21,353 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] init - starting auth service
+2025-07-16 14:04:21,355 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] init - starting auth service
+2025-07-16 14:04:21,358 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] auth_service - Starting the role manager
+2025-07-16 14:04:21,358 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] database - Querying the roles table [query_id=3010515262]
+2025-07-16 14:04:21,358 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] auth_service - Waiting for superuser to be created
+2025-07-16 14:04:21,359 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0: gms] database - Querying the roles table [query_id=3900788831]
+2025-07-16 14:04:21,360 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 1:main] auth_service - Starting the role manager
+2025-07-16 14:04:21,360 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 1:main] auth_service - role manager started
+2025-07-16 14:04:21,360 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 1:main] auth_service - authorizer and authenticator started
+2025-07-16 14:04:21,360 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] database - Query complete [query_id=3010515262]
+2025-07-16 14:04:21,361 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] auth_service - role manager started
+2025-07-16 14:04:21,361 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] auth_service - authorizer and authenticator started
+2025-07-16 14:04:21,361 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0:main] diagnostics - stop_after_starting_auth_service: pausing the node
+2025-07-16 14:04:51,504 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !WARN    | scylla: [shard 0: gms] reader_concurrency_semaphore - Permit system.roles:data-query timed out after -140217312ns
+2025-07-16 14:04:51,504 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 0: gms] reader_concurrency_semaphore - Semaphore system with 1/100 count and 16928/21474836 memory resources: timed out, dumping permit diagnostics:
+Trigger permit: count=1, memory=16928, table=system.roles, operation=data-query, state=active/need_cpu
+Identified bottleneck(s): CPU
+
+permits count   memory  table/operation/state
+1       1       17K     system.roles/data-query/active/need_cpu
+1       0       0B      *.*/view_builder/active
+
+2       1       17K     total
+
+Stats:
+permit_based_evictions: 0
+time_based_evictions: 0
+inactive_reads: 0
+total_successful_reads: 1105
+total_failed_reads: 0
+total_reads_shed_due_to_overload: 0
+total_reads_killed_due_to_kill_limit: 0
+reads_admitted: 1110
+reads_enqueued_for_admission: 826
+reads_enqueued_for_memory: 0
+reads_admitted_immediately: 285
+reads_queued_because_ready_list: 789
+reads_queued_because_need_cpu_permits: 36
+reads_queued_because_memory_resources: 0
+reads_queued_because_count_resources: 0
+reads_queued_with_eviction: 0
+total_permits: 1115
+current_permits: 2
+need_cpu_permits: 1
+awaits_permits: 0
+disk_reads: 0
+sstables_read: 0
+2025-07-16 14:04:51,513 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 1:strm] gossip - failure_detector_loop: Mark node fceaf9b0-1ec6-46a9-a83f-e19c1ebae2ea/optional(127.53.133.9) as DOWN
+2025-07-16 14:04:51,513 rolling-upgrade-2019-1-n-centos-db-node-b50af2f8-0-3 !INFO    | scylla: [shard 1:strm] gossip - failure_detector_loop: Mark node 77240f0c-e682-4b4a-8731-d19236b075c2/optional(127.53.133.37) as DOWN
