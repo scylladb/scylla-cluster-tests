@@ -28,6 +28,7 @@ pytestmark = [
         pytest.param("", id="regular"),
         pytest.param("-tls", id="tls", marks=[pytest.mark.docker_scylla_args(ssl=True)]),
         pytest.param("cloud-config", id="sni_proxy", marks=pytest.mark.skip(reason="manual test only")),
+        pytest.param("""-keyspace='"5_keyspace"' """, id="quoted_keyspace"),
     ],
 )
 def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
