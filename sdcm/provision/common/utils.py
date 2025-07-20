@@ -279,7 +279,10 @@ def install_syslogng_exporter():
 def disable_daily_apt_triggers():
     return dedent("""\
     if apt-get --help >/dev/null 2>&1 ; then
-        if [ ! -f /tmp/disable_daily_apt_triggers_done ]; then
+        smi_installed=false
+        dpkg -s scylla-machine-image &> /dev/null && smi_installed=true
+        dpkg -s scylla-enterprise-machine-image &> /dev/null && smi_installed=true
+        if [ ! -f /tmp/disable_daily_apt_triggers_done && ! $smi_installed ]; then
             rm -f /etc/apt/apt.conf.d/*unattended-upgrades /etc/apt/apt.conf.d/*auto-upgrades || true
             rm -f /etc/apt/apt.conf.d/*periodic /etc/apt/apt.conf.d/*update-notifier || true
             systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true
