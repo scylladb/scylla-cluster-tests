@@ -3104,21 +3104,21 @@ class FillDatabaseData(ClusterTester):
         # Run through the list of items and create all tables
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
-            # Check if current cluster version supports non-frozed UDT
-            if 'skip_condition' in item \
-                    and not eval(item['skip_condition']):
-                item['skip'] = 'skip'
-                self.all_verification_items[test_num]['skip'] = 'skip'
-                self.log.debug("Version doesn't support the item, skip it: %s.", item['create_tables'])
+            with self._execute_and_log(f'Created tables for test "{test_name}" in {{}}s'):
+                # Check if current cluster version supports non-frozen UDT
+                if 'skip_condition' in item \
+                        and not eval(item['skip_condition']):
+                    item['skip'] = 'skip'
+                    self.all_verification_items[test_num]['skip'] = 'skip'
+                    self.log.debug("Version doesn't support the item, skip it: %s.", item['create_tables'])
 
-            # TODO: fix following condition to make "skip_condition" really skip stuff
-            # when it is True, not False as it is now.
-            # As of now it behaves as "run_condition".
-            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
-                # NOTE: skip condition may change during upgrade, nail down it
-                # to be able to run proper queries on target scylla version
-                self.all_verification_items[test_num]['skip_condition'] = True
-                with self._execute_and_log(f'Created tables for test "{test_name}" in {{}} seconds'):
+                # TODO: fix following condition to make "skip_condition" really skip stuff
+                # when it is True, not False as it is now.
+                # As of now it behaves as "run_condition".
+                if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                    # NOTE: skip condition may change during upgrade, nail down it
+                    # to be able to run proper queries on target scylla version
+                    self.all_verification_items[test_num]['skip_condition'] = True
                     for create_table in item['create_tables']:
                         # Cannot create CDC log for a table keyspace_fill_db_data.order_by_with_in_test,
                         # because keyspace uses tablets. See issue scylladb/scylladb#16317.
@@ -3140,8 +3140,8 @@ class FillDatabaseData(ClusterTester):
                             time.sleep(15)
                     for truncate in item['truncates']:
                         truncates.append(truncate)
-            else:
-                self.all_verification_items[test_num]['skip_condition'] = False
+                else:
+                    self.all_verification_items[test_num]['skip_condition'] = False
         # Sleep a while after creating test tables to avoid schema disagreement.
         # Refs: https://github.com/scylladb/scylla/issues/5235
         time.sleep(30)
@@ -3217,9 +3217,9 @@ class FillDatabaseData(ClusterTester):
         self.log.info('Start table truncation')
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
-            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
-                for truncate in item['truncates']:
-                    with self._execute_and_log(f'Truncated table for test "{test_name}" in {{}} seconds'):
+            with self._execute_and_log(f'Truncated table for test "{test_name}" in {{}}s'):
+                if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                    for truncate in item['truncates']:
                         self.truncate_table(session, truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
@@ -3227,16 +3227,16 @@ class FillDatabaseData(ClusterTester):
         # pylint: disable=too-many-nested-blocks
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
-            # TODO: fix following condition to make "skip_condition" really skip stuff
-            # when it is True, not False as it is now.
-            # As of now it behaves as "run_condition".
-            if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
-                if 'disable_paging' in item and item['disable_paging']:
-                    session.default_fetch_size = 0
-                else:
-                    session.default_fetch_size = default_fetch_size
-                for insert in item['inserts']:
-                    with self._execute_and_log(f'Populated data for test "{test_name}" in {{}} seconds'):
+            with self._execute_and_log(f'Populated data for test "{test_name}" in {{}}s'):
+                # TODO: fix following condition to make "skip_condition" really skip stuff
+                # when it is True, not False as it is now.
+                # As of now it behaves as "run_condition".
+                if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                    if 'disable_paging' in item and item['disable_paging']:
+                        session.default_fetch_size = 0
+                    else:
+                        session.default_fetch_size = default_fetch_size
+                    for insert in item['inserts']:
                         try:
                             if insert.startswith("#REMOTER_RUN"):
                                 for node in self.db_cluster.nodes:
@@ -3246,14 +3246,14 @@ class FillDatabaseData(ClusterTester):
                         except Exception as ex:
                             LOGGER.exception("failed to insert: %s", insert)
                             raise ex
-                    # Add delay on client side for inserts of list to avoid list order issue
-                    # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
-                    if 'list<' in item['create_tables'][0]:
-                        time.sleep(1)
-                if item.get("cdc_tables"):
-                    with self._execute_and_log(f'Read CDC logs for test "{test_name}" in {{}} seconds'):
-                        for cdc_table in item["cdc_tables"]:
-                            item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
+                        # Add delay on client side for inserts of list to avoid list order issue
+                        # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
+                        if 'list<' in item['create_tables'][0]:
+                            time.sleep(1)
+                    if item.get("cdc_tables"):
+                        with self._execute_and_log(f'Read CDC logs for test "{test_name}" in {{}} seconds'):
+                            for cdc_table in item["cdc_tables"]:
+                                item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
 
     def _run_db_queries(self, item, session):
         for i in range(len(item['queries'])):
