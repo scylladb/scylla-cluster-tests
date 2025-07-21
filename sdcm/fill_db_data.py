@@ -3340,6 +3340,8 @@ class FillDatabaseData(ClusterTester):
         and after upgrade of every node to check the consistency of data
         """
         node = self.db_cluster.nodes[0]
+        LOGGER.debug("Current cluster nodes: [%s]", self.db_cluster.nodes)
+        LOGGER.debug("Picking [%s] as the target node to fill the DB data", node)
 
         with self.db_cluster.cql_connection_patient(node) as session:
             # pylint: disable=no-member
