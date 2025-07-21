@@ -2237,12 +2237,16 @@ class Nemesis:
                 if not result:
                     continue
 
+                first_row = result.one()
+                if not first_row or first_row.ck is None:
+                    continue
+
                 if not with_clustering_key_data:
                     partitions_for_delete[partition_key] = []
                     continue
 
                 # Suppose that min ck value is 0 in the partition
-                partitions_for_delete[partition_key].extend([0, result[0].ck])
+                partitions_for_delete[partition_key].extend([0, first_row.ck])
 
                 if None in partitions_for_delete[partition_key]:
                     partitions_for_delete.pop(partition_key)
@@ -2257,8 +2261,17 @@ class Nemesis:
             Returns timestamp and the clustering key value as tuple
         """
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
-            number_of_rows = session.execute(
-                SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one().system_count_ck
+            count_result = session.execute(
+                SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one()
+            if not count_result or count_result.system_count_ck is None:
+                message = f"Unable to count rows in partition (pk = {pkey})"
+                self.log.error(message)
+                raise PartitionNotFound(message)
+            number_of_rows = count_result.system_count_ck
+            if number_of_rows == 0:
+                message = f"Partition (pk = {pkey}) is empty"
+                self.log.error(message)
+                raise PartitionNotFound(message)
             fetch_limit = max(math.ceil(number_of_rows * partition_percentage), 11)
             self.log.debug(
                 "[%s_using_timestamp] Partition size: %s, fetching up to %s",
@@ -2268,13 +2281,19 @@ class Nemesis:
             )
             partition = session.execute(SimpleStatement(
                 f"select pk, ck from {ks_cf} where pk = {pkey} limit {fetch_limit}")).all()
+            if not partition:
+                message = (f"No rows found in partition (pk = {pkey}) after counting {number_of_rows} rows. "
+                           "The partition may have been deleted.")
+                self.log.error(message)
+                raise PartitionNotFound(message)
             delete_mark = partition[-1].ck
-            timestamp = session.execute(
-                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")).one().writetime_v
-            if not timestamp:
+            timestamp_result = session.execute(
+                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")).one()
+            if not timestamp_result or timestamp_result.writetime_v is None:
                 message = f"Unable to get writetime for row (pk = {pkey}, ck = {delete_mark})"
                 self.log.error(message)
                 raise TimestampNotFound(message)
+            timestamp = timestamp_result.writetime_v
 
             return timestamp, delete_mark
 
