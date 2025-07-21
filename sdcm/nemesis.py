@@ -5362,6 +5362,19 @@ class Nemesis(NemesisFlags):
     def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=False)
 
+    def switch_target_node_to_another_rack(self):
+        """
+            Switches the target node to a rack different than loader node rack.
+
+            This method selects a node from a different rack than the loader node rack
+            and sets it as the new target node. It is useful for testing rack-aware scenarios.
+        """
+        if self.cluster.params.get("rack_aware_loader") and self.target_node.parent_cluster.racks_count > 1:
+            loader_rack = self.loaders.nodes[0].rack
+            target_node_rack = [node.rack for node in self.cluster.nodes if node.rack != loader_rack][0]
+            self.set_target_node(rack=target_node_rack)
+            self.log.info("Target node rack %s, loader rack %s", self.target_node.rack, loader_rack)
+
     def _refuse_connection_from_banned_node(self, use_iptables=False):
         """Banned node could not connect with rest nodes in cluster
 
@@ -5381,6 +5394,12 @@ class Nemesis(NemesisFlags):
             raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+
+        if SkipPerIssues("scylladb/scylla-drivers#95", self.cluster.params):
+            # until https://github.com/scylladb/scylla-drivers/issues/95 would be solved
+            # we should disable the target node switching
+            self.switch_target_node_to_another_rack()
+
         keyspace_name = "banned_keyspace"
         table_name = "table1"
 
