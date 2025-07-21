@@ -4999,7 +4999,7 @@ class Nemesis(NemesisFlags):
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
         Then verify it can be used in a query. Finally, drop the index.
         """
-        if self.cluster.nemesis_count > 1 and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/21695", params=self.tester.params):
+        if self.cluster.nemesis_count > 1:
             raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
 
         # Disable MV tests with tablets.
@@ -5044,6 +5044,8 @@ class Nemesis(NemesisFlags):
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
+        if self.cluster.nemesis_count > 1:
+            raise UnsupportedNemesis("Skip create mv nemesis with parallel nemesis run")
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
