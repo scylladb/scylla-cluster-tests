@@ -12,7 +12,7 @@ seeds_num: 3
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'KillMVBuildingCoordinator'
 nemesis_seed: '032'
 
 user_prefix: 'longevity-100gb-4h'
@@ -26,3 +26,6 @@ sstable_size: 100
 
 hinted_handoff: 'enabled'
 parallel_node_operations: true
+
+experimental_features:
+ - views-with-tablets
