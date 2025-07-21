@@ -5428,7 +5428,7 @@ class Nemesis(NemesisFlags):
         # num_of_restarts = random.randint(1, len(self.cluster.nodes))
         num_of_restarts = 1
         self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Verification node for MV") as working_node:
+        with self.node_allocator.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Verification node for MV") as working_node:
             ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=working_node,
                                                             filter_empty_tables=True, filter_out_mv=True,
                                                             filter_out_table_with_counter=True)
@@ -5475,13 +5475,13 @@ class Nemesis(NemesisFlags):
                         self.target_node.stop_scylla()
                         self.log.debug("Wait to new coordinator will be elected for 30 seconds")
                         time.sleep(30)
-                        with self.run_nemesis(node_list=self.cluster.nodes,
-                                              nemesis_label="search coordinator") as verification_node:
+                        with self.node_allocator.run_nemesis(node_list=self.cluster.nodes,
+                                                             nemesis_label="search coordinator") as verification_node:
                             new_coordinator_node = get_topology_coordinator_node(verification_node)
 
                         self.log.debug("New coordinator node: %s, %s", new_coordinator_node, new_coordinator_node.name)
                         self.target_node.start_scylla()
-                        self.target_node.run_nodetool(sub_cmd="repair -pr")
+                        # self.target_node.run_nodetool(sub_cmd="repair -pr")
                         assert self.target_node != new_coordinator_node, \
                             f"New coordinator node was not elected while old one {coordinator_node.name} was stopped"
 
