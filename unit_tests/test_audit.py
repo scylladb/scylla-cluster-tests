@@ -10,6 +10,11 @@ class DummyAuditNode(BaseNode):
     system_log = Path(__file__).parent.resolve() / 'test_data' / 'test_audit.log'
 
 
+class DummyAuditNodeCommaSeparated(BaseNode):
+
+    system_log = Path(__file__).parent.resolve() / 'test_data' / 'test_audit_comma_sep.log'
+
+
 def test_get_audit_log_rows_can_be_filtered_by_time():
     node = DummyAuditNode(name='dummy-node', parent_cluster=None)
     # no date filter provided
@@ -21,6 +26,20 @@ def test_get_audit_log_rows_can_be_filtered_by_time():
     rows = get_audit_log_rows(node, from_datetime=start_time)
     rows = list(rows)
     assert len(rows) == 4
+    assert not [row for row in rows if row.event_time < start_time.replace(microsecond=0)]
+
+
+def test_get_audit_log_rows_can_be_filtered_by_time_comma_separated():
+    node = DummyAuditNodeCommaSeparated(name='dummy-node', parent_cluster=None)
+    # no date filter provided
+    rows = get_audit_log_rows(node, from_datetime=None)
+    assert len(list(rows)) == 211
+
+    # filter by date
+    start_time = datetime(2025, 7, 19, 16, 1, 31, 790)  # 2025-07-19T16:01:31.790
+    rows = get_audit_log_rows(node, from_datetime=start_time)
+    rows = list(rows)
+    assert len(rows) == 209
     assert not [row for row in rows if row.event_time < start_time.replace(microsecond=0)]
 
 

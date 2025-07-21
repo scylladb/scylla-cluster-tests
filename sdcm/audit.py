@@ -62,15 +62,15 @@ class AuditLogRow:
 
 AUDIT_LOG_REGEX = re.compile(
     r"""
-    node="(?P<node>.*?)"\s                # Node identifier
-    category="(?P<category>.*?)"\s        # Audit category (e.g., AUTH, DML)
-    cl="(?P<consistency>.*?)"\s           # Consistency level
-    error="(?P<error>.*?)"\s              # Error flag (true/false)
-    keyspace="(?P<keyspace_name>.*?)"\s   # Keyspace name
-    query="(?P<operation>.*?)"\s          # Query or operation performed
-    client_ip="(?P<source>.*?)"\s         # Source IP address
-    table="(?P<table_name>.*?)"\s         # Table name
-    username="(?P<username>.*?)"\s        # Username of the client
+    node="(?P<node>.*?)"[,\s]*                # Node identifier
+    category="(?P<category>.*?)"[,\s]*        # Audit category (e.g., AUTH, DML)
+    cl="(?P<consistency>.*?)"[,\s]*           # Consistency level
+    error="(?P<error>.*?)"[,\s]*              # Error flag (true/false)
+    keyspace="(?P<keyspace_name>.*?)"[,\s]*   # Keyspace name
+    query="(?P<operation>.*?),?"[,\s]*        # Query or operation performed
+    client_ip="(?P<source>.*?)"[,\s]*         # Source IP address
+    table="(?P<table_name>.*?)"[,\s]*         # Table name
+    username="(?P<username>.*?)"[,\s\n]*      # Username of the client
     """,
     re.VERBOSE
 )
