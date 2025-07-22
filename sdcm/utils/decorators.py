@@ -22,6 +22,7 @@ from functools import wraps, partial, cached_property
 from typing import Optional, Callable, TYPE_CHECKING
 
 from botocore.exceptions import ClientError
+from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.argus_results import send_result_to_argus
 from sdcm.sct_events import Severity
@@ -402,6 +403,15 @@ def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluste
                     else:
                         raise UnsupportedNemesis("Capacity Issue") from ex
                 raise
+            except ServiceUnavailable as ex:
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                        severity=Severity.CRITICAL
+                    ).publish()
+                else:
+                    raise UnsupportedNemesis("Capacity Issue") from ex
         return wrapper
 
     if func is not None and callable(func):
@@ -425,6 +435,11 @@ def critical_on_capacity_issues(func: callable) -> callable:
                                    "cluster is probably unbalanced, continuing with test would yield unknown results",
                                    severity=Severity.CRITICAL).publish()
             raise
+        except ServiceUnavailable as ex:
+            TestFrameworkEvent(source=func.__name__,
+                               message=f"Test failed due to service availability issues: {ex} "
+                               "cluster is probably unbalanced, continuing with test would yield unknown results",
+                               severity=Severity.CRITICAL).publish()
     return wrapper
 
 
