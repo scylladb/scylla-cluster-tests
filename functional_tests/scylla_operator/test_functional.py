@@ -398,7 +398,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
-    "3.5.0",
+    "3.5.1",
 ))
 def test_mgmt_repair(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
@@ -424,7 +424,7 @@ def test_mgmt_repair(db_cluster, manager_version):
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
-    "3.5.0",
+    "3.5.1",
 ))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)

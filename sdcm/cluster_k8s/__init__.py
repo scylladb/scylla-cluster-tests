@@ -125,7 +125,7 @@ SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
 K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0"  # without 'v' prefix
-SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.5.0"
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.5.1"
 
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
