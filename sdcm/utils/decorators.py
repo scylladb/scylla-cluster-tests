@@ -21,6 +21,7 @@ from functools import wraps, partial, cached_property
 from typing import Optional, Callable
 
 from botocore.exceptions import ClientError
+from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.argus_results import send_result_to_argus
 from sdcm.sct_events import Severity
@@ -364,6 +365,7 @@ def skip_on_capacity_issues(func: callable) -> callable:
     """
     Decorator to skip nemesis that fail due to capacity issues
     """
+<<<<<<< HEAD
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -373,6 +375,82 @@ def skip_on_capacity_issues(func: callable) -> callable:
                 raise UnsupportedNemesis("Capacity Issue") from ex
             raise
     return wrapper
+||||||| parent of 027ae91f1 (feature(skip_on_capacity_issues): check for gce ServiceUnavailable errors)
+    def decorator(inner_func):
+        @wraps(inner_func)
+        def wrapper(*args, **kwargs):
+            cluster = db_cluster
+            # Try to get db_cluster from inner_func's bound instance if not provided
+            if cluster is None and args:
+                bound_self = getattr(inner_func, "__self__", None)
+                if bound_self and hasattr(bound_self, "nodes"):
+                    cluster = bound_self
+                else:
+                    for arg in args:
+                        if hasattr(arg, "nodes"):  # crude check for cluster-like object
+                            cluster = arg
+                            break
+            try:
+                return inner_func(*args, **kwargs)
+            except ClientError as ex:
+                if "InsufficientInstanceCapacity" in str(ex):
+                    if not check_cluster_layout(cluster):
+                        TestFrameworkEvent(
+                            source=inner_func.__name__,
+                            message=f"Test failed due to capacity issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                            severity=Severity.CRITICAL
+                        ).publish()
+                    else:
+                        raise UnsupportedNemesis("Capacity Issue") from ex
+                raise
+        return wrapper
+
+    if func is not None and callable(func):
+        return decorator(func)
+    return decorator
+=======
+    def decorator(inner_func):
+        @wraps(inner_func)
+        def wrapper(*args, **kwargs):
+            cluster = db_cluster
+            # Try to get db_cluster from inner_func's bound instance if not provided
+            if cluster is None and args:
+                bound_self = getattr(inner_func, "__self__", None)
+                if bound_self and hasattr(bound_self, "nodes"):
+                    cluster = bound_self
+                else:
+                    for arg in args:
+                        if hasattr(arg, "nodes"):  # crude check for cluster-like object
+                            cluster = arg
+                            break
+            try:
+                return inner_func(*args, **kwargs)
+            except ClientError as ex:
+                if "InsufficientInstanceCapacity" in str(ex):
+                    if not check_cluster_layout(cluster):
+                        TestFrameworkEvent(
+                            source=inner_func.__name__,
+                            message=f"Test failed due to capacity issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                            severity=Severity.CRITICAL
+                        ).publish()
+                    else:
+                        raise UnsupportedNemesis("Capacity Issue") from ex
+                raise
+            except ServiceUnavailable as ex:
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                        severity=Severity.CRITICAL
+                    ).publish()
+                else:
+                    raise UnsupportedNemesis("Capacity Issue") from ex
+        return wrapper
+
+    if func is not None and callable(func):
+        return decorator(func)
+    return decorator
+>>>>>>> 027ae91f1 (feature(skip_on_capacity_issues): check for gce ServiceUnavailable errors)
 
 
 def critical_on_capacity_issues(func: callable) -> callable:
@@ -391,6 +469,11 @@ def critical_on_capacity_issues(func: callable) -> callable:
                                    "cluster is probably unbalanced, continuing with test would yield unknown results",
                                    severity=Severity.CRITICAL).publish()
             raise
+        except ServiceUnavailable as ex:
+            TestFrameworkEvent(source=func.__name__,
+                               message=f"Test failed due to service availability issues: {ex} "
+                               "cluster is probably unbalanced, continuing with test would yield unknown results",
+                               severity=Severity.CRITICAL).publish()
     return wrapper
 
 
