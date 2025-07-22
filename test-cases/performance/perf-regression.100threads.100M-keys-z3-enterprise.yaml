@@ -10,12 +10,10 @@ stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema '
 stress_cmd_no_mv: "cassandra-stress read no-warmup cl=ALL n=200M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=3000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=601M..800M "
 
 gce_network: 'qa-vpc'
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-2023.1.repo'
 # NOTE: following is needed for the K8S case
 k8s_loader_run_type: 'static'
 use_prepared_loaders: true
 n_db_nodes: 3
-n_monitor_nodes: 1
 
 # Loaders
 gce_instance_type_loader: 'c2-standard-30'
@@ -61,3 +59,5 @@ use_hdrhistogram: true
 
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 gce_project: 'gcp-local-ssd-latency'
+
+adaptive_timeout_store_metrics: false

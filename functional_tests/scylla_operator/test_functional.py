@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-#  pylint: disable=too-many-lines
 import logging
 import os
 import random
@@ -26,7 +25,7 @@ import path
 
 import pytest
 import yaml
-from cassandra.cluster import (  # pylint: disable=no-name-in-module
+from cassandra.cluster import (
     Cluster,
     ExecutionProfile,
     EXEC_PROFILE_DEFAULT,
@@ -95,7 +94,7 @@ def test_single_operator_image_tag_is_everywhere(db_cluster):
 
 
 @pytest.mark.required_operator("v1.11.0")
-def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # noqa: PLR0914
+def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # noqa: PLR0914
     """
     Deploy 2 'ScyllaCluster' K8S objects in 2 different namespaces in the single K8S cluster
     and combine them into a single DB cluster.
@@ -322,7 +321,7 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
                 time.sleep(4)
                 db_cluster.nodes[0].run_cqlsh(cmd=f"DROP KEYSPACE IF EXISTS {current_ks_name}", timeout=60)
                 time.sleep(4)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 # NOTE: we don't care if some of the queries fail.
                 #       At first, there are redundant ones and, at second, they are utilitary.
                 log.warning("Utilitary CQL query has failed: %s", exc)
@@ -647,7 +646,7 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
                 # NOTE: increase the value only when the sysctl spec update is successful
                 #       to avoid false negative results in further assertions
                 expected_aio_max_nr_value += 1
-            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001
                 str_error = str(error)
                 log.debug("Change /spec/sysctls value to %d failed. Error: %s",
                           expected_aio_max_nr_value, str_error)
@@ -857,7 +856,7 @@ def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
 
 
 @pytest.mark.restart_is_used
-def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-many-branches
+def test_scylla_yaml_override(db_cluster, scylla_yaml):
     """
     Test of applying scylla.yaml via configmap
     - update parameter that exists in scylla.yaml
@@ -962,7 +961,6 @@ def test_default_dns_policy(db_cluster: ScyllaPodCluster):
 @pytest.mark.required_operator("v1.8.0")
 @pytest.mark.requires_tls_and_sni
 def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path):
-    # pylint: disable=too-many-locals
 
     cluster_name = db_cluster.k8s_cluster.k8s_scylla_cluster_name
 
@@ -994,7 +992,7 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
     cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
                       execution_profiles={EXEC_PROFILE_DEFAULT: execution_profile})
     ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_SSLv23)
-    ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED  # pylint: disable=no-member
+    ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
 
     ssl_context.load_verify_locations(cadata=ca_filename.read_text())
     ssl_context.load_cert_chain(keyfile=key_filename, certfile=crt_filename)

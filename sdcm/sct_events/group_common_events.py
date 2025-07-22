@@ -100,12 +100,6 @@ def ignore_topology_change_coordinator_errors():
             ))
             stack.enter_context(DbEventsFilter(
                 db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
-                     r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_erro"
-                     r"r \(connection is closed\)\)"
-            ))
-            stack.enter_context(DbEventsFilter(
-                db_event=DatabaseLogEvent.RUNTIME_ERROR,
                 line=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*connection is closed",
             ))
         yield
@@ -456,6 +450,12 @@ def ignore_raft_transport_failing():
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
             regex=r".*raft - .* Transferring snapshot.*not found",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r"raft - \[[0-9a-f-]+\] Transferring snapshot to [0-9a-f-]+ failed with: seastar::rpc::remote_verb_error",
             extra_time_to_expiration=30
         ))
         yield

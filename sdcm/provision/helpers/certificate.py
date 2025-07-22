@@ -79,10 +79,13 @@ def install_client_certificate(remoter, node_identifier):
     dst = '/tmp/ssl_conf'
     remoter.run(f'mkdir -p {dst}')
     remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / node_identifier) + '/', dst=dst)
-    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / 'client'), dst=dst)  # pylint: disable=not-callable
+    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / 'client'), dst=dst)
     setup_script = dedent(f"""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
+        sed -i '/ssl = true/a hostname = {node_identifier}' ~/.cassandra/cqlshrc
+        sudo mkdir -p /root/.cassandra
+        sudo cp ~/.cassandra/cqlshrc /root/.cassandra
         sudo mkdir -p /etc/scylla/
         sudo rm -rf {SCYLLA_SSL_CONF_DIR}
         sudo mv -f /tmp/ssl_conf/ /etc/scylla/
@@ -145,7 +148,6 @@ def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
         )
 
 
-# pylint: disable=too-many-arguments,too-many-locals
 def create_certificate(
         cert_file: Path, key_file: Path, cname: str, ca_cert_file: Path = None, ca_key_file: Path = None,
         server_csr_file: Path = None, ip_addresses: list = None, dns_names: list = None, valid_days: int = 365) -> None:
@@ -334,6 +336,14 @@ def c_s_transport_str(peer_verification: bool, client_mtls: bool) -> str:
         transport_str += ' hostname-verification=true'
     if client_mtls:
         transport_str += f' keystore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.PKCS12_KEYSTORE} keystore-password=cassandra'
+    return transport_str
+
+
+def cql_stress_transport_str(peer_verification: bool) -> str:
+    """Build transport string for cassandra-stress."""
+    transport_str = f'truststore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} truststore-password=cassandra'
+    if peer_verification:
+        transport_str += ' hostname-verification=true'
     return transport_str
 
 

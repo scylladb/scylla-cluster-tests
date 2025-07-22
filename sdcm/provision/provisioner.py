@@ -36,7 +36,7 @@ class DataDisk:
 
 
 @dataclass
-class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
+class InstanceDefinition:
     name: str
     image_id: str
     type: str   # instance_type from yaml
@@ -55,6 +55,10 @@ class ProvisionError(Exception):
     pass
 
 
+class OperationPreemptedError(Exception):
+    pass
+
+
 class ProvisionerError(Exception):
     pass
 
@@ -63,14 +67,13 @@ class PricingModel(Enum):
     ON_DEMAND = 'on_demand'
     SPOT = 'spot'
     SPOT_FLEET = 'spot_fleet'
-    SPOT_LOW_PRICE = 'spot_low_price'
 
     def is_spot(self) -> bool:
         return self is not PricingModel.ON_DEMAND
 
 
 @dataclass
-class VmInstance:  # pylint: disable=too-many-instance-attributes
+class VmInstance:
     name: str
     region: str
     user_name: str

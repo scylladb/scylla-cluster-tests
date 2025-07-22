@@ -31,6 +31,10 @@ CQLSHRC_FILE = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
 def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = False) -> None:
     config = configparser.ConfigParser()
     config.read(cqlshrc_file)
+    if client_encrypt:
+        if not config['connection']:
+            config['connection'] = {}
+        config['connection']['ssl'] = 'true'
     config['ssl'] = {
         'validate': 'true' if client_encrypt else 'false',
         'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
@@ -42,7 +46,7 @@ def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = Fals
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
-# pylint: disable=no-member
+
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption

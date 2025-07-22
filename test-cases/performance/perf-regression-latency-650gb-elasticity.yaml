@@ -10,7 +10,6 @@ stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 
 
 n_db_nodes: 3
 n_loaders: 4
-n_monitor_nodes: 1
 
 instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
@@ -35,5 +34,8 @@ use_hdrhistogram: true
 email_subject_postfix: 'elasticity test'
 nemesis_double_load_during_grow_shrink_duration: 30
 parallel_node_operations: true
+cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.3'
+
+adaptive_timeout_store_metrics: false

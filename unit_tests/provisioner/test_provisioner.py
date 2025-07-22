@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-# pylint: disable=redefined-outer-name
+
 import uuid
 from datetime import datetime, timezone
 
@@ -106,7 +106,7 @@ def test_can_provision_scylla_vm(region, definition, provisioner, backend, provi
     assert v_m is v_m_2, 'provisioner should not not recreate vm with the same name'
 
     provisioner = provisioner_factory.create_provisioner(backend=backend, **provisioner_params)
-    v_m._provisioner = provisioner  # pylint: disable=protected-access
+    v_m._provisioner = provisioner
     assert v_m == provisioner.list_instances(
     )[0], 'provisioner with the same params should rediscover created resources'
 
@@ -165,7 +165,7 @@ def test_can_terminate_vm_instance(provisioner, definition, backend, provisioner
     assert not provisioner.list_instances()
 
 
-def test_can_trigger_cleanup(definition, provisioner, backend, provisioner_params):  # pylint: disable=no-self-use
+def test_can_trigger_cleanup(definition, provisioner, backend, provisioner_params):
     provisioner.get_or_create_instance(definition)
     assert len(provisioner.list_instances()) == 1
     provisioner.cleanup(wait=True)

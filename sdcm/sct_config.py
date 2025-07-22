@@ -14,7 +14,7 @@
 """
 Handling Scylla-cluster-test configuration loading
 """
-# pylint: disable=too-many-lines
+
 import os
 import re
 import ast
@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
@@ -108,7 +109,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         return [str(value), ] if str(value) else []
 
@@ -117,7 +118,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
         for val in value:
             try:
                 ret_values += [ast.literal_eval(val)]
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 ret_values += [str(val)]
         return ret_values
 
@@ -128,15 +129,15 @@ def int_or_space_separated_ints(value):
     try:
         value = int(value)
         return value
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         pass
 
     if isinstance(value, str):
         try:
             values = value.split()
-            [int(v) for v in values]  # pylint: disable=expression-not-assigned
+            [int(v) for v in values]
             return value
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     raise ValueError("{} isn't int or list".format(value))
@@ -146,14 +147,14 @@ def dict_or_str(value):
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
         # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
         # using yaml.safe_load()
         try:
             return yaml.safe_load(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     if isinstance(value, dict):
@@ -166,7 +167,7 @@ def dict_or_str_or_pydantic(value):
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     if isinstance(value, (dict, BaseModel)):
@@ -296,6 +297,9 @@ class SCTConfiguration(dict):
         dict(name="cloud_cluster_id", env="SCT_CLOUD_CLUSTER_ID", type=int,
              help="""scylla cloud cluster id"""),
 
+        dict(name="cloud_cluster_name", env="SCT_CLOUD_CLUSTER_NAME", type=str,
+             help="""scylla cloud cluster name"""),
+
         dict(name="cloud_prom_bearer_token", env="SCT_CLOUD_PROM_BEARER_TOKEN", type=str,
              help="""scylla cloud promproxy bearer_token to federate monitoring data into our monitoring instance"""),
 
@@ -375,9 +379,6 @@ class SCTConfiguration(dict):
 
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
-
-        dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
-             help="Url to the repo of scylla version to install c-s for loader"),
 
         dict(name="scylla_mgmt_address", env="SCT_SCYLLA_MGMT_ADDRESS",
              type=str,
@@ -651,7 +652,7 @@ class SCTConfiguration(dict):
                       parallel threads on different nodes. Ex.: "ChaosMonkey:2"
                     - nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run
                       <NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2>
-                      parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+                      parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
             """),
 
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",
@@ -743,7 +744,7 @@ class SCTConfiguration(dict):
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
              help="AWS security groups ids to use"),
 
-        dict(name="use_placement_group", env="SCT_USE_PLACEMENT_GROUP", type=str,
+        dict(name="use_placement_group", env="SCT_USE_PLACEMENT_GROUP", type=boolean,
              help="if true, create 'cluster' placement group for test case "
                   "for low-latency network performance achievement"),
 
@@ -788,9 +789,6 @@ class SCTConfiguration(dict):
 
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
              help=""),
-
-        dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
-             help="The max percentage of the on demand price we set for spot/fleet instances"),
 
         dict(name="extra_network_interface", env="SCT_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
@@ -1295,8 +1293,9 @@ class SCTConfiguration(dict):
             multiple commands can passed as a list"""),
 
         dict(name="perf_gradual_threads", env="SCT_PERF_GRADUAL_THREADS", type=dict_or_str,
-             help="Threads amount of c-s load for gradual performance test per sub-test. "
-                  "Example: {'read': 100, 'write': 200, 'mixed': 300}"),
+             help="Threads amount of stress load for gradual performance test per sub-test. "
+                  "Example: {'read': 100, 'write': [200, 300], 'mixed': 300}"),
+
         dict(name="perf_gradual_throttle_steps", env="SCT_PERF_GRADUAL_THROTTLE_STEPS", type=dict_or_str,
              help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}"),
 
@@ -1442,7 +1441,7 @@ class SCTConfiguration(dict):
                   "we enable kms by default since if we use scylla 2023.1.3 and up"),
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
-             help="How to transport logs: syslog-ng, ssh or docker", choices=("ssh", "docker", "syslog-ng")),
+             help="How to transport logs: syslog-ng, ssh or docker", choices=("ssh", "docker", "syslog-ng", "vector")),
 
         dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
              help="Collect logs from instances and sct runner"),
@@ -1719,6 +1718,21 @@ class SCTConfiguration(dict):
              help="""reserves instances capacity for whole duration of the test run (AWS only).
              Fallbacks to next availabilit zone if capacity is not available"""),
 
+        dict(name="use_dedicated_host", env="SCT_USE_DEDICATED_HOST", type=boolean,
+             help="""Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)"""),
+
+        dict(name="aws_dedicated_host_ids", env="SCT_AWS_DEDICATED_HOST_IDS", type=str_or_list_or_eval,
+             help="""list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)"""),
+
+        dict(name="post_behavior_dedicated_host", env="SCT_POST_BEHAVIOR_DEDICATED_HOST", type=str,
+             help="""
+            Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.
+
+            'destroy' - Destroy hosts (default)
+            'keep' - Keep hosts allocated
+         """,
+             choices=("keep", "destroy")),
+
         dict(name="bisect_start_date", env="SCT_BISECT_START_DATE", type=str,
              help="""Scylla build date from which bisecting should start.
               Setting this date enables bisection. Format: YYYY-MM-DD"""),
@@ -1761,6 +1775,9 @@ class SCTConfiguration(dict):
              help="Workload name, can be: write|read|mixed|unset."
                   "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
                   "If unset, workload is taken from test name."),
+
+        dict(name="adaptive_timeout_store_metrics", env="SCT_ADAPTIVE_TIMEOUT_STORE_METRICS", type=boolean,
+             help="Store adaptive timeout metrics in Argus. Disabled for performance tests only."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1869,10 +1886,11 @@ class SCTConfiguration(dict):
         'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i'
     ]
     ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
-    aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
+    aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2',
+                             'us-east-1', 'eu-north-1', 'eu-central-1', 'eu-west-3', 'ca-central-1']
 
     def __init__(self):  # noqa: PLR0912, PLR0914, PLR0915
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
         super().__init__()
         self.scylla_version = None
         self.scylla_version_upgrade_target = None
@@ -1951,7 +1969,7 @@ class SCTConfiguration(dict):
         dist_type = scylla_linux_distro.split('-')[0]
         dist_version = scylla_linux_distro.split('-')[-1]
 
-        if scylla_version := self.get('scylla_version'):  # pylint: disable=too-many-nested-blocks
+        if scylla_version := self.get('scylla_version'):
             if not self.get('docker_image'):
                 self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
@@ -2016,25 +2034,9 @@ class SCTConfiguration(dict):
                 raise ValueError("'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' "
                                  "or with 'scylla_repo'")
 
-            if (
-                self.get("n_loaders") and
-                not self.get("bare_loaders") and
-                not self.get("scylla_repo_loader") and
-                self.get("cluster_backend") != "aws"
-            ):
-                scylla_linux_distro_loader = self.get('scylla_linux_distro_loader')
-                dist_type_loader = scylla_linux_distro_loader.split('-')[0]
-                dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
-
-                scylla_version_for_loader = "nightly" if scylla_version == "latest" else scylla_version
-
-                self['scylla_repo_loader'] = find_scylla_repo(scylla_version_for_loader,
-                                                              dist_type_loader,
-                                                              dist_version_loader)
-
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
-           and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
+           and self.get("db_type") == "mixed_scylla":
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in region_names:
@@ -2060,14 +2062,14 @@ class SCTConfiguration(dict):
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
         if new_scylla_version and not 'k8s' in cluster_backend:
-            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
+            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif not self.get('new_scylla_repo'):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
         # 8) resolve repo symlinks
-        for repo_key in ("scylla_repo", "scylla_repo_loader", "new_scylla_repo",):
+        for repo_key in ("scylla_repo", "new_scylla_repo",):
             if self.get(repo_key):
                 self[repo_key] = resolve_latest_repo_symlink(self[repo_key])
 
@@ -2090,7 +2092,7 @@ class SCTConfiguration(dict):
         self['user_prefix'] = re.sub(r"[^a-zA-Z0-9-]", "-", self['user_prefix'])
 
         # 11) validate that supported instance_provision selected
-        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price']:
+        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
         # 12) validate authenticator parameters
@@ -2136,7 +2138,8 @@ class SCTConfiguration(dict):
                         f" Got error: {repr(exp)}, on item '{param}'") from exp
 
         # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
-        if (self.get("simulated_regions") or 0) > 1 or (self.get("simulated_racks") or 0) > 1:
+        num_of_db_nodes = sum([int(i) for i in str(self.get("n_db_nodes") or 0).split(" ")])
+        if (self.get("simulated_regions") or 0) > 1 or (self.get("simulated_racks") or 0) > 1 and num_of_db_nodes > 1 and cluster_backend != "docker":
             if snitch := self.get("endpoint_snitch"):
                 assert snitch.endswith("GossipingPropertyFileSnitch"), \
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
@@ -2180,6 +2183,7 @@ class SCTConfiguration(dict):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
 
         SCTCapacityReservation.get_cr_from_aws(self)
+        SCTDedicatedHosts.reserve(self)
 
         # 19: validate kafka configuration
         if kafka_connectors := self.get('kafka_connectors'):
@@ -2202,6 +2206,37 @@ class SCTConfiguration(dict):
                     int(i) for i in str(data_nodes_num).split()]
                 assert len(zero_nodes_num) == len(
                     data_nodes_num), "Config of zero token nodes is not equal config of data nodes for multi dc"
+
+        # 21 validate performance throughput parameters
+        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
+            for workload, params in performance_throughput_params.items():
+                if not isinstance(params, list):
+                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter")
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(f"Invalid thread count type for '{workload}': {thread_count} "
+                                         f"(type: {type(thread_count).__name__})")
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                                     f"or a list with the same length as perf_gradual_throttle_steps for {workload}")
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path('defaults/docker_images'))
@@ -2286,7 +2321,7 @@ class SCTConfiguration(dict):
             if opt['env'] in os.environ:
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
             nested_keys = [key for key in os.environ if key.startswith(opt['env'] + '.')]
@@ -2339,7 +2374,7 @@ class SCTConfiguration(dict):
         opt['is_k8s_multitenant_value'] = False
         try:
             opt['type'](self.get(opt['name']))
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             if not (self.get("cluster_backend").startswith("k8s")
                     and self.get("k8s_tenants_num") > 1
                     and opt.get("k8s_multitenancy_supported")
@@ -2351,7 +2386,7 @@ class SCTConfiguration(dict):
             for list_element in self.get(opt['name']):
                 try:
                     opt['type'](list_element)
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError("failed to validate {}".format(opt['name'])) from ex
             opt['is_k8s_multitenant_value'] = True
 
@@ -2386,8 +2421,7 @@ class SCTConfiguration(dict):
         return stress_tools
 
     def check_required_files(self):
-        # pylint: disable=too-many-nested-blocks
-        # pylint: disable=too-many-branches
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -2464,6 +2498,10 @@ class SCTConfiguration(dict):
 
         self._validate_placement_group_required_values()
         self._instance_type_validation()
+
+        if ((teardown_validators := self.get("teardown_validators.rackaware")) and
+                teardown_validators.get("enabled", False)):
+            self._verify_rackaware_configuration()
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
@@ -2654,7 +2692,7 @@ class SCTConfiguration(dict):
     def _validate_zero_token_backend_support(backend: str):
         assert backend == "aws", "Only AWS supports zero nodes configuration"
 
-    def verify_configuration_urls_validity(self):  # pylint: disable=too-many-branches
+    def verify_configuration_urls_validity(self):
         """
         Check if ami_id and repo urls are valid
         """
@@ -2707,7 +2745,7 @@ class SCTConfiguration(dict):
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
-        repos_to_validate = ['scylla_repo_loader']
+        repos_to_validate = []
         if backend in ("aws", "gce", "baremetal"):
             repos_to_validate.extend([
                 'new_scylla_repo',
@@ -2718,7 +2756,7 @@ class SCTConfiguration(dict):
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
-    def get_version_based_on_conf(self):  # pylint: disable=too-many-locals
+    def get_version_based_on_conf(self):
         """
         figure out which version and if it's enterprise version
         base on configuration only, before nodes are up and running
@@ -2789,7 +2827,7 @@ class SCTConfiguration(dict):
                 test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
                 test_config.argus_client().submit_packages([package])
                 test_config.argus_client().update_scylla_version(version_info["short"])
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
 
     def update_config_based_on_version(self):
@@ -2817,7 +2855,8 @@ class SCTConfiguration(dict):
         """
         return anyconfig.dumps(self.dict(), ac_parser="yaml")
 
-    def dump_help_config_markdown(self):
+    @classmethod
+    def dump_help_config_markdown(cls):
         """
         Dump all configuration options with their defaults and help to string in markdown format
 
@@ -2832,6 +2871,7 @@ class SCTConfiguration(dict):
             * **list:** can be appended by adding `++` as the first item of the list
                    `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
         """
+        defaults = anyconfig.load(sct_abs_path('defaults/test_default.yaml'))
 
         def strip_help_text(text):
             """
@@ -2842,32 +2882,34 @@ class SCTConfiguration(dict):
 
         ret = strip_help_text(header)
 
-        for opt in self.config_options:
+        for opt in cls.config_options:
             ret += '\n\n'
             if opt['help']:
                 help_text = '<br>'.join(strip_help_text(opt['help']).splitlines())
             else:
                 help_text = ''
             appendable = ' (appendable)' if is_config_option_appendable(opt.get('name')) else ''
-            default = self.get_default_value(opt['name'])
+            default = defaults.get(opt['name'], None)
             default_text = default if default else 'N/A'
             ret += f"""## **{opt['name']}** / {opt['env']}\n\n{help_text}\n\n**default:** {default_text}\n\n**type:** {opt.get('type').__name__}{appendable}\n"""
 
         return ret
 
-    def dump_help_config_yaml(self):
+    @classmethod
+    def dump_help_config_yaml(cls):
         """
         Dump all configuration options with their defaults and help to string in yaml format
 
         :return: str
         """
+        defaults = anyconfig.load(sct_abs_path('defaults/test_default.yaml'))
         ret = ""
-        for opt in self.config_options:
+        for opt in cls.config_options:
             if opt['help']:
-                help_text = '\n'.join(["# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()]) + '\n'
+                help_text = '\n'.join("# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()) + '\n'
             else:
                 help_text = ''
-            default = self.get_default_value(opt['name'])
+            default = defaults.get(opt['name'], None)
             default = default if default else 'N/A'
             ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, **opt)
 
@@ -2885,7 +2927,7 @@ class SCTConfiguration(dict):
             raise ValueError('Data volume configuration requires: data_volume_disk_type, data_volume_disk_size')
 
     def _verify_scylla_bench_mode_and_workload_parameters(self):
-        # pylint: disable=too-many-nested-blocks
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -2909,6 +2951,24 @@ class SCTConfiguration(dict):
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):
             raise ValueError("Scylla Manager is not supported for docker backend")
+
+    def _verify_rackaware_configuration(self):
+        if not self.get("rack_aware_loader"):
+            raise ValueError("'rack_aware_loader' must be set to True for rackaware validator.")
+
+        regions = self.get("simulated_regions") or len(self.region_names)
+        availability_zone = self.get("availability_zone")
+        racks_count = simulated_racks if (simulated_racks := self.get("simulated_racks")) else len(
+            availability_zone.split(",")) if availability_zone else 1
+        if racks_count == 1 and regions == 1:
+            raise ValueError(
+                "Rack-aware validation can only be performed in multi-availability zone or multi-region environments.")
+
+        loaders = sum(int(l) for l in n_loaders.split(" ")) if isinstance(
+            (n_loaders := self.get("n_loaders")), str) else n_loaders
+        zones = racks_count * regions
+        if loaders >= zones:
+            raise ValueError("Rack-aware validation requires zones without loaders.")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

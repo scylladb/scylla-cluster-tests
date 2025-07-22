@@ -2,7 +2,7 @@ test_duration: 360
 
 # workloads
 write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
-verify_stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=ONE n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..20100200 -log interval=5
+verify_stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..20100200 -log interval=5
 prepare_write_stress: cassandra-stress write no-warmup cl=QUORUM n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5
 stress_cmd_read_cl_quorum: cassandra-stress read no-warmup cl=QUORUM n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=DeflateCompressor' -mode cql3 native compression=none -rate threads=1000 -pop seq=1..10100200 -log interval=5
 stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=SnappyCompressor' -mode cql3 native compression=snappy -rate threads=1000 -pop seq=1..10100200 -log interval=5
@@ -14,9 +14,8 @@ stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/c
 stress_before_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data
 stress_after_cluster_upgrade: scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=one -rows-per-request=100 -timeout=30s -validate-data
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c7i.2xlarge'

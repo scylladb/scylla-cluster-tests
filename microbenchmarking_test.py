@@ -13,18 +13,11 @@
 import json
 
 from sdcm.argus_results import send_perf_simple_query_result_to_argus
-from sdcm.tester import ClusterTester, teardown_on_exception, log_run_info
+from sdcm.tester import ClusterTester
 from sdcm.utils.microbenchmarking.perf_simple_query_reporter import PerfSimpleQueryAnalyzer
 
 
 class PerfSimpleQueryTest(ClusterTester):
-    @teardown_on_exception
-    @log_run_info
-    def setUp(self):
-        super().setUp()
-
-        if es_index := self.params.get("custom_es_index"):
-            self._test_index = es_index
 
     def test_perf_simple_query(self):
         perf_simple_query_extra_command = self.params.get('perf_simple_query_extra_command') or ""
@@ -41,4 +34,9 @@ class PerfSimpleQueryTest(ClusterTester):
                 PerfSimpleQueryAnalyzer(self._test_index).check_regression(
                     self._test_id, is_gce=is_gce,
                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
-            send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results)
+
+            error_thresholds = self.params.get("latency_decorator_error_thresholds")
+            send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results, error_thresholds)
+
+    def update_test_with_errors(self):
+        self.log.info("update_test_with_errors: Suppress writing errors to ES")

@@ -9,9 +9,8 @@ stress_read_cmd: [
     "scylla-bench -workload=timeseries -mode=read -partition-count=4000 -concurrency=100 -replication-factor=3 -clustering-row-count=10000 -clustering-row-size=200  -rows-per-request=1 -start-timestamp=GET_WRITE_TIMESTAMP -write-rate 300 -distribution uniform --connection-count 100 -retry-number=30 -retry-interval=80ms,1s -duration=170m"
     ]
 
-n_db_nodes: 5
+n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 
 round_robin: true
 instance_type_db: 'i4i.2xlarge'

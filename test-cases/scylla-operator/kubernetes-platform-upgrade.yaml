@@ -25,7 +25,6 @@ n_loaders: 4
 k8s_n_loader_pods_per_cluster: 4
 k8s_loader_run_type: 'dynamic'
 
-n_monitor_nodes: 1
 
 k8s_enable_performance_tuning: true
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'

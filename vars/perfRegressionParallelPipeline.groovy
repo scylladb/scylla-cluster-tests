@@ -14,38 +14,47 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
-		}
+        }
         parameters {
+            // Cloud Provider Configuration
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
-
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'us-east-1|eu-west-1',
                name: 'region')
-
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                 description: 'Availability zone',
                 name: 'availability_zone')
-
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_version')
+            // ScyllaDB Configuration
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
+            string(defaultValue: '', description: 'Version of ScyllaDB', name: 'scylla_version')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
-            string(defaultValue: '', description: '', name: 'new_scylla_repo')
-            string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   name: 'new_scylla_repo')
+            string(defaultValue: '',
+                   description: 'ScyllaDB repository e.g. http://downloads.scylladb.com/deb/debian/scylla-2025.2.list',
+                   name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
+
+            // Provisioning Configuration
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
+                   description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
 
+            // Post Behavior Configuration
+            separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -58,29 +67,32 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
-            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
-                   description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
-                   name: 'sub_tests')
+            // Performance Test Configuration
+            separator(name: 'PERF_TEST', sectionHeader: 'Performance Test Configuration')
             string(defaultValue: "false",
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
+            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
+                   description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
+                   name: 'sub_tests')
 
+            // Email and Test Configuration
+            separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: "${pipelineParams.get('test_email_title', '')}",
                    description: 'String added to test email subject',
                    name: 'test_email_title')
-
             string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
-
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
 
+            // Kubernetes Configuration
+            separator(name: 'K8S_CONFIG', sectionHeader: 'Kubernetes Configuration')
             string(defaultValue: "${pipelineParams.get('k8s_version', '')}",
                    description: 'K8S version to be used. Suitable for EKS and GKE, but not local K8S (KinD). '
                    + 'In case of K8S platform upgrade it will be base one, target one will be automatically incremented. Example: "1.28"',
@@ -100,12 +112,19 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
                    description: 'if true, install haproxy ingress controller and use it',
                    name: 'k8s_enable_sni')
+
+            // Miscellaneous Configuration
+            separator(name: 'MISC_CONFIG', sectionHeader: 'Miscellaneous Configuration')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                    description: 'Gce project to use',
                    name: 'gce_project')
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
+                   description: 'jobs to compare performance results with, for example if running in staging, '
+                                + 'we still can compare with official jobs',
+                   name: 'perf_extra_jobs_to_compare')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
@@ -114,12 +133,15 @@ def call(Map pipelineParams) {
                      '\tSCT_USE_MGMT=false'
                      ),
                  name: 'extra_environment_variables')
-            string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
-                   description: 'jobs to compare performance results with, for example if running in staging, '
-                                + 'we still can compare with official jobs',
-                   name: 'perf_extra_jobs_to_compare')
+            booleanParam(defaultValue: false,
+                         description: 'if true, use job throttling to limit the number of concurrent builds',
+                         name: 'use_job_throttling')
+            string(defaultValue: null,
+                description: 'if set would override the default job throttling category',
+                name: 'job_throttle_category')
 
-            // NOTE: Optional parameters for BYO ScyllaDB stage
+            // BYO ScyllaDB Configuration
+            separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
             string(defaultValue: '',
                    description: (
                        'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +
@@ -242,6 +264,9 @@ def call(Map pipelineParams) {
                         } else {
                             sub_tests = [pipelineParams.test_name]
                         }
+                        // select the step function to use for throttling, if not throttling, it's a no-op
+                        def throttle_closure = params.use_job_throttling ? this.&throttle : { labels, closure -> closure() }
+                        def job_throttle_category = params.job_throttle_category ?: "SCT-perf-${builder.region}"
                         for (t in sub_tests) {
                             def perf_test
                             def sub_test = t
@@ -265,8 +290,22 @@ def call(Map pipelineParams) {
                                                             loadEnvFromString(params.extra_environment_variables)
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
+                                                                checkoutQaInternal(params)
                                                             }
                                                         dockerLogin(params)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage('Create Argus Test Run') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 5, unit: 'MINUTES') {
+                                                                createArgusTestRun(params)
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -462,7 +501,9 @@ def call(Map pipelineParams) {
                                 }
                             }
                         }
-                        parallel tasks
+                        throttle_closure([job_throttle_category]) {
+                            parallel tasks
+                        }
                     }
                 }
             }

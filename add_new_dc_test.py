@@ -2,7 +2,7 @@ import warnings
 from typing import Tuple, List
 
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
@@ -19,7 +19,7 @@ class TestAddNewDc(LongevityTest):
      https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
      """
 
-    def test_add_new_dc(self) -> None:  # pylint: disable=too-many-locals
+    def test_add_new_dc(self) -> None:
 
         self.log.info("Starting add new DC test...")
         assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
@@ -77,7 +77,12 @@ class TestAddNewDc(LongevityTest):
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
-        pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        pre_thread = self.run_stress_thread(
+            stress_cmd=stress_cmd,
+            duration=self.params.get('prepare_stress_duration'),
+            stats_aggregate_cmds=False,
+            round_robin=False,
+        )
         self.verify_stress_thread(pre_thread)
         self.log.info("Database pre write completed")
 

@@ -104,7 +104,7 @@ def stop_instance(instance):
             ])
             instance.stop()
             update_argus_resource_status(test_id, name, 'terminate')
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         eprint("stop instance %s error: %s" % (instance.id, str(exc)))
 
 
@@ -117,7 +117,7 @@ def remove_protection(instance):
                     'Value': False
                 })
             print_instance(instance, "Disabling API Termination protection")
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         eprint("DisableApiTermination protection %s error: %s" % (instance.id, str(exc)))
 
 
@@ -134,7 +134,7 @@ def terminate_instance(instance):
             ])
             instance.terminate()
             update_argus_resource_status(test_id, name, 'terminate')
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 
 
@@ -237,7 +237,7 @@ def delete_volume(volume):
         print_volume(volume, "deleting")
         if not DRY_RUN:
             volume.delete()
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         pass
 
 
@@ -288,7 +288,7 @@ def release_address(eip_dict, client):
                 client.release_address(AllocationId=eip_dict['AllocationId'])
             elif "PublicIp" in eip_dict:
                 client.release_address(PublicIp=eip_dict['PublicIp'])
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         print(exc)
 
 
@@ -343,6 +343,115 @@ def clean_capacity_reservations(region_name):
                 client.cancel_capacity_reservation(CapacityReservationId=cr["CapacityReservationId"])
 
 
+def print_dedicate_host(host: dict, msg: str):
+    print("dedicate host %s %s" % (host.get('HostId'), msg))
+
+
+def keep_alive_host(host: dict):
+    if datetime.datetime.now(tz=pytz.utc) - host.get('AllocationTime') < datetime.timedelta(hours=1):
+        # skipping if created recently and might miss tags yet
+        return True
+    # checking tags
+    if host.get('Tags') is None:
+        return False
+    for tag in host.get('Tags'):
+        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+            return True
+    return False
+
+
+def clean_dedicate_hosts(region_name):
+    print("cleaning region %s dedicate_hosts" % region_name)
+    ec2 = boto3.client('ec2', region_name=region_name)
+
+    def delete_host(_host: dict):
+        try:
+            print_dedicate_host(_host, "deleting")
+            if not DRY_RUN:
+                ec2.release_hosts(HostIds=[_host.get['HostId'], ])
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
+
+    count_kept_hosts = 0
+    count_deleted_hosts = 0
+    response = ec2.describe_hosts(Filters=[
+        {
+            'Name': 'state',
+            'Values': ['available']
+        }
+    ]
+    )
+
+    for host in response['Hosts']:
+        debug("checking host %s %s %s" %
+              (host.get('HostId'), host.get('Instances'), host.get('AllocationTime')))
+        keep_alive = keep_alive_host(host)
+
+        if keep_alive or host.get('Instances'):
+            count_kept_hosts += 1
+            if VERBOSE:
+                print_dedicate_host(host, "kept")
+        else:
+            count_deleted_hosts += + 1
+            delete_host(host)
+            if VERBOSE:
+                print_dedicate_host(host, "deleted")
+
+    print("region %s deleted %d kept %d" % (region_name, count_deleted_hosts, count_kept_hosts))
+
+
+def clean_unattached_security_groups(region_name: str):
+    """
+    Clean unattached security groups in the specified AWS region.
+    """
+    deleted = 0
+
+    if VERBOSE:
+        print(f"Checking region: {region_name} for unattached security groups")
+    session = boto3.Session()
+    ec2 = session.client('ec2', region_name=region_name)
+
+    # Use paginators for security groups
+    sg_paginator = ec2.get_paginator('describe_security_groups')
+    groups = []
+    for page in sg_paginator.paginate():
+        groups.extend(page['SecurityGroups'])
+
+    # Use paginators for network interfaces
+    ni_paginator = ec2.get_paginator('describe_network_interfaces')
+    interfaces = []
+    for page in ni_paginator.paginate():
+        interfaces.extend(page['NetworkInterfaces'])
+
+    attached_group_ids = set()
+    for iface in interfaces:
+        for sg in iface.get('Groups', []):
+            attached_group_ids.add(sg['GroupId'])
+
+    for group in groups:
+        tags = group.get('Tags', [])
+        # Skip default and specific security groups, and one tagged with 'keep:alive'
+        if (group['GroupName'] in ('default', 'SCT-2-sg', 'SCT-builder-ssh-sg')
+                or {'Key': 'keep', 'Value': 'alive'} in tags):
+            continue
+        if group['GroupId'] not in attached_group_ids:
+            deleted += 1
+            if VERBOSE:
+                print(
+                    f"Found unattached security group: {group['GroupId']} ({group['GroupName']}) in {region_name}\ntags: {tags}")
+            if not DRY_RUN:
+                try:
+                    ec2.delete_security_group(GroupId=group['GroupId'])
+                    if VERBOSE:
+                        print(f"Deleted security group: {group['GroupId']}")
+                except Exception as e:  # noqa: BLE001
+                    print(f"Failed to delete {group['GroupId']}: {e}")
+            else:
+                print(f"DRY RUN: would delete security group: {group['GroupId']} ({group['GroupName']})")
+    if VERBOSE:
+        print(f"Deleted {deleted} SGs in region: {region_name}")
+
+
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('ec2_stop')
     arg_parser.add_argument("--duration", type=int,
@@ -350,16 +459,16 @@ if __name__ == "__main__":
                             default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
     arg_parser.add_argument("--verbose", action="store_true",
                             help="print processing instances details",
-                            default=os.environ.get('VERBOSE', False))
+                            default=os.environ.get('VERBOSE'))
     arg_parser.add_argument("--trace", action="store_true",
                             help="trace every AWS call",
-                            default=os.environ.get('TRACE', False))
+                            default=os.environ.get('TRACE'))
     arg_parser.add_argument("--wait", type=int,
                             help="blind wait for instances to stop timeout",
-                            default=os.environ.get('WAIT', 60))
+                            default=os.environ.get('WAIT', '60'))
     arg_parser.add_argument("--dry-run", action="store_true",
                             help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN', False))
+                            default=os.environ.get('DRY_RUN'))
     arg_parser.add_argument("--default-action",
                             help="The default action when stopping an image (stop/terminate)",
                             default=os.environ.get('DEFAULT_ACTION', "terminate"))
@@ -384,3 +493,5 @@ if __name__ == "__main__":
         clean_volumes(region)
         clean_ips(region)
         clean_capacity_reservations(region)
+        clean_dedicate_hosts(region)
+        clean_unattached_security_groups(region)

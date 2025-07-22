@@ -21,7 +21,6 @@ import threading
 from functools import cached_property
 from typing import Dict
 
-from sdcm.nemesis import Nemesis
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.stress.base import format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
@@ -32,7 +31,7 @@ from sdcm.sct_events.loaders import KclStressEvent
 LOGGER = logging.getLogger(__name__)
 
 
-class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class KclStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.kcl"
 
@@ -82,7 +81,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
                                     log_file=log_file_name,
                                     retry=0,
                                     )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             errors_str = format_stress_cmd_error(exc)
             kcl_failure_event = KclStressEvent.failure(
                 node=loader,
@@ -99,7 +98,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return loader, result, kcl_failure_event or kcl_finish_event
 
 
-class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class CompareTablesSizesThread(DockerBasedStressThread):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
@@ -134,8 +133,12 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
             dst_table = self._options.get('dst_table')
             end_time = time.time() + self._timeout
 
+            cluster = self.node_list[0].parent_cluster
+            nemesis_node_allocator = cluster.test_config.tester_obj().nemesis_allocator
+
             while not self._stop_event.is_set():
-                with Nemesis.run_nemesis(node_list=self.node_list, nemesis_label="Compare tables size by cf-stats") as node:
+                with nemesis_node_allocator.run_nemesis(nemesis_label="Compare tables size by cf-stats",
+                                                        node_list=self.node_list) as node:
                     node.run_nodetool('flush')
 
                     dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
@@ -153,7 +156,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
                 time.sleep(self._interval)
             return None
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,

@@ -16,7 +16,6 @@ k8s_loader_run_type: 'static'
 k8s_deploy_monitoring: false
 
 n_db_nodes: 3
-n_monitor_nodes: 1
 
 instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
@@ -30,3 +29,5 @@ round_robin: true
 store_perf_results: true
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
+
+adaptive_timeout_store_metrics: false

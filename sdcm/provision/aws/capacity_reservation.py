@@ -64,7 +64,7 @@ class SCTCapacityReservation:
         if not cls.is_capacity_reservation_enabled(params) and not force_fetch:
             LOGGER.info("Capacity reservation is not enabled. Skipping reservation.")
             return
-        test_id = params.get("reuse_cluster") or params.get("test_id")
+        test_id = params.get("test_id")
         ec2 = boto3.client('ec2', region_name=params.region_names[0])
         reservations = ec2.describe_capacity_reservations(
             Filters=[
@@ -123,7 +123,8 @@ class SCTCapacityReservation:
         """Returns True if capacity reservation is enabled."""
         is_single_dc = str(params.get("n_db_nodes")).isdigit() or params.get('simulated_regions') > 0
         return (params.get("cluster_backend") == "aws"
-                and (params.get("test_id") or params.get("reuse_cluster"))
+                and params.get("test_id")
+                and not params.get("reuse_cluster")
                 and params.get('use_capacity_reservation') is True
                 and params.get('instance_provision') == 'on_demand'
                 and is_single_dc)
@@ -140,7 +141,7 @@ class SCTCapacityReservation:
             LOGGER.info("Capacity reservation already created. Skipping reservation.")
             return
         region = params.region_names[0]
-        test_id = params.get("reuse_cluster") or params.get("test_id")
+        test_id = params.get("test_id")
         ec2 = boto3.client('ec2', region_name=region)
         placement_group_arn = None
 
@@ -198,7 +199,6 @@ class SCTCapacityReservation:
         return cls.reservations[availability_zone][instance_type]
 
     @staticmethod
-    # pylint: disable=too-many-arguments
     def _create(ec2, test_id, availability_zone, instance_type, instance_count, duration, placement_group_arn=None) -> str | None:
         additional_params = {}
         if placement_group_arn:
@@ -236,7 +236,7 @@ class SCTCapacityReservation:
                 **additional_params
             )
             return response['CapacityReservation']['CapacityReservationId']
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("Failed to create capacity reservation for %s. Error: %s", instance_type, exc)
             return None
 

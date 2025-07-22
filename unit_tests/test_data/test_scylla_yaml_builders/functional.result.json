@@ -2,7 +2,7 @@
   "broadcast_address": "__NODE_PRIVATE_ADDRESS__",
   "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
   "listen_address": "__NODE_PRIVATE_ADDRESS__",
-  "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
+  "endpoint_snitch": "org.apache.cassandra.locator.GossipingPropertyFileSnitch",
   "rpc_address": "__NODE_PRIVATE_ADDRESS__",
   "cluster_name": "dummy_cluster",
   "seed_provider": [
@@ -21,5 +21,6 @@
   "auto_bootstrap": true,
   "enable_ipv6_dns_lookup": false,
   "listen_interface": "eth0",
-  "hinted_handoff_enabled": false
+  "hinted_handoff_enabled": false,
+  "test_parameter": "test_value"
 }

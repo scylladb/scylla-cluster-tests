@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Any, Dict
 
-from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error, _HttpResponseCommonAPI
 from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
 from azure.mgmt.resource.resources.models import ResourceGroup
 from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
@@ -37,13 +37,17 @@ def dict_keys_to_camel_case(dct):
             else b for a, b in dct.items()}
 
 
-class WaitableObject:  # pylint: disable=too-few-public-methods
+class WaitableObject:
+
+    def __init__(self, error: AzureError = None):
+        self.error = error
 
     def wait(self):
-        pass
+        if self.error:
+            raise self.error
 
 
-class ResultableObject:  # pylint: disable=too-few-public-methods
+class ResultableObject:
 
     def __init__(self, stdout, stderr):
         self.stdout = stdout
@@ -428,7 +432,7 @@ class FakeNetworkInterface:
         return WaitableObject()
 
 
-class FakeNetwork:  # pylint: disable=too-few-public-methods
+class FakeNetwork:
 
     def __init__(self, path) -> None:
         self.path: Path = path
@@ -462,7 +466,14 @@ class FakeVirtualMachines:
         priority = parameters.get("priority") or ""
         if tags.get("JenkinsJobTag") == "FailSpotDB" and priority.lower() == "spot" and tags.get("NodeType") == "scylla-db":
             # for testing fallback on demand
-            raise AzureError("Failing creating db spot instance because JenkinsJobTag is FailSpotDB")
+            class Resp(_HttpResponseCommonAPI):
+                @property
+                def status_code(self):
+                    return 409
+
+                def text(self):
+                    return '{"message": "preemption error msg", "error": {"message": "preemption error", "code": "OperationPreempted"}}'
+            return WaitableObject(error=ODataV4Error(response=Resp()))
 
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
@@ -575,18 +586,16 @@ class FakeVirtualMachines:
         except FileNotFoundError:
             raise ResourceNotFoundError("Virtual Machine not found") from None
 
-    def begin_restart(self, resource_group_name, vm_name  # pylint: disable=unused-argument, no-self-use
-                      ) -> WaitableObject:
+    def begin_restart(self, resource_group_name, vm_name) -> WaitableObject:
         return WaitableObject()
 
-    # pylint: disable=unused-argument,no-self-use
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
-        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,  # pylint: disable=subprocess-run-check
+        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,
                                 text=True, check=False)
         return ResultableObject(result.stdout, result.stderr)
 
 
-class FakeImages:  # pylint: disable=too-few-public-methods
+class FakeImages:
     def __init__(self, path: Path) -> None:
         self.path = path
 
@@ -595,7 +604,7 @@ class FakeImages:  # pylint: disable=too-few-public-methods
             return [Image.deserialize(image) for image in json.load(file)]
 
 
-class Compute:  # pylint: disable=too-few-public-methods
+class Compute:
 
     def __init__(self, path) -> None:
         self.path: Path = path
@@ -603,7 +612,7 @@ class Compute:  # pylint: disable=too-few-public-methods
         self.images = FakeImages(self.path)
 
 
-class FakeResourceManagementClient:  # pylint: disable=too-few-public-methods
+class FakeResourceManagementClient:
 
     def __init__(self, path: Path) -> None:
         self.path = path

@@ -1,9 +1,8 @@
 test_duration: 300
-n_db_nodes: 4
+n_db_nodes: 6
 n_test_oracle_db_nodes: 1
 n_loaders: 1
-n_monitor_nodes: 1
-instance_type_db: 'i4i.2xlarge'
+instance_type_db: 'i4i.large'
 
 user_prefix: 'gemini-with-nemesis-3h-normal'
 

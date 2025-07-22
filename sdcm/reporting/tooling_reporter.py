@@ -44,7 +44,7 @@ class ToolReporterBase():
         try:
             report_package_to_argus(client=self.argus_client, tool_name=self.TOOL_NAME, package_version=self.version,
                                     additional_data=self.additional_data, date=self.date, revision_id=self.revision_id)
-        except Exception:  # pylint: disable=broad-except # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.warning("Failed reporting tool version to Argus", exc_info=True)
 
     def _collect_version_info(self) -> None:
@@ -60,7 +60,7 @@ class ToolReporterBase():
 
 
 class PythonDriverReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     """
         Reports python-driver version used for SCT operations.
     """
@@ -75,7 +75,7 @@ class PythonDriverReporter(ToolReporterBase):
 
 
 class CassandraStressVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cassandra-stress"
 
     def _collect_version_info(self) -> None:
@@ -103,7 +103,7 @@ class CassandraStressVersionReporter(ToolReporterBase):
 
 
 class CqlStressCassandraStressVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cql-stress-cassandra-stress"
 
     def _collect_version_info(self) -> None:
@@ -148,7 +148,7 @@ class LatteVersionReporter(ToolReporterBase):
 
 
 class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "java-driver"
 
     def __init__(self, driver_version: str, runner: CommandRunner, command_prefix: str = None, argus_client: ArgusSCTClient = None) -> None:
@@ -160,7 +160,7 @@ class CassandraStressJavaDriverVersionReporter(ToolReporterBase):
 
 
 class CqlStressRustDriverVersionReporter(ToolReporterBase):
-    # pylint: disable=too-few-public-methods
+
     TOOL_NAME = "cql-stress-rust-driver"
 
     def __init__(self, driver_version: str, date: str, revision_id: str, runner: CommandRunner, command_prefix: str = None,
@@ -179,6 +179,84 @@ class LatteRustDriverVersionReporter(ToolReporterBase):
 
     def __init__(self, driver_version: str, date: str, revision_id: str,
                  argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class ScyllaBenchVersionReporter(ToolReporterBase):
+    """
+    Reports scylla-bench and scylla gocql driver versions used in SCT.
+    """
+    TOOL_NAME = "scylla-bench"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} -version-json")
+        LOGGER.debug("%s: Collected scylla-bench version output:\n%s", self, output.stdout)
+        version_info = json.loads(output.stdout)
+        LOGGER.debug("Result:\n%s", version_info)
+
+        s_b_info = version_info.get("scylla-bench", {})
+        self.version = f"{s_b_info.get('version', '#FAILED_CHECK_LOGS')}"
+        self.date = s_b_info.get('commit_date')
+        self.revision_id = s_b_info.get('commit_sha')
+
+        if driver_details := version_info.get("scylla-driver", {}):
+            ScyllaBenchGoCqlDriverVersionReporter(
+                driver_version=driver_details.get('version'),
+                date=driver_details.get("commit_date"),
+                revision_id=driver_details.get("commit_sha"),
+                argus_client=self.argus_client
+            ).report()
+
+
+class ScyllaBenchGoCqlDriverVersionReporter(ToolReporterBase):
+    TOOL_NAME = "scylla-bench-gocql-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str, argus_client: ArgusSCTClient = None) -> None:
+        super().__init__(None, "", argus_client)
+        self.version = driver_version
+        self.date = date
+        self.revision_id = revision_id
+
+    def _collect_version_info(self) -> None:
+        pass
+
+
+class GeminiVersionReporter(ToolReporterBase):
+    """
+    Reports Gemini and scylla gocql driver versions used in SCT.
+    """
+    TOOL_NAME = "gemini"
+
+    def _collect_version_info(self) -> None:
+        output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} --version-json")
+        LOGGER.debug("%s: Collected gemini version output:\n%s", self, output.stdout)
+        version_info = json.loads(output.stdout)
+        LOGGER.debug("Result:\n%s", version_info)
+
+        s_b_info = version_info.get("gemini", {})
+        self.version = f"{s_b_info.get('version', '#FAILED_CHECK_LOGS')}"
+        self.date = s_b_info.get('commit_date')
+        self.revision_id = s_b_info.get('commit_sha')
+
+        if driver_details := version_info.get("scylla-driver", {}):
+            GeminiGoCqlDriverVersionReporter(
+                driver_version=driver_details.get('version'),
+                date=driver_details.get("commit_date"),
+                revision_id=driver_details.get("commit_sha"),
+                argus_client=self.argus_client
+            ).report()
+
+
+class GeminiGoCqlDriverVersionReporter(ToolReporterBase):
+    TOOL_NAME = "gemini-gocql-driver"
+
+    def __init__(self, driver_version: str, date: str, revision_id: str, argus_client: ArgusSCTClient = None) -> None:
         super().__init__(None, "", argus_client)
         self.version = driver_version
         self.date = date

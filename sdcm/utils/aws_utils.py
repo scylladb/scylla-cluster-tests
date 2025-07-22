@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import functools
+import json
 import socket
 import time
 import logging
@@ -18,6 +19,7 @@ from functools import cached_property
 from typing import List, Dict, get_args
 
 import boto3
+import botocore
 from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.literals import ArchitectureTypeType
@@ -123,7 +125,7 @@ class EksClusterCleanupMixin:
                 if attachment_id := attachment.get('AttachmentId'):
                     try:
                         self.ec2_client.detach_network_interface(AttachmentId=attachment_id, Force=True)
-                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.debug("Failed to detach network interface (%s) attachment %s:\n%s",
                                      network_interface_id, attachment_id, exc)
 
@@ -133,7 +135,7 @@ class EksClusterCleanupMixin:
             network_interface_id = interface_description['NetworkInterfaceId']
             try:
                 self.ec2_client.delete_network_interface(NetworkInterfaceId=network_interface_id)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("Failed to delete network interface %s :\n%s", network_interface_id, exc)
 
     def destroy_attached_security_groups(self):
@@ -141,7 +143,7 @@ class EksClusterCleanupMixin:
         # even when cluster is gone
         try:
             sg_list = self.attached_security_group_ids
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Failed to get list of security groups:\n%s", exc)
             return
 
@@ -151,12 +153,12 @@ class EksClusterCleanupMixin:
             # In this case you need to forcefully detach interfaces and delete them to make nodegroup deletion possible.
             try:
                 self.delete_network_interfaces_of_sg(security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("destroy_attached_security_groups: %s", exc)
 
             try:
                 self.ec2_client.delete_security_group(GroupId=security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("Failed to delete security groups %s, due to the following error:\n%s",
                              security_group_id, exc)
 
@@ -166,7 +168,7 @@ class EksClusterCleanupMixin:
             for node_group_name in self._get_attached_nodegroup_names(status=status):
                 try:
                     self.eks_client.delete_nodegroup(clusterName=self.short_cluster_name, nodegroupName=node_group_name)
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                                  self.short_cluster_name, node_group_name, exc)
             time.sleep(10)
@@ -181,7 +183,7 @@ class EksClusterCleanupMixin:
     def destroy_cluster(self):
         try:
             self.eks_client.delete_cluster(name=self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
                          self.short_cluster_name, exc)
 
@@ -205,7 +207,7 @@ class EksClusterCleanupMixin:
                 LOGGER.warning(
                     "Couldn't find any OIDC provider associated with the '%s' EKS cluster",
                     self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
                 "Failed to delete OIDC provider for the '%s' cluster due to "
                 "the following error:\n%s",
@@ -417,7 +419,7 @@ class PublicIpNotReady(Exception):
     pass
 
 
-@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
+@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady, botocore.exceptions.ClientError),
           message="Waiting for instance to get public ip")
 def ec2_instance_wait_public_ip(instance):
     instance.reload()
@@ -564,3 +566,54 @@ def aws_check_instance_type_supported(instance_type: str, region_name: str) -> b
             return False
         raise
     return True
+
+
+class AwsIAM:
+    def __init__(self):
+        self.account_id = boto3.client("sts").get_caller_identity()["Account"]
+        self._policy_format = f"arn:aws:iam::{self.account_id}:policy/" + "{}"
+        self._role_format = f"arn:aws:iam::{self.account_id}:role/" + "{}"
+
+    @cached_property
+    def iam_client(self):
+        return boto3.client('iam')
+
+    def get_full_arn(self, policy_name, policy_type):
+        if policy_type == "policy":
+            arn_format = self._policy_format
+        elif policy_type == "role":
+            arn_format = self._role_format
+        else:
+            raise TypeError(f"Unsupported policy type: {policy_type}")
+        return arn_format.format(policy_name)
+
+    def get_policy_by_name_prefix(self, prefix: str) -> list[str]:
+        policies = []
+        paginator = self.iam_client.get_paginator('list_policies')
+        for page in paginator.paginate():
+            for policy in page['Policies']:
+                policy_name = policy['PolicyName']
+                if policy_name.startswith(prefix):
+                    policies.append(self.get_full_arn(policy_name=policy_name, policy_type="policy"))
+        return policies
+
+    def add_resource_to_iam_policy(self, policy_arn: str, resource_to_add: str) -> None:
+        policy = self.iam_client.get_policy(PolicyArn=policy_arn)
+        policy_version = self.iam_client.get_policy_version(
+            PolicyArn=policy_arn,
+            VersionId=policy['Policy']['DefaultVersionId']
+        )
+        policy_document = policy_version['PolicyVersion']['Document']
+
+        for statement in policy_document['Statement']:
+            if statement['Effect'] == 'Allow':
+                if "/*" in statement['Resource'][0]:
+                    statement['Resource'].append(resource_to_add + "/*")
+                else:
+                    statement['Resource'].append(resource_to_add)
+
+        self.iam_client.create_policy_version(
+            PolicyArn=policy_arn,
+            PolicyDocument=json.dumps(policy_document),
+            SetAsDefault=True
+        )

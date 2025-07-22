@@ -35,6 +35,7 @@ from sdcm.utils.gce_utils import (
     gce_private_addresses,
 )
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.keystore import KeyStore
@@ -46,8 +47,8 @@ GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 GKE_URLLIB_RETRY = 5  # How many times api request is retried before reporting failure
 GKE_URLLIB_BACKOFF_FACTOR = 0.1
 
-P = ParamSpec("P")  # pylint: disable=invalid-name
-R = TypeVar("R")  # pylint: disable=invalid-name
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def init_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: dict,
@@ -144,7 +145,6 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
 class GkeNodePool(CloudK8sNodePool):
     k8s_cluster: 'GkeCluster'
 
-    # pylint: disable=too-many-arguments
     def __init__(  # noqa: PLR0913
             self,
             k8s_cluster: 'KubernetesCluster',
@@ -259,7 +259,6 @@ class GcloudException(Exception):
     ...
 
 
-# pylint: disable=too-many-instance-attributes
 class GkeCluster(KubernetesCluster):
     AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
@@ -269,7 +268,6 @@ class GkeCluster(KubernetesCluster):
     TOKEN_UPDATE_NEEDED = False
     pools: Dict[str, GkeNodePool]
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def __init__(self,  # noqa: PLR0913
                  gke_cluster_version,
                  gke_k8s_release_channel,
@@ -594,7 +592,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster):
     node_pool: 'GkeNodePool'
     PodContainerClass = GkeScyllaPodContainer
 
-    # pylint: disable=too-many-arguments
+    @mark_new_nodes_as_running_nemesis
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",

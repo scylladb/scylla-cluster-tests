@@ -18,9 +18,7 @@ batch_size: 125
 cs_duration: ''
 
 n_loaders: 4
-n_monitor_nodes: 1
 n_db_nodes: 3
-simulated_racks: 3
 add_node_cnt: 0
 
 instance_type_db: 'i4i.xlarge'

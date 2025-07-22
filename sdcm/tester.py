@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-# pylint: disable=too-many-lines
 import shutil
 from collections import defaultdict
 from copy import deepcopy
@@ -36,11 +35,12 @@ import json
 
 import botocore
 import yaml
+import pytest
 from invoke.exceptions import UnexpectedExit, Failure
 
-from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
+from cassandra.concurrent import execute_concurrent_with_args
 from cassandra import ConsistencyLevel
-from cassandra.cluster import Session  # pylint: disable=no-name-in-module
+from cassandra.cluster import Session
 
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
@@ -64,6 +64,7 @@ from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -76,6 +77,7 @@ from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
+from sdcm.utils.action_logger import get_action_logger
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
@@ -84,9 +86,9 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_servi
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password, \
+    make_threads_be_daemonic_by_default, ParallelObject, change_default_password, \
     parse_python_thread_command, get_data_dir_path
-from sdcm.utils.cql_utils import cql_quote_if_needed
+from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
@@ -96,6 +98,7 @@ from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJE
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
     LatencyDuringOperationsPerformanceAnalyzer
@@ -152,7 +155,8 @@ from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
-
+from sdcm.exceptions import TestFailedByEvents
+from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -205,7 +209,7 @@ def teardown_on_exception(method):
     return wrapper
 
 
-class silence:  # pylint: disable=invalid-name
+class silence:
     """
     A decorator and context manager that catch, log and store any exception that
         happened within wrapped function or within context clause.
@@ -248,7 +252,7 @@ class silence:  # pylint: disable=invalid-name
                 self.log.debug("Silently running '%s'", name)
                 result = funct(*args, **kwargs)
                 self.log.debug("Finished '%s'. No errors were silenced.", name)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
             return result
@@ -281,14 +285,14 @@ class CriticalTestFailure(BaseException):
     pass
 
 
-def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
+def critical_failure_handler(signum, frame):
     try:
         if TestConfig().tester_obj().teardown_started:
             TEST_LOG.info("A critical event happened during tearDown")
             return
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         pass
-    raise CriticalTestFailure("Critical Error has failed the test")  # pylint: disable=raise-missing-from
+    raise CriticalTestFailure("Critical Error has failed the test")
 
 
 signal.signal(signal.SIGUSR2, critical_failure_handler)
@@ -306,8 +310,9 @@ class ClusterInformation(NamedTuple):
     schema_versions: List[SchemaVersion]
 
 
-class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     log = None
+    actions_log = None
     localhost = None
     events_processes_registry = None
     monitors: BaseMonitorSet = None
@@ -318,7 +323,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def k8s_cluster(self):
         return self.k8s_clusters[0] if getattr(self, 'k8s_clusters', None) else None
 
-    def __init__(self, methodName='runTest'):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
+    def __init__(self, methodName='runTest'):
         self.result = None
         super().__init__(methodName=methodName)
 
@@ -368,7 +373,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 try:
                     client.sct_heartbeat()
                     fail_count = 0  # Reset fail_count on success
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     self.log.warning("Failed to submit heartbeat to argus, Try #%s", fail_count + 1)
                     fail_count += 1
                 stop_signal.wait(timeout=30.0)
@@ -385,7 +390,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def argus_update_status(self, status: TestStatus):
         try:
             self.test_config.argus_client().set_sct_run_status(new_status=status)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Error saving test status to Argus", exc_info=True)
 
     def generate_scylla_server_package(self) -> Package:
@@ -393,7 +398,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Used for offline tests for tracking scylla versions in Argus.
         """
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
-        # pylint: disable=line-too-long
+
         expr = re.compile(
             r'(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+).) with build-id (?P<build_id>[\dabcdef]+)')
         version_dict = expr.match(scylla_version).groupdict()
@@ -427,7 +432,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
             self.log.info("Saving collected packages...")
             self.test_config.argus_client().submit_packages(packages_to_submit)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
     def argus_collect_manager_version(self):
@@ -473,7 +478,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 version = match.group(2)
                 self.test_config.argus_client().update_scylla_version(version=version)
                 return
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Error getting scylla version for argus", exc_info=True)
 
         TestFrameworkEvent(
@@ -529,7 +534,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.argus_update_status(test_status)
 
             self.test_config.argus_client().finalize_sct_run()
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Error committing test events to Argus", exc_info=True)
 
     def argus_collect_logs(self, log_links: dict[str, list[str] | str]):
@@ -539,12 +544,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 argus_link = LogLink(log_name=name, log_link=link)
                 logs_to_save.append(argus_link)
             self.test_config.argus_client().submit_sct_logs(logs_to_save)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self.log.error("Error saving logs to Argus", exc_info=True)
 
     def argus_collect_gemini_results(self):
         try:
-            # pylint: disable=no-member
+
             if not hasattr(self, "gemini_results"):
                 return
 
@@ -583,7 +588,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
                 "oracle_nodes_count": self.params.get("n_test_oracle_db_nodes"),
             })
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.log.warning("Error submitting gemini results to argus", exc_info=True)
 
     def collect_ssl_conf(self):
@@ -692,6 +697,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_logging(self):
         self.log = logging.getLogger(self.__class__.__name__)
+        self.actions_log = get_action_logger('tester')
         self.logdir = self.test_config.logdir()
 
     def run(self, result=None):
@@ -790,7 +796,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # download rpms for update_db_packages
         self.params['update_db_packages'] = download_dir_from_cloud(self.params.get('update_db_packages'))
 
-    def download_encrypt_keys(self):  # pylint: disable=no-self-use
+    def download_encrypt_keys(self):
         download_encrypt_keys()
 
     @property
@@ -815,7 +821,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              not self.params.get('enterprise_disable_kms'))
 
         if should_enable_kms:
-            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
         kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
@@ -864,7 +870,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @teardown_on_exception
     @log_run_info
-    def setUp(self):  # pylint: disable=too-many-branches,too-many-statements  # noqa: PLR0912, PLR0915
+    def setUp(self):  # noqa: PLR0912, PLR0915
         self._results = []
         self.status = "RUNNING"
         self.start_time = time.time()
@@ -879,7 +885,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.test_config.set_test_id(self.params.get('test_id') or uuid4())
         self.test_config.set_test_name(self.id())
         self.test_config.set_tester_obj(self)
-        self._init_logging()
         RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
 
         self._profile_factory = None
@@ -937,7 +942,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get("logs_transport") == 'syslog-ng':
             self.test_config.configure_syslogng(self.localhost)
-
+        if self.params.get("logs_transport") == 'vector':
+            self.test_config.configure_vector(self.localhost)
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
 
@@ -945,9 +951,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self._init_ldap()
 
         self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
-        # Cover multi-tenant configuration. Prevent event device double initiate
-        start_events_device(log_dir=self.logdir,
-                            _registry=getattr(self, "_registry", None) or self.events_processes_registry)
         enable_default_filters(sct_config=self.params)
 
         self.skip_test_stages = defaultdict(lambda: False, self.params.get('skip_test_stages') or {})
@@ -986,6 +989,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
+
+        self.nemesis_allocator = NemesisNodeAllocator(self)
 
         self.init_resources()
 
@@ -1105,6 +1110,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # available yet. Update rack info in Argus for loaders in the end of set up.
         for loaders in self.loaders_multitenant:
             loaders.update_rack_info_in_argus()
+        self.actions_log.info("initialized test")
 
     def set_system_auth_rf(self, db_cluster=None):
         db_cluster = db_cluster or self.db_cluster
@@ -1229,7 +1235,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return nemesis_threads
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+
         if loader_info['n_nodes'] is None:
             n_loader_nodes = self.params.get('n_loaders')
             if isinstance(n_loader_nodes, int):
@@ -1352,7 +1358,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
 
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
-        # pylint: disable=too-many-branches,too-many-statements,too-many-locals
+
         regions = self.params.get('azure_region_name')
         test_id = str(TestConfig().test_id())
         provisioners: List[AzureProvisioner] = []
@@ -1420,7 +1426,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+
         regions = self.params.get('region_name').split()
 
         if loader_info['n_nodes'] is None:
@@ -1599,7 +1605,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                         **common_params)
 
     def get_cluster_baremetal(self):
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+
         baremetal_info: cluster_baremetal.BareMetalCredentials = KeyStore(
         ).get_baremetal_config(self.params.get("s3_baremetal_config"))
         user_credentials = self.params.get('user_credentials_path')
@@ -1848,7 +1854,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_k8s_eks(self, n_k8s_clusters: int):  # pylint: disable=too-many-branches
+    def get_cluster_k8s_eks(self, n_k8s_clusters: int):
         region_names = self.params.region_names
         availability_zones = self.params.get('availability_zone').split(',')
         for _ in range(n_k8s_clusters):
@@ -1948,7 +1954,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
-        # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+
         if loader_info is None:
             loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
                            'device_mappings': None}
@@ -2005,8 +2011,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                 duration=duration)
         self.verify_stress_thread(cs_thread_pool)
 
-    # pylint: disable=too-many-arguments,too-many-return-statements
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # noqa: PLR0911, PLR0913
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='',
                           use_single_loader=False,
                           stop_test_on_failure=True):
@@ -2047,11 +2052,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    # pylint: disable=too-many-arguments
     def run_stress_cassandra_thread(  # noqa: PLR0913
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
-        # pylint: disable=too-many-locals
+
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
@@ -2083,11 +2087,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alter_test_tables_encryption(stress_command=stress_cmd)
         return cs_thread
 
-    # pylint: disable=too-many-arguments
     def run_cql_stress_cassandra_thread(  # noqa: PLR0913
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
-        # pylint: disable=too-many-locals
+
         if duration:
             timeout = self.get_duration(duration)
             if ' duration' in stress_cmd:
@@ -2118,7 +2121,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alter_test_tables_encryption(stress_command=stress_cmd)
         return cs_thread
 
-    # pylint: disable=too-many-arguments,unused-argument
     def run_stress_thread_bench(self, stress_cmd, duration=None, round_robin=False, stats_aggregate_cmds=True,
                                 stop_test_on_failure=True, **_):
 
@@ -2146,9 +2148,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return bench_thread
 
     def run_stress_thread_harry(self, stress_cmd, duration=None,
-                                # pylint: disable=too-many-arguments,unused-argument
+
                                 round_robin=False, stats_aggregate_cmds=True,
-                                stop_test_on_failure=True, **_):  # pylint: disable=too-many-arguments,unused-argument
+                                stop_test_on_failure=True, **_):
 
         timeout = self.get_duration(duration)
 
@@ -2170,7 +2172,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         harry_thread.run()
         return harry_thread
 
-    # pylint: disable=too-many-arguments
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                         round_robin=False, stats_aggregate_cmds=True, **_):
 
@@ -2211,7 +2212,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                  stop_test_on_failure=stop_test_on_failure,
                                  params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_hydra_kcl_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                              round_robin=False, stats_aggregate_cmds=True, **_):
 
@@ -2227,7 +2227,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                node_list=self.db_cluster.nodes,
                                round_robin=round_robin, params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_nosqlbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='', round_robin=False,
                               stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
 
@@ -2247,7 +2246,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             stop_test_on_failure=stop_test_on_failure,
             params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_table_compare_thread(self, stress_cmd, duration=None, stress_num=1, round_robin=False, **_):
 
         timeout = self.get_duration(duration)
@@ -2259,7 +2257,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                         node_list=self.db_cluster.nodes,
                                         round_robin=round_robin, params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                            round_robin=False, stats_aggregate_cmds=True, **_):
 
@@ -2275,7 +2272,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                    node_list=self.db_cluster.nodes,
                                    round_robin=round_robin, params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_cdclog_reader_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                                  round_robin=False, stats_aggregate_cmds=True, enable_batching=True,
                                  keyspace_name=None, base_table_name=None):
@@ -2312,7 +2308,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   timeout=timeout,
                                   params=self.params).run()
 
-    # pylint: disable=too-many-arguments
     def run_python_thread(self, stress_cmd, duration=None, **_):
         timeout = self.get_duration(duration)
 
@@ -2454,7 +2449,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return keyspace_name.lower() in keyspace_list
 
     def wait_validate_keyspace_existence(self, session, keyspace_name, timeout=180,
-                                         step=5):  # pylint: disable=invalid-name
+                                         step=5):
         text = 'waiting for the keyspace "{}" to be created in the cluster'.format(keyspace_name)
         does_keyspace_exist = wait.wait_for(func=self.is_keyspace_in_cluster, step=step, text=text, timeout=timeout,
                                             session=session, keyspace_name=keyspace_name, throw_exc=False)
@@ -2482,6 +2477,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if tablets_config:
                 cmd += ' AND TABLETS = %s' % tablets_config
             execution_result = session.execute(cmd)
+            self.actions_log.info("Keyspace created", metadata={"keyspace": keyspace_name, "statement": cmd})
 
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
@@ -2489,13 +2485,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
-    def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches  # noqa: PLR0913
+    def create_table(self, name, key_type="varchar",  # noqa: PLR0913
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None, compaction=None,
                      compact_storage=False, scylla_encryption_options=None, keyspace_name=None,
                      sstable_size=None):
 
-        # pylint: disable=too-many-locals
         additional_columns = ""
         if columns is not None:
             for key, value in columns.items():
@@ -2541,61 +2536,54 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('CQL query to execute: {}'.format(query))
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
+        self.actions_log.info("Created table", metadata={"table_name": name, "query": query})
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
         try:
             timeout = f" USING TIMEOUT {truncate_timeout_sec}s" if truncate_timeout_sec else ""
             session.execute('TRUNCATE TABLE {0}.{1}{2}'.format(ks_name, table_name, timeout))
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
 
     def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # noqa: PLR0913
-                                 # pylint: disable=too-many-arguments
                                  mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
                                  gc_grace=None, compact_storage=False):
 
-        # pylint: disable=too-many-locals
-        mv_columns_str = mv_columns
-        if isinstance(mv_columns, list):
-            mv_columns_str = ', '.join(c for c in mv_columns)
+        # Fix quotes for column names, only use quotes where needed
+        if mv_columns != '*':
+            mv_columns = [
+                cql_quote_if_needed(cql_unquote_if_needed(col))
+                for col in (mv_columns if isinstance(mv_columns, list) else list(mv_columns))
+            ]
+        mv_partition_key = [
+            cql_quote_if_needed(cql_unquote_if_needed(pk))
+            for pk in (mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key))
+        ]
+        mv_clustering_key = [
+            cql_quote_if_needed(cql_unquote_if_needed(cl))
+            for cl in (mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key))
+        ]
 
-        where_clause = []
-        mv_partition_key = mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key)
-        mv_clustering_key = mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key)
+        where_clause = ' and '.join([f'{kc} is not null' for kc in mv_partition_key + mv_clustering_key])
+        select_clause = ', '.join(mv_columns)
+        pk_clause = ', '.join(mv_partition_key)
+        cl_clause = ', '.join(mv_clustering_key)
 
-        for kc in mv_partition_key + mv_clustering_key:  # pylint: disable=invalid-name
-            where_clause.append('{} is not null'.format(kc))
-
-        pk_clause = ', '.join(pk for pk in mv_partition_key)
-        cl_clause = ', '.join(cl for cl in mv_clustering_key)
-
-        query = 'CREATE MATERIALIZED VIEW {ks}.{mv_name} AS SELECT {mv_columns} FROM {ks}.{table_name} ' \
-                'WHERE {where_clause} PRIMARY KEY ({pk}, {cl}) WITH comment=\'test MV\''.format(ks=ks_name,
-                                                                                                mv_name=mv_name,
-                                                                                                mv_columns=mv_columns_str,
-                                                                                                table_name=base_table_name,
-                                                                                                where_clause=' and '.join
-                                                                                                (wc for wc in
-                                                                                                 where_clause),
-                                                                                                pk=pk_clause,
-                                                                                                cl=cl_clause)
+        query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
+                f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
         if compression is not None:
-            query = ('%s AND compression = { \'sstable_compression\': '
-                     '\'%sCompressor\' }' % (query, compression))
-
+            query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
         if read_repair is not None:
-            query = '%s AND read_repair_chance=%f' % (query, read_repair)
+            query += f" AND read_repair_chance={read_repair}"
         if gc_grace is not None:
-            query = '%s AND gc_grace_seconds=%d' % (query, gc_grace)
+            query += f" AND gc_grace_seconds={gc_grace}"
         if speculative_retry is not None:
-            query = ('%s AND speculative_retry=\'%s\'' %
-                     (query, speculative_retry))
-
+            query += f" AND speculative_retry='{speculative_retry}'"
         if compact_storage:
             query += ' AND COMPACT STORAGE'
 
-        self.log.debug('MV create statement: {}'.format(query))
+        self.log.debug(f'MV create statement: {query}')
         session.execute(query, timeout=600)
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):
@@ -2643,7 +2631,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
-    def copy_table(self, node, src_keyspace, src_table, dest_keyspace,  # pylint: disable=too-many-arguments
+    def copy_table(self, node, src_keyspace, src_table, dest_keyspace,
                    dest_table, columns_list=None, copy_data=False):
         """
         Create table with same structure as <src_keyspace>.<src_table>.
@@ -2661,14 +2649,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             try:
                 result = self.copy_data_between_tables(node, src_keyspace, src_table,
                                                        dest_keyspace, dest_table, columns_list)
-            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001
                 self.log.error('Copying data from %s to %s failed with error: %s',
                                src_table, dest_table, error)
                 return False
 
         return result
 
-    def copy_view(self, node, src_keyspace, src_view, dest_keyspace,  # pylint: disable=too-many-arguments
+    def copy_view(self, node, src_keyspace, src_view, dest_keyspace,
                   dest_table, columns_list=None, copy_data=False):
         """
         Create table with same structure as <src_keyspace>.<src_view>.
@@ -2687,7 +2675,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             try:
                 result = self.copy_data_between_tables(node, src_keyspace, src_view,
                                                        dest_keyspace, dest_table, columns_list)
-            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001
                 self.log.error('Copying data from %s to %s failed with error %s',
                                src_view, dest_table, error)
                 return False
@@ -2695,7 +2683,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return result
 
     def create_table_as(self, node, src_keyspace, src_table,
-                        # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
+
                         dest_keyspace, dest_table, create_statement,
                         columns_list=None):
         """ Create table with same structure as another table or view
@@ -2748,7 +2736,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return False
 
     def copy_data_between_tables(self, node, src_keyspace, src_table, dest_keyspace,
-                                 # pylint: disable=too-many-arguments,too-many-locals
+
                                  dest_table, columns_list=None):
         """ Copy all data from one table/view to another table
             Structure of the tables has to be same
@@ -2803,7 +2791,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                      'Actually inserted rows: %s.',
                                      len(source_table_rows), succeeded_rows)
                     return False
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.log.warning('Problem during copying data: %s', exc)
                 return False
 
@@ -2828,17 +2816,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         table_id = self.rows_to_list(session.execute(query))
         return table_id[0]
 
-    def get_truncated_time_from_system_local(self, session):  # pylint: disable=invalid-name
+    def get_truncated_time_from_system_local(self, session):
         query = "SELECT truncated_at FROM system.local"
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time
 
-    def get_truncated_time_from_system_truncated(self, session, table_id):  # pylint: disable=invalid-name
+    def get_truncated_time_from_system_truncated(self, session, table_id):
         query = "SELECT truncated_at FROM system.truncated WHERE table_uuid={}".format(table_id)
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
 
-    def get_describecluster_info(self) -> Optional[ClusterInformation]:  # pylint: disable=too-many-locals
+    def get_describecluster_info(self) -> Optional[ClusterInformation]:
         """
         Runs the 'nodetool describecluster' command on a node.
 
@@ -2861,12 +2849,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if describecluster_output.ok:
             desc_stdout = describecluster_output.stdout
-            name_pattern = re.compile("((?<=Name: )[\w _-]*)")  # pylint: disable=anomalous-backslash-in-string
-            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")  # pylint: disable=anomalous-backslash-in-string
+            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
+            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
             partitioner_pattern = re.compile(
-                "((?<=Partitioner: )[\w.]*)")  # pylint: disable=anomalous-backslash-in-string
+                "((?<=Partitioner: )[\w.]*)")
             schema_versions_pattern = re.compile(
-                "([a-z0-9-]{36}: \[[\d., ]*\])")  # pylint: disable=anomalous-backslash-in-string
+                "([a-z0-9-]{36}: \[[\d., ]*\])")
 
             name = name_pattern.search(desc_stdout).group()
             snitch = snitch_pattern.search(desc_stdout).group()
@@ -2895,11 +2883,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 current_nemesis.report()
 
     @silence()
-    def stop_nemesis(self, cluster):  # pylint: disable=no-self-use
+    def stop_nemesis(self, cluster):
         cluster.stop_nemesis(timeout=1800)
 
     @silence()
-    def stop_resources_stop_tasks_threads(self, cluster):  # pylint: disable=no-self-use
+    def stop_resources_stop_tasks_threads(self, cluster):
         # TODO: this should be run in parallel
         for node in cluster.nodes:
             node.stop_task_threads()
@@ -2908,13 +2896,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 node.wait_till_tasks_threads_are_stopped()
 
     @silence()
-    def get_backtraces(self, cluster):  # pylint: disable=no-self-use
+    def get_backtraces(self, cluster):
         cluster.get_backtraces()
 
     @silence()
-    def stop_resources(self):  # pylint: disable=no-self-use
+    def stop_resources(self):
         self.log.debug('Stopping all resources')
         SCTCapacityReservation.cancel(self.params)
+        SCTDedicatedHosts.release(self.params)
         with silence(parent=self, name="Kill Stress Threads"):
             self.kill_stress_thread()
 
@@ -2934,15 +2923,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.stop_resources_stop_tasks_threads(self.monitors)
 
     @silence()
-    def destroy_cluster(self, cluster):  # pylint: disable=no-self-use
+    def destroy_cluster(self, cluster):
         cluster.destroy()
 
     @silence()
-    def set_keep_alive_on_failure(self, cluster):  # pylint: disable=no-self-use
+    def set_keep_alive_on_failure(self, cluster):
         cluster.set_keep_alive_on_failure()
 
     @silence()
-    def destroy_credentials(self):  # pylint: disable=no-self-use
+    def destroy_credentials(self):
         if self.credentials is not None:
             for credential in self.credentials:
                 credential.destroy()
@@ -2958,7 +2947,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def clean_resources(self):
-        # pylint: disable=too-many-branches
+
         if not self.params.get('execute_post_behavior'):
             self.log.info('Resources will continue to run')
             return
@@ -3006,9 +2995,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence(name="Save node schema", raise_error_event=False)
     def save_cqlsh_output_in_file(self, node, cmd: str, log_file: str):
-        self.log.info("Save command '%s' output in the file. Node %s", cmd, node.name)
+        self.log.info("Save command '%s' output in the file %s/%s. Node %s",
+                      cmd, self.logdir, log_file, node.name)
 
-        log_file_path = Path(self.logdir) / self.db_cluster.logdir / log_file
+        log_file_path = Path(self.logdir) / log_file
         self.log.debug("Schema file path: %s", log_file_path)
         if not (result := node.run_cqlsh(cmd).stdout):
             return
@@ -3017,11 +3007,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             res_file.write(result.strip())
 
     def save_schema(self):
+        """
+        Saves the node's schema including internal metadata.
+        """
         if self.db_cluster is None:
-            self.log.error("Didn't find the nodes in the cluster for saving the schema.")
+            self.log.error("Didn't find the nodes in the cluster for saving the schema and schema with internals")
             return
 
-        self.log.info("Save nodes user schema in the files")
+        self.log.info("Save nodes user schema in the files under folder: %s", self.logdir)
         # Collect schema info from one node only. Not need to collect from every node
         found_live_node = False
         for node in self.db_cluster.nodes:
@@ -3031,6 +3024,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.save_cqlsh_output_in_file(node=node, cmd="desc schema", log_file="schema.log")
             self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system_schema.tables",
                                            log_file="system_schema_tables.log")
+            self.save_cqlsh_output_in_file(node=node, cmd="select JSON * from system.truncated",
+                                           log_file="system_truncated.log")
+            self.save_cqlsh_output_in_file(node=node,
+                                           cmd="desc schema with internals",
+                                           log_file="schema_with_internals.log")
             break
 
         if not found_live_node:
@@ -3048,7 +3046,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_timeout_thread()
         self.stop_event_analyzer()
         self.stop_resources()
-        self.get_test_failures()
 
         with silence(parent=self, name='closing decoding queue as needed'):
             if self.test_config.BACKTRACE_DECODING:
@@ -3076,26 +3073,35 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.save_email_data()
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        self.stop_event_device()
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 
-        self.finalize_teardown()
         self.argus_finalize_test_run()
         try:
             ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
-        self.remove_python_exit_hooks()
+        self.log.debug("Threads and processes at the end of the test:")
+        for t in threading.enumerate():
+            self.log.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
 
-    @silence()
-    def remove_python_exit_hooks(self):  # pylint: disable=no-self-use
-        clear_out_all_exit_hooks()
+    @pytest.fixture(autouse=True, name='setup_logging')
+    def fixture_setup_logging(self):
+        self._init_logging()
+
+    @pytest.fixture(autouse=True, name='event_system')
+    def fixture_event_system(self, setup_logging):
+        # NOTE: in multi-tenant configuration to prevent event device double initiate
+        # it's getting it from `self._registry` and not from `self.events_processes_registry`
+        start_events_device(log_dir=self.logdir,
+                            _registry=getattr(self, "_registry", None) or self.events_processes_registry)
+        yield
+        self.stop_event_device()
 
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
@@ -3134,15 +3140,49 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for error in to_remove:
             result.errors.remove(error)
 
+    @pytest.fixture(autouse=True, name="teardown_fail_by_events")
+    def fixture_teardown_fail_by_events(self, request, event_system):
+        yield
+
+        self.finalize_teardown()
+
     def finalize_teardown(self):
         final_event = self._get_test_result_event()
         if final_event.test_status == 'SUCCESS':
             self.log.info(str(final_event))
             return
-        if self._outcome is not None:
-            # If there is not self._outcome, it means tests running in non-unittest environment
-            self._remove_errors_from_unittest_results(self._outcome)
-            self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
+        else:
+            # log it only in log, pytest would print it anyway on stdout, as a fixture finalizer that failed
+            self.log.debug(str(final_event))
+            raise TestFailedByEvents(f"\n{final_event}")
+
+    @pytest.fixture(autouse=True, name="validate")
+    def fixture_validate(self):
+        # This is needed only for unit tests to help
+        # order the fixture execution, so we can validate the events
+        # generated by `report_failures_as_event`
+        pass
+
+    @pytest.fixture(autouse=True)
+    def report_failures_as_event(self, request: pytest.FixtureRequest, validate):
+        yield
+        if subtests_results := SUBTESTS_FAILURES.pop(request.node.nodeid, None):
+            for report in subtests_results:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=report.nodeid + " - " + report.context.msg,
+                    exception=f"Subtests failed:\n{report.longreprtext}",
+                    severity=Severity.ERROR,
+                ).publish_or_dump(default_logger=self.log)
+
+        if rep_call := getattr(request.node, "rep_call", None):
+            if rep_call.failed:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=request.node.name,
+                    exception=request.node.rep_call.longreprtext,
+                    severity=Severity.ERROR,
+                ).publish_or_dump(default_logger=self.log)
 
     @silence()
     def destroy_localhost(self):
@@ -3150,7 +3190,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.localhost.destroy()
 
     @silence()
-    def stop_event_analyzer(self):  # pylint: disable=no-self-use
+    def stop_event_analyzer(self):
         stop_events_analyzer(_registry=self.events_processes_registry)
 
     @silence()
@@ -3173,7 +3213,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
 
     @silence()
-    def stop_event_device(self):  # pylint: disable=no-self-use
+    def stop_event_device(self):
         stop_events_device(_registry=self.events_processes_registry)
 
     @silence()
@@ -3188,7 +3228,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def populate_data_parallel(self, size_in_gb: int, replication_factor: int = 3, blocking=True, read=False):
 
-        # pylint: disable=too-many-locals
         base_cmd = "cassandra-stress write cl=QUORUM "
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
@@ -3298,17 +3337,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "drops" if "dropped" in query else "errors")
             assert any((float(v[1]) for v in results[0]["values"])) is False, err_msg
 
-    def get_data_set_size(self, cs_cmd):  # pylint: disable=inconsistent-return-statements
+    def get_data_set_size(self, cs_cmd):
         """:returns value of n in stress comand, that is approximation and currently doesn't take in consideration
             column size definitions if they present in the command
         """
         try:
             return int(re.search(r"n=(\d+) ", cs_cmd).group(1))
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.fail("Unable to get data set size from cassandra-stress command: %s" % cs_cmd)
             return None
 
-    def get_c_s_column_definition(self, cs_cmd):  # pylint: disable=inconsistent-return-statements
+    def get_c_s_column_definition(self, cs_cmd):
         """:returns value of -col in stress comand, that is approximation and currently doesn't take in consideration
             column definitions if they present in the command
         """
@@ -3317,7 +3356,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if search_res := re.search(r".* -col ('.*') .*", cs_cmd):
                 return search_res.group(1)
             return None
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             self.fail("Unable to get column definition from cassandra-stress command: %s" % cs_cmd)
             return None
 
@@ -3421,7 +3460,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 exception=exc
             ).publish_or_dump()
 
-    def check_regression_multi_baseline(self, subtests_info=None,  # pylint: disable=inconsistent-return-statements
+    def check_regression_multi_baseline(self, subtests_info=None,
                                         metrics=None, email_subject=None):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
                                                       email_recipients=self.params.get('email_recipients'),
@@ -3476,7 +3515,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # if any result values is not zero - there are running compactions.
         return any((float(v[1]) for v in results[0]["values"]))
 
-    def wait_compactions_are_running(self, n=20, sleep_time=60):  # pylint: disable=invalid-name
+    def wait_compactions_are_running(self, n=20, sleep_time=60):
         # Wait until there are running compactions
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
         def _is_compaction_running():
@@ -3484,14 +3523,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         _is_compaction_running()
 
     @measure_time
-    def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
+    def wait_no_compactions_running(self, n=80, sleep_time=60):
         # Wait until there are no running compactions
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
         def _is_no_compaction_running():
             assert not self.is_compaction_running, "Waiting until all compactions settle down"
         _is_no_compaction_running()
 
-    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):  # pylint: disable=invalid-name
+    @measure_time
+    def wait_for_no_tablets_splits(self, n=3, sleep_time=180):
+        # Wait until there are no tablets splits happened
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def _is_no_tablets_splits():
+            query = "select resize_type from system.tablets"
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0], connect_timeout=600) as session:
+                query_result = session.execute(query)
+
+            results_set = set([result_row.resize_type for result_row in query_result])
+            self.log.debug("resize_type all results: %s", results_set)
+            assert results_set == {'none'} or not results_set, (
+                "Tablet splits or merges still in progress: %s" % results_set)
+        _is_no_tablets_splits()
+
+    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
         """
         wait for any prometheus metric to have data in it
 
@@ -3510,7 +3564,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             now = time.time()
             results = self.prometheus_db.query(query=metric_query, start=now - 60, end=now)
             self.log.debug("metric_has_data: %s", results)
-            assert results, "No results from Prometheus"
+            assert results, f"No results from Prometheus for metric: {metric_query}"
             if results:
                 assert any((float(v[1]) for v in results[0]["values"])) > 0, f"{metric_query} didn't has data in it"
 
@@ -3590,29 +3644,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info("Logs collected. Run command `hydra investigate show-logs %s' to get links",
                       self.test_config.test_id())
 
-    @silence()
-    def get_test_failures(self):
-        """
-            Print to logging in case of failure or error in unittest
-            since tearDown can take a while, or even fail on it's own, we want to know fast what the failure/error is.
-            applied the idea from
-            https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
-            :returns tuple(error, test_failure)
-        """
-        if hasattr(self, '_outcome'):  # Python 3.4+
-            result = self.defaultTestResult()  # these 2 methods have no side effects
-            self._feedErrorsToResult(result, self._outcome.errors)  # pylint: disable=no-member
-        else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
-            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)  # pylint: disable=no-member
-        for error in result.errors + result.failures:
-            if len(error) > 1 and error[1]:
-                TestFrameworkEvent(
-                    source=self.__class__.__name__,
-                    source_method=error[0],
-                    message=error[1],
-                    severity=Severity.ERROR,
-                ).publish_or_dump(default_logger=self.log)
-
     def stop_all_nodes_except_for(self, node):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
 
@@ -3647,7 +3678,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         node.wait_db_up()
 
-    def get_used_capacity(self, node) -> float:  # pylint: disable=too-many-locals
+    def get_used_capacity(self, node) -> float:
         # node_filesystem_size_bytes{
         #     mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{
         #         mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
@@ -3726,7 +3757,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             email_data = self.get_email_data()
             self._argus_add_relocatable_pkg(email_data)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.error("Error while saving email data. Error: %s\nTraceback: %s", exc, traceback.format_exc())
 
         grafana_screenshots = []
@@ -3734,7 +3765,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             grafana_screenshots = self.monitors.get_grafana_screenshots_from_all_monitors(
                 self.start_time) if self.monitors else {}
             self.argus_collect_screenshots(grafana_screenshots)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.log.exception("Error while collecting screenshots:", exc_info=exc)
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
@@ -3760,7 +3791,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.test_config.argus_client().submit_packages(
                 [Package(name="relocatable_pkg", date="", version=relocatable_pkg, revision_id="", build_id="")])
 
-    def get_email_data(self):  # pylint: disable=no-self-use
+    def get_email_data(self):
         """prepare data to generate and send via email
 
         Have to return the dict which is used to build the
@@ -3865,7 +3896,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             output.append(result['message'])
         return output
 
-    def _get_live_node(self) -> Optional[BaseNode]:  # pylint: disable=inconsistent-return-statements
+    def _get_live_node(self) -> Optional[BaseNode]:
         if not self.db_cluster or not self.db_cluster.nodes:
             self.log.error("Cluster object was not initialized")
             return None
@@ -3900,6 +3931,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
         return False
 
+    @property
+    def is_rack_aware_validation_enabled(self) -> bool:
+        if not self.is_rack_aware_policy:
+            return False
+
+        count_loaders = sum(len(loaders.nodes) for loaders in self.loaders_multitenant)
+        return count_loaders == 1 and self.db_cluster.racks_count > 1
+
     def get_hdrhistogram(self, hdr_tags: list[str], stress_operation: str,
                          start_time: float, end_time: float) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
@@ -3923,3 +3962,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return make_hdrhistogram_summary_by_interval(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)
+
+    @property
+    def all_db_nodes(self) -> list[BaseNode]:
+        """
+        Returns a list of all DB nodes from all managed DB clusters (for multi-tenant support).
+        """
+        db_clusters = self.db_clusters_multitenant or [self.db_cluster]
+        return [node for cluster in db_clusters for node in cluster.nodes]

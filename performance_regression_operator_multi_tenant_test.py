@@ -18,11 +18,10 @@ from sdcm.utils.common import ParallelObject
 from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
 
 
-# pylint: disable=too-many-public-methods
 class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, PerformanceRegressionTest):
     load_iteration_timeout_sec = 7200
 
-    def create_test_stats(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def create_test_stats(self, *args, **kwargs):
         self.log.info(
             "Suppress the test class stats creation. "
             "Leave it for the per-DB classes.")
@@ -62,7 +61,10 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
                     "'%s' DB cluster: Populating data using round_robin", db_cluster_name)
                 params.update({'stress_num': 1, 'round_robin': True})
             for stress_cmd in prepare_write_cmd:
-                params.update({'stress_cmd': stress_cmd})
+                params.update({
+                    'stress_cmd': stress_cmd,
+                    'duration': self.params.get('prepare_stress_duration'),
+                })
                 # Run all stress commands
                 params.update(dict(stats_aggregate_cmds=False))
                 self.log.debug("'%s' DB cluster: RUNNING stress cmd: %s",

@@ -2,9 +2,8 @@ test_duration: 180
 
 n_db_nodes: 3
 n_loaders: 3
-n_monitor_nodes: 1
 
-instance_type_db: 'i3.2xlarge'
+instance_type_db: 'i3.xlarge'
 instance_type_loader: 'c6i.2xlarge'
 
 pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 1024};"

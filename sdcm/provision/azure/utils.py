@@ -29,7 +29,7 @@ from sdcm.utils.version_utils import (
 LOGGER = logging.getLogger(__name__)
 
 
-def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
+def get_scylla_images(
         scylla_version: str,
         region_name: str,
         arch: VmArch = VmArch.X86,
@@ -91,7 +91,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
     return output[::-1]
 
 
-def get_released_scylla_images(  # pylint: disable=unused-argument
+def get_released_scylla_images(
         scylla_version: str,
         region_name: str,
         arch: VmArch = VmArch.X86,

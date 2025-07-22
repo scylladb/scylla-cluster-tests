@@ -14,8 +14,6 @@
 from textwrap import dedent
 
 
-# pylint: disable=anomalous-backslash-in-string
-
 def configure_syslogng_target_script(hostname: str = "") -> str:
     return dedent("""
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
@@ -50,6 +48,42 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
         """.format(hostname=hostname))
 
 
+def configure_vector_target_script(host: str, port: int) -> str:
+    return dedent("""
+        echo "
+        sources:
+            journald:
+                type: journald
+            vector_metrics:
+                type: internal_metrics
+
+        transforms:
+            filter_audit:
+                inputs:
+                    - journald
+                type: filter
+                condition: |
+                    !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? \\"default\\", \\"AUDIT\\")
+        sinks:
+            sct-runner:
+                type: vector
+                inputs:
+                    - filter_audit
+                address: {host}:{port}
+                healthcheck: false
+            prometheus:
+                type: prometheus_exporter
+                address: 0.0.0.0:9577
+                inputs:
+                  - vector_metrics
+                healthcheck: false
+
+        " > /etc/vector/vector.yaml
+
+        systemctl kill -s HUP --kill-who=main vector.service
+    """).format(host=host, port=port)
+
+
 def configure_hosts_set_hostname_script(hostname: str) -> str:
     return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
            f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
@@ -80,6 +114,46 @@ def restart_syslogng_service():
     return "systemctl restart syslog-ng  || true\n"
 
 
+def configure_backoff_timeout():
+    return dedent("""\
+        backoff() {
+            local attempt=$1
+            local max_timeout=${2:-60}
+            local base=${3:-5}
+            local timeout
+
+            timeout=$((attempt * base))
+            if [ $timeout -gt $max_timeout ]; then
+                timeout=$max_timeout
+            fi
+            echo $timeout
+        }
+    """)
+
+
+def update_repo_cache():
+    return dedent("""\
+        if yum --help 2>/dev/null 1>&2 ; then
+            echo "Cleaning yum cache..."
+            yum clean all
+            rm -rf /var/cache/yum/
+        elif apt-get --help 2>/dev/null 1>&2 ; then
+            echo "Cleaning apt cache..."
+            apt-get clean all
+            rm -rf /var/cache/apt/
+
+            for n in 1 2 3 4 5 6 7 8 9; do
+                if apt-get -y update; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
+        else
+            echo "Unsupported distro"
+        fi
+    """)
+
+
 def install_syslogng_service():
     return dedent("""\
         SYSLOG_NG_INSTALLED=""
@@ -89,11 +163,18 @@ def install_syslogng_service():
                 yum reinstall -y syslog-ng
                 SYSLOG_NG_INSTALLED=1
             else
-                yum install -y epel-release
+                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
+                    if yum install -y epel-release; then
+                        break
+                    fi
+                    sleep $(backoff $n)
+                done
+
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
                     if yum install -y --downloadonly syslog-ng; then
                         break
                     fi
+                    sleep $(backoff $n)
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
@@ -101,7 +182,7 @@ def install_syslogng_service():
                         SYSLOG_NG_INSTALLED=1
                         break
                     fi
-                    sleep 10
+                    sleep $(backoff $n)
                 done
             fi
         elif apt-get --help 2>/dev/null 1>&2 ; then
@@ -112,24 +193,53 @@ def install_syslogng_service():
                 SYSLOG_NG_INSTALLED=1
             else
                 cat /etc/apt/sources.list
-                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
-                    if apt-get -y update ; then
-                        break
-                    fi
-                    sleep 0.5
-                done
-
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
                     DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y syslog-ng || true
                     if dpkg-query --show syslog-ng ; then
                         SYSLOG_NG_INSTALLED=1
                         break
                     fi
+                    sleep $(backoff $n)
                 done
             fi
         else
             echo "Unsupported distro"
         fi
+    """)
+
+
+def install_vector_service():
+    return dedent("""\
+        # install repo
+        for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+            if bash -c "$(curl -L https://setup.vector.dev)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        # install vector
+        if yum --help 2>/dev/null 1>&2 ; then
+            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                if yum install -y vector; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
+        elif apt-get --help 2>/dev/null 1>&2 ; then
+            for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y vector || true
+                if dpkg-query --show vector ; then
+                    break
+                fi
+                sleep $(backoff $n)
+            done
+        else
+            echo "Unsupported distro"
+        fi
+
+        systemctl enable vector
+        systemctl start vector
     """)
 
 
@@ -219,4 +329,27 @@ def configure_syslogng_file_source(log_file: str) -> str:
         EOF
 
         echo "log {{ source(s_scylla_file); filter(filter_sct); destination(remote_sct); rewrite(r_host); }};" >> /etc/syslog-ng/syslog-ng.conf
+    """)
+
+
+def install_docker_service():
+    return dedent("""\
+        # Install Docker
+
+        for n in 1 2 3; do
+            if bash -c "$(curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh)"; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        for n in 1 2 3; do
+            if sh get-docker.sh ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        systemctl enable docker.service
+        systemctl start docker.service
     """)

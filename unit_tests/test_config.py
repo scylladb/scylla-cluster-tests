@@ -26,10 +26,8 @@ RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstab
           '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
           '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla.repo'
 
-# pylint: disable=no-self-use
 
-
-class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-methods
+class ConfigurationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         logging.basicConfig(level=logging.ERROR)
@@ -78,7 +76,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_03_dump_help_config_yaml(self):
         logging.debug(self.conf.dump_help_config_yaml())
 
-    def test_03_dump_help_config_markdown(self):  # pylint: disable=invalid-name
+    def test_03_dump_help_config_markdown(self):
         logging.debug(self.conf.dump_help_config_markdown())
 
     @pytest.mark.integration
@@ -125,7 +123,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = '666.development-blah'
-        os.environ['SCT_SCYLLA_REPO_LOADER'] = RPM_URL
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -196,7 +193,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         assert len(amis) == 2
         assert all(ami.startswith('ami-') for ami in amis)
 
-    def test_12_scylla_version_ami_case1(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_ami_case1(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
@@ -205,7 +202,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_ami_case2(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_ami_case2(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
@@ -222,7 +219,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_repo_case1(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_case1(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
@@ -230,14 +227,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
     @pytest.mark.integration
-    def test_12_scylla_version_repo_case2(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_case2(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
         self.assertRaisesRegex(
             ValueError, r"AMIs for scylla_version='99.0.3' not found in eu-west-1 arch=x86_64", sct_config.SCTConfiguration)
 
-    def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_ubuntu(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
@@ -254,17 +251,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
-        self.assertEqual(conf.get('scylla_repo_loader'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list")
 
-    def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+    def test_12_scylla_version_repo_ubuntu_loader_centos(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
         os.environ['SCT_GCE_IMAGE_DB'] = (
             'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7')
-        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo'
 
         expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
@@ -275,24 +269,19 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
-        self.assertEqual(conf.get('scylla_repo_loader'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo")
 
-    def test_12_k8s_scylla_version_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+    def test_12_k8s_scylla_version_ubuntu_loader_centos(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
-        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertFalse(conf.get('scylla_repo'))
-        self.assertEqual(conf.get('scylla_repo_loader'),
-                         'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo')
 
     @pytest.mark.integration
-    def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
+    def test_13_scylla_version_ami_branch_latest(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.2:latest'
@@ -303,6 +292,114 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         amis = conf.get('ami_id_db_scylla').split()
         assert len(amis) == 2
         assert all(ami.startswith('ami-') for ami in amis)
+
+    def test_14_check_rackaware_config_false_loader(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'false'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError, expected_regex="rack_aware_loader' must be set to True for rackaware validator."):
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_one_racks(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError,
+                                    expected_regex="Rack-aware validation can only be performed in multi-availability zone or multi-"):
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_no_rack_without_loader(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1 eu-west-2"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_SIMULATED_RACKS'] = "0"
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '2 2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        with self.assertRaisesRegex(ValueError,
+                                    expected_regex="Rack-aware validation requires zones without loaders."):
+
+            conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_az(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = "eu-west-1"
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_N_LOADERS'] = '1'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_region(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '1 0'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_14_check_rackaware_config_multi_az_and_region(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_RACK_AWARE_LOADER'] = 'true'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_N_LOADERS'] = '1 1'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
+                 enabled: true
+            """
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
 
     def test_conf_check_required_files(self):  # pylint: disable=no-self-use
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -316,7 +413,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         conf.check_required_files()
 
-    def test_conf_check_required_files_negative(self):  # pylint: disable=no-self-use
+    def test_conf_check_required_files_negative(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/stress_cmd_with_bad_profile.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)'\
@@ -334,7 +431,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         def get_dupes(c):
             '''sort/tee/izip'''
 
-            # pylint: disable=invalid-name
             a, b = itertools.tee(sorted(c))
             next(b, None)
             r = None
@@ -398,7 +494,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value='2019.1.1', clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
 
     def test_15a_new_scylla_repo_by_scylla_version(self):
@@ -416,7 +512,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                 unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=resolved_repo_link, clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
 
         self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
@@ -437,7 +533,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with unittest.mock.patch.object(sct_config, 'get_branched_gce_images', return_value=[image], clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+            conf._get_target_upgrade_version()
 
         self.assertEqual(conf.get('gce_image_db'), resolved_image_link)
 
@@ -630,7 +726,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_20_user_data_format_version_gce_3(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_GCE_IMAGE_DB'] = ('https://www.googleapis.com/compute/v1/projects/'
-                                          'ubuntu-os-cloud/global/images/family/ubuntu-2004-lts')
+                                          'ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64')
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
@@ -1011,6 +1107,42 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.scylla_version = "2025.1.0~dev"
         conf.is_enterprise = True
         conf.update_config_based_on_version()
+
+    @staticmethod
+    def test_37_validates_single_thread_count_for_all_throttle_steps():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"read": 620, "write": [630], "mixed": [500]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = ('{"read": ["unthrottled", "unthrottled"], "mixed": [100, "unthrottled"],'
+                                                         '"write": [200, "unthrottled"]}')
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_37_raises_error_for_mismatched_thread_and_throttle_step_counts(self):
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"read": [620, 630]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"read": ["100", "200", "unthrottled"]}'
+        with self.assertRaises(ValueError):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+    @staticmethod
+    def test_37_handles_empty_performance_throughput_parameters():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = "{}"
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = "{}"
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    @staticmethod
+    def test_37_validates_multiple_thread_counts_per_throttle_step():
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"write": [400, 420, 440, 460, 480]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"write": ["100", "200", "300", "400", "unthrottled"]}'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    def test_37_raises_error_for_invalid_thread_count_type(self):
+        os.environ["SCT_PERF_GRADUAL_THREADS"] = '{"mixed": ["invalid_type"]}'
+        os.environ["SCT_PERF_GRADUAL_THROTTLE_STEPS"] = '{"mixed": ["unthrottled"]}'
+        with self.assertRaises(ValueError):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
 
 
 if __name__ == "__main__":

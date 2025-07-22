@@ -16,14 +16,26 @@ import contextlib
 import datetime
 import time
 from textwrap import dedent
-from typing import Any, Callable, List, Dict, Optional
+from typing import (
+    Any,
+    Callable,
+    List,
+    Dict,
+    Optional,
+    Sequence,
+)
 
 import boto3
 from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.service_resource import Instance
-from mypy_boto3_ec2.type_defs import InstanceTypeDef, SpotFleetLaunchSpecificationTypeDef, \
-    RequestSpotLaunchSpecificationTypeDef, SpotFleetRequestConfigDataTypeDef
+from mypy_boto3_ec2.type_defs import (
+    InstanceTypeDef,
+    SpotFleetLaunchSpecificationTypeDef,
+    RequestSpotLaunchSpecificationTypeDef,
+    SpotFleetRequestConfigDataTypeDef,
+    TagSpecificationTypeDef,
+)
 
 from sdcm.provision.aws.constants import SPOT_REQUEST_TIMEOUT, SPOT_REQUEST_WAITING_TIME, STATUS_FULFILLED, \
     SPOT_STATUS_UNEXPECTED_ERROR, SPOT_PRICE_TOO_LOW, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
@@ -108,14 +120,14 @@ def find_instances_by_tags(region_name: str, tags: TagsType, states: List[str] =
 
 
 def find_instance_by_id(region_name: str, instance_id: str) -> Instance:
-    return ec2_resources[region_name].Instance(id=instance_id)  # pylint: disable=no-member
+    return ec2_resources[region_name].Instance(id=instance_id)
 
 
 def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsType):
     end_time = time.perf_counter() + 20
     while end_time > time.perf_counter():
         with contextlib.suppress(ClientError):
-            ec2_clients[region_name].create_tags(  # pylint: disable=no-member
+            ec2_clients[region_name].create_tags(
                 Resources=instance_ids,
                 Tags=convert_tags_to_aws_format(tags))
             return True
@@ -145,7 +157,7 @@ def wait_for_provision_request_done(
 def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
     try:
         resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return []
     for req in resp['SpotFleetRequestConfigs']:
         if req['SpotFleetRequestState'] == 'active' and req.get('ActivityStatus', None) == STATUS_FULFILLED:
@@ -168,7 +180,7 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
     for request_id in request_ids:
         try:
             resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             return None
         provisioned_instances.extend([inst['InstanceId'] for inst in resp['ActiveInstances']])
     return provisioned_instances
@@ -182,7 +194,7 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     """
     try:
         resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return []
     provisioned = []
     for req in resp['SpotInstanceRequests']:
@@ -196,7 +208,6 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     return provisioned
 
 
-#  pylint: disable=too-many-arguments
 def create_spot_fleet_instance_request(
         region_name: str,
         count: int,
@@ -216,14 +227,13 @@ def create_spot_fleet_instance_request(
     return resp['SpotFleetRequestId']
 
 
-#  pylint: disable=too-many-arguments
 def create_spot_instance_request(
         region_name: str,
         count: int,
-        price: Optional[float],
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
+        tag_specifications: Sequence[TagSpecificationTypeDef] = None
 ) -> List[str]:
     params = {
         'DryRun': False,
@@ -231,9 +241,8 @@ def create_spot_instance_request(
         'Type': 'one-time',
         'LaunchSpecification': instance_parameters,
         'AvailabilityZoneGroup': full_availability_zone,
+        'TagSpecifications': tag_specifications,
     }
-    if price:
-        params['SpotPrice'] = str(price)
     if valid_until:
         params['ValidUntil'] = valid_until
     resp = ec2_clients[region_name].request_spot_instances(**params)

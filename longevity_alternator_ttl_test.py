@@ -100,7 +100,6 @@ class AlternatorTtlLongevityTest(LongevityTest):
         4. Wait for TTL-scan intervals to run
         5. Run a background read stress while data is being expired.
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)

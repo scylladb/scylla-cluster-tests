@@ -10,12 +10,10 @@ stress_read_cmd: [
     ]
 
 
-n_db_nodes: 3
+n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
-simulated_racks: 3
 
-instance_type_db: 'i3en.2xlarge'
+instance_type_db: 'i3en.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '025'
@@ -29,3 +27,7 @@ post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 12
 
 
 round_robin: true
+
+# enable vector.dev logging for all tier1
+# TODO: remove this when vector.dev logging is enabled by default
+logs_transport: 'vector'

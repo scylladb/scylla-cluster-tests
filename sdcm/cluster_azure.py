@@ -22,6 +22,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
+from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class AzureNode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
+    def __init__(self, azure_instance: VmInstance,
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
                  base_logdir=None, dc_idx=0, rack=0):
@@ -132,7 +133,7 @@ class AzureNode(cluster.BaseNode):
                 else:
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
                     self.log.warning(f"Unhandled Azure scheduled event: {event}")
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.warning('Error during getting Azure scheduled events: %s', details)
             return 0
         return SPOT_TERMINATION_CHECK_DELAY
@@ -188,8 +189,8 @@ class AzureNode(cluster.BaseNode):
         return resolve_ip_to_dns(self.private_ip_address)
 
 
-class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals  # noqa: PLR0913
+class AzureCluster(cluster.BaseCluster):
+    def __init__(self, image_id, root_disk_size,  # noqa: PLR0913
                  provisioners: List[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
@@ -212,7 +213,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                          node_type=node_type)
         self.log.debug("AzureCluster constructor")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
+    @mark_new_nodes_as_running_nemesis
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         self.log.info("Adding nodes to cluster")
         nodes = []
 
@@ -279,12 +281,11 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, root_disk_size,
                  provisioners: List[AzureProvisioner], credentials,
                  instance_type='Standard_L8s_v3',
                  user_name='ubuntu',
                  user_prefix=None, n_nodes=3, params=None, region_names=None):
-        # pylint: disable=too-many-locals
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super().__init__(
@@ -313,11 +314,10 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, root_disk_size, provisioners, credentials,
                  instance_type='Standard_D2_v4',
                  user_name='centos',
                  user_prefix=None, n_nodes=1, params=None, region_names=None):
-        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self, params=params)
@@ -339,11 +339,10 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
 class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, root_disk_size, provisioners, credentials,
                  instance_type='Standard_D2_v4',
                  user_name='centos', user_prefix=None, n_nodes=1,
                  targets=None, params=None, region_names=None):
-        # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
 

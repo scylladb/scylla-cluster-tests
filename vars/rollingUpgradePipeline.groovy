@@ -15,6 +15,7 @@ def call(Map pipelineParams) {
             SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
+            separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: '',
                    description: 'a Azure Image to run against',
                    name: 'azure_image_db')
@@ -34,14 +35,15 @@ def call(Map pipelineParams) {
             string(defaultValue: "a",
                description: 'Availability zone',
                name: 'availability_zone')
-
-            string(defaultValue: '', description: '', name: 'scylla_ami_id')
+            separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
+            string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
 
-            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price',
+            separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+                   description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
-
+            separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -55,9 +57,13 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
             string(defaultValue: '', description: 'scylla option: internode_compression', name: 'internode_compression')
+            separator(name: 'EMAIL_TEST', sectionHeader: 'Email and Test Configuration')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
@@ -70,11 +76,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                    description: 'Gce project to use',
                    name: 'gce_project')
-            string(defaultValue: '',
-                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
-                   name: 'requested_by_user')
 
             // NOTE: Optional parameters for BYO ScyllaDB stage
+            separator(name: 'BYO_SCYLLA', sectionHeader: 'BYO ScyllaDB Configuration')
             string(defaultValue: '',
                    description: (
                        'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +

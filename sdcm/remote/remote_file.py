@@ -31,7 +31,6 @@ def read_to_stringio(fobj):
     return StringIO(fobj.read())
 
 
-# pylint: disable=too-many-locals,too-many-arguments
 @contextlib.contextmanager
 def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
                 preserve_ownership=True, preserve_permissions=True, log_change=True):
@@ -48,7 +47,8 @@ def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, 
                   timeout=300,
                   throw_exc=True,
                   src=str(remote_path),
-                  dst=local_tempfile)
+                  dst=local_tempfile,
+                  sudo=sudo)
     with open(local_tempfile, encoding="utf-8") as fobj:
         parsed_data = deserializer(fobj)
         original_content = serializer(parsed_data)
@@ -76,7 +76,8 @@ def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, 
                       timeout=300,
                       throw_exc=True,
                       src=local_tempfile,
-                      dst=remote_tempfile)
+                      dst=remote_tempfile,
+                      sudo=sudo)
         if sudo:
             remoter.sudo(remote_tempfile_move_cmd)
         else:

@@ -13,7 +13,7 @@
 
 import traceback
 
-from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
+from ssh2.exceptions import SocketRecvError
 
 from .result import Result
 
@@ -75,7 +75,7 @@ class Failure(Exception):
     .. versionadded:: 1.0
     """
 
-    def __init__(self, result: Result, reason: str = None):  # pylint: disable=super-init-not-called
+    def __init__(self, result: Result, reason: str = None):
         self.result = result
         self.reason = reason
 

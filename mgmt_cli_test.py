@@ -12,9 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-# pylint: disable=too-many-lines
 
-# pylint: disable=too-many-lines
 import random
 import threading
 from enum import Enum
@@ -45,7 +43,9 @@ from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.aws_utils import AwsIAM
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.sct_events.system import InfoEvent
@@ -67,8 +67,8 @@ class ManagerTestMetrics:
 class SnapshotData:
     """Describes the backup snapshot:
 
-    - bucket: S3 bucket name
-    - tag: snapshot tag, for example 'sm_20240816185129UTC'
+    - locations: backup locations
+    - tag: snapshot tag, for example, 'sm_20240816185129UTC'
     - exp_timeout: expected timeout for the restore operation
     - dataset: dict with snapshot dataset details such as cl, replication, schema, etc.
     - keyspaces: list of keyspaces presented in backup
@@ -76,8 +76,9 @@ class SnapshotData:
     - prohibit_verification_read: if True, the verification read will be prohibited. Most likely, such a backup was
       created via c-s user profile.
     - node_ids: list of node ids where backup was created
+    - one_one_restore_params: dict with parameters for 1-1 restore ('account_credential_id' and 'sm_cluster_id')
     """
-    bucket: str
+    locations: list[str]
     tag: str
     exp_timeout: int
     dataset: dict[str, str | int | dict]
@@ -86,6 +87,7 @@ class SnapshotData:
     cs_read_cmd_template: str
     prohibit_verification_read: bool
     node_ids: list[str]
+    one_one_restore_params: dict[str, str | int] | None
 
 
 class DatabaseOperations(ClusterTester):
@@ -274,31 +276,6 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
 class ClusterOperations(ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
 
-    def ensure_and_get_cluster(self, manager_tool, force_add: bool = False, **add_cluster_extra_params):
-        """Get the cluster if it is already added, otherwise add it to manager.
-
-        Use force_add=True if you want to re-add the cluster (delete and add again) even if it already added.
-        Use add_cluster_extra_params to pass additional parameters (like 'client_encrypt') to the add_cluster method.
-        """
-        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME)
-
-        if not mgr_cluster or force_add:
-            if mgr_cluster:
-                mgr_cluster.delete()
-
-            add_cluster_params = {}
-            add_cluster_params.update(
-                name=self.CLUSTER_NAME,
-                db_cluster=self.db_cluster,
-                auth_token=self.monitors.mgmt_auth_token,
-                force_non_ssl_session_port=manager_tool.is_force_non_ssl_session_port(db_cluster=self.db_cluster),
-            )
-            add_cluster_params.update(add_cluster_extra_params)
-
-            mgr_cluster = manager_tool.add_cluster(**add_cluster_params)
-
-        return mgr_cluster
-
     def get_cluster_hosts_ip(self):
         return ScyllaManagerTool.get_cluster_hosts_ip(self.db_cluster)
 
@@ -327,6 +304,11 @@ class ClusterOperations(ClusterTester):
         nodetool_status = self.db_cluster.get_nodetool_status(self.db_cluster.nodes[0])
         rf = {dc_name: len(nodes) for dc_name, nodes in nodetool_status.items()}
         return rf
+
+    def disable_compaction(self):
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
 
 class BucketOperations(ClusterTester):
@@ -409,7 +391,21 @@ class BucketOperations(ClusterTester):
     def sync_gs_buckets(source: str, destination: str) -> None:
         LOCALRUNNER.run(f"gsutil -m rsync -r gs://{source} gs://{destination}")
 
-    def copy_backup_snapshot_bucket(self, source: str, destination: str) -> None:
+    def get_region_from_bucket_location(self, location: str) -> str:
+        cluster_backend = self.params.get("cluster_backend")
+
+        if cluster_backend == "aws":
+            # extract region name from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53 to us-east-1
+            return location.split(":")[0].split("_", 1)[1].replace("_", "-").lower()
+        elif cluster_backend == "gce":
+            # extract region name from GCE_US_EAST_1:gcs:scylla-cloud-backup-23-29-6q0i5q to us-east1
+            parts = location.split(":")[0].split("_")[1:]
+            assert len(parts) == 3, f"Can't extract region from location {location}"
+            return f"{parts[0].lower()}-{parts[1].lower()}{parts[2]}"
+        else:
+            raise ValueError(f"Unsupported cluster backend - {cluster_backend}, should be either aws or gce")
+
+    def copy_backup_snapshot_bucket(self, source: str, destination: str, region: str) -> None:
         """Copy bucket with Manager backup snapshots.
         The process consists of two stages - new bucket creation and data sync (original bucket -> newly created).
         The main use case is to make a copy of a bucket created in a test with Cloud (siren) cluster since siren
@@ -419,7 +415,6 @@ class BucketOperations(ClusterTester):
         Only AWS and GCE backends are supported.
         """
         cluster_backend = self.params.get("cluster_backend")
-        region = next(iter(self.params.region_names), '')
 
         if cluster_backend == "aws":
             self.create_s3_bucket(name=destination, region=region)
@@ -442,7 +437,7 @@ class SnapshotOperations(ClusterTester):
         try:
             snapshot_dict = all_snapshots_dict["sizes"][snapshot_name]
         except KeyError:
-            raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
+            raise ValueError(f"Snapshot data for '{snapshot_name}' was not found in the {snapshots_config} file")
 
         ks_tables_map = {}
         for ks, ts in snapshot_dict["dataset"]["schema"].items():
@@ -450,7 +445,7 @@ class SnapshotOperations(ClusterTester):
             ks_tables_map[ks] = t_names
 
         snapshot_data = SnapshotData(
-            bucket=all_snapshots_dict["bucket"],
+            locations=snapshot_dict["locations"],
             tag=snapshot_dict["tag"],
             exp_timeout=snapshot_dict["exp_timeout"],
             dataset=snapshot_dict["dataset"],
@@ -459,6 +454,7 @@ class SnapshotOperations(ClusterTester):
             cs_read_cmd_template=all_snapshots_dict["cs_read_cmd_template"],
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
             node_ids=snapshot_dict.get("node_ids"),
+            one_one_restore_params=snapshot_dict.get("one_one_restore_params"),
         )
         return snapshot_data
 
@@ -677,7 +673,6 @@ class ManagerTestFunctionsMixIn(
         else:
             return None
 
-    # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
                               truncate=True, restore_data_with_task=False, timeout=None):
         if ks_names is None:
@@ -800,9 +795,8 @@ class ManagerTestFunctionsMixIn(
 
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
-    def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+    def test_restore_multiple_backup_snapshots(self):  # noqa: PLR0914
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend != 'aws':
             self.log.error("Test supports only AWS ATM")
@@ -837,8 +831,7 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
 
     def test_restore_backup_with_task(self, ks_names: list = None):
         self.log.info('starting test_restore_backup_with_task')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         if not ks_names:
             ks_names = ['keyspace1']
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=ks_names)
@@ -859,8 +852,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_basic_backup(self, ks_names: list = None):
         self.log.info('starting test_basic_backup')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
@@ -872,8 +864,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_multiple_ks_tables(self):
         self.log.info('starting test_backup_multiple_ks_tables')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         tables = self.create_ks_and_tables(10, 100)
         self.log.debug('tables list = {}'.format(tables))
         # TODO: insert data to those tables
@@ -886,8 +877,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_location_with_path(self):
         self.log.info('starting test_backup_location_with_path')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
             mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
         except ScyllaManagerError as error:
@@ -896,8 +886,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_backup_rate_limit(self):
         self.log.info('starting test_backup_rate_limit')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         rate_limit_list = [f'{dc}:{random.randint(15, 25)}' for dc in self.get_all_dcs_names()]
         self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
@@ -917,8 +906,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         previously mentioned orphan files from the bucket.
         """
         self.log.info('starting test_backup_purge_removes_orphan_files')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, retention=1)
@@ -943,8 +931,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
     def test_enospc_during_backup(self):
         self.log.info('starting test_enospc_during_backup')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         # deleting previous snapshots so that the current backup will last longer
         previous_backup_tasks = mgr_cluster.backup_task_list
         for backup_task in previous_backup_tasks:
@@ -972,9 +959,14 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info('finishing test_enospc_during_backup')
 
     def test_enospc_before_restore(self):
+        if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            # TODO: Get back to this restriction after https://github.com/scylladb/scylla-manager/issues/4275 resolution
+            self.log.info('Skipping test_enospc_before_restore due to enabled tablets. '
+                          'For details https://github.com/scylladb/scylla-manager/issues/4276')
+            return
+
         self.log.info('starting test_enospc_before_restore')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
@@ -1027,13 +1019,10 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.run_prepare_write_cmd()
 
         self.log.info('Disable compaction for every node in the cluster')
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+        self.disable_compaction()
 
         self.log.info('Prepare Manager')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
 
         self.log.info('Run backup #1')
         backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -1132,10 +1121,10 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         load_results = stress_read_thread.get_results()
         self.log.info('load={}'.format(load_results))
 
-    def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
+    def test_repair_multiple_keyspace_types(self):
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         rf = self.get_rf_based_on_nodes_number() if len(self.params.region_names) > 1 else 2
         self.create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=rf)
@@ -1205,7 +1194,7 @@ class ManagerCRUDTests(ManagerTestFunctionsMixIn):
         """
         self.log.info('starting test_mgmt_cluster_crud')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
@@ -1222,8 +1211,7 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
 
     def test_cluster_healthcheck(self):
         self.log.info('starting test_mgmt_cluster_healthcheck')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         other_host, other_host_ip = [
             host_data for host_data in self.get_cluster_hosts_with_ips() if
             host_data[1] != self.get_cluster_hosts_ip()[0]][0]
@@ -1271,8 +1259,7 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
         nodes_from_local_dc = self.db_cluster.nodes[:2]
         nodes_from_distant_dc = self.db_cluster.nodes[2:]
         manager_node = self.monitors.nodes[0]
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
             reconfigure_scylla_manager(manager_node=manager_node, logger=self.log,
                                        values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
@@ -1312,7 +1299,6 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             self.db_cluster.enable_client_encrypt()
 
         manager_node = self.monitors.nodes[0]
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
 
         self.log.info("Create and send client TLS certificate/key to the manager node")
         manager_node.create_node_certificate(cert_file=manager_node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
@@ -1320,7 +1306,7 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
         manager_node.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
         manager_node.remoter.send_files(src=str(manager_node.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
 
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True, client_encrypt=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True, client_encrypt=True)
 
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
@@ -1353,10 +1339,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
     def _test_suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
         self.log.info('starting test_suspend_and_resume_{}'.format(task_type))
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         elif task_type == "repair":
@@ -1377,10 +1362,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         suspension_duration = 75
         test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
         self.log.info('starting test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may run very fast and
         # the test won't be able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         task_type = random.choice(["backup", "repair"])
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -1411,10 +1395,9 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
 
     def _test_suspend_and_resume_without_starting_tasks(self):
         self.log.info('starting test_suspend_and_resume_without_starting_tasks')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool, force_add=True)
+        mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
@@ -1446,7 +1429,21 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
 
 class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
-    def test_prepare_backup_snapshot(self):
+    def _unlock_cloud_key(self) -> str | None:
+        """The operation is required to make the particular Cloud cluster key reusable.
+        For that, the key should be unlocked from the original cluster.
+        """
+        self.log.info("Unlock the EaR key used by cluster to reuse it while restoring to a new cluster (1-1 restore)")
+        ear_key = self.db_cluster.get_ear_key()
+
+        if not ear_key:
+            self.log.warning("No EaR key found, skipping unlock")
+            return None
+
+        self.db_cluster.unlock_ear_key()
+        return ear_key.get("keyid")
+
+    def test_prepare_backup_snapshot(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
         """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
 
         Steps:
@@ -1458,23 +1455,26 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         """
         is_cloud_manager = self.params.get("use_cloud_manager")
 
+        self.log.info("Initialize Scylla Manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Define backup location")
+        if is_cloud_manager:
+            # Extract location from an automatically scheduled backup task
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            location_list = [auto_backup_task.get_task_info_dict()["location"]]
+
+            self.log.info("Delete scheduled backup task to not interfere")
+            mgr_cluster.delete_task(auto_backup_task)
+        else:
+            location_list = self.locations
+
         self.log.info("Populate the cluster with data")
         backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
         assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
 
         ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
-
-        self.log.info("Initialize Scylla Manager")
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-
-        self.log.info("Define backup location")
-        if is_cloud_manager:
-            # Extract location from automatically scheduled backup task
-            auto_backup_task = mgr_cluster.backup_task_list[0]
-            location_list = [auto_backup_task.get_task_info_dict()["location"]]
-        else:
-            location_list = self.locations
 
         self.log.info("Run backup and wait for it to finish")
         backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=["0"])
@@ -1484,21 +1484,35 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
 
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
-            # from ["'AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53'"] to scylla-cloud-backup-8072-7216-v5dn53
-            original_bucket_name = location_list[0].split(":")[-1].rstrip("'")
-            bucket_name = original_bucket_name + "-manager-tests"
-            self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name)
+            # can be several locations for multiDC cluster, for example,
+            # 'AWS_EU_SOUTH_1:s3:scylla-cloud-backup-170-176-15c7bm,AWS_EU_WEST_1:s3:scylla-cloud-backup-170-175-9dy2w4'
+            location_list = location_list[0].split(",")
+            for location in location_list:
+                # from AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53' to scylla-cloud-backup-8072-7216-v5dn53
+                original_bucket_name = location.split(":")[-1].strip("'")
+                bucket_name = original_bucket_name + "-manager-tests"
+                region = self.get_region_from_bucket_location(location)
+                self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name, region=region)
+
+        if is_cloud_manager:
+            cluster_id = self.db_cluster.cloud_cluster_id
+            key_id = self._unlock_cloud_key()
+            manager_cluster_id = self.db_cluster.get_manager_cluster_id()
         else:
-            bucket_name = location_list[0]
+            cluster_id = mgr_cluster.id
+            key_id = "N/A"
+            manager_cluster_id = "N/A"
 
         self.log.info("Send snapshot details to Argus")
         snapshot_details = {
             "tag": backup_task.get_snapshot_tag(),
             "size": backup_size,
-            "bucket": bucket_name,
+            "locations": ",".join(location_list),
             "ks_name": ks_name,
             "scylla_version": self.params.get_version_based_on_conf()[0],
-            "cluster_id": mgr_cluster.id,
+            "cluster_id": cluster_id,
+            "ear_key_id": key_id,
+            "manager_cluster_id": manager_cluster_id,
         }
         send_manager_snapshot_details_to_argus(
             argus_client=self.test_config.argus_client(),
@@ -1653,7 +1667,7 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
         self.log.info("Got Manager's version: %s", manager_tool.sctool.version)
 
         # Add cluster and verify hosts health
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Host status is not 'UP'"
@@ -1663,6 +1677,14 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
 
 
 class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
+
+    def tearDown(self):
+        """Unlock EaR key used by Cloud cluster to reuse it in the future
+        Otherwise, if not unlocked, the key will be deleted together with the cluster
+        """
+        if self.params.get("use_cloud_manager"):
+            self.db_cluster.unlock_ear_key()
+        super().tearDown()
 
     def get_restore_extra_parameters(self) -> str:
         extra_params = self.params.get('mgmt_restore_extra_params')
@@ -1689,6 +1711,18 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             row_name=dataset_label,
         )
 
+    def _adjust_aws_restore_policy(self, snapshot: SnapshotData, cluster_id: str) -> None:
+        assert self.params.get("use_cloud_manager"), "Should be applied to Cloud-managed clusters only"
+
+        iam_client = AwsIAM()
+        policies = iam_client.get_policy_by_name_prefix(f"s3-scylla-cloud-backup-{cluster_id}")
+        for policy_arn in policies:
+            for location in snapshot.locations:
+                iam_client.add_resource_to_iam_policy(
+                    policy_arn=policy_arn,
+                    resource_to_add=f"arn:aws:s3:::{location.split(':')[-1]}",
+                )
+
     def test_backup_and_restore_only_data(self):
         """The test is extensively used for restore benchmarking purposes and consists of the following steps:
         1. Populate the cluster with data (currently operates with datasets of 500GB, 1TB, 2TB, 5TB);
@@ -1700,13 +1734,8 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         """
         self.run_prepare_write_cmd()
 
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
-
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
@@ -1742,22 +1771,28 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                            All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
             restore_outside_manager: set True to restore outside of Manager via nodetool refresh
         """
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        self.log.info("Initialize Scylla Manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
+        self.log.info("Define snapshot details and location")
         snapshot_data = self.get_snapshot_data(snapshot_name)
+        locations = snapshot_data.locations
+
+        if self.params.get("use_cloud_manager"):
+            self.log.info("Delete scheduled backup task to not interfere")
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            mgr_cluster.delete_task(auto_backup_task)
+
+            self.log.info("Adjust restore cluster backup policy")
+            if self.params.get("cluster_backend") == "aws":
+                self._adjust_aws_restore_policy(snapshot_data, cluster_id=self.db_cluster.cloud_cluster_id)
+
+            self.log.info("Grant admin permissions to scylla_manager user")
+            self.db_cluster.nodes[0].run_cqlsh(cmd="grant scylla_admin to scylla_manager")
 
         self.log.info("Restoring the schema")
-        location = [f"s3:{snapshot_data.bucket}"]
         self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag, timeout=600,
-                                      restore_schema=True, location_list=location)
-        for ks_name in snapshot_data.keyspaces:
-            self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
-
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        # Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+                                      restore_schema=True, location_list=locations)
 
         if restore_outside_manager:
             self.log.info("Restoring the data outside the Manager")
@@ -1766,18 +1801,18 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                     mgr_cluster=mgr_cluster,
                     snapshot_tag=snapshot_data.tag,
                     ks_tables_list=snapshot_data.ks_tables_map,
-                    location=location[0],
+                    location=locations[0],
                     precreated_backup=True,
                 )
             restore_time = timer.duration
         else:
-            self.log.info("Restoring the data with Manager task")
+            self.log.info("Restoring the data with standard L&S approach")
             extra_params = self.get_restore_extra_parameters()
             task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
                                                  timeout=snapshot_data.exp_timeout, restore_data=True,
-                                                 location_list=location, extra_params=extra_params)
+                                                 location_list=locations, extra_params=extra_params)
             restore_time = task.duration
-            manager_version_timestamp = manager_tool.sctool.client_version_timestamp
+            manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
             self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
 
         self.manager_test_metrics.restore_time = restore_time
@@ -1816,6 +1851,73 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                                "Please provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
 
         self.test_restore_from_precreated_backup(snapshot_name, restore_outside_manager=True)
+
+
+class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
+    """The class contains tests and test methods for one-to-one restore functionality.
+    In current shape, 1-1 restore is supposed to be used for Scylla Cloud clusters only.
+    So, the test is not applicable for on-prem clusters used for regular Manager SCT tests.
+    """
+
+    def setUp(self):
+        super().setUp()
+        if not self.params.get("use_cloud_manager"):
+            raise ValueError("The test is applicable only for Scylla Cloud clusters")
+
+    def tearDown(self):
+        """Unlock EaR key used by Cloud cluster to reuse it in the future
+        Otherwise, if not unlocked, the key will be deleted together with the cluster
+        """
+        self.db_cluster.unlock_ear_key(ignore_status=True)
+        super().tearDown()
+
+    def _define_cloud_provider_id(self) -> int:
+        cluster_backend = self.params.get("cluster_backend")
+        if cluster_backend == "aws":
+            return 1
+        elif cluster_backend == "gce":
+            return 2
+        else:
+            raise ValueError("Unsupported cloud provider")
+
+    def test_one_to_one_restore(self):
+        self.log.info("Get snapshot details")
+        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
+        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
+                               "Please, provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
+        snapshot_data = self.get_snapshot_data(snapshot_name)
+
+        self.log.info("Initialize Scylla Manager")
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Delete scheduled backup task to not interfere")
+        auto_backup_task = mgr_cluster.backup_task_list[0]
+        mgr_cluster.delete_task(auto_backup_task)
+
+        self.log.info("Run 1-1 restore")
+        # Siren cli requires locations to be sent in a format different from the one used in the Manager
+        # Thus, all locations should be reformatted from "AWS_US_EAST_1:s3:bucket_name" to "us-east-1:s3:bucket_name"
+        locations = []
+        for location in snapshot_data.locations:
+            dc_prefix = "-".join(location.split(":")[0].split("_")[1:]).lower()
+            locations.append(dc_prefix + ":" + location.split(":", 1)[1])
+
+        with ExecutionTimer() as timer:
+            self.db_cluster.run_one_to_one_restore(
+                sm_cluster_id=snapshot_data.one_one_restore_params["sm_cluster_id"],
+                buckets=",".join(locations),
+                snapshot_tag=snapshot_data.tag,
+                account_credential_id=snapshot_data.one_one_restore_params["account_credential_id"],
+                provider_id=self._define_cloud_provider_id(),
+            )
+        self.log.info(f"1-1 restore took {timer.duration} seconds")
+
+        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
+            self.log.info("Running verification read stress")
+            cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
+            self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
+        else:
+            self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
 
 class ManagerReportType(Enum):
@@ -1877,13 +1979,10 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         self.run_prepare_write_cmd()
 
         self.log.info("Disable clusterwide compaction")
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+        # Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        self.disable_compaction()
 
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
 
         self.log.info("Create and report backup time")
         backup_task = self.create_backup_and_report(mgr_cluster, "Backup")

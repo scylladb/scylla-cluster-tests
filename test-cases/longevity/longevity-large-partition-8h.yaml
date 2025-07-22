@@ -33,9 +33,8 @@ post_prepare_cql_cmds: [
                         "ALTER TABLE scylla_bench.test with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
                         ]
 
-n_db_nodes: 5
+n_db_nodes: 6
 n_loaders: 4
-n_monitor_nodes: 1
 
 round_robin: true
 
@@ -66,4 +65,5 @@ data_validation: |
   partition_range_with_data_validation: 0-100
   limit_rows_number: 5555
 # Run a verification every 10 minutes:
-run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'
+# Disabled due to https://github.com/scylladb/scylladb/issues/23743
+# run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'

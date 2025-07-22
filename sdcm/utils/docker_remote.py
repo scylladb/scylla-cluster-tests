@@ -15,9 +15,8 @@ from sdcm.utils.net import resolve_ip_to_dns
 LOGGER = logging.getLogger(__name__)
 
 
-# pylint: disable=too-many-public-methods
 class RemoteDocker(BaseNode):
-    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):  # pylint: disable=too-many-arguments
+    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):
         self.node = node
         self._internal_ip_address = None
         self.log = LOGGER
@@ -74,15 +73,21 @@ class RemoteDocker(BaseNode):
         except (ValueError, socket.herror):
             return self.external_address
 
-    @cached_property
-    def running_in_docker(self):
-        ok = self.node.remoter.run("test /.dockerenv", ignore_status=True).ok
-        ok |= 'docker' in self.node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
+    @staticmethod
+    @cache
+    def running_in_docker(node):
+        ok = node.remoter.run("test /.dockerenv", ignore_status=True).ok
+        ok |= 'docker' in node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
         return ok
+
+    @staticmethod
+    @cache
+    def running_in_podman(node) -> bool:
+        return 'podman' in node.remoter.run('echo $container', ignore_status=True).stdout
 
     @cached_property
     def sudo_needed(self):
-        return 'sudo ' if self.running_in_docker else ''
+        return 'sudo ' if self.running_in_docker(self.node) and not self.running_in_podman(self.node) else ''
 
     def create_network(self, docker_network):
         try:
@@ -122,7 +127,7 @@ class RemoteDocker(BaseNode):
                                         verbose=kwargs.get('verbose'), ignore_status=True).ok
         return result
 
-    def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
+    def receive_files(self, src, dst, **kwargs):
         remote_tempfile = self.node.remoter.run("mktemp").stdout.strip()
 
         result = self.node.remoter.run(f"{self.sudo_needed} docker cp {self.docker_id}:{src} {remote_tempfile}",
@@ -157,8 +162,9 @@ class RemoteDocker(BaseNode):
     @cache
     def pull_image(node, image):
         # Login docker-hub before pull, in case node authentication is expired or not logged-in.
-        docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker)
-        remote_cmd = node.remoter.sudo if node.is_docker else node.remoter.run
+        docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker())
+        remote_cmd = node.remoter.sudo if RemoteDocker.running_in_docker(
+            node) and not RemoteDocker.running_in_podman(node) else node.remoter.run
         remote_cmd(f"docker pull {image}", verbose=True, retry=3)
 
     def __enter__(self):

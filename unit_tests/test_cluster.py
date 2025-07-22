@@ -11,15 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-few-public-methods
-
-import re
 import json
-import time
-import shutil
 import logging
 import os.path
+import re
+import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from functools import cached_property
@@ -34,8 +32,8 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluste
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.system import InstanceStatusEvent
 from sdcm.utils.common import (
     get_keyspace_partition_ranges,
@@ -43,15 +41,15 @@ from sdcm.utils.common import (
     parse_nodetool_listsnapshots,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.nemesis_utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
-
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
 
 
-class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstract-method
-    # pylint: disable=super-init-not-called
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):
+
     def __init__(self, nodes, params=None):
         self.nodes = nodes
         self.params = params or sct_config.SCTConfiguration()
@@ -60,6 +58,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
         self.added_password_suffix = False
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
+        self.name = 'dummy_db_cluster'
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         for _ in range(count):
@@ -68,10 +67,8 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
     def wait_for_init(*_, node_list=None, verbose=False, timeout=None, **__):
         pass
 
-
-class DummyDbLogReader(DbLogReader):
-    def get_scylla_debuginfo_file(self):
-        return "scylla_debug_info_file"
+    def validate_seeds_on_all_nodes(self):
+        pass
 
 
 class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
@@ -94,7 +91,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     @cached_property
     def _db_log_reader(self):
-        return DummyDbLogReader(
+        return DbLogReader(
             system_log=self.node.system_log,
             remoter=self.node.remoter,
             node_name=str(self),
@@ -111,9 +108,9 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
                 for line in log_text.splitlines(keepends=True):
                     temp_log.write(line)
                     temp_log.flush()
-                    self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+                    self._db_log_reader._read_and_publish_events()
         else:
-            self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+            self._db_log_reader._read_and_publish_events()
 
     @classmethod
     def tearDownClass(cls):
@@ -216,14 +213,18 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
-            event_backtrace1, event_backtrace2 = events[-3], events[-2]
-            print(event_backtrace1)
-            print(event_backtrace2)
+            backtraces = [event for event in events if event["type"] == "BACKTRACE"]
+            assert len(backtraces) == 2
+            for event_backtrace in backtraces:
+                assert event_backtrace["raw_backtrace"]
 
-            assert event_backtrace1["type"] == "BACKTRACE"
-            assert event_backtrace1["raw_backtrace"]
-            assert event_backtrace2["type"] == "BACKTRACE"
-            assert event_backtrace2["raw_backtrace"]
+            oversized_events = [event for event in events if event["type"] == "OVERSIZED_ALLOCATION"]
+            assert len(oversized_events) == 2
+            for event_oversized in oversized_events:
+                print(event_oversized)
+                assert event_oversized["raw_backtrace"]
+
+            print(events[-1])
 
     def test_gate_closed_ignored_exception_is_catched(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'gate_closed_ignored_exception.log')
@@ -445,9 +446,9 @@ class TestBaseMonitorSet(unittest.TestCase):
         self.assertEqual(self.monitor_cluster.monitoring_version, "master")
 
 
-class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
+class NodetoolDummyNode(BaseNode):
 
-    def __init__(self, resp, myregion=None, myname=None, myrack=None):  # pylint: disable=super-init-not-called
+    def __init__(self, resp, myregion=None, myname=None, myrack=None):
         self.resp = resp
         self.myregion = myregion
         self.myname = myname
@@ -462,14 +463,14 @@ class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
     def name(self):
         return self.myname
 
-    def run_nodetool(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def run_nodetool(self, *args, **kwargs):
         return Result(exited=0, stderr="", stdout=self.resp)
 
 
-class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abstract-method
+class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
     nodes: List['NodetoolDummyNode']
 
-    def __init__(self, params):  # pylint: disable=super-init-not-called
+    def __init__(self, params):
         self.nodes = params
         self.name = 'dummy_cluster'
         self.added_password_suffix = False
@@ -482,7 +483,7 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abs
 
 class TestNodetoolStatus(unittest.TestCase):
 
-    def test_can_get_nodetool_status_typical(self):  # pylint: disable=no-self-use
+    def test_can_get_nodetool_status_typical(self):
         resp = "\n".join(["Datacenter: eastus",
                           "==================",
                           "Status=Up/Down",
@@ -504,7 +505,7 @@ class TestNodetoolStatus(unittest.TestCase):
                            '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
                                             'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
 
-    def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):  # pylint: disable=no-self-use
+    def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):
         """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
         resp = "\n".join(["Datacenter: datacenter1",
                           "=======================",
@@ -525,7 +526,7 @@ class TestNodetoolStatus(unittest.TestCase):
                             'host_id': '7b8f86bf-c70c-4246-a273-146057e12431', 'rack': 'rack1'},
                            }}
 
-    def test_datacenter_name_per_region(self):  # pylint: disable=no-self-use
+    def test_datacenter_name_per_region(self):
         resp = "\n".join(["Datacenter: eastus",
                           "==================",
                           "Status=Up/Down",
@@ -553,7 +554,7 @@ class TestNodetoolStatus(unittest.TestCase):
         datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1])
         assert datacenter_name_per_region == {'east-us': 'eastus'}
 
-    def test_get_rack_names_per_datacenter_and_rack_idx(self):  # pylint: disable=no-self-use
+    def test_get_rack_names_per_datacenter_and_rack_idx(self):
         resp = "\n".join(["Datacenter: eastus",
                           "==================",
                           "Status=Up/Down",
@@ -584,7 +585,7 @@ class TestNodetoolStatus(unittest.TestCase):
         nodes_per_region = db_cluster.get_nodes_per_datacenter_and_rack_idx()
         assert nodes_per_region == {('east-us', '1'): [node1, node2], ('west-us', '2'): [node3, ]}
 
-    def test_can_get_nodetool_status_ipv6(self):  # pylint: disable=no-self-use
+    def test_can_get_nodetool_status_ipv6(self):
         resp = "\n".join(["Datacenter: eu-north",
                           "====================",
                           "Status=Up/Down",
@@ -606,7 +607,7 @@ class TestNodetoolStatus(unittest.TestCase):
                            '2a05:d016:cf8:de00:339e:d0d:9446:1980': {'state': 'UN', 'load': '1.04MB', 'tokens': '256', 'owns': '?',
                                                                      'host_id': 'd67e8502', 'rack': '1a'}}}
 
-    def test_can_get_nodetool_status_azure(self):  # pylint: disable=no-self-use
+    def test_can_get_nodetool_status_azure(self):
         resp = "\n".join(["Datacenter: eastus",
                          "==================",
                           "Status=Up/Down",
@@ -719,7 +720,7 @@ def test_base_node_cpuset_not_configured(cat_results):
 
 
 @pytest.mark.integration
-def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=unused-argument
+def test_get_any_ks_cf_list(docker_scylla, params, events):
 
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
@@ -800,8 +801,102 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
     assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
 
+@pytest.fixture
+def prepared_keyspaces(docker_scylla, params):
+
+    cluster = DummyScyllaCluster([docker_scylla])
+    cluster.params = params
+
+    with cluster.cql_connection_patient(docker_scylla) as session:
+        ks = "testks"
+        base_cf = "test_table"
+        counter_cf = "counter_table"
+
+        session.execute(f"""
+            CREATE KEYSPACE IF NOT EXISTS {ks}
+            WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': 1}};
+        """)
+
+        session.execute(f"""
+            CREATE TABLE IF NOT EXISTS {ks}.{base_cf} (
+                id uuid PRIMARY KEY,
+                txt text,
+                tags list<text>,
+                kv map<text, text>,
+                nums set<int>,
+                d duration
+            );
+        """)
+
+        session.execute(f"""
+            CREATE TABLE IF NOT EXISTS {ks}.{counter_cf} (
+                id uuid PRIMARY KEY,
+                cnt counter
+            );
+        """)
+
+    return cluster, ks, base_cf, counter_cf
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        # All regular (non-PK) columns
+        ({"is_primary_key": False}, {"txt", "tags", "kv", "nums", "d"}),
+
+        # Filter out collections
+        ({"is_primary_key": False, "filter_out_collections": True}, {"txt", "d"}),
+
+        # Filter out unsupported types
+        ({"is_primary_key": False, "filter_out_column_types": ["duration"]}, {"txt", "tags", "kv", "nums"}),
+
+        # Filter out collections + unsupported types
+        (
+            {"is_primary_key": False, "filter_out_collections": True, "filter_out_column_types": ["duration"]},
+            {"txt"}
+        ),
+
+        # Get PK column
+        ({"is_primary_key": True}, {"id"}),
+
+        # Filter out PK column by type
+        ({"is_primary_key": True, "filter_out_column_types": ["uuid"]}, set()),
+    ]
+)
 @pytest.mark.integration
-def test_filter_out_ks_with_rf_one(docker_scylla, params, events):  # pylint: disable=unused-argument
+def test_general_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    cluster, ks, base_cf, _ = prepared_keyspaces
+    with cluster.cql_connection_patient(cluster.nodes[0]) as session:
+        result = set(get_column_names(session, ks, base_cf, **kwargs))
+        assert result == expected
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        # Regular counter column (non-PK)
+        ({"is_primary_key": False}, {"cnt"}),
+
+        # Filter out counter type (non-PK)
+        ({"is_primary_key": False, "filter_out_column_types": ["counter"]}, set()),
+
+        # Get PK column
+        ({"is_primary_key": True}, {"id"}),
+
+        # Filter out PK column by type
+        ({"is_primary_key": True, "filter_out_column_types": ["uuid"]}, set()),
+    ]
+)
+@pytest.mark.integration
+def test_counter_table_column_filtering(prepared_keyspaces, kwargs, expected):
+    cluster, ks, _, counter_cf = prepared_keyspaces
+    with cluster.cql_connection_patient(cluster.nodes[0]) as session:
+        result = set(get_column_names(session, ks, counter_cf, **kwargs))
+        assert result == expected
+
+
+@pytest.mark.integration
+def test_filter_out_ks_with_rf_one(docker_scylla, params, events):
 
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
@@ -823,7 +918,7 @@ def test_filter_out_ks_with_rf_one(docker_scylla, params, events):  # pylint: di
 
 
 @pytest.mark.integration
-def test_is_table_has_no_sstables(docker_scylla, params, events):  # pylint: disable=unused-argument
+def test_is_table_has_no_sstables(docker_scylla, params, events):
     """
     test is_table_has_no_sstables filter function, as it would be used in `disrupt_snapshot_operations` nemesis
     """
@@ -880,7 +975,7 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):  # pylint: dis
 
 
 class TestNodetool(unittest.TestCase):
-    def test_describering_parsing(self):  # pylint: disable=no-self-use
+    def test_describering_parsing(self):
         """ Test "nodetool describering" output parsing """
         resp = "\n".join(["Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:",
                           "TokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, "

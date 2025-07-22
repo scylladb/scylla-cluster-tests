@@ -46,7 +46,7 @@ class NoSQLBenchEventsPublisher(FileFollowerThread):
                         event.clone().add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class NoSQLBenchStressThread(DockerBasedStressThread):
     """
     A stress thread that is running NoSQLBench docker on remote loader and getting results back
     If you have questions regarding NoSQLBench command line please checkout following documentation:
@@ -114,7 +114,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                             f'{self.docker_image_name} '
                                             f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                             timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
 
             return loader, result, stress_event

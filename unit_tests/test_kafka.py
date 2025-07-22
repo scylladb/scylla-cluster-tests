@@ -52,7 +52,6 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
     - from GitHub release url
     """
 
-    # pylint: disable=unused-argument,unnecessary-lambda
     params['kafka_backend'] = 'localstack'
 
     disable_tablets = ""

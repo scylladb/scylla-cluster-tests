@@ -64,7 +64,7 @@ class ScyllaDoctor:
         return latest
 
     def download_scylla_doctor(self):
-        if self.node.remoter.run("which curl", ignore_status=True).ok:
+        if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
             self.node.install_package('curl')
@@ -97,8 +97,9 @@ class ScyllaDoctor:
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
             self.node.install_package('ethtool')
+            self.node.install_package('tar')
 
-        if self.offline_install:
+        if self.offline_install or self.node.parent_cluster.cluster_backend == "docker":
             self.download_scylla_doctor()
             if self.node.is_nonroot_install:
                 self.python3_path = self.find_local_python3_binary(self.current_dir)
@@ -111,7 +112,7 @@ class ScyllaDoctor:
             sd_package = Package(name="scylla-doctor", date="", version=self.version, revision_id="", build_id="")
             LOGGER.info("Saving Scylla doctor package in Argus...")
             self.test_config.argus_client().submit_packages([sd_package])
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             LOGGER.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
 
     def find_local_python3_binary(self, user_home: str):
@@ -166,7 +167,7 @@ class ScyllaDoctor:
         return False
 
     def analyze_and_verify_results(self):
-        scylla_doctor_result = json.loads(self.node.remoter.run(f"cat {self.json_result_file}").stdout.strip())
+        scylla_doctor_result = json.loads(self.node.remoter.sudo(f"cat {self.json_result_file}").stdout.strip())
 
         LOGGER.debug("Scylla-doctor output: %s", pprint.pformat(scylla_doctor_result))
 

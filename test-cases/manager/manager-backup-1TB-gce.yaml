@@ -15,11 +15,10 @@ compaction_strategy: 'NullCompactionStrategy'
 post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'class': 'SizeTieredCompactionStrategy'}"
 prepare_wait_no_compactions_timeout: 120
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 2
-n_monitor_nodes: 1
 
-gce_instance_type_db: 'n2-highmem-16'
+gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 gce_instance_type_loader: 'e2-standard-16'
 

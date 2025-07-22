@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-few-public-methods
 
 import os
 import shutil
@@ -40,13 +39,13 @@ class DummyRemote:
         return True
 
     @staticmethod
-    def receive_files(src, dst):
+    def receive_files(src, dst,  *_, **__):
         shutil.copy(src, dst)
         return True
 
 
 class LocalNode(BaseNode):
-    # pylint: disable=too-many-arguments
+
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1):
         super().__init__(name, parent_cluster)
         self.node_index = node_index
@@ -92,7 +91,7 @@ class LocalNode(BaseNode):
 
 
 class LocalLoaderSetDummy(BaseCluster):
-    # pylint: disable=super-init-not-called,abstract-method
+
     def __init__(self, nodes=None, params=None):
         self.name = "LocalLoaderSetDummy"
         self.params = params or {}
@@ -114,7 +113,7 @@ class LocalLoaderSetDummy(BaseCluster):
 
 
 class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
-    # pylint: disable=super-init-not-called
+
     def __init__(self, params=None):
         self.name = "LocalScyllaClusterDummy"
         self.params = params or {}

@@ -24,7 +24,6 @@ k8s_n_scylla_pods_per_cluster: 3
 instance_type_db: 'i4i.4xlarge'
 
 # NOTE: 1 (one) monitoring node per tenant
-n_monitor_nodes: 1
 
 n_loaders: 14
 k8s_n_loader_pods_per_cluster: 1
@@ -33,11 +32,11 @@ instance_type_loader: 'c6i.large'
 k8s_minio_storage_size: 1024Gi
 
 nemesis_class_name:
-  - 'FreeTierSetMonkey'
-  - 'FreeTierSetMonkey'
-  - 'FreeTierSetMonkey'
-  - 'FreeTierSetMonkey'
-  - 'FreeTierSetMonkey'
+  - 'SisyphusMonkey'
+  - 'SisyphusMonkey'
+  - 'SisyphusMonkey'
+  - 'SisyphusMonkey'
+  - 'SisyphusMonkey'
   - 'NoOpMonkey'
   - 'NoOpMonkey'
   - 'NoOpMonkey'
@@ -47,6 +46,21 @@ nemesis_class_name:
   - 'NoOpMonkey'
   - 'NoOpMonkey'
   - 'NoOpMonkey'
+nemesis_selector:
+  - "free_tier_set"
+  - "free_tier_set"
+  - "free_tier_set"
+  - "free_tier_set"
+  - "free_tier_set"
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
 nemesis_seed: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14']
 nemesis_during_prepare: false
 

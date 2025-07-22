@@ -22,7 +22,7 @@ from abc import abstractmethod, ABCMeta
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
-from threading import Thread, Event as ThreadEvent
+from threading import Lock, Thread, Event as ThreadEvent
 from typing import TYPE_CHECKING
 from multiprocessing import Process, Event
 from textwrap import dedent
@@ -70,7 +70,7 @@ class LoggerBase(metaclass=ABCMeta):
 
 
 class SSHLoggerBase(LoggerBase):
-    RETRIEVE_LOG_MESSAGE_TEMPLATE = "Reading Scylla logs from {since}"
+    RETRIEVE_LOG_MESSAGE_TEMPLATE = "SSHLogger reading {log_file} from {since}"
     VERBOSE_RETRIEVE = True
     READINESS_CHECK_DELAY = 10  # seconds
 
@@ -89,7 +89,7 @@ class SSHLoggerBase(LoggerBase):
         self._child_process.terminate()
         self._child_process.join(timeout=timeout)
         if self._child_process.is_alive():
-            self._child_process.kill()  # pylint: disable=no-member
+            self._child_process.kill()
 
     @raise_event_on_failure
     def _journal_thread(self) -> None:
@@ -105,7 +105,8 @@ class SSHLoggerBase(LoggerBase):
         return self._remoter.is_up()
 
     def _retrieve(self, since: str) -> None:
-        self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(since=since or "the beginning"))
+        self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(
+            log_file=self._target_log_file, since=since or "the beginning"))
         try:
             self._remoter.run(
                 cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
@@ -113,7 +114,7 @@ class SSHLoggerBase(LoggerBase):
                 ignore_status=True,
                 log_file=self._target_log_file,
             )
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self._log.error("Error retrieving remote node DB service log: %s", details)
 
     @cached_property
@@ -141,21 +142,27 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self.target_log_file = target_log_file
         self._child_thread = ThreadPoolExecutor(max_workers=1)
         self._thread = None
+        self._lock = Lock()
+        self._started = False
 
     def start(self) -> None:
-        LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
-        self._termination_event.clear()
-        self._thread = self._child_thread.submit(self._journal_thread)
-        LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
+        with self._lock:
+            if self._started:
+                return
+            LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
+            self._termination_event.clear()
+            self._thread = self._child_thread.submit(self._journal_thread)
+            self._started = True
+            LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
 
     def stop(self, timeout: float | None = None) -> None:
-        self._termination_event.set()
-        thread_cancelled = self._thread.cancel()
-        LOGGER.debug("Is thread cancelled?: %s, target_log_file: %s", thread_cancelled, self.target_log_file)
-        self._child_thread.shutdown(wait=False, cancel_futures=True)
-        LOGGER.debug("Is thread shutdown?: %s, target_log_file: %s", self._thread.running(), self.target_log_file)
-        if self._thread.running():
-            self._thread.cancel()  # pylint: disable=no-member
+        with self._lock:
+            self._termination_event.set()
+            # ensure the tail command to be stopped
+            self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
+            if self._thread.running():
+                self._thread.cancel()
+            self._started = False
 
     @cached_property
     def _logger_cmd_template(self) -> str:
@@ -206,12 +213,6 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                 time.sleep(self.READINESS_CHECK_DELAY)
             te_is_set = self._termination_event.is_set()
             LOGGER.debug("_termination_event is set?: %s. %s", te_is_set, self._remote_log_file)
-
-    def _is_ready_to_retrieve(self) -> bool:
-        LOGGER.debug("Before remoter is_up. %s", self._remote_log_file)
-        is_up = self._remoter.is_up()
-        LOGGER.debug("After remoter is_up. Result: %s. %s", is_up, self._remote_log_file)
-        return is_up
 
     def __enter__(self):
         self.start()
@@ -295,7 +296,7 @@ class SSHGeneralFileLogger(SSHLoggerBase):
     def _is_file_exist(self, file_path: str) -> bool:
         try:
             return self._remoter.run(cmd=f"sudo test -e {file_path}", ignore_status=True).ok
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self._log.error("Error checking if file %s exists: %s", file_path, details)
         return False
 
@@ -330,7 +331,7 @@ class CommandLoggerBase(LoggerBase):
     def _thread_body(self):
         while not self._termination_event.wait(self.restart_delay):
             try:
-                # pylint: disable=consider-using-with
+
                 self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
                 started = False
                 try:
@@ -342,7 +343,7 @@ class CommandLoggerBase(LoggerBase):
                 if started:
                     # Update last time only if command successfully started
                     self._last_time_completed = time.time()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
 
     def start(self):
@@ -373,7 +374,7 @@ class CommandNodeLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
 
 
 class DockerGeneralLogger(CommandNodeLoggerBase):
-    # pylint: disable=invalid-overridden-method
+
     @cached_property
     def _logger_cmd(self) -> str:
         return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
@@ -388,10 +389,10 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
         cmd = self._node.k8s_cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c",
             parent_cluster.container, namespace=parent_cluster.namespace)
-        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
-class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attributes
+class K8sClientLogger(LoggerBase):
     READ_REQUEST_TIMEOUT = 1200  # 20 minutes
     RECONNECT_DELAY = 30
     CHUNK_SIZE = 64
@@ -410,7 +411,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
         self._last_read_timestamp = None
         self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._k8s_cluster.get_api_client())
         self._termination_event = ThreadEvent()
-        self._file_object = open(self._target_log_file, "a", encoding="utf-8")  # pylint: disable=consider-using-with
+        self._file_object = open(self._target_log_file, "a", encoding="utf-8")
         self._log_reader = None
         self._stream = None
         self._thread = Thread(target=self._log_loop)
@@ -557,7 +558,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 self._log.debug(
                     "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self._log.error(
                     "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
@@ -591,7 +592,7 @@ class CertManagerLogger(CommandClusterLoggerBase):
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=cert-manager",
             namespace="cert-manager")
-        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class ScyllaManagerLogger(CommandClusterLoggerBase):
@@ -602,7 +603,7 @@ class ScyllaManagerLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-manager",
-            namespace=self._cluster._scylla_manager_namespace)  # pylint: disable=protected-access
+            namespace=self._cluster._scylla_manager_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -614,7 +615,7 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-operator",
-            namespace=self._cluster._scylla_operator_namespace)  # pylint: disable=protected-access
+            namespace=self._cluster._scylla_operator_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -627,7 +628,7 @@ class HaproxyIngressLogger(CommandClusterLoggerBase):
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/name=haproxy-ingress",
             namespace="haproxy-controller")
-        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
@@ -659,7 +660,7 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
                 else:
                     wrong_scheduled_pods_on_scylla_node.append(
                         f"{pod.metadata.name} ({pod.spec.node_name} node)")
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self._log.warning("Failed to get pods list: %s", str(details))
 
         if not wrong_scheduled_pods_on_scylla_node:
@@ -670,7 +671,7 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
         return f"echo \"I`date -u +\"%m%d %H:%M:%S\"`              {message}\" >> {self._target_log_file} 2>&1"
 
 
-def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements  # noqa: PLR0911
+def get_system_logging_thread(logs_transport, node, target_log_file):  # noqa: PLR0911
     if logs_transport == 'docker':
         return DockerGeneralLogger(node, target_log_file)
     if logs_transport == 'kubectl':
@@ -691,8 +692,8 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
     return None
 
 
-class DockerComposeLogger(CommandClusterLoggerBase):  # pylint: disable=too-few-public-methods
-    # pylint: disable=invalid-overridden-method
+class DockerComposeLogger(CommandClusterLoggerBase):
+
     @cached_property
     def _logger_cmd(self) -> str:
         return f"{self._cluster.compose_context} logs --no-color --tail=1000 >>{self._target_log_file}"

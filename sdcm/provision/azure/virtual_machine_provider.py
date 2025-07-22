@@ -20,11 +20,11 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Any, List
 
 import binascii
-from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error
 from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
 from invoke import Result
 
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError, OperationPreemptedError
 from sdcm.provision.user_data import UserDataBuilder
 from sdcm.utils.azure_utils import AzureService
 
@@ -52,7 +52,7 @@ class VirtualMachineProvider:
 
     def get_or_create(self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
                       ) -> List[VirtualMachine]:
-        # pylint: disable=too-many-locals
+
         v_ms = []
         pollers = []
         error_to_raise = None
@@ -76,7 +76,7 @@ class VirtualMachineProvider:
                 "network_profile": {
                     "network_interfaces": [{
                         "id": nic_id,
-                        "properties": {"deleteOption": "Delete"}
+                        "properties": {"deleteOption": "Detach"}
                     }],
                 },
             }
@@ -121,8 +121,12 @@ class VirtualMachineProvider:
                     LOGGER.warning("Instance view is not available for VM %s", v_m.name)
                 self._cache[v_m.name] = v_m
                 v_ms.append(v_m)
-            except AzureError as err:
+            except ODataV4Error as err:
                 LOGGER.error("Error when waiting for VM %s: %s", definition.name, str(err))
+                if err.code == 'OperationPreempted':
+                    raise OperationPreemptedError(err)  # spot instance preemption, abort provision immediately
+            except AzureError as err:
+                LOGGER.error("Error when waiting for creation of VM %s: %s", definition.name, str(err))
                 error_to_raise = err
         if error_to_raise:
             raise ProvisionError(error_to_raise)

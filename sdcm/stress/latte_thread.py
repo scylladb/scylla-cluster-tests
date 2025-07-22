@@ -91,11 +91,14 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
-class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
-    def build_stress_cmd(self, cmd_runner, loader, hosts):  # pylint: disable=too-many-locals
+    def set_stress_operation(self, stress_cmd):
+        return get_latte_operation_type(self.stress_cmd)
+
+    def build_stress_cmd(self, cmd_runner, loader, hosts):
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
         script_name = script_name_regx.search(self.stress_cmd).group(0)
@@ -122,17 +125,25 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if credentials := self.loader_set.get_db_auth():
             auth_config = f' --user {credentials[0]} --password {credentials[1]}'
 
-        datacenter = ""
-        if self.loader_set.test_config.MULTI_REGION:
+        datacenter, rack = "", ""
+        if self.params.get("rack_aware_loader"):
+            rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
+            if len(set(rack_names.values())) > 1:
+                if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
+                    rack = f"--rack {loader_rack} "
+        if self.loader_set.test_config.MULTI_REGION or rack:
             # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
             # not for loader nodes. So call next function for DB nodes
             datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
             if loader_dc := datacenter_name_per_region.get(loader.region):
-                datacenter = f"--datacenter {loader_dc}"
+                datacenter = f"--datacenter {loader_dc} "
             else:
                 LOGGER.error(
                     "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
                     loader.region, datacenter_name_per_region)
+                if rack:
+                    # NOTE: fail fast if we cannot find proper dc value when rack-awareness is enabled
+                    raise RuntimeError(f"Could not find proper dc-pair for the loader rack value: {rack}")
 
         custom_schema_params = ""
         if latte_schema_parameters := self.params['latte_schema_parameters']:
@@ -141,7 +152,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 processed_v = v
                 try:
                     processed_v = int(v)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     if v not in ('true', 'false'):
                         processed_v = r"\"%s\"" % v
                 custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
@@ -150,7 +161,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q '
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q '
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
@@ -198,15 +209,14 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
 
-        stress_operation = get_latte_operation_type(self.stress_cmd)
-        first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [stress_operation])[0]
+        first_tag_or_op = "-" + (find_latte_tags(self.stress_cmd) or [self.stress_operation])[0]
         log_file_name = os.path.join(
             loader.logdir, 'latte%s-l%s-c%s-%s.log' % (first_tag_or_op, loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('latte benchmarking tool local log: %s', log_file_name)
 
         # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
         log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
-        remote_hdr_file_name = f"hdrh-latte-{stress_operation}-{log_id}.hdr"
+        remote_hdr_file_name = f"hdrh-latte-{self.stress_operation}-{log_id}.hdr"
         LOGGER.debug("latte remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
         LOGGER.debug("latte HDR local file %s", local_hdr_file_name)
@@ -233,6 +243,12 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 remote_log_file=remote_hdr_file_name_full_path,
                 target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
             )
+            # NOTE: running dozens of commands in parallel on a single SCT runner
+            #       it is easy to get stress command to run earlier than the HDRH file
+            #       starts being read.
+            #       So, to avoid data loss by time mismatch we start reading earlier
+            #       to make sure we do not race with stress threads start time.
+            hdrh_logger_context.start()
         else:
             hdrh_logger_context = contextlib.nullcontext()
         stress_cmd += f" -- {hosts} "
@@ -254,7 +270,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     keyspace=keyspace_holder,
                     instance_name=loader.ip_address,
                     metrics=nemesis_metrics_obj(),
-                    stress_operation=stress_operation,
+                    stress_operation=self.stress_operation,
                     stress_log_filename=log_file_name,
                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 LatteHDRExporter(
@@ -262,7 +278,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     instance_name=loader.ip_address,
                     hdr_tags=self.hdr_tags,
                     metrics=nemesis_metrics_obj(),
-                    stress_operation=stress_operation,
+                    stress_operation=self.stress_operation,
                     stress_log_filename=local_hdr_file_name,
                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 LatteStressEvent(
@@ -277,7 +293,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     retry=0,
                 )
                 result = self.parse_final_output(result)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return loader, result, latte_stress_event

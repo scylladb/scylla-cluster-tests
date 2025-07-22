@@ -516,7 +516,6 @@ def resolve_latest_repo_symlink(url: str) -> str:
 
     Can raise ValueError if `url' is not a valid URL that points to a repo file stored in S3.
     """
-    # pylint: disable=too-many-branches
     base, sep, rest = url.partition(LATEST_SYMLINK_NAME)
     if sep != LATEST_SYMLINK_NAME:
         LOGGER.debug("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
@@ -657,7 +656,7 @@ class MethodVersionNotFound(Exception):
     pass
 
 
-class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
+class scylla_versions:
     """Runs a versioned method that is suitable for the configured scylla version.
 
     Limitations:
@@ -738,7 +737,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
             get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
             res = LOCALRUNNER.run(get_pkgs_cmd)
             relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
 
@@ -815,7 +814,6 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
 
     repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
-    # pylint: disable=useless-else-on-loop
     for key in repo_map:
         if scylla_version.startswith(key):
             return repo_map[key]
@@ -840,7 +838,14 @@ def get_branched_repo(scylla_version: str,
         raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
 
     branch_id = branch.replace('branch-', '').replace('enterprise-', '')
-    product = 'scylla-enterprise' if branch == 'enterprise' or is_enterprise(branch_id) else 'scylla'
+    try:
+        is_source_available = ComparableScyllaVersion(branch_id) >= "2025.1.0"
+    except ValueError:
+        is_source_available = True
+    if branch == "enterprise" or (is_enterprise(branch_id) and not is_source_available):
+        product = "scylla-enterprise"
+    else:
+        product = "scylla"
 
     if dist_type == "centos":
         prefix = f"unstable/{product}/{branch}/rpm/centos/{branch_version}/"

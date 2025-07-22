@@ -18,13 +18,14 @@ USER root
 
 RUN curl -L https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo
 
-RUN microdnf update && \
+RUN microdnf -y update && \
 	microdnf -y install \
         iproute \
         sudo \
     	openssh-server \
  		docker-ce-cli \
-        rsync && \
+        rsync \
+        procps-ng && \
     microdnf clean all && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
     echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \

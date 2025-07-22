@@ -11,11 +11,12 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, date
 from typing import Literal, Optional, List
 
-from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
+from cassandra.util import uuid_from_time, datetime_from_uuid1
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import decorate_with_context, ignore_ycsb_connection_refused
@@ -45,7 +46,7 @@ class AuditConfiguration:
 
 
 @dataclass
-class AuditLogRow:  # pylint: disable=too-many-instance-attributes
+class AuditLogRow:
     date: date
     node: str
     event_time: datetime
@@ -59,7 +60,23 @@ class AuditLogRow:  # pylint: disable=too-many-instance-attributes
     username: str
 
 
-class AuditLogReader:  # pylint: disable=too-few-public-methods
+AUDIT_LOG_REGEX = re.compile(
+    r"""
+    node="(?P<node>.*?)"\s                # Node identifier
+    category="(?P<category>.*?)"\s        # Audit category (e.g., AUTH, DML)
+    cl="(?P<consistency>.*?)"\s           # Consistency level
+    error="(?P<error>.*?)"\s              # Error flag (true/false)
+    keyspace="(?P<keyspace_name>.*?)"\s   # Keyspace name
+    query="(?P<operation>.*?)"\s          # Query or operation performed
+    client_ip="(?P<source>.*?)"\s         # Source IP address
+    table="(?P<table_name>.*?)"\s         # Table name
+    username="(?P<username>.*?)"\s        # Username of the client
+    """,
+    re.VERBOSE
+)
+
+
+class AuditLogReader:
 
     def __init__(self, cluster):
         self._cluster = cluster
@@ -72,7 +89,7 @@ class AuditLogReader:  # pylint: disable=too-few-public-methods
         raise NotImplementedError()
 
 
-class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class TableAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: Optional[datetime] = None,
              category: Optional[AuditCategory] = None,
@@ -109,7 +126,7 @@ class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-met
         return rows
 
 
-def get_audit_log_rows(node,  # pylint: disable=too-many-locals
+def get_audit_log_rows(node,
                        from_datetime: Optional[datetime] = None,
                        category: Optional[AuditCategory] = None,
                        operation: Optional[str] = None,
@@ -122,38 +139,31 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
                 while line[-2] != '"':
                     # read multiline audit log (must end with ")
                     line += log_file.readline()  # noqa: PLW2901
-                audit_data = line.split(': "', maxsplit=1)[-1]
-                try:
-                    node, cat, consistency, table, keyspace_name, opr, source, username, error = audit_data.split(
-                        '", "')
-                except ValueError:
+                if match := AUDIT_LOG_REGEX.search(line):
+                    found_audit_log_fields = match.groupdict()
+                    if category and found_audit_log_fields.get('category', "") != category:
+                        continue
+                    found_audit_log_fields["operation"] = re.sub(
+                        r'\\(.)', r'\1', found_audit_log_fields.get('operation', ""))
+                    if operation and found_audit_log_fields["operation"] != operation:
+                        continue
+                    event_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
+                    event_date = event_time.date()
+                    found_audit_log_fields['error'] = found_audit_log_fields.get('error', 'false') == 'true'
+
+                    yield AuditLogRow(
+                        date=event_date,
+                        event_time=event_time,
+                        **found_audit_log_fields)
+                    found_rows += 1
+                    if found_rows >= limit_rows:
+                        break
+                else:
                     LOGGER.error("Failed to parse audit log line: %s", line)
                     continue
-                if category and cat != category:
-                    continue
-                if operation and opr != operation:
-                    continue
-                event_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
-                event_date = event_time.date()
-                yield AuditLogRow(
-                    date=event_date,
-                    node=node,
-                    event_time=event_time,
-                    category=cat,
-                    consistency=consistency,
-                    error=error.strip()[-1] == 'true',
-                    keyspace_name=keyspace_name,
-                    operation=opr,
-                    source=source,
-                    table_name=table,
-                    username=username,
-                )
-                found_rows += 1
-                if found_rows >= limit_rows:
-                    break
 
 
-class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class SyslogAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
              operation: Optional[str] = None,

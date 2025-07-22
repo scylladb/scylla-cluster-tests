@@ -89,7 +89,6 @@ class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     small_table_threshold: str = None
 
 
-# pylint: disable=invalid-name,too-many-instance-attributes,too-many-arguments
 @dataclass
 class ScyllaOperatorRepairTaskStatus(ScyllaOperatorRepairTask):
     # These statuses are not available at scylla-operator 1.0
@@ -248,12 +247,11 @@ class OperatorManagerCluster(ManagerCluster):
         )
         try:
             self.scylla_cluster.add_scylla_cluster_value('/spec/backups', so_backup_task.to_dict())
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.error('Failed to submit repair task:\n%s\ndue to the %s', so_backup_task.to_dict(), exc)
             raise
         return so_backup_task
 
-    # pylint: disable=too-many-locals
     def create_backup_task(  # noqa: PLR0913
             self,
             dc_list=None,
@@ -292,6 +290,11 @@ class OperatorManagerCluster(ManagerCluster):
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
                                             fail_fast=None, intensity=None, parallel=None,
                                             name=None) -> ScyllaOperatorRepairTask:
+
+        # TODO: add support for the "ignore_down_hosts" manager parameter
+        #       when following scylla-operator bug gets fixed:
+        #       https://github.com/scylladb/scylla-operator/issues/2730
+
         if name is None:
             name = self._pick_original_name(
                 'default-repair-task-name', [so_task.name for so_task in self.operator_repair_tasks])
@@ -307,12 +310,12 @@ class OperatorManagerCluster(ManagerCluster):
         )
         try:
             self.scylla_cluster.add_scylla_cluster_value('/spec/repairs', so_repair_task.to_dict())
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.error('Failed to submit repair task:\n%s\ndue to the %s', so_repair_task.to_dict(), exc)
             raise
         return so_repair_task
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments,arguments-differ
+    def create_repair_task(self, dc_list=None,
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
                            intensity=None, parallel=None, name=None) -> RepairTask:
         # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the repair one.
@@ -409,8 +412,8 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
             cluster = self.clusterClass(
                 manager_node=self.manager_node, cluster_name=cluster_name, scylla_cluster=self.scylla_cluster)
         else:
-            cluster.set_scylla_cluster(self.scylla_cluster)  # pylint: disable=no-member
-            cluster.set_cluster_name(cluster_name)  # pylint: disable=no-member
+            cluster.set_scylla_cluster(self.scylla_cluster)
+            cluster.set_cluster_name(cluster_name)
         return cluster
 
     def __init__(self, manager_node, scylla_cluster):

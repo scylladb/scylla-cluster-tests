@@ -20,7 +20,9 @@ from typing import List, Optional, Union
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by_id, set_tags_on_instances, \
     wait_for_provision_request_done, create_spot_fleet_instance_request, \
@@ -32,12 +34,12 @@ from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, Ins
 LOGGER = logging.getLogger(__name__)
 
 
-class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-few-public-methods
+class AWSInstanceProvisioner(InstanceProvisionerBase):
     # TODO: Make them configurable
     _wait_interval = 5
     _iam_fleet_role = 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role'
 
-    def provision(  # pylint: disable=too-many-arguments
+    def provision(
             self,
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
@@ -66,11 +68,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
                 count=count,
                 tags=tags,
             )
-        # None spot instances are called On-Demand instances in AWS naming
-        if provision_parameters.price:
-            raise ValueError("AWS does not support price targeting for on-demand instances")
-        if provision_parameters.duration:
-            LOGGER.info("AWS does not support duration for on-demand instances")
         return self._provision_on_demand_instances(
             provision_parameters=provision_parameters,
             instance_parameters=instance_parameters,
@@ -105,12 +102,23 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             tags: List[TagsType]) -> List[Instance]:
         instance_parameters_dict = instance_parameters.model_dump(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        instance_parameters_dict['TagSpecifications'] = [
+            {"ResourceType": "instance", "Tags": tags_as_ec2_tags(tags[0])}]
+
         if cr_id := SCTCapacityReservation.reservations.get(provision_parameters.availability_zone, {}).get(
                 instance_parameters.InstanceType):
             instance_parameters_dict['CapacityReservationSpecification'] = {
                 'CapacityReservationTarget': {
                     'CapacityReservationId': cr_id
                 }
+            }
+        if host_id := SCTDedicatedHosts.get_host(provision_parameters.region_name + provision_parameters.availability_zone,
+                                                 instance_parameters.InstanceType):
+            instance_parameters_dict['Placement'] = {
+                'HostId': host_id
             }
         LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
                     provision_parameters.region_name,
@@ -166,17 +174,24 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
+
+        instance_parameters_dict = instance_parameters.model_dump(
+            exclude_none=True,
+            exclude_unset=True,
+            exclude_defaults=True,
+            encode_user_data=True,
+        )
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        instance_parameters_dict['TagSpecifications'] = [
+            {"ResourceType": "spot-fleet-request", "Tags": tags_as_ec2_tags(tags[0])}]
+
         request_id = create_spot_fleet_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
-            price=provision_parameters.price,
             fleet_role=self._iam_fleet_role,
-            instance_parameters=instance_parameters.model_dump(
-                exclude_none=True,
-                exclude_unset=True,
-                exclude_defaults=True,
-                encode_user_data=True,
-            ),
+            instance_parameters=instance_parameters_dict
         )
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,
@@ -208,7 +223,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
         try:
             resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
             LOGGER.info("%s: - %s", request_ids, resp)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("%s: - failed to get status: %s", request_ids, exc)
             return []
         for req in resp['SpotFleetRequestConfigs']:
@@ -259,10 +274,14 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
+
+        # picks the tags of the first instance to apply to all instances upfront
+        # later those would be updated with individual tags (Name, etc.)
+        tag_specifications = [{"ResourceType": "spot-instances-request", "Tags": tags_as_ec2_tags(tags[0])},]
+
         request_ids = create_spot_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
-            price=getattr(provision_parameters, 'price', None),
             instance_parameters=instance_parameters.model_dump(
                 exclude_none=True,
                 exclude_unset=True,
@@ -271,6 +290,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             ),
             full_availability_zone=self._full_availability_zone_name(provision_parameters),
             valid_until=self._spot_valid_until,
+            tag_specifications=tag_specifications,
         )
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,

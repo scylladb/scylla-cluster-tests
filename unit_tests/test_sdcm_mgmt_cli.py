@@ -19,8 +19,8 @@ def test_01_get_task_info_dict():
         ├──────────────────────────────────────┼────────────────────────┼──────────┼────────┤
         │ 13814000-1dd2-11b2-a009-02c33d089f9b │ 07 Jan 23 23:08:59 UTC │ 0s       │ DONE   │
         ╰──────────────────────────────────────┴────────────────────────┴──────────┴────────╯"""))
-    stderr = mock.PropertyMock = None
-    exited = mock.PropertyMock = 0
+    stderr = mock.PropertyMock(return_value=None)
+    exited = mock.PropertyMock(return_value=0)
     type(remoter_result).stdout = stdout
     type(remoter_result).stderr = stderr
     type(remoter_result).exited = exited

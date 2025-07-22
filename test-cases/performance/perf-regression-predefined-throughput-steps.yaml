@@ -1,9 +1,9 @@
 test_duration: 500
 prepare_write_cmd: [
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=150 -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
+    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
 ]
 
 stress_cmd_w:  [
@@ -38,7 +38,6 @@ round_robin: true
 
 n_db_nodes: 3
 n_loaders: 4
-n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c7i.8xlarge'
@@ -66,4 +65,6 @@ append_scylla_yaml:
 use_placement_group: true
 use_prepared_loaders: false
 stress_image:
-  cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
+  cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
+
+adaptive_timeout_store_metrics: false

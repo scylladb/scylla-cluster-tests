@@ -15,7 +15,7 @@ from unit_tests.test_cluster import DummyDbCluster
 logging.basicConfig(level=logging.DEBUG)
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
+class DummyNode(BaseNode):
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -23,6 +23,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def init(self):
         super().init()
         self.remoter.stop()
+
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
 
     def wait_for_cloud_init(self):
         pass
@@ -76,19 +79,16 @@ class FakeServiceLevel(ServiceLevel):
 
 class FakePrometheus:
     @staticmethod
-    # pylint: disable=unused-argument
     def get_scylla_io_queue_total_operations(start_time, end_time, node_ip, irate_sample_sec='60s'):
         return {'127.0.0.1': {'sl:default': [410.5785714285715, 400.36428571428576],
                               'sl:sl200_abc': [177.11428571428573, 182.02857142857144],
                               'sl:sl50_abc': [477.11428571428573, 482.02857142857144]}
                 }
 
-    # pylint: disable=unused-argument,no-self-use
     def get_scylla_reactor_utilization(self, start_time, end_time, instance):
         return 100
 
 
-# pylint: disable=too-few-public-methods
 class FakeSession:
     default_timeout = 0
 

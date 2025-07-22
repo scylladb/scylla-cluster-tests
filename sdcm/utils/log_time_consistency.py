@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 
 
-class LogTimeConsistencyAnalyzerBase:  # pylint: disable=too-few-public-methods
+class LogTimeConsistencyAnalyzerBase:
     times = {
         '<1min': 60,
         '<5min': 60 * 5,
@@ -81,7 +81,7 @@ class LogTimeConsistencyAnalyzerBase:  # pylint: disable=too-few-public-methods
                 output[name].append('There are more messages, total number is ' + str(value))
 
 
-class DbLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: disable=too-few-public-methods
+class DbLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):
     files_pattern = '**/*db-node*/messages.log'
 
     @classmethod
@@ -96,7 +96,7 @@ class DbLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: d
                     continue
             try:
                 current_time = datetime.datetime.fromisoformat(line.split()[0]).timestamp()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 continue
             current_time_shift = prior_time - current_time
             if bucket_name := cls._get_timeshift_bucket_name(current_time_shift):
@@ -110,7 +110,7 @@ class DbLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: d
         return output, counters
 
 
-class SctLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: disable=too-few-public-methods
+class SctLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):
     files_pattern = '**/sct.log'
     sct_scylla_log_re = re.compile(
         r'< t:([0-9-]+ [0-9:]+),[0-9]+[ \t]+f:cluster.py[ \t]+l:[0-9]+[ \t]+c:sdcm.cluster[ \t]+p:[A-Z]+ > ([0-9T:-]+)')
@@ -132,7 +132,7 @@ class SctLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: 
                 sct_time, event_time = match.groups()
                 sct_time = datetime.datetime.fromisoformat(sct_time).timestamp()
                 event_time = datetime.datetime.fromisoformat(event_time).timestamp()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 continue
             current_time_shift = sct_time - event_time
             if bucket_name := cls._get_timeshift_bucket_name(time_shift=current_time_shift):

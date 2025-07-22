@@ -10,12 +10,19 @@
 # See LICENSE for more details.
 #
 #
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from cassandra.cluster import Session  # pylint: disable=no-name-in-module
 
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
+
 CONSISTENT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
 CONSISTENT_CLUSTER_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"
+GROUP0_LIMITED_VOTERS = "GROUP0_LIMITED_VOTERS"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -74,21 +81,22 @@ def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
     return CONSISTENT_TOPOLOGY_CHANGES_FEATURE in get_enabled_features(session)
 
 
-def is_tablets_feature_enabled(node) -> bool:
+def is_tablets_feature_enabled(node: BaseNode) -> bool:
     """ Check whether tablets enabled
     """
     with node.remote_scylla_yaml() as scylla_yaml:
         # for backward compatibility of 2024.1 and earlier
-        if isinstance(scylla_yaml, dict):
-            scylla_dict = scylla_yaml
-        else:
-            scylla_dict = scylla_yaml.dict()
-
-        if "tablets" in scylla_dict.get("experimental_features", []):
+        scylla_conf = scylla_yaml.model_dump()
+        if "tablets" in (scylla_conf.get("experimental_features") or []):
             return True
-        if scylla_dict.get("enable_tablets"):
+        if scylla_conf.get("enable_tablets"):
             return True
-        if scylla_dict.get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
+        if scylla_conf.get("tablets_mode_for_new_keyspaces") in ["enabled", "enforced"]:
             return True
 
     return False
+
+
+def is_group0_limited_voters_enabled(session: Session) -> bool:
+    """ Check whether feature group0 limited voters is enabled"""
+    return GROUP0_LIMITED_VOTERS in get_enabled_features(session)

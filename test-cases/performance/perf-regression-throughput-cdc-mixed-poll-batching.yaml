@@ -10,7 +10,6 @@ stress_cdc_log_reader_batching_enable: true
 
 n_db_nodes: 3
 n_loaders: 4
-n_monitor_nodes: 1
 
 instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
@@ -29,3 +28,5 @@ experimental_features:
 
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com']
 backtrace_decoding: false
+
+adaptive_timeout_store_metrics: false

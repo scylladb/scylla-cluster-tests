@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-# pylint: disable=too-many-lines
 
 from __future__ import absolute_import, annotations
 
@@ -40,7 +39,7 @@ import traceback
 import ctypes
 import shlex
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
 from contextlib import closing, contextmanager
@@ -58,7 +57,7 @@ from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
-import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
+import docker
 from google.cloud.storage import Blob as GceBlob
 from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
 from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
@@ -68,6 +67,7 @@ from prettytable import PrettyTable
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
+from sdcm.utils.argus import create_proxy_argus_s3_url
 from sdcm.utils.aws_utils import (
     AwsArchType,
     EksClusterForCleaner,
@@ -100,9 +100,11 @@ DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
+CREATE_TABLE_REGEX = re.compile(
+    r'CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)')
 
 
-class KeyBasedLock():  # pylint: disable=too-few-public-methods
+class KeyBasedLock():
     """Class designed for creating locks based on hashable keys."""
 
     def __init__(self):
@@ -124,7 +126,7 @@ def _remote_get_hash(remoter, file_path):
     try:
         result = remoter.run('md5sum {}'.format(file_path), verbose=True)
         return result.stdout.strip().split()[0]
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error(str(details))
         return None
 
@@ -136,7 +138,7 @@ def _remote_get_file(remoter, src, dst, user_agent=None):
     return remoter.run(cmd, ignore_status=True)
 
 
-def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):  # pylint: disable=too-many-arguments
+def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):
     _remote_get_file(remoter, src, dst, user_agent)
     if not hash_expected:
         return
@@ -204,7 +206,7 @@ def get_data_dir_path(*args):
 
 
 def get_sct_root_path():
-    import sdcm  # pylint: disable=import-outside-toplevel
+    import sdcm
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     sct_root_dir = os.path.join(sdcm_path, "..")
     return os.path.abspath(sct_root_dir)
@@ -250,6 +252,7 @@ class S3Storage():
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
     num_download_attempts = 5
+    s3_host_name_regex = re.compile(r"https?://([a-zA-Z0-9-]+\.s3\.amazonaws\.com)")
 
     def __init__(self, bucket=None):
         if bucket:
@@ -291,7 +294,7 @@ class S3Storage():
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
             return s3_url
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.debug("Unable to upload to S3: %s", details)
             return ""
 
@@ -310,6 +313,18 @@ class S3Storage():
         acl_obj.put(ACL='', AccessControlPolicy={'Grants': grants, 'Owner': acl_obj.owner})
 
     def download_file(self, link, dst_dir):
+        """Download file from S3 bucket or Argus proxy link."""
+
+        if not self.s3_host_name_regex.match(link):
+            # get the actual s3 link from Argus first
+            creds = KeyStore().get_argus_rest_credentials()
+            headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
+
+            response = requests.head(link, allow_redirects=True, headers=headers)
+            link = response.history[-1].headers.get('location', link)
+            # remove query parameters from the link, we don't need them for S3 download
+            link = urljoin(link, urlparse(link).path)
+
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
         file_name = os.path.basename(key_name)
         try:
@@ -320,7 +335,7 @@ class S3Storage():
             LOGGER.info("Downloaded finished")
             return os.path.join(os.path.abspath(dst_dir), file_name)
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
             return ""
 
@@ -356,7 +371,7 @@ def list_logs_by_test_id(test_id):
             if log_type in log_file:
                 results.append({"file_path": log_file,
                                 "type": log_type,
-                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file),
+                                "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
                                 "date": convert_to_date(log_file.split('/')[1])
                                 })
                 break
@@ -379,6 +394,9 @@ def list_parallel_timelines_report_urls(test_id: str) -> list[str | None]:
 
 def all_aws_regions(cached=False):
     if cached:
+        # Note: this is a hardcoded list of AWS regions, it may not have all of aws regions.
+        # this list is used for setup of vpc peering, please don't remove or reshuffle it,
+        # only add new regions at the bottom of it
         return [
             'eu-north-1',
             'ap-south-1',
@@ -395,7 +413,7 @@ def all_aws_regions(cached=False):
             'us-east-1',
             'us-east-2',
             'us-west-1',
-            'us-west-2'
+            'us-west-2',
         ]
     else:
         client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
@@ -407,7 +425,7 @@ class ParallelObject:
         Run function in with supplied args in parallel using thread.
     """
 
-    def __init__(self, objects: Iterable, timeout: int = 6,  # pylint: disable=redefined-outer-name
+    def __init__(self, objects: Iterable, timeout: int = 6,
                  num_workers: int = None, disable_logging: bool = False):
         """Constructor for ParallelObject
 
@@ -427,7 +445,7 @@ class ParallelObject:
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
-        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)
 
     def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False) -> List[ParallelObjectResult]:
         """Run callable object "disrupt_func" in parallel
@@ -488,7 +506,7 @@ class ParallelObject:
             except FuturesTimeoutError as exception:
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
                 time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
-            except Exception as exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exception:  # noqa: BLE001
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
             else:
                 results.append(ParallelObjectResult(obj=target_obj, exc=None, result=result))
@@ -573,7 +591,7 @@ class ParallelObject:
         return results_map
 
 
-class ParallelObjectResult:  # pylint: disable=too-few-public-methods
+class ParallelObjectResult:
     """Object for result of future in ParallelObject
 
     Return as a result of ParallelObject.run method
@@ -626,7 +644,7 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
                     base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22")
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             log.error("%(name)s: failed to connect to Docker via SSH", builder)
             raise
         docker_clients[builder["name"]] = client
@@ -713,8 +731,6 @@ def aws_tags_to_dict(tags_list):
             tags_dict[item["Key"]] = item["Value"]
     return tags_dict
 
-# pylint: disable=too-many-arguments
-
 
 def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None):
     """
@@ -751,16 +767,16 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
 
-    for curr_region_name in instances:
+    for curr_region_name, per_region_instances in instances.items():
         if running:
-            instances[curr_region_name] = [i for i in instances[curr_region_name] if i['State']['Name'] == 'running']
+            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] == 'running']
         else:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
+            instances[curr_region_name] = [i for i in per_region_instances
                                            if not i['State']['Name'] == 'terminated']
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
-        for curr_region_name in instances:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
+        for curr_region_name, per_region_instances in instances.items():
+            instances[curr_region_name] = [i for i in per_region_instances
                                            if i['Placement']['AvailabilityZone'] == curr_region_name + availability_zone]
     if not group_as_region:
         instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
@@ -1090,21 +1106,21 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
         tags = {}
 
         @cached_property
-        def eks_client(self):  # pylint: disable=no-self-use
+        def eks_client(self):
             return
 
-        def list_clusters(self) -> list:  # pylint: disable=no-self-use
+        def list_clusters(self) -> list:
             eks_clusters = []
             for aws_region in regions or all_aws_regions():
                 try:
                     cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.error("Failed to get list of EKS clusters in the '%s' region: %s", aws_region, exc)
                     return []
                 for cluster_name in cluster_names:
                     try:
                         eks_clusters.append(EksClusterForCleaner(cluster_name, aws_region))
-                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.error("Failed to get body of cluster on EKS: %s", exc)
             return eks_clusters
 
@@ -1240,11 +1256,11 @@ def safe_kill(pid, signal):
     try:
         os.kill(pid, signal)
         return True
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return False
 
 
-class FileFollowerIterator():  # pylint: disable=too-few-public-methods
+class FileFollowerIterator():
     def __init__(self, filename, thread_obj):
         self.filename = filename
         self.thread_obj = thread_obj
@@ -1252,11 +1268,11 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
     def __iter__(self):
         with open(self.filename, encoding="utf-8") as input_file:
             line = ''
-            poller = select.poll()  # pylint: disable=no-member
+            poller = select.poll()
             registered = False
             while not self.thread_obj.stopped():
                 if not registered:
-                    poller.register(input_file, select.POLLIN)  # pylint: disable=no-member
+                    poller.register(input_file, select.POLLIN)
                     registered = True
                 if poller.poll(100):
                     line += input_file.readline()
@@ -1272,7 +1288,7 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
 
 class FileFollowerThread():
     def __init__(self):
-        self.executor = concurrent.futures.ThreadPoolExecutor(1)  # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self._stop_event = threading.Event()
         self.future = None
 
@@ -1602,28 +1618,29 @@ def get_ami_tags(ami_id, region_name):
             return {}
 
 
-def get_db_tables(session, keyspace_name, node, with_compact_storage=True):
+def get_db_tables(keyspace_name, node, with_compact_storage=None):
     """
-    Return tables from keystore based on their compact storage feature
+    Return tables from keyspace based on their compact storage feature.
     Arguments:
-        session -- DB session
-        ks -- Keypsace name
-        with_compact_storage -- If True, return non compact tables, if False, return compact tables
-
+        keyspace_name -- Keyspace name
+        node -- Node to run CQLSH commands
+        with_compact_storage -- If True, return tables with compact storage; if False, return tables without compact storage; if None, return all tables
     """
     output = []
-    for row in list(session.execute(f"select table_name from system_schema.tables where keyspace_name='{keyspace_name}'")):
-        try:
-            create_table_statement = node.run_cqlsh(f"describe {keyspace_name}.{row.table_name}").stdout.upper()
-        except (UnexpectedExit, Libssh2_UnexpectedExit) as err:
-            # SCT issue https://github.com/scylladb/scylla-cluster-tests/issues/7240
-            # May happen when disrupt_add_remove_dc nemesis run in parallel to the disrupt_add_drop_column
-            LOGGER.error("Failed to describe '%s.%s' table. Maybe the table has been deleted. Error: %s",
-                         keyspace_name, row.table_name, err.result.stderr)
+    try:
+        schema_output = node.run_cqlsh("DESC SCHEMA WITH INTERNALS").stdout
+    except (UnexpectedExit, Libssh2_UnexpectedExit) as err:
+        LOGGER.error("Failed to describe schema: %s", err.result.stderr)
+        return output
+
+    for match in CREATE_TABLE_REGEX.findall(schema_output):
+        element_keyspace, table_name, options = match
+        if element_keyspace != keyspace_name:
             continue
 
-        if with_compact_storage is None or (("WITH COMPACT STORAGE" in create_table_statement) == with_compact_storage):
-            output.append(row.table_name)
+        has_compact_storage = "COMPACT STORAGE" in options
+        if with_compact_storage is None or has_compact_storage == with_compact_storage:
+            output.append(table_name)
 
     return output
 
@@ -1639,7 +1656,7 @@ def remove_files(path):
             shutil.rmtree(path=path, ignore_errors=True)
         if os.path.isfile(path):
             os.remove(path)
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during remove archived logs %s", details)
         LOGGER.info("Remove temporary data manually: \"%s\"", path)
 
@@ -1657,7 +1674,7 @@ def create_remote_storage_dir(node, path='') -> Optional[str, None]:
                 'Remote storing folder not created.\n %s', result)
             remote_dir = node_remote_dir
 
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during creating remote directory %s", details)
         return None
 
@@ -2030,7 +2047,7 @@ def rows_to_list(rows):
 
 
 # Copied from dtest
-class Page:  # pylint: disable=too-few-public-methods
+class Page:
     data = None
 
     def __init__(self):
@@ -2211,7 +2228,7 @@ def reach_enospc_on_node(target_node):
         LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.warning(str(details))
         return bool(list(no_space_log_reader))
 
@@ -2298,7 +2315,7 @@ def convert_metric_to_ms(metric: str) -> float:
             metric_converted += _convert_to_ms(parsed_values['units'], parsed_values['sec'])
         else:
             metric_converted = float(metric)
-    except ValueError as ve:  # pylint: disable=invalid-name
+    except ValueError as ve:
         metric_converted = metric
         LOGGER.error("Value %s can't be converted to float. Exception: %s", metric, ve)
     return metric_converted
@@ -2412,7 +2429,7 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
         if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
                 current_value = current_value[int(name)]
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 current_value = None
             continue
         current_value = current_value.get(name, None)
@@ -2485,17 +2502,7 @@ def make_threads_be_daemonic_by_default():
     @return:
     @rtype:
     """
-    threading.current_thread()._daemonic = True  # pylint: disable=protected-access
-
-
-def clear_out_all_exit_hooks():
-    """
-    Some thread-related code is using threading._register_atexit to hook to python program exit
-    in order teardown gracefully as result test can halt at the end for any period of time, even for days.
-    To avoid that we clear it out to be sure that nothing is hooked and test is terminated right after
-      teardown.
-    """
-    threading._threading_atexits.clear()  # pylint: disable=protected-access
+    threading.current_thread()._daemonic = True
 
 
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
@@ -2589,7 +2596,7 @@ def describering_parsing(describering_output):
 
 
 @contextmanager
-def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid-name
+def SoftTimeoutContext(timeout: int, operation: str):
     """Publish SoftTimeoutEvent with operation info in case of duration > timeout"""
     start_time = time.time()
     yield
@@ -2638,12 +2645,12 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
                    ).run(get_placement_groups, ignore_exceptions=True)
 
-    for curr_region_name in placement_groups:
+    for curr_region_name, instances in placement_groups.items():
         if available:
             placement_groups[curr_region_name] = [
                 i for i in placement_groups[curr_region_name] if i['State'] == 'available']
         else:
-            placement_groups[curr_region_name] = [i for i in placement_groups[curr_region_name]
+            placement_groups[curr_region_name] = [i for i in instances
                                                   if not i['State'] == 'deleted']
     if not group_as_region:
         placement_groups = list(itertools.chain(*list(placement_groups.values())))  # flatten the list of lists

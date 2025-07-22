@@ -27,7 +27,9 @@ from sdcm.sct_provision.user_data_objects.apt_daily_triggers import DisableAptTr
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
 from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
+from sdcm.sct_provision.user_data_objects.vector_dev import VectorDevUserDataObject
 from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
+from sdcm.sct_provision.user_data_objects.docker_service import DockerUserDataObject
 from sdcm.test_config import TestConfig
 
 
@@ -96,7 +98,7 @@ class DefinitionBuilder(abc.ABC):
                                   use_public_ip=use_public_ip,
                                   )
 
-    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,  # pylint: disable=too-many-arguments
+    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,
                                 n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
@@ -147,9 +149,11 @@ class DefinitionBuilder(abc.ABC):
             DisableAptTriggersUserDataObject,
             SyslogNgUserDataObject,
             SyslogNgExporterUserDataObject,
+            VectorDevUserDataObject,
             SshdUserDataObject,
             EnableWaLinuxAgent,
             ScyllaUserDataObject,
+            DockerUserDataObject,
         ]
         user_data_objects = [
             klass(test_config=self.test_config, params=self.params,

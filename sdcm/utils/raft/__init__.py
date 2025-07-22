@@ -10,7 +10,9 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events import Severity
-from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
+from sdcm.utils.features import (is_consistent_topology_changes_feature_enabled,
+                                 is_consistent_cluster_management_feature_enabled,
+                                 is_group0_limited_voters_enabled)
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
 from sdcm.rest.raft_api import RaftApi
@@ -139,7 +141,10 @@ class RaftFeatureOperations(ABC):
         return list(map(self.get_message_waiting_timeout, log_patterns))
 
     def call_read_barrier(self):
-        ...
+        """Trigger raft global read barrier """
+
+    def search_inconsistent_host_ids(self) -> list[str]:
+        """ Search host id of node which violate group0 and token ring consistency"""
 
 
 class RaftFeature(RaftFeatureOperations):
@@ -180,7 +185,7 @@ class RaftFeature(RaftFeatureOperations):
         try:
             row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
             return row.value
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
             return ""
@@ -197,7 +202,7 @@ class RaftFeature(RaftFeatureOperations):
                 for row in rows:
                     group0_members.append({"host_id": str(row.server_id),
                                            "voter": row.can_vote})
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
 
@@ -234,10 +239,7 @@ class RaftFeature(RaftFeatureOperations):
             return node_status.get("status", "") == "BOOTSTRAPPING"
 
         LOGGER.debug("Clean group0 non-voter's members")
-        host_ids = self.get_diff_group0_token_ring_members()
-        if not host_ids:
-            LOGGER.debug("Node could return to token ring but not yet bootstrap")
-            host_ids = self.get_group0_non_voters()
+        host_ids = self.search_inconsistent_host_ids()
         attempt = 3
         while host_ids:
             removing_host_id = host_ids.pop(0)
@@ -261,7 +263,7 @@ class RaftFeature(RaftFeatureOperations):
             if not host_ids or attempt < 1:
                 break
 
-        missing_host_ids = self.get_diff_group0_token_ring_members() or self.get_group0_non_voters()
+        missing_host_ids = self.search_inconsistent_host_ids()
         if missing_host_ids:
             token_ring_members = self._node.get_token_ring_members()
             group0_members = self.get_group0_members()
@@ -318,6 +320,10 @@ class RaftFeature(RaftFeatureOperations):
                                         event_class=DatabaseLogEvent.DATABASE_ERROR,
                                         regex=r".*raft.*applier fiber stopped because of the error.*abort requested",
                                         extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                        regex=r".*raft_topology - tablets draining failed.*connection is closed\)\). Aborting the topology operation",
+                                        extra_time_to_expiration=timeout),
         )
 
     def is_cluster_topology_consistent(self) -> bool:
@@ -329,7 +335,7 @@ class RaftFeature(RaftFeatureOperations):
         LOGGER.debug("Difference between group0 and token ring: %s", diff)
         num_of_nodes = len(self._node.parent_cluster.nodes)
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
-        non_voters_ids = self.get_group0_non_voters()
+        non_voters_ids = self.search_inconsistent_host_ids()
 
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
@@ -339,8 +345,9 @@ class RaftFeature(RaftFeatureOperations):
         LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
                      self._node.name, self._node.host_id)
         token_ring_node_ids = [member["host_id"] for member in tokenring_members]
+        broken_hosts = self.search_inconsistent_host_ids()
         for member in group0_members:
-            if member["voter"] and member["host_id"] in token_ring_node_ids:
+            if member["host_id"] in token_ring_node_ids and member["host_id"] not in broken_hosts:
                 continue
             error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
                 f"can_vote {member['voter']} and " \
@@ -375,8 +382,26 @@ class RaftFeature(RaftFeatureOperations):
             api = RaftApi(self._node)
             result = api.read_barrier(group_id=raft_group0_id)
             LOGGER.debug("Api response %s", result)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
+
+    def search_inconsistent_host_ids(self) -> list[str]:
+        """ Search inconsistent hosts in group zero and token ring
+
+        Find difference between group0 and tokenring and return hostid
+        of nodes which should be removed for restoring consistency
+                """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            limited_voters_feature_enabled = is_group0_limited_voters_enabled(session)
+        host_ids = self.get_diff_group0_token_ring_members()
+
+        LOGGER.debug("Difference between group0 and token ring: %s", host_ids)
+        # Starting from 2025.2 not all alive nodes are voters. get
+        # non voters node only for older versions < 2025.2
+        if not host_ids and not limited_voters_feature_enabled:
+            LOGGER.debug("Get non-voter member hostids")
+            host_ids = self.get_group0_non_voters()
+        return host_ids
 
 
 class NoRaft(RaftFeatureOperations):
@@ -439,6 +464,9 @@ class NoRaft(RaftFeatureOperations):
 
     def call_read_barrier(self):
         ...
+
+    def search_inconsistent_host_ids(self) -> list[str]:
+        return []
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:

@@ -168,11 +168,11 @@ else
   die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
-if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
     $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
-    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, using it."
+    echo "There is ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} in local cache, using it."
 fi
 
 if [ -z "$HYDRA_DRY_RUN" ]; then
@@ -185,19 +185,19 @@ fi
 DOCKER_ADD_HOST_ARGS=()
 
 # export all SCT_* env vars into the docker run
-SCT_OPTIONS=$(env | sed -n 's/^\(SCT_.*\)=.*/--env \1/p')
+SCT_OPTIONS=$(env | sed -n 's/^\(SCT_[^=]*\)=.*/--env \1/p')
 
 # export all PYTEST_* env vars into the docker run
-PYTEST_OPTIONS=$(env | sed -n 's/^\(PYTEST_.*\)=.*/--env \1/p')
+PYTEST_OPTIONS=$(env | sed -n 's/^\(PYTEST_[^=]*\)=.*/--env \1/p')
 
 # export all BUILD_* env vars into the docker run
-BUILD_OPTIONS=$(env | sed -n 's/^\(BUILD_.*\)=.*/--env \1/p')
+BUILD_OPTIONS=$(env | sed -n 's/^\(BUILD_[^=]*\)=.*/--env \1/p')
 
 # export all AWS_* env vars into the docker run
-AWS_OPTIONS=$(env | sed -n 's/^\(AWS_.*\)=.*/--env \1/p')
+AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]*\)=.*/--env \1/p')
 
 # export all JENKINS_* env vars into the docker run
-JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_.*\)=.*/--env \1/p')
+JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]*\)=.*/--env \1/p')
 
 is_podman="$($tool --help | { grep -o podman || :; })"
 docker_common_args=()
@@ -225,17 +225,19 @@ function run_in_docker () {
          -v /var/run/docker.sock:/var/run/docker.sock
          -v /dev:/dev:rw
          --tmpfs "${HOME_DIR}/.docker:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER})"
+         --tmpfs "${HOME_DIR}/.local:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER}),size=256m"
          -e HOME="${HOME_DIR}"
        )
     elif [ -z "$is_podman" ]; then
         docker_common_args+=(
            -v /var/run:/run
            -v /dev:/dev:rw
+           --tmpfs "${HOME_DIR}/.local:exec,mode=1777"
            -u ${USER_ID}
            )
     else
         PODMAN_PORT=$(EPHEMERAL_PORT)
-        podman system service -t 0 tcp:localhost:${PODMAN_PORT} &
+        podman system --log-level=error service -t 0 tcp:localhost:${PODMAN_PORT} &
         trap "exit" INT TERM
         trap "kill 0" EXIT
         docker_common_args+=(
@@ -254,7 +256,6 @@ function run_in_docker () {
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
         -v "${HOME_DIR}:${HOME_DIR}" \
-        --tmpfs "${HOME_DIR}/.local:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER}),size=256m" \
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
@@ -281,8 +282,10 @@ function run_in_docker () {
         --env PYTHONFAULTHANDLER=yes \
         --env TERM \
         --net=host \
+        --ulimit core=-1 \
+        -v /var/lib/systemd/coredump:/var/lib/systemd/coredump \
         --name="${SCT_TEST_ID}_$(date +%s)" \
-        ${DOCKER_REPO}:${VERSION} \
+        ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} \
         /bin/bash -c "${PREPARE_CMD}; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
 }
 

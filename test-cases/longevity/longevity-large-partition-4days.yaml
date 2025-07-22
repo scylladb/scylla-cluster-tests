@@ -17,9 +17,8 @@ stress_cmd: ["scylla-bench -workload=uniform -mode=read -replication-factor=3 -p
 
 post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck is not NULL and token(pk) > -4570794944214759424 and token(pk) < 4621334552741592064 AND v is not null PRIMARY KEY (v, ck, pk) with comment = 'TEST VIEW'"
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
 azure_instance_type_db: 'Standard_L32s_v3'

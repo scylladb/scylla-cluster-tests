@@ -20,7 +20,7 @@ from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
-from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder, ProvisionType
+from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
@@ -193,16 +193,6 @@ class ClusterBase(BaseModel):
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
 
-    def _spot_low_price(self, region_id: int) -> float:
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
-
-        aws_pricing = AWSPricing()
-        on_demand_price = float(aws_pricing.get_on_demand_instance_price(
-            region_name=self._region(region_id),
-            instance_type=self._instance_type,
-        ))
-        return on_demand_price * self.params.get('spot_max_price')
-
     def provision_plan(self, region_id: int, availability_zone: str) -> ProvisionPlan:
         return ProvisionPlanBuilder(
             initial_provision_type=self._instance_provision,
@@ -210,13 +200,11 @@ class ClusterBase(BaseModel):
             fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
             availability_zone=availability_zone,
-            spot_low_price=self._spot_low_price(
-                region_id) if self._instance_provision == ProvisionType.SPOT_LOW_PRICE else None,
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 
     def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,
@@ -269,10 +257,11 @@ class DBCluster(ClusterBase):
             cluster_name=self.cluster_name,
             user_data_format_version=self.params.get('user_data_format_version'),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            test_config=self._test_config,
         ).to_string()
 
     def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,
@@ -385,6 +374,7 @@ class OracleDBCluster(ClusterBase):
             cluster_name=self.cluster_name,
             user_data_format_version=self.params.get('oracle_user_data_format_version'),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            test_config=self._test_config,
         ).to_string()
 
 
@@ -402,6 +392,8 @@ class LoaderCluster(ClusterBase):
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             aws_additional_interface=network_interfaces_count(self.params) > 1,
+            test_config=self._test_config,
+            install_docker=True,
         ).to_string()
 
 
@@ -420,6 +412,7 @@ class MonitoringCluster(ClusterBase):
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            test_config=self._test_config,
         ).to_string()
 
 
@@ -435,4 +428,4 @@ class PlacementGroup(ClusterBase):
                 name=self.placement_group_name, tags=self.common_tags, region=self._region(0))
 
 
-ClusterNode.update_forward_refs()
+ClusterNode.model_rebuild()

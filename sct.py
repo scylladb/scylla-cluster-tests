@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import os
@@ -55,7 +54,7 @@ from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_
     update_sct_runner_tags, list_sct_runners
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
-from sdcm.utils.argus import argus_offline_collect_events, get_argus_client
+from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -87,14 +86,15 @@ from sdcm.utils.common import (
     search_test_id_in_latest,
     get_latest_scylla_release,
 )
+from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
+from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
 )
-from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import docker_hub_login
+from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
 from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
@@ -116,8 +116,8 @@ from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
-from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
+from utils.build_system.create_test_release_jobs import JenkinsPipelines
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -153,7 +153,7 @@ def install_package_from_dir(ctx, _, directories):
 
 
 def cloud_provider_option(function=None, default: str | None = DEFAULT_CLOUD,
-                          required: bool = True, help: str = "Cloud provider"):  # pylint:disable=redefined-builtin
+                          required: bool = True, help: str = "Cloud provider"):
     def actual_decorator(func):
         return click.option(
             "-c", "--cloud-provider",
@@ -194,7 +194,8 @@ class SctLoader(unittest.TestLoader):
 def cli(ctx):
     disable_loggers_during_startup()
     # Ugly way of filtering the few command that do not require OKTA verification
-    if ctx.invoked_subcommand not in ("update-conf-docs", "nemesis-list", "create-nemesis-pipelines"):
+    if ctx.invoked_subcommand not in ("update-conf-docs", "conf-docs", "nemesis-list",
+                                      "create-nemesis-pipelines", "create-nemesis-yaml", "pre-commit"):
         try_auth_with_okta()
 
         key_store = KeyStore()
@@ -227,6 +228,9 @@ def provision_resources(backend, test_name: str, config: str):
     if params.get("logs_transport") == 'syslog-ng':
         click.echo("Provision syslog-ng logging service")
         test_config.configure_syslogng(localhost)
+    elif params.get("logs_transport") == 'vector':
+        click.echo("Provision vector logging service")
+        test_config.configure_vector(localhost)
     else:
         click.echo("No need provision logging service")
 
@@ -266,7 +270,7 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):  # pylint: disable=too-many-arguments,too-many-branches
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -292,6 +296,10 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     add_file_logger()
 
     user_param = {"RunByUser": user} if user else {}
+    if user:
+        os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
+        os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
+        os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
 
     if not post_behavior and user and not test_id and not logdir:
         click.echo(f"Clean all resources belong to user `{user}'")
@@ -346,7 +354,6 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @click.option('-b', '--backend', 'backend_type', type=click.Choice(SCTConfiguration.available_backends + ['all']), default='all', help="use specific backend")
 @click.pass_context
 def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type):  # noqa: PLR0912, PLR0914, PLR0915
-    # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()
 
@@ -359,6 +366,11 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
     if all([not get_all, not get_all_running, not user, not test_id]):
         click.echo(list_resources.get_help(ctx))
         sys.exit(1)
+
+    if get_all_running or user:
+        os.environ['SCT_REGION_NAME'] = os.environ.get('SCT_REGION_NAME', '')
+        os.environ['SCT_GCE_DATACENTER'] = os.environ.get('SCT_GCE_DATACENTER', '')
+        os.environ['SCT_AZURE_REGION_NAME'] = os.environ.get('SCT_AZURE_REGION_NAME', '')
 
     if get_all_running:
         table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"]
@@ -481,7 +493,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
             eks_table.align = "l"
             eks_table.sortby = 'CreateTime'
             for cluster in eks_clusters:
-                tags = gce_meta_to_dict(cluster.extra['metadata'])
+                tags = cluster.metadata
                 eks_table.add_row([cluster.name,
                                    tags.get('TestId', 'N/A') if tags else "N/A",
                                    cluster.region_name,
@@ -648,15 +660,17 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
               type=str,
               help="List images by version. Use '-v all' for all versions. "
                    "OSS format: <4.3> Enterprise format: <enterprise-2021.1>. Mutually exclusive with --branch.")
-@click.option('-r', '--region',
+@click.option('-r', '--region', "regions",
               type=CloudRegion(),
-              help="Cloud region to query images in. Defaults to eu-west-1",
-              default="eu-west-1")
+              help="Cloud region to query images in",
+              multiple=True)
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
-              help="architecture of the AMI (default: x86_64)")  # pylint: disable=too-many-locals
-def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
+              help="architecture of the AMI (default: x86_64)")
+def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
+    if len(regions) == 0:
+        regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
@@ -671,73 +685,73 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
 
     branch = branch or "master:latest"
 
-    if version is not None:
-        match cloud_provider:
-            case "aws":
-                rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
-                        title=f"AWS Machine Images by Version in region {region}")
-                )
-            case "gce":
-                if arch:
-                    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-                    click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
-                rows = get_gce_images_versioned(version=version)
-
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="GCE Machine Images by version")
-                )
-            case "azure":
-                if arch:
-                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
-                rows = []
-                for image in azure_images:
-                    rows.append(['Azure', image.name, image.unique_id, 'N/A'])
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="Azure Machine Images by version")
-                )
-
-            case _:
-                click.echo(f"Cloud provider {cloud_provider} is not supported")
-
-    elif branch:
-        if ":" not in branch:
-            branch += ":all"
-
-        match cloud_provider:
-            case "aws":
-                region = region or "eu-west-1"
-                ami_images = get_ami_images(branch=branch, region=region, arch=arch)
-                click.echo(
-                    create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
-                        title=f"AMI Machine Images for {branch} in region {region}"
+    for region in regions:
+        if version is not None:
+            match cloud_provider:
+                case "aws":
+                    rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                            title=f"AWS Machine Images by Version in region {region}")
                     )
-                )
-            case "gce":
-                gce_images = get_gce_images(branch=branch, arch=arch)
-                click.echo(
-                    create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
-                        title=f"GCE Machine Images for {branch}"
-                    )
-                )
-            case "azure":
-                if arch:
-                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
-                rows = []
-                for image in azure_images:
-                    rows.append(['Azure', image.name, image.id, 'N/A'])
-                click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                        title="Azure Machine Images by version")
-                )
+                case "gce":
+                    if arch:
+                        #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+                        click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
+                    rows = get_gce_images_versioned(version=version)
 
-            case _:
-                click.echo(f"Cloud provider {cloud_provider} is not supported")
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="GCE Machine Images by version")
+                    )
+                case "azure":
+                    if arch:
+                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                    azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
+                    rows = []
+                    for image in azure_images:
+                        rows.append(['Azure', image.name, image.unique_id, 'N/A'])
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="Azure Machine Images by version")
+                    )
+
+                case _:
+                    click.echo(f"Cloud provider {cloud_provider} is not supported")
+
+        elif branch:
+            if ":" not in branch:
+                branch += ":all"
+
+            match cloud_provider:
+                case "aws":
+                    ami_images = get_ami_images(branch=branch, region=region, arch=arch)
+                    click.echo(
+                        create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                            title=f"AMI Machine Images for {branch} in region {region}"
+                        )
+                    )
+                case "gce":
+                    gce_images = get_gce_images(branch=branch, arch=arch)
+                    click.echo(
+                        create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                            title=f"GCE Machine Images for {branch}"
+                        )
+                    )
+                case "azure":
+                    if arch:
+                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                    rows = []
+                    for image in azure_images:
+                        rows.append(['Azure', image.name, image.id, 'N/A'])
+                    click.echo(
+                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                            title="Azure Machine Images by version")
+                    )
+
+                case _:
+                    click.echo(f"Cloud provider {cloud_provider} is not supported")
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
@@ -772,7 +786,7 @@ def list_repos(dist_type, dist_version):
 @click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
-def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):  # pylint: disable=too-many-locals
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
@@ -842,7 +856,7 @@ def _run_yaml_test(backend, full_path, env):
         config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
         error = True
     return error, output
@@ -852,7 +866,7 @@ def _run_yaml_test(backend, full_path, env):
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 @click.option('-i', '--include', type=str, default='')
 @click.option('-e', '--exclude', type=str, default='')
-def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many-locals,too-many-branches
+def lint_yamls(backend, exclude: str, include: str):
     if not include:
         raise ValueError('You did not provide include filters')
 
@@ -862,7 +876,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             exclude_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
 
     include_filters = []
@@ -871,11 +885,11 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             include_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
-    process_pool = ProcessPoolExecutor(max_workers=5)  # pylint: disable=consider-using-with
+    process_pool = ProcessPoolExecutor(max_workers=5)
 
     features = []
     for root, _, files in os.walk('./test-cases'):
@@ -913,7 +927,7 @@ def conf(config_file, backend):
     try:
         config.verify_configuration()
         config.check_required_files()
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:
         logging.exception(str(ex))
         click.secho(str(ex), fg='red')
         sys.exit(1)
@@ -925,28 +939,16 @@ def conf(config_file, backend):
 @cli.command('conf-docs', help="Show all available configuration in yaml/markdown format")
 @click.option('-o', '--output-format', type=click.Choice(["yaml", "markdown"]), default="yaml", help="type of the output")
 def conf_docs(output_format):
-    add_file_logger()
-
-    os.environ['SCT_CLUSTER_BACKEND'] = "aws"  # just to pass SCTConfiguration() verification.
-
-    config_logger = logging.getLogger('sdcm.sct_config')
-    config_logger.setLevel(logging.ERROR)
     if output_format == 'markdown':
-        click.secho(SCTConfiguration().dump_help_config_markdown())
+        click.secho(SCTConfiguration.dump_help_config_markdown())
     elif output_format == 'yaml':
-        click.secho(SCTConfiguration().dump_help_config_yaml())
+        click.secho(SCTConfiguration.dump_help_config_yaml())
 
 
 @cli.command('update-conf-docs', help="Update the docs configuration markdown")
 def update_conf_docs():
-    add_file_logger()
-
-    os.environ['SCT_CLUSTER_BACKEND'] = "aws"  # just to pass SCTConfiguration() verification.
-
-    config_logger = logging.getLogger('sdcm.sct_config')
-    config_logger.setLevel(logging.ERROR)
     markdown_file = Path(__name__).parent / 'docs' / 'configuration_options.md'
-    markdown_file.write_text(SCTConfiguration().dump_help_config_markdown())
+    markdown_file.write_text(SCTConfiguration.dump_help_config_markdown())
     click.secho(f"docs written into {markdown_file}")
 
 
@@ -1006,7 +1008,7 @@ def show_log(test_id, output_format, update_argus: bool):
         try:
             store_logs_in_argus(test_id=test_id, logs=reduce(lambda acc, log: acc[log["type"]].append(
                 log["link"]) or acc, files, defaultdict(list)), update=True)
-        except Exception:  # pylint: disable=broad-except # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.error("Error updating logs in argus.", exc_info=True)
 
 
@@ -1022,7 +1024,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
     containers = {}
     try:
         containers = restore_monitoring_stack(test_id, date_time)
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error(details)
 
     if not containers:
@@ -1128,16 +1130,17 @@ def integration_tests(test):
     get_test_config().logdir()
     add_file_logger()
 
-    # setup prerequisites for the integration test is identical
-    # to the kind local functional tests
-    # TODO: to refactor setup_prerequisites out of LocalKindCluster
-    sct_config = SCTConfiguration()
-    local_cluster = mini_k8s.LocalKindCluster(
-        software_version="",
-        user_prefix="",
-        params=sct_config,
-    )
-    local_cluster.setup_prerequisites()
+    if not running_in_podman():  # we can't do sudo commands within rootless podman
+        # setup prerequisites for the integration test is identical
+        # to the kind local functional tests
+        # TODO: to refactor setup_prerequisites out of LocalKindCluster
+        sct_config = SCTConfiguration()
+        local_cluster = mini_k8s.LocalKindCluster(
+            software_version="",
+            user_prefix="",
+            params=sct_config,
+        )
+        local_cluster.setup_prerequisites()
 
     sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'integration', 'unit_tests/{}'.format(test)]))
 
@@ -1159,7 +1162,7 @@ def pre_commit():
 class OutputLogger():
     def __init__(self, filename, terminal):
         self.terminal = terminal
-        self.log = open(filename, "a", encoding="utf-8")  # pylint: disable=consider-using-with
+        self.log = open(filename, "a", encoding="utf-8")
 
     def write(self, message):
         self.terminal.write(message)
@@ -1169,7 +1172,7 @@ class OutputLogger():
         self.terminal.flush()
         self.log.flush()
 
-    def isatty(self):  # pylint: disable=no-self-use
+    def isatty(self):
         return False
 
 
@@ -1192,8 +1195,18 @@ def run_test(argv, backend, config, logdir):
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
-    unittest.main(module=None, argv=['python -m unittest', argv],
-                  failfast=False, buffer=False, catchbreak=True, testLoader=SctLoader())
+    if '::' in argv:
+        target = argv
+    else:
+        test_path = argv.split('.')
+        test_path[0] = f"{test_path[0]}.py"
+        target = '::'.join(test_path)
+
+    if not target:
+        print("argv is referring to the directory or file that contain tests, it can't be empty")
+        sys.exit(1)
+    return_code = pytest.main(['-s', '-vv', '-rN', '-p', 'no:logging', '-p', 'no:warnings', target])
+    sys.exit(return_code)
 
 
 @cli.command('run-pytest', help="Run tests using pytest")
@@ -1248,10 +1261,10 @@ def cloud_usage_report(emails, report_type, user):
 @click.option('--backend', help='Cloud where search nodes', default=None)
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
-    # pylint: disable=too-many-nested-blocks,too-many-branches
+
     add_file_logger()
 
-    from sdcm.logcollector import Collector  # pylint: disable=import-outside-toplevel
+    from sdcm.logcollector import Collector
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1280,7 +1293,8 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             #  current_cluster_type will be "warning"
             if cluster_type == 'sct-runner' and cluster_type not in link:
                 current_cluster_type = link.split("/")[-1].split("-")[0]
-            table.add_row([current_cluster_type, link])
+            table.add_row([current_cluster_type, create_proxy_argus_s3_url(
+                link).format(collector.test_id, link.split("/")[-1])])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
@@ -1311,7 +1325,7 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], u
 
         if not argus_client.get_run().get("events"):
             argus_offline_collect_events(client=argus_client)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
 
@@ -1328,7 +1342,6 @@ def get_test_results_for_failed_test(test_status, start_time):
     }
 
 
-# pylint: disable=too-many-arguments,too-many-branches,too-many-statements
 @cli.command('send-email', help='Send email with results for testrun')
 @click.option('--test-id', help='Test-id of run')
 @click.option('--test-status', help='Override test status FAILED|ABORTED')
@@ -1403,7 +1416,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         try:
             reporter.send_report(test_results)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
@@ -1479,19 +1492,33 @@ def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
                            create_freestyle_jobs=triggers, job_name_suffix='')
 
 
+@cli.command("create-nemesis-yaml")
+@click.option('--diff/--no-diff', default=True)
+def create_nemesis_yaml(diff):
+    error_carrier = ErrorCarrier() if diff else None
+    file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
+
+    generate_nemesis_yaml(file_opener)
+    if error_carrier:
+        sys.exit(1)
+
+
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
 @click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
-def create_nemesis_pipelines(base_job: str, backend: list[str]):
-    for backend_name in backend:
-        if backend_name not in NemesisJobGenerator.BACKEND_TO_REGION.keys():
-            LOGGER.warning("## Unsupported backend: %s", backend_name)
-            continue
-        LOGGER.info("## Generating jobs for backend %s", backend_name)
-        gen = NemesisJobGenerator(base_job=base_job, backend=backend_name)
-        gen.render_base_job_config()
-        gen.create_test_cases_from_template()
-        gen.create_job_files_from_template()
+@click.option('--diff/--no-diff', default=True)
+def create_nemesis_pipelines(base_job: str, backend: list[str], diff: bool):
+    error_carrier = ErrorCarrier() if diff else None
+    file_opener = partial(OpenWithDiff, error_carrier=error_carrier) if diff else open
+
+    gen = NemesisJobGenerator(base_job=base_job, backends=backend, base_dir="",
+                              file_opener=file_opener)
+    gen.render_base_job_config()
+    gen.create_test_cases_from_template()
+    gen.create_job_files_from_template()
+
+    if error_carrier:
+        sys.exit(1)
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
@@ -1578,7 +1605,6 @@ def create_runner_image(cloud_provider, region, availability_zone):
 @click.option("-p", "--address-pool", required=False, type=str, help="ElasticIP pool to use")
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
                            test_id, test_name, duration, restore_monitor=False, restored_test_id="", address_pool=None):
-    # pylint: disable=too-many-locals
 
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
@@ -1714,7 +1740,7 @@ def get_nemesis_list(backend, config):
 
     # NOTE: this import messes up logging for the test, since it's importing tester.py
     # directly down the line
-    from unit_tests.test_nemesis import FakeTester  # pylint: disable=import-outside-toplevel
+    from unit_tests.nemesis.fake_cluster import FakeTester
 
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
@@ -1779,6 +1805,7 @@ def finish_argus_test_run(jenkins_status):
         if jenkins_status == "ABORTED":
             new_status = TestStatus.ABORTED
         test_config.argus_client().set_sct_run_status(new_status)
+        test_config.argus_client().finalize_sct_run()
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
 

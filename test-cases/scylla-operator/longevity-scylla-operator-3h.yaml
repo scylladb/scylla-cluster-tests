@@ -7,7 +7,6 @@ k8s_n_scylla_pods_per_cluster: 3
 nemesis_add_node_cnt: 1
 
 n_loaders: 2
-n_monitor_nodes: 1
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'kubernetes'

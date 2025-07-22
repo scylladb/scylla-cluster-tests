@@ -1,0 +1,54 @@
+test_duration: 60
+
+prepare_write_cmd:
+  - >-
+    latte run --function=insert --consistency=ALL --duration=100000
+    --threads=3 --concurrency=128
+    --start-cycle=1 --end-cycle=100000 -P row_count=100000
+    data_dir/latte/validation.rn
+
+# +-------+--------------------------------------+------------------------------------+
+# | Time  | Stress 1 (Write/Delete)              | Stress 2 (Read)                    |
+# | ------|--------------------------------------|------------------------------------+
+# | 00:00 | Writing rows 97k+ indexes, rate 50   | Read rows on 0+ indexes, rate 1000 |
+# | 00:20 | Start deleting rows, indexes: 98k+   | Reading rows on 20k+ indexes       |
+# | 00:22 | Finish deleting 100 rows (98k–98100) | Reading rows on 22k+ indexes       |
+# | 00:42 | Finish writing                       | Reading rows on 42k+ indexes       |
+# | 01:37 | ------------------------------------ | Reached deleted rows (98k–98100)...|
+# |       | ------------------------------------ | ...checking that 98k-98100 absent  |
+# | 01:40 | ------------------------------------ | Starts 2nd read loop over 100k     |
+# | 03:17 | ------------------------------------ | Reached deleted rows (98k–98100)...|
+# |       | ------------------------------------ | ...checking that 98k-98100 absent  |
+# | 03:20 | ------------------------------------ | Finished reading                   |
+# +-------|--------------------------------------|------------------------------------+
+stress_cmd:
+  - >-
+    latte run --function=insert_or_delete --consistency=QUORUM --duration=2100
+    --threads=1 --concurrency=128 --rate=50
+    --start-cycle=97000 --end-cycle=99100 -P row_count=100000
+    -P delete_start_index=98001 -P delete_end_index=98100
+    data_dir/latte/validation.rn
+  - >-
+    latte run --function=get --consistency=QUORUM --duration=200000
+    --threads=3 --concurrency=128 --rate=1000
+    --start-cycle=1 --end-cycle=100000 -P row_count=100000
+    -P delete_start_index=98001 -P delete_end_index=98100
+    --validation-strategy=retry
+    data_dir/latte/validation.rn
+
+n_loaders: 1
+instance_type_db: 'i4i.large'
+n_db_nodes: 3
+
+nemesis_class_name: SisyphusMonkey
+nemesis_selector: "not disruptive"
+nemesis_interval: 1
+
+user_prefix: 'simple-data-validation-latte'
+instance_provision: 'spot'
+
+use_preinstalled_scylla: true
+
+# append_scylla_yaml:
+#   enable_tablets: false
+#   tablets_mode_for_new_keyspaces: 'disabled'

@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-instance-attributes, broad-except, protected-access
-
 from __future__ import annotations
 
 import json
@@ -23,7 +21,7 @@ import fnmatch
 import logging
 from enum import Enum
 from json import JSONEncoder
-from types import new_class  # pylint: disable=no-name-in-module
+from types import new_class
 from typing import \
     Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
 from keyword import iskeyword
@@ -37,13 +35,15 @@ import dateutil.parser
 from sdcm import sct_abs_path
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.utils.action_logger import get_action_logger
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
 FILTER_EVENT_DECAY_TIME = 600.0
 LOGGER = logging.getLogger(__name__)
+ACTION_LOGGER = get_action_logger("event")
 
 
-class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods
+class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
     def __init__(self, severities_conf: str = DEFAULT_SEVERITIES):
         super().__init__()
         with open(severities_conf, encoding="utf-8") as fobj:
@@ -53,13 +53,12 @@ class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too
     def __setitem__(self, key: str, value: Type[SctEvent]):
         if not value.is_abstract() and key not in self.max_severities:
             raise ValueError(f"There is no max severity configured for {key}")
-        super().__setitem__(key, weakproxy(value))  # pylint: disable=no-member; pylint doesn't know about Dict
+        super().__setitem__(key, weakproxy(value))
 
     def __set_name__(self, owner: Type[SctEvent], name: str) -> None:
         self[owner.__name__] = owner  # add owner class to the registry.
 
 
-# pylint: disable=invalid-name
 class EventPeriod(Enum):
     BEGIN = "begin"
     END = "end"
@@ -100,7 +99,6 @@ class SctEvent:
     save_to_files: bool = True
 
     def __init_subclass__(cls, abstract: bool = False):
-        # pylint: disable=unsupported-membership-test; pylint doesn't know about Dict
         if cls.__name__ in cls._sct_event_types_registry:
             raise TypeError(f"Name {cls.__name__} is already used")
         cls.base = cls.__name__.split(".", 1)[0]
@@ -214,7 +212,6 @@ class SctEvent:
         return fmt
 
     def add_subcontext(self):
-        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
         # Add subcontext for event with ERROR and CRITICAL severity only
         if self.severity.value < 3:
@@ -243,7 +240,6 @@ class SctEvent:
                     self.subcontext.append(nemesis)
 
     def publish(self, warn_not_ready: bool = True) -> None:
-        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
 
         if not self._ready_to_publish:
@@ -251,10 +247,21 @@ class SctEvent:
                 LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
         get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
+        if self.severity.value > Severity.WARNING.value:
+            metadata = {"base": self.base}
+            if self.type:
+                metadata["type"] = self.type
+            if self.subtype:
+                metadata["subtype"] = self.subtype
+            ACTION_LOGGER.error(
+                f"{self.severity.name} Event",
+                trace_id=self.event_id,
+                target=getattr(self, 'node', None),
+                metadata=metadata
+            )
         self._ready_to_publish = False
 
     def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
-        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
 
         if not self._ready_to_publish:
@@ -323,7 +330,7 @@ class SctEvent:
             warning = f"[SCT internal warning] {self} has not been published or dumped, maybe you missed .publish()"
             try:
                 LOGGER.warning(warning)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 print(f"Exception while printing {warning}. Full exception: {exc}")
 
 
@@ -412,7 +419,7 @@ class BaseFilter(SystemEvent, abstract=True):
         raise NotImplementedError()
 
 
-T_log_event = TypeVar("T_log_event", bound="LogEvent")  # pylint: disable=invalid-name
+T_log_event = TypeVar("T_log_event", bound="LogEvent")
 
 
 @runtime_checkable
@@ -470,7 +477,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
                 # 2021-04-06 13:03:28  ...
                 event_time = " ".join(splitted_line[:2])
 
-            self.source_timestamp = dateutil.parser.parse(event_time).timestamp()
+            self.source_timestamp = dateutil.parser.parse(event_time).replace(tzinfo=timezone.utc) .timestamp()
         except ValueError:
             pass
         self.event_timestamp = time.time()

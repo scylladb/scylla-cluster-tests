@@ -174,8 +174,17 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
     scylla_logs_pattern_resharding_start = "database - Resharding"
     scylla_logs_pattern_resharding_finish = "storage_service - Restarting a node in NORMAL"
 
-    log.info("Update the cpu count to '%s' CPUs to make Scylla start the resharding process on "
-             "all the nodes 1 by 1", cpus)
+    nodes_data = []
+    for node in reversed(db_cluster.nodes):
+        liveness_probe_failures = node.follow_system_log(
+            patterns=["healthz probe: can't connect to JMX"])
+        resharding_start = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
+        resharding_finish = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_FINISH])
+        nodes_data.append((node, liveness_probe_failures, resharding_start, resharding_finish))
+
+    log.info(
+        "Update the cpu count to '%s' CPUs to make Scylla start "
+        "the resharding process on all the nodes 1 by 1", cpus)
     db_cluster.replace_scylla_cluster_value(
         "/spec/datacenter/racks/0/resources", {
             "limits": {

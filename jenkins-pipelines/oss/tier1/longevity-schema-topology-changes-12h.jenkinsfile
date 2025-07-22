@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-parallel-schema-changes-12h.yaml", "configurations/network_config/scylla_addresses_on_different_interfaces.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-parallel-schema-changes-12h-cql-stress.yaml", "configurations/network_config/scylla_addresses_on_different_interfaces.yaml"]''',
 
     timeout: [time: 820, unit: 'MINUTES']
 )

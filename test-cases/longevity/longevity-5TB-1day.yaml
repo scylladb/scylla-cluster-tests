@@ -15,12 +15,11 @@ stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=1200m -mode cql3 nat
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 120}']
 round_robin: true
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 4
-n_monitor_nodes: 1
 seeds_num: 2
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-32'
 gce_n_local_ssd_disk_db: 24
 azure_instance_type_db: 'Standard_L16s_v3'

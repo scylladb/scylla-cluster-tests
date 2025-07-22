@@ -23,9 +23,11 @@ from typing import Optional, Callable
 from botocore.exceptions import ClientError
 
 from sdcm.argus_results import send_result_to_argus
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import EventCounterContextManager
 from sdcm.exceptions import UnsupportedNemesis
+from sdcm.sct_events.system import TestFrameworkEvent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,17 +36,16 @@ class Retry(Exception):
     pass
 
 
-class retrying:  # pylint: disable=invalid-name,too-few-public-methods
+class retrying:
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    # pylint: disable=too-many-arguments,redefined-outer-name
     def __init__(self, n=3, sleep_time=1,
                  allowed_exceptions=(Exception,), message="", timeout=0,
                  raise_on_exceeded=True):
         if n:
-            self.n = n  # number of times to retry  # pylint: disable=invalid-name
+            self.n = n  # number of times to retry
         else:
             self.n = sys.maxsize * 2 + 1
         self.sleep_time = sleep_time  # number seconds to sleep between retries
@@ -82,7 +83,7 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
         return inner
 
 
-timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
+timeout = partial(retrying, n=0)
 
 
 def log_run_info(arg):
@@ -179,7 +180,7 @@ def _find_hdr_tags(*args):
 
 
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
-                                 cycle_name: Optional[str] = None):
+                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -191,7 +192,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
-    from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
+    from sdcm.utils import latency
 
     def wrapper(func):
 
@@ -231,7 +232,9 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 return res
             monitor = monitoring_set.nodes[0]
             screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
-            if 'read' in test_name:
+            if workload_type:
+                workload = workload_type
+            elif 'read' in test_name:
                 workload = 'read'
             elif 'write' in test_name:
                 workload = 'write'
@@ -331,7 +334,7 @@ class NoValue(Exception):
     ...
 
 
-class optional_cached_property(cached_property):  # pylint: disable=invalid-name,too-few-public-methods
+class optional_cached_property(cached_property):
     """Extension for cached_property from Lib/functools.py with ability to ignore calculated result.
 
     To make it to not cache a value on a property call raise NoValue exception: it will be ignored and
@@ -368,6 +371,25 @@ def skip_on_capacity_issues(func: callable) -> callable:
         except ClientError as ex:
             if "InsufficientInstanceCapacity" in str(ex):
                 raise UnsupportedNemesis("Capacity Issue") from ex
+            raise
+    return wrapper
+
+
+def critical_on_capacity_issues(func: callable) -> callable:
+    """
+    Decorator to end the test with a critical event due to capacity issues
+    This should be used when a failure would leave the cluster in an inconsistent topology state
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as ex:
+            if "InsufficientInstanceCapacity" in str(ex):
+                TestFrameworkEvent(source=callable.__name__,
+                                   message=f"Test failed due to capacity issues: {ex} "
+                                   "cluster is probably unbalanced, continuing with test would yield unknown results",
+                                   severity=Severity.CRITICAL).publish()
             raise
     return wrapper
 

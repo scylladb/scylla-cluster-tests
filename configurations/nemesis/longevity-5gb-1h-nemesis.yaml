@@ -14,7 +14,6 @@ stress_cmd:
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 seeds_num: 3
 
 instance_type_db: 'i4i.large'
@@ -27,7 +26,6 @@ azure_instance_type_loader: 'Standard_F2s_v2'
 nemesis_interval: 3
 
 gce_n_local_ssd_disk_db: 1
-
 
 server_encrypt: true
 client_encrypt: true

@@ -76,7 +76,6 @@ def get_stress_cmd_params(cmd):
     :return: dict with params
     """
 
-    # pylint: disable=too-many-branches
     cmd_params = {
         "raw_cmd": cmd
     }
@@ -316,24 +315,6 @@ class PrometheusDBStats:
         else:
             return res
 
-    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
-        """
-        Get Scylla CPU scheduler runtime from PrometheusDB
-
-        :return: list of tuples (unix time, op/s)
-        """
-        if not self._check_start_end_time(start_time, end_time):
-            return {}
-        # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) ' \
-            'by (group, instance)' % (node_ip, irate_sample_sec)
-        results = self.query(query=query, start=start_time, end=end_time)
-        res = defaultdict(dict)
-        for item in results:
-            res[item['metric']['instance']].update({item['metric']['group']:
-                                                    [float(runtime[1]) for runtime in item['values']]})
-        return res
-
     def get_scylla_io_queue_total_operations(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
         """
         Get Scylla CPU scheduler runtime from PrometheusDB
@@ -353,28 +334,8 @@ class PrometheusDBStats:
                                                     [float(runtime[1]) for runtime in item['values']]})
         return res
 
-    def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):  # pylint: disable=invalid-name
-        """
-        Get scylla_scheduler_shares from PrometheusDB
-
-        :return: list of tuples (unix time, op/s)
-        """
-        if not self._check_start_end_time(start_time, end_time):
-            return {}
-        # the query is taken from the Grafana Dashborad definition
-        query = 'avg(scylla_scheduler_shares{group=~"sl:.*", instance="%s"} ) by (group, instance)' % node_ip
-        results = self.query(query=query, start=start_time, end=end_time)
-        res = {}
-        for item in results:
-            try:
-                res[item['metric']['group']] = {int(i[1]) for i in item['values']}
-            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
-                # average value may be returned not integer. Ignore it
-                LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
-        return res
-
     def get_scylla_storage_proxy_replica_cross_shard_ops(self, start_time, end_time):
-        query = """sum(irate(scylla_storage_proxy_replica_cross_shard_ops{instance=~".+[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.+",shard=~"[0-9]+"}[1m])) by (dc)"""  # pylint: disable=line-too-long
+        query = """sum(irate(scylla_storage_proxy_replica_cross_shard_ops{instance=~".+[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.+",shard=~"[0-9]+"}[1m])) by (dc)"""
         query = urllib.parse.quote(query)
         results = self.query(query, start_time, end_time)
         cross_shards_ops_per_node_shard_by_dc = []
@@ -410,7 +371,7 @@ class PrometheusDBStats:
     def generate_node_capacity_query_postfix(node):
         return f'{{mountpoint="{SCYLLA_DIR}", instance=~".*?{node.private_ip_address}.*?"}}'
 
-    def get_used_capacity_gb(self, node):  # pylint: disable=too-many-locals
+    def get_used_capacity_gb(self, node):
         #  example: node_filesystem_size_bytes{mountpoint="/var/lib/scylla",
         #  instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla",
         #  instance=~".*?10.0.79.46.*?"}
@@ -481,7 +442,7 @@ class Stats:
     def elasticsearch(self) -> Optional[ES]:
         try:
             return ES()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to create ES connection (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
             return None
@@ -496,7 +457,7 @@ class Stats:
                 doc_id=self._test_id,
                 body=self._stats,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to create test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
@@ -510,7 +471,7 @@ class Stats:
                 doc_id=self._test_id,
                 body=data,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to update test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
@@ -524,7 +485,7 @@ class Stats:
                 index=self._test_index,
                 id=self._test_id,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to check for test stats existence (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
         return None
@@ -604,7 +565,7 @@ class TestStatsMixin(Stats):
                                                                             'date': match.group(4),
                                                                             'commit_id': match.group(5),
                                                                             'build_id': build_id if build_id else ''}
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             LOGGER.exception('Failed getting scylla versions: %s', ex)
 
         # append Scylla build mode in scylla_versions
@@ -620,10 +581,10 @@ class TestStatsMixin(Stats):
         test_params = self.params.items()
 
         for key, value in test_params:
-            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
+            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):
                 continue
             elif is_gce and key in \
-                    ['instance_type_loader',  # pylint: disable=no-else-continue
+                    ['instance_type_loader',
                      'instance_type_monitor',
                      'instance_type_db']:
                 # exclude these params from gce run
@@ -645,10 +606,10 @@ class TestStatsMixin(Stats):
         setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
         setup_details['cpu_platform'] = 'UNKNOWN'
         if is_gce and self.db_cluster:
-            if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):  # pylint: disable=protected-access
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform  # pylint: disable=protected-access
+            if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform
             else:
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(
                     'cpuPlatform', 'UNKNOWN')
 
         setup_details['db_cluster_node_details'] = {}
@@ -671,13 +632,16 @@ class TestStatsMixin(Stats):
         test_details['log_files'] = {}
         return test_details
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None,
                           doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None, test_index=None):
 
         if not self.create_stats:
             return
+        custom_es_index = self.params.get("custom_es_index")
         if test_index:
             self._test_index = test_index
+        elif custom_es_index:
+            self._test_index = custom_es_index
         elif not self._test_index:
             self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id(doc_id_with_timestamp)
@@ -742,7 +706,7 @@ class TestStatsMixin(Stats):
             stat["stdev"] = stddev(ops_filtered)
             self.log.debug("Stats: %s", stat)
             return stat
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
@@ -788,7 +752,7 @@ class TestStatsMixin(Stats):
             return 0
         try:
             return float(stress_result[stat])
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
                              "Discarding stat." % (stress_result[stat], stat, details))
         return 0
@@ -821,7 +785,6 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False,
                             scrap_metrics_step=None):
         if not self.create_stats:
@@ -909,7 +872,7 @@ class TestStatsMixin(Stats):
                     index=self._test_index,
                     doc_id=self._test_id,
                 )
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 LOGGER.exception("Failed to get test stats (doc_id=%s)", self._test_id)
                 ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
             else:

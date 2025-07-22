@@ -187,7 +187,7 @@ class TestScyllaBenchEvent(unittest.TestCase):
 
         try:
             raise ValueError('Stress command completed with bad status 1')
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             scylla_bench_event.severity = Severity.ERROR
             scylla_bench_event.add_error([str(exc)])
 
@@ -408,7 +408,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
                             {ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)})
 
-    def test_cs_hint_in_flight_error(self):  # pylint: disable=no-self-use
+    def test_cs_hint_in_flight_error(self):
         self.get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
                        '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many '
                        'in flight hints: 10490670',
@@ -476,7 +476,7 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertEqual(event.line_number, 1)
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
-        self.assertTrue(event._ready_to_publish)  # pylint: disable=protected-access
+        self.assertTrue(event._ready_to_publish)
         event.event_id = "3eaf9cb2-b54b-43f5-8472-d0fbf5c25f72"
         self.assertEqual(
             str(event),
@@ -497,7 +497,7 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertEqual(event.line_number, 0)
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
-        self.assertFalse(event._ready_to_publish)  # pylint: disable=protected-access
+        self.assertFalse(event._ready_to_publish)
         event.event_id = "3ce0cdeb-0866-40ce-9a20-25ea3ae08be2"
         self.assertEqual(
             str(event),

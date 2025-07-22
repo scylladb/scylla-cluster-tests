@@ -3,23 +3,33 @@
   "extends": [
     "config:recommended"
   ],
-  "schedule": ["every weekend"],
-  "assignees": ["scylladb/qa-maintainers"],
-  "reviewers": ["scylladb/qa-maintainers"],
+  "ignorePresets": [
+    "group:monorepos",
+    "group:recommended"
+  ],
+  "schedule": [
+    "every weekend"
+  ],
+  "assignees": [
+    "scylladb/qa-maintainers"
+  ],
+  "reviewers": [
+    "scylladb/qa-maintainers"
+  ],
   "labels": [
+    "backport/none",
     "renovate",
-    "dependencies",
-    "New Hydra Version"
+    "dependencies"
   ],
   "enabledManagers": [
-    "pip-compile",
+    "pep621",
     "github-actions",
     "helm-values"
   ],
   "packageRules": [
     {
       "groupName": "All pip dependencies",
-      "matchManagers": ["pip-compile"],
+      "matchManagers": ["pep621"],
       "packageNames": ["!scylla-driver"],
       "enabled": true
     },
@@ -33,17 +43,29 @@
         "minor",
         "patch"
       ],
-      "enabled": false
+      "enabled": false,
+      "addLabels": [
+        "New Hydra Version"
+      ]
     },
     {
-      "packageNames": ["scylla-driver"],
-      "enabled": true
-    },
-    {
-      "groupName": "All Helm values files",
-      "matchManagers": ["helm-values"],
+      "matchPackageNames": [
+        "scylla-driver"
+      ],
       "enabled": true,
-      "labels": ["renovate", "dependencies"]
+      "addLabels": [
+        "New Hydra Version"
+      ]
+    },
+    {
+      "groupName": null,
+      "matchManagers": [
+        "helm-values"
+      ],
+      "enabled": true,
+      "addLabels": [
+        "test-integration"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
@@ -51,13 +73,16 @@
   },
   "osvVulnerabilityAlerts": true,
   "github-actions": {
-    "enabled": true,
-    "labels": ["renovate", "dependencies"]
+    "enabled": true
   },
   "helm-values": {
-    "fileMatch": ["(^|/)values_.*\\.ya?ml$"]
+    "fileMatch": [
+      "(^|/)values_.*\\.ya?ml$"
+    ]
   },
   "pip-compile": {
-    "fileMatch": ["(^|/)requirements\\.txt$"]
+    "fileMatch": [
+      "(^|/)requirements\\.txt$"
+    ]
   }
 }

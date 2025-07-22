@@ -53,7 +53,7 @@ ComputeEngineCloud gcpCloud = new ComputeEngineCloud(config.name, config.project
 gcpCloud.setNoDelayProvisioning(true)
 
 InstanceConfiguration instanceConfiguration = new InstanceConfiguration()
-instanceConfiguration.setNumExecutorsStr("4")
+instanceConfiguration.setNumExecutorsStr("1")
 instanceConfiguration.setOneShot(false)
 instanceConfiguration.setNamePrefix("builders")
 instanceConfiguration.setDescription("SCT Jenkins builders")
@@ -88,7 +88,7 @@ class GceBuilder:
 
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
-    VERSION = 'v2'
+    VERSION = 'v4'
 
     def __init__(self, region: GceRegion):
         self.region = region

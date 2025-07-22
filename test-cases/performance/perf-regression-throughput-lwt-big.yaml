@@ -43,7 +43,6 @@ stress_cmd_lwt_mixed_baseline: "cassandra-stress user profile=/tmp/cs_lwt_perf_b
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
@@ -59,3 +58,5 @@ backtrace_decoding: false
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'lwt@scylladb.com']
 email_subject_postfix: 'disk-wise(big dataset)'
+
+adaptive_timeout_store_metrics: false

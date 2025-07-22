@@ -29,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DatabaseLogEvent(LogEvent, abstract=True):
+    OVERSIZED_ALLOCATION: Type[LogEventProtocol]
     WARNING: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
     UNKNOWN_VERB: Type[LogEventProtocol]
@@ -68,7 +69,6 @@ class DatabaseLogEvent(LogEvent, abstract=True):
 MILLI_RE = re.compile(r"(\d+) ms")
 
 
-# pylint: disable=too-few-public-methods
 class ReactorStalledMixin(Generic[T_log_event]):
     tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
 
@@ -82,6 +82,9 @@ class ReactorStalledMixin(Generic[T_log_event]):
         return super().add_info(node=node, line=line, line_number=line_number)
 
 
+# cause this is warning level, it's need to be before WARNING being suppressed
+DatabaseLogEvent.add_subevent_type("OVERSIZED_ALLOCATION", severity=Severity.ERROR,
+                                   regex="seastar_memory - oversized allocation:")
 DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.SUPPRESS,
                                    regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
@@ -173,6 +176,7 @@ DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
                                    regex="^(?!.*audit:).*backtrace")
 SYSTEM_ERROR_EVENTS = (
+    DatabaseLogEvent.OVERSIZED_ALLOCATION(),
     DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
     DatabaseLogEvent.UNKNOWN_VERB(),
@@ -421,7 +425,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
     save_to_files = False
     continuous_hash_fields = ('node', 'shard', 'table', 'compaction_process_id')
 
-    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
+    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,
                  severity=Severity.NORMAL, **__):
         self.table = table
         self.compaction_process_id = compaction_process_id

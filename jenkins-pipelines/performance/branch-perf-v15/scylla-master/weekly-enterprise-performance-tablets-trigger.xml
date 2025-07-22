@@ -40,7 +40,7 @@ provision_type=on_demand</properties>
               <properties>scylla_version=2024.1
 aws_region=us-east-1
 region=us-east-1
-new_scylla_repo=https://downloads.scylladb.com/unstable/scylla-enterprise/enterprise/deb/unified/latest/scylladb-enterprise/scylla.list
+new_scylla_repo=https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>

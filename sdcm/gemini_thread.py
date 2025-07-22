@@ -25,11 +25,12 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.reporting.tooling_reporter import GeminiVersionReporter
 
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult:  # pylint: disable=too-few-public-methods
+class NotGeminiErrorResult:
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -59,10 +60,10 @@ class GeminiEventsPublisher(FileFollowerThread):
                     break
 
 
-class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class GeminiStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):  # pylint: disable=too-many-arguments
+    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -70,12 +71,12 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.unique_id = uuid.uuid4()
         self.gemini_default_flags = {
             "level": "info",
-            "request-timeout": "60s",
+            "request-timeout": "3s",
             "connect-timeout": "60s",
             "consistency": "QUORUM",
-            "async-objects-stabilization-backoff": "1s",
+            "async-objects-stabilization-backoff": "10ms",
             "async-objects-stabilization-attempts": 10,
-            "max-mutation-retries-backoff": "1s",
+            "max-mutation-retries-backoff": "10ms",
             "max-mutation-retries": 10,
             "dataset-size": "large",
             "oracle-host-selection-policy": "token-aware",
@@ -94,10 +95,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             "min-partition-keys": 2,
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
-            "partition-key-distribution": "normal",  # Distribution for hitting the partition
+            "partition-key-distribution": "uniform",  # Distribution for hitting the partition
             # These two are used to control the memory usage of Gemini
-            "token-range-slices": 512,  # Number of partitions
-            "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
+            "token-range-slices": 10000,  # Number of partitions
+            "partition-key-buffer-reuse-size": 128,  # Internal Channel Size per partition value generation
             "statement-log-file-compression": "zstd",
         }
 
@@ -108,11 +109,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
     def _generate_gemini_command(self):
         seed = self.params.get("gemini_seed") or random.randint(1, 100)
         table_options = self.params.get("gemini_table_options")
-        log_statements = self.params.get("gemini_log_cql_statements") or False
+        log_statements = self.params.get("gemini_log_cql_statements") or True
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
-                --non-interactive \
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
@@ -174,6 +174,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         LOGGER.debug("gemini local log: %s", log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
+        try:
+            prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
+            reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
+
         with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
             try:
                 publisher.event_id = gemini_stress_event.event_id
@@ -187,7 +194,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 )
                 # sleep to gather all latest log messages
                 time.sleep(5)
-            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error(details)
                 result = getattr(details, "result", NotGeminiErrorResult(details))
 
@@ -250,7 +257,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         try:
             results = json.loads(json_str)
 
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Invalid json document {}".format(details))
 
         return results.get("result")

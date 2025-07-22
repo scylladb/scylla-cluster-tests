@@ -14,12 +14,11 @@ stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_
             ]
 stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(select=1)' cl=SERIAL duration=3420m -mode native cql3 -rate threads=10" ]
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 3
-n_monitor_nodes: 1
 round_robin: true
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c6i.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
@@ -29,5 +28,6 @@ space_node_threshold: 64424
 
 user_prefix: 'longevity-lwt-500G-3d'
 # Set tombstone_gc to 'repair' + a propagation_delay_in_seconds of 5 minutes for the tombstone-gc-verification table:
-post_prepare_cql_cmds: "ALTER TABLE cqlstress_lwt_example.blogposts with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
-run_tombstone_gc_verification: '{"ks_cf": "cqlstress_lwt_example.blogposts", "interval": 300, "propagation_delay_in_seconds": 300}' # 'ks.cf, interval(sec), propagation_delay_in_seconds(sec)'
+# Disabled due to https://github.com/scylladb/scylladb/issues/23743
+# post_prepare_cql_cmds: "ALTER TABLE cqlstress_lwt_example.blogposts with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
+# run_tombstone_gc_verification: '{"ks_cf": "cqlstress_lwt_example.blogposts", "interval": 300, "propagation_delay_in_seconds": 300}' # 'ks.cf, interval(sec), propagation_delay_in_seconds(sec)'

@@ -10,7 +10,6 @@ stress_cmd_mv: "scylla-bench -workload=uniform -mode=write -replication-factor=2
 
 n_db_nodes: 3
 n_loaders: 2
-n_monitor_nodes: 1
 
 instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
@@ -28,3 +27,5 @@ store_perf_results: true
 use_prepared_loaders: true
 use_hdrhistogram: true
 custom_es_index: 'mv-overloading-latency-read'
+
+adaptive_timeout_store_metrics: false

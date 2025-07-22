@@ -28,7 +28,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
 
-    def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
+    def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',
                   save_stats=True, is_alternator=True):
         if not is_alternator:
             stress_cmd = stress_cmd.replace('dynamodb', 'cassandra-cql')
@@ -88,7 +88,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                         params.update({'stress_num': 1, 'round_robin': True})
 
                     for stress_cmd in prepare_write_cmd:
-                        params.update({'stress_cmd': stress_cmd.replace('dynamodb', stress_type)})
+                        params.update({
+                            'stress_cmd': stress_cmd.replace('dynamodb', stress_type),
+                            'duration': self.params.get('prepare_stress_duration'),
+                        })
 
                         # Run all stress commands
                         params.update(dict(stats_aggregate_cmds=False))
@@ -97,8 +100,13 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
                 # One stress cmd command
                 else:
-                    stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd.replace('dynamodb', stress_type), stress_num=1,
-                                                               prefix='preload-', stats_aggregate_cmds=False))
+                    stress_queue.append(self.run_stress_thread(
+                        stress_cmd=prepare_write_cmd.replace('dynamodb', stress_type),
+                        duration=self.params.get('prepare_stress_duration'),
+                        stress_num=1,
+                        prefix='preload-',
+                        stats_aggregate_cmds=False,
+                    ))
 
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)

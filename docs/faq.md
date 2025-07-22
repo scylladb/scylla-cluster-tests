@@ -134,3 +134,40 @@ hydra upload --test-id <uuid> path/to/file
 ```
 
 In case you don't want to report to Argus / Argus is missing the test run for this id you can use `--no-use-argus` to skip that part.
+
+
+## How to open a coredump from sct test run (python) ?
+
+first download the file to the SCT folder, and execute the following command:
+```bash
+./docker/env/hydra.sh 'bash -c "sudo pip install pystack; pystack core core.python3.1000.bd43fbcd0c4b44488ce7e97e25fe1a28.1804.1745768005000000"'
+```
+
+
+## How to define parameters for performance throughput test ?
+There are 3 parameters that can be defined in the yaml file to control the performance throughput test (example here: `configurations/performance/cassandra_stress_gradual_load_steps.yaml`):
+
+```
+perf_gradual_throttle_steps - Define throttle for load steps in ops per sub-test (read / write / mixed).
+                                Example: {'read': ['100000', '150000'], 'write': [200, unthrottled], 'mixed': ['300']}
+```
+```
+perf_gradual_threads - Threads amount of stress load per sub-test (read / write / mixed).
+                       For debugging, you can set a specific thread count for each step (per load).
+                       The value of perf_gradual_threads[load] must be either:
+                           - a single-element list or integer(applied to all throttle steps)
+                                Example: {'read': 100, 'write': 200, 'mixed': [200, 300]}
+
+                           - a list with the same length as perf_gradual_throttle_steps[load] (one thread count per step).
+                                Example: {'read': [100, 200], 'write': [200, 300], 'mixed': [300]}
+```
+```
+perf_gradual_throttle_duration - Define duration for each step in seconds per sub-test (read / write / mixed).
+                                    Example: {'read': '30m', 'write': None, 'mixed': '30m'}
+```
+
+Those parameters can be overridden during job triggering by setting the environment variables in `extra_environment_variables`:
+```bash
+SCT_PERF_GRADUAL_THREADS={"read": [450, 400, 450], "write": 400, "mixed": 1900}
+SCT_PERF_GRADUAL_THROTTLE_STEPS={"read": ['700000', 'unthrottled', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled']}
+```

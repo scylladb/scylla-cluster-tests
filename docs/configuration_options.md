@@ -91,7 +91,7 @@ Number list of loader nodes in multiple data centers
 
 Number list of monitor nodes in multiple data centers
 
-**default:** N/A
+**default:** 1
 
 **type:** int_or_space_separated_ints
 
@@ -139,6 +139,15 @@ scylla cloud cluster id
 **default:** N/A
 
 **type:** int
+
+
+## **cloud_cluster_name** / SCT_CLOUD_CLUSTER_NAME
+
+scylla cloud cluster name
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **cloud_prom_bearer_token** / SCT_CLOUD_PROM_BEARER_TOKEN
@@ -290,15 +299,6 @@ List of distro features relevant to SCT test. Example: 'fips'.
 Url to the repo of scylla version to install scylla from for managment tests
 
 **default:** N/A
-
-**type:** str (appendable)
-
-
-## **scylla_repo_loader** / SCT_SCYLLA_REPO_LOADER
-
-Url to the repo of scylla version to install c-s for loader
-
-**default:** https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list
 
 **type:** str (appendable)
 
@@ -568,7 +568,7 @@ A local directory of rpms to install a custom version on top of<br>the scylla in
 
 The port of scylla management
 
-**default:** branch-4.9
+**default:** branch-4.11
 
 **type:** str (appendable)
 
@@ -962,7 +962,7 @@ More arguments to append to scylla-node-exporter command line
 
 ## **nemesis_class_name** / SCT_NEMESIS_CLASS_NAME
 
-Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
+Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "ScyllaOperatorBasicOperationsMonkey:1 NonDisruptiveMonkey:2"
 
 **default:** NoOpMonkey
 
@@ -1173,7 +1173,7 @@ if true, create 'cluster' placement group for test case for low-latency network 
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** boolean
 
 
 ## **subnet_id** / SCT_SUBNET_ID
@@ -1300,15 +1300,6 @@ root disk size in Gb for sct-runner
 **default:** N/A
 
 **type:** str (appendable)
-
-
-## **spot_max_price** / SCT_SPOT_MAX_PRICE
-
-The max percentage of the on demand price we set for spot/fleet instances
-
-**default:** N/A
-
-**type:** float
 
 
 ## **extra_network_interface** / SCT_EXTRA_NETWORK_INTERFACE
@@ -2564,7 +2555,7 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 ## **perf_gradual_threads** / SCT_PERF_GRADUAL_THREADS
 
-Threads amount of c-s load for gradual performance test per sub-test. Example: {'read': 100, 'write': 200, 'mixed': 300}
+Threads amount of stress load for gradual performance test per sub-test. Example: {'read': 100, 'write': [200, 300], 'mixed': 300}
 
 **default:** N/A
 
@@ -3412,7 +3403,7 @@ Defines how many regions must be simulated on the Scylla config side. If set the
 
 Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.<br>Provide number of racks to simulate.
 
-**default:** N/A
+**default:** 3
 
 **type:** int
 
@@ -3457,7 +3448,7 @@ Run commit log check thread if commitlog_use_hard_size_limit is True
 
 Configuration for additional validations executed after the test
 
-**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}}
+**default:** {'scrub': {'enabled': False, 'timeout': 1200, 'keyspace': '', 'table': ''}, 'test_error_events': {'enabled': False, 'failing_events': [{'event_class': 'DatabaseLogEvent', 'event_type': 'RUNTIME_ERROR', 'regex': '.*runtime_error.*'}, {'event_class': 'CoreDumpEvent'}]}, 'rackaware': {'enabled': False}}
 
 **type:** dict_or_str
 
@@ -3469,6 +3460,33 @@ reserves instances capacity for whole duration of the test run (AWS only).<br>Fa
 **default:** N/A
 
 **type:** boolean
+
+
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+**type:** str_or_list_or_eval (appendable)
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **bisect_start_date** / SCT_BISECT_START_DATE
@@ -3577,3 +3595,12 @@ Workload name, can be: write|read|mixed|unset.Used for e.g. latency_calculator_d
 **default:** N/A
 
 **type:** str (appendable)
+
+
+## **adaptive_timeout_store_metrics** / SCT_ADAPTIVE_TIMEOUT_STORE_METRICS
+
+Store adaptive timeout metrics in Argus. Disabled for performance tests only.
+
+**default:** True
+
+**type:** boolean

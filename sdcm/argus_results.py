@@ -17,7 +17,8 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule, \
+    StaticGenericResultTable
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
@@ -37,7 +38,7 @@ LATENCY_ERROR_THRESHOLDS = {
 }
 
 
-class LatencyCalculatorMixedResult(GenericResultTable):
+class LatencyCalculatorMixedResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -56,7 +57,7 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorWriteResult(GenericResultTable):
+class LatencyCalculatorWriteResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -72,7 +73,7 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         ]
 
 
-class LatencyCalculatorReadResult(GenericResultTable):
+class LatencyCalculatorReadResult(StaticGenericResultTable):
     class Meta:
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
@@ -88,7 +89,7 @@ class LatencyCalculatorReadResult(GenericResultTable):
         ]
 
 
-class ReactorStallStatsResult(GenericResultTable):
+class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
         description = ""
@@ -101,7 +102,7 @@ class ReactorStallStatsResult(GenericResultTable):
         ]
 
 
-class ManagerRestoreBanchmarkResult(GenericResultTable):
+class ManagerRestoreBanchmarkResult(StaticGenericResultTable):
     class Meta:
         name = "Restore benchmark"
         description = "Restore benchmark"
@@ -121,7 +122,7 @@ class ManagerRestoreBanchmarkResult(GenericResultTable):
         }
 
 
-class ManagerBackupBenchmarkResult(GenericResultTable):
+class ManagerBackupBenchmarkResult(StaticGenericResultTable):
     class Meta:
         name = "Backup benchmark"
         description = "Backup benchmark"
@@ -130,7 +131,7 @@ class ManagerBackupBenchmarkResult(GenericResultTable):
         ]
 
 
-class ManagerBackupReadResult(GenericResultTable):
+class ManagerBackupReadResult(StaticGenericResultTable):
     class Meta:
         name = "Read timing"
         description = "Read timing"
@@ -139,18 +140,79 @@ class ManagerBackupReadResult(GenericResultTable):
         ]
 
 
-class ManagerSnapshotDetails(GenericResultTable):
+class ManagerSnapshotDetails(StaticGenericResultTable):
     class Meta:
         name = "Snapshot details"
         description = "Manager snapshots (pre-created for next utilization in restore tests) details"
         Columns = [
             ColumnMetadata(name="tag", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER),
-            ColumnMetadata(name="bucket", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="locations", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="ks_name", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="scylla_version", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ear_key_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="manager_cluster_id", unit="", type=ResultType.TEXT),
         ]
+
+
+class PerfSimpleQueryResult(StaticGenericResultTable):
+    def __init__(self, workload: str, parameters: dict):
+        super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
+
+    class Meta:
+        Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="instructions_per_op", unit="",
+                                  type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                   ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                   ]
+
+        ValidationRules = dict()
+
+
+class IOPropertiesResultsTable(StaticGenericResultTable):
+    def __init__(self, cluster_backend: str, instance_type: str):
+        super().__init__(name=f"{cluster_backend} - {instance_type} - Disk Performance")
+
+    class Meta:
+        description = "io_properties.yaml generated from live measured disk"
+        Columns = [
+            ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
+        ]
+
+
+class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
+    def __init__(self, cluster_backend: str, instance_type: str):
+        super().__init__(name=f"{cluster_backend} - {instance_type} - Disk Performance Percent deviation")
+
+    class Meta:
+        description = "io_properties.yaml percent deviation from pre-configured disk"
+        Columns = [
+            ColumnMetadata(name="read_iops_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="write_iops_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
+                           type=ResultType.INTEGER, higher_is_better=False),
+        ]
+
+        ValidationRules = {
+            "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
+            "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+            "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
+            "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
+        }
 
 
 workload_to_table = {
@@ -171,51 +233,101 @@ def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResu
             raise
 
 
-def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
-                         start_time: float = 0, error_thresholds: dict = None):
-    result_table = workload_to_table[workload]()
+def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str,  # noqa: PLR0914
+                         cycle: int, result: dict, start_time: float = 0, error_thresholds: dict = None):
+    """Sends results to Argus service.
+
+    This function creates following data tables in Argus:
+    - Stress commands latency results table is registered always
+      and it stores parsed values taken from the HDR histograms.
+    - Summary table for above results is registered
+      when "result['hdr_summary']" has more than 2 rows with unique HDR tags.
+      It is useful for cases when we run multiple stress commands of different types in parallel
+      like customer-scenarios covered by latte stress commands.
+      It stores the worst P90 and P99 latencies among all of the rows/results
+      and summary throughput for all of them even if workload types are different.
+    - Reactor stalls table is registered
+      when relevant SCT events occured (result['reactor_stalls_stats'])
+      during the measured time range.
+    """
+    result_table, result_table_summary = workload_to_table[workload](), workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
+    result_table_summary.name = f"{workload} - {name} - Summary latencies"
+    result_table_summary.description = f"{workload} workload summary - {description}"
     if error_thresholds:
         error_thresholds = error_thresholds[workload]["default"] | error_thresholds[workload].get(name, {})
         result_table.validation_rules = {metric: ValidationRule(**rules) for metric, rules in error_thresholds.items()}
+        result_table_summary.validation_rules = result_table.validation_rules
     try:
         start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime('%H:%M:%S')
     except ValueError:
         start_time = "N/A"
-    for operation in ["write", "read"]:
-        summary = result["hdr_summary"]
-        if operation.upper() not in summary:
-            continue
-        for percentile in ["90", "99"]:
-            value = summary[operation.upper()][f"percentile_{percentile}"]
-            result_table.add_result(column=f"P{percentile} {operation}",
-                                    row=f"Cycle #{cycle}",
-                                    value=value,
-                                    status=Status.UNSET)
-        if value := summary[operation.upper()].get("throughput", None):
-            result_table.add_result(column=f"Throughput {operation.lower()}",
-                                    row=f"Cycle #{cycle}",
-                                    value=value,
-                                    status=Status.UNSET)
 
-    result_table.add_result(column="duration", row=f"Cycle #{cycle}",
-                            value=result["duration_in_sec"], status=Status.UNSET)
-    try:
-        overview_screenshot = [screenshot for screenshot in result["screenshots"] if "overview" in screenshot][0]
-        result_table.add_result(column="Overview", row=f"Cycle #{cycle}",
-                                value=overview_screenshot, status=Status.UNSET)
-    except IndexError:
-        pass
-    try:
-        qa_screenshot = [screenshot for screenshot in result["screenshots"]
-                         if "scylla-per-server-metrics-nemesis" in screenshot][0]
-        result_table.add_result(column="QA dashboard", row=f"Cycle #{cycle}",
-                                value=qa_screenshot, status=Status.UNSET)
-    except IndexError:
-        pass
-    result_table.add_result(column="start time", row=f"Cycle #{cycle}",
-                            value=start_time, status=Status.UNSET)
+    summary_throughput, summary_worst_lat = 0, {}
+    summary_row_name = f"Cycle #{cycle} (Summary of all HDR tags)"
+    overview_screenshot = [s for s in result["screenshots"] if "overview" in s]
+    qa_screenshot = [s for s in result["screenshots"] if "scylla-per-server-metrics-nemesis" in s]
+    hdr_summary = result.get("hdr_summary", {})
+    hdr_summary_len = len(hdr_summary)
+    skip_hdr_tag = hdr_summary_len == 1 or (workload == "mixed" and hdr_summary_len == 2)
+    for i, (workload_type_and_hdr_tag, hdr_data) in enumerate(hdr_summary.items()):
+        (workload_type, hdr_tag) = workload_type_and_hdr_tag.split("--", maxsplit=1)
+        row_name = f"Cycle #{cycle}" + "" if skip_hdr_tag else f" (HDR tag: {hdr_tag})"
+        for percentile in ("90", "99"):
+            if (workload_type, percentile) not in summary_worst_lat:
+                summary_worst_lat[(workload_type, percentile)] = 0.0
+            column_name = f"P{percentile} {workload_type.lower()}"
+            value = hdr_data[f"percentile_{percentile}"]
+            result_table.add_result(
+                column=column_name,
+                row=row_name,
+                value=value,
+                status=Status.UNSET,
+            )
+            if summary_worst_lat[(workload_type, percentile)] < value:
+                summary_worst_lat[(workload_type, percentile)] = value
+                result_table_summary.add_result(
+                    column=column_name,
+                    row=summary_row_name,
+                    value=value,
+                    status=Status.UNSET,
+                )
+        if value := hdr_data.get("throughput", None):
+            summary_throughput += value
+            result_table.add_result(
+                column=f"Throughput {workload_type.lower()}",
+                row=row_name,
+                value=value,
+                status=Status.UNSET,
+            )
+        if (i > 0 and skip_hdr_tag) or not skip_hdr_tag:
+            continue
+        result_table.add_result(column="duration", row=row_name, value=result["duration_in_sec"], status=Status.UNSET)
+        result_table.add_result(column="start time", row=row_name, value=start_time, status=Status.UNSET)
+        if overview_screenshot:
+            result_table.add_result(column="Overview", row=row_name, value=overview_screenshot[0], status=Status.UNSET)
+        if qa_screenshot:
+            result_table.add_result(column="QA dashboard", row=row_name, value=qa_screenshot[0], status=Status.UNSET)
+
+    if hdr_summary_len > 2:
+        result_table_summary.add_result(
+            column=f"Throughput {workload_type.lower()}",
+            row=summary_row_name,
+            value=summary_throughput,
+            status=Status.UNSET,
+        )
+        result_table_summary.add_result(
+            column="duration", row=summary_row_name, value=result["duration_in_sec"], status=Status.UNSET)
+        result_table_summary.add_result(
+            column="start time", row=summary_row_name, value=start_time, status=Status.UNSET)
+        if overview_screenshot:
+            result_table_summary.add_result(
+                column="Overview", row=summary_row_name, value=overview_screenshot[0], status=Status.UNSET)
+        if qa_screenshot:
+            result_table_summary.add_result(
+                column="QA dashboard", row=summary_row_name, value=qa_screenshot[0], status=Status.UNSET)
+        submit_results_to_argus(argus_client, result_table_summary)
     submit_results_to_argus(argus_client, result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
@@ -231,33 +343,23 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         submit_results_to_argus(argus_client, result_table)
 
 
-def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict):
+def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict, error_thresholds: dict):
+    def set_validation_rules(column_metadata):
+        if column_threshold := error_thresholds.get(workload, {}).get(column_metadata, {}):
+            LOGGER.debug("%s_threshold result: %s", column_metadata, column_threshold)
+            return ValidationRule(**column_threshold)
+        else:
+            return ValidationRule(best_pct=5)
+
     stats = result["stats"]
     workload = result["test_properties"]["type"]
-    parameters = result["parameters"]
+    validation_rules = dict()
+    validation_rules["instructions_per_op"] = set_validation_rules("instructions_per_op")
+    validation_rules["allocs_per_op"] = set_validation_rules("allocs_per_op")
 
-    class PerfSimpleQueryResult(GenericResultTable):
-        class Meta:
-            name = f"{workload} - Perf Simple Query"
-            description = json.dumps(parameters)
-            Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="instructions_per_op", unit="",
-                                      type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                       ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                       ]
-
-            ValidationRules = {
-                "allocs_per_op": ValidationRule(best_pct=5),
-                "instructions_per_op": ValidationRule(best_pct=5),
-            }
-
-    result_table = PerfSimpleQueryResult()
+    result_table = PerfSimpleQueryResult(workload=workload, parameters=result["parameters"])
+    result_table.validation_rules = validation_rules
+    LOGGER.debug("result_table.validation_rules result: %s", result_table.validation_rules)
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
@@ -291,46 +393,15 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         LOGGER.warning("No test exists for this run, skipping submitting results")
         return
 
-    class IOPropertiesResultsTable(GenericResultTable):
-        class Meta:
-            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance"
-            description = "io_properties.yaml generated from live measured disk"
-            Columns = [
-                ColumnMetadata(name="read_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="read_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="write_iops", unit="iops", type=ResultType.INTEGER, higher_is_better=True),
-                ColumnMetadata(name="write_bandwidth", unit="bps", type=ResultType.INTEGER, higher_is_better=True),
-            ]
-
-    class IOPropertiesDeviationResultsTable(GenericResultTable):
-        class Meta:
-            name = f"{params.get('cluster_backend')} - {node.db_node_instance_type} - Disk Performance Percent deviation"
-            description = "io_properties.yaml percent deviation from pre-configured disk"
-            Columns = [
-                ColumnMetadata(name="read_iops_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="write_iops_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-                ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
-                               type=ResultType.INTEGER, higher_is_better=False),
-            ]
-
-            ValidationRules = {
-                "read_iops_pct_deviation": ValidationRule(fixed_limit=15),
-                "read_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-                "write_iops_pct_deviation": ValidationRule(fixed_limit=15),
-                "write_bandwidth_pct_deviation": ValidationRule(fixed_limit=15),
-            }
-
-    table = IOPropertiesResultsTable()
+    table = IOPropertiesResultsTable(cluster_backend=params.get('cluster_backend'),
+                                     instance_type=node.db_node_instance_type)
     for key, value in results["active"].items():
         table.add_result(column=key, row="measured", value=value, status=Status.UNSET)
         table.add_result(column=key, row="pre-configured", value=results["preset"][key], status=Status.UNSET)
     submit_results_to_argus(argus_client, table)
 
-    table = IOPropertiesDeviationResultsTable()
+    table = IOPropertiesDeviationResultsTable(cluster_backend=params.get('cluster_backend'),
+                                              instance_type=node.db_node_instance_type)
     for key, value in results["deviation_pct"].items():
         table.add_result(column=f"{key}_pct_deviation", row="deviation_percent",
                          value=value, status=Status.PASS if value < 15 else Status.WARNING)

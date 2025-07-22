@@ -56,7 +56,7 @@ class AuditLogTestFailure(Exception):
     """
 
 
-class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
+class BootstrapStreamErrorFailure(Exception):
     """ raised if node was not boostrapped after bootstrap
     streaming was aborted """
 
@@ -95,3 +95,13 @@ class NemesisStressFailure(Exception):
 
 class BannedQueryExecUnexpectedSuccess(Exception):
     """Exception when query executed successfully on banned node"""
+
+
+class Group0LimitedVotersFeatureNotEnableOnNodes(Exception):
+    """Raise if feature group0_limited_voters is enabled on nodes"""
+
+
+class TestFailedByEvents(Exception):
+    """
+    Exception raised when a test fails due to events.
+    """

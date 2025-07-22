@@ -13,7 +13,7 @@
 
 import enum
 import logging
-from sdcm.utils.decorators import static_init  # pylint: disable=unused-import
+from sdcm.utils.decorators import static_init
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class DistroBase(enum.Enum):
 # (enum_prefix, os name, versions list (format is either "major.minor" or "major"), boolean - debian_like == True else rhel_like)
 KNOWN_OS = (
     ("CENTOS", "centos", ["7", "8", "9"], DistroBase.RHEL),
-    ("RHEL", "rhel", ["7", "8", "9"], DistroBase.RHEL),
+    ("RHEL", "rhel", ["7", "8", "9", "10"], DistroBase.RHEL),
     ("OEL", "ol", ["7", "8", "9"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2023"], DistroBase.RHEL),
     ("ROCKY", "rocky", ["8", "9"], DistroBase.RHEL),
@@ -41,7 +41,7 @@ KNOWN_OS = (
     ("UBUNTU", "ubuntu", ["20.04", "21.04", "21.10", "22.04", "24.04"], DistroBase.DEBIAN),
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
     ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
-    ("MINT", "linuxmint", ["20", "21"], DistroBase.DEBIAN),
+    ("MINT", "linuxmint", ["20", "21", "22"], DistroBase.DEBIAN),
 
 )
 

@@ -59,7 +59,7 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.labels,  // labels
   "/tmp/jenkins/", // fs root
   new SSHConnector(22,
-                   "user-jenkins_scylla_test_id_ed25519.pem", "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", "", "", "", null, 0, 0,
+                   "user-jenkins_scylla_test_id_ed25519.pem", "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", "", "", "", null, null, null,
                    new NonVerifyingKeyVerificationStrategy()),
   false, // privateIpUsed
   true, // alwaysReconnect
@@ -96,7 +96,7 @@ jenkins.save()
 
 class AwsBuilder:
     NUM_CPUS = 2
-    NUM_EXECUTORS = 4
+    NUM_EXECUTORS = 1
     VERSION = 'v3'
 
     def __init__(self, region: AwsRegion, params=None, number=1):
@@ -207,59 +207,34 @@ class AwsBuilder:
         try:
             asg_client = boto3.client('autoscaling', region_name=self.region.region_name)
             subnet_ids = [self.region.sct_subnet(region_az=az).subnet_id for az in self.region.availability_zones]
-            asg_client.create_auto_scaling_group(AutoScalingGroupName=self.name, MinSize=0, MaxSize=200,
-                                                 AvailabilityZones=self.region.availability_zones,
-                                                 VPCZoneIdentifier=",".join(subnet_ids),
-                                                 MixedInstancesPolicy={
-                                                     "LaunchTemplate": {
-                                                         "LaunchTemplateSpecification": {
-                                                             "LaunchTemplateName": self.launch_template_name,
-                                                             "Version": "$Latest"
-                                                         },
-                                                         "Overrides": [
-                                                             {
-                                                                 "InstanceRequirements": {
-                                                                     "VCpuCount": {
-                                                                         "Min": self.NUM_CPUS,
-                                                                         "Max": self.NUM_CPUS
-                                                                     },
-                                                                     "MemoryMiB": {
-                                                                         "Min": 4096,
-                                                                         "Max": 8192
-                                                                     },
-                                                                 }
-                                                             }
-                                                         ]
-                                                     },
-                                                     "InstancesDistribution": {
-                                                         "OnDemandAllocationStrategy": "lowest-price",
-                                                         "OnDemandBaseCapacity": 0,
-                                                         "OnDemandPercentageAboveBaseCapacity": 100,
-                                                         "SpotAllocationStrategy": "price-capacity-optimized"
-                                                     },
-                                                 },
-                                                 Tags=[
-                                                     {
-                                                         "Key": "Name",
-                                                         "Value": "sct-jenkins-builder-asg",
-                                                         "PropagateAtLaunch": True
-                                                     },
-                                                     {
-                                                         "Key": "NodeType",
-                                                         "Value": "builder",
-                                                         "PropagateAtLaunch": True
-                                                     },
-                                                     {
-                                                         "Key": "keep",
-                                                         "Value": "alive",
-                                                         "PropagateAtLaunch": True
-                                                     },
-                                                     {
-                                                         "Key": "keep_action",
-                                                         "Value": "terminate",
-                                                         "PropagateAtLaunch": True
-                                                     }]
-                                                 )
+            asg_client.create_auto_scaling_group(
+                AutoScalingGroupName=self.name,
+                MinSize=0,
+                MaxSize=200,
+                AvailabilityZones=self.region.availability_zones,
+                VPCZoneIdentifier=",".join(subnet_ids),
+                MixedInstancesPolicy={
+                    "LaunchTemplate": {
+                        "LaunchTemplateSpecification": {"LaunchTemplateName": self.launch_template_name, "Version": "$Latest"},
+                        "Overrides": [
+                            {
+                                "InstanceRequirements": {
+                                    "VCpuCount": {"Min": self.NUM_CPUS, "Max": self.NUM_CPUS},
+                                    "MemoryMiB": {"Min": 4096, "Max": 8192},
+                                }
+                            }
+                        ],
+                    },
+                    "InstancesDistribution": {"OnDemandAllocationStrategy": "lowest-price", "OnDemandBaseCapacity": 0, "OnDemandPercentageAboveBaseCapacity": 100, "SpotAllocationStrategy": "price-capacity-optimized"},
+                },
+                Tags=[
+                    {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
+                    {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
+                    {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
+                    {"Key": "keep", "Value": "alive", "PropagateAtLaunch": True},
+                    {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
+                ],
+            )
 
         except botocore.exceptions.ClientError as error:
             LOGGER.debug(error.response)

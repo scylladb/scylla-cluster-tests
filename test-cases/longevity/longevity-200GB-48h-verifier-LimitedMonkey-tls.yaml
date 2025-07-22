@@ -10,11 +10,10 @@ stress_cmd:
   - "cassandra-stress read cl=ONE duration=2860m -schema 'keyspace=lowload1 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1  -col 'size=FIXED(50) n=FIXED(1)' -pop seq=1..500 -log interval=5"
 run_fullscan:
   - '{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}'
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
-n_monitor_nodes: 1
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 azure_instance_type_db: 'Standard_L16s_v3'
 gce_instance_type_db: 'n2-highmem-16'
 

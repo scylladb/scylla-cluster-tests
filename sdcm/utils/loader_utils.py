@@ -166,7 +166,7 @@ class LoaderUtilsMixin:
         duration_per_cs_profile = None if len(user_profiles_def) == 1 else list(user_profiles_def[1])
         return user_profiles, duration_per_cs_profile
 
-    def run_cs_user_profiles(self, cs_profiles: str | int | list, duration_per_cs_profile: str | list = None, stress_queue: list = None):  # pylint: disable=too-many-locals
+    def run_cs_user_profiles(self, cs_profiles: str | int | list, duration_per_cs_profile: str | list = None, stress_queue: list = None):
         """
          :param duration_per_cs_profile: if duration of cassandra-stress command is parameterized, it is expected to get needed value for
                                          duration
@@ -227,7 +227,6 @@ class LoaderUtilsMixin:
             cmds = [cmds]
 
         for cmd in cmds:
-            # pylint: disable=no-member
             with self.db_cluster.cql_connection_patient(node) as session:
                 session.execute(cmd)
 
@@ -260,14 +259,26 @@ class LoaderUtilsMixin:
                     self.log.debug("Using round_robin for multiple Keyspaces...")
                     for i in range(1, keyspace_num + 1):
                         keyspace_name = self._get_keyspace_name(i)
-                        self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                                       'keyspace_name': keyspace_name,
-                                                                       'round_robin': True})
+                        self._run_all_stress_cmds(
+                            write_queue,
+                            params={
+                                'stress_cmd': prepare_write_cmd,
+                                'duration': self.params.get('prepare_stress_duration'),
+                                'keyspace_name': keyspace_name,
+                                'round_robin': True,
+                            },
+                        )
                 # Not using round_robin and all keyspaces will run on all loaders
                 else:
-                    self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                                   'keyspace_num': keyspace_num,
-                                                                   'round_robin': self.params.get('round_robin')})
+                    self._run_all_stress_cmds(
+                        write_queue,
+                        params={
+                            'stress_cmd': prepare_write_cmd,
+                            'duration': self.params.get('prepare_stress_duration'),
+                            'keyspace_num': keyspace_num,
+                            'round_robin': self.params.get('round_robin'),
+                        },
+                    )
 
             if prepare_cs_user_profiles:
                 self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)

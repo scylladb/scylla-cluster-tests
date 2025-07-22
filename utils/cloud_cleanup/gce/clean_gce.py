@@ -59,7 +59,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                         res.done()
                         LOGGER.info("%s terminated", instance.name)
                         update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'terminate')
-                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while terminating instance %s: %s", instance.name, exc)
                 else:
                     LOGGER.info("dry run: would terminate instance %s, creation time: %s",
@@ -75,7 +75,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                         res.done()
                         LOGGER.info("%s stopped", instance.name)
                         update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'stop')
-                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while stopping instance %s: %s", instance.name, exc)
                 else:
                     LOGGER.info("dry run: would stop instance %s, creation time: %s", instance.name, vm_creation_time)
@@ -85,14 +85,15 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('gce_cleanup')
     arg_parser.add_argument("--duration", type=int,
                             help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
+                            default=os.environ.get('DURATION', str(DEFAULT_KEEP_HOURS)))
     arg_parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction,
                             help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN', False))
+                            default=os.environ.get('DRY_RUN'))
 
     args = arg_parser.parse_args()
 
     is_dry_run = bool(args.dry_run)
+    DEFAULT_KEEP_HOURS = int(args.duration)
 
     if is_dry_run:
         LOGGER.error("'Dry run' mode on")

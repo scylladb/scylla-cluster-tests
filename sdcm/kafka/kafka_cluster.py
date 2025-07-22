@@ -89,11 +89,11 @@ class LocalKafkaCluster(cluster.BaseCluster):
         if connector_url.startswith("http"):
             if connector_url.endswith('.jar'):
                 self.remoter.run(
-                    f'curl -L --create-dirs -O --output-dir {self.docker_compose_path / "connectors"} {connector_url} '
+                    f'curl --show-error --fail -L --create-dirs -O --output-dir {self.docker_compose_path / "connectors"} {connector_url} '
                 )
             if connector_url.endswith('.zip'):
                 self.remoter.run(
-                    f'curl -L -o /tmp/connector.zip {connector_url} && '
+                    f'curl --show-error --fail -L -o /tmp/connector.zip {connector_url} && '
                     f'unzip -o /tmp/connector.zip -d {self.docker_compose_path / "connectors"} && rm /tmp/connector.zip'
                 )
         if connector_url.startswith("file://"):
@@ -173,5 +173,5 @@ class LocalKafkaCluster(cluster.BaseCluster):
         rack=0,
         enable_auto_bootstrap=False,
         instance_type=None,
-    ):  # pylint: disable=too-many-arguments
+    ):
         raise NotImplementedError

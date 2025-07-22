@@ -33,7 +33,6 @@ from sdcm.sct_events.events_processes import \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
     EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
 from sdcm.utils.issues import SkipPerIssues
-from sdcm.sct_events.group_common_events import ignore_topology_change_coordinator_errors
 
 
 EVENTS_DEVICE_START_DELAY = 1  # seconds
@@ -80,14 +79,14 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
         if (proc := get_events_process(name, _registry=_registry)) and proc.is_alive():
             LOGGER.debug("Signaling %s to terminate and wait for finish...", name)
             proc.stop(timeout=EVENTS_PROCESS_STOP_TIMEOUT)
-            events_stat[f"{proc._registry}[{name}]"] = proc.events_counter  # pylint: disable=protected-access
+            events_stat[f"{proc._registry}[{name}]"] = proc.events_counter
     LOGGER.debug("All events consumers stopped.")
 
     if events_stat:
         LOGGER.info("Statistics of sent/received events (by device): %s", json.dumps(events_stat, indent=4))
 
 
-def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unused-argument
+def enable_default_filters(sct_config: SCTConfiguration):
 
     # Default filters.
     if SkipPerIssues('scylladb/scylla-enterprise#1272', params=sct_config):
@@ -154,7 +153,10 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
     # upgrades and any place where the race between raft global barrier and gossipier could
     # take place. So ignore such messages globally for any sct test.
     # TODO: this should be removed after gossiper will be removed.
-    ignore_topology_change_coordinator_errors().__enter__()
+    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                   line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
+                        r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_error"
+                        r" \(connection is closed\)\)").publish()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")

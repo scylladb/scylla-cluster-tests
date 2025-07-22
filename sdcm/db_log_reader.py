@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
 
 import json
 import logging
@@ -37,7 +36,7 @@ LOG_LINE_MAX_PROCESSING_SIZE = 1024 * 5
 
 
 class DbLogReader(Process):
-    # pylint: disable=too-many-instance-attributes
+
     EXCLUDE_FROM_LOGGING = [
         ' | sshd[',
         ' | systemd:',
@@ -54,7 +53,7 @@ class DbLogReader(Process):
         '] stream_session - [Stream ',
         '] storage_proxy - Exception when communicating with',
     ]
-    # pylint: disable=too-many-arguments
+
     BUILD_ID_REGEX = re.compile(r'build-id\s(.*?)\sstarting\s\.\.\.')
 
     def __init__(self,
@@ -87,8 +86,6 @@ class DbLogReader(Process):
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
 
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-
         backtraces = []
         index = 0
 
@@ -114,7 +111,7 @@ class DbLogReader(Process):
                     if line[0] == '{':
                         try:
                             json_log = json.loads(line)
-                        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                        except Exception:  # noqa: BLE001
                             pass
 
                     if self._log_lines:
@@ -132,25 +129,25 @@ class DbLogReader(Process):
                         self._build_id = match.groups()[0]
                         LOGGER.debug("Found build-id: %s", self._build_id)
 
-                    match = BACKTRACE_RE.search(line)
                     one_line_backtrace = []
-                    if match and backtraces:
-                        data = match.groupdict()
-                        if data['other_bt']:
-                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                        if data['scylla_bt']:
-                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
-                    elif "backtrace:" in line.lower() and "0x" in line:
+                    if ("backtrace:" in line.lower() or "report: at" in line.lower()) and "0x" in line:
                         # This part handles the backtrases are printed in one line.
                         # Example:
                         # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
                         # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
                         # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
                         # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
-                        splitted_line = re.split("backtrace:", line, flags=re.IGNORECASE)
+                        splitted_line = re.split("backtrace:|report: at", line, flags=re.IGNORECASE)
                         for trace_line in splitted_line[1].split():
                             if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
                                 one_line_backtrace.append(trace_line)
+
+                    elif (match := BACKTRACE_RE.search(line)) and backtraces:
+                        data = match.groupdict()
+                        if data['other_bt']:
+                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
+                        if data['scylla_bt']:
+                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
 
                     # for each line, if it matches a continuous event pattern,
                     # call the appropriate function with the class tied to that pattern
@@ -175,7 +172,7 @@ class DbLogReader(Process):
 
                     if one_line_backtrace and backtraces:
                         backtraces[-1]['backtrace'] = one_line_backtrace
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
                                      index, self._system_log, line)
 
@@ -186,7 +183,7 @@ class DbLogReader(Process):
         traces_count = 0
         for backtrace in backtraces:
             backtrace['event'].raw_backtrace = "\n".join(backtrace['backtrace'])
-            if backtrace['event'].type == 'BACKTRACE':
+            if backtrace['backtrace']:
                 traces_count += 1
 
         # support interlaced reactor stalled
@@ -199,14 +196,12 @@ class DbLogReader(Process):
                 backtrace["event"].publish()
                 continue
             try:
-                scylla_debug_info = self.get_scylla_debuginfo_file()
-                LOGGER.debug("Debug info file %s", scylla_debug_info)
                 self._decoding_queue.put({
                     "node": self._node_name,
-                    "debug_file": scylla_debug_info,
+                    "build_id": self._build_id,
                     "event": backtrace["event"],
                 })
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 backtrace["event"].publish()
                 raise
 
@@ -224,7 +219,7 @@ class DbLogReader(Process):
                 self._read_and_publish_events()
             except (SystemExit, KeyboardInterrupt) as ex:
                 LOGGER.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 LOGGER.exception("failed to read db log")
 
     def filter_backtraces(self, backtrace):
@@ -245,33 +240,6 @@ class DbLogReader(Process):
 
     def get_scylla_build_id(self) -> str | None:
         return self._build_id
-
-    def get_scylla_debuginfo_file(self):
-        """
-        Lookup the scylla debug information, in various places it can be.
-
-        :return the path to the scylla debug information
-        :rtype str
-        """
-        # first try default location
-        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
-        results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-        if results.ok:
-            return scylla_debug_info
-
-        # then try the relocatable location
-        results = self._remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug', ignore_status=True)
-        if results.stdout.strip():
-            return results.stdout.strip()
-
-        # then look it up base on the build id
-        if build_id := self.get_scylla_build_id():
-            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-            results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-            if results.ok:
-                return scylla_debug_info
-
-        raise Exception("Couldn't find scylla debug information")
 
     def stop(self):
         self._terminate_event.set()

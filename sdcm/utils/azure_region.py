@@ -27,7 +27,7 @@ from azure.mgmt.compute.models import TargetRegion
 from sdcm.utils.azure_utils import AzureService
 
 if TYPE_CHECKING:
-    # pylint: disable=ungrouped-imports
+
     from typing import Optional
 
     from azure.mgmt.compute.models import Gallery, GalleryImageVersion, VirtualMachine
@@ -80,7 +80,7 @@ def region_name_to_location(region_name: str) -> str:
 # [3] https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-subnet
 # [4] https://docs.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview#network-security-groups
 # [5] https://docs.microsoft.com/en-us/azure/virtual-machines/shared-image-galleries
-class AzureRegion:  # pylint: disable=too-many-public-methods
+class AzureRegion:
     SCT_GALLERY_REGION = "eastus"
     SCT_RESOURCE_GROUP_NAME_PREFIX = "SCT_IMAGES"
 
@@ -94,7 +94,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
         self.region_name = region_name
 
     @cached_property
-    def azure_service(self) -> AzureService:  # pylint: disable=no-self-use; pylint doesn't now about cached_property
+    def azure_service(self) -> AzureService:
         return AzureService()
 
     @cached_property
@@ -126,7 +126,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
         return f"{self.sct_resource_group_name}-{self.VIRTUAL_NETWORK_NAME_SUFFIX}"
 
     @cached_property
-    def sct_subnet_name(self) -> str:  # pylint: disable=no-self-use; pylint doesn't now about cached_property
+    def sct_subnet_name(self) -> str:
         return "default"
 
     def common_parameters(self, location: Optional[str] = None, tags: Optional[dict] = None) -> dict:
@@ -289,7 +289,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             parameters=parameters,
         ).result()
 
-    def create_virtual_machine(self,  # pylint: disable=too-many-arguments
+    def create_virtual_machine(self,
                                vm_name: str,
                                vm_size: str,
                                image: dict[str, str],
@@ -415,7 +415,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             gallery_image_version=self.common_parameters(location=self.sct_gallery_location, tags=tags) | {
                 "storage_profile": {
                     "source": {
-                        "id": source_id,
+                        "virtual_machine_id": source_id
                     },
                 },
             },

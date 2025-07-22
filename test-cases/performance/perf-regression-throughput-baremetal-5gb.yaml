@@ -25,7 +25,6 @@ s3_baremetal_config: baremetal_config_example
 
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 1
 
 db_nodes_public_ip: []
 db_nodes_private_ip: []
@@ -51,3 +50,5 @@ email_subject_postfix: 'disk and cache'
 custom_es_index: 'performancestatsv2'
 
 use_hdrhistogram: true
+
+adaptive_timeout_store_metrics: false

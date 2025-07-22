@@ -3053,7 +3053,7 @@ class FillDatabaseData(ClusterTester):
 
     @staticmethod
     def cql_truncate_simple_tables(session, rows):
-        truncate_query = 'TRUNCATE TABLE truncate_table%d'
+        truncate_query = 'TRUNCATE TABLE truncate_table%d USING TIMEOUT 300s'
         for i in range(rows):
             session.execute(truncate_query % i)
 
@@ -3202,7 +3202,9 @@ class FillDatabaseData(ClusterTester):
         return is_tablets_feature_enabled(self.db_cluster.nodes[0])
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
-    def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
+    def truncate_table(self, session, truncate):   # pylint: disable=no-self-use
+        if "using timeout" not in truncate.lower():
+            truncate = f"{truncate} USING TIMEOUT 300s"
         LOGGER.debug(truncate)
         session.execute(truncate)
 

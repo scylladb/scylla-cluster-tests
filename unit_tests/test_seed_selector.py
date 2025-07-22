@@ -10,10 +10,13 @@ from sdcm.test_config import TestConfig
 from unit_tests.dummy_remote import DummyRemote
 
 
-class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
+class DummyNode(sdcm.cluster.BaseNode):
     def init(self):
         super().init()
         self.remoter.stop()
+
+    def do_default_installations(self):
+        pass  # we don't need to install anything for this unittests
 
     def _get_private_ip_address(self):
         # Expected node name like : node1, node2, node3 ...
@@ -29,7 +32,7 @@ class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
         return '127.0.0.%s' % self.name.replace('node', '')
 
     @property
-    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
+    def is_nonroot_install(self):
         return False
 
 

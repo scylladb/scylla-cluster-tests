@@ -30,14 +30,17 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
+
+
+pytest_plugins = ["pytester"]
 
 
 @pytest.fixture(scope='module')
@@ -57,7 +60,7 @@ def prom_address():
 
 
 @pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: disable=too-many-locals
+def fixture_docker_scylla(request: pytest.FixtureRequest, params):
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
@@ -71,7 +74,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
     docker_version = docker_scylla_args.get(
-        'image', "scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+        'image', "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
     cluster = LocalScyllaClusterDummy(params=params)
 
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
@@ -80,8 +83,8 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
         create_ca(localhost)
 
-    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
-                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
                          ' --entrypoint /entry.sh')
 
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
@@ -107,14 +110,14 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     def db_up():
         try:
             return scylla.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
     def db_alternator_up():
         try:
             return scylla.is_port_used(port=ALTERNATOR_PORT, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
@@ -133,12 +136,12 @@ def fake_remoter():
 
 
 @pytest.fixture(scope='session', autouse=True)
-def fake_provisioner():  # pylint: disable=no-self-use
+def fake_provisioner():
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
 
 
 @pytest.fixture(scope='session', autouse=True)
-def fake_region_definition_builder():  # pylint: disable=no-self-use
+def fake_region_definition_builder():
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
 
 
@@ -149,7 +152,7 @@ def fixture_params(request: pytest.FixtureRequest):
         os.environ['SCT_CONFIG_FILES'] = config_files
 
     os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-    params = sct_config.SCTConfiguration()  # pylint: disable=attribute-defined-outside-init
+    params = sct_config.SCTConfiguration()
     params.update(dict(
         authenticator='PasswordAuthenticator',
         authenticator_user='cassandra',
@@ -177,3 +180,33 @@ def pytest_sessionfinish():
     # to silence the warnings, let's just prevent logging from raising
     # exceptions.
     logging.raiseExceptions = False
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    """
+    Hook to capture the test report and attach it to the test item,
+    so it can be accessed later during teardown or in fixtures.
+    """
+    outcome = yield
+    report: pytest.TestReport = outcome.get_result()
+    setattr(item, "rep_" + report.when, report)
+
+    if report.when in ("call", "teardown") and item.get_closest_marker("override_pass"):
+        # overite the results of specific under test_tester that are supposed to fail
+        report.outcome = "passed"
+
+    return report
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_logreport(report: pytest.TestReport):
+    """
+    Hook to log subtest failures and their reports,
+    so it can be accessed later during teardown or in fixtures.
+
+    in this one we handle the subtests failures only, and change some of them to passed
+    """
+    if report.when == "call" and getattr(report, "context", None):
+        if report.failed:
+            SUBTESTS_FAILURES[report.nodeid].append(report)
