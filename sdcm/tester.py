@@ -3850,11 +3850,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        email_data['grafana_screenshots'] = grafana_screenshots
-        email_data["reporter"] = self.email_reporter.__class__.__name__
-        self.log.debug('Save email data to file %s', json_file_path)
-        self.log.debug('Email data: %s', email_data)
-        save_email_data_to_file(email_data, json_file_path)
+        if email_data is not None:
+            email_data['grafana_screenshots'] = grafana_screenshots
+            email_data["reporter"] = self.email_reporter.__class__.__name__
+            self.log.debug('Save email data to file %s', json_file_path)
+            self.log.debug('Email data: %s', email_data)
+            save_email_data_to_file(email_data, json_file_path)
+        else:
+            self.log.info(f'failed to get email data, email will not be sent.')
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:

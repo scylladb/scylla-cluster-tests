@@ -49,6 +49,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.stack.enter_context(ignore_operation_errors())
 
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
+        # test_name is created with postfix (one of '_read', '_write', '_mixed', '_throughput_read', '_throughput_write')
+        # which indicate the type of workload that will be run
         if test_name.endswith('_throughput_read'):
             self.params['workload_name'] = 'throughput'
             cycle_name = 'throughput-read'
@@ -66,7 +68,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             cycle_name = '50% read 50% write'
         else:
             raise ValueError(f"Unknown test_name {test_name} for workload, only test_name ending with '_read', '_write', '_mixed', '_throughput_read', or '_throughput_write' are supported.")
-            self.log.error(f'unknown test_name {test_name} - some things might not work as expected')
 
         @latency_calculator_decorator(cycle_name=cycle_name, row_name=row_name)
         def execute_workload_with_latency_calculator_decorator(self, *args, **kwargs):
@@ -159,30 +160,30 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.log.warning("No prepare command defined in YAML!")
 
     def test_full(self):
-        self.run_tests_by_name('full')
+        self.run_test_suite_by_configuration_name('full')
 
     def test_latency(self):
-        self.run_tests_by_name('basic-read')
+        self.run_test_suite_by_configuration_name('basic-read')
 
     def test_latency_read(self):
-        self.run_tests_by_name('basic-read')
+        self.run_test_suite_by_configuration_name('basic-read')
 
     def test_latency_write(self):
-        self.run_tests_by_name('basic-write')
+        self.run_test_suite_by_configuration_name('basic-write')
 
     def test_latency_mixed(self):
-        self.run_tests_by_name('basic-mixed')
+        self.run_test_suite_by_configuration_name('basic-mixed')
 
     def test_throughput(self):
-        self.run_tests_by_name('basic-throughput')
+        self.run_test_suite_by_configuration_name('basic-throughput')
 
     def test_throughput_read(self):
-        self.run_tests_by_name('basic-throughput-read')
+        self.run_test_suite_by_configuration_name('basic-throughput-read')
 
     def test_throughput_write(self):
-        self.run_tests_by_name('basic-throughput-write')
+        self.run_test_suite_by_configuration_name('basic-throughput-write')
 
-    def run_tests_by_name(self, mode):
+    def run_test_suite_by_configuration_name(self, mode):
         """
         Test steps:
 
@@ -329,6 +330,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.preload_data()
 
         for func in tests_to_run:
-            self.wait_no_compactions_running(n=120)
+            self.wait_no_compactions_running(n=120, sleep_time=10)
             func()
 

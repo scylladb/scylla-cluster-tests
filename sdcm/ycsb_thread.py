@@ -136,6 +136,15 @@ class YcsbStressThread(DockerBasedStressThread):
         self.hdrh_logger_contextes = []
         self.cluster_tester = cluster_tester
 
+    def _hdr_files_directory_inside_ycsb_container(self):
+        return '/tmp/hdr-output-directory'
+    
+    def _hdr_files_directory_on_master_node(self, loader_idx, cpu_idx):
+        return os.path.join(self.directory_for_hdr_files, f'{loader_idx}/{cpu_idx}')
+
+    def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
+        return f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
+    
     def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
             return None
@@ -226,7 +235,7 @@ class YcsbStressThread(DockerBasedStressThread):
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
         if self.params.get("use_hdrhistogram"):
-            stress_cmd += " -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path=/tmp/hdr-output-directory/hdrh-"
+            stress_cmd += f" -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path={self._hdr_files_directory_inside_ycsb_container()}/hdrh-"
         return stress_cmd
 
     @staticmethod
@@ -303,13 +312,13 @@ class YcsbStressThread(DockerBasedStressThread):
                             d = d.strip()
                             if not d:
                                 continue
-                            if d.startswith('#[Logging for:'):
-                                if data2:
-                                    LOGGER.warning(f'File {src_pth} removing previous content ({len(data2)} lines)')
-                                data2 = []
                             if d.startswith('tail: '):
                                 ignored_tail_lines += 1
                             elif d.startswith('#'):
+                                if d.startswith('#[Logging for:'):
+                                    if data2:
+                                        LOGGER.warning(f'File {src_pth} removing previous content ({len(data2)} lines)')
+                                    data2 = []
                                 data2.append(d)
                             else:
                                 payload = d.split(',')[-1]
@@ -341,11 +350,14 @@ class YcsbStressThread(DockerBasedStressThread):
             loader_idx = loader.node_index
             for cpu_idx in range(self.stress_num):
                 for work_type in self.WORK_TYPES:
-                    LOGGER.debug(f'Initializing HDR logger with remote=/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr and target={self.directory_for_hdr_files}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
+                    loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
+                    master_node_path = self._hdr_files_directory_on_master_node(loader_idx, cpu_idx)
+                    LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
                     hdrh_logger = HDRHistogramFileLogger(
                         node=loader,
-                        remote_log_file=f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}/hdrh-{work_type}.hdr',
-                        target_log_file=os.path.join(self.directory_for_hdr_files, f'hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged'),
+                        remote_log_file=f'{loaders_node_path}/hdrh-{work_type}.hdr',
+                        target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged',
+                        ignore_stderr_output=True
                     )
                     self.hdrh_logger_contextes.append(hdrh_logger)
                     hdrh_logger.start()
@@ -355,19 +367,19 @@ class YcsbStressThread(DockerBasedStressThread):
         for hdrh_logger in self.hdrh_logger_contextes:
             hdrh_logger.stop()
 
-    def _prepare_temp_directory_for_hdr_files(self, loader_idx, cpu_idx):
-        hdr_files_directory = f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
-        LOGGER.debug(f'Preparing HDR files directory: {hdr_files_directory}')
-        os.makedirs(hdr_files_directory, exist_ok=True)
-        files = glob.glob(f'{hdr_files_directory}/*.hdr')
+    def _prepare_directory_for_hdr_files_on_loader_node(self, loader_idx, cpu_idx):
+        loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
+        LOGGER.debug(f'Preparing HDR files directory: {loaders_node_path}')
+        os.makedirs(loaders_node_path, exist_ok=True)
+        files = glob.glob(f'{loaders_node_path}/*.hdr')
         for f in files:
             LOGGER.debug(f'removing old hdr file: {f}')
             os.remove(f)
         try:
-            os.chmod('/tmp/hdr-output-directory', 0o777)
+            os.chmod(loaders_node_path, 0o777)
         except Exception:
-            LOGGER.exception(f'chmod failed for /tmp/hdr-output-directory')
-        return hdr_files_directory
+            LOGGER.exception(f'chmod failed for {loaders_node_path}')
+        return loaders_node_path
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         if "k8s" in self.params.get("cluster_backend"):
@@ -392,8 +404,8 @@ class YcsbStressThread(DockerBasedStressThread):
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
             extra_docker_opts = f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
             if self.params["use_hdrhistogram"]:
-                hdr_files_directory = self._prepare_temp_directory_for_hdr_files(loader_idx, cpu_idx)
-                extra_docker_opts += f' -v {hdr_files_directory}:/tmp/hdr-output-directory:z'
+                hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
+                extra_docker_opts += f' -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container()}:z'
 
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,

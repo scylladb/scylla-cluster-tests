@@ -56,7 +56,7 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 backtrace_decoding: false
 
 store_perf_results: true
-email_recipients: ['alternator@scylladb.com']
+email_recipients: ['alternator-perf-results@scylladb.com']
 
 
 latency_decorator_error_thresholds:

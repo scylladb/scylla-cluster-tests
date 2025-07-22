@@ -128,7 +128,7 @@ class SSHLoggerBase(LoggerBase):
 class HDRHistogramFileLogger(SSHLoggerBase):
     VERBOSE_RETRIEVE = False
 
-    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
+    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str, ignore_stderr_output: bool = False):
         super().__init__(node=node, target_log_file=target_log_file)
         self._child_process = None
         self._remote_log_file = remote_log_file
@@ -137,6 +137,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self._thread = None
         self._lock = Lock()
         self._started = False
+        self._ignore_stderr_output = ignore_stderr_output
 
     def start(self) -> None:
         with self._lock:
@@ -159,6 +160,8 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
+        if self._ignore_stderr_output:
+            return f"(tail -f {self._remote_log_file} 2> /dev/null)"
         return f"tail -f {self._remote_log_file}"
 
     def validate_and_collect_hdr_file(self):
