@@ -86,6 +86,7 @@ class SSHLoggerBase(LoggerBase):
 
     def stop(self, timeout: float | None = None) -> None:
         self._termination_event.set()
+        self._remoter.run(f"kill -9 -{self.remote_pid}", ignore_status=True)
         if self._thread.running():
             self._thread.cancel()
 
@@ -102,11 +103,28 @@ class SSHLoggerBase(LoggerBase):
     def _is_ready_to_retrieve(self) -> bool:
         return self._remoter.is_up()
 
+    @property
+    def remote_pid(self) -> str:
+        """
+        Returns the PID of the remote logger process.
+        This is used to ensure that the logger is running and to manage its lifecycle.
+        """
+        remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+        if not self._remoter.run(f"test -f {remote_pid_file}", ignore_status=True).ok:
+            return ""
+        return self._remoter.run(f"cat {remote_pid_file}").stdout.strip()
+
     def _retrieve(self, since: str) -> None:
         self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(since=since or "the beginning"))
         try:
+            # Write the remote PID to a file before running the logger command
+            remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+            cmd = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else '')
+            remote_cmd = (f"cat <<'EOF' > /tmp/logger_cmd_{os.getpid()}.sh\n{cmd}\nEOF\n"
+                          f"setsid bash /tmp/logger_cmd_{os.getpid()}.sh & echo $! > {remote_pid_file}; wait"
+                          )
             self._remoter.run(
-                cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
+                cmd=remote_cmd,
                 verbose=self.VERBOSE_RETRIEVE,
                 ignore_status=True,
                 log_file=self._target_log_file,
