@@ -949,7 +949,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_perf_results')
         self.scylla_dir = SCYLLA_DIR
-        self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = None
@@ -3004,6 +3003,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 credential.destroy()
             self.credentials = []
 
+    @classmethod
+    @property
+    def left_processes_log(cls):
+        return os.path.join(TestConfig().logdir(), 'left_processes.log')
+
     @silence()
     def show_alive_threads(self):
         return gather_live_threads_and_dump_to_file(self.left_processes_log)
@@ -3153,11 +3157,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
-        self._check_alive_routines_and_report_them()
-        self._check_if_db_log_time_consistency_looks_good()
-        self.log.debug("Threads and processes at the end of the test:")
-        for t in threading.enumerate():
-            self.log.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
 
     @pytest.fixture(autouse=True, name='setup_logging')
     def fixture_setup_logging(self):
@@ -3172,18 +3171,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         yield
         self.stop_event_device()
 
+    @pytest.fixture(autouse=True, name='threads_checks', scope='session')
+    def fixture_threads_checks(self):
+
+        yield
+
+        self._check_alive_routines_and_report_them()
+        self._check_if_db_log_time_consistency_looks_good()
+        logging.debug("Threads and processes at the end of the test:")
+        for t in threading.enumerate():
+            logging.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
+
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
-        result = DbLogTimeConsistencyAnalyzer.analyze_dir(self.logdir)
+        result = DbLogTimeConsistencyAnalyzer.analyze_dir(TestConfig().logdir())
         looks_good = True
         for value in result['TOTAL'].values():
             if value > 0:
                 looks_good = False
                 break
         if looks_good:
-            self.log.info('DB logs time consistency is perfect')
+            logging.info('DB logs time consistency is perfect')
         else:
-            self.log.error(
+            logging.error(
                 'DB logs time consistency is NOT perfect, details:\n%s',
                 yaml.safe_dump(result, sort_keys=False)
             )
@@ -3192,7 +3202,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         threads_alive = self.show_alive_threads()
         processes_alive = self.show_alive_processes()
         if processes_alive or threads_alive:
-            self.log.error('Please check %s log to see them', self.left_processes_log)
+            logging.error('Please check %s log to see them', self.left_processes_log)
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
