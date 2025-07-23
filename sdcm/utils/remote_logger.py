@@ -93,8 +93,7 @@ class SSHLoggerBase(LoggerBase):
     def _journal_thread(self) -> None:
         read_from_timestamp = None
         while not self._termination_event.is_set():
-            if self._is_ready_to_retrieve():
-                self._retrieve(since=read_from_timestamp)
+            if self._is_ready_to_retrieve() and self._retrieve(since=read_from_timestamp):
                 read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             else:
                 time.sleep(self.READINESS_CHECK_DELAY)
@@ -102,7 +101,7 @@ class SSHLoggerBase(LoggerBase):
     def _is_ready_to_retrieve(self) -> bool:
         return self._remoter.is_up()
 
-    def _retrieve(self, since: str) -> None:
+    def _retrieve(self, since: str) -> bool:
         self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(
             log_file=self._target_log_file, since=since or "the beginning"))
         try:
@@ -112,8 +111,10 @@ class SSHLoggerBase(LoggerBase):
                 ignore_status=True,
                 log_file=self._target_log_file,
             )
+            return True
         except Exception as details:  # noqa: BLE001
             self._log.error("Error retrieving remote node DB service log: %s", details)
+        return False
 
     @cached_property
     def _remoter(self) -> RemoteCmdRunnerBase:
@@ -128,7 +129,7 @@ class SSHLoggerBase(LoggerBase):
 class HDRHistogramFileLogger(SSHLoggerBase):
     VERBOSE_RETRIEVE = False
 
-    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str, ignore_stderr_output: bool = False):
+    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
         super().__init__(node=node, target_log_file=target_log_file)
         self._child_process = None
         self._remote_log_file = remote_log_file
@@ -137,7 +138,6 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         self._thread = None
         self._lock = Lock()
         self._started = False
-        self._ignore_stderr_output = ignore_stderr_output
 
     def start(self) -> None:
         with self._lock:
@@ -160,8 +160,6 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
-        if self._ignore_stderr_output:
-            return f"(tail -f {self._remote_log_file} 2> /dev/null)"
         return f"tail -f {self._remote_log_file}"
 
     def validate_and_collect_hdr_file(self):
@@ -201,9 +199,12 @@ class HDRHistogramFileLogger(SSHLoggerBase):
             LOGGER.debug("Start check if remoter ready. %s", self._remote_log_file)
             if self._is_ready_to_retrieve():
                 LOGGER.debug("Remoter ready. %s", self._remote_log_file)
-                self._retrieve(since=read_from_timestamp)
-                LOGGER.debug("Retrieve finished. %s", self._remote_log_file)
-                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                if self._retrieve(since=read_from_timestamp):
+                    LOGGER.debug("Retrieve finished. %s", self._remote_log_file)
+                    read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    LOGGER.debug("Retrieve failed for file %s", self._remote_log_file)
+                    time.sleep(self.READINESS_CHECK_DELAY)
             else:
                 LOGGER.debug("Remoter is not ready. %s", self._remote_log_file)
                 time.sleep(self.READINESS_CHECK_DELAY)

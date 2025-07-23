@@ -20,6 +20,7 @@ import tempfile
 import logging
 import glob
 import binascii
+from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
@@ -346,6 +347,11 @@ class YcsbStressThread(DockerBasedStressThread):
                         LOGGER.debug(f'File {src_pth} does not exist, skipping update')
 
     def _initialize_hdr_loggers(self):
+        class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
+            @cached_property
+            def _logger_cmd_template(self) -> str:
+                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
+
         for loader in self.loaders:
             loader_idx = loader.node_index
             for cpu_idx in range(self.stress_num):
@@ -353,11 +359,10 @@ class YcsbStressThread(DockerBasedStressThread):
                     loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
                     master_node_path = self._hdr_files_directory_on_master_node(loader_idx, cpu_idx)
                     LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
-                    hdrh_logger = HDRHistogramFileLogger(
+                    hdrh_logger = HDRHistogramFileLoggerCheckForExistingFile(
                         node=loader,
                         remote_log_file=f'{loaders_node_path}/hdrh-{work_type}.hdr',
                         target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged',
-                        ignore_stderr_output=True
                     )
                     self.hdrh_logger_contextes.append(hdrh_logger)
                     hdrh_logger.start()
