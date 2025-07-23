@@ -4,9 +4,8 @@ def call(Map pipelineParams) {
         parameters {
             string(name: 'scylla_version', defaultValue: '', description: 'Scylla version to test')
             string(name: 'base_versions', defaultValue: '', description: 'Base versions')
-            string(name: 'provision_type', defaultValue: '', description: 'Provision type')
-            string(name: 'new_scylla_repo', defaultValue: '', description: 'New Scylla repo')
-            string(name: 'use_job_throttling', defaultValue: 'true', description: 'Use job throttling')
+            string(name: 'new_scylla_repo', defaultValue: 'https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list', description: 'New Scylla repo')
+            booleanParam(name: 'use_job_throttling', defaultValue: true, description: 'if true, use job throttling to limit the number of concurrent builds')
             string(name: 'labels_selector', defaultValue: '', description: 'This parameter is used for trigger with Scylla master version only. It points how to trigger the test: daily, weekly ot once in 3 weeks. Expected values: master-3weeks OR master-weekly OR master-daily')
         }
         triggers {
@@ -24,7 +23,7 @@ def call(Map pipelineParams) {
                         def scylla_version = params.scylla_version?.trim()
                         def labels_selector = params.labels_selector?.trim()
                         println("Scylla version: ${scylla_version}")
-                        println("Matrix storage: $labels_selector")
+                        println("Labels selector: $labels_selector")
                         if (scylla_version == "master:latest") {
                             scylla_version = "master"
                             if (!labels_selector) {
@@ -193,10 +192,10 @@ def call(Map pipelineParams) {
                             }
                             if (region && version && sub_tests) {
                                 println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
-                                    build job: job_name, parameters: [
+                                    build job: job_name, wait: false, parameters: [
                                         string(name: 'scylla_version', value: params.scylla_version),
                                         string(name: 'base_versions', value: params.base_versions),
-                                        string(name: 'provision_type', value: params.provision_type),
+                                        string(name: 'provision_type', value: 'on_demand'),
                                         string(name: 'new_scylla_repo', value: params.new_scylla_repo),
                                         string(name: 'use_job_throttling', value: params.use_job_throttling),
                                         string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
