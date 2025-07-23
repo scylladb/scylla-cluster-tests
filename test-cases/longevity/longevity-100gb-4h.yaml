@@ -29,3 +29,6 @@ parallel_node_operations: true
 
 experimental_features:
  - views-with-tablets
+
+
+append_scylla_args: "--logger-log-level storage_service=debug:raft_topology=debug:view_building_coordinator=debug:view_building_worker=debug"
