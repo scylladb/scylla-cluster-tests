@@ -11,5 +11,5 @@ rollingOperatorUpgradePipeline(
     test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml',
     availability_zone: 'a,b',
     scylla_mgmt_agent_version: '3.5.1',
-    k8s_scylla_operator_chart_version: 'v1.18.0-alpha.3-7-ge2e02be'
+    k8s_scylla_operator_chart_version: 'v1.18.0-beta.1'
 )
