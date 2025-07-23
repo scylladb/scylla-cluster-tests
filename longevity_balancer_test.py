@@ -17,6 +17,7 @@
 from collections import defaultdict
 from contextlib import ExitStack, contextmanager
 import contextlib
+from itertools import count
 from time import sleep, strftime, time
 from argus.client.base import ArgusClientError
 from argus.client.generic_result import ColumnMetadata, ResultType, StaticGenericResultTable, Status
@@ -73,14 +74,16 @@ class LongevityBalancerTest(LongevityTest):
             for node in self.db_cluster.data_nodes:
                 wait_no_tablets_migration_running(node, timeout=3600 * 2)
 
-    def get_disk_usage(self, node: BaseNode) -> float:
+    def get_disk_usage(self, node: BaseNode, end_time: float = None) -> float:
         """
         Get the disk usage of a node in percentage.
 
         :param node: The node to get the disk usage for.
+        :param end_time: The end time for the query, defaults to current time.
         :return: The disk usage in percentage, or -1 if the query fails."""
         self.prometheus_db: PrometheusDBStats
-        start, end = time() - 60, time()  # Query the last minute of data
+        end = end_time or time()
+        start = end - 60  # Query the last minute of data to ensure we have recent metrics
         avail_query = f'sum(node_filesystem_avail_bytes{{mountpoint="/var/lib/scylla", instance=~".*?{node.private_ip_address}.*?", job=~"node_exporter.*"}})'
         size_query = f'sum(node_filesystem_size_bytes{{mountpoint="/var/lib/scylla", instance=~".*?{node.private_ip_address}.*?", job=~"node_exporter.*"}})'
         full_query = f'1 - ({avail_query} / {size_query})'
@@ -96,22 +99,18 @@ class LongevityBalancerTest(LongevityTest):
             # Catch any errors in case the results are malformed
             return -1
 
-    def disk_usage_to_argus(self):
-        """
-        Collect disk usage for each node and submit the results to Argus.
-
-        :return: A dictionary with racks as keys and their disk usages as values.
-        """
-        shortname = lambda node: f"node-{node.name.split('-')[-1]}"
-        rack_groups = defaultdict(list)
-        for node in self.db_cluster.data_nodes:
-            rack_groups[node.rack].append(node)
-
-        columns = []
+    def result_table(self, rack_groups: dict[str, list[BaseNode]], prev: list = []):  # noqa: B006
+        columns: list[ColumnMetadata] = [ColumnMetadata(name="time", unit="", type=ResultType.TEXT),]
         for rack, rack_nodes in rack_groups.items():
             for node in rack_nodes:
-                columns.append(ColumnMetadata(name=shortname(node), unit="%", type=ResultType.FLOAT))
-            columns.append(ColumnMetadata(name=f"rack-{rack}", unit="%", type=ResultType.FLOAT))
+                columns.append(ColumnMetadata(name=f"node{node.name.split('-')[-1]}", unit="%", type=ResultType.FLOAT))
+            columns.append(ColumnMetadata(name=f"RACK{rack}", unit="%", type=ResultType.FLOAT))
+
+        # ensure that the columns are consistent with previous calls
+        prev.append(columns)
+        columns = max(prev, key=len)
+        self.log.info(f"Result table prev: {prev=}")
+        self.log.info(f"Result table columns: {columns=}")
 
         class DiskUsageResult(StaticGenericResultTable):
             class Meta:
@@ -125,23 +124,36 @@ class LongevityBalancerTest(LongevityTest):
                     """
                 Columns = columns
 
-        label = strftime('%Y-%m-%d %H:%M:%S')
-        data_table = DiskUsageResult()
+        return DiskUsageResult()
 
-        rack_usages = defaultdict(list)
+    def disk_usage_to_argus(self, cycle: dict[str, count] = {"row": count(1)}) -> None:  # noqa: B006
+        """
+        Collect disk usage for each node and submit the results to Argus.
+        """
+        rack_groups: defaultdict[str, list[BaseNode]] = defaultdict(list)
+        for node in self.db_cluster.data_nodes:
+            rack_groups[node.rack].append(node)
+
+        data_table = self.result_table(rack_groups)
+        row = f"#{next(cycle['row'])}"
+
+        current_time = time()
+        data_table.add_result(column="time", row=row, value=strftime('%H:%M:%S'), status=Status.UNSET)
+
+        rack_usages: defaultdict[str, list[float]] = defaultdict(list)
         for rack, rack_nodes in rack_groups.items():
             for node in rack_nodes:
-                usage = self.get_disk_usage(node)
-                rack_usages[rack].append(usage)
-                data_table.add_result(column=shortname(node), row=label, value=usage,
-                                      status=Status.UNSET)
+                if (usage := self.get_disk_usage(node, end_time=current_time)) != -1:
+                    rack_usages[rack].append(usage)
+                    data_table.add_result(column=f"node{node.name.split('-')[-1]}", row=row, value=usage,
+                                          status=Status.UNSET)
             # Calculate the average usage for the rack
             if rack_usages[rack]:
                 rack_delta = max(rack_usages[rack]) - min(rack_usages[rack])
                 status = (Status.PASS if rack_delta <= SOFT_BALANCE_THRESHOLD else
                           Status.WARNING if rack_delta <= HARD_BALANCE_THRESHOLD else
                           Status.ERROR)
-                data_table.add_result(column=f"rack-{rack}", row=label, value=rack_delta, status=status)
+                data_table.add_result(column=f"RACK{rack}", row=row, value=rack_delta, status=status)
 
         try:
             self.test_config.argus_client().submit_results(data_table)
@@ -150,7 +162,6 @@ class LongevityBalancerTest(LongevityTest):
                 pass  # Ignore validation errors, the status is just used to color the table in Argus
             else:
                 raise
-        return rack_usages
 
     @contextmanager
     def periodic_disk_usage_to_argus(self, interval=600):
@@ -175,9 +186,9 @@ class LongevityBalancerTest(LongevityTest):
         for rack, usages in rack_usages.items():
             min_utilization = min(usages)
             max_utilization = max(usages)
-            if max_utilization - min_utilization > HARD_BALANCE_THRESHOLD:
+            if max_utilization - min_utilization > SOFT_BALANCE_THRESHOLD:
                 TestFrameworkEvent(source="longevity_balancer_test",
-                                   message=f"Storage utilization is not balanced in rack {rack}. Min: {min_utilization}, Max: {max_utilization}",
+                                   message=f"Storage utilization is not balanced in rack {rack}. Min: {min_utilization:.2f}%, Max: {max_utilization:.2f}%",
                                    severity=Severity.CRITICAL).publish()
 
     def test_load_balance(self):
