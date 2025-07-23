@@ -21,13 +21,14 @@ from time import sleep, strftime, time
 from argus.client.base import ArgusClientError
 from argus.client.generic_result import ColumnMetadata, ResultType, StaticGenericResultTable, Status
 from longevity_test import LongevityTest
-from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
+from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from threading import Thread
 
@@ -195,5 +196,53 @@ class LongevityBalancerTest(LongevityTest):
         sleep(600)  # wait for new nodes to have prometheus_db metrics
         with self.periodic_disk_usage_to_argus(interval=600):
             self.test_custom_time()
+            self.wait_for_balance()
+            self.check_final_balance()
+
+    def scale_out(self):
+        added_nodes = self.db_cluster.add_nodes(
+            count=self.db_cluster.racks_count,
+            instance_type=self.params.get("instance_type_db"),
+            enable_auto_bootstrap=True,
+            rack=None)
+        self.monitors.reconfigure_scylla_monitoring()
+        up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+        with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
+            self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+        self.db_cluster.set_seeds()
+        self.db_cluster.update_seed_provider()
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+        return added_nodes
+
+    def scale_in(self, nodes: list[BaseNode]):
+        parallel_obj = ParallelObject(objects=nodes, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION, num_workers=len(nodes))
+        parallel_obj.run(self.db_cluster.decommission, ignore_exceptions=False, unpack_objects=True)
+        self.monitors.reconfigure_scylla_monitoring()
+
+    def grow_shrink(self):
+        # This method is used instead of GrowShrinkClusterNemesis because the nemesis
+        # will wait for tablet migration to finish after scale out, which is not desired in this test.
+        sleep(15*60)
+        new_nodes = self.scale_out()
+        sleep(15*60)
+        self.scale_in(new_nodes)
+
+    def test_load_balance_grow_shrink(self):
+        """
+        Test to ensure that the cluster is balanced correctly in difficult conditions:
+            - heterogeneous nodes with different disk sizes.
+            - multiple tables with different partition sizes.
+
+        This test will:
+        1. Expand the cluster by adding new nodes.
+        2. Run the original test_custom_time to populate the cluster with data.
+        3. During the test, nodes will be added and removed.
+        4. Wait for tablet migration to finish.
+        5. Periodically check the disk usage of each node to ensure they are balanced.
+        """
+        self.expand_cluster_heterogenous()
+        sleep(600)  # wait for new nodes to have prometheus_db metrics
+        with self.periodic_disk_usage_to_argus(interval=600):
+            ParallelObject(objects=[self.test_custom_time, self.grow_shrink], timeout=7200).call_objects()
             self.wait_for_balance()
             self.check_final_balance()
