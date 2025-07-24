@@ -269,8 +269,9 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
 @click.option('--logdir', type=str, help='directory with test run')
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option('--include-runners', is_flag=True, default=False, help='Include SCT runner instances in cleanup (requires --user or --test-id for safety)')
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend, include_runners):
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -290,10 +291,22 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
         $ hydra clean-resources --test-id TESTID
       - To clean all resources belong to some user:
         $ hydra clean-resources --user vasya.pupkin
+      - To clean all resources and SCT runners for a user:
+        $ hydra clean-resources --user vasya.pupkin --include-runners
+      - To clean all resources and SCT runners for specific test IDs:
+        $ hydra clean-resources --test-id TESTID --include-runners
 
     Also you can add --dry-run option to see what should be cleaned.
+    
+    Note: --include-runners requires either --user or --test-id for safety.
     """
     add_file_logger()
+
+    # Safety check for runner cleanup
+    if include_runners and not user and not test_id:
+        click.echo("ERROR: --include-runners requires either --user or --test-id for safety", err=True)
+        click.echo("This prevents accidental deletion of all SCT runners", err=True)
+        ctx.exit(1)
 
     user_param = {"RunByUser": user} if user else {}
     if user:
@@ -343,6 +356,28 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     for param in params:
         clean_func(param, dry_run=dry_run)
         click.echo(f"Cleanup for the {param} resources has been finished")
+        
+        # Clean SCT runners if requested
+        if include_runners:
+            click.echo(f"Cleaning SCT runners for {param}...")
+            # Extract user and test_id from param for runner cleanup
+            runner_user = param.get("RunByUser")
+            runner_test_id = param.get("TestId")
+            
+            # Convert single test_id to tuple for consistency with clean_sct_runners
+            if runner_test_id:
+                runner_test_id = (runner_test_id,) if isinstance(runner_test_id, str) else runner_test_id
+                
+            clean_sct_runners(
+                test_status=None,
+                test_runner_ip=None,
+                backend=backend,
+                user=runner_user,
+                test_id=runner_test_id,
+                dry_run=dry_run,
+                force=False
+            )
+            click.echo(f"SCT runner cleanup for {param} has been finished")
 
 
 @cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure)')
