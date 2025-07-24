@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import NamedTuple, TYPE_CHECKING
 from functools import cached_property
 from itertools import chain
@@ -28,6 +29,7 @@ from azure.core.credentials import AzureNamedKeyCredential
 from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
+from azure.core.exceptions import HttpResponseError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.decorators import retrying
@@ -184,7 +186,6 @@ class AzureService(metaclass=Singleton):
 
     # Azure Resource Graph is a service with extremely powerful query language for the resource exploration.
     # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/overview for more details.
-    @retrying(n=3)
     def resource_graph_query(self, query: str) -> Iterator:
         LOGGER.debug("query=%r", query)
         request = QueryRequest(
@@ -194,15 +195,34 @@ class AzureService(metaclass=Singleton):
         )
 
         def paged_query() -> Iterator[list]:
+            retry_count = 0
+            max_retries = 5
+            base_delay = 2  # Start with 2 seconds
+            
             while True:
-                response = self.resource_graph.resources(request)
-                yield response.data
-                if not response.skip_token:
-                    # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/concepts/work-with-data#paging-results
-                    assert response.result_truncated == "false", "paging is not possible because you missed id column"
-                    break
-                LOGGER.debug("get next page of query=%r", query)
-                request.options.skip_token = response.skip_token
+                try:
+                    response = self.resource_graph.resources(request)
+                    retry_count = 0  # Reset retry count on successful request
+                    yield response.data
+                    if not response.skip_token:
+                        # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/concepts/work-with-data#paging-results
+                        assert response.result_truncated == "false", "paging is not possible because you missed id column"
+                        break
+                    LOGGER.debug("get next page of query=%r", query)
+                    request.options.skip_token = response.skip_token
+                except HttpResponseError as e:
+                    if "RateLimiting" in str(e) and retry_count < max_retries:
+                        retry_count += 1
+                        # Exponential backoff with jitter: 2, 4, 8, 16, 32 seconds
+                        delay = base_delay ** retry_count
+                        LOGGER.warning("Azure Resource Graph rate limiting encountered. "
+                                     "Retrying in %d seconds (attempt %d/%d). Query: %s", 
+                                     delay, retry_count, max_retries, query)
+                        time.sleep(delay)
+                        continue
+                    else:
+                        # Re-raise if not rate limiting or max retries exceeded
+                        raise
 
         return chain.from_iterable(paged_query())
 

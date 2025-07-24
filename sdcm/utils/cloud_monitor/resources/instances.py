@@ -148,14 +148,19 @@ class CloudInstances(CloudResources):
         self.all.extend(self["gce"])
 
     def get_azure_instances(self):
-        query_bits = ["Resources", "where type =~ 'Microsoft.Compute/virtualMachines'",
-                      "project id, resourceGroup, name"]
-        res = AzureService().resource_graph_query(query=' | '.join(query_bits))
-        get_virtual_machine = AzureService().compute.virtual_machines.get
-        instances = [(get_virtual_machine(resource_group_name=vm["resourceGroup"],
-                      vm_name=vm["name"], expand='instanceView'), vm["resourceGroup"]) for vm in res]
-        self["azure"] = [AzureInstance(instance, resource_group) for instance, resource_group in instances]
-        self.all.extend(self["azure"])
+        try:
+            query_bits = ["Resources", "where type =~ 'Microsoft.Compute/virtualMachines'",
+                          "project id, resourceGroup, name"]
+            res = AzureService().resource_graph_query(query=' | '.join(query_bits))
+            get_virtual_machine = AzureService().compute.virtual_machines.get
+            instances = [(get_virtual_machine(resource_group_name=vm["resourceGroup"],
+                          vm_name=vm["name"], expand='instanceView'), vm["resourceGroup"]) for vm in res]
+            self["azure"] = [AzureInstance(instance, resource_group) for instance, resource_group in instances]
+            self.all.extend(self["azure"])
+            LOGGER.info("Successfully retrieved Azure instances")
+        except Exception as e:
+            LOGGER.error("Failed to retrieve Azure instances: %s. Continuing with other cloud providers.", e)
+            self["azure"] = []  # Set empty list to indicate partial failure
 
     def get_all(self):
         LOGGER.info("Getting all cloud instances...")
