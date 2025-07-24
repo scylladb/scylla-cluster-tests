@@ -318,7 +318,7 @@ class YcsbStressThread(DockerBasedStressThread):
                                 continue
                             if d.startswith('tail: '):
                                 ignored_tail_lines += 1
-                            elif d.startswith('#'):
+                            elif d.startswith(('#', "'")):
                                 if d.startswith('#[Logging for:'):
                                     if data2:
                                         LOGGER.warning(f'File {src_pth} removing previous content ({len(data2)} lines)')
@@ -371,6 +371,7 @@ class YcsbStressThread(DockerBasedStressThread):
                         target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged',
                     )
                     self.hdrh_logger_contextes.append(hdrh_logger)
+                    hdrh_logger.remove_remote_log_file()
                     hdrh_logger.start()
 
     def _terminate_hdr_loggers(self):

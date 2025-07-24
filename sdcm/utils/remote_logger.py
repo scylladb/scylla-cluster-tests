@@ -158,6 +158,18 @@ class HDRHistogramFileLogger(SSHLoggerBase):
                 self._thread.cancel()
             self._started = False
 
+    def remove_remote_log_file(self):
+        """
+        Remove the remote log file.
+        Makes sure the source file doesn't exist on the remote, which seems to mess things up for some reason.
+        """
+        LOGGER.debug("Removing remote log file: %s", self._remote_log_file)
+        assert not self._started, "Cannot remove remote log file while logger is running"
+        try:
+            self._remoter.run(f"rm -f {self._remote_log_file}", ignore_status=True)
+        except Exception as e:
+            LOGGER.error("Failed to remove remote log file '%s': %s", self._remote_log_file, e)
+
     @cached_property
     def _logger_cmd_template(self) -> str:
         return f"tail -f {self._remote_log_file}"
