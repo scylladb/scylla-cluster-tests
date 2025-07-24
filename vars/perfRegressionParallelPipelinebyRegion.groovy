@@ -191,7 +191,8 @@ def call(Map pipelineParams) {
                                 }
                             }
                             if (region && version && sub_tests) {
-                                println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
+                                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                                    println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
                                     build job: job_name, wait: false, parameters: [
                                         string(name: 'scylla_version', value: params.scylla_version),
                                         string(name: 'base_versions', value: params.base_versions),
