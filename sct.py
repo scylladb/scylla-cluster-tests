@@ -1661,12 +1661,15 @@ def set_runner_tags(runner_ip, tags):
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends),
               help="Specific backend to use")
+@click.option('--user', type=str, help='user name to filter instances by')
+@sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
-def clean_runner_instances(runner_ip, test_status, backend, dry_run, force):
+def clean_runner_instances(runner_ip, test_status, backend, user, test_id, dry_run, force):
     add_file_logger()
     clean_sct_runners(
-        test_runner_ip=runner_ip, test_status=test_status, backend=backend, dry_run=dry_run, force=force)
+        test_runner_ip=runner_ip, test_status=test_status, backend=backend, 
+        user=user, test_id=test_id, dry_run=dry_run, force=force)
 
 
 @cli.command("generate-pt-report", help="Generate parallel timelines representation for the SCT test events")

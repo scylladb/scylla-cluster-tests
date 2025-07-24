@@ -1197,7 +1197,31 @@ def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 
-def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
+def _get_runner_user_tag(sct_runner_info: SctRunnerInfo) -> str | None:
+    """Extract the RunByUser tag from SCT runner instance.
+    
+    Args:
+        sct_runner_info: SCT runner instance information
+        
+    Returns:
+        The RunByUser tag value or None if not found
+    """
+    if sct_runner_info.cloud_provider == "aws":
+        # For AWS, extract from instance tags
+        tags = aws_tags_to_dict(sct_runner_info.instance.get("Tags", []))
+        return tags.get("RunByUser")
+    elif sct_runner_info.cloud_provider == "gce":
+        # For GCE, extract from metadata
+        tags = gce_meta_to_dict(sct_runner_info.instance.metadata)
+        return tags.get("RunByUser")
+    elif sct_runner_info.cloud_provider == "azure":
+        # For Azure, extract from instance tags
+        if hasattr(sct_runner_info.instance, 'tags') and sct_runner_info.instance.tags:
+            return sct_runner_info.instance.tags.get("RunByUser")
+    return None
+
+
+def list_sct_runners(backend: str = None, test_runner_ip: str = None, user: str = None, test_id: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
     if verbose:
         log = LOGGER.info
     else:
@@ -1213,18 +1237,32 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: b
         sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
     sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
-    if test_runner_ip:
-        if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
-            sct_runners = [sct_runner_info, ]
-        else:
-            LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
-            return []
-    else:
-        sct_runners = list(sct_runners)
+    # Apply filters
+    filtered_runners = []
+    for runner in sct_runners:
+        # Filter by IP
+        if test_runner_ip and test_runner_ip not in runner.public_ips:
+            continue
+        
+        # Filter by user (stored in RunByUser tag)
+        if user:
+            runner_user = _get_runner_user_tag(runner)
+            if not runner_user or runner_user != user:
+                continue
+        
+        # Filter by test_id
+        if test_id and runner.test_id != test_id:
+            continue
+            
+        filtered_runners.append(runner)
 
-    log("%d SCT runner(s) found:\n    %s", len(sct_runners), "\n    ".join(map(str, sct_runners)))
+    if test_runner_ip and not filtered_runners:
+        LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
+        return []
 
-    return sct_runners
+    log("%d SCT runner(s) found:\n    %s", len(filtered_runners), "\n    ".join(map(str, filtered_runners)))
+
+    return filtered_runners
 
 
 def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test_id: str = None, tags: dict = None):
@@ -1238,8 +1276,7 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
     if test_runner_ip:
         runner_to_update = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     elif test_id:
-        listed_runners = list_sct_runners(backend=backend, verbose=False)
-        runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
+        runner_to_update = list_sct_runners(backend=backend, test_id=test_id, verbose=False)
 
     if not runner_to_update:
         LOGGER.warning("Could not find SCT runner with IP: %s, test_id: %s to update tags for.",
@@ -1288,10 +1325,12 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
 def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
                       backend: str = None,
+                      user: str = None,
+                      test_id: str = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
 
-    sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
+    sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip, user=user, test_id=test_id)
     timeout_flag = False
     runners_terminated = 0
     end_message = ""
