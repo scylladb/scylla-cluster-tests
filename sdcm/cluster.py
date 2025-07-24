@@ -3811,10 +3811,8 @@ class BaseCluster:
                                                filter_func: Callable[..., bool] = None) -> List[str]:
         with self.cql_connection_patient(db_node, connect_timeout=600) as session:
             session.default_timeout = 60.0 * 5
-            session.default_consistency_level = ConsistencyLevel.ONE
-            execute_result = session.execute_async("select keyspace_name from system_schema.scylla_keyspaces")
-            fetcher = PageFetcher(execute_result).request_all(timeout=120)
-            keyspaces = fetcher.all_data()
+            keyspaces = [row.keyspace_name for row in session.execute(
+                "select keyspace_name from system_schema.scylla_keyspaces")]
             self.log.debug("Keyspaces with tablets enabled %s", keyspaces)
 
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
