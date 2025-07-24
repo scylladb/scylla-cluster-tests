@@ -49,28 +49,28 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade',
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
                                 region: 'eu-west-2',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
                                 region: 'eu-west-2',
                                 versions: ['master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"', '"test_read_gradual_increase_load"', '"test_write_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_read_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled',
                                 region: 'eu-west-3',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
                             ],
                             [
@@ -128,35 +128,35 @@ def call(Map pipelineParams) {
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets',
                                 region: 'eu-west-2',
                                 versions: ['2025.1', '2025.2', 'master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-3weeks']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
                                 versions: ['2025.1', '2025.2'],
-                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
                                 versions: ['master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
                                 region: 'eu-north-1',
                                 versions: ['2025.1', '2025.2'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"', '"test_write_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
                                 region: 'eu-north-1',
                                 versions: ['master'],
-                                sub_tests: ['"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
                         ]
@@ -198,7 +198,7 @@ def call(Map pipelineParams) {
                                             string(name: 'base_versions', value: params.base_versions),
                                             string(name: 'provision_type', value: 'on_demand'),
                                             string(name: 'new_scylla_repo', value: params.new_scylla_repo),
-                                            string(name: 'use_job_throttling', value: params.use_job_throttling),
+                                            booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region)
                                         ]
