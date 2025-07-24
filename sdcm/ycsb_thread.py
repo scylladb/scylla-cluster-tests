@@ -361,6 +361,8 @@ class YcsbStressThread(DockerBasedStressThread):
                 for work_type in self.WORK_TYPES:
                     loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
                     master_node_path = self._hdr_files_directory_on_master_node(loader_idx, cpu_idx)
+                    LOGGER.debug(f'Creating masters node HDR files directory: {master_node_path}')
+                    os.makedirs(master_node_path, exist_ok=True)
                     LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
                     hdrh_logger = HDRHistogramFileLoggerCheckForExistingFile(
                         node=loader,
