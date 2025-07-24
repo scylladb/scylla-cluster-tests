@@ -880,4 +880,4 @@ class TestStatsMixin(Stats):
         return None
 
     def get_test_start_time(self):
-        return self._stats['test_details'].get('start_time', None)
+        return self._stats.get('test_details', {}).get('start_time', None)
