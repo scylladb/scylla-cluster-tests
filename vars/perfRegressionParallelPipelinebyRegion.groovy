@@ -193,15 +193,16 @@ def call(Map pipelineParams) {
                             if (region && version && sub_tests) {
                                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                                     println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
-                                    build job: job_name, wait: false, parameters: [
-                                        string(name: 'scylla_version', value: params.scylla_version),
-                                        string(name: 'base_versions', value: params.base_versions),
-                                        string(name: 'provision_type', value: 'on_demand'),
-                                        string(name: 'new_scylla_repo', value: params.new_scylla_repo),
-                                        string(name: 'use_job_throttling', value: params.use_job_throttling),
-                                        string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
-                                        string(name: 'region', value: region)
-                                    ]
+                                        build job: job_name, wait: false, parameters: [
+                                            string(name: 'scylla_version', value: params.scylla_version),
+                                            string(name: 'base_versions', value: params.base_versions),
+                                            string(name: 'provision_type', value: 'on_demand'),
+                                            string(name: 'new_scylla_repo', value: params.new_scylla_repo),
+                                            string(name: 'use_job_throttling', value: params.use_job_throttling),
+                                            string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
+                                            string(name: 'region', value: region)
+                                        ]
+                                    }
                                 }
                             }
                         }
