@@ -196,6 +196,16 @@ class LongevityPipelineTest:
         return f'clean-resources --post-behavior --test-id {self.test_id}'
 
     @cached_property
+    def clean_runner_instances_cmd(self):
+        if self.runner:
+            return f'{self.runner_arg}{self.clean_runner_instances_cmd_docker}'
+        return self.clean_runner_instances_cmd_docker
+
+    @cached_property
+    def clean_runner_instances_cmd_docker(self):
+        return f'clean-runner-instances --test-id {self.test_id} --backend {self.backend}'
+
+    @cached_property
     def send_email_cmd(self):
         # Command line of the hydra it self
         if self.runner:
@@ -337,6 +347,21 @@ class LongevityPipelineTest:
         ), self.test_tmp_dir
 
     @property
+    def test_case_clean_runner_instances(self):
+        self.set_test_home_dir_postfix('clean_runner_instances')
+        return HydraTestCaseParams(
+            name=f'{self.step_name_prefix}_clean_runner_instances',
+            cmd=self.clean_runner_instances_cmd,
+            expected=[
+                *self.after_runner_expected,
+                re.compile(f"{self.after_runner_docker_run_prefix} "
+                           f"eval './sct.py  {self.clean_runner_instances_cmd_docker}'")],
+            not_expected=[*self.after_runner_not_expected],
+            return_code=0,
+            env=self.get_longevity_env
+        ), self.test_tmp_dir
+
+    @property
     def test_case_send_email(self):
         self.set_test_home_dir_postfix('send_email')
         return HydraTestCaseParams(
@@ -356,7 +381,7 @@ class LongevityPipelineTest:
         Creates list of test case parameters that represent steps in longevity pipeline steps
         """
         return (self.test_case_show_conf, self.test_case_create_runner, self.test_case_run_test,
-                self.test_case_collect_logs, self.test_case_clean_resources)
+                self.test_case_collect_logs, self.test_case_clean_resources, self.test_case_clean_runner_instances)
 
 
 class TestHydraSh(unittest.TestCase):
