@@ -157,15 +157,33 @@ class VirtualMachineProvider:
 
     def reboot(self, name: str, wait: bool = True, hard: bool = False) -> None:
         LOGGER.info("Triggering reboot of instance: %s", name)
-        flags = "-ff" if hard else "-f"
-        self.run_command(name, f"reboot {flags}")
-        start_time = time.time()
-        while wait and time.time() - start_time < 600:  # 10 minutes
-            time.sleep(10)
-            instance_view = self._azure_service.compute.virtual_machines.instance_view(
-                self._resource_group_name, vm_name=name)
-            if instance_view and instance_view.statuses[-1].display_status == 'VM running':
-                break
+        
+        # Try walinuxagent approach first
+        try:
+            flags = "-ff" if hard else "-f"
+            self.run_command(name, f"reboot {flags}")
+            LOGGER.debug("Successfully triggered reboot via walinuxagent for instance: %s", name)
+        except Exception as ex:  # noqa: BLE001
+            # Fallback to Azure SDK when walinuxagent is not available or fails
+            LOGGER.warning("Failed to reboot instance %s via walinuxagent (%s), falling back to Azure SDK", name, ex)
+            if hard:
+                LOGGER.warning("Hard reboot requested but Azure SDK does not distinguish between hard and soft reboot")
+            task = self._azure_service.compute.virtual_machines.begin_restart(self._resource_group_name, vm_name=name)
+            if wait:
+                LOGGER.info("Waiting for SDK-triggered reboot of instance: %s...", name)
+                task.wait()
+                LOGGER.info("Instance %s has been rebooted via Azure SDK.", name)
+                return
+        
+        # Wait for walinuxagent-triggered reboot to complete
+        if wait:
+            start_time = time.time()
+            while time.time() - start_time < 600:  # 10 minutes
+                time.sleep(10)
+                instance_view = self._azure_service.compute.virtual_machines.instance_view(
+                    self._resource_group_name, vm_name=name)
+                if instance_view and instance_view.statuses[-1].display_status == 'VM running':
+                    break
 
     def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
         """Adds tags to instance (with waiting for completion)"""
