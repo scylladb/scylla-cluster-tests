@@ -5440,9 +5440,9 @@ class Nemesis(NemesisFlags):
                 if not is_views_with_tablets_enabled(session):
                     raise UnsupportedNemesis("MV building coordinator works only with tablets")
                 # TODO: need to filter keyspaces with enabled tablets only
-                ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=working_node,
-                                                                filter_empty_tables=True, filter_out_mv=True,
-                                                                filter_out_table_with_counter=True)
+                ks_cfs = self.cluster.get_non_system_ks_cf_with_tablets_list(db_node=working_node,
+                                                                             filter_empty_tables=True, filter_out_mv=True,
+                                                                             filter_out_table_with_counter=True)
                 if not ks_cfs:
                     raise UnsupportedNemesis(
                         'Non-system keyspace and table are not found. nemesis can\'t be run')
