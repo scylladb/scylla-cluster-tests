@@ -312,7 +312,7 @@ class YcsbStressThread(DockerBasedStressThread):
                         data2 = []
                         ignored_tail_lines = 0
                         faulty_lines = 0
-                        for d in data:
+                        for e, d in enumerate(data):
                             d = d.strip()
                             if not d:
                                 continue
@@ -330,9 +330,9 @@ class YcsbStressThread(DockerBasedStressThread):
                                     base64.b64decode(payload, validate=True)
                                 except (ValueError, binascii.Error) as exc:
                                     if faulty_lines == 0:
-                                        LOGGER.warning(f'File {src_pth} has faulty line: `{d}`: {exc}')
+                                        LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`: {exc}')
                                     else:
-                                        LOGGER.warning(f'File {src_pth} has faulty line: `{d}`')
+                                        LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`')
                                     faulty_lines += 1
                                     continue
                                 if d[0].isdigit() or d[0] == '.':
