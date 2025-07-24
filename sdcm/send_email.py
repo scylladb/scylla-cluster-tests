@@ -561,6 +561,7 @@ class SnitchEmailReporter(BaseEmailReporter):
     pass
 
 
+# Alternator's performance tests need only vanilla processing, hence empty class, which inherits functionality from base
 class PerformanceRegressionAlternatorTestEmailReporter(BaseEmailReporter):
     pass
 

@@ -351,10 +351,9 @@ class YcsbStressThread(DockerBasedStressThread):
 
     def _initialize_hdr_loggers(self):
         class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
-            pass
-            # @cached_property
-            # def _logger_cmd_template(self) -> str:
-            #     return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
+            @cached_property
+            def _logger_cmd_template(self) -> str:
+                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
 
         for loader in self.loaders:
             loader_idx = loader.node_index
