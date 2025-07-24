@@ -6589,7 +6589,7 @@ COMPLEX_NEMESIS = [NoOpMonkey, ScyllaCloudLimitedChaosMonkey,
                    MdcChaosMonkey, SisyphusMonkey,
                    DisruptKubernetesNodeThenReplaceScyllaNode,
                    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-                   CategoricalMonkey]
+                   CategoricalMonkey, NemesisSequence]
 
 
 class CorruptThenScrubMonkey(Nemesis):
