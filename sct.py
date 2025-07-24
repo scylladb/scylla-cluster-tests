@@ -235,13 +235,19 @@ def provision_resources(backend, test_name: str, config: str):
         click.echo("No need provision logging service")
 
     click.echo(f"Provision {backend} cloud resources")
-    if backend == "aws":
-        layout = SCTProvisionLayout(params=params)
-        layout.provision()
-    elif backend == "azure":
-        provision_sct_resources(params=params, test_config=test_config)
-    else:
-        raise ValueError(f"backend {backend} is not supported")
+    try:
+        if backend == "aws":
+            layout = SCTProvisionLayout(params=params)
+            layout.provision()
+        elif backend == "azure":
+            provision_sct_resources(params=params, test_config=test_config)
+        else:
+            raise ValueError(f"backend {backend} is not supported")
+    except Exception:
+        LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
+        test_config.init_argus_client(params)
+        test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
+        sys.exit(1)
 
 
 @cli.command("clean-aws-kms-aliases", help="clean AWS KMS old aliases")
