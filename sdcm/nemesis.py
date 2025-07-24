@@ -5471,7 +5471,11 @@ class Nemesis(NemesisFlags):
                 for _ in range(num_of_restarts):
                     self.log.debug("Target Coordinator node: %s, %s", coordinator_node.name, self.target_node.name)
                     # kill scylla on target node which is coordinator now.
-                    self._kill_scylla_daemon()
+                    # self._kill_scylla_daemon()
+                    host_id = self.target_node.host_id
+                    self.target_node.stop_scylla()
+                    self._remove_node_add_node(verification_node=working_node,
+                                               node_to_remove=self.target_node, remove_node_host_id=host_id)
                     self.log.debug("Wait to new coordinator will be elected for 30 seconds")
                     # time.sleep(30)
                     new_coordinator_node = get_topology_coordinator_node(working_node)
@@ -5496,7 +5500,7 @@ class Nemesis(NemesisFlags):
 
                 self.log.debug("Nodetool ouput %s", result.stdout)
 
-                with adaptive_timeout(operation=Operations.CREATE_MV, node=new_coordinator_node, timeout=14400) as timeout:
+                with adaptive_timeout(operation=Operations.CREATE_MV, node=new_coordinator_node, timeout=3600) as timeout:
                     wait_for_view_to_be_built(working_node, ks_name, view_name, timeout=timeout * 2)
                 # for node in self.cluster.nodes:
                 #     with adaptive_timeout(operation=Operations.CREATE_MV, node=self.target_node, timeout=14400) as timeout:
@@ -5506,6 +5510,7 @@ class Nemesis(NemesisFlags):
                 #                                     min_duration=300, max_duration=2400)
 
             finally:
+                self.log.debug("------------------RESULTS------------------------")
                 self.log.debug("Build_views table: %s", working_node.run_cqlsh("select * from system.built_views"))
                 self.log.debug("View_build_status_v2 table: %s", working_node.run_cqlsh(
                     "select * from system.view_build_status_v2"))

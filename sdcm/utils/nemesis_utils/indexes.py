@@ -132,6 +132,7 @@ def wait_for_view_to_be_built(node: BaseNode, ks, view_name, timeout=300) -> Non
     while time.time() - start_time < timeout:
         result = node.run_nodetool(f"viewbuildstatus {ks}.{view_name}",
                                    ignore_status=True, verbose=True, publish_event=True)
+        LOGGER.debug("View Status: %s", result.stdout)
         if f"{ks}.{view_name}_index has finished building" in result.stdout:
             InfoEvent(message=f"Index {ks}.{view_name} was built").publish()
             return
