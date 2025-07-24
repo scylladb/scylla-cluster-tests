@@ -1221,7 +1221,7 @@ def _get_runner_user_tag(sct_runner_info: SctRunnerInfo) -> str | None:
     return None
 
 
-def list_sct_runners(backend: str = None, test_runner_ip: str = None, user: str = None, test_id: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
+def list_sct_runners(backend: str = None, test_runner_ip: str = None, user: str = None, test_id: str | tuple = None, verbose: bool = True) -> list[SctRunnerInfo]:
     if verbose:
         log = LOGGER.info
     else:
@@ -1250,14 +1250,30 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, user: str 
             if not runner_user or runner_user != user:
                 continue
         
-        # Filter by test_id
-        if test_id and runner.test_id != test_id:
-            continue
+        # Filter by test_id (can be single string or tuple of strings)
+        if test_id:
+            if isinstance(test_id, (tuple, list)):
+                if runner.test_id not in test_id:
+                    continue
+            else:
+                if runner.test_id != test_id:
+                    continue
             
         filtered_runners.append(runner)
 
-    if test_runner_ip and not filtered_runners:
-        LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
+    if not filtered_runners:
+        if test_runner_ip:
+            LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
+        elif user or test_id:
+            filter_desc = []
+            if user:
+                filter_desc.append(f"User: '{user}'")
+            if test_id:
+                if isinstance(test_id, (tuple, list)):
+                    filter_desc.append(f"TestIds: {list(test_id)}")
+                else:
+                    filter_desc.append(f"TestId: '{test_id}'")
+            LOGGER.warning("No SCT Runners were found (Backend: '%s', Filters: %s)", backend, ", ".join(filter_desc))
         return []
 
     log("%d SCT runner(s) found:\n    %s", len(filtered_runners), "\n    ".join(map(str, filtered_runners)))
@@ -1326,7 +1342,7 @@ def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
                       backend: str = None,
                       user: str = None,
-                      test_id: str = None,
+                      test_id: str | tuple = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
 
