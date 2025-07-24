@@ -141,7 +141,7 @@ class YcsbStressThread(DockerBasedStressThread):
         return '/tmp/hdr-output-directory'
     
     def _hdr_files_directory_on_master_node(self, loader_idx, cpu_idx):
-        return os.path.join(self.directory_for_hdr_files, f'{loader_idx}/{cpu_idx}')
+        return self.directory_for_hdr_files
 
     def _hdr_main_dir_on_loaders_node(self):
         return '/tmp/hdr-output-directory'
@@ -351,9 +351,10 @@ class YcsbStressThread(DockerBasedStressThread):
 
     def _initialize_hdr_loggers(self):
         class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
-            @cached_property
-            def _logger_cmd_template(self) -> str:
-                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
+            pass
+            # @cached_property
+            # def _logger_cmd_template(self) -> str:
+            #     return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
 
         for loader in self.loaders:
             loader_idx = loader.node_index
