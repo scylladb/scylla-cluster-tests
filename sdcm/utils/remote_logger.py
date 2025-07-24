@@ -143,7 +143,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         with self._lock:
             if self._started:
                 return
-            LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
+            LOGGER.debug("Start to read remote_log_file: %s, target_log_file: %s", self._remote_log_file, self.target_log_file)
             self._termination_event.clear()
             self._thread = self._child_thread.submit(self._journal_thread)
             self._started = True
@@ -694,4 +694,3 @@ class DockerComposeLogger(CommandClusterLoggerBase):
     @cached_property
     def _logger_cmd(self) -> str:
         return f"{self._cluster.compose_context} logs --no-color --tail=1000 >>{self._target_log_file}"
-

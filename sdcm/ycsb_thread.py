@@ -143,8 +143,11 @@ class YcsbStressThread(DockerBasedStressThread):
     def _hdr_files_directory_on_master_node(self, loader_idx, cpu_idx):
         return os.path.join(self.directory_for_hdr_files, f'{loader_idx}/{cpu_idx}')
 
+    def _hdr_main_dir_on_loaders_node(self):
+        return '/tmp/hdr-output-directory'
+    
     def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
-        return f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
+        return f'{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}'
     
     def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
@@ -381,9 +384,9 @@ class YcsbStressThread(DockerBasedStressThread):
             LOGGER.debug(f'removing old hdr file: {f}')
             os.remove(f)
         try:
-            os.chmod(loaders_node_path, 0o777)
+            os.chmod(self._hdr_main_dir_on_loaders_node(), 0o777)
         except Exception:
-            LOGGER.exception(f'chmod failed for {loaders_node_path}')
+            LOGGER.exception(f'chmod failed for {self._hdr_main_dir_on_loaders_node()}')
         return loaders_node_path
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
