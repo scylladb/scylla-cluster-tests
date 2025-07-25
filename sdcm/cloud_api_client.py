@@ -13,6 +13,7 @@
 
 import json
 import logging
+import ipaddress
 import requests
 from enum import Enum
 from functools import cached_property
@@ -34,6 +35,18 @@ class ScyllaCloudAPIError(Exception):
 class CloudProviderType(Enum):
     AWS = 'AWS'
     GCP = 'GCP'
+
+    @classmethod
+    def from_sct_backend(cls, backend_name: str) -> 'CloudProviderType':
+        """Convert SCT backend name to Scylla Cloud provider type"""
+        backend_upper = backend_name.upper()
+        if backend_upper == 'GCE':  # map SCT 'gce' backend to Scylla Cloud 'GCP' provider
+            return cls.GCP
+        elif backend_upper == 'AWS':
+            return cls.AWS
+        else:
+            raise ValueError(f"Unsupported cloud provider backend: {backend_name}. "
+                             f"Supported backends: gce, aws")
 
 
 class ScyllaCloudAPIClient:
@@ -114,11 +127,10 @@ class ScyllaCloudAPIClient:
 
     def get_scylla_versions(self, defaults: bool = False) -> dict[str, Any]:
         """List available ScyllaDB Cloud versions"""
-        url = "deployment/scylla-versions"
         params = {}
         if defaults:
             params['defaults'] = 'true'
-        return self.request("GET", url, params=params)
+        return self.request("GET", "deployment/scylla-versions", params=params)
 
     @cached_property
     def current_scylla_version(self) -> dict:
@@ -127,11 +139,11 @@ class ScyllaCloudAPIClient:
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
-        url = f'/deployment/cloud-provider/{cloud_provider_id}/regions'
         params = {}
         if defaults:
             params['defaults'] = 'true'
-        return self.request('GET', url, params=params)
+        return self.request(
+            'GET', f'/deployment/cloud-provider/{cloud_provider_id}/regions', params=params)
 
     def get_region_id_by_name(self, *, cloud_provider_id: int, region_name: str) -> int:
         """Get the ID of a cloud provider region by its name"""
@@ -141,11 +153,11 @@ class ScyllaCloudAPIClient:
     def get_instance_types(
             self, *, cloud_provider_id: int, region_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get instance types available for a given cloud provider and region"""
-        url = f'/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}'
         params = {}
         if defaults:
             params['defaults'] = 'true'
-        return self.request('GET', url, params=params)
+        return self.request(
+            'GET', f'/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}', params=params)
 
     def get_instance_id_by_name(
             self, *, cloud_provider_id: int, region_id: int, instance_type_name: str) -> int:
@@ -166,7 +178,36 @@ class ScyllaCloudAPIClient:
 
     @cached_property
     def client_ip(self) -> str:
-        return self.request("GET", "deployment/client-ip")["clientIp"]
+        """
+        Get client IP address.
+
+        Attempts to obtain the IP from an external service (similar to how Siren frontend operates). Falls back
+        to API method if the external service fails.
+        The API method is not the primary source because it returns IPv6 address for cloud instances, and Siren does
+        not yet support IPv6 addresses.
+        """
+        try:
+            response = requests.get("https://ipv4.icanhazip.com/", timeout=10)
+            response.raise_for_status()
+            external_ip = response.text.strip()
+
+            if external_ip and self._is_valid_ipv4(external_ip):
+                LOGGER.debug("Got client IP from external service: %s", external_ip)
+                return external_ip
+        except Exception as e:  # noqa: BLE001
+            LOGGER.warning("Failed to get client IP from external service: %s", e)
+
+        # fallback to API method
+        external_ip = self.request("GET", "deployment/client-ip")["clientIp"]
+        LOGGER.debug("Got client IP from API fallback: %s", external_ip)
+        return external_ip
+
+    @staticmethod
+    def _is_valid_ipv4(ip_str: str) -> bool:
+        try:
+            return ipaddress.ip_address(ip_str).version == 4
+        except ValueError:
+            return False
 
     ### Account related APIs ###
     def get_active_accounts(self, *, account_id: int) -> list[dict[str, Any]]:
@@ -269,21 +310,19 @@ class ScyllaCloudAPIClient:
 
     def get_clusters(self, *, account_id: int, metrics: str = '', enriched: bool = False) -> list[dict[str, Any]]:
         """List all clusters for a given account"""
-        url = f'/account/{account_id}/clusters'
         params = {}
         if enriched:
             params['enriched'] = 'true'
         if metrics:
             params['metrics'] = metrics
-        return self.request('GET', url, params=params)['clusters']
+        return self.request('GET', f'/account/{account_id}/clusters', params=params)['clusters']
 
     def get_cluster_details(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> dict[str, Any]:
         """Get details of a cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}'
         params = {}
         if enriched:
             params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['cluster']
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}', params=params)['cluster']
 
     def get_cluster_id_by_name(self, *, account_id: int, cluster_name: str) -> int | None:
         if clusters := self.get_clusters(account_id=account_id):
@@ -292,19 +331,17 @@ class ScyllaCloudAPIClient:
 
     def get_cluster_nodes(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of cluster nodes"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/nodes'
         params = {}
         if enriched:
             params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['nodes']
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/nodes', params=params)['nodes']
 
     def get_cluster_dcs(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of data centers used by a cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/dcs'
         params = {}
         if enriched:
             params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['dataCenters']
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dcs', params=params)['dataCenters']
 
     def delete_cluster(self, *, account_id: int,  cluster_id: int, cluster_name: str) -> dict[str, Any]:
         """Delete a cluster"""
@@ -338,6 +375,10 @@ class ScyllaCloudAPIClient:
         """Set the email address(es) used for cluster notifications"""
         return self.request(
             'POST', f'/account/{account_id}/cluster/{cluster_id}/notifications/email', emails=emails)
+
+    def get_cluster_connection(self, *, account_id: int, cluster_id: int) -> dict[str, Any]:
+        """Get cluster connection details including credentials and endpoints"""
+        return self.request('GET', f'/account/{account_id}/cluster/connect', params={'clusterId': cluster_id})
 
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
@@ -440,13 +481,12 @@ class ScyllaCloudAPIClient:
             self, *, account_id: int, cluster_id: int, type: str = '', dc: int | None = None
     ) -> list[dict[str, Any]]:
         """Get the list of network connections for a given cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection'
         params = {}
         if type:
             params['type'] = type
         if dc:
             params['dc'] = dc
-        return self.request('GET', url, params=params)
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection', params=params)
 
     def create_network_connection(
             self,
@@ -474,10 +514,9 @@ class ScyllaCloudAPIClient:
         :param name: name of the connection
         :param connection_type: type of the connection (only "AWS_TGW_ATTACHMENT" for now)
         """
-        url = f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection'
         return self.request(
             'POST',
-            url,
+            f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection',
             cidrList=cidr_list,
             clusterDCID=dc_id,
             data=data,
