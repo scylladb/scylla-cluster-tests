@@ -26,6 +26,10 @@ def call(Map pipelineParams) {
                description: 'aws|gce|azure|docker',
                name: 'backend')
 
+            booleanParam(defaultValue: pipelineParams.get('use_scylla_cloud', false),
+                        description: 'Use ScyllaDB Cloud as a backend. Only AWS and GCE cloud providers are supported.',
+                        name: 'use_scylla_cloud')
+
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
@@ -314,6 +318,9 @@ def call(Map pipelineParams) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: 30, unit: 'MINUTES') {
                                     if (params.backend == 'aws' || params.backend == 'azure') {
+                                        if (params.use_scylla_cloud) {
+                                            echo "ScyllaDB Cloud is used as DB cluster backend: provisioning loader nodes only on ${params.backend} backend"
+                                        }
                                         provisionResources(params, builder.region)
                                     } else if (params.backend.contains('docker')) {
                                         sh """

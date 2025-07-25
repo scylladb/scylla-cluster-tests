@@ -14,6 +14,12 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
+    # Set Scylla Cloud flag if enabled
+    if [[ "${params.use_scylla_cloud}" == "true" ]] ; then
+        export SCT_CLUSTER_BACKEND="xcloud"
+        export SCT_XCLOUD_PROVIDER="${params.backend}"
+    fi
+
     if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
         export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
     fi

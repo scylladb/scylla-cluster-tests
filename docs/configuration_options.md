@@ -17,7 +17,7 @@ a list of config files that would be used
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
-backend that will be used, aws/gce/docker
+backend that will be used, aws/gce/azure/docker/xcloud
 
 **default:** N/A
 
