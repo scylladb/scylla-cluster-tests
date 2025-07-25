@@ -26,6 +26,41 @@ class ScyllaDoctor:
     SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX = "downloads/scylla-doctor/tar/"
     SCYLLA_DOCTOR_OFFLINE_BIN = "scylla_doctor.pyz"
     SCYLLA_DOCTOR_OFFLINE_CONF = "scylla_doctor.conf"
+    SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS = dedent("""
+        [GossipInfoCollector]
+        ; Doesn't work with systemd-user service
+        run = no
+        [SystemTopologyCollector]
+        ; Depends on GossipInfoCollector
+        run = no
+        [TokenMetadataHostsMappingCollector]
+        ; Doesn't work with systemd-user service
+        run = no
+        [RaftTopologyRPCStatusCollector]
+        ; Doesn't work with systemd-user service
+        run = no
+        [ScyllaClusterStatusCollector]
+        ; Doesn't work with systemd-user service
+        run = no
+        [ScyllaClusterSchemaCollector]
+        ; Doesn't work with systemd-user service
+        run = no
+        [KernelRingBufferCollector]
+        ; Requires root privileges
+        run = no
+        [ScyllaLimitNOFILECollector]
+        ; Requires root privileges
+        run = no
+        [ScyllaSystemConfigurationFilesCollector]
+        ; Requires root installation with configs in /etc
+        run = no
+        [PerftuneYamlDefaultCollector]
+        ; Depends on ScyllaSystemConfigurationFilesCollector
+        run = no
+        [PerftuneSystemConfigurationCollector]
+        ; perftune script requires root
+        run = no
+    """)
 
     def __init__(self, node: BaseNode, test_config: TestConfig, offline_install=False):
         self.node = node
@@ -78,7 +113,7 @@ class ScyllaDoctor:
         self.node.remoter.run(f"curl -JL {self.SCYLLA_DOCTOR_OFFLINE_DOWNLOAD_URI}{package_path} | tar -xvz")
         self.scylla_doctor_exec = f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_BIN}"
 
-    def update_scylla_doctor_config(self, prefix: str):
+    def update_scylla_doctor_config(self, prefix: str, additional_config=""):
         with remote_file(self.node.remoter, f"{self.current_dir}/{self.SCYLLA_DOCTOR_OFFLINE_CONF}") as f:
             config = dedent(f"""
                 [DefaultPaths]
@@ -86,6 +121,8 @@ class ScyllaDoctor:
                 scylla_directory_config = {prefix}/scylladb/etc/scylla
                 scylla_directory_configs = {prefix}/scylladb/etc/scylla.d
                 scylla_directory_var = {prefix}/scylladb
+
+                {additional_config}
             """)
             LOGGER.info("Updating scylla-doctor-config file...\n%s", config)
 
@@ -103,7 +140,8 @@ class ScyllaDoctor:
             self.download_scylla_doctor()
             if self.node.is_nonroot_install:
                 self.python3_path = self.find_local_python3_binary(self.current_dir)
-                self.update_scylla_doctor_config(self.current_dir)
+                self.update_scylla_doctor_config(
+                    self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS)
         else:
             self.node.install_package('scylla-doctor')
 
