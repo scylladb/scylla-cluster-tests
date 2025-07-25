@@ -17,6 +17,11 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
     export SCT_CLUSTER_BACKEND="${params.backend}"
 
+    if [[ "${params.backend}" == "xcloud" ]] ; then
+        export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+        export SCT_XCLOUD_ENV="${params.xcloud_env}"
+    fi
+
     if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
         export SCT_INSTANCE_PROVISION="${params.provision_type}"
     fi

@@ -246,7 +246,7 @@ class SCTConfiguration(dict):
              help="a list of config files that would be used", appendable=False),
 
         dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", type=str,
-             help="backend that will be used, aws/gce/docker", appendable=False),
+             help="backend that will be used, aws/gce/azure/docker/xcloud", appendable=False),
 
         dict(name="test_method", env="SCT_TEST_METHOD", type=str,
              help="class.method used to run the test. Filled automatically with run-test sct command.",
@@ -2338,11 +2338,17 @@ class SCTConfiguration(dict):
         if cloud_provider == 'aws':
             return {
                 'region': self.region_names[0],
-                'instance_type_db': self.get('instance_type_db')}
+                'instance_type_db': self.get('instance_type_db'),
+                'instance_type_loader': self.get('instance_type_loader'),
+                'root_disk_size_loader': self.get('root_disk_size_loader'),
+                'root_disk_type_loader': self.get('root_disk_type_loader')}
         elif cloud_provider == 'gce':
             return {
                 'region': self.gce_datacenters[0],
-                'instance_type_db': self.get('gce_instance_type_db')}
+                'instance_type_db': self.get('gce_instance_type_db'),
+                'instance_type_loader': self.get('gce_instance_type_loader'),
+                'root_disk_size_loader': self.get('gce_root_disk_size_loader'),
+                'root_disk_type_loader': self.get('gce_root_disk_type_loader')}
         return {}
 
     @cached_property
@@ -3054,7 +3060,7 @@ class SCTConfiguration(dict):
                              f"Currently supported versions: {', '.join(supported_versions)}")
 
         # validate if selected region is supported by the cloud provider
-        provider_id = cloud_api_client.cloud_provider_ids[CloudProviderType(cloud_provider.upper())]
+        provider_id = cloud_api_client.cloud_provider_ids[CloudProviderType.from_sct_backend(cloud_provider)]
         supported_regions = [
             r['externalId'] for r in cloud_api_client.get_regions(
                 cloud_provider_id=provider_id)['regions']
