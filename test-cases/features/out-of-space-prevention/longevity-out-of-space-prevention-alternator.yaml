@@ -1,0 +1,40 @@
+test_duration: 720
+# This will fill a 3 x i4i.large cluster to 90% disk usage
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 200 -p recordcount=420000000
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=120000000
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 200 -p recordcount=420000000
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=120000000 -p insertcount=120000000
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 200 -p recordcount=420000000
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=240000000 -p insertcount=120000000
+
+# This will fill a 3 x i4i.large cluster to an extra 15% disk usage
+stress_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 200 -p recordcount=420000000
+    -p fieldcount=8 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=360000000 -p insertcount=60000000
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.large'
+instance_type_monitor: 't3.large'
+
+user_prefix: 'oos-test'
+round_robin: true
+
+alternator_port: 8080
+dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_use_dns_routing: true
+docker_network: 'ycsb_net'
