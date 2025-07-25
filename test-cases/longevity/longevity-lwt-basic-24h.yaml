@@ -1,19 +1,58 @@
-test_duration: 1500
-prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=30" ]
-stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=1440m -mode native cql3 -rate threads=20",
-             "cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=1440m -mode native cql3 -rate threads=20"
-            ]
-stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' cl=SERIAL duration=1440m -mode native cql3 -rate threads=20" ]
+test_duration: 3600
+stress_duration: 60
+
+prepare_write_cmd:
+  - >-
+    latte run
+    -f myinsert
+    -P rows=10000000
+    -P replication_factor=3
+    --rate 50000
+    test-cases/longevity/lwt_and_tablet.rn
+
+
+
+stress_cmd:
+  - >-
+    latte run -f lwt_upd_one --threads=20 --concurrency=60 --duration=80m
+    test-cases/longevity/lwt_and_tablet.rn
+
+  - >-
+    latte run -f lwt_upd_two --threads=20 --concurrency=60 --duration=80m
+    test-cases/longevity/lwt_and_tablet.rn
+
+  - >-
+    latte run -f lwt_read --consistency=QUORUM --threads=20 --concurrency=60 --duration=80m
+    test-cases/longevity/lwt_and_tablet.rn
+
+  - >-
+    latte run -f delete_partitions -P delete_ratio=0.5 --duration=80m
+    test-cases/longevity/lwt_and_tablet.rn
+
+# TODO more flexible deletion
+#  - >-
+#    latte run -f delete_partitions --threads 10 --concurrency 30  --rate 20000 --duration 80m
+#    test-cases/longevity/lwt_and_tablet.rn
+
+
+
+#use_mgmt: false
+#enable_argus: false
+store_perf_results: true
+
 
 n_db_nodes: 6
-n_loaders: 3
+#simulated_racks: 3
+n_loaders: 5
 round_robin: true
 
-instance_type_db: 'i4i.large'
+instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
+#nemesis_class_name: 'NoOpMonkey'
 nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
 nemesis_seed: '021'
 nemesis_during_prepare: false
 space_node_threshold: 64424

@@ -1,0 +1,96 @@
+use latte::*;
+
+const TOTAL_ROWS  = latte::param!("rows",               10_000_000);
+const PK_SPREAD   = latte::param!("pk_spread",          1_000);
+const RF          = latte::param!("replication_factor", 3);
+const SERIAL_CL   = latte::param!("serial_cl",          true);
+const DELETE_RATIO  = latte::param!("delete_ratio",       0.50);
+
+fn pk(i) {
+    i / PK_SPREAD
+}
+
+fn ck(i) {
+    i % PK_SPREAD
+}
+
+fn pad(i) {
+    latte::text(i, 200)
+}
+
+
+pub async fn schema(db) {
+    // needs ${RF} → keep template string
+    db.execute(`
+        CREATE KEYSPACE IF NOT EXISTS my_keyspace
+        WITH replication = {
+          'class'              : 'NetworkTopologyStrategy',
+          'replication_factor' : ${RF}
+        }
+    `).await?;
+
+
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS my_keyspace.lwt_io (\
+            pk bigint,\
+            ck bigint,\
+            a int,\
+            pad text,\
+            PRIMARY KEY (pk, ck)) \
+         WITH compaction = { 'class' : 'TimeWindowCompactionStrategy' }",
+    )
+    .await?;
+}
+
+pub async fn prepare(db) {
+    db.prepare("ins",
+        "INSERT INTO my_keyspace.lwt_io (pk, ck, a, pad) VALUES (?,?,?,?)"
+    ).await?;
+
+    db.prepare("del_part",
+        "DELETE FROM my_keyspace.lwt_io WHERE pk = ?"
+    ).await?;
+
+    db.prepare("upd_two",
+        "UPDATE my_keyspace.lwt_io \
+         SET pad = ? WHERE pk = ? AND ck = ? IF a <= 500000"
+    ).await?;
+
+    db.prepare("upd_one",
+        "UPDATE my_keyspace.lwt_io \
+         SET pad = ? WHERE pk = ? AND ck = ? IF a > 500000"
+    ).await?;
+
+    db.prepare("sel_lwt",
+        "SELECT a, pad FROM my_keyspace.lwt_io WHERE pk = ? AND ck = ?"
+    ).await?;
+}
+
+
+pub async fn myinsert(db, i) {
+    db.execute_prepared(
+        "ins",
+        [ pk(i), ck(i), hash_range(i, 1_000_000), pad(i) ]
+    ).await?;
+}
+
+
+pub async fn delete_partitions(db, part) {
+    let total_parts = TOTAL_ROWS / PK_SPREAD;
+    if (part as f64) < (total_parts as f64) * DELETE_RATIO {
+        db.execute_prepared("del_part", [ part ]).await?;
+    }
+}
+
+
+pub async fn lwt_upd_one(db, i) {
+    db.execute_prepared("upd_one", [ pad(i), pk(i), ck(i) ]).await?;
+}
+
+pub async fn lwt_upd_two(db, i) {
+    db.execute_prepared("upd_two", [ pad(i), pk(i), ck(i) ]).await?;
+}
+
+pub async fn lwt_read(db, i) {
+    db.execute_prepared("sel_lwt", [ pk(i), ck(i) ]).await?;
+}
