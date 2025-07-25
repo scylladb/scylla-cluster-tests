@@ -5472,16 +5472,16 @@ class Nemesis(NemesisFlags):
                     self.log.debug("Target Coordinator node: %s, %s", coordinator_node.name, self.target_node.name)
                     # kill scylla on target node which is coordinator now.
                     # self._kill_scylla_daemon()
-                    # host_id = self.target_node.host_id
-                    self.target_node.stop_scylla()
-                    # self._remove_node_add_node(verification_node=working_node,
-                    #                            node_to_remove=self.target_node, remove_node_host_id=host_id)
+                    host_id = self.target_node.host_id
+                    # self.target_node.stop_scylla()
+                    self._remove_node_add_node(verification_node=working_node,
+                                               node_to_remove=self.target_node, remove_node_host_id=host_id)
                     self.log.debug("Wait to new coordinator will be elected for 30 seconds")
                     # time.sleep(30)
                     new_coordinator_node = get_topology_coordinator_node(working_node)
                     self.log.debug("Target and New coordinator node: %s, %s",
                                    self.target_node.name, new_coordinator_node.name)
-                    self.target_node.start_scylla()
+                    # self.target_node.start_scylla()
                     # self.target_node.run_nodetool(sub_cmd="repair -pr")
                     assert self.target_node != new_coordinator_node, \
                         f"New coordinator node was not elected while old one {coordinator_node.name} was stopped"
