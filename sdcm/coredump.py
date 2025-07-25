@@ -330,9 +330,9 @@ class CoredumpThreadBase(Thread):
         return self._extract_version(release_version)
 
     def update_new_coredump_with_exec_information(self, core_info: CoreDumpInfo) -> None:
-        core = self._get_core_by_pid(core_info.pid)
-        core_info.update(executable=core.get('exe', r'N\A'),
-                         executable_version=self._get_executable_version(core.get('exe', r'N\A')))
+        if core := self._get_core_by_pid(core_info.pid):
+            core_info.update(executable=core.get('exe', r'N\A'),
+                             executable_version=self._get_executable_version(core.get('exe', r'N\A')))
 
     @staticmethod
     def _extract_version(release_version: str) -> Optional[str]:
