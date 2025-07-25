@@ -236,8 +236,9 @@ class LongevityOutOfSpaceTest(LongevityTest):
     def test_oos_repair(self):
         """
         Fill the cluster to 90%
-        Start a repair task
+        Restart nodes during fill
         Fill the cluster to 98%
+        At 97% disk usage, start a repair task
         Repair should have status RUNNING and not finish
         Scale out the cluster
         Wait until the repair task has status DONE
@@ -246,18 +247,22 @@ class LongevityOutOfSpaceTest(LongevityTest):
         prepare_thread.start()
         nodes = cycle(self.db_cluster.nodes)
         while prepare_thread.is_alive():
-            # every 10 minutes, cycle thorough the nodes restart them
-            sleep(600)
+            # every 15 minutes, cycle thorough the nodes restart them
+            sleep(900)
             node = next(nodes)
-            if self.get_disk_usage(node) > 80:
+            if self.get_disk_usage(node) > 70:
                 break
-            self.log.info(f"Restarting node {node.name}")
+            self.log.info(f"Restarting node {node.name}.")
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
+            self.log.info(f"Node {node.name} has restarted.")
+        prepare_thread.join()
+        self.log.info("Prepare write command finished.")
 
         with ignore_stress_errors():
             stress_thread = Thread(target=self.run_stress)
             stress_thread.start()
+            self.log.info("Started stress write thread.")
 
             mgr_cluster = self.db_cluster.get_cluster_manager()
             repair_task = None
@@ -290,9 +295,8 @@ class LongevityOutOfSpaceTest(LongevityTest):
             if task_final_status != TaskStatus.ERROR_FINAL:
                 repair_task.stop()
             raise ScyllaManagerError(
-                f'Task: {repair_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
-                f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(repair_task.id))
+                f"Task: {repair_task.id} final status is: {task_final_status}.\nTask progress string: {progress_full_string}")
+        self.log.info(f"Task: {repair_task.id} is done.")
 
         self.run_stress("stress_cmd_r")
 
