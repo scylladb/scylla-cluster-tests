@@ -163,9 +163,9 @@ class LongevityOutOfSpaceTest(LongevityTest):
             result = result and self.verify_stress_thread(stress)
         return result
 
-    def scale_out(self, rack=None):
+    def scale_out(self, nr_nodes=None, rack=None):
         instance_type = self.params.get("instance_type_db")
-        nr_nodes = self.db_cluster.racks_count if rack is None else 1
+        nr_nodes = nr_nodes or self.db_cluster.racks_count
         added_nodes = self.db_cluster.add_nodes(
             count=nr_nodes, instance_type=instance_type, enable_auto_bootstrap=True, rack=rack)
         self.monitors.reconfigure_scylla_monitoring()
@@ -376,7 +376,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         while decommission_thread.is_alive():
             if self.get_disk_usage(node1) >= 98:
                 self.log.info(f"Node {node1.name} is at critical disk utilization, scaling out the cluster.")
-                self.scale_out(rack=node1.rack)
+                self.scale_out(nr_nodes=1, rack=node1.rack)
                 break
             sleep(60)
 
@@ -483,7 +483,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
         host_ids_to_remove = {node: node.host_id for node in rack1[1:]}
 
         self.log.info(f"Stopping and terminating all nodes in rack {node1.rack} except {node1.name}")
-        for node in rack1[1:]:
+        for node in host_ids_to_remove.keys():
             self.log.info(f"Stopping node {node.name} in rack {node.rack}")
             node.stop_scylla_server()
             self.log.info(f"Terminating node {node.name} in rack {node.rack}")
@@ -498,10 +498,14 @@ class LongevityOutOfSpaceTest(LongevityTest):
                 node1.run_nodetool(f"removenode {host_id}", ignore_status=True,
                                    verbose=True, long_running=True, retry=0)
 
+        # Wait for the cluster topology to stabilize
+        self.log.info("Waiting for cluster topology to stabilize after removenode operations.")
+        sleep(300)  # Wait for 5 minutes to ensure topology stabilization
+
+        self.db_cluster.set_seeds()
         self.db_cluster.update_seed_provider()
         self.monitors.reconfigure_scylla_monitoring()
 
         # Bootstrap new nodes
         self.log.info(f"Bootstrapping new nodes in rack {node1.rack}")
-        for _ in rack1[1:]:
-            self.scale_out(rack=node1.rack)
+        self.scale_out(nr_nodes=len(host_ids_to_remove), rack=node1.rack)
