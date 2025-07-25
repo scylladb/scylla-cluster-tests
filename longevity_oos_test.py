@@ -118,7 +118,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
                 if disk_usage >= 98.5:
                     TestFrameworkEvent(source="longevity_balancer_test",
                                        message=f"Node {node.name} ({node.private_ip_address}) disk usage is at {disk_usage:.2f}%.",
-                                       severity=Severity.CRITICAL).publish()
+                                       severity=Severity.ERROR).publish()
             sleep(60)
 
     def get_disk_usage(self, node: BaseNode, end_time: float = None, interval: int = 60) -> float:
