@@ -90,7 +90,7 @@ from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger, HaproxyIngressLogger
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
-from sdcm.utils.version_utils import ComparableScyllaOperatorVersion
+from sdcm.utils.version_utils import ComparableScyllaOperatorVersion, ComparableScyllaVersion
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
@@ -2641,8 +2641,12 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                                      dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
         self.k8s_clusters[dc_idx].log.debug(
             "Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
+        request_body = [{"op": "replace", "path": path, "value": value}]
+        # Scylla >= 2025.x images are published to scylladb/scylla instead of scylladb/scylla-enterprise
+        if path.__contains__("version") and ComparableScyllaVersion(value) >= "2025.1.0":
+            request_body.append({"op": "replace", "path": "/spec/repository", "value": "scylladb/scylla"})
         return self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
-            body=[{"op": "replace", "path": path, "value": value}],
+            body=request_body,
             name=self.scylla_cluster_name,
             namespace=self.namespace,
             content_type=JSON_PATCH_TYPE)
