@@ -339,6 +339,12 @@ class ScyllaCloudAPIClient:
         return self.request(
             'POST', f'/account/{account_id}/cluster/{cluster_id}/notifications/email', emails=emails)
 
+    def get_cluster_connection(self, *, account_id: int, cluster_id: int) -> dict[str, Any]:
+        """Get cluster connection details including credentials and endpoints"""
+        url = f'/account/{account_id}/cluster/connect'
+        params = {'clusterId': cluster_id}
+        return self.request('GET', url, params=params)
+
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
         """Create a CIDR formatted firewall rule for a given cluster"""
