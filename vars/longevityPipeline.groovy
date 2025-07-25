@@ -23,8 +23,16 @@ def call(Map pipelineParams) {
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
-               description: 'aws|gce|azure|docker',
+               description: 'aws|gce|azure|docker|xcloud',
                name: 'backend')
+
+            choice(name: 'xcloud_provider',
+                   choices: ['aws', 'gce'],
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',)
+
+            string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
+                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
+                   name: 'xcloud_env')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
@@ -313,7 +321,10 @@ def call(Map pipelineParams) {
                         wrap([$class: 'BuildUser']) {
                             dir('scylla-cluster-tests') {
                                 timeout(time: 30, unit: 'MINUTES') {
-                                    if (params.backend == 'aws' || params.backend == 'azure') {
+                                    if (params.backend == 'xcloud') {
+                                        echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
+                                    }
+                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure') {
                                         provisionResources(params, builder.region)
                                     } else if (params.backend.contains('docker')) {
                                         sh """

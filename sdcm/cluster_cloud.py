@@ -11,15 +11,22 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import ipaddress
 import logging
 from functools import cached_property
 from types import SimpleNamespace
-from typing import Dict, Any
+from typing import Any
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 
 LOGGER = logging.getLogger(__name__)
+
+
+def format_ip_with_cidr(ip_str: str) -> str:
+    """Format IP address with CIDR notation."""
+    ip = ipaddress.ip_address(ip_str)
+    return f"{ip_str}/32" if ip.version == 4 else f"{ip_str}/128"
 
 
 class ScyllaCloudError(Exception):
@@ -32,8 +39,14 @@ class CloudNode(cluster.BaseNode):
     METADATA_BASE_URL = None
     log = LOGGER
 
-    def __init__(self, cloud_instance_data: Dict[str, Any], parent_cluster,
-                 node_prefix='node', node_index=1, base_logdir=None, dc_idx=0, rack=0):
+    def __init__(self,
+                 cloud_instance_data: dict[str, Any],
+                 parent_cluster: cluster.BaseScyllaCluster,
+                 node_prefix: str = 'node',
+                 node_index: int = 1,
+                 base_logdir: str | None = None,
+                 dc_idx: int = 0,
+                 rack: int = 0):
         self.node_index = node_index
         self._cloud_instance_data = cloud_instance_data
         self._api_client: ScyllaCloudAPIClient = parent_cluster._api_client
@@ -139,7 +152,7 @@ class CloudNode(cluster.BaseNode):
         return False
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {
             **super().tags,
             "NodeIndex": str(self.node_index),
@@ -198,13 +211,20 @@ class CloudNode(cluster.BaseNode):
 class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
     """Scylla DB cluster running on Scylla Cloud"""
 
-    def __init__(self, cloud_api_client: ScyllaCloudAPIClient, user_prefix=None,
-                 n_nodes=3, params=None, node_type='scylla-db', add_nodes=True):
+    def __init__(self,
+                 cloud_api_client: ScyllaCloudAPIClient,
+                 user_prefix: str | None = None,
+                 n_nodes: int = 3,
+                 params: dict[str, Any] | None = None,
+                 node_type: str = 'scylla-db',
+                 add_nodes: bool = True,
+                 allowed_ips: list | None = None):
 
         self._api_client = cloud_api_client
         self._account_id = cloud_api_client.get_current_account_id()
         self._cluster_id = None
         self._cluster_request_id = None
+        self._allowed_ips = allowed_ips or []
 
         self._cluster_created = False
         self._pending_node_configs = []
@@ -231,7 +251,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         # nodes provisioning and startup is managed by the Scylla Cloud itself
         return False
 
-    def _create_node(self, cloud_instance_data, node_index, dc_idx, rack):
+    def _create_node(self, cloud_instance_data: dict[str, Any], node_index: int, dc_idx: int, rack: int) -> CloudNode:
         try:
             node = CloudNode(
                 cloud_instance_data=cloud_instance_data,
@@ -246,7 +266,13 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         except Exception as e:
             raise ScyllaCloudError(f"Failed to create node: {e}") from e
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(self,
+                  count: int,
+                  ec2_user_data: str = '',
+                  dc_idx: int = 0,
+                  rack: int = 0,
+                  enable_auto_bootstrap: bool = False,
+                  instance_type: str | None = None) -> list[CloudNode]:
         """
         Add nodes to cluster. For cloud backend, this creates the entire cluster
         on first call, then performs resize for subsequent calls.
@@ -259,7 +285,12 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             return self._resize_cluster(count, dc_idx, rack, instance_type)
         return self._create_cluster(count, dc_idx, rack, enable_auto_bootstrap, instance_type)
 
-    def _create_cluster(self, count, dc_idx, rack, enable_auto_bootstrap, instance_type):
+    def _create_cluster(self,
+                        count: int,
+                        dc_idx: int,
+                        rack: int,
+                        enable_auto_bootstrap: bool,
+                        instance_type: str | None) -> list[CloudNode]:
         self.log.info("Creating new Scylla Cloud cluster with %s nodes", count)
         cluster_config = self._prepare_cluster_config(count, instance_type)
 
@@ -269,13 +300,16 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
+
+        self._get_cluster_credentials()
+
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
         self._cluster_created = True
         self.log.info("Successfully created cluster %s with %s nodes", self._cluster_id, len(nodes))
 
         return nodes
 
-    def _init_nodes_from_cluster(self, count, dc_idx, rack):
+    def _init_nodes_from_cluster(self, count: int, dc_idx: int, rack: int) -> list[CloudNode]:
         """Decompose the created cluster into individual CloudNode objects"""
         cluster_nodes = self._api_client.get_cluster_nodes(
             account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)
@@ -301,10 +335,10 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             self.log.info("Created node %s with public IP: %s", node.name, node.public_ip_address)
         return created_nodes
 
-    def _prepare_cluster_config(self, node_count, instance_type):
-        cloud_provider = self.params.get('xcloud_provider').upper()
+    def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
+        cloud_provider_type = CloudProviderType.from_sct_backend(self.params.get('xcloud_provider'))
 
-        provider_id = self._api_client.cloud_provider_ids[CloudProviderType(cloud_provider)]
+        provider_id = self._api_client.cloud_provider_ids[cloud_provider_type]
 
         region_name = self.params.cloud_provider_params.get('region')
         region_id = self._api_client.get_region_id_by_name(
@@ -314,7 +348,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         instance_id = self._api_client.get_instance_id_by_name(
             cloud_provider_id=provider_id, region_id=region_id, instance_type_name=instance_type_name)
 
-        allowed_ips = [f"{self._api_client.client_ip}/32",]
+        allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
+        allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
 
         return {
             'account_id': self._account_id,
@@ -338,7 +373,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'scaling': {}
         }
 
-    def _wait_for_cluster_ready(self, timeout=600):
+    def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Scylla Cloud cluster to be ready")
 
         def check_cluster_status():
@@ -448,6 +483,22 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         if down_nodes:
             raise cluster.ClusterNodesNotReady(
                 f"Nodes {','.join([node.name for node in down_nodes])} are not in ACTIVE/NORMAL state")
+
+    def _get_cluster_credentials(self):
+        """Retrieve default credentials for password authentification"""
+        connection_details = self._api_client.get_cluster_connection(
+            account_id=self._account_id, cluster_id=self._cluster_id)
+
+        creds = connection_details.get('credentials', {})
+        username = creds.get('username')
+        password = creds.get('password')
+        if username and password:
+            self.params.update({
+                'authenticator_user': username,
+                'authenticator_password': password
+            })
+        else:
+            self.log.error("No default username/password found in cluster connection details")
 
     def get_node_ips_param(self, public_ip=True):
         return 'xcloud_nodes_public_ip' if public_ip else 'xcloud_nodes_private_ip'

@@ -28,11 +28,16 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
         return TestConfig()
 
     def provision(self):
+        use_scylla_cloud = (self._params.get('cluster_backend') == 'xcloud' or
+                            self._params.get('xcloud_provisioning_mode'))
+
         if self.placement_group:
             self.placement_group.provision()
         SCTCapacityReservation.reserve(self._params)
         SCTDedicatedHosts.reserve(self._params)
-        if self.db_cluster:
+
+        # skip DB cluster provisioning for Scylla Cloud
+        if not use_scylla_cloud and self.db_cluster:
             self.db_cluster.provision()
         if self.monitoring_cluster:
             self.monitoring_cluster.provision()
