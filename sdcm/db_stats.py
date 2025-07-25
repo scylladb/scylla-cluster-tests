@@ -431,7 +431,10 @@ class Stats:
     def __init__(self, *args, **kwargs):
         self._test_index = kwargs.get("test_index")
         self._test_id = kwargs.get("test_id")
-        self._stats = {}
+        self._stats = {
+            'test_details': {},
+            'results': {},
+        }
         self.test_config = TestConfig()
 
         # For using this class as a base for TestStatsMixin.
