@@ -16,14 +16,12 @@ import random
 import time
 
 from cassandra.query import SimpleStatement
-from cassandra.cluster import Session
 
 from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,49 +68,6 @@ def get_random_column_name(session, ks, cf, filter_out_collections: bool = False
                                         filter_out_column_types=filter_out_column_types):
         return random.choice(column_names)
     return None
-
-
-def create_materialized_view(session: Session, ks_name: str, base_table_name: str, mv_name: str,  # noqa: PLR0913
-                             mv_partition_key: str | list[str], mv_clustering_key: str | list[str],
-                                mv_columns: str | list[str] = '*', speculative_retry: str = None, read_repair: str = None,
-                                compression: str | None = None, gc_grace: str | None = None,
-                                compact_storage: bool = False, timeout: int | float = 600):
-
-    # Fix quotes for column names, only use quotes where needed
-    if mv_columns != '*':
-        mv_columns = [
-            cql_quote_if_needed(cql_unquote_if_needed(col))
-            for col in (mv_columns if isinstance(mv_columns, list) else list(mv_columns))
-        ]
-    mv_partition_key = [
-        cql_quote_if_needed(cql_unquote_if_needed(pk))
-        for pk in (mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key))
-    ]
-    mv_clustering_key = [
-        cql_quote_if_needed(cql_unquote_if_needed(cl))
-        for cl in (mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key))
-    ]
-
-    where_clause = ' and '.join([f'{kc} is not null' for kc in mv_partition_key + mv_clustering_key])
-    select_clause = ', '.join(mv_columns)
-    pk_clause = ', '.join(mv_partition_key)
-    cl_clause = ', '.join(mv_clustering_key)
-
-    query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
-            f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
-    if compression is not None:
-        query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
-    if read_repair is not None:
-        query += f" AND read_repair_chance={read_repair}"
-    if gc_grace is not None:
-        query += f" AND gc_grace_seconds={gc_grace}"
-    if speculative_retry is not None:
-        query += f" AND speculative_retry='{speculative_retry}'"
-    if compact_storage:
-        query += ' AND COMPACT STORAGE'
-
-    LOGGER.debug(f'MV create statement: {query}')
-    session.execute(query, timeout=timeout)
 
 
 def create_index(session, ks, cf, column) -> str:
