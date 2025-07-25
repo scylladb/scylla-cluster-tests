@@ -432,7 +432,8 @@ class Stats:
         self._test_index = kwargs.get("test_index")
         self._test_id = kwargs.get("test_id")
         self._stats = {
-            'test_details': {}
+            'test_details': {},
+            'results': {},
         }
         self.test_config = TestConfig()
 
