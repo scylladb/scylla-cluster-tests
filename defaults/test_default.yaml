@@ -118,7 +118,6 @@ authenticator_password: ''
 
 # gemini defaults
 n_test_oracle_db_nodes: 1
-gemini_seed: 0
 oracle_scylla_version: '2022.1.14'
 append_scylla_args_oracle: '--enable-cache false'
 
