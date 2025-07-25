@@ -433,8 +433,10 @@ def is_enterprise(scylla_version):
     """
     :param scylla_version: scylla version string
     :return: True if this version string passed is a scylla enterprise version
+    but limit the picker to 2024.x. The later versions would not be considered to be
+    enterprise from the docker hub POV (since they are in scylladb/scylla)
     """
-    return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
+    return bool(re.search(r"^20[0-2][0-4].*", scylla_version))
 
 
 def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> str:
