@@ -43,3 +43,7 @@ gemini_seed: 66
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 use_preinstalled_scylla: false
+
+stress_image:
+  gemini: 'scylladb/gemini:1.9.3'
+gemini_log_cql_statements: false
