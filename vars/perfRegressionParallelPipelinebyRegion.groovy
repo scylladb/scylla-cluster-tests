@@ -1,6 +1,11 @@
 def call(Map pipelineParams) {
+    def builder = getJenkinsLabels("aws", "eu-west-1")
     pipeline {
-        agent any
+        agent {
+            label {
+                   label builder.label
+            }
+        }
         parameters {
             string(name: 'scylla_version', defaultValue: '', description: 'Scylla version to test')
             string(name: 'base_versions', defaultValue: '', description: 'Base versions')
@@ -11,8 +16,8 @@ def call(Map pipelineParams) {
         triggers {
             parameterizedCron (
                 '''
-                    00 6 * * 0 %scylla_version="master:latest";labels_selector=master-weekly
-                    0 23 */21 * * %scylla_version="master:latest";labels_selector=master-3weeks
+                    00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly
+                    0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks
                 '''
             )
         }
