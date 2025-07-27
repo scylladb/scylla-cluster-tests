@@ -656,8 +656,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if self.enable_cdc_for_tables:
             gemini_cmd += " --table-options \"cdc={'enabled': true}\""
         gemini_thread = self.run_gemini(gemini_cmd)
-        self.metric_has_data(
-            metric_query='gemini_cql_requests', n=10)
+        if SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/11534", params=self.params):
+            self.metric_has_data(
+                metric_query='gemini_cql_requests', n=10)
 
         with ignore_upgrade_schema_errors():
 
