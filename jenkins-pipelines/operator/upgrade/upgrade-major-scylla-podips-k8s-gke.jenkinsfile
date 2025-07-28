@@ -8,6 +8,7 @@ rollingOperatorUpgradePipeline(
     availability_zone: 'c',
     base_versions: '["2024.1.19"]',
     new_version: '2025.1.5',
+    k8s_version: '1.31',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
     test_config: '''["test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml", "configurations/operator/expose-pod-ips.yaml"]''',
     scylla_mgmt_agent_version: '3.5.1',
