@@ -19,7 +19,7 @@ from typing import NamedTuple
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.test_config import TestConfig
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.git import clone_repo
 from sdcm.utils.metaclasses import Singleton
 from sdcm.utils.decorators import retrying
