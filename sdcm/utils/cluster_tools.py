@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING
 from collections import defaultdict
 
+
 if TYPE_CHECKING:
     from sdcm.cluster import BaseCluster, BaseNode
 

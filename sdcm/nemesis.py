@@ -106,8 +106,8 @@ from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
-                               update_authenticator, ParallelObject,
-                               ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+                               update_authenticator, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
