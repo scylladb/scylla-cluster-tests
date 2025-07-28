@@ -42,7 +42,6 @@ from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import (
     S3Storage,
-    ParallelObject,
     list_instances_aws,
     list_instances_gce,
     remove_files,
@@ -54,6 +53,7 @@ from sdcm.utils.common import (
     get_sct_root_path,
     normalize_ipv6_url, create_remote_storage_dir,
 )
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying

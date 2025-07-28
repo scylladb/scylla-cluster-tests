@@ -15,7 +15,7 @@ from sdcm.wait import wait_for
 
 from sdcm.sct_events.group_common_events import decorate_with_context, \
     ignore_ycsb_connection_refused
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.raft import get_node_status_from_system_by
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
