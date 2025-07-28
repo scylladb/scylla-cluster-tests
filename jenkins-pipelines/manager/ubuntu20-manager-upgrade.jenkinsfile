@@ -9,7 +9,7 @@ managerPipeline(
 
     // Upgrade from previous minor release (choose non-last patch release which is still used in production)
     // Use Metabase to check it (https://scylladb.metabaseapp.com/question/1685-manager-version)
-    manager_version: '3.4.1',
+    manager_version: '3.5.0',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
