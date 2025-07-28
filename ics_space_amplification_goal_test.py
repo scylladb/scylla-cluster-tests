@@ -21,7 +21,8 @@ from sdcm.cluster import BaseNode
 from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.utils.common import ParallelObject, skip_optional_stage
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.parallel_object import ParallelObject
 from test_lib.compaction import CompactionStrategy, LOGGER
 
 KEYSPACE_NAME = 'keyspace1'

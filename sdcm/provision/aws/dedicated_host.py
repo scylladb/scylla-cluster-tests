@@ -24,7 +24,8 @@ import tenacity
 
 from sdcm.wait import exponential_retry
 from sdcm.utils.aws_utils import tags_as_ec2_tags
-from sdcm.utils.common import ParallelObject, all_aws_regions
+from sdcm.utils.common import all_aws_regions
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.test_config import TestConfig
 
 

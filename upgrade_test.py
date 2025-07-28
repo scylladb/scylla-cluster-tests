@@ -35,7 +35,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import retrying
 from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
