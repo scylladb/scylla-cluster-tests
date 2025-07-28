@@ -343,7 +343,7 @@ Branch of scylla db enterprise to install. Options in defaults/manager_versions.
 
 
 
-**default:** 3.5.0
+**default:** 3.5.1
 
 **type:** str
 
@@ -2026,7 +2026,7 @@ Number of nodes in monitoring pool that will be used for scylla-operator's deplo
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
-**default:** scylladb/scylla-manager:3.5.0
+**default:** scylladb/scylla-manager:3.5.1
 
 **type:** str (appendable)
 
