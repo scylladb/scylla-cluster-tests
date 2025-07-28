@@ -2604,8 +2604,12 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                                      dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
         self.k8s_clusters[dc_idx].log.debug(
             "Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
+        request_body=[{"op": "replace", "path": path, "value": value}]
+        # Scylla >= 2025.x is no longer available in scylladb/scylla-enterprise
+        if path.__contains__("version") and value.startswith("2025"):
+            request_body.append({"op": "replace", "path": "repository", "value": "scylladb/scylla"})
         return self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
-            body=[{"op": "replace", "path": path, "value": value}],
+            body=request_body,
             name=self.scylla_cluster_name,
             namespace=self.namespace,
             content_type=JSON_PATCH_TYPE)
