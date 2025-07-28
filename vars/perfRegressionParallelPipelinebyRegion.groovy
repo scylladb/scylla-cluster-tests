@@ -55,7 +55,8 @@ def call(Map pipelineParams) {
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
-                                labels: ['master-weekly']
+                                labels: ['master-weekly'],
+                                rolling_upgrade_test: true
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
@@ -134,7 +135,8 @@ def call(Map pipelineParams) {
                                 region: 'eu-west-2',
                                 versions: ['2025.1', '2025.2', 'master'],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
-                                labels: ['master-3weeks']
+                                labels: ['master-3weeks'],
+                                rolling_upgrade_test: true
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
@@ -193,6 +195,7 @@ def call(Map pipelineParams) {
                                         println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
                                         break
                                     }
+                                    rolling_upgrade_test = entry.rolling_upgrade_test
                                 }
                             }
                             if (region && version && sub_tests) {
@@ -200,9 +203,9 @@ def call(Map pipelineParams) {
                                     println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
                                         build job: job_name, wait: false, parameters: [
                                             string(name: 'scylla_version', value: params.scylla_version),
-                                            string(name: 'base_versions', value: params.base_versions),
+                                            string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
                                             string(name: 'provision_type', value: 'on_demand'),
-                                            string(name: 'new_scylla_repo', value: params.new_scylla_repo),
+                                            string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
                                             booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region)
