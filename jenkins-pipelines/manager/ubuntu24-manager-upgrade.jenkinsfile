@@ -8,7 +8,7 @@ managerPipeline(
     region: 'us-east-1',
 
     // Upgrade from the latest patch release
-    manager_version: '3.4',
+    manager_version: '3.5.1',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
