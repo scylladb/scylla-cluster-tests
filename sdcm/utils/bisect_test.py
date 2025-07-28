@@ -17,7 +17,7 @@ from functools import wraps
 
 import boto3
 import requests
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events import Severity
 
