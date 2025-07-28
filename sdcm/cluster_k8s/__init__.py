@@ -2607,7 +2607,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         request_body=[{"op": "replace", "path": path, "value": value}]
         # Scylla >= 2025.x is no longer available in scylladb/scylla-enterprise
         if path.__contains__("version") and value.startswith("2025"):
-            request_body.append({"op": "replace", "path": "repository", "value": "scylladb/scylla"})
+            request_body.append({"op": "replace", "path": "/spec/repository", "value": "scylladb/scylla"})
         return self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
             body=request_body,
             name=self.scylla_cluster_name,
