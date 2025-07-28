@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from collections import defaultdict
 from functools import partial
 
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseCluster, BaseNode

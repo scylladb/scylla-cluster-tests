@@ -14,7 +14,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 from longevity_test import LongevityTest
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
 
 

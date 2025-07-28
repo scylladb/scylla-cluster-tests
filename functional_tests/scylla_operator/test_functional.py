@@ -39,7 +39,7 @@ from sdcm.cluster_k8s import (
     SCYLLA_OPERATOR_NAMESPACE
 )
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
