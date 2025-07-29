@@ -197,19 +197,6 @@ wheels = [
 ]
 
 [[package]]
-name = "autopep8"
-version = "2.3.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pycodestyle", marker = "sys_platform != 'win32'" },
-    { name = "tomli", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/50/d8/30873d2b7b57dee9263e53d142da044c4600a46f2d28374b3e38b023df16/autopep8-2.3.2.tar.gz", hash = "sha256:89440a4f969197b69a995e4ce0661b031f455a9f776d2c5ba3dbd83466931758", size = 92210, upload-time = "2025-01-14T14:46:18.454Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/43/53afb8ba17218f19b77c7834128566c5bbb100a0ad9ba2e8e89d089d7079/autopep8-2.3.2-py2.py3-none-any.whl", hash = "sha256:ce8ad498672c845a0c3de2629c15b635ec2b05ef8177a6e7c91c74f3e9b51128", size = 45807, upload-time = "2025-01-14T14:46:15.466Z" },
-]
-
-[[package]]
 name = "avro"
 version = "1.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1561,7 +1548,7 @@ name = "importlib-metadata"
 version = "8.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "sys_platform != 'win32'" },
+    { name = "zipp", marker = "python_full_version < '3.13' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/66/650a33bd90f786193e4de4b3ad86ea60b53c89b669a5c7be931fac31cdb0/importlib_metadata-8.7.0.tar.gz", hash = "sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000", size = 56641, upload-time = "2025-04-27T15:29:01.736Z" }
 wheels = [
@@ -3401,7 +3388,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "autopep8", marker = "sys_platform != 'win32'" },
     { name = "pre-commit", marker = "sys_platform != 'win32'" },
     { name = "pycodestyle", marker = "sys_platform != 'win32'" },
     { name = "ruff", marker = "sys_platform != 'win32'" },
@@ -3469,7 +3455,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "autopep8", specifier = "==2.3.2" },
     { name = "pre-commit", specifier = "==4.0.1" },
     { name = "pycodestyle", specifier = "==2.13.0" },
     { name = "ruff", specifier = "==0.11.13" },

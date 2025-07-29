@@ -31,7 +31,7 @@ DEFAULT_KEEP_HOURS = 14
 
 
 def get_keep_hours(v_m, default=DEFAULT_KEEP_HOURS):
-    keep = v_m.tags.get('keep', "").lower() if v_m.tags else None
+    keep = v_m.tags.get("keep", "").lower() if v_m.tags else None
     if keep == "alive":
         return -1
     try:
@@ -42,34 +42,41 @@ def get_keep_hours(v_m, default=DEFAULT_KEEP_HOURS):
 
 def get_vm_creation_time(v_m, resource_group_name):
     try:
-        creation_time_str = v_m.tags.get('creation_time', "") if v_m.tags else ""
+        creation_time_str = v_m.tags.get("creation_time", "") if v_m.tags else ""
         creation_time = datetime.fromisoformat(creation_time_str)
     except ValueError:
         LOGGER.info("Error parsing creation time tag of VM: %s", creation_time_str)
         # set creation time to now in instance.tags so next time will be processed properly
         creation_time = datetime.utcnow()
         tags = v_m.tags or {}
-        tags.update({'creation_time': creation_time.isoformat(sep=" ", timespec="seconds")})
+        tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         try:
-            compute_client.virtual_machines.begin_update(resource_group_name, v_m.name, parameters={
-                "tags": tags,
-            })
+            compute_client.virtual_machines.begin_update(
+                resource_group_name,
+                v_m.name,
+                parameters={
+                    "tags": tags,
+                },
+            )
         except Exception as exc:  # noqa: BLE001
             LOGGER.info(
                 "Failed to update VM tags: %s in resource group: %s with exception: %s",
-                v_m.name, resource_group_name, exc)
+                v_m.name,
+                resource_group_name,
+                exc,
+            )
     return creation_time
 
 
 def get_rg_creation_time(resource_group):
     try:
-        creation_time_str = resource_group.tags.get('creation_time', "") if resource_group.tags else ""
+        creation_time_str = resource_group.tags.get("creation_time", "") if resource_group.tags else ""
         creation_time = datetime.fromisoformat(creation_time_str)
     except ValueError:
         LOGGER.info("Error parsing creation time tag of RG: %s", creation_time_str)
         creation_time = datetime.utcnow()
         tags = resource_group.tags or {}
-        tags.update({'creation_time': creation_time.isoformat(sep=" ", timespec="seconds")})
+        tags.update({"creation_time": creation_time.isoformat(sep=" ", timespec="seconds")})
         resource_group.tags = tags
         try:
             resource_client.resource_groups.create_or_update(resource_group.name, resource_group)
@@ -79,7 +86,7 @@ def get_rg_creation_time(resource_group):
 
 
 def get_keep_action(v_m) -> Callable:
-    keep_action = v_m.tags.get('keep_action', "terminate").lower() if v_m.tags else "terminate"
+    keep_action = v_m.tags.get("keep_action", "terminate").lower() if v_m.tags else "terminate"
     if not keep_action:
         keep_action = "terminate"
     return keep_action
@@ -105,7 +112,8 @@ def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False)
             compute_client.virtual_machines.begin_delete(resource_group_name, vm_name)
         except Exception as exc:  # noqa: BLE001
             LOGGER.info(
-                "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc)
+                "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
+            )
             return
         update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="terminate")
 
@@ -118,8 +126,9 @@ def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
         try:
             compute_client.virtual_machines.begin_deallocate(resource_group_name, vm_name, test_id)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.info("Failed to stop VM: %s in resource group: %s with exception: %s",
-                        vm_name, resource_group_name, exc)
+            LOGGER.info(
+                "Failed to stop VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc
+            )
             return
         update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="stop")
 
@@ -136,8 +145,11 @@ def delete_resource_group(resource_group_name, dry_run=False):
 
 
 def clean_azure_instances(dry_run=False):
-    resource_groups = [resource_group for resource_group in resource_client.resource_groups.list() if (
-        resource_group.tags.get('keep', "") != "alive" if resource_group.tags else True)]
+    resource_groups = [
+        resource_group
+        for resource_group in resource_client.resource_groups.list()
+        if (resource_group.tags.get("keep", "") != "alive" if resource_group.tags else True)
+    ]
     for resource_group in resource_groups:
         LOGGER.info("Checking resource group: %s", resource_group.name)
         rg_creation_time = get_rg_creation_time(resource_group)
@@ -148,8 +160,10 @@ def clean_azure_instances(dry_run=False):
         clean_group = True
         vms_to_process = []
         for v_m in compute_client.virtual_machines.list(resource_group.name):
-            test_id = v_m.tags.get('TestId', "").lower() if v_m.tags else ""
-            if should_keep(creation_time=get_vm_creation_time(v_m, resource_group.name), keep_hours=get_keep_hours(v_m)):
+            test_id = v_m.tags.get("TestId", "").lower() if v_m.tags else ""
+            if should_keep(
+                creation_time=get_vm_creation_time(v_m, resource_group.name), keep_hours=get_keep_hours(v_m)
+            ):
                 LOGGER.info("Keeping VM: %s in resource group: %s", v_m.name, resource_group.name)
                 clean_group = False  # skip cleaning group if there's at least one VM to keep
             elif get_keep_action(v_m) == "terminate":
@@ -168,13 +182,19 @@ def clean_azure_instances(dry_run=False):
 
 
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser('azure_cleanup')
-    arg_parser.add_argument("--duration", type=int,
-                            help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
-    arg_parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction,
-                            help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN'))
+    arg_parser = argparse.ArgumentParser("azure_cleanup")
+    arg_parser.add_argument(
+        "--duration",
+        type=int,
+        help="duration to keep non-tagged instances running in hours",
+        default=os.environ.get("DURATION", DEFAULT_KEEP_HOURS),
+    )
+    arg_parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        help="do not stop or terminate anything",
+        default=os.environ.get("DRY_RUN"),
+    )
 
     args = arg_parser.parse_args()
 

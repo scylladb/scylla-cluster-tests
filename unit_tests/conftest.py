@@ -24,8 +24,16 @@ from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.certificate import (
-    create_ca, create_certificate, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
-    CLIENT_FACING_KEYFILE, CA_CERT_FILE, CA_KEY_FILE, CLIENT_CERT_FILE, CLIENT_KEY_FILE)
+    create_ca,
+    create_certificate,
+    SCYLLA_SSL_CONF_DIR,
+    CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE,
+    CA_CERT_FILE,
+    CA_KEY_FILE,
+    CLIENT_CERT_FILE,
+    CLIENT_KEY_FILE,
+)
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
@@ -43,10 +51,11 @@ from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 pytest_plugins = ["pytester"]
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def events():
     class LocalMixing(EventsUtilsMixin):
         pass
+
     mixing = LocalMixing()
     mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
     yield mixing
@@ -54,57 +63,71 @@ def events():
     mixing.teardown_events_processes()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def prom_address():
     yield start_metrics_server()
 
 
-@pytest.fixture(name='docker_scylla', scope='function')
+@pytest.fixture(name="docker_scylla", scope="function")
 def fixture_docker_scylla(request: pytest.FixtureRequest, params):
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
-    ssl = docker_scylla_args.get('ssl')
-    docker_network = docker_scylla_args.get('docker_network')
+    ssl = docker_scylla_args.get("ssl")
+    docker_network = docker_scylla_args.get("docker_network")
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
-    entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
+    entryfile_path = entryfile_path / "docker" / "scylla-sct" / ("entry_ssl.sh" if ssl else "entry.sh")
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
     docker_version = docker_scylla_args.get(
-        'image', "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+        "image", "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269"
+    )
     cluster = LocalScyllaClusterDummy(params=params)
 
-    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+    ssl_dir = (Path(__file__).parent.parent / "data_dir" / "ssl_conf").absolute()
 
     if ssl:
-        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        localhost = LocalHost(user_prefix="unit_test_fake_user", test_id="unit_test_fake_test_id")
         create_ca(localhost)
 
-    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
-                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
-                         ' --entrypoint /entry.sh')
+    extra_docker_opts = (
+        f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+        f" -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z"
+        " --entrypoint /entry.sh"
+    )
 
-    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
-                          command_line=f"--smp 1 {alternator_flags}",
-                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+    scylla = RemoteDocker(
+        LocalNode("scylla", cluster),
+        image_name=docker_version,
+        command_line=f"--smp 1 {alternator_flags}",
+        extra_docker_opts=extra_docker_opts,
+        docker_network=docker_network,
+    )
 
     if ssl:
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
-                               ip_addresses=[scylla.ip_address], dns_names=[scylla.public_dns_name])
-            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
+            create_certificate(
+                CLIENT_FACING_CERTFILE,
+                CLIENT_FACING_KEYFILE,
+                cname="scylladb",
+                ca_cert_file=CA_CERT_FILE,
+                ca_key_file=CA_KEY_FILE,
+                ip_addresses=[scylla.ip_address],
+                dns_names=[scylla.public_dns_name],
+            )
+            create_certificate(
+                CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb", ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE
+            )
         finally:
             os.chdir(curr_dir)
 
     cluster.nodes = [scylla]
-    DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
+    DummyRemoter = collections.namedtuple("DummyRemoter", ["run", "sudo"])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
     def db_up():
@@ -121,9 +144,10 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
-    wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
-    wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
-                  timeout=120, throw_exc=True)
+    wait.wait_for(func=db_up, step=1, text="Waiting for DB services to be up", timeout=120, throw_exc=True)
+    wait.wait_for(
+        func=db_alternator_up, step=1, text="Waiting for DB services to be up alternator)", timeout=120, throw_exc=True
+    )
     yield scylla
 
     scylla.kill()
@@ -135,12 +159,12 @@ def fake_remoter():
     return FakeRemoter
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def fake_provisioner():
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def fake_region_definition_builder():
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
 
@@ -148,25 +172,27 @@ def fake_region_definition_builder():
 @pytest.fixture(scope="function", name="params")
 def fixture_params(request: pytest.FixtureRequest):
     if sct_config_marker := request.node.get_closest_marker("sct_config"):
-        config_files = sct_config_marker.kwargs.get('files')
-        os.environ['SCT_CONFIG_FILES'] = config_files
+        config_files = sct_config_marker.kwargs.get("files")
+        os.environ["SCT_CONFIG_FILES"] = config_files
 
-    os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+    os.environ["SCT_CLUSTER_BACKEND"] = "docker"
     params = sct_config.SCTConfiguration()
-    params.update(dict(
-        authenticator='PasswordAuthenticator',
-        authenticator_user='cassandra',
-        authenticator_password='cassandra',
-        authorizer='CassandraAuthorizer',
-    ))
+    params.update(
+        dict(
+            authenticator="PasswordAuthenticator",
+            authenticator_user="cassandra",
+            authenticator_password="cassandra",
+            authorizer="CassandraAuthorizer",
+        )
+    )
     yield params
 
     for k in os.environ:
-        if k.startswith('SCT_'):
+        if k.startswith("SCT_"):
             del os.environ[k]
 
 
-@pytest.fixture(scope='function', autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
 

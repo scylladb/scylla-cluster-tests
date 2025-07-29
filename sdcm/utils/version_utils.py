@@ -42,8 +42,8 @@ from sdcm.utils.features import get_enabled_features
 #   - 2019.1.4-0.20191217.b59e92dbd
 
 # gemini version 1.0.1, commit ef7c6f422c78ef6b84a6f3bccf52ea9ec846bba0, date 2019-05-16T09:56:16Z
-GEMINI_VERSION_RE = re.compile(r'\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),')
-REPO_VERSIONS_REGEX = re.compile(r'Filename: .*?server_(.*?)_.*\n', re.DOTALL)
+GEMINI_VERSION_RE = re.compile(r"\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),")
+REPO_VERSIONS_REGEX = re.compile(r"Filename: .*?server_(.*?)_.*\n", re.DOTALL)
 
 # NOTE: following regex is taken from the 'semver' package as is:
 #       https://python-semver.readthedocs.io/en/2.10.0/readme.html
@@ -69,10 +69,10 @@ SEMVER_REGEX = re.compile(
 )
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
-ARGUS_VERSION_RE = re.compile(r'((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)')
-SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
-SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
-ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r'(.*)_SSTABLE_FORMAT')
+ARGUS_VERSION_RE = re.compile(r"((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)")
+SCYLLA_VERSION_GROUPED_RE = re.compile(r"(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)")
+SSTABLE_FORMAT_VERSION_REGEX = re.compile(r"Feature (.*)_SSTABLE_FORMAT is enabled")
+ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r"(.*)_SSTABLE_FORMAT")
 PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
 
 # Example of output for `systemctl --version' command:
@@ -104,14 +104,19 @@ class ScyllaFileType(Enum):
 
 FILE_REGEX_DICT = {
     ScyllaFileType.DEBIAN: [
-        (re.compile(r"deb\s+\[arch=(?P<arch>[^\s]*).*?\].*\s(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"),
-         "{url}/dists/{version_code_name}/{component}/binary-{arch}/Packages"),
+        (
+            re.compile(
+                r"deb\s+\[arch=(?P<arch>[^\s]*).*?\].*\s(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"
+            ),
+            "{url}/dists/{version_code_name}/{component}/binary-{arch}/Packages",
+        ),
     ],
-    ScyllaFileType.YUM:
-        [
-            (re.compile(r"baseurl=(?P<url>http.*scylladb.com.*)"), "{url}" + REPOMD_XML_PATH),
-            (re.compile(r"deb\s+(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"),
-             "{url}/dists/{version_code_name}/{component}/binary-amd64/Packages.gz"),
+    ScyllaFileType.YUM: [
+        (re.compile(r"baseurl=(?P<url>http.*scylladb.com.*)"), "{url}" + REPOMD_XML_PATH),
+        (
+            re.compile(r"deb\s+(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"),
+            "{url}/dists/{version_code_name}/{component}/binary-amd64/Packages.gz",
+        ),
     ],
 }
 
@@ -128,36 +133,35 @@ class ComparableScyllaVersion:
         self.v_major = int(parsed_version[0])
         self.v_minor = int(parsed_version[1])
         self.v_patch = int(parsed_version[2])
-        self.v_pre_release = parsed_version[3] or ''
-        self.v_build = parsed_version[4] or ''
+        self.v_pre_release = parsed_version[3] or ""
+        self.v_build = parsed_version[4] or ""
 
     @staticmethod
     def parse(version_string: str):
         """Parse scylla-binary and scylla-docker-tag versions into a proper semver structure."""
         # NOTE: remove 'with build-id' part if exists and other possible non-semver parts
-        _scylla_version = (version_string or '').split(" ")[0]
+        _scylla_version = (version_string or "").split(" ")[0]
 
         # NOTE: replace '~' which gets returned by the scylla binary
-        _scylla_version = _scylla_version.replace('~', '-')
+        _scylla_version = _scylla_version.replace("~", "-")
 
         # NOTE: remove docker-specific parts if version is taken from a docker tag
-        _scylla_version = _scylla_version.replace('-aarch64', '')
-        _scylla_version = _scylla_version.replace('-x86_64', '')
+        _scylla_version = _scylla_version.replace("-aarch64", "")
+        _scylla_version = _scylla_version.replace("-x86_64", "")
 
         # NOTE: transform gce-image version like '2024.2.0.dev.0.20231219.c7cdb16538f2.1'
         if gce_image_v_match := re.search(r"(\d+\.\d+\.\d+\.)([a-z0-9]+\.)(.*)", _scylla_version):
             _scylla_version = f"{gce_image_v_match[1][:-1]}-{gce_image_v_match[2][:-1]}-{gce_image_v_match[3]}"
 
         # NOTE: make short scylla version like '5.2' be correct semver string
-        _scylla_version_parts = _scylla_version.split('.')
-        if len(_scylla_version_parts) == 2 and '-' in _scylla_version_parts[1]:
+        _scylla_version_parts = _scylla_version.split(".")
+        if len(_scylla_version_parts) == 2 and "-" in _scylla_version_parts[1]:
             # NOTE: support for older non-semver release like '2022.1~rc8'
-            minor, extra = _scylla_version_parts[1].split('-')
+            minor, extra = _scylla_version_parts[1].split("-")
             _scylla_version = f"{_scylla_version_parts[0]}.{minor}.0-{extra}"
         elif len(_scylla_version_parts) == 2:
             _scylla_version = f"{_scylla_version}.0"
-        elif len(_scylla_version_parts) > 2 and re.search(
-                r"\D+", _scylla_version_parts[2].split("-")[0]):
+        elif len(_scylla_version_parts) > 2 and re.search(r"\D+", _scylla_version_parts[2].split("-")[0]):
             _scylla_version = f"{_scylla_version_parts[0]}.{_scylla_version_parts[1]}.0-{_scylla_version_parts[2]}"
             for part in _scylla_version_parts[3:]:
                 _scylla_version += f".{part}"
@@ -173,13 +177,14 @@ class ComparableScyllaVersion:
             _scylla_version = f"{dotted_build_id_match[1]}+{dotted_build_id_match[3]}"
 
         # NOTE: replace '_' with '.' symbol in the build part, example: '3.5.0-dev_0.20250105+ef3b96816_SNAPSHOT
-        _scylla_version = re.sub(r'_', '.', _scylla_version)
+        _scylla_version = re.sub(r"_", ".", _scylla_version)
 
         if match := SEMVER_REGEX.match(_scylla_version):
             return match.groups()
         raise ValueError(
             f"Cannot parse provided '{version_string}' scylla_version for the comparison. "
-            f"Transformed scylla_version: {_scylla_version}")
+            f"Transformed scylla_version: {_scylla_version}"
+        )
 
     def __str__(self):
         result = f"{self.v_major}.{self.v_minor}.{self.v_patch}"
@@ -200,7 +205,7 @@ class ComparableScyllaVersion:
         # NOTE: absence of the 'pre-release' part means we have 'GA' version which is newer than
         #       any of the 'pre-release' ones.
         #       So, make empty 'pre-release' prevail over any defined one.
-        return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or 'xyz')
+        return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or "xyz")
 
     def __lt__(self, other):
         return self.as_comparable() < self._transform_to_comparable(other).as_comparable()
@@ -225,16 +230,16 @@ class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
     """Accepts and compares known 'non-semver' and 'semver'-like Scylla Operator versions."""
 
     def as_comparable(self):
-        v_pre_release = ''
+        v_pre_release = ""
         if not self.v_pre_release:
-            v_pre_release = 'xyz'
+            v_pre_release = "xyz"
         else:
             # 'alpha.0-100-gf796b97'
             dash_parts = self.v_pre_release.split("-")
             transformed_dash_parts = []
             # ['alpha.0', '100', 'gf796b97']
             for dash_part in dash_parts:
-                dot_parts = dash_part.split('.')
+                dot_parts = dash_part.split(".")
                 transformed_dot_parts = []
                 # ['alpha', '0'] , ['100'] , ['gf796b97']
                 for dot_part in dot_parts:
@@ -243,28 +248,29 @@ class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
                     else:
                         # ['alpha', '0000'] , ['0100'] , ['gf796b97']
                         transformed_dot_parts.append(dot_part.zfill(4))
-                transformed_dash_parts.append('.'.join(transformed_dot_parts))
-            v_pre_release = '-'.join(transformed_dash_parts)
+                transformed_dash_parts.append(".".join(transformed_dot_parts))
+            v_pre_release = "-".join(transformed_dash_parts)
         return (self.v_major, self.v_minor, self.v_patch, v_pre_release)
 
     @staticmethod
     def parse(version_string: str):
         """Parse scylla-operator versions into a proper semver structure."""
-        _scylla_operator_version = version_string or ''
+        _scylla_operator_version = version_string or ""
 
         # NOTE: remove redundant prefixes and suffixes if exist
-        for prefix in ('scylla-operator-', 'scylla-manager-', 'scylla-', 'v'):
+        for prefix in ("scylla-operator-", "scylla-manager-", "scylla-", "v"):
             if _scylla_operator_version.startswith(prefix):
-                _scylla_operator_version = _scylla_operator_version[len(prefix):]
-        for suffix in ('-nightly', ):
+                _scylla_operator_version = _scylla_operator_version[len(prefix) :]
+        for suffix in ("-nightly",):
             if _scylla_operator_version.endswith(suffix):
-                _scylla_operator_version = _scylla_operator_version[:-len(suffix)]
+                _scylla_operator_version = _scylla_operator_version[: -len(suffix)]
 
         if match := SEMVER_REGEX.match(_scylla_operator_version):
             return match.groups()
         raise ValueError(
             f"Cannot parse provided '{version_string}' scylla_operator_version for the comparison. "
-            f"Transformed scylla_operator_version: {_scylla_operator_version}")
+            f"Transformed scylla_operator_version: {_scylla_operator_version}"
+        )
 
 
 @lru_cache(maxsize=1024)
@@ -277,7 +283,7 @@ def get_url_content(url, return_url_data=True):
     if not response_data:
         raise ValueError(f"The repository URL '{url}' not contains any content")
     if return_url_data:
-        return response_data.split('\n')
+        return response_data.split("\n")
     # To overcome on Pylint's "inconsistent-return-statements", a value must be returned    return []
     return []
 
@@ -287,7 +293,7 @@ def get_scylla_urls_from_repository(repo_details):
     for url in repo_details.urls:
         match = None
         url_format = None
-        for (url_regex, url_format) in FILE_REGEX_DICT[repo_details.type]:
+        for url_regex, url_format in FILE_REGEX_DICT[repo_details.type]:
             match = url_regex.match(url)
             if match:
                 break
@@ -295,35 +301,36 @@ def get_scylla_urls_from_repository(repo_details):
             continue
         url_details = {**match.groupdict()}
 
-        archs = url_details.get('arch', None)
+        archs = url_details.get("arch", None)
         if archs is None:
             archs = [None]
         else:
-            archs = archs.split(',')
+            archs = archs.split(",")
 
         for arch in archs:
-            if arch == '':
+            if arch == "":
                 continue
-            full_url = url_format.format(**{**url_details, 'arch': arch})
+            full_url = url_format.format(**{**url_details, "arch": arch})
             # for scylla-manager we never used a noarch key
-            basearch_list = ["x86_64"] if 'scylla-manager' in full_url else ["x86_64", "noarch"]
+            basearch_list = ["x86_64"] if "scylla-manager" in full_url else ["x86_64", "noarch"]
             for basearch in basearch_list:
-                urls.add(Template(full_url).substitute(basearch=basearch, releasever='7'))
+                urls.add(Template(full_url).substitute(basearch=basearch, releasever="7"))
             # We found the correct regex and we can continue to next URL
 
-    ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=lambda _url: get_url_content(
-        url=_url, return_url_data=False))
+    ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(
+        func=lambda _url: get_url_content(url=_url, return_url_data=False)
+    )
     return urls
 
 
 def get_branch_version_from_debian_repository(urls, full_version: bool = False):
     def get_version(url):
-        data = '\n'.join(get_url_content(url=url))
+        data = "\n".join(get_url_content(url=url))
         if full_version:
             major_versions = [version.strip() for version in REPO_VERSIONS_REGEX.findall(data)]
         else:
             # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
-            major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
+            major_versions = [version.split("-", maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         if not major_versions:
             return ""
         return set(major_versions)
@@ -335,17 +342,21 @@ def get_branch_version_from_debian_repository(urls, full_version: bool = False):
 
 def get_branch_version_from_centos_repository(urls, full_version: bool = False):
     def get_version(url):
-        data = '\n'.join(get_url_content(url=url))
+        data = "\n".join(get_url_content(url=url))
         primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
         if full_version:
             major_versions = [
-                f"{package['version'][1]['ver']}-{package['version'][1]['rel']}" for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
+                f"{package['version'][1]['ver']}-{package['version'][1]['rel']}"
+                for package in parser.getList()
+                if package["name"][0] in SUPPORTED_PACKAGES
+            ]
         else:
-            major_versions = [package['version'][1]['ver']
-                              for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
+            major_versions = [
+                package["version"][1]["ver"] for package in parser.getList() if package["name"][0] in SUPPORTED_PACKAGES
+            ]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -355,12 +366,12 @@ def get_branch_version_from_centos_repository(urls, full_version: bool = False):
 
 def get_all_versions_from_debian_repository(urls: set[str], full_version: bool = False) -> set[str]:
     def get_version(url: str) -> set[str]:
-        data = '\n'.join(get_url_content(url=url))
+        data = "\n".join(get_url_content(url=url))
         if full_version:
             major_versions = [version.strip() for version in REPO_VERSIONS_REGEX.findall(data)]
         else:
             # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
-            major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
+            major_versions = [version.split("-", maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -370,17 +381,21 @@ def get_all_versions_from_debian_repository(urls: set[str], full_version: bool =
 
 def get_all_versions_from_centos_repository(urls: set[str], full_version: bool = False) -> set[str]:
     def get_version(url: str) -> set[str]:
-        data = '\n'.join(get_url_content(url=url))
+        data = "\n".join(get_url_content(url=url))
         primary_path = PRIMARY_XML_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
         if full_version:
-            major_versions = [f"{package['version'][1]['ver']}-{package['version'][1]['rel']}" for package in
-                              parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
+            major_versions = [
+                f"{package['version'][1]['ver']}-{package['version'][1]['rel']}"
+                for package in parser.getList()
+                if package["name"][0] in SUPPORTED_PACKAGES
+            ]
         else:
-            major_versions = [package['version'][1]['ver']
-                              for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
+            major_versions = [
+                package["version"][1]["ver"] for package in parser.getList() if package["name"][0] in SUPPORTED_PACKAGES
+            ]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -393,7 +408,7 @@ def get_repository_details(url):
 
     for file_type, regex_list in FILE_REGEX_DICT.items():
         for _url in urls:
-            for (url_regex, _) in regex_list:
+            for url_regex, _ in regex_list:
                 match = url_regex.match(_url)
                 if match:
                     return RepositoryDetails(type=file_type, urls=urls)
@@ -440,15 +455,16 @@ def is_enterprise(scylla_version):
 def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> str:
     # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
     # It can be switched to RELEASE_BRANCH from an upstream job
-    git_branch = os.environ.get('GIT_BRANCH')  # origin/branch-4.5
-    scylla_repo = params.get('scylla_repo')
+    git_branch = os.environ.get("GIT_BRANCH")  # origin/branch-4.5
+    scylla_repo = params.get("scylla_repo")
 
     scylla_version_source = scylla_version or scylla_repo or git_branch
     LOGGER.debug("scylla_version_source: %s", scylla_version_source)
-    if match := re.match(r'[\D\d]*-(\d+\.\d+)', scylla_version_source) or \
-            re.match(r'\D*(\d+\.\d+)', scylla_version_source):
+    if match := re.match(r"[\D\d]*-(\d+\.\d+)", scylla_version_source) or re.match(
+        r"\D*(\d+\.\d+)", scylla_version_source
+    ):
         version_type = f"nightly-{match.group(1)}"
-    elif scylla_version_source and 'master' in scylla_version_source:
+    elif scylla_version_source and "master" in scylla_version_source:
         version_type = "nightly-master"
     else:
         raise Exception("Scylla version for web install isn't identified")
@@ -492,13 +508,13 @@ def get_systemd_version(output: str) -> int:
 
 
 def get_scylla_docker_repo_from_version(scylla_version: str):
-    if scylla_version in ('latest', 'master:latest'):
-        return 'scylladb/scylla-nightly'
-    if scylla_version in ('enterprise', 'enterprise:latest'):
-        return 'scylladb/scylla-enterprise-nightly'
+    if scylla_version in ("latest", "master:latest"):
+        return "scylladb/scylla-nightly"
+    if scylla_version in ("enterprise", "enterprise:latest"):
+        return "scylladb/scylla-enterprise-nightly"
     if is_enterprise(scylla_version):
-        return 'scylladb/scylla-enterprise'
-    return 'scylladb/scylla'
+        return "scylladb/scylla-enterprise"
+    return "scylladb/scylla"
 
 
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
@@ -528,7 +544,10 @@ def resolve_latest_repo_symlink(url: str) -> str:
     #  2. http://downloads.scylladb.com.s3.amazonaws.com/...
     #  3. http://s3.amazonaws.com/downloads.scylladb.com/...
     # Plus same forms for HTTPS.
-    if parsed_base_url.netloc in (SCYLLA_REPO_BUCKET, f"{SCYLLA_REPO_BUCKET}.s3.amazonaws.com", ):
+    if parsed_base_url.netloc in (
+        SCYLLA_REPO_BUCKET,
+        f"{SCYLLA_REPO_BUCKET}.s3.amazonaws.com",
+    ):
         prefix = parsed_base_url.path.lstrip("/")
     elif parsed_base_url.netloc == "s3.amazonaws.com" and parsed_base_url.path.startswith(f"/{SCYLLA_REPO_BUCKET}/"):
         prefix = parsed_base_url.path.split("/", 2)[-1]
@@ -555,7 +574,12 @@ def resolve_latest_repo_symlink(url: str) -> str:
                     timestamp = dateutil.parser.parse(build, ignoretz=True)
                 except ValueError:
                     pass
-            build_list.append((timestamp, build, ))
+            build_list.append(
+                (
+                    timestamp,
+                    build,
+                )
+            )
         if continuation_token := s3_objects.get("NextContinuationToken"):
             s3_objects = s3_client.list_objects_v2(
                 Bucket=SCYLLA_REPO_BUCKET,
@@ -570,15 +594,13 @@ def resolve_latest_repo_symlink(url: str) -> str:
             break
     else:
         ScyllaRepoEvent(
-            url=url,
-            error=f"There is no a sibling directory which contains same repo file (ETag={latest_etag})"
+            url=url, error=f"There is no a sibling directory which contains same repo file (ETag={latest_etag})"
         ).publish_or_dump(default_logger=LOGGER)
         return url
 
     if (timestamp, build) != build_list[0]:
         ScyllaRepoEvent(
-            url=url,
-            error=f"{url} doesn't point to the latest repo ({base}{build_list[0][1]}{rest})"
+            url=url, error=f"{url} doesn't point to the latest repo ({base}{build_list[0][1]}{rest})"
         ).publish_or_dump(default_logger=LOGGER)
 
     resolved_url = f"{base}{build}{rest}"
@@ -587,16 +609,18 @@ def resolve_latest_repo_symlink(url: str) -> str:
 
 
 def get_specific_tag_of_docker_image(docker_repo: str):
-    if docker_repo == 'scylladb/scylla-nightly':
-        product = 'scylla'
-        branch = 'master'
-    elif docker_repo == 'scylladb/scylla-enterprise-nightly':
-        product = 'scylla-enterprise'
-        branch = 'enterprise'
+    if docker_repo == "scylladb/scylla-nightly":
+        product = "scylla"
+        branch = "master"
+    elif docker_repo == "scylladb/scylla-enterprise-nightly":
+        product = "scylla-enterprise"
+        branch = "enterprise"
     else:
         raise ValueError(f"SCT doesn't support getting latest from {docker_repo}")
 
-    build_url = f'https://s3.amazonaws.com/downloads.scylladb.com/unstable/{product}/{branch}/relocatable/latest/00-Build.txt'
+    build_url = (
+        f"https://s3.amazonaws.com/downloads.scylladb.com/unstable/{product}/{branch}/relocatable/latest/00-Build.txt"
+    )
     res = requests.get(build_url)
     res.raise_for_status()
     # example of 00-Build.txt content: (each line is formatted as 'key: value`)
@@ -604,8 +628,8 @@ def get_specific_tag_of_docker_image(docker_repo: str):
     #    url-id: 2022-08-29T08:05:34Z
     #    docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61
     build_info = yaml.safe_load(res.content)
-    tag = build_info['docker-image-name'].split(':', maxsplit=1)[1]
-    LOGGER.debug('found %s for %s repo', tag, docker_repo)
+    tag = build_info["docker-image-name"].split(":", maxsplit=1)[1]
+    LOGGER.debug("found %s for %s repo", tag, docker_repo)
     return tag
 
 
@@ -684,6 +708,7 @@ class scylla_versions:
         In [4]: Foo().foo()
         Out[4]: 'all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3'
     """
+
     VERSIONS = {}
 
     def __init__(self, *min_max_version_pairs: tuple):
@@ -707,7 +732,7 @@ class scylla_versions:
         def inner(*args, **kwargs):
             cls_self = args[0]
             try:
-                cluster_object = getattr(cls_self, 'cluster', cls_self)
+                cluster_object = getattr(cls_self, "cluster", cls_self)
                 scylla_version = cluster_object.params.get("scylla_version")
                 if not scylla_version or scylla_version.endswith(":latest"):
                     # NOTE: in case we run Scylla cluster with "latest" version then we need
@@ -725,7 +750,10 @@ class scylla_versions:
                     LOGGER.warning("Failed to parse '%s' scylla version: %s", scylla_version, exc)
             raise MethodVersionNotFound(
                 "Method '{}' with version '{}' is not supported in '{}'!".format(
-                    func.__name__, scylla_version, cls_self.__class__.__name__))
+                    func.__name__, scylla_version, cls_self.__class__.__name__
+                )
+            )
+
         return inner
 
 
@@ -733,10 +761,12 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
     relocatable_pkg = ""
     if scylla_version and "build-id" in scylla_version:
         try:
-            scylla_build_id = scylla_version.split('build-id')[-1].split()[0]
-            get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
+            scylla_build_id = scylla_version.split("build-id")[-1].split()[0]
+            get_pkgs_cmd = (
+                f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
+            )
             res = LOCALRUNNER.run(get_pkgs_cmd)
-            relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
+            relocatable_pkg = re.findall(rf"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
@@ -745,7 +775,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
 
 
-def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
+def get_s3_scylla_repos_mapping(dist_type="centos", dist_version=None):
     """
     get the mapping from version prefixes to rpm .repo or deb .list files locations
 
@@ -758,45 +788,44 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
         return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
-    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
-    bucket = 'downloads.scylladb.com'
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
+    bucket = "downloads.scylladb.com"
 
-    if dist_type == 'centos':
-        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/', Delimiter='/')
+    if dist_type == "centos":
+        response = s3_client.list_objects(Bucket=bucket, Prefix="rpm/centos/", Delimiter="/")
 
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
+        for repo_file in response["Contents"]:
+            filename = os.path.basename(repo_file["Key"])
             # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
-            if filename.startswith('scylla-') and filename.endswith('.repo'):
-                version_prefix = filename.replace('.repo', '').split('-')[-1]
-                _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
-                    bucket=bucket,
-                    path=repo_file['Key'])
+            if filename.startswith("scylla-") and filename.endswith(".repo"):
+                version_prefix = filename.replace(".repo", "").split("-")[-1]
+                _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)][version_prefix] = (
+                    "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file["Key"])
+                )
 
-    elif dist_type in ('ubuntu', 'debian'):
-        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
+    elif dist_type in ("ubuntu", "debian"):
+        response = s3_client.list_objects(Bucket=bucket, Prefix="deb/{}/".format(dist_type), Delimiter="/")
+        for repo_file in response["Contents"]:
+            filename = os.path.basename(repo_file["Key"])
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
-            repo_regex = re.compile(r'\d+\.\d\.list')
-            if filename.startswith('scylla-') and (
-                    filename.endswith('-{}.list'.format(dist_version)) or
-                    repo_regex.search(filename)):
-                version_prefix = \
-                    filename.replace('-{}.list'.format(dist_version), '').replace('.list', '').split('-')[-1]
-                _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
-                    bucket=bucket,
-                    path=repo_file['Key'])
+            repo_regex = re.compile(r"\d+\.\d\.list")
+            if filename.startswith("scylla-") and (
+                filename.endswith("-{}.list".format(dist_version)) or repo_regex.search(filename)
+            ):
+                version_prefix = (
+                    filename.replace("-{}.list".format(dist_version), "").replace(".list", "").split("-")[-1]
+                )
+                _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)][version_prefix] = (
+                    "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file["Key"])
+                )
 
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
     return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 
-def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
+def find_scylla_repo(scylla_version, dist_type="centos", dist_version=None):
     """
     Get a repo/list of scylla, based on scylla version match
 
@@ -807,7 +836,7 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
 
     :return: str url repo/list
     """
-    if ':' in scylla_version:
+    if ":" in scylla_version:
         branch_repo = get_branched_repo(scylla_version, dist_type)
         if branch_repo:
             return branch_repo
@@ -821,9 +850,11 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
 
-def get_branched_repo(scylla_version: str,
-                      dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
-                      bucket: str = "downloads.scylladb.com") -> Optional[str]:
+def get_branched_repo(
+    scylla_version: str,
+    dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
+    bucket: str = "downloads.scylladb.com",
+) -> Optional[str]:
     """
     Get a repo/list of scylla, based on scylla version match
 
@@ -833,11 +864,11 @@ def get_branched_repo(scylla_version: str,
     :return: str url repo/list, or None if not found
     """
     try:
-        branch, branch_version = scylla_version.split(':', maxsplit=1)
+        branch, branch_version = scylla_version.split(":", maxsplit=1)
     except ValueError:
         raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
 
-    branch_id = branch.replace('branch-', '').replace('enterprise-', '')
+    branch_id = branch.replace("branch-", "").replace("enterprise-", "")
     try:
         is_source_available = ComparableScyllaVersion(branch_id) >= "2025.1.0"
     except ValueError:
@@ -850,17 +881,20 @@ def get_branched_repo(scylla_version: str,
     if dist_type == "centos":
         prefix = f"unstable/{product}/{branch}/rpm/centos/{branch_version}/"
         filename = "scylla.repo"
-    elif dist_type in ("ubuntu", "debian",):
+    elif dist_type in (
+        "ubuntu",
+        "debian",
+    ):
         prefix = f"unstable/{product}/{branch}/deb/unified/{branch_version}/scylladb-{branch_id}/"
         filename = "scylla.list"
     else:
         raise ValueError(f"Unsupported {dist_type=}")
 
     s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
-    response = s3_client.list_objects(Bucket=bucket, Prefix=prefix, Delimiter='/')
+    response = s3_client.list_objects(Bucket=bucket, Prefix=prefix, Delimiter="/")
 
     for repo_file in response.get("Contents", ()):
-        if os.path.basename(repo_file['Key']) == filename:
+        if os.path.basename(repo_file["Key"]) == filename:
             return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
 
     if branch_version.isdigit():

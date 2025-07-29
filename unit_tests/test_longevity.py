@@ -1,4 +1,3 @@
-
 def test_test_user_batch_custom_time(params, pytester):
     """
     Test to verify that the longevity test for user batch with custom time runs successfully with 5000 tables case
@@ -8,8 +7,8 @@ def test_test_user_batch_custom_time(params, pytester):
 
     # remove HOME and USERPROFILE environment variables, so we can get actual user configuration
     # the test depends on some part of the user configuration, for running the test locally
-    pytester._monkeypatch.delenv('HOME')
-    pytester._monkeypatch.delenv('USERPROFILE')
+    pytester._monkeypatch.delenv("HOME")
+    pytester._monkeypatch.delenv("USERPROFILE")
 
     pytester.makeconftest(
         """
@@ -118,7 +117,6 @@ def test_test_user_batch_custom_time(params, pytester):
     )
 
     # run the test with pytest
-    result = pytester.runpytest(
-        "test_test_user_batch_custom_time.py::DummyLongevityTest::test_user_batch_custom_time")
+    result = pytester.runpytest("test_test_user_batch_custom_time.py::DummyLongevityTest::test_user_batch_custom_time")
 
     result.assert_outcomes(passed=1)

@@ -32,9 +32,9 @@ from sdcm.utils.action_logger import get_action_logger
 class FakeSCTConfiguration(SCTConfiguration):
     def _load_environment_variables(self):
         return {
-            'config_files': ['test-cases/PR-provision-test-docker.yaml'],
-            'cluster_backend': 'docker',
-            'run_commit_log_check_thread': False
+            "config_files": ["test-cases/PR-provision-test-docker.yaml"],
+            "cluster_backend": "docker",
+            "run_commit_log_check_thread": False,
         }
 
 
@@ -52,13 +52,13 @@ class ClusterTesterForTests(ClusterTester):
     def _init_params(self):
         self.params = FakeSCTConfiguration()
 
-    @pytest.fixture(autouse=True, name='setup_logging')
+    @pytest.fixture(autouse=True, name="setup_logging")
     def fixture_setup_logging(self, tmp_path):
         self._init_logging(tmp_path / self.__class__.__name__)
 
     def _init_logging(self, logdir):
         self.log = logging.getLogger(self.__class__.__name__)
-        self.actions_log = get_action_logger('tester')
+        self.actions_log = get_action_logger("tester")
         self.logdir = logdir
 
     def init_resources(self, loader_info=None, db_info=None, monitor_info=None):
@@ -112,10 +112,9 @@ class ClusterTesterForTests(ClusterTester):
     def save_schema(self):
         pass
 
-    @pytest.fixture(autouse=True, name='event_system')
+    @pytest.fixture(autouse=True, name="event_system")
     def fixture_event_system(self, setup_logging):
-        start_events_device(log_dir=self.logdir,
-                            _registry=self.events_processes_registry)
+        start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         yield
         self.stop_event_device()
         events_processes._EVENTS_PROCESSES = None
@@ -123,19 +122,18 @@ class ClusterTesterForTests(ClusterTester):
 
 @pytest.mark.xfail(reason="this test fails if run after `test_test_user_batch_custom_time`", strict=False)
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
-            raise ValueError('Subtest1 failed')
-        with self.subTest('SUBTEST2'):
-            raise ValueError('Subtest2 failed')
-        raise ValueError('Main test also failed')
+        with self.subTest("SUBTEST1"):
+            raise ValueError("Subtest1 failed")
+        with self.subTest("SUBTEST2"):
+            raise ValueError("Subtest2 failed")
+        raise ValueError("Main test also failed")
 
     @silence()
     def save_email_data(self):
         raise ValueError()
 
-    @pytest.fixture(scope='function')
+    @pytest.fixture(scope="function")
     def validate(self, event_system):
         yield
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
@@ -146,23 +144,22 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
             assert self.event_summary == {"NORMAL": 2, "ERROR": 3}
 
         wait_for_summary()
-        assert 'Subtest1 failed' in self.events['ERROR'][1]
-        assert 'save_email_data' in self.events['ERROR'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert "Subtest1 failed" in self.events["ERROR"][1]
+        assert "save_email_data" in self.events["ERROR"][0]
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
 
 
 class CriticalErrorNotCaughtTest(ClusterTesterForTests):
-
     @pytest.mark.override_pass
     def test(self):
         try:
             ClusterHealthValidatorEvent.NodeStatus(
-                node='node-1',
-                message='Failed by some reason',
-                error='Reason to fail',
+                node="node-1",
+                message="Failed by some reason",
+                error="Reason to fail",
                 severity=Severity.CRITICAL,
             ).publish()
             end_time = time.time() + 2
@@ -177,9 +174,9 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
 
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
-        assert len(self.events['CRITICAL']) == 1
-        assert 'ClusterHealthValidatorEvent' in self.events['CRITICAL'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert len(self.events["CRITICAL"]) == 1
+        assert "ClusterHealthValidatorEvent" in self.events["CRITICAL"][0]
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
@@ -187,13 +184,12 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
 
 @pytest.mark.xfail(reason="this test fails if run after `test_test_user_batch_custom_time`", strict=False)
 class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
-            assert False, 'Subtest1 failed'
-        with self.subTest('SUBTEST2'):
-            assert False, 'Subtest2 failed'
-        assert False, 'Main test also failed'
+        with self.subTest("SUBTEST1"):
+            assert False, "Subtest1 failed"
+        with self.subTest("SUBTEST2"):
+            assert False, "Subtest2 failed"
+        assert False, "Main test also failed"
 
     @silence()
     def save_email_data(self):
@@ -207,18 +203,18 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
         @retrying(n=5, sleep_time=1, allowed_exceptions=(AssertionError,))
         def wait_for_summary():
-            assert self.event_summary == {'NORMAL': 2, 'ERROR': 3}
+            assert self.event_summary == {"NORMAL": 2, "ERROR": 3}
+
         wait_for_summary()
         assert "save_email_data" in self.events["ERROR"][0]
-        assert 'Subtest1 failed' in self.events['ERROR'][1]
-        assert self.final_event.test_status == 'FAILED'
+        assert "Subtest1 failed" in self.events["ERROR"][1]
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
 
 
 class TeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
         pass
 
@@ -230,18 +226,17 @@ class TeardownFailsTest(ClusterTesterForTests):
     def validate(self, event_system):
         yield
 
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'save_email_data' in self.final_event.events['ERROR'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert "save_email_data" in self.final_event.events["ERROR"][0]
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
 
 
 class SetupFailsTest(ClusterTesterForTests):
-
     def prepare_kms_host(self):
-        raise RuntimeError('prepare_kms_host failed')
+        raise RuntimeError("prepare_kms_host failed")
 
     @pytest.mark.override_pass
     def test(self):
@@ -251,36 +246,32 @@ class SetupFailsTest(ClusterTesterForTests):
     def validate(self, event_system):
         yield
 
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'prepare_kms_host failed' in self.final_event.events['ERROR'][0]
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert "prepare_kms_host failed" in self.final_event.events["ERROR"][0]
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
 
 
 class TestErrorTest(ClusterTesterForTests):
-
     def test(self):
         TestFrameworkEvent(
-            source=self.__class__.__name__,
-            source_method='test',
-            message="Something went wrong"
+            source=self.__class__.__name__, source_method="test", message="Something went wrong"
         ).publish()
 
     @pytest.fixture(autouse=True)
     def validate(self, event_system):
         yield
 
-        assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert self.final_event.test_status == 'FAILED'
+        assert self.event_summary == {"NORMAL": 2, "ERROR": 1}
+        assert self.final_event.test_status == "FAILED"
 
     def finalize_teardown(self):
         pass
 
 
 class SuccessTest(ClusterTesterForTests):
-
     def test(self):
         pass
 
@@ -288,21 +279,20 @@ class SuccessTest(ClusterTesterForTests):
     def validate(self, event_system):
         yield
 
-        assert self.event_summary == {'NORMAL': 2}
-        assert self.final_event.test_status == 'SUCCESS'
+        assert self.event_summary == {"NORMAL": 2}
+        assert self.final_event.test_status == "SUCCESS"
 
 
 class SubtestsSuccessTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
+        with self.subTest("SUBTEST1"):
             pass
-        with self.subTest('SUBTEST2'):
+        with self.subTest("SUBTEST2"):
             pass
 
     @pytest.fixture(autouse=True)
     def validate(self, event_system):
         yield
 
-        assert self.event_summary == {'NORMAL': 2}
-        assert self.final_event.test_status == 'SUCCESS'
+        assert self.event_summary == {"NORMAL": 2}
+        assert self.final_event.test_status == "SUCCESS"

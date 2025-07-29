@@ -48,10 +48,11 @@ class BodySizeExceeded(Exception):
         super().__init__()
 
 
-class Email():
+class Email:
     """
     Responsible for sending emails
     """
+
     _attachments_size_limit = 10485760  # 10Mb = 20 * 1024 * 1024
     _body_size_limit = 26214400  # 25Mb = 20 * 1024 * 1024
 
@@ -79,10 +80,10 @@ class Email():
 
     def prepare_email(self, subject, content, recipients, html=True, files=()):
         msg = MIMEMultipart()
-        msg['subject'] = subject
-        msg['from'] = self.sender
+        msg["subject"] = subject
+        msg["from"] = self.sender
         assert recipients, "No recipients provided"
-        msg['to'] = ','.join(recipients)
+        msg["to"] = ",".join(recipients)
         if html:
             text_part = MIMEText(content, "html")
         else:
@@ -92,11 +93,8 @@ class Email():
         for path in files:
             attachment_size += os.path.getsize(path)
             with open(path, "rb") as fil:
-                part = MIMEApplication(
-                    fil.read(),
-                    Name=os.path.basename(path)
-                )
-            part['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(path)
+                part = MIMEApplication(fil.read(), Name=os.path.basename(path))
+            part["Content-Disposition"] = 'attachment; filename="%s"' % os.path.basename(path)
             msg.attach(part)
         if attachment_size >= self._attachments_size_limit:
             raise AttachementSizeExceeded(current_size=attachment_size, limit=self._attachments_size_limit)
@@ -155,11 +153,11 @@ class BaseEmailReporter:
         "restore_monitor_job_base_link",
     )
     _fields = ()
-    email_template_file = 'results_base.html'
+    email_template_file = "results_base.html"
     last_events_body_limit_per_severity = 35000
     last_events_body_limit_total = 70000
     last_events_limit = 10000000  # This limit won't be reached, to be relay only on body limits
-    last_events_severities = ['CRITICAL', 'ERROR', 'WARNING']
+    last_events_severities = ["CRITICAL", "ERROR", "WARNING"]
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
         self.email_recipients = email_recipients
@@ -192,8 +190,8 @@ class BaseEmailReporter:
             current_template = self.email_template_fp
 
         self.log.info("Rendering results to html using '%s' template...", current_template)
-        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
-        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
+        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_templates"))
+        env = jinja2.Environment(loader=loader, autoescape=True, extensions=["jinja2.ext.loopcontrols"])
         env.filters["format_timestamp"] = format_timestamp
         if template_str is None:
             template = env.get_template(current_template)
@@ -207,25 +205,25 @@ class BaseEmailReporter:
         if html_file_path:
             html = self.render_to_html(results, template_str=template_str, template_file=template_file)
             with open(html_file_path, "wb") as html_file:
-                html_file.write(html.encode('utf-8'))
+                html_file.write(html.encode("utf-8"))
             self.log.info("HTML report saved to '%s'.", html_file_path)
         else:
             self.log.error("File for HTML report is missing")
 
     def send_email(self, email):
         if not self.email_recipients:
-            self.log.warning('Email recipient is not set, not sending report')
+            self.log.warning("Email recipient is not set, not sending report")
             return
         try:
             Email().send_email(recipients=self.email_recipients, email=email)
         except Exception as details:
             self.log.error("Error during sending email: %s", details, exc_info=True)
         finally:
-            self.log.info('Send email with results to %s', self.email_recipients)
+            self.log.info("Send email with results to %s", self.email_recipients)
 
     def send_report(self, results):
         if not self.email_recipients:
-            self.log.warning('Email recipient is not set, not sending report')
+            self.log.warning("Email recipient is not set, not sending report")
             return
         report_data = self.build_data_for_report(results)
         attachments_data = self.build_data_for_attachments(results)
@@ -237,10 +235,8 @@ class BaseEmailReporter:
                 report = self._generate_report(report_data)
                 attachments = self._generate_report_attachments(attachments_data)
                 email = smtp.prepare_email(
-                    subject=report_data['subject'],
-                    recipients=self.email_recipients,
-                    content=report,
-                    files=attachments)
+                    subject=report_data["subject"], recipients=self.email_recipients, content=report, files=attachments
+                )
                 break
             except (AttachementSizeExceeded, BodySizeExceeded) as exc:
                 report_data, attachments_data = self.cut_report_data(report_data, attachments_data, reason=exc)
@@ -252,11 +248,12 @@ class BaseEmailReporter:
 
     def _generate_report_attachments(self, attachments_data):
         if attachments_data is None:
-            attachment_file = os.path.join(self.logdir, 'attachment_excluded.html')
+            attachment_file = os.path.join(self.logdir, "attachment_excluded.html")
             self.save_html_to_file(
                 {},
                 html_file_path=attachment_file,
-                template_str='<html><body>Attachment was excluded due to the size limitation</body></html>')
+                template_str="<html><body>Attachment was excluded due to the size limitation</body></html>",
+            )
             return (attachment_file,)
         elif attachments_data:
             return self.build_report_attachments(attachments_data)
@@ -265,19 +262,17 @@ class BaseEmailReporter:
 
     def _generate_report(self, report_data):
         if report_data is None:
-            return self.render_to_html(
-                {},
-                '<html><body>Report was not sent due to the size limitation</body></html>')
+            return self.render_to_html({}, "<html><body>Report was not sent due to the size limitation</body></html>")
         return self.build_report(report_data)
 
     def build_report(self, report_data):
         self.log.info("Prepare result to send in email")
-        report_data['last_events'] = self._get_last_events(
+        report_data["last_events"] = self._get_last_events(
             report_data,
             self.last_events_body_limit_per_severity,
             self.last_events_body_limit_total,
             self.last_events_limit,
-            self.last_events_severities
+            self.last_events_severities,
         )
         return self.render_to_html(report_data)
 
@@ -295,41 +290,47 @@ class BaseEmailReporter:
     def _get_last_events(report_data, category_size_limit, total_size_limit, events_in_category_limit, severities):
         output = {}
         total_size = 0
-        last_events = report_data.get('last_events')
+        last_events = report_data.get("last_events")
         if last_events and isinstance(last_events, dict):
             for severity, events in last_events.items():
                 if severity not in severities:
                     continue
                 severity_events_length = 0
                 if not events:
-                    output[severity] = ['No events with this severity']
+                    output[severity] = ["No events with this severity"]
                     continue
                 output[severity] = severity_events = []
                 for event in reversed(events):
-                    if len(event) >= category_size_limit - severity_events_length or \
-                            len(severity_events) >= events_in_category_limit or \
-                            total_size + len(event) > total_size_limit:
-                        severity_events.append('There are more events. See log file.')
+                    if (
+                        len(event) >= category_size_limit - severity_events_length
+                        or len(severity_events) >= events_in_category_limit
+                        or total_size + len(event) > total_size_limit
+                    ):
+                        severity_events.append("There are more events. See log file.")
                         break
                     severity_events.insert(0, event)
                     severity_events_length += len(event)
                     total_size += len(event)
                 if len(severity_events) == 0 and len(events) >= 1:
                     severity_events.append(events[-1][category_size_limit])
-                    severity_events.append('There are more events. See log file.')
+                    severity_events.append("There are more events. See log file.")
         return output
 
     @staticmethod
-    def _check_if_last_events_over_the_limit(report_data, category_size_limit, total_size_limit, events_in_category_limit):
+    def _check_if_last_events_over_the_limit(
+        report_data, category_size_limit, total_size_limit, events_in_category_limit
+    ):
         total_size = 0
-        last_events = report_data.get('last_events')
+        last_events = report_data.get("last_events")
         if last_events and isinstance(last_events, dict):
             for events in last_events.values():
                 severity_events_length = 0
                 for event in reversed(events):
-                    if len(event) >= category_size_limit - severity_events_length or \
-                            severity_events_length >= events_in_category_limit or \
-                            total_size + len(event) > total_size_limit:
+                    if (
+                        len(event) >= category_size_limit - severity_events_length
+                        or severity_events_length >= events_in_category_limit
+                        or total_size + len(event) > total_size_limit
+                    ):
                         return True
                     severity_events_length += len(event)
                     total_size += len(event)
@@ -371,60 +372,67 @@ class LongevityEmailReporter(BaseEmailReporter):
     last_events_body_limit_per_severity_in_attachment = 3000000
     last_events_body_limit_total_in_attachment = 10000000
     last_events_limit_in_attachment = 10000000  # This limit won't be reached, to be relay only on body limits
-    last_events_severities_in_attachment = BaseEmailReporter.last_events_severities + ['NORMAL']
+    last_events_severities_in_attachment = BaseEmailReporter.last_events_severities + ["NORMAL"]
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if attachments_data is not None:
             if self._check_if_last_events_over_the_limit(
-                    attachments_data,
-                    self.last_events_body_limit_per_severity_in_attachment // 3,
-                    self.last_events_body_limit_total_in_attachment // 3,
-                    self.last_events_limit_in_attachment // 3):
-                attachments_data['last_events'] = self._get_last_events(
+                attachments_data,
+                self.last_events_body_limit_per_severity_in_attachment // 3,
+                self.last_events_body_limit_total_in_attachment // 3,
+                self.last_events_limit_in_attachment // 3,
+            ):
+                attachments_data["last_events"] = self._get_last_events(
                     attachments_data,
                     self.last_events_body_limit_per_severity_in_attachment // 3,
                     self.last_events_body_limit_total_in_attachment // 3,
                     self.last_events_limit_in_attachment // 3,
-                    self.last_events_severities_in_attachment)
+                    self.last_events_severities_in_attachment,
+                )
                 return report_data, attachments_data
             return report_data, None
         if self._check_if_last_events_over_the_limit(
-                report_data,
-                self.last_events_body_limit_per_severity // 3,
-                self.last_events_body_limit_total // 3,
-                self.last_events_limit // 3):
-            report_data['last_events'] = self._get_last_events(
+            report_data,
+            self.last_events_body_limit_per_severity // 3,
+            self.last_events_body_limit_total // 3,
+            self.last_events_limit // 3,
+        ):
+            report_data["last_events"] = self._get_last_events(
                 report_data,
                 self.last_events_body_limit_per_severity // 3,
                 self.last_events_body_limit_total // 3,
                 self.last_events_limit // 3,
-                self.last_events_severities)
+                self.last_events_severities,
+            )
             return report_data, None
         return None, None
 
     def build_report(self, report_data):
-        report_data['short_report'] = True
+        report_data["short_report"] = True
         return super().build_report(report_data)
 
     def build_report_attachments(self, attachments_data, template_str=None):
-        attachments = (self.build_email_report(attachments_data, template_str),
-                       self.build_issue_template(attachments_data))
+        attachments = (
+            self.build_email_report(attachments_data, template_str),
+            self.build_issue_template(attachments_data),
+        )
         return attachments
 
     def build_email_report(self, attachments_data, template_str=None):
-        report_file = os.path.join(self.logdir, 'email_report.html')
-        attachments_data['last_events'] = self._get_last_events(
+        report_file = os.path.join(self.logdir, "email_report.html")
+        attachments_data["last_events"] = self._get_last_events(
             attachments_data,
             self.last_events_body_limit_per_severity_in_attachment,
             self.last_events_body_limit_total_in_attachment,
             self.last_events_limit_in_attachment,
-            self.last_events_severities_in_attachment)
+            self.last_events_severities_in_attachment,
+        )
         self.save_html_to_file(attachments_data, report_file, template_str=template_str)
         return report_file
 
     def build_issue_template(self, attachments_data):
-        report_file = os.path.join(self.logdir, 'issue_template.html')
-        template_file = 'results_issue_template.html'
+        report_file = os.path.join(self.logdir, "issue_template.html")
+        template_file = "results_issue_template.html"
         attachments_data["config_files_link"] = self.get_config_file_link(attachments_data)
         self.save_html_to_file(attachments_data, report_file, template_file=template_file)
         return report_file
@@ -440,16 +448,19 @@ class LongevityEmailReporter(BaseEmailReporter):
             if not config_file:
                 continue
 
-            if 'cloud' in config_file or 'cloud' in attachments_data["job_name"]:
-                config_files.append({"file": f"{config_file.split('/')[-1]} ",
-                                     "link": "Siren repo"})
+            if "cloud" in config_file or "cloud" in attachments_data["job_name"]:
+                config_files.append({"file": f"{config_file.split('/')[-1]} ", "link": "Siren repo"})
                 continue
 
-            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True,
-                                         text=True, check=True)
-            config_files.append({"file": f"[{config_file.split('/')[-1]}]",
-                                 "link": f"https://github.com/scylladb/scylla-cluster-tests/blob"
-                                 f"/{last_commit.stdout.strip()}/{config_file}"})
+            last_commit = subprocess.run(
+                ["git", "rev-list", "HEAD", "-1", config_file], capture_output=True, text=True, check=True
+            )
+            config_files.append(
+                {
+                    "file": f"[{config_file.split('/')[-1]}]",
+                    "link": f"https://github.com/scylladb/scylla-cluster-tests/blob/{last_commit.stdout.strip()}/{config_file}",
+                }
+            )
 
         return config_files
 
@@ -473,11 +484,7 @@ class GeminiEmailReporter(LongevityEmailReporter):
 
 
 class FunctionalEmailReporter(LongevityEmailReporter):
-    _fields = (
-        "test_statuses",
-        "results",
-        "status"
-    )
+    _fields = ("test_statuses", "results", "status")
     email_template_file = "results_functional.html"
 
 
@@ -540,16 +547,11 @@ class JepsenEmailReporter(BaseEmailReporter):
 
     @staticmethod
     def build_report_attachments(attachments_data, template_str=None):
-        return (attachments_data["jepsen_report"], )
+        return (attachments_data["jepsen_report"],)
 
 
 class SlaPerUserEmailReporter(LongevityEmailReporter):
-    _fields = (
-        "grafana_screenshots",
-        "scylla_ami_id",
-        "parallel_timelines_report",
-        "workload_comparison"
-    )
+    _fields = ("grafana_screenshots", "scylla_ami_id", "parallel_timelines_report", "workload_comparison")
     email_template_file = "results_sl_workloads.html"
 
 
@@ -573,15 +575,16 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
         "collect_last_results_count",
         "collect_last_scylla_date_count",
         "deviation_diff",
-        "is_deviation_within_limits"
+        "is_deviation_within_limits",
     )
     email_template_file = "results_perf_simple_query.html"
 
 
-def build_reporter(name: str,  # noqa: PLR0911
-                   email_recipients: Sequence[str] = (),
-                   logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-
+def build_reporter(  # noqa: PLR0911
+    name: str,
+    email_recipients: Sequence[str] = (),
+    logdir: Optional[str] = None,
+) -> Optional[BaseEmailReporter]:
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:
@@ -636,72 +639,75 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
     """
     nodes = []
 
-    tags = {"TestId": test_id, }
+    tags = {
+        "TestId": test_id,
+    }
 
     instances = list_instances_aws(tags_dict=tags, group_as_region=True, running=True)
     for region in instances:
         for instance in instances[region]:
             # NOTE: K8S nodes created by autoscaler never have 'Name' set.
-            name = 'N/A'
-            for tag in instance['Tags']:
-                if tag['Key'] == 'Name':
-                    name = tag['Value']
+            name = "N/A"
+            for tag in instance["Tags"]:
+                if tag["Key"] == "Name":
+                    name = tag["Value"]
                     break
-            public_ip_addr = instance.get('PublicIpAddress', 'N/A')
+            public_ip_addr = instance.get("PublicIpAddress", "N/A")
             if public_ip_addr != ip_filter:
-                nodes.append([name,
-                              instance.get('PublicIpAddress', 'N/A'),
-                              instance['State']['Name'],
-                              "aws",
-                              region])
+                nodes.append([name, instance.get("PublicIpAddress", "N/A"), instance["State"]["Name"], "aws", region])
     instances = list_instances_gce(tags_dict=tags, running=True)
     for instance in instances:
         public_ips = gce_public_addresses(instance)
         if ip_filter not in public_ips:
-            nodes.append([instance.name,
-                          ", ".join(public_ips) if public_ips else "N/A",
-                          instance.status.lower(),
-                          "gce",
-                          instance.zone.split('/')[-1]])
+            nodes.append(
+                [
+                    instance.name,
+                    ", ".join(public_ips) if public_ips else "N/A",
+                    instance.status.lower(),
+                    "gce",
+                    instance.zone.split("/")[-1],
+                ]
+            )
     resources = list_resources_docker(tags_dict=tags, running=True, group_as_builder=True)
     for builder_name, containers in resources.get("containers", {}).items():
         for container in containers:
             container.reload()
-            nodes.append([container.name,
-                          container.attrs["NetworkSettings"]["IPAddress"],
-                          container.status,
-                          "docker container",
-                          builder_name])
+            nodes.append(
+                [
+                    container.name,
+                    container.attrs["NetworkSettings"]["IPAddress"],
+                    container.status,
+                    "docker container",
+                    builder_name,
+                ]
+            )
     for builder_name, images in resources.get("images", {}).items():
         for image in images:
-            nodes.append([", ".join(image.tags),
-                          "N/A",
-                          "N/A",
-                          "docker image",
-                          builder_name])
+            nodes.append([", ".join(image.tags), "N/A", "N/A", "docker image", builder_name])
     return nodes
 
 
 def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):
     for subject, content in test_results.items():
-        if 'email_body' not in content:
-            content['email_body'] = {}
-        if 'attachments' not in content:
-            content['attachments'] = []
-        if 'template' not in content:
-            content['template'] = None
+        if "email_body" not in content:
+            content["email_body"] = {}
+        if "attachments" not in content:
+            content["attachments"] = []
+        if "template" not in content:
+            content["template"] = None
         email_content = copy.deepcopy(content)
-        email_content['email_body']['logs_links'] = logs
-        html = reporter.render_to_html(email_content['email_body'],
-                                       template=email_content['template'])
+        email_content["email_body"]["logs_links"] = logs
+        html = reporter.render_to_html(email_content["email_body"], template=email_content["template"])
         try:
-            reporter.send_email(subject=subject, content=html, files=email_content['attachments'])
+            reporter.send_email(subject=subject, content=html, files=email_content["attachments"])
         except Exception:  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
-            build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
-                "job_url": os.environ.get("BUILD_URL"),
-                "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
-            })
+            build_reporter("TestAborted", email_recipients, testrun_dir).send_report(
+                {
+                    "job_url": os.environ.get("BUILD_URL"),
+                    "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+                }
+            )
 
 
 def read_email_data_from_file(filename):
@@ -719,7 +725,7 @@ def read_email_data_from_file(filename):
         try:
             with open(filename, encoding="utf-8") as file:
                 data = file.read().strip()
-                email_data = json.loads(data or '{}')
+                email_data = json.loads(data or "{}")
         except Exception as details:  # noqa: BLE001
             LOGGER.warning("Error during read email data file %s: %s", filename, details)
     return email_data

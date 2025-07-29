@@ -19,8 +19,12 @@ from functools import partial
 from typing import Callable
 
 from sdcm.cluster import BaseNode
-from sdcm.nemesis import StartStopMajorCompaction, StartStopScrubCompaction, StartStopCleanupCompaction, \
-    StartStopValidationCompaction
+from sdcm.nemesis import (
+    StartStopMajorCompaction,
+    StartStopScrubCompaction,
+    StartStopCleanupCompaction,
+    StartStopValidationCompaction,
+)
 from sdcm.rest.compaction_manager_client import CompactionManagerClient
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.group_common_events import ignore_compaction_stopped_exceptions
@@ -28,6 +32,7 @@ from sdcm.send_email import FunctionalEmailReporter
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps, COMPACTION_TYPES
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -41,6 +46,7 @@ def record_sub_test_result(func: Callable):
         except Exception as exc:  # noqa: BLE001
             LOGGER.error(exc)
             return {test_name: ["FAILURE", [exc]]}
+
     return wrapper
 
 
@@ -54,15 +60,15 @@ class StopCompactionTest(ClusterTester):
         self.populate_data_parallel(size_in_gb=10, blocking=True)
         self.disable_autocompaction_on_all_nodes()
         self.test_statuses = {}
-        self.email_reporter = FunctionalEmailReporter(email_recipients=self.params.get('email_recipients'),
-                                                      logdir=self.logdir)
+        self.email_reporter = FunctionalEmailReporter(
+            email_recipients=self.params.get("email_recipients"), logdir=self.logdir
+        )
 
     def disable_autocompaction_on_all_nodes(self):
         compaction_ops = CompactionOps(cluster=self.db_cluster)
         compaction_ops.disable_autocompaction_on_ks_cf(node=self.node)
 
     def test_stop_compaction(self):
-
         # skip due to missing support
         # to be enabled when https://github.com/scylladb/scylla/issues/10676 is fixed
         # with self.subTest("Stop upgrade compaction test"):
@@ -94,7 +100,7 @@ class StopCompactionTest(ClusterTester):
                     self._stop_compaction_on_ks_cf_base_scenario(
                         compaction_func=compaction_ops.trigger_scrub_compaction,
                         watcher_expression="Scrubbing in abort mode",
-                        compaction_type=COMPACTION_TYPES.SCRUB
+                        compaction_type=COMPACTION_TYPES.SCRUB,
                     )
                 )
 
@@ -104,7 +110,7 @@ class StopCompactionTest(ClusterTester):
                     self._stop_compaction_on_ks_cf_base_scenario(
                         compaction_func=compaction_ops.trigger_cleanup_compaction,
                         watcher_expression="Cleaning",
-                        compaction_type=COMPACTION_TYPES.CLEANUP
+                        compaction_type=COMPACTION_TYPES.CLEANUP,
                     )
                 )
 
@@ -114,7 +120,7 @@ class StopCompactionTest(ClusterTester):
                     self._stop_compaction_on_ks_cf_base_scenario(
                         compaction_func=compaction_ops.trigger_validation_compaction,
                         watcher_expression="Scrubbing in validate mode",
-                        compaction_type=COMPACTION_TYPES.SCRUB
+                        compaction_type=COMPACTION_TYPES.SCRUB,
                     )
                 )
 
@@ -131,8 +137,7 @@ class StopCompactionTest(ClusterTester):
         self.test_statuses.update(
             self._stop_compaction_base_test_scenario(
                 compaction_func=StartStopMajorCompaction(
-                    tester_obj=self,
-                    termination_event=self.db_cluster.nemesis_termination_event
+                    tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
                 )
             )
         )
@@ -150,8 +155,7 @@ class StopCompactionTest(ClusterTester):
         self.test_statuses.update(
             self._stop_compaction_base_test_scenario(
                 compaction_func=StartStopScrubCompaction(
-                    tester_obj=self,
-                    termination_event=self.db_cluster.nemesis_termination_event
+                    tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
                 )
             )
         )
@@ -169,8 +173,7 @@ class StopCompactionTest(ClusterTester):
         self.test_statuses.update(
             self._stop_compaction_base_test_scenario(
                 compaction_func=StartStopCleanupCompaction(
-                    tester_obj=self,
-                    termination_event=self.db_cluster.nemesis_termination_event
+                    tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
                 )
             )
         )
@@ -189,8 +192,7 @@ class StopCompactionTest(ClusterTester):
         self.test_statuses.update(
             self._stop_compaction_base_test_scenario(
                 compaction_func=StartStopValidationCompaction(
-                    tester_obj=self,
-                    termination_event=self.db_cluster.nemesis_termination_event
+                    tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
                 )
             )
         )
@@ -219,15 +221,16 @@ class StopCompactionTest(ClusterTester):
         """
         compaction_ops = CompactionOps(cluster=self.db_cluster, node=self.node)
         timeout = 300
-        upgraded_configuration_options = {"enable_sstables_mc_format": False,
-                                          "enable_sstables_md_format": True}
+        upgraded_configuration_options = {"enable_sstables_mc_format": False, "enable_sstables_md_format": True}
         trigger_func = partial(compaction_ops.trigger_upgrade_compaction)
-        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
-                             node=self.node,
-                             mark=self.node.mark_log(),
-                             watch_for="Upgrade keyspace1.standard1",
-                             timeout=timeout,
-                             stop_func=compaction_ops.stop_upgrade_compaction)
+        watch_func = partial(
+            compaction_ops.stop_on_user_compaction_logged,
+            node=self.node,
+            mark=self.node.mark_log(),
+            watch_for="Upgrade keyspace1.standard1",
+            timeout=timeout,
+            stop_func=compaction_ops.stop_upgrade_compaction,
+        )
 
         def _upgrade_sstables_format(node: BaseNode):
             LOGGER.info("Upgrading sstables format...")
@@ -278,16 +281,20 @@ class StopCompactionTest(ClusterTester):
         timeout = 900
 
         def _trigger_reshape(node: BaseNode, tester, keyspace: str = "keyspace1"):
-
             if reshape_on_boot is True:
-                compaction_strategy = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
-                                       'compaction_window_unit': 'MINUTES', 'max_threshold': 1, 'min_threshold': 1}
+                compaction_strategy = {
+                    "class": "TimeWindowCompactionStrategy",
+                    "compaction_window_size": 1,
+                    "compaction_window_unit": "MINUTES",
+                    "max_threshold": 1,
+                    "min_threshold": 1,
+                }
             else:
-                compaction_strategy = {'class': 'SizeTieredCompactionStrategy'}
+                compaction_strategy = {"class": "SizeTieredCompactionStrategy"}
             compaction_ops.trigger_flush()
             tester.wait_no_compactions_running()
             LOGGER.info("Copying data files to ./staging and ./upload directories...")
-            keyspace_dir = f'/var/lib/scylla/data/{keyspace}'
+            keyspace_dir = f"/var/lib/scylla/data/{keyspace}"
             cf_data_dir = node.remoter.run(f"ls {keyspace_dir}").stdout.splitlines()[0]
             full_dir_path = f"{keyspace_dir}/{cf_data_dir}"
             upload_dir = f"{full_dir_path}/upload"
@@ -304,15 +311,15 @@ class StopCompactionTest(ClusterTester):
             else:
                 node.run_nodetool("refresh -- keyspace1 standard1")
 
-        trigger_func = partial(_trigger_reshape,
-                               node=node,
-                               tester=self)
-        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
-                             node=node,
-                             mark=node.mark_log(),
-                             watch_for="Reshape keyspace1.standard1",
-                             timeout=timeout,
-                             stop_func=stop_reshape_func)
+        trigger_func = partial(_trigger_reshape, node=node, tester=self)
+        watch_func = partial(
+            compaction_ops.stop_on_user_compaction_logged,
+            node=node,
+            mark=node.mark_log(),
+            watch_for="Reshape keyspace1.standard1",
+            timeout=timeout,
+            stop_func=stop_reshape_func,
+        )
         try:
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
             self.test_statuses.update({"StartStopReshapeCompaction": ["SUCCESS", []]})
@@ -323,8 +330,7 @@ class StopCompactionTest(ClusterTester):
             self._grep_log_and_assert(node)
 
     @record_sub_test_result
-    def _stop_compaction_base_test_scenario(self,
-                                            compaction_func):
+    def _stop_compaction_base_test_scenario(self, compaction_func):
         try:
             self.wait_no_compactions_running()
             compaction_func.disrupt()
@@ -341,30 +347,35 @@ class StopCompactionTest(ClusterTester):
                 if pattern.search(line):
                     found_grepped_expression = True
 
-        self.assertTrue(found_grepped_expression, msg=f'Did not find the expected "{self.GREP_PATTERN}" '
-                        f'expression in the logs.')
+        self.assertTrue(
+            found_grepped_expression, msg=f'Did not find the expected "{self.GREP_PATTERN}" expression in the logs.'
+        )
 
     @record_sub_test_result
-    def _stop_compaction_on_ks_cf_base_scenario(self,
-                                                compaction_func: Callable,
-                                                watcher_expression: str,
-                                                compaction_type: str):
+    def _stop_compaction_on_ks_cf_base_scenario(
+        self, compaction_func: Callable, watcher_expression: str, compaction_type: str
+    ):
         c_s_keyspace = "keyspace1"
         c_s_cf = "standard1"
         LOGGER.info("Running a start / stop compaction test for compaction type: %s", compaction_type)
         self.wait_no_compactions_running()
         compaction_ops = CompactionOps(cluster=self.db_cluster, node=self.node)
         compaction_manager_client = CompactionManagerClient(self.node)
-        stop_func = partial(compaction_manager_client.stop_keyspace_compaction,
-                            keyspace=c_s_keyspace, compaction_type=compaction_type,
-                            tables=[c_s_cf])
+        stop_func = partial(
+            compaction_manager_client.stop_keyspace_compaction,
+            keyspace=c_s_keyspace,
+            compaction_type=compaction_type,
+            tables=[c_s_cf],
+        )
         timeout = 360
         trigger_func = partial(compaction_func)
-        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
-                             node=self.node,
-                             watch_for=watcher_expression,
-                             timeout=timeout,
-                             stop_func=stop_func)
+        watch_func = partial(
+            compaction_ops.stop_on_user_compaction_logged,
+            node=self.node,
+            watch_for=watcher_expression,
+            timeout=timeout,
+            stop_func=stop_func,
+        )
 
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
         self._grep_log_and_assert(self.node)
@@ -378,22 +389,27 @@ class StopCompactionTest(ClusterTester):
         except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
-        email_data.update({"test_statuses": self.test_statuses,
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
+        email_data.update(
+            {
+                "test_statuses": self.test_statuses,
+                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+            }
+        )
         return email_data
 
 
 class StopCompactionTestICS(ClusterTester):
-
     def setUp(self):
         super().setUp()
         self.node = self.db_cluster.nodes[0]
         self.storage_service_client = StorageServiceClient(self.node)
         # insert ~10GB of data
-        populate_data_cmd = "cassandra-stress write cl=ONE n=2097152" \
-                            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) " \
-                            "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native " \
-                            "-rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+        populate_data_cmd = (
+            "cassandra-stress write cl=ONE n=2097152"
+            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) "
+            "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native "
+            "-rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+        )
         prepare = self.run_stress_thread(stress_cmd=populate_data_cmd, round_robin=True)
         self.verify_stress_thread(prepare)
 
@@ -401,12 +417,14 @@ class StopCompactionTestICS(ClusterTester):
         """Verifying data loss on stopping compaction by reading inserted"""
         self.wait_no_compactions_running()
         compaction_nemesis = StartStopMajorCompaction(
-            tester_obj=self,
-            termination_event=self.db_cluster.nemesis_termination_event)
+            tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
+        )
         compaction_nemesis.disrupt()
-        verify_cmd = "cassandra-stress read cl=ONE -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) " \
-                     "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native" \
-                     " -rate threads=40 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+        verify_cmd = (
+            "cassandra-stress read cl=ONE -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) "
+            "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native"
+            " -rate threads=40 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+        )
 
         verify = self.run_stress_thread(stress_cmd=verify_cmd, round_robin=True)
         self.verify_stress_thread(verify)

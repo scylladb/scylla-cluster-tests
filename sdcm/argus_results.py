@@ -17,8 +17,14 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule, \
-    StaticGenericResultTable
+from argus.client.generic_result import (
+    GenericResultTable,
+    ColumnMetadata,
+    ResultType,
+    Status,
+    ValidationRule,
+    StaticGenericResultTable,
+)
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
@@ -27,14 +33,8 @@ from sdcm.sct_events.system import FailedResultEvent
 LOGGER = logging.getLogger(__name__)
 
 LATENCY_ERROR_THRESHOLDS = {
-    "replace_node": {
-        "percentile_90": 5,
-        "percentile_99": 10
-    },
-    "default": {
-        "percentile_90": 5,
-        "percentile_99": 10
-    }
+    "replace_node": {"percentile_90": 5, "percentile_99": 10},
+    "default": {"percentile_90": 5, "percentile_99": 10},
 }
 
 
@@ -98,7 +98,7 @@ class ReactorStallStatsResult(StaticGenericResultTable):
             *[
                 ColumnMetadata(name=f"{interval}ms", unit="count", type=ResultType.INTEGER)
                 for interval in STALL_INTERVALS
-            ]
+            ],
         ]
 
 
@@ -161,17 +161,17 @@ class PerfSimpleQueryResult(StaticGenericResultTable):
         super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
 
     class Meta:
-        Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                   ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                   ColumnMetadata(name="instructions_per_op", unit="",
-                                  type=ResultType.FLOAT, higher_is_better=False),
-                   ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                   ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                   ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                   ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                   ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
-                   ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
-                   ]
+        Columns = [
+            ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="instructions_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+        ]
 
         ValidationRules = dict()
 
@@ -197,14 +197,14 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
     class Meta:
         description = "io_properties.yaml percent deviation from pre-configured disk"
         Columns = [
-            ColumnMetadata(name="read_iops_pct_deviation", unit="%",
-                           type=ResultType.INTEGER, higher_is_better=False),
-            ColumnMetadata(name="read_bandwidth_pct_deviation", unit="%",
-                           type=ResultType.INTEGER, higher_is_better=False),
-            ColumnMetadata(name="write_iops_pct_deviation", unit="%",
-                           type=ResultType.INTEGER, higher_is_better=False),
-            ColumnMetadata(name="write_bandwidth_pct_deviation", unit="%",
-                           type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(name="read_iops_pct_deviation", unit="%", type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(
+                name="read_bandwidth_pct_deviation", unit="%", type=ResultType.INTEGER, higher_is_better=False
+            ),
+            ColumnMetadata(name="write_iops_pct_deviation", unit="%", type=ResultType.INTEGER, higher_is_better=False),
+            ColumnMetadata(
+                name="write_bandwidth_pct_deviation", unit="%", type=ResultType.INTEGER, higher_is_better=False
+            ),
         ]
 
         ValidationRules = {
@@ -218,7 +218,7 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
-    "read": LatencyCalculatorReadResult
+    "read": LatencyCalculatorReadResult,
 }
 
 
@@ -227,14 +227,23 @@ def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResu
         argus_client.submit_results(result_table)
     except ArgusClientError as exc:
         if exc.args[1] == "DataValidationError":
-            FailedResultEvent(f"Argus validation failed for the result in {result_table.name}."
-                              f" Please check the 'Results' tab for more details.").publish()
+            FailedResultEvent(
+                f"Argus validation failed for the result in {result_table.name}. Please check the 'Results' tab for more details."
+            ).publish()
         else:
             raise
 
 
-def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str,  # noqa: PLR0914
-                         cycle: int, result: dict, start_time: float = 0, error_thresholds: dict = None):
+def send_result_to_argus(  # noqa: PLR0914
+    argus_client: ArgusClient,
+    workload: str,
+    name: str,
+    description: str,
+    cycle: int,
+    result: dict,
+    start_time: float = 0,
+    error_thresholds: dict = None,
+):
     """Sends results to Argus service.
 
     This function creates following data tables in Argus:
@@ -260,7 +269,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table.validation_rules = {metric: ValidationRule(**rules) for metric, rules in error_thresholds.items()}
         result_table_summary.validation_rules = result_table.validation_rules
     try:
-        start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime('%H:%M:%S')
+        start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime("%H:%M:%S")
     except ValueError:
         start_time = "N/A"
 
@@ -318,15 +327,19 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
             status=Status.UNSET,
         )
         result_table_summary.add_result(
-            column="duration", row=summary_row_name, value=result["duration_in_sec"], status=Status.UNSET)
+            column="duration", row=summary_row_name, value=result["duration_in_sec"], status=Status.UNSET
+        )
         result_table_summary.add_result(
-            column="start time", row=summary_row_name, value=start_time, status=Status.UNSET)
+            column="start time", row=summary_row_name, value=start_time, status=Status.UNSET
+        )
         if overview_screenshot:
             result_table_summary.add_result(
-                column="Overview", row=summary_row_name, value=overview_screenshot[0], status=Status.UNSET)
+                column="Overview", row=summary_row_name, value=overview_screenshot[0], status=Status.UNSET
+            )
         if qa_screenshot:
             result_table_summary.add_result(
-                column="QA dashboard", row=summary_row_name, value=qa_screenshot[0], status=Status.UNSET)
+                column="QA dashboard", row=summary_row_name, value=qa_screenshot[0], status=Status.UNSET
+            )
         submit_results_to_argus(argus_client, result_table_summary)
     submit_results_to_argus(argus_client, result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
@@ -335,11 +348,11 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table = ReactorStallStatsResult()
         result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
-        result_table.add_result(column="total", row=f"Cycle #{cycle}",
-                                value=stall_stats["counter"], status=Status.UNSET)
+        result_table.add_result(
+            column="total", row=f"Cycle #{cycle}", value=stall_stats["counter"], status=Status.UNSET
+        )
         for interval, value in stall_stats["ms"].items():
-            result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
-                                    value=value, status=Status.UNSET)
+            result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}", value=value, status=Status.UNSET)
         submit_results_to_argus(argus_client, result_table)
 
 
@@ -365,8 +378,9 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
     submit_results_to_argus(argus_client, result_table)
 
 
-def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: dict, sut_timestamp: int,
-                                            row_name: str = None) -> None:
+def send_manager_benchmark_results_to_argus(
+    argus_client: ArgusClient, result: dict, sut_timestamp: int, row_name: str = None
+) -> None:
     if not row_name:
         row_name = "#1"
 
@@ -393,17 +407,23 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         LOGGER.warning("No test exists for this run, skipping submitting results")
         return
 
-    table = IOPropertiesResultsTable(cluster_backend=params.get('cluster_backend'),
-                                     instance_type=node.db_node_instance_type)
+    table = IOPropertiesResultsTable(
+        cluster_backend=params.get("cluster_backend"), instance_type=node.db_node_instance_type
+    )
     for key, value in results["active"].items():
         table.add_result(column=key, row="measured", value=value, status=Status.UNSET)
         table.add_result(column=key, row="pre-configured", value=results["preset"][key], status=Status.UNSET)
     submit_results_to_argus(argus_client, table)
 
-    table = IOPropertiesDeviationResultsTable(cluster_backend=params.get('cluster_backend'),
-                                              instance_type=node.db_node_instance_type)
+    table = IOPropertiesDeviationResultsTable(
+        cluster_backend=params.get("cluster_backend"), instance_type=node.db_node_instance_type
+    )
     for key, value in results["deviation_pct"].items():
-        table.add_result(column=f"{key}_pct_deviation", row="deviation_percent",
-                         value=value, status=Status.PASS if value < 15 else Status.WARNING)
+        table.add_result(
+            column=f"{key}_pct_deviation",
+            row="deviation_percent",
+            value=value,
+            status=Status.PASS if value < 15 else Status.WARNING,
+        )
 
     submit_results_to_argus(argus_client, table)

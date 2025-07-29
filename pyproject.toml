@@ -61,7 +61,6 @@ dependencies = [
 ]
 [dependency-groups]
 dev = [
-    "autopep8==2.3.2",
     "pre-commit==4.0.1",
     "pycodestyle==2.13.0",
     "ruff==0.11.13",
@@ -92,7 +91,7 @@ exclude = ["argus/"]
 target-version = "py313"
 
 force-exclude = true
-line-length = 240
+line-length = 120
 respect-gitignore = true
 
 [tool.ruff.lint.pylint]

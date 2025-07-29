@@ -32,8 +32,8 @@ class ScyllaCloudAPIError(Exception):
 
 
 class CloudProviderType(Enum):
-    AWS = 'AWS'
-    GCP = 'GCP'
+    AWS = "AWS"
+    GCP = "GCP"
 
 
 class ScyllaCloudAPIClient:
@@ -42,15 +42,18 @@ class ScyllaCloudAPIClient:
     exception_class: Exception = ScyllaCloudAPIError
 
     def __init__(self, api_url: str, auth_token: str, raise_for_status: bool = False):
-        self.api_url = api_url.rstrip('/')
+        self.api_url = api_url.rstrip("/")
         self.auth_token = auth_token.strip()
         self.raise_for_status = raise_for_status
         self.session = self._create_session()
 
-        self.session.headers.update({
-            'Authorization': f'Bearer {self.auth_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'})
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {self.auth_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
 
         LOGGER.info("Initialized Scylla Cloud API client for %s", self.api_url)
 
@@ -61,7 +64,8 @@ class ScyllaCloudAPIClient:
             total=retries,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE"])
+            allowed_methods=["HEAD", "GET", "PUT", "DELETE", "OPTIONS", "TRACE"],
+        )
         adapter = HTTPAdapter(max_retries=retry_strategy)
 
         session = requests.Session()
@@ -79,10 +83,15 @@ class ScyllaCloudAPIClient:
         :param params: query parameters to be sent in url
         :param body: keyword args to be sent as JSON body
         """
-        url = urljoin(self.api_url, endpoint.lstrip('/'))
+        url = urljoin(self.api_url, endpoint.lstrip("/"))
 
-        LOGGER.debug("Making %s request to %s with query parameters %s and payload %s",
-                     method, url, pformat(params), pformat(body))
+        LOGGER.debug(
+            "Making %s request to %s with query parameters %s and payload %s",
+            method,
+            url,
+            pformat(params),
+            pformat(body),
+        )
         response = self.session.request(method, url, params=params, json=body)
 
         if self.raise_for_status:
@@ -100,7 +109,7 @@ class ScyllaCloudAPIClient:
     @staticmethod
     def _parse_response_data(response_json: dict[str, Any]) -> dict[str, Any]:
         """Parse API response handling the top level 'data' attribute in response"""
-        return response_json.get('data', response_json)
+        return response_json.get("data", response_json)
 
     @staticmethod
     def get_error(response: dict) -> str | None:
@@ -117,7 +126,7 @@ class ScyllaCloudAPIClient:
         url = "deployment/scylla-versions"
         params = {}
         if defaults:
-            params['defaults'] = 'true'
+            params["defaults"] = "true"
         return self.request("GET", url, params=params)
 
     @cached_property
@@ -127,37 +136,35 @@ class ScyllaCloudAPIClient:
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
-        url = f'/deployment/cloud-provider/{cloud_provider_id}/regions'
+        url = f"/deployment/cloud-provider/{cloud_provider_id}/regions"
         params = {}
         if defaults:
-            params['defaults'] = 'true'
-        return self.request('GET', url, params=params)
+            params["defaults"] = "true"
+        return self.request("GET", url, params=params)
 
     def get_region_id_by_name(self, *, cloud_provider_id: int, region_name: str) -> int:
         """Get the ID of a cloud provider region by its name"""
-        regions = self.get_regions(cloud_provider_id=cloud_provider_id)['regions']
+        regions = self.get_regions(cloud_provider_id=cloud_provider_id)["regions"]
         return next(region for region in regions if region["externalId"] == region_name)["id"]
 
-    def get_instance_types(
-            self, *, cloud_provider_id: int, region_id: int, defaults: bool = False) -> dict[str, Any]:
+    def get_instance_types(self, *, cloud_provider_id: int, region_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get instance types available for a given cloud provider and region"""
-        url = f'/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}'
+        url = f"/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}"
         params = {}
         if defaults:
-            params['defaults'] = 'true'
-        return self.request('GET', url, params=params)
+            params["defaults"] = "true"
+        return self.request("GET", url, params=params)
 
-    def get_instance_id_by_name(
-            self, *, cloud_provider_id: int, region_id: int, instance_type_name: str) -> int:
+    def get_instance_id_by_name(self, *, cloud_provider_id: int, region_id: int, instance_type_name: str) -> int:
         """Get the ID of an instance type by its name in a given cloud provider and region"""
-        instance_types = self.get_instance_types(
-            cloud_provider_id=cloud_provider_id, region_id=region_id)['instances']
+        instance_types = self.get_instance_types(cloud_provider_id=cloud_provider_id, region_id=region_id)["instances"]
         try:
             return next(t for t in instance_types if t["externalId"] == instance_type_name)["id"]
         except StopIteration:
             raise ScyllaCloudAPIError(
                 f"Instance type '{instance_type_name}' not found in region_id: {region_id} for cloud_provider_id: "
-                f"{cloud_provider_id}, available instance types: {', '.join(t['externalId'] for t in instance_types)}")
+                f"{cloud_provider_id}, available instance types: {', '.join(t['externalId'] for t in instance_types)}"
+            )
 
     @cached_property
     def cloud_provider_ids(self) -> dict[CloudProviderType, int]:
@@ -171,29 +178,29 @@ class ScyllaCloudAPIClient:
     ### Account related APIs ###
     def get_active_accounts(self, *, account_id: int) -> list[dict[str, Any]]:
         """From given account list active cloud-accounts for all cloud-providers"""
-        return self.request('GET', f'/account/{account_id}/cloud-account')
+        return self.request("GET", f"/account/{account_id}/cloud-account")
 
     def get_account_details(self) -> dict[str, Any]:
         """Get details of the account tied to the authorized user"""
-        return self.request('GET', '/account/default')
+        return self.request("GET", "/account/default")
 
     def get_current_account_id(self) -> int:
         """Get the ID of the account tied to the authorized user"""
         account_details = self.get_account_details()
-        return account_details.get('accountId', 1)  # TODO: is 1 a valid default account ID?
+        return account_details.get("accountId", 1)  # TODO: is 1 a valid default account ID?
 
     def set_account_notifications_email(self, *, account_id: int, emails: list[str]) -> dict[str, Any]:
         """Set the email address(es) used for account notifications"""
-        return self.request('POST', f'/account/{account_id}/notifications/email', emails=emails)
+        return self.request("POST", f"/account/{account_id}/notifications/email", emails=emails)
 
     ### Cluster related APIs ###
     def get_cluster_requests(self, *, account_id: int, cluster_id: int) -> list[dict[str, Any]]:
         """list of cluster requests created in the context of a given account"""
-        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/request')
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/request")
 
     def get_cluster_request_details(self, *, account_id: int, request_id: int) -> dict[str, Any]:
         """Get details of a specific cluster request"""
-        return self.request('GET', f'/account/{account_id}/cluster/request/{request_id}')
+        return self.request("GET", f"/account/{account_id}/cluster/request/{request_id}")
 
     def create_cluster_request(  # noqa: PLR0913
         self,
@@ -245,8 +252,8 @@ class ScyllaCloudAPIClient:
         :return: created cluster details
         """
         response = self.request(
-            'POST',
-            f'/account/{account_id}/cluster',
+            "POST",
+            f"/account/{account_id}/cluster",
             clusterName=cluster_name,
             scyllaVersion=scylla_version,
             cidrBlock=cidr_block,
@@ -264,26 +271,27 @@ class ScyllaCloudAPIClient:
             jumpStart=jump_start,
             encryptionAtRest=encryption_at_rest,
             maintenanceWindows=maintenance_windows,
-            scaling=scaling,)
+            scaling=scaling,
+        )
         return self._parse_response_data(response)
 
-    def get_clusters(self, *, account_id: int, metrics: str = '', enriched: bool = False) -> list[dict[str, Any]]:
+    def get_clusters(self, *, account_id: int, metrics: str = "", enriched: bool = False) -> list[dict[str, Any]]:
         """List all clusters for a given account"""
-        url = f'/account/{account_id}/clusters'
+        url = f"/account/{account_id}/clusters"
         params = {}
         if enriched:
-            params['enriched'] = 'true'
+            params["enriched"] = "true"
         if metrics:
-            params['metrics'] = metrics
-        return self.request('GET', url, params=params)['clusters']
+            params["metrics"] = metrics
+        return self.request("GET", url, params=params)["clusters"]
 
     def get_cluster_details(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> dict[str, Any]:
         """Get details of a cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}'
+        url = f"/account/{account_id}/cluster/{cluster_id}"
         params = {}
         if enriched:
-            params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['cluster']
+            params["enriched"] = "true"
+        return self.request("GET", url, params=params)["cluster"]
 
     def get_cluster_id_by_name(self, *, account_id: int, cluster_name: str) -> int | None:
         if clusters := self.get_clusters(account_id=account_id):
@@ -292,86 +300,81 @@ class ScyllaCloudAPIClient:
 
     def get_cluster_nodes(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of cluster nodes"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/nodes'
+        url = f"/account/{account_id}/cluster/{cluster_id}/nodes"
         params = {}
         if enriched:
-            params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['nodes']
+            params["enriched"] = "true"
+        return self.request("GET", url, params=params)["nodes"]
 
     def get_cluster_dcs(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of data centers used by a cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/dcs'
+        url = f"/account/{account_id}/cluster/{cluster_id}/dcs"
         params = {}
         if enriched:
-            params['enriched'] = 'true'
-        return self.request('GET', url, params=params)['dataCenters']
+            params["enriched"] = "true"
+        return self.request("GET", url, params=params)["dataCenters"]
 
-    def delete_cluster(self, *, account_id: int,  cluster_id: int, cluster_name: str) -> dict[str, Any]:
+    def delete_cluster(self, *, account_id: int, cluster_id: int, cluster_name: str) -> dict[str, Any]:
         """Delete a cluster"""
-        return self.request('POST', f'/account/{account_id}/cluster/{cluster_id}/delete',
-                            clusterName=cluster_name)
+        return self.request("POST", f"/account/{account_id}/cluster/{cluster_id}/delete", clusterName=cluster_name)
 
     def resize_cluster(self, *, account_id: int, cluster_id: int, dc_nodes: list[dict]) -> dict[str, Any]:
         """
-       `Create cluster-create request.
+        `Create cluster-create request.
 
-        :param account_id: ID of the account
-        :param cluster_id: ID of the cluster to resize
-        :param dc_nodes: list of the requested changes for each DC
-            [
-                {
-                    "dcId": int,
-                    "wantedSize": int,
-                    "instanceTypeId": int
-                },
-                ...
-            ]
+         :param account_id: ID of the account
+         :param cluster_id: ID of the cluster to resize
+         :param dc_nodes: list of the requested changes for each DC
+             [
+                 {
+                     "dcId": int,
+                     "wantedSize": int,
+                     "instanceTypeId": int
+                 },
+                 ...
+             ]
         """
-        return self.request(
-            'POST', f'/account/{account_id}/cluster/{cluster_id}/resize', dcNodes=dc_nodes)
+        return self.request("POST", f"/account/{account_id}/cluster/{cluster_id}/resize", dcNodes=dc_nodes)
 
     def update_cluster_name(self, *, account_id: int, cluster_id: int, new_name: str) -> dict[str, Any]:
         """Update the name of a cluster"""
-        return self.request('PATCH', f'/account/{account_id}/cluster/{cluster_id}/name', name=new_name)
+        return self.request("PATCH", f"/account/{account_id}/cluster/{cluster_id}/name", name=new_name)
 
     def set_cluster_notifications_email(self, *, account_id: int, cluster_id: int, emails: list[str]) -> dict[str, Any]:
         """Set the email address(es) used for cluster notifications"""
-        return self.request(
-            'POST', f'/account/{account_id}/cluster/{cluster_id}/notifications/email', emails=emails)
+        return self.request("POST", f"/account/{account_id}/cluster/{cluster_id}/notifications/email", emails=emails)
 
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
         """Create a CIDR formatted firewall rule for a given cluster"""
-        return self.request('POST',
-                            f'/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed',
-                            ipAddress=ip_address)
+        return self.request(
+            "POST", f"/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed", ipAddress=ip_address
+        )
 
     def get_fw_rules(self, *, account_id: int, cluster_id: int) -> list[dict[str, Any]]:
         """Get the list of firewall rules for a given cluster"""
-        return self.request(
-            'GET', f'/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed')
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed")
 
     def delete_fw_rule(self, *, account_id: int, cluster_id: int, rule_id: int) -> dict[str, Any]:
         """Delete a firewall rule in a given cluster"""
-        return self.request(
-            'DELETE', f'/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed/{rule_id}')
+        return self.request("DELETE", f"/account/{account_id}/cluster/{cluster_id}/network/firewall/allowed/{rule_id}")
 
     def get_vpc_peers(self, *, account_id: int, cluster_id: int) -> list[dict[str, Any]]:
         """Get list of all VPC peers for a given cluster"""
-        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/peer')
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/network/vpc/peer")
 
     def create_vpc_peer(
-            self,
-            *,
-            account_id: int,
-            cluster_id: int,
-            vpc_id: str,
-            cidr_block: str,
-            owner_id: str,
-            region_id: int,
-            dc_id: int,
-            allow_cql: bool,
-            asynchronous: bool = False
+        self,
+        *,
+        account_id: int,
+        cluster_id: int,
+        vpc_id: str,
+        cidr_block: str,
+        owner_id: str,
+        region_id: int,
+        dc_id: int,
+        allow_cql: bool,
+        asynchronous: bool = False,
     ) -> dict[str, Any]:
         """
         Create a VPC peer for a given cluster.
@@ -386,12 +389,12 @@ class ScyllaCloudAPIClient:
         :param allow_cql: whether to allow CQL traffic over the VPC peer
         :param asynchronous: whether to perform the operation asynchronously (Default: False)
         """
-        url = f'/account/{account_id}/cluster/{cluster_id}/network/vpc/peer'
+        url = f"/account/{account_id}/cluster/{cluster_id}/network/vpc/peer"
         params = {}
         if asynchronous:
-            params['asynchronous'] = 'true'
+            params["asynchronous"] = "true"
         return self.request(
-            'POST',
+            "POST",
             url,
             vpcId=vpc_id,
             cidrBlock=cidr_block,
@@ -399,21 +402,15 @@ class ScyllaCloudAPIClient:
             regionId=region_id,
             dcId=dc_id,
             allowCql=allow_cql,
-            params=params)
+            params=params,
+        )
 
     def get_vpc_peer_details(self, *, account_id: int, cluster_id: int, peer_id: str) -> dict[str, Any]:
         """Get details of a VPC peer for a given cluster"""
-        return self.request(
-            'GET', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}')
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}")
 
     def update_vpc_peer(
-            self,
-            *,
-            account_id: int,
-            cluster_id: int,
-            peer_id: str,
-            status: str,
-            cidr_block: str
+        self, *, account_id: int, cluster_id: int, peer_id: str, status: str, cidr_block: str
     ) -> dict[str, Any]:
         """
         Update a VPC peer for a given cluster.
@@ -425,39 +422,39 @@ class ScyllaCloudAPIClient:
         :param cidr_block: new single address or list of comma separated CIDR block addresses for the VPC peer
         """
         return self.request(
-            'PUT',
-            f'/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}',
+            "PUT",
+            f"/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}",
             status=status,
-            cidrBlock=cidr_block)
+            cidrBlock=cidr_block,
+        )
 
     def delete_vpc_peer(self, *, account_id: int, cluster_id: int, peer_id: str) -> dict[str, Any]:
         """Delete a VPC peer for a given cluster"""
-        return self.request(
-            'DELETE', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}')
+        return self.request("DELETE", f"/account/{account_id}/cluster/{cluster_id}/network/vpc/peer/{peer_id}")
 
     ### Account cluster network connection related APIs ###
     def get_network_connections(
-            self, *, account_id: int, cluster_id: int, type: str = '', dc: int | None = None
+        self, *, account_id: int, cluster_id: int, type: str = "", dc: int | None = None
     ) -> list[dict[str, Any]]:
         """Get the list of network connections for a given cluster"""
-        url = f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection'
+        url = f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection"
         params = {}
         if type:
-            params['type'] = type
+            params["type"] = type
         if dc:
-            params['dc'] = dc
-        return self.request('GET', url, params=params)
+            params["dc"] = dc
+        return self.request("GET", url, params=params)
 
     def create_network_connection(
-            self,
-            *,
-            account_id: int,
-            cluster_id: int,
-            cidr_list: list[str],
-            dc_id: int,
-            data: dict[str, Any],
-            name: str,
-            connection_type: Literal["AWS_TGW_ATTACHMENT"]
+        self,
+        *,
+        account_id: int,
+        cluster_id: int,
+        cidr_list: list[str],
+        dc_id: int,
+        data: dict[str, Any],
+        name: str,
+        connection_type: Literal["AWS_TGW_ATTACHMENT"],
     ) -> dict[str, Any]:
         """
         Create a network connection for a given cluster.
@@ -474,32 +471,24 @@ class ScyllaCloudAPIClient:
         :param name: name of the connection
         :param connection_type: type of the connection (only "AWS_TGW_ATTACHMENT" for now)
         """
-        url = f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection'
+        url = f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection"
         return self.request(
-            'POST',
-            url,
-            cidrList=cidr_list,
-            clusterDCID=dc_id,
-            data=data,
-            name=name,
-            type=connection_type)
+            "POST", url, cidrList=cidr_list, clusterDCID=dc_id, data=data, name=name, type=connection_type
+        )
 
-    def get_network_connection_details(
-            self, *, account_id: int, cluster_id: int, connection_id: str
-    ) -> dict[str, Any]:
+    def get_network_connection_details(self, *, account_id: int, cluster_id: int, connection_id: str) -> dict[str, Any]:
         """Get details of a network connection for a given cluster"""
-        return self.request(
-            'GET', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}')
+        return self.request("GET", f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}")
 
     def update_network_connection(
-            self,
-            *,
-            account_id: int,
-            cluster_id: int,
-            connection_id: str,
-            cidr_list: list[str],
-            name: str,
-            status: Literal["ACTIVE", "INACTIVE"],
+        self,
+        *,
+        account_id: int,
+        cluster_id: int,
+        connection_id: str,
+        cidr_list: list[str],
+        name: str,
+        status: Literal["ACTIVE", "INACTIVE"],
     ) -> dict[str, Any]:
         """
         Update a network connection for a given cluster.
@@ -512,22 +501,23 @@ class ScyllaCloudAPIClient:
         :param status: new status of the connection ("ACTIVE" or "INACTIVE")
         """
         return self.request(
-            'PATCH',
-            f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}',
+            "PATCH",
+            f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}",
             cidrList=cidr_list,
             name=name,
-            status=status)
+            status=status,
+        )
 
     def recreate_network_connection(
-            self,
-            *,
-            account_id: int,
-            cluster_id: int,
-            connection_id: str,
-            cidr_list: list[str],
-            data: dict[str, Any],
-            name: str,
-            status: Literal["ACTIVE", "INACTIVE"]
+        self,
+        *,
+        account_id: int,
+        cluster_id: int,
+        connection_id: str,
+        cidr_list: list[str],
+        data: dict[str, Any],
+        name: str,
+        status: Literal["ACTIVE", "INACTIVE"],
     ) -> dict[str, Any]:
         """Recreate a network connection for a given cluster.
 
@@ -544,14 +534,16 @@ class ScyllaCloudAPIClient:
         :param status: new status of the connection ("ACTIVE" or "INACTIVE")
         """
         return self.request(
-            'PUT',
-            f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}',
+            "PUT",
+            f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}",
             cidrList=cidr_list,
             data=data,
             name=name,
-            status=status)
+            status=status,
+        )
 
     def delete_network_connection(self, *, account_id: int, cluster_id: int, connection_id: str) -> dict[str, Any]:
         """Delete a network connection for a given cluster"""
         return self.request(
-            'DELETE', f'/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}')
+            "DELETE", f"/account/{account_id}/cluster/{cluster_id}/network/vpc/connection/{connection_id}"
+        )

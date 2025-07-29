@@ -32,8 +32,13 @@ from invoke import exceptions
 
 from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus,
-                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult)
+from sdcm.argus_results import (
+    send_manager_benchmark_results_to_argus,
+    send_manager_snapshot_details_to_argus,
+    submit_results_to_argus,
+    ManagerBackupReadResult,
+    ManagerBackupBenchmarkResult,
+)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
@@ -78,6 +83,7 @@ class SnapshotData:
     - node_ids: list of node ids where backup was created
     - one_one_restore_params: dict with parameters for 1-1 restore ('account_credential_id' and 'sm_cluster_id')
     """
+
     locations: list[str]
     tag: str
     exp_timeout: int
@@ -91,22 +97,21 @@ class SnapshotData:
 
 
 class DatabaseOperations(ClusterTester):
-
-    def get_keyspace_name(self, ks_prefix: str = 'keyspace', ks_number: int = 1) -> list:
+    def get_keyspace_name(self, ks_prefix: str = "keyspace", ks_number: int = 1) -> list:
         """Get keyspace name based on the following logic:
-            - if keyspaces number > 1, numeric indexes are used in the ks name;
-            - if keyspaces number == 1, ks name depends on whether compression is applied to keyspace. If applied,
-            the compression postfix will be used in the name, otherwise numeric index (keyspace1)
+        - if keyspaces number > 1, numeric indexes are used in the ks name;
+        - if keyspaces number == 1, ks name depends on whether compression is applied to keyspace. If applied,
+        the compression postfix will be used in the name, otherwise numeric index (keyspace1)
         """
         if ks_number > 1:
-            return ['{}{}'.format(ks_prefix, i) for i in range(1, ks_number + 1)]
+            return ["{}{}".format(ks_prefix, i) for i in range(1, ks_number + 1)]
         else:
-            stress_cmd = self.params.get('stress_read_cmd')
-            if 'compression' in stress_cmd:
-                compression_postfix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
-                keyspace_name = '{}_{}'.format(ks_prefix, compression_postfix.lower())
+            stress_cmd = self.params.get("stress_read_cmd")
+            if "compression" in stress_cmd:
+                compression_postfix = re.search("compression=(.*)Compressor", stress_cmd).group(1)
+                keyspace_name = "{}_{}".format(ks_prefix, compression_postfix.lower())
             else:
-                keyspace_name = '{}{}'.format(ks_prefix, ks_number)
+                keyspace_name = "{}{}".format(ks_prefix, ks_number)
             return [keyspace_name]
 
     def get_table_id(self, node, table_name, keyspace_name=None, remove_hyphen=True):
@@ -124,11 +129,10 @@ class DatabaseOperations(ClusterTester):
             results = session.execute(query)
         base_id = str(results[0].id)
         if remove_hyphen:
-            return base_id.replace('-', '')
+            return base_id.replace("-", "")
         return base_id
 
-    def create_keyspace_and_basic_table(self, keyspace_name, table_name="example_table",
-                                        replication_factor=1):
+    def create_keyspace_and_basic_table(self, keyspace_name, table_name="example_table", replication_factor=1):
         self.log.info("creating keyspace {}".format(keyspace_name))
         keyspace_existence = self.create_keyspace(keyspace_name, replication_factor)
         assert keyspace_existence, "keyspace creation failed"
@@ -141,12 +145,14 @@ class DatabaseOperations(ClusterTester):
         table_name = []
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             for keyspace in range(num_ks):
-                session.execute(f"CREATE KEYSPACE IF NOT EXISTS ks00{keyspace} "
-                                "WITH replication={'class':'NetworkTopologyStrategy', 'replication_factor':1}")
+                session.execute(
+                    f"CREATE KEYSPACE IF NOT EXISTS ks00{keyspace} WITH replication={{'class':'NetworkTopologyStrategy', 'replication_factor':1}}"
+                )
                 for table in range(num_table):
-                    session.execute(f'CREATE COLUMNFAMILY IF NOT EXISTS ks00{keyspace}.table00{table} '
-                                    '(key varchar, c varchar, v varchar, PRIMARY KEY(key, c))')
-                    table_name.append(f'ks00{keyspace}.table00{table}')
+                    session.execute(
+                        f"CREATE COLUMNFAMILY IF NOT EXISTS ks00{keyspace}.table00{table} (key varchar, c varchar, v varchar, PRIMARY KEY(key, c))"
+                    )
+                    table_name.append(f"ks00{keyspace}.table00{table}")
                     # FIXME: improve the structure + data insertion
                     # can use this function to populate tables better?
                     # self.populate_data_parallel()
@@ -159,14 +165,18 @@ class DatabaseOperations(ClusterTester):
         try:
             directoy_path = f"/var/lib/scylla/data/{keyspace_name}"
             directory_size_result = db_node.remoter.sudo(f"du -h --max-depth=0 {directoy_path}")
-            result = db_node.remoter.sudo(f'rm -rf {directoy_path}')
+            result = db_node.remoter.sudo(f"rm -rf {directoy_path}")
             if result.stderr:
-                raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
-                                        'Error: {}'.format(result))
+                raise FilesNotCorrupted(
+                    "Files were not corrupted. CorruptThenRepair nemesis can't be run. Error: {}".format(result)
+                )
             if directory_size_result.stdout:
-                directory_size = directory_size_result.stdout[:directory_size_result.stdout.find("\t")]
-                self.log.debug("Removed the directory of keyspace {} from node {}\nThe size of the directory is {}".format(
-                    keyspace_name, db_node, directory_size))
+                directory_size = directory_size_result.stdout[: directory_size_result.stdout.find("\t")]
+                self.log.debug(
+                    "Removed the directory of keyspace {} from node {}\nThe size of the directory is {}".format(
+                        keyspace_name, db_node, directory_size
+                    )
+                )
 
         finally:
             db_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -179,10 +189,12 @@ class DatabaseOperations(ClusterTester):
         """
         num_of_nodes = self.params.get("n_db_nodes")
         num_of_rows_per_insertion = int(total_num_of_rows / (num_of_nodes - 1))
-        stress_command_template = "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={}" \
-                                  " replication(strategy=NetworkTopologyStrategy,replication_factor=3)'" \
-                                  " -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={}..{} -mode cql3" \
-                                  " native -rate threads=200 -log interval=5"
+        stress_command_template = (
+            "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={}"
+            " replication(strategy=NetworkTopologyStrategy,replication_factor=3)'"
+            " -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={}..{} -mode cql3"
+            " native -rate threads=200 -log interval=5"
+        )
         start_of_range = 1
         # We can't shut down node 1 since it's the default contact point of the stress command, and we have no way
         # of changing that. As such, we skip it.
@@ -190,12 +202,13 @@ class DatabaseOperations(ClusterTester):
             self.log.info("inserting {} rows to every node except {}".format(num_of_rows_per_insertion, node.name))
             end_of_range = start_of_range + num_of_rows_per_insertion - 1
             node.stop_scylla_server(verify_up=False, verify_down=True)
-            stress_thread = self.run_stress_thread(stress_cmd=stress_command_template.format(num_of_rows_per_insertion,
-                                                                                             keyspace_name,
-                                                                                             start_of_range,
-                                                                                             end_of_range))
+            stress_thread = self.run_stress_thread(
+                stress_cmd=stress_command_template.format(
+                    num_of_rows_per_insertion, keyspace_name, start_of_range, end_of_range
+                )
+            )
             time.sleep(15)
-            self.log.info('load={}'.format(stress_thread.get_results()))
+            self.log.info("load={}".format(stress_thread.get_results()))
             node.start_scylla_server(verify_up=True, verify_down=False)
             start_of_range = end_of_range + 1
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
@@ -204,11 +217,13 @@ class DatabaseOperations(ClusterTester):
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
 
-    def create_missing_rows_in_cluster(self, create_missing_rows_in_multiple_nodes, total_num_of_rows,
-                                       keyspace_to_be_repaired=None):
+    def create_missing_rows_in_cluster(
+        self, create_missing_rows_in_multiple_nodes, total_num_of_rows, keyspace_to_be_repaired=None
+    ):
         if create_missing_rows_in_multiple_nodes:
-            self.insert_data_while_excluding_each_node(total_num_of_rows=total_num_of_rows,
-                                                       keyspace_name=keyspace_to_be_repaired)
+            self.insert_data_while_excluding_each_node(
+                total_num_of_rows=total_num_of_rows, keyspace_name=keyspace_to_be_repaired
+            )
             self.wait_no_compactions_running(n=40, sleep_time=10)
         else:
             target_node = self.db_cluster.nodes[2]
@@ -216,23 +231,22 @@ class DatabaseOperations(ClusterTester):
 
 
 class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
-
     def _generate_load(self, keyspace_name: str = None):
-        self.log.info('Starting c-s write workload')
-        stress_cmd = self.params.get('stress_cmd')
+        self.log.info("Starting c-s write workload")
+        stress_cmd = self.params.get("stress_cmd")
         stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=keyspace_name)
-        self.log.info('Sleeping for 15s to let cassandra-stress run...')
+        self.log.info("Sleeping for 15s to let cassandra-stress run...")
         time.sleep(15)
         return stress_thread
 
     def generate_load_and_wait_for_results(self, keyspace_name: str = None):
         load_thread = self._generate_load(keyspace_name=keyspace_name)
         load_results = load_thread.get_results()
-        self.log.info(f'load={load_results}')
+        self.log.info(f"load={load_results}")
 
     def generate_background_read_load(self):
-        self.log.info('Starting c-s read')
-        stress_cmd = self.params.get('stress_read_cmd')
+        self.log.info("Starting c-s read")
+        stress_cmd = self.params.get("stress_read_cmd")
         number_of_nodes = self.params.get("n_db_nodes")
         number_of_loaders = self.params.get("n_loaders")
 
@@ -240,15 +254,15 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
         stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
         stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
-        self.log.info('Sleeping for 15s to let cassandra-stress run...')
+        self.log.info("Sleeping for 15s to let cassandra-stress run...")
         time.sleep(15)
         return stress_thread
 
     def run_verification_read_stress(self, ks_names=None):
         stress_queue = []
-        stress_cmd = self.params.get('stress_read_cmd')
-        keyspace_num = self.params.get('keyspace_num')
-        InfoEvent(message='Starting read stress for data verification').publish()
+        stress_cmd = self.params.get("stress_read_cmd")
+        keyspace_num = self.params.get("keyspace_num")
+        InfoEvent(message="Starting read stress for data verification").publish()
         stress_start_time = datetime.now()
         if ks_names:
             self.assemble_and_run_all_stress_cmd_by_ks_names(stress_queue, stress_cmd, ks_names)
@@ -257,7 +271,7 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         for stress in stress_queue:
             self.verify_stress_thread(stress)
         stress_run_time = datetime.now() - stress_start_time
-        InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
+        InfoEvent(message=f"The read stress run was completed. Total run time: {stress_run_time}").publish()
 
     def run_and_verify_stress_in_threads(self, cs_cmds: list[str], stop_on_failure: bool = False) -> None:
         """Runs C-S commands in threads and verifies their execution results.
@@ -265,8 +279,9 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         """
         stress_queue = []
         for stress_cmd in cs_cmds:
-            _thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True,
-                                             stop_test_on_failure=stop_on_failure)
+            _thread = self.run_stress_thread(
+                stress_cmd=stress_cmd, round_robin=True, stop_test_on_failure=stop_on_failure
+            )
             stress_queue.append(_thread)
 
         for _thread in stress_queue:
@@ -285,7 +300,7 @@ class ClusterOperations(ClusterTester):
     def get_all_dcs_names(self):
         dcs_names = set()
         for node in self.db_cluster.nodes:
-            data_center = self.db_cluster.get_nodetool_info(node)['Data Center']
+            data_center = self.db_cluster.get_nodetool_info(node)["Data Center"]
             dcs_names.add(data_center)
         return dcs_names
 
@@ -354,12 +369,16 @@ class BucketOperations(ClusterTester):
             raise NotImplementedError("At the moment, we only support debian installation")
 
     def install_azcopy_dependencies(self, node):
-        self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
+        self._run_cmd_with_retry(
+            executor=node.remoter.sudo,
+            cmd=shell_script_cmd("""\
             curl -L https://aka.ms/downloadazcopy-v10-linux | \
                 tar xz -C /usr/bin --strip-components 1 --wildcards '*/azcopy'
-        """))
-        self.backup_azure_blob_service = \
+        """),
+        )
+        self.backup_azure_blob_service = (
             f"https://{self.test_config.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
+        )
         self.backup_azure_blob_sas = self.test_config.backup_azure_blob_credentials["download_sas"]
 
     @staticmethod
@@ -384,7 +403,7 @@ class BucketOperations(ClusterTester):
         LOCALRUNNER.run(f"gsutil mb -l {region} gs://{name}")
 
     @staticmethod
-    def sync_s3_buckets(source: str, destination: str, acl: str = 'bucket-owner-full-control') -> None:
+    def sync_s3_buckets(source: str, destination: str, acl: str = "bucket-owner-full-control") -> None:
         LOCALRUNNER.run(f"aws s3 sync s3://{source} s3://{destination} --acl {acl}")
 
     @staticmethod
@@ -427,7 +446,6 @@ class BucketOperations(ClusterTester):
 
 
 class SnapshotOperations(ClusterTester):
-
     @staticmethod
     def get_snapshot_data(snapshot_name: str) -> SnapshotData:
         snapshots_config = "defaults/manager_restore_benchmark_snapshots.yaml"
@@ -461,9 +479,9 @@ class SnapshotOperations(ClusterTester):
     @staticmethod
     def _get_all_snapshot_files_s3(cluster_id, bucket_name, region_name):
         file_set = set()
-        s3_client = boto3.client('s3', region_name=region_name)
-        paginator = s3_client.get_paginator('list_objects')
-        pages = paginator.paginate(Bucket=bucket_name, Prefix=f'backup/sst/cluster/{cluster_id}')
+        s3_client = boto3.client("s3", region_name=region_name)
+        paginator = s3_client.get_paginator("list_objects")
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=f"backup/sst/cluster/{cluster_id}")
         for page in pages:
             # No Contents key means that no snapshot file of the cluster exist,
             # probably no backup ran before this function
@@ -476,7 +494,7 @@ class SnapshotOperations(ClusterTester):
     def _get_all_snapshot_files_gce(cluster_id, bucket_name):
         file_set = set()
         storage_client, _ = get_gce_storage_client()
-        blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=f'backup/sst/cluster/{cluster_id}')
+        blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=f"backup/sst/cluster/{cluster_id}")
         for listing_object in blobs:
             file_set.add(listing_object.name)
         # Unlike S3, if no files match the prefix, no error will occur
@@ -487,20 +505,21 @@ class SnapshotOperations(ClusterTester):
         file_set = set()
         azure_service = AzureService()
         container_client = azure_service.blob.get_container_client(container=bucket_name)
-        dir_listing = container_client.list_blobs(name_starts_with=f'backup/sst/cluster/{cluster_id}')
+        dir_listing = container_client.list_blobs(name_starts_with=f"backup/sst/cluster/{cluster_id}")
         for listing_object in dir_listing:
             file_set.add(listing_object.name)
         return file_set
 
     def get_all_snapshot_files(self, cluster_id):
-        region_name = next(iter(self.params.region_names), '')
-        bucket_name = self.params.get('backup_bucket_location').split()[0].format(region=region_name)
-        if self.params.get('backup_bucket_backend') == 's3':
-            return self._get_all_snapshot_files_s3(cluster_id=cluster_id, bucket_name=bucket_name,
-                                                   region_name=region_name)
-        elif self.params.get('backup_bucket_backend') == 'gcs':
+        region_name = next(iter(self.params.region_names), "")
+        bucket_name = self.params.get("backup_bucket_location").split()[0].format(region=region_name)
+        if self.params.get("backup_bucket_backend") == "s3":
+            return self._get_all_snapshot_files_s3(
+                cluster_id=cluster_id, bucket_name=bucket_name, region_name=region_name
+            )
+        elif self.params.get("backup_bucket_backend") == "gcs":
             return self._get_all_snapshot_files_gce(cluster_id=cluster_id, bucket_name=bucket_name)
-        elif self.params.get('backup_bucket_backend') == 'azure':
+        elif self.params.get("backup_bucket_backend") == "azure":
             return self._get_all_snapshot_files_azure(cluster_id=cluster_id, bucket_name=bucket_name)
         else:
             raise ValueError(f'"{self.params.get("backup_bucket_backend")}" not supported')
@@ -515,7 +534,7 @@ class SnapshotPreparerOperations(ClusterTester):
 
         For example, LeveledCompactionStrategy -> lcs or SizeTieredCompactionStrategy -> stcs.
         """
-        return ''.join(char for char in compaction_strategy if char.isupper()).lower()
+        return "".join(char for char in compaction_strategy if char.isupper()).lower()
 
     def _build_ks_name(self, backup_size: int, cs_cmd_params: dict) -> str:
         """Build the keyspace name based on the backup size and the parameters used in the c-s command.
@@ -636,8 +655,9 @@ class ManagerTestFunctionsMixIn(
         email_data.update(
             {
                 "manager_server_repo": self.params.get("scylla_mgmt_address"),
-                "manager_agent_repo": (self.params.get("scylla_mgmt_agent_address") or
-                                       self.params.get("scylla_mgmt_address")),
+                "manager_agent_repo": (
+                    self.params.get("scylla_mgmt_agent_address") or self.params.get("scylla_mgmt_address")
+                ),
                 "backup_time": str(self.manager_test_metrics.backup_time),
                 "restore_time": str(self.manager_test_metrics.restore_time),
                 "restore_parameters": restore_parameters,
@@ -649,7 +669,7 @@ class ManagerTestFunctionsMixIn(
     @cached_property
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
-        region = next(iter(self.params.region_names), '')
+        region = next(iter(self.params.region_names), "")
         bucket_locations = self.params.get("backup_bucket_location")
 
         buckets = (
@@ -673,28 +693,39 @@ class ManagerTestFunctionsMixIn(
         else:
             return None
 
-    def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
-                              truncate=True, restore_data_with_task=False, timeout=None):
+    def verify_backup_success(
+        self,
+        mgr_cluster,
+        backup_task,
+        ks_names: list = None,
+        tables_names: list = None,
+        truncate=True,
+        restore_data_with_task=False,
+        timeout=None,
+    ):
         if ks_names is None:
-            ks_names = ['keyspace1']
+            ks_names = ["keyspace1"]
         if tables_names is None:
-            tables_names = ['standard1']
+            tables_names = ["standard1"]
         ks_tables_map = {keyspace: tables_names for keyspace in ks_names}
         if truncate:
             for ks, tables in ks_tables_map.items():
                 for table_name in tables:
-                    self.log.info(f'running truncate on {ks}.{table_name}')
-                    self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks}.{table_name}')
+                    self.log.info(f"running truncate on {ks}.{table_name}")
+                    self.db_cluster.nodes[0].run_cqlsh(f"TRUNCATE {ks}.{table_name}")
         if restore_data_with_task:
-            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                          timeout=timeout, restore_data=True)
+            self.restore_backup_with_task(
+                mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(), timeout=timeout, restore_data=True
+            )
         else:
             snapshot_tag = backup_task.get_snapshot_tag()
-            self.restore_backup_without_manager(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                                                ks_tables_list=ks_tables_map)
+            self.restore_backup_without_manager(
+                mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag, ks_tables_list=ks_tables_map
+            )
 
-    def restore_backup_without_manager(self, mgr_cluster, snapshot_tag, ks_tables_list, location=None,
-                                       precreated_backup=False):
+    def restore_backup_without_manager(
+        self, mgr_cluster, snapshot_tag, ks_tables_list, location=None, precreated_backup=False
+    ):
         """Restore backup without Scylla Manager but using the `nodetool refresh` operation
         (https://opensource.docs.scylladb.com/stable/operating-scylla/nodetool-commands/refresh.html).
 
@@ -718,14 +749,14 @@ class ManagerTestFunctionsMixIn(
             install_dependencies = self.install_azcopy_dependencies
             download = self.download_from_azure
         else:
-            raise ValueError(f'{backup_bucket_backend=} is not supported')
+            raise ValueError(f"{backup_bucket_backend=} is not supported")
 
         browse_all_clusters = True if precreated_backup else False
         per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag, location, browse_all_clusters)
         # One path is for schema, it should be filtrated as this method is supposed to be run on restored schema cluster
-        backed_up_node_ids = [i for i in per_node_backup_file_paths if 'schema' not in i]
+        backed_up_node_ids = [i for i in per_node_backup_file_paths if "schema" not in i]
 
-        nodetool_refresh_extra_flags = self.params.get('mgmt_nodetool_refresh_flags') or ""
+        nodetool_refresh_extra_flags = self.params.get("mgmt_nodetool_refresh_flags") or ""
         for index, node in enumerate(self.db_cluster.nodes):
             install_dependencies(node=node)
             node_data_path = Path("/var/lib/scylla/data")
@@ -749,17 +780,31 @@ class ManagerTestFunctionsMixIn(
                         node.run_nodetool(f"refresh {keyspace} {table} {nodetool_refresh_extra_flags}")
                     self.log.info(f"[Node {index}][{keyspace}.{table}] Nodetool refresh took {timer.duration}")
 
-    def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
-                                 location_list=None, extra_params=None):
+    def restore_backup_with_task(
+        self,
+        mgr_cluster,
+        snapshot_tag,
+        timeout,
+        restore_schema=False,
+        restore_data=False,
+        location_list=None,
+        extra_params=None,
+    ):
         location_list = location_list if location_list else self.locations
         dc_mapping = self.get_dc_mapping() if restore_data else None
-        restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
-                                                       location_list=location_list, snapshot_tag=snapshot_tag,
-                                                       dc_mapping=dc_mapping, extra_params=extra_params)
+        restore_task = mgr_cluster.create_restore_task(
+            restore_schema=restore_schema,
+            restore_data=restore_data,
+            location_list=location_list,
+            snapshot_tag=snapshot_tag,
+            dc_mapping=dc_mapping,
+            extra_params=extra_params,
+        )
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
-        InfoEvent(message=f'The restore task has ended successfully. '
-                  f'Restore run time: {restore_task.duration}.').publish()
+        InfoEvent(
+            message=f"The restore task has ended successfully. Restore run time: {restore_task.duration}."
+        ).publish()
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
         return restore_task
@@ -767,18 +812,19 @@ class ManagerTestFunctionsMixIn(
     def create_repair_and_alter_it_with_repair_control(self):
         keyspace_to_be_repaired = "keyspace2"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_repair_control',
-                                               db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.add_cluster(
+            name=self.CLUSTER_NAME + "_repair_control",
+            db_cluster=self.db_cluster,
+            auth_token=self.monitors.mgmt_auth_token,
+        )
         # writing 292968720 rows, equal to the amount of data written in the prepare (around 100gb per node),
         # to create a large data fault and therefore a longer running repair
-        self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=True,
-                                            keyspace_to_be_repaired=keyspace_to_be_repaired,
-                                            total_num_of_rows=292968720)
-        arg_list = [{"intensity": .0001},
-                    {"intensity": 0},
-                    {"parallel": 1},
-                    {"intensity": 2, "parallel": 1}]
+        self.create_missing_rows_in_cluster(
+            create_missing_rows_in_multiple_nodes=True,
+            keyspace_to_be_repaired=keyspace_to_be_repaired,
+            total_num_of_rows=292968720,
+        )
+        arg_list = [{"intensity": 0.0001}, {"intensity": 0}, {"parallel": 1}, {"intensity": 2, "parallel": 1}]
 
         InfoEvent(message="Repair started").publish()
         repair_task = mgr_cluster.create_repair_task(keyspace="keyspace2")
@@ -794,109 +840,131 @@ class ManagerTestFunctionsMixIn(
 
 
 class ManagerRestoreTests(ManagerTestFunctionsMixIn):
-
     def test_restore_multiple_backup_snapshots(self):  # noqa: PLR0914
         mgr_cluster = self.db_cluster.get_cluster_manager()
-        cluster_backend = self.params.get('cluster_backend')
-        if cluster_backend != 'aws':
+        cluster_backend = self.params.get("cluster_backend")
+        if cluster_backend != "aws":
             self.log.error("Test supports only AWS ATM")
             return
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        region = next(iter(self.params.region_names), '')
+        region = next(iter(self.params.region_names), "")
         target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         location_list = [f"{backup_bucket_backend}:{target_bucket}"]
-        confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend]["confirmation_stress_template"]
+        confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend][
+            "confirmation_stress_template"
+        ]
         read_stress_list = []
         snapshot_sizes = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"]
         for size in snapshot_sizes:
-            number_of_rows = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["number_of_rows"]
-            expected_timeout = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["expected_timeout"]
+            number_of_rows = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size][
+                "number_of_rows"
+            ]
+            expected_timeout = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size][
+                "expected_timeout"
+            ]
             snapshot_dict = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["snapshots"]
             snapshot_tag = random.choice(list(snapshot_dict.keys()))
             keyspace_name = snapshot_dict[snapshot_tag]["keyspace_name"]
 
-            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                                          timeout=180, restore_schema=True, location_list=location_list)
-            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                                          timeout=expected_timeout, restore_data=True, location_list=location_list)
-            stress_command = confirmation_stress_template.format(num_of_rows=number_of_rows,
-                                                                 keyspace_name=keyspace_name,
-                                                                 sequence_start=1,
-                                                                 sequence_end=number_of_rows)
+            self.restore_backup_with_task(
+                mgr_cluster=mgr_cluster,
+                snapshot_tag=snapshot_tag,
+                timeout=180,
+                restore_schema=True,
+                location_list=location_list,
+            )
+            self.restore_backup_with_task(
+                mgr_cluster=mgr_cluster,
+                snapshot_tag=snapshot_tag,
+                timeout=expected_timeout,
+                restore_data=True,
+                location_list=location_list,
+            )
+            stress_command = confirmation_stress_template.format(
+                num_of_rows=number_of_rows, keyspace_name=keyspace_name, sequence_start=1, sequence_end=number_of_rows
+            )
             read_stress_list.append(stress_command)
         for stress in read_stress_list:
             read_thread = self.run_stress_thread(stress_cmd=stress, round_robin=False)
             self.verify_stress_thread(read_thread)
 
     def test_restore_backup_with_task(self, ks_names: list = None):
-        self.log.info('starting test_restore_backup_with_task')
+        self.log.info("starting test_restore_backup_with_task")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         if not ks_names:
-            ks_names = ['keyspace1']
+            ks_names = ["keyspace1"]
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=ks_names)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
         soft_timeout = 36 * 60
         hard_timeout = 50 * 60
         with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.data_nodes[0], timeout=soft_timeout):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names,
-                                       restore_data_with_task=True, timeout=hard_timeout)
+            self.verify_backup_success(
+                mgr_cluster=mgr_cluster,
+                backup_task=backup_task,
+                ks_names=ks_names,
+                restore_data_with_task=True,
+                timeout=hard_timeout,
+            )
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_restore_backup_with_task')
+        self.log.info("finishing test_restore_backup_with_task")
 
 
 class ManagerBackupTests(ManagerRestoreTests):
-
     def test_basic_backup(self, ks_names: list = None):
-        self.log.info('starting test_basic_backup')
+        self.log.info("starting test_basic_backup")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names)
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_basic_backup')
+        self.log.info("finishing test_basic_backup")
 
     def test_backup_multiple_ks_tables(self):
-        self.log.info('starting test_backup_multiple_ks_tables')
+        self.log.info("starting test_backup_multiple_ks_tables")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         tables = self.create_ks_and_tables(10, 100)
-        self.log.debug('tables list = {}'.format(tables))
+        self.log.debug("tables list = {}".format(tables))
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-        self.log.info('finishing test_backup_multiple_ks_tables')
+        self.log.info("finishing test_backup_multiple_ks_tables")
 
     def test_backup_location_with_path(self):
-        self.log.info('starting test_backup_location_with_path')
+        self.log.info("starting test_backup_location_with_path")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
-            mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
+            mgr_cluster.create_backup_task(location_list=[f"{location}/path_testing/" for location in self.locations])
         except ScyllaManagerError as error:
-            self.log.info('Expected to fail - error: {}'.format(error))
-        self.log.info('finishing test_backup_location_with_path')
+            self.log.info("Expected to fail - error: {}".format(error))
+        self.log.info("finishing test_backup_location_with_path")
 
     def test_backup_rate_limit(self):
-        self.log.info('starting test_backup_rate_limit')
+        self.log.info("starting test_backup_rate_limit")
         mgr_cluster = self.db_cluster.get_cluster_manager()
-        rate_limit_list = [f'{dc}:{random.randint(15, 25)}' for dc in self.get_all_dcs_names()]
-        self.log.info('rate limit will be {}'.format(rate_limit_list))
+        rate_limit_list = [f"{dc}:{random.randint(15, 25)}" for dc in self.get_all_dcs_names()]
+        self.log.info("rate limit will be {}".format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status(timeout=18000)
-        assert task_status == TaskStatus.DONE, \
+        assert task_status == TaskStatus.DONE, (
             f"Task {backup_task.id} did not end successfully:\n{backup_task.detailed_progress}"
-        self.log.info('backup task finished with status {}'.format(task_status))
+        )
+        self.log.info("backup task finished with status {}".format(task_status))
         # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-        self.log.info('finishing test_backup_rate_limit')
+        self.log.info("finishing test_backup_rate_limit")
 
     def test_backup_purge_removes_orphan_files(self):
         """
@@ -905,7 +973,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         a new task) and after the task concludes (successfully) the test makes sure the manager has deleted the
         previously mentioned orphan files from the bucket.
         """
-        self.log.info('starting test_backup_purge_removes_orphan_files')
+        self.log.info("starting test_backup_purge_removes_orphan_files")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
@@ -927,10 +995,10 @@ class ManagerBackupTests(ManagerRestoreTests):
         orphan_files_post_rerun = snapshot_file_list_post_purge.intersection(orphan_files_pre_rerun)
         assert not orphan_files_post_rerun, "orphan files were not deleted!"
 
-        self.log.info('finishing test_backup_purge_removes_orphan_files')
+        self.log.info("finishing test_backup_purge_removes_orphan_files")
 
     def test_enospc_during_backup(self):
-        self.log.info('starting test_enospc_during_backup')
+        self.log.info("starting test_enospc_during_backup")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         # deleting previous snapshots so that the current backup will last longer
         previous_backup_tasks = mgr_cluster.backup_task_list
@@ -950,59 +1018,62 @@ class ManagerBackupTests(ManagerRestoreTests):
                 backup_task.start()
 
                 backup_task.wait_and_get_final_status()
-                assert backup_task.status == TaskStatus.DONE, "The backup failed to run on a node with no free space," \
-                                                              " while it should have had the room for snapshots due " \
-                                                              "to the previous run"
+                assert backup_task.status == TaskStatus.DONE, (
+                    "The backup failed to run on a node with no free space, while it should have had the room for snapshots due to the previous run"
+                )
 
             finally:
                 clean_enospc_on_node(target_node=target_node, sleep_time=30)
-        self.log.info('finishing test_enospc_during_backup')
+        self.log.info("finishing test_enospc_during_backup")
 
     def test_enospc_before_restore(self):
         if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
             # TODO: Get back to this restriction after https://github.com/scylladb/scylla-manager/issues/4275 resolution
-            self.log.info('Skipping test_enospc_before_restore due to enabled tablets. '
-                          'For details https://github.com/scylladb/scylla-manager/issues/4276')
+            self.log.info(
+                "Skipping test_enospc_before_restore due to enabled tablets. For details https://github.com/scylladb/scylla-manager/issues/4276"
+            )
             return
 
-        self.log.info('starting test_enospc_before_restore')
+        self.log.info("starting test_enospc_before_restore")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
         target_node = self.db_cluster.nodes[1]
         with ignore_no_space_errors(node=target_node), ignore_stream_mutation_fragments_errors():
             try:
                 reach_enospc_on_node(target_node=target_node)
 
                 snapshot_tag = backup_task.get_snapshot_tag()
-                restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=self.locations,
-                                                               snapshot_tag=snapshot_tag)
+                restore_task = mgr_cluster.create_restore_task(
+                    restore_data=True, location_list=self.locations, snapshot_tag=snapshot_tag
+                )
                 final_status = restore_task.wait_and_get_final_status(step=30)
 
-                assert final_status == TaskStatus.ERROR, \
-                    f"The restore task is supposed to fail, since node {target_node} lacks the disk space to download" \
-                    f"the snapshot files"
+                assert final_status == TaskStatus.ERROR, (
+                    f"The restore task is supposed to fail, since node {target_node} lacks the disk space to downloadthe snapshot files"
+                )
             finally:
                 clean_enospc_on_node(target_node=target_node, sleep_time=30)
-        self.log.info('finishing test_enospc_before_restore')
+        self.log.info("finishing test_enospc_before_restore")
 
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
-        with self.subTest('Backup Multiple KS\' and Tables'):
+        with self.subTest("Backup Multiple KS' and Tables"):
             self.test_backup_multiple_ks_tables()
-        with self.subTest('Backup to Location with path'):
+        with self.subTest("Backup to Location with path"):
             self.test_backup_location_with_path()
-        with self.subTest('Test Backup Rate Limit'):
+        with self.subTest("Test Backup Rate Limit"):
             self.test_backup_rate_limit()
-        with self.subTest('Test Backup Purge Removes Orphans Files'):
+        with self.subTest("Test Backup Purge Removes Orphans Files"):
             self.test_backup_purge_removes_orphan_files()
-        with self.subTest('Test restore a backup with restore task'):
+        with self.subTest("Test restore a backup with restore task"):
             self.test_restore_backup_with_task()
-        with self.subTest('Test Backup end of space'):  # Preferably at the end
+        with self.subTest("Test Backup end of space"):  # Preferably at the end
             self.test_enospc_during_backup()
-        with self.subTest('Test Restore end of space'):
+        with self.subTest("Test Restore end of space"):
             self.test_enospc_before_restore()
 
     def test_no_delta_backup_at_disabled_compaction(self):
@@ -1013,41 +1084,44 @@ class ManagerBackupTests(ManagerRestoreTests):
 
         For more details https://github.com/scylladb/scylla-manager/issues/3936#issuecomment-2277611709
         """
-        self.log.info('starting test_consecutive_backups')
+        self.log.info("starting test_consecutive_backups")
 
-        self.log.info('Run write stress')
+        self.log.info("Run write stress")
         self.run_prepare_write_cmd()
 
-        self.log.info('Disable compaction for every node in the cluster')
+        self.log.info("Disable compaction for every node in the cluster")
         self.disable_compaction()
 
-        self.log.info('Prepare Manager')
+        self.log.info("Prepare Manager")
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
 
-        self.log.info('Run backup #1')
+        self.log.info("Run backup #1")
         backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_1_status = backup_task_1.wait_and_get_final_status(timeout=3600)
-        assert backup_task_1_status == TaskStatus.DONE, \
+        assert backup_task_1_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_1_status} instead of {TaskStatus.DONE}"
-        self.log.info(f'Backup task #1 duration - {backup_task_1.duration}')
+        )
+        self.log.info(f"Backup task #1 duration - {backup_task_1.duration}")
 
-        self.log.info('Run backup #2')
+        self.log.info("Run backup #2")
         backup_task_2 = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task_2_status = backup_task_2.wait_and_get_final_status(timeout=60)
-        assert backup_task_2_status == TaskStatus.DONE, \
+        assert backup_task_2_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_2_status} instead of {TaskStatus.DONE}"
-        self.log.info(f'Backup task #2 duration - {backup_task_2.duration}')
+        )
+        self.log.info(f"Backup task #2 duration - {backup_task_2.duration}")
 
         assert backup_task_2.duration < timedelta(seconds=15), "No-delta backup took more than 15 seconds"
 
-        self.log.info('Verify restore from backup #2')
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task_2,
-                                   restore_data_with_task=True, timeout=3600)
+        self.log.info("Verify restore from backup #2")
+        self.verify_backup_success(
+            mgr_cluster=mgr_cluster, backup_task=backup_task_2, restore_data_with_task=True, timeout=3600
+        )
 
-        self.log.info('Run verification read stress')
+        self.log.info("Run verification read stress")
         self.run_verification_read_stress()
 
-        self.log.info('finishing test_consecutive_backups')
+        self.log.info("finishing test_consecutive_backups")
 
 
 class ManagerRepairTests(ManagerTestFunctionsMixIn):
@@ -1056,18 +1130,20 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
 
     def _test_intensity_and_parallel(self, fault_multiple_nodes):
         keyspace_to_be_repaired = "keyspace2"
-        InfoEvent(message='starting test_intensity_and_parallel').publish()
+        InfoEvent(message="starting test_intensity_and_parallel").publish()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(
-            name=self.CLUSTER_NAME + '_intensity_and_parallel',
+            name=self.CLUSTER_NAME + "_intensity_and_parallel",
             db_cluster=self.db_cluster,
             auth_token=self.monitors.mgmt_auth_token,
         )
 
         InfoEvent(message="Starting faulty load (to be repaired)").publish()
-        self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
-                                            keyspace_to_be_repaired=keyspace_to_be_repaired,
-                                            total_num_of_rows=29296872)
+        self.create_missing_rows_in_cluster(
+            create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
+            keyspace_to_be_repaired=keyspace_to_be_repaired,
+            total_num_of_rows=29296872,
+        )
 
         InfoEvent(message="Starting a repair with no intensity").publish()
         base_repair_task = mgr_cluster.create_repair_task(keyspace="keyspace*")
@@ -1078,22 +1154,26 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_to_be_repaired}")
 
-        arg_list = [{"intensity": .5},
-                    {"intensity": .25},
-                    {"intensity": .0001},
-                    {"intensity": 2},
-                    {"intensity": 4},
-                    {"parallel": 1},
-                    {"parallel": 2},
-                    {"intensity": 2, "parallel": 1},
-                    {"intensity": 100},
-                    {"intensity": 0}]
+        arg_list = [
+            {"intensity": 0.5},
+            {"intensity": 0.25},
+            {"intensity": 0.0001},
+            {"intensity": 2},
+            {"intensity": 4},
+            {"parallel": 1},
+            {"parallel": 2},
+            {"intensity": 2, "parallel": 1},
+            {"intensity": 100},
+            {"intensity": 0},
+        ]
 
         for arg_dict in arg_list:
             InfoEvent(message="Starting faulty load (to be repaired)").publish()
-            self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
-                                                keyspace_to_be_repaired=keyspace_to_be_repaired,
-                                                total_num_of_rows=29296872)
+            self.create_missing_rows_in_cluster(
+                create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
+                keyspace_to_be_repaired=keyspace_to_be_repaired,
+                total_num_of_rows=29296872,
+            )
 
             InfoEvent(message=f"Starting a repair with {arg_dict}").publish()
             repair_task = mgr_cluster.create_repair_task(**arg_dict, keyspace="keyspace*")
@@ -1102,7 +1182,7 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
 
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_to_be_repaired}")
-        InfoEvent(message='finishing test_intensity_and_parallel').publish()
+        InfoEvent(message="finishing test_intensity_and_parallel").publish()
 
     def test_repair_intensity_feature(self, fault_multiple_nodes):
         InfoEvent(message="Starting C-S write load").publish()
@@ -1116,13 +1196,13 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         stress_read_thread = self.generate_background_read_load()
         time.sleep(600)  # So we will see the base load of the cluster
         InfoEvent(message="Sleep ended - Starting tests").publish()
-        with self.subTest('test_intensity_and_parallel'):
+        with self.subTest("test_intensity_and_parallel"):
             self._test_intensity_and_parallel(fault_multiple_nodes=fault_multiple_nodes)
         load_results = stress_read_thread.get_results()
-        self.log.info('load={}'.format(load_results))
+        self.log.info("load={}".format(load_results))
 
     def test_repair_multiple_keyspace_types(self):
-        self.log.info('starting test_repair_multiple_keyspace_types')
+        self.log.info("starting test_repair_multiple_keyspace_types")
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.db_cluster.get_cluster_manager()
 
@@ -1132,9 +1212,10 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         self.create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
-        assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
-                                                                                            str(repair_task.status))
-        self.log.info('Task: {} is done.'.format(repair_task.id))
+        assert task_final_status == TaskStatus.DONE, "Task: {} final status is: {}.".format(
+            repair_task.id, str(repair_task.status)
+        )
+        self.log.info("Task: {} is done.".format(repair_task.id))
         self.log.debug("sctool version is : {}".format(manager_tool.sctool.version))
 
         expected_keyspaces_to_be_repaired = ["system_distributed", self.NETWORKSTRATEGY_KEYSPACE_NAME]
@@ -1145,20 +1226,22 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         self.log.info("Looking in the repair output for all of the required keyspaces")
         for keyspace_name in expected_keyspaces_to_be_repaired:
             keyspace_repair_percentage = per_keyspace_progress.get(keyspace_name, None)
-            assert keyspace_repair_percentage is not None, \
-                "The keyspace {} was not included in the repair!".format(keyspace_name)
+            assert keyspace_repair_percentage is not None, "The keyspace {} was not included in the repair!".format(
+                keyspace_name
+            )
 
-            assert keyspace_repair_percentage == 100, \
-                "The repair of the keyspace {} stopped at {}%".format(
-                    keyspace_name, keyspace_repair_percentage)
+            assert keyspace_repair_percentage == 100, "The repair of the keyspace {} stopped at {}%".format(
+                keyspace_name, keyspace_repair_percentage
+            )
 
         localstrategy_keyspace_percentage = per_keyspace_progress.get(self.LOCALSTRATEGY_KEYSPACE_NAME, None)
-        assert localstrategy_keyspace_percentage is None, \
+        assert localstrategy_keyspace_percentage is None, (
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
+        )
         self.log.info("the sctool repair command was completed successfully")
 
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_repair_multiple_keyspace_types')
+        self.log.info("finishing test_repair_multiple_keyspace_types")
 
     def test_repair_intensity_feature_on_multiple_node(self):
         self.test_repair_intensity_feature(fault_multiple_nodes=True)
@@ -1180,11 +1263,10 @@ class ManagerRepairTests(ManagerTestFunctionsMixIn):
         InfoEvent(message="Sleep ended - Starting tests").publish()
         self.create_repair_and_alter_it_with_repair_control()
         load_results = stress_read_thread.get_results()
-        self.log.info('load={}'.format(load_results))
+        self.log.info("load={}".format(load_results))
 
 
 class ManagerCRUDTests(ManagerTestFunctionsMixIn):
-
     def test_cluster_crud(self):
         """
         Test steps:
@@ -1192,7 +1274,7 @@ class ManagerCRUDTests(ManagerTestFunctionsMixIn):
         2) update the cluster attributes in manager: name/host
         3) delete the cluster from manager and re-add again.
         """
-        self.log.info('starting test_mgmt_cluster_crud')
+        self.log.info("starting test_mgmt_cluster_crud")
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.db_cluster.get_cluster_manager()
         # Test cluster attributes
@@ -1200,23 +1282,25 @@ class ManagerCRUDTests(ManagerTestFunctionsMixIn):
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name + "_renamed", "Cluster name wasn't changed after update command"
         mgr_cluster.delete()
-        mgr_cluster = manager_tool.add_cluster(self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.add_cluster(
+            self.CLUSTER_NAME, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token
+        )
 
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_mgmt_cluster_crud')
+        self.log.info("finishing test_mgmt_cluster_crud")
 
 
 class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
-
     def test_cluster_healthcheck(self):
-        self.log.info('starting test_mgmt_cluster_healthcheck')
+        self.log.info("starting test_mgmt_cluster_healthcheck")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         other_host, other_host_ip = [
-            host_data for host_data in self.get_cluster_hosts_with_ips() if
-            host_data[1] != self.get_cluster_hosts_ip()[0]][0]
+            host_data
+            for host_data in self.get_cluster_hosts_with_ips()
+            if host_data[1] != self.get_cluster_hosts_ip()[0]
+        ][0]
         sleep = 40
-        self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
+        self.log.debug("Sleep {} seconds, waiting for health-check task to run by schedule on first time".format(sleep))
         time.sleep(sleep)
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
@@ -1227,17 +1311,19 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
         # Check for sctool status change after scylla-server down
         other_host.stop_scylla_server()
         self.log.debug("Health-check next run is: {}".format(healthcheck_task.next_run))
-        self.log.debug('Sleep {} seconds, waiting for health-check task to run after node down'.format(sleep))
+        self.log.debug("Sleep {} seconds, waiting for health-check task to run after node down".format(sleep))
         time.sleep(sleep)
         dict_host_health = mgr_cluster.get_hosts_health()
         assert dict_host_health[other_host_ip].status == HostStatus.DOWN, "Host: {} status is not 'DOWN'".format(
-            other_host_ip)
-        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(
-            other_host_ip)
+            other_host_ip
+        )
+        assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, (
+            "Host: {} REST status is not 'DOWN'".format(other_host_ip)
+        )
         other_host.start_scylla_server()
 
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_mgmt_cluster_healthcheck')
+        self.log.info("finishing test_mgmt_cluster_healthcheck")
 
     def test_healthcheck_change_max_timeout(self):
         """
@@ -1254,37 +1340,39 @@ class ManagerHealthCheckTests(ManagerTestFunctionsMixIn):
 
         The test makes sure that the healthcheck reports those statuses correctly.
         """
-        self.log.info('starting test_healthcheck_change_max_timeout')
+        self.log.info("starting test_healthcheck_change_max_timeout")
 
         nodes_from_local_dc = self.db_cluster.nodes[:2]
         nodes_from_distant_dc = self.db_cluster.nodes[2:]
         manager_node = self.monitors.nodes[0]
         mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
-            reconfigure_scylla_manager(manager_node=manager_node, logger=self.log,
-                                       values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
+            reconfigure_scylla_manager(
+                manager_node=manager_node, logger=self.log, values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}]
+            )
             sleep = 40
-            self.log.debug('Sleep %s seconds, waiting for health-check task to rerun', sleep)
+            self.log.debug("Sleep %s seconds, waiting for health-check task to rerun", sleep)
             time.sleep(sleep)
             dict_host_health = mgr_cluster.get_hosts_health()
             for node in nodes_from_distant_dc:
-                assert dict_host_health[node.ip_address].status == HostStatus.TIMEOUT, \
-                    f'After setting "max_timeout" to a value shorter than the latency of the distant dc nodes, ' \
-                    f'the healthcheck status of {node.ip_address} was not {HostStatus.TIMEOUT} as expected, but ' \
-                    f'instead it was {dict_host_health[node.ip_address].status}'
+                assert dict_host_health[node.ip_address].status == HostStatus.TIMEOUT, (
+                    f'After setting "max_timeout" to a value shorter than the latency of the distant dc nodes, '
+                    f"the healthcheck status of {node.ip_address} was not {HostStatus.TIMEOUT} as expected, but "
+                    f"instead it was {dict_host_health[node.ip_address].status}"
+                )
             for node in nodes_from_local_dc:
-                assert dict_host_health[node.ip_address].status == HostStatus.UP, \
-                    f'After setting "max_timeout" to a value longer than the latency of the local dc nodes, ' \
-                    f'the healthcheck status of {node.ip_address} is not {HostStatus.UP} as expected, but ' \
-                    f'instead it was {dict_host_health[node.ip_address].status}'
+                assert dict_host_health[node.ip_address].status == HostStatus.UP, (
+                    f'After setting "max_timeout" to a value longer than the latency of the local dc nodes, '
+                    f"the healthcheck status of {node.ip_address} is not {HostStatus.UP} as expected, but "
+                    f"instead it was {dict_host_health[node.ip_address].status}"
+                )
         finally:
-            reconfigure_scylla_manager(manager_node=manager_node, logger=self.log, values_to_remove=['healthcheck'])
+            reconfigure_scylla_manager(manager_node=manager_node, logger=self.log, values_to_remove=["healthcheck"])
             mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_healthcheck_change_max_timeout')
+        self.log.info("finishing test_healthcheck_change_max_timeout")
 
 
 class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
-
     def _disable_client_encryption(self) -> None:
         for node in self.db_cluster.nodes:
             with node.remote_scylla_yaml() as scylla_yml:
@@ -1292,19 +1380,21 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             node.restart_scylla()
 
     def test_client_encryption(self):
-        self.log.info('starting test_client_encryption')
+        self.log.info("starting test_client_encryption")
 
-        self.log.info('ENABLED client encryption checks')
+        self.log.info("ENABLED client encryption checks")
         if not self.db_cluster.nodes[0].is_client_encrypt:
             self.db_cluster.enable_client_encrypt()
 
         manager_node = self.monitors.nodes[0]
 
         self.log.info("Create and send client TLS certificate/key to the manager node")
-        manager_node.create_node_certificate(cert_file=manager_node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                             cert_key=manager_node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        manager_node.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
-        manager_node.remoter.send_files(src=str(manager_node.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
+        manager_node.create_node_certificate(
+            cert_file=manager_node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+            cert_key=manager_node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
+        )
+        manager_node.remoter.run(f"mkdir -p {mgmt.cli.SSL_CONF_DIR}")
+        manager_node.remoter.send_files(src=str(manager_node.ssl_conf_dir) + "/", dst=str(mgmt.cli.SSL_CONF_DIR))
 
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True, client_encrypt=True)
 
@@ -1317,13 +1407,13 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
 
-        self.log.info('DISABLED client encryption checks')
+        self.log.info("DISABLED client encryption checks")
         self._disable_client_encryption()
         # SM caches scylla nodes configuration and the healthcheck svc is independent on the cache updates.
         # Cache is being updated periodically, every 1 minute following the manager config for SCT.
         # We need to wait until SM is aware about the configuration change.
         sleep_time = 90
-        self.log.debug('Sleep %s seconds, waiting for SM is aware about the configuration change', sleep_time)
+        self.log.debug("Sleep %s seconds, waiting for SM is aware about the configuration change", sleep_time)
         time.sleep(sleep_time)
 
         dict_host_health = mgr_cluster.get_hosts_health()
@@ -1331,14 +1421,13 @@ class ManagerEncryptionTests(ManagerTestFunctionsMixIn):
             assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
 
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_client_encryption')
+        self.log.info("finishing test_client_encryption")
 
 
 class ManagerSuspendTests(ManagerTestFunctionsMixIn):
-
     def _test_suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
-        self.log.info('starting test_suspend_and_resume_{}'.format(task_type))
+        self.log.info("starting test_suspend_and_resume_{}".format(task_type))
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
@@ -1349,19 +1438,22 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
             suspendable_task = mgr_cluster.create_repair_task(intensity=1, parallel=1)
         else:
             raise ValueError(f"Not familiar with task type: {task_type}")
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
+        )
         with mgr_cluster.suspend_manager_then_resume(start_tasks=True):
-            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), (
                 f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
+            )
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
-        self.log.info('finishing test_suspend_and_resume_{}'.format(task_type))
+        )
+        self.log.info("finishing test_suspend_and_resume_{}".format(task_type))
 
     def _test_suspend_with_on_resume_start_tasks_flag_template(self, wait_for_duration):
         suspension_duration = 75
         test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
-        self.log.info('starting test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
+        self.log.info("starting test_suspend_with_on_resume_start_tasks_flag_{}".format(test_name_filler))
         # re-add the cluster to make the backup task run from scratch, otherwise it may run very fast and
         # the test won't be able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
@@ -1370,65 +1462,68 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         else:
             suspendable_task = mgr_cluster.create_repair_task()
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
-        with mgr_cluster.suspend_manager_then_resume(start_tasks=False, start_tasks_in_advance=True,
-                                                     duration=f"{suspension_duration}s"):
-            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=60, step=2), \
+        )
+        with mgr_cluster.suspend_manager_then_resume(
+            start_tasks=False, start_tasks_in_advance=True, duration=f"{suspension_duration}s"
+        ):
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=60, step=2), (
                 f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+            )
             if wait_for_duration:  # Whether waiting for the duration time to pass or not
-                time.sleep(suspension_duration+5)
+                time.sleep(suspension_duration + 5)
         if wait_for_duration:
-            assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
-                f"After the cluster was resumed (while resuming AFTER the suspend duration has passed)," \
-                f" task {suspendable_task.id} failed to reach status " \
-                f"{TaskStatus.DONE}, but instead stayed in {suspendable_task.status}"
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), (
+                f"After the cluster was resumed (while resuming AFTER the suspend duration has passed), task {suspendable_task.id} failed to reach status {TaskStatus.DONE}, but instead stayed in {suspendable_task.status}"
+            )
         else:
-            assert suspendable_task.status == TaskStatus.STOPPED, \
-                "After the cluster was resumed (while resuming BEFORE the suspend duration "\
-                f"has passed), task {suspendable_task.id} failed to stay in status STOPPED"
+            assert suspendable_task.status == TaskStatus.STOPPED, (
+                f"After the cluster was resumed (while resuming BEFORE the suspend duration has passed), task {suspendable_task.id} failed to stay in status STOPPED"
+            )
             time.sleep(suspension_duration + 5)
-            assert suspendable_task.status == TaskStatus.STOPPED, \
-                "After the cluster was resumed (while resuming BEFORE the suspend duration "\
-                f"has passed), task {suspendable_task.id} failed to stay in status STOPPED after suspension time ended"
-        self.log.info('finishing test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
+            assert suspendable_task.status == TaskStatus.STOPPED, (
+                f"After the cluster was resumed (while resuming BEFORE the suspend duration has passed), task {suspendable_task.id} failed to stay in status STOPPED after suspension time ended"
+            )
+        self.log.info("finishing test_suspend_with_on_resume_start_tasks_flag_{}".format(test_name_filler))
 
     def _test_suspend_and_resume_without_starting_tasks(self):
-        self.log.info('starting test_suspend_and_resume_without_starting_tasks')
+        self.log.info("starting test_suspend_and_resume_without_starting_tasks")
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
+        )
         with mgr_cluster.suspend_manager_then_resume(start_tasks=False):
             mgr_cluster.suspend()
-            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), (
                 f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+            )
             mgr_cluster.resume(start_tasks=False)
             self.log.info("Waiting a little time to make sure the task isn't started")
             time.sleep(60)
             current_task_status = suspendable_task.status
-            assert current_task_status == TaskStatus.STOPPED, \
-                f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
-                f'reached "{current_task_status}" status'
-        self.log.info('finishing test_suspend_and_resume_without_starting_tasks')
+            assert current_task_status == TaskStatus.STOPPED, (
+                f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead reached "{current_task_status}" status'
+            )
+        self.log.info("finishing test_suspend_and_resume_without_starting_tasks")
 
     def test_suspend_and_resume(self):
-        with self.subTest('Suspend and resume backup task'):
+        with self.subTest("Suspend and resume backup task"):
             self._test_suspend_and_resume_task_template(task_type="backup")
-        with self.subTest('Suspend and resume repair task'):
+        with self.subTest("Suspend and resume repair task"):
             self._test_suspend_and_resume_task_template(task_type="repair")
-        with self.subTest('Suspend and resume without starting task'):
+        with self.subTest("Suspend and resume without starting task"):
             self._test_suspend_and_resume_without_starting_tasks()
-        with self.subTest('Suspend with on resume start tasks flag after duration has passed'):
+        with self.subTest("Suspend with on resume start tasks flag after duration has passed"):
             self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=True)
-        with self.subTest('Suspend with on resume start tasks flag before duration has passed'):
+        with self.subTest("Suspend with on resume start tasks flag before duration has passed"):
             self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=False)
 
 
 class ManagerHelperTests(ManagerTestFunctionsMixIn):
-
     def _unlock_cloud_key(self) -> str | None:
         """The operation is required to make the particular Cloud cluster key reusable.
         For that, the key should be unlocked from the original cluster.
@@ -1479,8 +1574,9 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.log.info("Run backup and wait for it to finish")
         backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=["0"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        )
 
         if is_cloud_manager:
             self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
@@ -1529,7 +1625,6 @@ class ManagerSanityTests(
     ManagerSuspendTests,
     ManagerEncryptionTests,
 ):
-
     def test_manager_sanity(self, prepared_ks: bool = False, ks_names: list = None):
         """
         Test steps:
@@ -1540,23 +1635,23 @@ class ManagerSanityTests(
         """
         if not prepared_ks:
             self.generate_load_and_wait_for_results()
-        with self.subTest('Basic Backup Test'):
+        with self.subTest("Basic Backup Test"):
             self.test_basic_backup(ks_names=ks_names)
-        with self.subTest('Restore Backup Test'):
+        with self.subTest("Restore Backup Test"):
             self.test_restore_backup_with_task(ks_names=ks_names)
-        with self.subTest('Repair Multiple Keyspace Types'):
+        with self.subTest("Repair Multiple Keyspace Types"):
             self.test_repair_multiple_keyspace_types()
-        with self.subTest('Mgmt Cluster CRUD'):
+        with self.subTest("Mgmt Cluster CRUD"):
             self.test_cluster_crud()
-        with self.subTest('Mgmt cluster Health Check'):
+        with self.subTest("Mgmt cluster Health Check"):
             self.test_cluster_healthcheck()
         # test_healthcheck_change_max_timeout requires a multi dc run
         if self.db_cluster.nodes[0].test_config.MULTI_REGION:
-            with self.subTest('Basic test healthcheck change max timeout'):
+            with self.subTest("Basic test healthcheck change max timeout"):
                 self.test_healthcheck_change_max_timeout()
-        with self.subTest('Basic test suspend and resume'):
+        with self.subTest("Basic test suspend and resume"):
             self.test_suspend_and_resume()
-        with self.subTest('Client Encryption'):
+        with self.subTest("Client Encryption"):
             # Since this test activates encryption, it has to be the last test in the sanity
             self.test_client_encryption()
 
@@ -1567,7 +1662,7 @@ class ManagerSanityTests(
         2) Create vnodes keyspace and propagate some data.
         3) Run sanity test (test_manager_sanity).
         """
-        self.log.info('starting test_manager_sanity_vnodes_tablets_cluster')
+        self.log.info("starting test_manager_sanity_vnodes_tablets_cluster")
 
         ks_config = [("tablets_keyspace", True), ("vnodes_keyspace", False)]
         ks_names = [i[0] for i in ks_config]
@@ -1578,16 +1673,15 @@ class ManagerSanityTests(
 
         self.test_manager_sanity(prepared_ks=True, ks_names=ks_names)
 
-        self.log.info('finishing test_manager_sanity_vnodes_tablets_cluster')
+        self.log.info("finishing test_manager_sanity_vnodes_tablets_cluster")
 
 
 class ManagerRollbackTests(ManagerTestFunctionsMixIn):
-
     def test_mgmt_repair_nemesis(self):
         """
-            Test steps:
-            1) Run cassandra stress on cluster.
-            2) Add cluster to Manager and run full repair via Nemesis
+        Test steps:
+        1) Run cassandra stress on cluster.
+        2) Add cluster to Manager and run full repair via Nemesis
         """
         self.generate_load_and_wait_for_results()
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
@@ -1600,16 +1694,16 @@ class ManagerRollbackTests(ManagerTestFunctionsMixIn):
         1) Run the repair test.
         2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_address').
         """
-        self.log.info('starting test_manager_upgrade')
-        scylla_mgmt_upgrade_to_repo = self.params.get('scylla_mgmt_upgrade_to_repo')
+        self.log.info("starting test_manager_upgrade")
+        scylla_mgmt_upgrade_to_repo = self.params.get("scylla_mgmt_upgrade_to_repo")
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         selected_host = self.get_cluster_hosts_ip()[0]
-        cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or \
-            manager_tool.add_cluster(name=cluster_name, host=selected_host,
-                                     auth_token=self.monitors.mgmt_auth_token)
-        self.log.info('Running some stress and repair before upgrade')
+        cluster_name = "mgr_cluster1"
+        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(
+            name=cluster_name, host=selected_host, auth_token=self.monitors.mgmt_auth_token
+        )
+        self.log.info("Running some stress and repair before upgrade")
         self.test_mgmt_repair_nemesis()
 
         repair_task_list = mgr_cluster.repair_task_list
@@ -1622,10 +1716,10 @@ class ManagerRollbackTests(ManagerTestFunctionsMixIn):
         for repair_task in repair_task_list:
             self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
 
-        self.log.info('Running a new repair task after upgrade')
+        self.log.info("Running a new repair task after upgrade")
         repair_task = mgr_cluster.create_repair_task()
         self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
-        self.log.info('finishing test_manager_upgrade')
+        self.log.info("finishing test_manager_upgrade")
 
     def test_manager_rollback_upgrade(self):
         """
@@ -1633,19 +1727,18 @@ class ManagerRollbackTests(ManagerTestFunctionsMixIn):
         1) Run Upgrade test: scylla_mgmt_address --> scylla_mgmt_upgrade_to_repo
         2) Run manager downgrade to pre-upgrade version as in yaml: 'scylla_mgmt_address'.
         """
-        self.log.info('starting test_manager_rollback_upgrade')
+        self.log.info("starting test_manager_rollback_upgrade")
         self.test_manager_upgrade()
-        scylla_mgmt_address = self.params.get('scylla_mgmt_address')
+        scylla_mgmt_address = self.params.get("scylla_mgmt_address")
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         manager_from_version = manager_tool.sctool.version
         manager_tool.rollback_upgrade(scylla_mgmt_address=scylla_mgmt_address)
         assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after rollback."
-        self.log.info('finishing test_manager_rollback_upgrade')
+        self.log.info("finishing test_manager_rollback_upgrade")
 
 
 class ManagerInstallationTests(ManagerTestFunctionsMixIn):
-
     def test_manager_installed_and_functional(self):
         """Verify that the Manager is installed and functional.
 
@@ -1653,7 +1746,7 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
         where the main goal is to execute installation test.
         The rest of the checks are executed on Ubuntu distribution in test_manager_sanity.
         """
-        self.log.info('starting test_manager_installed_and_functional')
+        self.log.info("starting test_manager_installed_and_functional")
 
         manager_node = self.monitors.nodes[0]
         scylla_node = self.db_cluster.nodes[0]
@@ -1673,11 +1766,10 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
             assert host_health.status == HostStatus.UP, "Host status is not 'UP'"
             assert host_health.rest_status == HostRestStatus.UP, "Host REST status is not 'UP'"
 
-        self.log.info('finishing test_manager_installed_and_functional')
+        self.log.info("finishing test_manager_installed_and_functional")
 
 
 class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
-
     def tearDown(self):
         """Unlock EaR key used by Cloud cluster to reuse it in the future
         Otherwise, if not unlocked, the key will be deleted together with the cluster
@@ -1687,11 +1779,12 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         super().tearDown()
 
     def get_restore_extra_parameters(self) -> str:
-        extra_params = self.params.get('mgmt_restore_extra_params')
+        extra_params = self.params.get("mgmt_restore_extra_params")
         return extra_params if extra_params else None
 
-    def _send_restore_results_to_argus(self, task: RestoreTask, manager_version_timestamp: int,
-                                       dataset_label: str = None):
+    def _send_restore_results_to_argus(
+        self, task: RestoreTask, manager_version_timestamp: int, dataset_label: str = None
+    ):
         total_restore_time = int(task.duration.total_seconds())
         repair_time = int(task.post_restore_repair_duration.total_seconds())
         results = {
@@ -1739,19 +1832,25 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
-        assert backup_task_status == TaskStatus.DONE, \
+        assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
+        )
+        InfoEvent(message=f"The backup task has ended successfully. Backup run time: {backup_task.duration}").publish()
         self.manager_test_metrics.backup_time = backup_task.duration
 
-        ks_number = self.params.get('keyspace_num') or 1
+        ks_number = self.params.get("keyspace_num") or 1
         ks_names = self.get_keyspace_name(ks_number=ks_number)
         for ks_name in ks_names:
-            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
+            self.db_cluster.nodes[0].run_cqlsh(f"TRUNCATE {ks_name}.standard1")
 
         extra_params = self.get_restore_extra_parameters()
-        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                             timeout=110000, restore_data=True, extra_params=extra_params)
+        task = self.restore_backup_with_task(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=backup_task.get_snapshot_tag(),
+            timeout=110000,
+            restore_data=True,
+            extra_params=extra_params,
+        )
         self.manager_test_metrics.restore_time = task.duration
 
         manager_version_timestamp = manager_tool.sctool.client_version_timestamp
@@ -1791,8 +1890,13 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             self.db_cluster.nodes[0].run_cqlsh(cmd="grant scylla_admin to scylla_manager")
 
         self.log.info("Restoring the schema")
-        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag, timeout=600,
-                                      restore_schema=True, location_list=locations)
+        self.restore_backup_with_task(
+            mgr_cluster=mgr_cluster,
+            snapshot_tag=snapshot_data.tag,
+            timeout=600,
+            restore_schema=True,
+            location_list=locations,
+        )
 
         if restore_outside_manager:
             self.log.info("Restoring the data outside the Manager")
@@ -1808,16 +1912,21 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         else:
             self.log.info("Restoring the data with standard L&S approach")
             extra_params = self.get_restore_extra_parameters()
-            task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
-                                                 timeout=snapshot_data.exp_timeout, restore_data=True,
-                                                 location_list=locations, extra_params=extra_params)
+            task = self.restore_backup_with_task(
+                mgr_cluster=mgr_cluster,
+                snapshot_tag=snapshot_data.tag,
+                timeout=snapshot_data.exp_timeout,
+                restore_data=True,
+                location_list=locations,
+                extra_params=extra_params,
+            )
             restore_time = task.duration
             manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
             self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
 
         self.manager_test_metrics.restore_time = restore_time
 
-        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
+        if not (self.params.get("mgmt_skip_post_restore_stress_read") or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")
             cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
             self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
@@ -1830,7 +1939,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
         restore from a pre-created backup.
         """
-        if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
+        if reuse_snapshot_name := self.params.get("mgmt_reuse_backup_snapshot_name"):
             self.log.info("Executing test_restore_from_precreated_backup...")
             self.test_restore_from_precreated_backup(reuse_snapshot_name)
         else:
@@ -1846,9 +1955,10 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         The motivation of having such a test is to check L&S efficiency when doing the restore of the full cluster in
         comparison with the same test but with restore executed via Manager.
         """
-        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
-        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
-                               "Please provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
+        snapshot_name = self.params.get("mgmt_reuse_backup_snapshot_name")
+        assert snapshot_name, (
+            "The test requires a pre-created snapshot to restore from. Please provide the 'mgmt_reuse_backup_snapshot_name' parameter."
+        )
 
         self.test_restore_from_precreated_backup(snapshot_name, restore_outside_manager=True)
 
@@ -1882,9 +1992,10 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
 
     def test_one_to_one_restore(self):
         self.log.info("Get snapshot details")
-        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
-        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
-                               "Please, provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
+        snapshot_name = self.params.get("mgmt_reuse_backup_snapshot_name")
+        assert snapshot_name, (
+            "The test requires a pre-created snapshot to restore from. Please, provide the 'mgmt_reuse_backup_snapshot_name' parameter."
+        )
         snapshot_data = self.get_snapshot_data(snapshot_name)
 
         self.log.info("Initialize Scylla Manager")
@@ -1912,7 +2023,7 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
             )
         self.log.info(f"1-1 restore took {timer.duration} seconds")
 
-        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
+        if not (self.params.get("mgmt_skip_post_restore_stress_read") or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")
             cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
             self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
@@ -1928,11 +2039,17 @@ class ManagerReportType(Enum):
 class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     def report_to_argus(self, report_type: ManagerReportType, data: dict, label: str):
         if report_type == ManagerReportType.READ:
-            table = ManagerBackupReadResult(sut_timestamp=mgmt.get_scylla_manager_tool(
-                manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
+            table = ManagerBackupReadResult(
+                sut_timestamp=mgmt.get_scylla_manager_tool(
+                    manager_node=self.monitors.nodes[0]
+                ).sctool.client_version_timestamp
+            )
         elif report_type == ManagerReportType.BACKUP:
-            table = ManagerBackupBenchmarkResult(sut_timestamp=mgmt.get_scylla_manager_tool(
-                manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
+            table = ManagerBackupBenchmarkResult(
+                sut_timestamp=mgmt.get_scylla_manager_tool(
+                    manager_node=self.monitors.nodes[0]
+                ).sctool.client_version_timestamp
+            )
         else:
             raise InvalidArgument("Unknown report type")
 
@@ -1948,8 +2065,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         backup_status = task.wait_and_get_final_status(timeout=7200)
         assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
 
-        InfoEvent(
-            message=f'Backup total time is: {task.duration}.').publish()
+        InfoEvent(message=f"Backup total time is: {task.duration}.").publish()
         backup_report = {
             "backup time": int(task.duration.total_seconds()),
         }
@@ -1959,13 +2075,13 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
     def run_read_stress_and_report(self, label):
         stress_queue = []
 
-        for command in self.params.get('stress_read_cmd'):
+        for command in self.params.get("stress_read_cmd"):
             stress_queue.append(self.run_stress_thread(command, round_robin=True, stop_test_on_failure=False))
 
         with ExecutionTimer() as stress_timer:
             for stress in stress_queue:
                 assert self.verify_stress_thread(stress), "Read stress command"
-        InfoEvent(message=f'Read stress duration: {stress_timer.duration}s.').publish()
+        InfoEvent(message=f"Read stress duration: {stress_timer.duration}s.").publish()
 
         read_stress_report = {
             "read time": int(stress_timer.duration.total_seconds()),
@@ -1995,11 +2111,14 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
 
         self.log.info("Create and report backup time during read stress")
 
-        backup_thread = threading.Thread(target=self.create_backup_and_report,
-                                         kwargs={"mgr_cluster": mgr_cluster, "label": "Backup during read stress"})
+        backup_thread = threading.Thread(
+            target=self.create_backup_and_report,
+            kwargs={"mgr_cluster": mgr_cluster, "label": "Backup during read stress"},
+        )
 
-        read_stress_thread = threading.Thread(target=self.run_read_stress_and_report,
-                                              kwargs={"label": "Read stress during backup"})
+        read_stress_thread = threading.Thread(
+            target=self.run_read_stress_and_report, kwargs={"label": "Read stress during backup"}
+        )
         backup_thread.start()
         read_stress_thread.start()
 

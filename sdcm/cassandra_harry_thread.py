@@ -51,11 +51,10 @@ class CassandraHarryStressEventsPublisher(FileFollowerThread):
 
 
 class CassandraHarryThread(DockerBasedStressThread):
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.harry"
 
     def __init__(self, *args, **kwargs):
-        credentials = kwargs.pop('credentials', None)
+        credentials = kwargs.pop("credentials", None)
 
         super().__init__(*args, **kwargs)
 
@@ -68,8 +67,8 @@ class CassandraHarryThread(DockerBasedStressThread):
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, f'cassandra-harry-l{loader_idx}-{uuid.uuid4()}.log')
-        LOGGER.debug('cassandra-harry local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, f"cassandra-harry-l{loader_idx}-{uuid.uuid4()}.log")
+        LOGGER.debug("cassandra-harry local log: %s", log_file_name)
 
         LOGGER.debug("running: %s", self.stress_cmd)
 
@@ -78,30 +77,36 @@ class CassandraHarryThread(DockerBasedStressThread):
         else:
             node_cmd = self.stress_cmd
 
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f' --label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name, extra_docker_opts=f" --label shell_marker={self.shell_marker}"
+        )
 
-        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
+        node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}"
 
         CassandraHarryEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         result = {}
         harry_failure_event = harry_finish_event = None
-        with CassandraHarryStressExporter(instance_name=loader.ip_address,
-                                          metrics=nemesis_metrics_obj(),
-                                          stress_operation='write',
-                                          stress_log_filename=log_file_name,
-                                          loader_idx=loader_idx), \
-                CassandraHarryStressEventsPublisher(node=loader, harry_log_filename=log_file_name), \
-                cleanup_context:
+        with (
+            CassandraHarryStressExporter(
+                instance_name=loader.ip_address,
+                metrics=nemesis_metrics_obj(),
+                stress_operation="write",
+                stress_log_filename=log_file_name,
+                loader_idx=loader_idx,
+            ),
+            CassandraHarryStressEventsPublisher(node=loader, harry_log_filename=log_file_name),
+            cleanup_context,
+        ):
             result = None
             try:
-                docker_run_result = docker.run(cmd=f"{node_cmd} -node {ip}",
-                                               timeout=self.timeout + self.shutdown_timeout,
-                                               log_file=log_file_name,
-                                               verbose=True,
-                                               retry=0,
-                                               )
+                docker_run_result = docker.run(
+                    cmd=f"{node_cmd} -node {ip}",
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name,
+                    verbose=True,
+                    retry=0,
+                )
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
             except Exception as exc:  # noqa: BLE001
                 errors_str = format_stress_cmd_error(exc)
@@ -115,11 +120,14 @@ class CassandraHarryThread(DockerBasedStressThread):
                     node=loader,
                     stress_cmd=self.stress_cmd,
                     log_file_name=log_file_name,
-                    errors=[errors_str, ],
+                    errors=[
+                        errors_str,
+                    ],
                 ).publish()
             else:
-                harry_finish_event = CassandraHarryEvent.finish(node=loader, stress_cmd=self.stress_cmd,
-                                                                log_file_name=log_file_name)
+                harry_finish_event = CassandraHarryEvent.finish(
+                    node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name
+                )
                 harry_finish_event.publish()
 
         return loader, result, harry_failure_event or harry_finish_event
@@ -133,8 +141,8 @@ class CassandraHarryThread(DockerBasedStressThread):
         INFO  [pool-6-thread-1] instance_id_IS_UNDEFINED 2021-01-19 13:46:49,835 Runner.java:255 - Completed
         """
         results = {}
-        if any(['Runner.java:255 - Completed' in line for line in lines]):
-            results['status'] = 'completed'
+        if any(["Runner.java:255 - Completed" in line for line in lines]):
+            results["status"] = "completed"
         else:
-            results['status'] = 'failed'
+            results["status"] = "failed"
         return results

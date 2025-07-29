@@ -58,7 +58,7 @@ class NdBenchStressEventsPublisher(FileFollowerThread):
 
 class NdBenchStatsPublisher(FileFollowerThread):
     METRICS = {}
-    collectible_ops = ['read', 'write']
+    collectible_ops = ["read", "write"]
 
     def __init__(self, loader_node, loader_idx, ndbench_log_filename):
         super().__init__()
@@ -70,13 +70,13 @@ class NdBenchStatsPublisher(FileFollowerThread):
             gauge_name = self.gauge_name(operation)
             if gauge_name not in self.METRICS:
                 metrics = nemesis_metrics_obj()
-                self.METRICS[gauge_name] = metrics.create_gauge(gauge_name,
-                                                                'Gauge for ndbench metrics',
-                                                                ['instance', 'loader_idx', 'type'])
+                self.METRICS[gauge_name] = metrics.create_gauge(
+                    gauge_name, "Gauge for ndbench metrics", ["instance", "loader_idx", "type"]
+                )
 
     @staticmethod
     def gauge_name(operation):
-        return 'sct_ndbench_%s_gauge' % operation.replace('-', '_')
+        return "sct_ndbench_%s_gauge" % operation.replace("-", "_")
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]
@@ -85,10 +85,12 @@ class NdBenchStatsPublisher(FileFollowerThread):
     def run(self):
         # INFO RPSCount:78 - Read avg: 0.314ms, Read RPS: 7246, Write avg: 0.39ms, Write RPS: 1802, total RPS: 9048, Success Ratio: 100%
         stat_regex = re.compile(
-            r'Read avg: (?P<read_lat_avg>.*?)ms.*?'
-            r'Read RPS: (?P<read_ops>.*?),.*?'
-            r'Write avg: (?P<write_lat_avg>.*?)ms.*?'
-            r'Write RPS: (?P<write_ops>.*?),', re.IGNORECASE)
+            r"Read avg: (?P<read_lat_avg>.*?)ms.*?"
+            r"Read RPS: (?P<read_ops>.*?),.*?"
+            r"Write avg: (?P<write_lat_avg>.*?)ms.*?"
+            r"Write RPS: (?P<write_ops>.*?),",
+            re.IGNORECASE,
+        )
 
         while not self.stopped():
             exists = os.path.isfile(self.ndbench_log_filename)
@@ -103,7 +105,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
                     match = stat_regex.search(line)
                     if match:
                         for key, value in match.groupdict().items():
-                            operation, name = key.split('_', 1)
+                            operation, name = key.split("_", 1)
                             self.set_metric(operation, name, float(value))
 
                 except Exception as exc:  # noqa: BLE001
@@ -111,26 +113,30 @@ class NdBenchStatsPublisher(FileFollowerThread):
 
 
 class NdBenchStressThread(DockerBasedStressThread):
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ndbench"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # remove the ndbench command, and parse the rest of the ; separated values
-        stress_cmd = re.sub(r'^ndbench', '', self.stress_cmd)
+        stress_cmd = re.sub(r"^ndbench", "", self.stress_cmd)
         if credentials := self.loader_set.get_db_auth():
-            stress_cmd += f'; cass.username={credentials[0]} ; cass.password={credentials[1]}'
+            stress_cmd += f"; cass.username={credentials[0]} ; cass.password={credentials[1]}"
 
-        self.stress_cmd = ' '.join([f'-Dndbench.config.{param.strip()}' for param in stress_cmd.split(';')])
-        timeout = '' if 'cli.timeoutMillis' in self.stress_cmd else f'-Dndbench.config.cli.timeoutMillis={self.timeout * 1000}'
-        self.stress_cmd = f'./gradlew {timeout}' \
-            f' -Dndbench.config.cass.host={self.node_list[0].cql_address} {self.stress_cmd} run'
+        self.stress_cmd = " ".join([f"-Dndbench.config.{param.strip()}" for param in stress_cmd.split(";")])
+        timeout = (
+            ""
+            if "cli.timeoutMillis" in self.stress_cmd
+            else f"-Dndbench.config.cli.timeoutMillis={self.timeout * 1000}"
+        )
+        self.stress_cmd = (
+            f"./gradlew {timeout} -Dndbench.config.cass.host={self.node_list[0].cql_address} {self.stress_cmd} run"
+        )
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, f'ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
-        LOGGER.debug('ndbench local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, f"ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log")
+        LOGGER.debug("ndbench local log: %s", log_file_name)
 
         LOGGER.debug("running: %s", self.stress_cmd)
 
@@ -139,39 +145,48 @@ class NdBenchStressThread(DockerBasedStressThread):
         else:
             node_cmd = self.stress_cmd
 
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts='--network=host '
-                                                                  '--security-opt seccomp=unconfined '
-                                                                  f'--label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(
+            loader,
+            self.docker_image_name,
+            extra_docker_opts="--network=host "
+            "--security-opt seccomp=unconfined "
+            f"--label shell_marker={self.shell_marker}",
+        )
 
-        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
+        node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}"
 
         NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         result = {}
         ndbench_failure_event = ndbench_finish_event = None
-        with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name), \
-                NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name), \
-                cleanup_context:
+        with (
+            NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name),
+            NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name),
+            cleanup_context,
+        ):
             try:
-                result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + self.shutdown_timeout,
-                                    ignore_status=True,
-                                    log_file=log_file_name,
-                                    verbose=True,
-                                    retry=0)
+                result = docker.run(
+                    cmd=node_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    ignore_status=True,
+                    log_file=log_file_name,
+                    verbose=True,
+                    retry=0,
+                )
             except Exception as exc:  # noqa: BLE001
                 ndbench_failure_event = NdBenchStressEvent.failure(
                     node=str(loader),
                     stress_cmd=self.stress_cmd,
                     log_file_name=log_file_name,
-                    errors=[format_stress_cmd_error(exc), ])
+                    errors=[
+                        format_stress_cmd_error(exc),
+                    ],
+                )
                 ndbench_failure_event.publish()
             finally:
                 ndbench_finish_event = NdBenchStressEvent.finish(
-                    node=loader,
-                    stress_cmd=self.stress_cmd,
-                    log_file_name=log_file_name)
+                    node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name
+                )
                 ndbench_finish_event.publish()
 
         return loader, result, ndbench_failure_event or ndbench_finish_event

@@ -11,7 +11,8 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-""" This module keeps utilities that help to extract schema definition and stress commands from user profile """
+"""This module keeps utilities that help to extract schema definition and stress commands from user profile"""
+
 from __future__ import absolute_import, annotations
 
 import re
@@ -45,7 +46,7 @@ def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
     """
     Extract materialized view creation command from user profile, 'extra_definitions' part
     """
-    all_mvs = profile_content['extra_definitions']
+    all_mvs = profile_content["extra_definitions"]
     mv_cmd = [cmd for cmd in all_mvs if name_substr in cmd]
 
     mv_cmd = [mv_cmd[0]] if not all_entries and mv_cmd else mv_cmd
@@ -60,7 +61,7 @@ def get_view_name_from_stress_cmd(mv_create_cmd, name_substr):
           - create MATERIALIZED VIEW cf_update_2_columns_mv_pk as select * from blog_posts where domain is not null;
 
     """
-    find_mv_name = re.search(r'materialized view (.*%s.*) as' % name_substr, mv_create_cmd, re.I)
+    find_mv_name = re.search(r"materialized view (.*%s.*) as" % name_substr, mv_create_cmd, re.I)
     return find_mv_name.group(1) if find_mv_name else None
 
 
@@ -69,8 +70,9 @@ def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_us
     Get materialized view name from user profile defined in the test yaml.
     It may be used when we want query from materialized view that was created during running user profile
     """
-    stress_cmd = get_stress_command_for_profile(params=params, stress_cmds_part=stress_cmds_part,
-                                                search_for_user_profile=search_for_user_profile)
+    stress_cmd = get_stress_command_for_profile(
+        params=params, stress_cmds_part=stress_cmds_part, search_for_user_profile=search_for_user_profile
+    )
     if not stress_cmd:
         return ""
 
@@ -81,34 +83,36 @@ def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_us
 
 def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
     """
-     Get keyspace name from user profile defined in the test yaml.
-     Example:
-        # Keyspace Name
-        keyspace: mv_synchronous_ks
+    Get keyspace name from user profile defined in the test yaml.
+    Example:
+       # Keyspace Name
+       keyspace: mv_synchronous_ks
     """
-    stress_cmd = get_stress_command_for_profile(params=params, stress_cmds_part=stress_cmds_part,
-                                                search_for_user_profile=search_for_user_profile)
+    stress_cmd = get_stress_command_for_profile(
+        params=params, stress_cmds_part=stress_cmds_part, search_for_user_profile=search_for_user_profile
+    )
     if not stress_cmd:
         return ""
 
     _, profile = get_profile_content(stress_cmd[0])
-    return profile['keyspace']
+    return profile["keyspace"]
 
 
 def get_table_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
     """
-     Get table name from user profile defined in the test yaml.
-     Example:
-        # Table name
-        table: blog_posts
+    Get table name from user profile defined in the test yaml.
+    Example:
+       # Table name
+       table: blog_posts
     """
-    stress_cmd = get_stress_command_for_profile(params=params, stress_cmds_part=stress_cmds_part,
-                                                search_for_user_profile=search_for_user_profile)
+    stress_cmd = get_stress_command_for_profile(
+        params=params, stress_cmds_part=stress_cmds_part, search_for_user_profile=search_for_user_profile
+    )
     if not stress_cmd:
         return ""
 
     _, profile = get_profile_content(stress_cmd[0])
-    return profile['table']
+    return profile["table"]
 
 
 def get_profile_content(stress_cmd):
@@ -121,8 +125,9 @@ def get_profile_content(stress_cmd):
 
     :return: (profile_filename, dict with yaml)
     """
-    cs_profile = re.search(r'profile=(?P<path>.*)/(?P<file>.*\.yaml)', stress_cmd) or \
-        re.search(r'(?P<path>.*)/(?P<file>.*\.yaml)', stress_cmd)
+    cs_profile = re.search(r"profile=(?P<path>.*)/(?P<file>.*\.yaml)", stress_cmd) or re.search(
+        r"(?P<path>.*)/(?P<file>.*\.yaml)", stress_cmd
+    )
 
     if cs_profile:
         profile_path = cs_profile.group("path")
@@ -145,6 +150,5 @@ def get_profile_content(stress_cmd):
 
 
 def replace_scylla_qa_internal_path(stress_cmd: str, loader_path: str):
-    stress_cmd = re.sub(r"profile=scylla-qa-internal\/\S*",
-                        f" profile={loader_path} ", stress_cmd)
+    stress_cmd = re.sub(r"profile=scylla-qa-internal\/\S*", f" profile={loader_path} ", stress_cmd)
     return stress_cmd

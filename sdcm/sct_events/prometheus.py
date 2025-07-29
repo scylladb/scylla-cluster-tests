@@ -31,16 +31,25 @@ LOGGER = logging.getLogger(__name__)
 
 class PrometheusDumper(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
     def run(self) -> None:
-        events_gauge = \
-            nemesis_metrics_obj().create_gauge("sct_events_gauge",
-                                               "Gauge for SCT events",
-                                               ["event_type", "type", "subtype", "severity", "node", ])
+        events_gauge = nemesis_metrics_obj().create_gauge(
+            "sct_events_gauge",
+            "Gauge for SCT events",
+            [
+                "event_type",
+                "type",
+                "subtype",
+                "severity",
+                "node",
+            ],
+        )
 
         for event_tuple in self.inbound_events():
             with verbose_suppress("PrometheusDumper failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
-                events_gauge.labels(event_class,
-                                    getattr(event, "type", ""),
-                                    getattr(event, "subtype", ""),
-                                    event.severity,
-                                    getattr(event, "node", "")).set(event.event_timestamp)
+                events_gauge.labels(
+                    event_class,
+                    getattr(event, "type", ""),
+                    getattr(event, "subtype", ""),
+                    event.severity,
+                    getattr(event, "node", ""),
+                ).set(event.event_timestamp)

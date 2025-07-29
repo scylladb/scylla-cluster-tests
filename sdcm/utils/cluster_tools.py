@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def group_nodes_by_dc_idx(nodes: list[BaseNode]) -> dict[int, list[BaseNode]]:  # noqa: F821
-    """ Group nodes by dc_idx """
+    """Group nodes by dc_idx"""
     nodes_by_dc_idx = defaultdict(list)
     for node in nodes:
         nodes_by_dc_idx[node.dc_idx].append(node)
@@ -56,12 +56,15 @@ def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
             # Check if all racks have the same number of nodes
             if current_dc_config_count != len(nodes_in_dc):
                 LOGGER.debug(
-                    f"Datacenter {dc_idx=} rack distribution: {dict(racks)}, config count: {current_dc_config_count}, {len(nodes_in_dc)=}")
+                    f"Datacenter {dc_idx=} rack distribution: {dict(racks)}, config count: {current_dc_config_count}, {len(nodes_in_dc)=}"
+                )
                 return False
         return True
     elif capacity_errors_check_mode == "disabled":
         # If capacity errors check is disabled, we assume the cluster is balanced
         return True
     else:
-        raise ValueError(f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
-                         "Supported modes are: 'per-initial_config', 'disabled'.")
+        raise ValueError(
+            f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
+            "Supported modes are: 'per-initial_config', 'disabled'."
+        )

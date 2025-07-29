@@ -49,9 +49,15 @@ from sdcm.utils.common import (
     gce_meta_to_dict,
     list_instances_aws,
     list_instances_gce,
-    str_to_bool, convert_name_to_ami_if_needed,
+    str_to_bool,
+    convert_name_to_ami_if_needed,
 )
-from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name, tags_as_ec2_tags, EC2NetworkConfiguration
+from sdcm.utils.aws_utils import (
+    ec2_instance_wait_public_ip,
+    ec2_ami_get_root_device_name,
+    tags_as_ec2_tags,
+    EC2NetworkConfiguration,
+)
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import (
     SUPPORTED_PROJECTS,
@@ -72,7 +78,6 @@ from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
 
 if TYPE_CHECKING:
-
     from typing import Optional, Any, Type
 
     from mypy_boto3_ec2.literals import InstanceTypeType
@@ -138,6 +143,7 @@ class SctRunnerInfo:
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
+
     VERSION = "1.11"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
@@ -159,13 +165,11 @@ class SctRunner(ABC):
         self.params = params
 
     @abstractmethod
-    def region_az(self, region_name: str, availability_zone: str) -> str:
-        ...
+    def region_az(self, region_name: str, availability_zone: str) -> str: ...
 
     @cached_property
     @abstractmethod
-    def image_name(self) -> str:
-        ...
+    def image_name(self) -> str: ...
 
     def instance_type(self, test_duration) -> str:
         if test_duration > 7 * 60:
@@ -182,15 +186,15 @@ class SctRunner(ABC):
 
     @cached_property
     @abstractmethod
-    def key_pair(self) -> SSHKey:
-        ...
+    def key_pair(self) -> SSHKey: ...
 
     def get_remoter(self, host, connect_timeout: Optional[float] = None) -> RemoteCmdRunnerBase:
         self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
         self._ssh_pkey_file.write(self.key_pair.private_key.decode())
         self._ssh_pkey_file.flush()
-        return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER,
-                                                  key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
+        return RemoteCmdRunnerBase.create_remoter(
+            hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout
+        )
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
         from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
@@ -201,7 +205,10 @@ class SctRunner(ABC):
         LOGGER.info("Installing required packages...")
         login_user = self.LOGIN_USER
         public_key = self.key_pair.public_key.decode()
-        result = remoter.sudo(shell_script_cmd(quote="'", cmd=f"""\
+        result = remoter.sudo(
+            shell_script_cmd(
+                quote="'",
+                cmd=f"""\
             # Make sure that cloud-init finished running.
             until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
 
@@ -255,7 +262,10 @@ class SctRunner(ABC):
 
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
-        """), ignore_status=True)
+        """,
+            ),
+            ignore_status=True,
+        )
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(remoter=remoter)
@@ -267,8 +277,7 @@ class SctRunner(ABC):
             raise Exception(f"Unable to install required packages:\n{result.stdout}{result.stderr}")
 
     @abstractmethod
-    def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
-        ...
+    def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any: ...
 
     @property
     def source_image(self) -> Any:
@@ -287,59 +296,49 @@ class SctRunner(ABC):
 
     @property
     @abstractmethod
-    def instance(self):
-        ...
+    def instance(self): ...
 
     @instance.setter
     @abstractmethod
-    def instance(self, new_instance_value):
-        ...
+    def instance(self, new_instance_value): ...
 
     @abstractmethod
-    def _create_instance(self,
-                         instance_type: str,
-                         base_image: Any,
-                         tags: dict[str, str],
-                         instance_name: str,
-                         root_disk_size_gb: int = 0,
-                         region_az: str = "",
-                         test_duration: int | None = None,
-                         address_pool: str | None = None) -> Any:
-        ...
+    def _create_instance(
+        self,
+        instance_type: str,
+        base_image: Any,
+        tags: dict[str, str],
+        instance_name: str,
+        root_disk_size_gb: int = 0,
+        region_az: str = "",
+        test_duration: int | None = None,
+        address_pool: str | None = None,
+    ) -> Any: ...
 
     @staticmethod
     @abstractmethod
-    def set_tags(sct_runner_info: SctRunnerInfo,
-                 tags: dict):
-        ...
+    def set_tags(sct_runner_info: SctRunnerInfo, tags: dict): ...
 
     @abstractmethod
-    def _stop_image_builder_instance(self, instance: Any) -> None:
-        ...
+    def _stop_image_builder_instance(self, instance: Any) -> None: ...
 
     @abstractmethod
-    def _terminate_image_builder_instance(self, instance: Any) -> None:
-        ...
+    def _terminate_image_builder_instance(self, instance: Any) -> None: ...
 
     @abstractmethod
-    def _get_instance_id(self) -> Any:
-        ...
+    def _get_instance_id(self) -> Any: ...
 
     @abstractmethod
-    def get_instance_public_ip(self, instance: Any) -> str:
-        ...
+    def get_instance_public_ip(self, instance: Any) -> str: ...
 
     @abstractmethod
-    def _create_image(self, instance: Any) -> Any:
-        ...
+    def _create_image(self, instance: Any) -> Any: ...
 
     @abstractmethod
-    def _get_image_id(self, image: Any) -> Any:
-        ...
+    def _get_image_id(self, image: Any) -> Any: ...
 
     @abstractmethod
-    def _copy_source_image_to_region(self) -> None:
-        ...
+    def _copy_source_image_to_region(self) -> None: ...
 
     def create_image(self) -> None:
         """Create SCT Runner image in specified region.
@@ -379,51 +378,60 @@ class SctRunner(ABC):
                 LOGGER.info("Terminating SCT Image Builder instance `%s'...", builder_instance_id)
                 self._terminate_image_builder_instance(instance=instance)
             except Exception as ex:  # noqa: BLE001
-                LOGGER.warning("Was not able to terminate `%s': %s\nPlease terminate manually!!!",
-                               builder_instance_id, ex)
+                LOGGER.warning(
+                    "Was not able to terminate `%s': %s\nPlease terminate manually!!!", builder_instance_id, ex
+                )
         else:
-            LOGGER.info("SCT Runner image exists in the source region `%s'! ID: %s",
-                        self.SOURCE_IMAGE_REGION, self._get_image_id(image=source_image))
+            LOGGER.info(
+                "SCT Runner image exists in the source region `%s'! ID: %s",
+                self.SOURCE_IMAGE_REGION,
+                self._get_image_id(image=source_image),
+            )
 
         if self.region_name != self.SOURCE_IMAGE_REGION and self.image is None:
-            LOGGER.info("Copying %s to %s...\nNOTE: it can take 5-15 minutes.",
-                        self.image_name, self.region_name)
+            LOGGER.info("Copying %s to %s...\nNOTE: it can take 5-15 minutes.", self.image_name, self.region_name)
             self._copy_source_image_to_region()
             LOGGER.info("Finished copying %s to %s", self.image_name, self.region_name)
         else:
             LOGGER.info("No need to copy SCT Runner image since it already exists in `%s'", self.region_name)
 
     @abstractmethod
-    def _get_base_image(self, image: Optional[Any] = None) -> Any:
-        ...
+    def _get_base_image(self, image: Optional[Any] = None) -> Any: ...
 
-    def create_instance(self,
-                        test_id: str,
-                        test_name: str,
-                        test_duration: int,
-                        instance_type: str = "",
-                        root_disk_size_gb: int = 0,
-                        restore_monitor: bool = False,
-                        restored_test_id: str = "",
-                        address_pool: str | None = None) -> Any:
+    def create_instance(
+        self,
+        test_id: str,
+        test_name: str,
+        test_duration: int,
+        instance_type: str = "",
+        root_disk_size_gb: int = 0,
+        restore_monitor: bool = False,
+        restored_test_id: str = "",
+        address_pool: str | None = None,
+    ) -> Any:
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
         if not image:
-            LOGGER.error("SCT Runner image was not found in %s! "
-                         "Use `hydra create-runner-image --cloud-provider %s --region %s'",
-                         self.region_name, self.CLOUD_PROVIDER, self.region_name)
+            LOGGER.error(
+                "SCT Runner image was not found in %s! Use `hydra create-runner-image --cloud-provider %s --region %s'",
+                self.region_name,
+                self.CLOUD_PROVIDER,
+                self.region_name,
+            )
             return None
 
         tags = TestConfig.common_tags()
-        tags.update({
-            "TestId": test_id,
-            "TestName": test_name,
-            "NodeType": self.NODE_TYPE,
-            "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
-            "keep_action": "terminate",
-            "UserName": self.LOGIN_USER,
-            "bastion": "true",
-        })
+        tags.update(
+            {
+                "TestId": test_id,
+                "TestName": test_name,
+                "NodeType": self.NODE_TYPE,
+                "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
+                "keep_action": "terminate",
+                "UserName": self.LOGIN_USER,
+                "bastion": "true",
+            }
+        )
         if restore_monitor and restored_test_id:
             tags.update({"RestoredTestId": restored_test_id})
 
@@ -443,17 +451,16 @@ class SctRunner(ABC):
 
     @classmethod
     @abstractmethod
-    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
-        ...
+    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]: ...
 
     @staticmethod
     @abstractmethod
-    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
-        ...
+    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None: ...
 
 
 class AwsSctRunner(SctRunner):
     """Provision and configure the SCT Runner on AWS."""
+
     CLOUD_PROVIDER = "aws"
     BASE_IMAGE = "ami-02f921fd5f09a1812"  # Canonical, Ubuntu, 24.04 LTS, amd64 numbat image build on 2024-08-06
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
@@ -509,48 +516,56 @@ class AwsSctRunner(SctRunner):
         if not existing_amis:
             return None
 
-        assert len(existing_amis) == 1, \
-            f"More than 1 SCT Runner AMI with {self.image_name}:{self.VERSION} " \
+        assert len(existing_amis) == 1, (
+            f"More than 1 SCT Runner AMI with {self.image_name}:{self.VERSION} "
             f"found in {self.region_name}: {existing_amis}"
+        )
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    def _create_instance(self,
-                         instance_type: InstanceTypeType,
-                         base_image: Any,
-                         tags: dict[str, str],
-                         instance_name: str,
-                         root_disk_size_gb: int = 0,
-                         region_az: str = "",
-                         test_duration: int | None = None,
-                         address_pool: str | None = None) -> Any:
+    def _create_instance(
+        self,
+        instance_type: InstanceTypeType,
+        base_image: Any,
+        tags: dict[str, str],
+        instance_name: str,
+        root_disk_size_gb: int = 0,
+        region_az: str = "",
+        test_duration: int | None = None,
+        address_pool: str | None = None,
+    ) -> Any:
         if region_az.startswith(self.SOURCE_IMAGE_REGION):
             aws_region: AwsRegion = self.aws_region_source
         else:
             aws_region: AwsRegion = self.aws_region
         ec2_network_configuration_subnets = EC2NetworkConfiguration(
-            regions=[aws_region.region_name], availability_zones=[self.availability_zone], params=self.params).subnets_per_region
-        assert ec2_network_configuration_subnets, f"No SCT subnet found in the source region. " \
-            f"Use `hydra prepare-regions --cloud-provider aws --region-name {aws_region.region_name}' " \
+            regions=[aws_region.region_name], availability_zones=[self.availability_zone], params=self.params
+        ).subnets_per_region
+        assert ec2_network_configuration_subnets, (
+            f"No SCT subnet found in the source region. "
+            f"Use `hydra prepare-regions --cloud-provider aws --region-name {aws_region.region_name}' "
             f"to create cloud env!"
+        )
 
         subnets = ec2_network_configuration_subnets[aws_region.region_name][self.availability_zone]
 
         interfaces = []
         for i, subnet in enumerate(subnets):
-            interfaces.append({
-                "DeviceIndex": i,
-                "SubnetId": subnet,
-                "Groups": [aws_region.sct_security_group.group_id,
-                           aws_region.sct_ssh_security_group.group_id],
-                "DeleteOnTermination": True,
-            })
+            interfaces.append(
+                {
+                    "DeviceIndex": i,
+                    "SubnetId": subnet,
+                    "Groups": [aws_region.sct_security_group.group_id, aws_region.sct_ssh_security_group.group_id],
+                    "DeleteOnTermination": True,
+                }
+            )
             if len(subnets) == 1:
                 interfaces[-1]["AssociatePublicIpAddress"] = not address_pool
 
         LOGGER.info("Creating instance...")
         base_image = convert_name_to_ami_if_needed(
-            ami_id_param=base_image, region_names=tuple([aws_region.region_name]))
+            ami_id_param=base_image, region_names=tuple([aws_region.region_name])
+        )
 
         result = aws_region.resource.create_instances(
             ImageId=base_image,
@@ -559,18 +574,22 @@ class AwsSctRunner(SctRunner):
             MaxCount=1,
             KeyName=aws_region.SCT_KEY_PAIR_NAME,
             NetworkInterfaces=interfaces,
-            TagSpecifications=[{
-                "ResourceType": "instance",
-                "Tags": [{"Key": key, "Value": value} for key, value in tags.items()] +
-                        [{"Key": "Name", "Value": instance_name}],
-            }],
-            BlockDeviceMappings=[{
-                "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region_name=aws_region.region_name),
-                "Ebs": {
-                    "VolumeSize": root_disk_size_gb or self.instance_root_disk_size(test_duration),
-                    "VolumeType": "gp3"
+            TagSpecifications=[
+                {
+                    "ResourceType": "instance",
+                    "Tags": [{"Key": key, "Value": value} for key, value in tags.items()]
+                    + [{"Key": "Name", "Value": instance_name}],
                 }
-            }]
+            ],
+            BlockDeviceMappings=[
+                {
+                    "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region_name=aws_region.region_name),
+                    "Ebs": {
+                        "VolumeSize": root_disk_size_gb or self.instance_root_disk_size(test_duration),
+                        "VolumeType": "gp3",
+                    },
+                }
+            ],
         )
         instance = result[0]
 
@@ -580,9 +599,11 @@ class AwsSctRunner(SctRunner):
         if address_pool:
             LOGGER.info("Associating an EIP from `%s' pool...", address_pool)
             unassigned_addresses = [
-                addr for addr in aws_region.resource.vpc_addresses.filter(
+                addr
+                for addr in aws_region.resource.vpc_addresses.filter(
                     Filters=[{"Name": "tag:sct-runner-pool", "Values": [address_pool]}]
-                ) if not addr.instance_id
+                )
+                if not addr.instance_id
             ]
             if not unassigned_addresses:
                 raise Exception(f"There are no unassigned EIPs in `{address_pool}' pool")
@@ -595,15 +616,16 @@ class AwsSctRunner(SctRunner):
 
         if len(instance.network_interfaces) > 1:
             for interface in instance.network_interfaces:
-                if interface.attachment['DeviceIndex'] == 0 and interface.association_attribute is None:
-                    response = aws_region.client.allocate_address(Domain='vpc')
-                    eip_allocation_id = response['AllocationId']
+                if interface.attachment["DeviceIndex"] == 0 and interface.association_attribute is None:
+                    response = aws_region.client.allocate_address(Domain="vpc")
+                    eip_allocation_id = response["AllocationId"]
                     aws_region.client.associate_address(
                         AllocationId=eip_allocation_id,
                         NetworkInterfaceId=interface.id,
                     )
                     aws_region.resource.create_tags(
-                        Resources=[eip_allocation_id], Tags=tags_as_ec2_tags(TestConfig().common_tags()))
+                        Resources=[eip_allocation_id], Tags=tags_as_ec2_tags(TestConfig().common_tags())
+                    )
                     break
 
         LOGGER.info("Instance `%s' is running. Waiting for public IP...", instance.instance_id)
@@ -641,7 +663,7 @@ class AwsSctRunner(SctRunner):
 
         unused = []
         for device in devices:
-            dev = device.replace("/dev/", '')
+            dev = device.replace("/dev/", "")
             if len(glob.glob("/sys/class/block/{dev}/{dev}*".format(dev=dev))) == 0:
                 unused.append(device)
         return unused
@@ -652,8 +674,10 @@ class AwsSctRunner(SctRunner):
         raid_level = 0
         # Create RAID if more than one unused disk is available
         if len(disks) != 1:
-            remoter.sudo(f"mdadm --create --verbose {raid_device} --level={raid_level} "
-                         f"--raid-devices={len(disks)} " + " ".join(disks))
+            remoter.sudo(
+                f"mdadm --create --verbose {raid_device} --level={raid_level} "
+                f"--raid-devices={len(disks)} " + " ".join(disks)
+            )
             remoter.sudo(f"mkfs.xfs {raid_device}")
         else:
             remoter.sudo(f"mkfs.xfs {disks[0]}")
@@ -703,10 +727,7 @@ class AwsSctRunner(SctRunner):
 
     def _create_image(self, instance: Any) -> Any:
         result = self.aws_region_source.client.create_image(
-            Description=self.IMAGE_DESCRIPTION,
-            InstanceId=instance.instance_id,
-            Name=self.image_name,
-            NoReboot=False
+            Description=self.IMAGE_DESCRIPTION, InstanceId=instance.instance_id, Name=self.image_name, NoReboot=False
         )
         self.tag_image(image_id=result["ImageId"], image_type=ImageType.SOURCE)
 
@@ -718,7 +739,7 @@ class AwsSctRunner(SctRunner):
             Description=self.IMAGE_DESCRIPTION,
             Name=self.image_name,
             SourceImageId=self.source_image.image_id,
-            SourceRegion=self.SOURCE_IMAGE_REGION
+            SourceRegion=self.SOURCE_IMAGE_REGION,
         )
         LOGGER.info("Image copied, id: `%s'.", result["ImageId"])
         self.tag_image(image_id=result["ImageId"], image_type=ImageType.GENERAL)
@@ -739,30 +760,37 @@ class AwsSctRunner(SctRunner):
                 instance_name = instance["InstanceId"]
                 if "Name" in tags:
                     instance_name = f"{tags['Name']} ({instance_name})"
-                sct_runners.append(SctRunnerInfo(
-                    sct_runner_class=cls,
-                    cloud_service_instance=client,
-                    region_az=instance["Placement"]["AvailabilityZone"],
-                    instance=instance,
-                    test_id=tags.get("TestId"),
-                    instance_name=instance_name,
-                    public_ips=[public_ip, ] if (public_ip := instance.get("PublicIpAddress")) else [],
-                    launch_time=instance["LaunchTime"],
-                    keep=tags.get("keep"),
-                    keep_action=tags.get("keep_action"),
-                    logs_collected=str_to_bool(tags.get("logs_collected")),
-                ))
+                sct_runners.append(
+                    SctRunnerInfo(
+                        sct_runner_class=cls,
+                        cloud_service_instance=client,
+                        region_az=instance["Placement"]["AvailabilityZone"],
+                        instance=instance,
+                        test_id=tags.get("TestId"),
+                        instance_name=instance_name,
+                        public_ips=[
+                            public_ip,
+                        ]
+                        if (public_ip := instance.get("PublicIpAddress"))
+                        else [],
+                        launch_time=instance["LaunchTime"],
+                        keep=tags.get("keep"),
+                        keep_action=tags.get("keep_action"),
+                        logs_collected=str_to_bool(tags.get("logs_collected")),
+                    )
+                )
         return sct_runners
 
     @staticmethod
     def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
         sct_runner_info.cloud_service_instance.terminate_instances(
-            InstanceIds=[sct_runner_info.instance["InstanceId"], ],
+            InstanceIds=[
+                sct_runner_info.instance["InstanceId"],
+            ],
         )
 
     @staticmethod
-    def set_tags(sct_runner_info: SctRunnerInfo,
-                 tags: dict) -> None:
+    def set_tags(sct_runner_info: SctRunnerInfo, tags: dict) -> None:
         tags_to_create = []
         for key, value in tags.items():
             tags_to_create.append({"Key": str(key), "Value": str(value)})
@@ -779,7 +807,9 @@ class GceSctRunner(SctRunner):
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
-    BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+    BASE_IMAGE = (
+        "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
+    )
     SOURCE_IMAGE_REGION = "us-east1"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "e2-standard-2"
     REGULAR_TEST_INSTANCE_TYPE = "e2-standard-2"  # 2 vcpus, 8G
@@ -788,13 +818,13 @@ class GceSctRunner(SctRunner):
     FAMILY = "sct-runner-image"
     SCT_NETWORK = "qa-vpc"
 
-    def __init__(self, region_name: str, availability_zone: str,  params: SCTConfiguration | None = None):
+    def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration | None = None):
         availability_zone = random_zone(region_name)
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.gce_region = region_name
         self.gce_source_region = self.SOURCE_IMAGE_REGION
         self.images_client, info = get_gce_compute_images_client()
-        self.project_name = info['project_id']
+        self.project_name = info["project_id"]
         self.instances_client, _ = get_gce_compute_instances_client()
         self._instance_name = None
 
@@ -817,9 +847,7 @@ class GceSctRunner(SctRunner):
 
     @property
     def instance(self) -> compute_v1.Instance:
-        return self.instances_client.get(project=self.project_name,
-                                         zone=self.zone,
-                                         instance=self.instance_name)
+        return self.instances_client.get(project=self.project_name, zone=self.zone, instance=self.instance_name)
 
     @cached_property
     def image_name(self) -> str:
@@ -840,42 +868,52 @@ class GceSctRunner(SctRunner):
         tags_to_create = {str(k): str(v).lower() for k, v in tags.items()}
         LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
         instances_client, info = get_gce_compute_instances_client()
-        gce_set_labels(instances_client=instances_client,
-                       instance=sct_runner_info.instance,
-                       new_labels=tags_to_create,
-                       project=info['project_id'],
-                       zone=sct_runner_info.region_az)
+        gce_set_labels(
+            instances_client=instances_client,
+            instance=sct_runner_info.instance,
+            new_labels=tags_to_create,
+            project=info["project_id"],
+            zone=sct_runner_info.region_az,
+        )
         LOGGER.info("SCT runner tags set to: %s", tags_to_create)
 
     @staticmethod
     def tags_to_labels(tags: dict[str, str]) -> dict[str, str]:
         return {key.lower(): value.lower().replace(".", "_") for key, value in tags.items()}
 
-    def _create_instance(self,
-                         instance_type: str,
-                         base_image: Any,
-                         tags: dict[str, str],
-                         instance_name: str,
-                         root_disk_size_gb: int = 0,
-                         region_az: str = "",
-                         test_duration: int | None = None,
-                         address_pool: str | None = None) -> Any:
+    def _create_instance(
+        self,
+        instance_type: str,
+        base_image: Any,
+        tags: dict[str, str],
+        instance_name: str,
+        root_disk_size_gb: int = 0,
+        region_az: str = "",
+        test_duration: int | None = None,
+        address_pool: str | None = None,
+    ) -> Any:
         LOGGER.info("Creating instance...")
-        disks = [disk_from_image(disk_type=f"projects/{self.project_name}/zones/{region_az}/diskTypes/pd-ssd",
-                                 disk_size_gb=root_disk_size_gb or self.instance_root_disk_size(test_duration),
-                                 boot=True,
-                                 source_image=base_image,
-                                 auto_delete=True)]
+        disks = [
+            disk_from_image(
+                disk_type=f"projects/{self.project_name}/zones/{region_az}/diskTypes/pd-ssd",
+                disk_size_gb=root_disk_size_gb or self.instance_root_disk_size(test_duration),
+                boot=True,
+                source_image=base_image,
+                auto_delete=True,
+            )
+        ]
 
         if address_pool:
             LOGGER.info("Use External IP address from `%s' pool...", address_pool)
             addresses_client, info = get_gce_compute_addresses_client()
             unassigned_addresses = list(
-                addresses_client.list(request=compute_v1.ListAddressesRequest(
-                    project=info["project_id"],
-                    region=region_az.rsplit("-", maxsplit=1)[0],
-                    filter=f"labels.sct-runner-pool={address_pool} AND status=RESERVED",
-                ))
+                addresses_client.list(
+                    request=compute_v1.ListAddressesRequest(
+                        project=info["project_id"],
+                        region=region_az.rsplit("-", maxsplit=1)[0],
+                        filter=f"labels.sct-runner-pool={address_pool} AND status=RESERVED",
+                    )
+                )
             )
             if not unassigned_addresses:
                 raise Exception(f"There are no unassigned External IP addresses in `{address_pool}' pool")
@@ -883,22 +921,28 @@ class GceSctRunner(SctRunner):
         else:
             external_ipv4 = None
 
-        instance = create_instance(project_id=self.project_name, zone=region_az,
-                                   machine_type=instance_type,
-                                   instance_name=instance_name,
-                                   network_name=self.SCT_NETWORK,
-                                   disks=disks,
-                                   external_access=True,
-                                   external_ipv4=external_ipv4,
-                                   metadata=tags | {
-                                       "launch_time": get_current_datetime_formatted(),
-                                       "block-project-ssh-keys": "true",
-                                       "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
-                                   },
-                                   service_accounts=[{
-                                       'email': KeyStore().get_gcp_credentials()['client_email'],
-                                       'scopes': ['https://www.googleapis.com/auth/cloud-platform'],
-                                   }],)
+        instance = create_instance(
+            project_id=self.project_name,
+            zone=region_az,
+            machine_type=instance_type,
+            instance_name=instance_name,
+            network_name=self.SCT_NETWORK,
+            disks=disks,
+            external_access=True,
+            external_ipv4=external_ipv4,
+            metadata=tags
+            | {
+                "launch_time": get_current_datetime_formatted(),
+                "block-project-ssh-keys": "true",
+                "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
+            },
+            service_accounts=[
+                {
+                    "email": KeyStore().get_gcp_credentials()["client_email"],
+                    "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+                }
+            ],
+        )
         LOGGER.info("Got public IP: %s", self.get_instance_public_ip(instance))
         self.instance_name = instance_name
 
@@ -951,7 +995,7 @@ class GceSctRunner(SctRunner):
                 instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose)
         for instance in instances:
             tags = gce_meta_to_dict(instance.metadata)
-            region = instance.zone.split('/')[-1]
+            region = instance.zone.split("/")[-1]
             if launch_time := tags.get("launch_time"):
                 try:
                     launch_time = datetime_from_formatted(date_string=launch_time)
@@ -962,28 +1006,30 @@ class GceSctRunner(SctRunner):
                 create_time = instance.creation_timestamp
                 LOGGER.info("`launch_time' tag is empty or invalid, fallback to creation time: %s", create_time)
                 launch_time = datetime.datetime.fromisoformat(create_time)
-            sct_runners.append(SctRunnerInfo(
-                sct_runner_class=cls,
-                cloud_service_instance=None,  # we don't need it for GCE
-                region_az=region,
-                instance=instance,
-                instance_name=instance.name,
-                public_ips=gce_public_addresses(instance),
-                test_id=tags.get("TestId"),
-                launch_time=launch_time,
-                keep=tags.get("keep"),
-                keep_action=tags.get("keep_action"),
-                logs_collected=str_to_bool(tags.get("logs_collected")),
-            ))
+            sct_runners.append(
+                SctRunnerInfo(
+                    sct_runner_class=cls,
+                    cloud_service_instance=None,  # we don't need it for GCE
+                    region_az=region,
+                    instance=instance,
+                    instance_name=instance.name,
+                    public_ips=gce_public_addresses(instance),
+                    test_id=tags.get("TestId"),
+                    launch_time=launch_time,
+                    keep=tags.get("keep"),
+                    keep_action=tags.get("keep_action"),
+                    logs_collected=str_to_bool(tags.get("logs_collected")),
+                )
+            )
         return sct_runners
 
     @staticmethod
     def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
         instance = sct_runner_info.instance
         instances_client, info = get_gce_compute_instances_client()
-        res = instances_client.delete(instance=instance.name,
-                                      project=info['project_id'],
-                                      zone=instance.zone.split('/')[-1])
+        res = instances_client.delete(
+            instance=instance.name, project=info["project_id"], zone=instance.zone.split("/")[-1]
+        )
         res.done()
 
 
@@ -1044,15 +1090,17 @@ class AzureSctRunner(SctRunner):
                         return gallery_image_version
         return None
 
-    def _create_instance(self,
-                         instance_type: str,
-                         base_image: Any,
-                         tags: dict[str, str],
-                         instance_name: str,
-                         root_disk_size_gb: int = 0,
-                         region_az: str = "",
-                         test_duration: int | None = None,
-                         address_pool: str | None = None) -> Any:
+    def _create_instance(
+        self,
+        instance_type: str,
+        base_image: Any,
+        tags: dict[str, str],
+        instance_name: str,
+        root_disk_size_gb: int = 0,
+        region_az: str = "",
+        test_duration: int | None = None,
+        address_pool: str | None = None,
+    ) -> Any:
         if address_pool:
             raise NotImplementedError("--address-pool is not implement for Azure yet")
 
@@ -1076,22 +1124,26 @@ class AzureSctRunner(SctRunner):
             return self.instance
         else:
             test_id = tags["TestId"]
-            provisioner = provisioner_factory.create_provisioner(backend="azure", test_id=test_id,
-                                                                 region=self.azure_region.location,
-                                                                 availability_zone=self.availability_zone)
-            vm_params = InstanceDefinition(name=instance_name,
-                                           image_id=base_image["id"],
-                                           type=instance_type,
-                                           user_name=self.LOGIN_USER,
-                                           ssh_key=self.key_pair,
-                                           tags=tags | {"launch_time": get_current_datetime_formatted()},
-                                           root_disk_size=root_disk_size_gb or self.instance_root_disk_size(
-                                               test_duration=test_duration),
-                                           user_data=None,
-                                           use_public_ip=True,
-                                           )
-            self.instance = provisioner.get_or_create_instance(definition=vm_params,
-                                                               pricing_model=PricingModel.ON_DEMAND)
+            provisioner = provisioner_factory.create_provisioner(
+                backend="azure",
+                test_id=test_id,
+                region=self.azure_region.location,
+                availability_zone=self.availability_zone,
+            )
+            vm_params = InstanceDefinition(
+                name=instance_name,
+                image_id=base_image["id"],
+                type=instance_type,
+                user_name=self.LOGIN_USER,
+                ssh_key=self.key_pair,
+                tags=tags | {"launch_time": get_current_datetime_formatted()},
+                root_disk_size=root_disk_size_gb or self.instance_root_disk_size(test_duration=test_duration),
+                user_data=None,
+                use_public_ip=True,
+            )
+            self.instance = provisioner.get_or_create_instance(
+                definition=vm_params, pricing_model=PricingModel.ON_DEMAND
+            )
             return self.instance
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
@@ -1149,19 +1201,21 @@ class AzureSctRunner(SctRunner):
                     LOGGER.warning("Value of `launch_time' tag is invalid: %s", exc)
                     launch_time = None
             region_az = instance.location + "" if not instance.zones else instance.zones[0]
-            sct_runners.append(SctRunnerInfo(
-                sct_runner_class=cls,
-                cloud_service_instance=azure_service,
-                region_az=region_az,
-                instance=instance,
-                instance_name=instance.name,
-                public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
-                launch_time=launch_time,
-                test_id=instance.tags.get("TestId"),
-                keep=instance.tags.get("keep"),
-                keep_action=instance.tags.get("keep_action"),
-                logs_collected=str_to_bool(instance.tags.get("logs_collected")),
-            ))
+            sct_runners.append(
+                SctRunnerInfo(
+                    sct_runner_class=cls,
+                    cloud_service_instance=azure_service,
+                    region_az=region_az,
+                    instance=instance,
+                    instance_name=instance.name,
+                    public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
+                    launch_time=launch_time,
+                    test_id=instance.tags.get("TestId"),
+                    keep=instance.tags.get("keep"),
+                    keep_action=instance.tags.get("keep_action"),
+                    logs_collected=str_to_bool(instance.tags.get("logs_collected")),
+                )
+            )
         return sct_runners
 
     @staticmethod
@@ -1179,7 +1233,7 @@ class AzureSctRunner(SctRunner):
                 "operation": TagsPatchOperation.MERGE.value,
                 "properties": {
                     "tags": tags_to_create,
-                }
+                },
             }
         )
         LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
@@ -1187,14 +1241,16 @@ class AzureSctRunner(SctRunner):
         LOGGER.info("SCT runner tags set to: %s", tags_to_create)
 
 
-def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "", params: SCTConfiguration | None = None) -> SctRunner:
+def get_sct_runner(
+    cloud_provider: str, region_name: str, availability_zone: str = "", params: SCTConfiguration | None = None
+) -> SctRunner:
     if cloud_provider == "aws":
         return AwsSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
     if cloud_provider == "gce":
         return GceSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
     if cloud_provider == "azure":
         return AzureSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
-    raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
+    raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
 
 
 def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
@@ -1204,18 +1260,24 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: b
         log = LOGGER.debug
     log("Looking for SCT runner instances (backend is '%s')...", backend)
     if "aws" in (backend or "") or backend in ("k8s-eks", "docker"):
-        sct_runner_classes = (AwsSctRunner, )
+        sct_runner_classes = (AwsSctRunner,)
     elif "gce" in (backend or "") or backend == "k8s-gke":
-        sct_runner_classes = (GceSctRunner, )
+        sct_runner_classes = (GceSctRunner,)
     elif "azure" in (backend or ""):
-        sct_runner_classes = (AzureSctRunner, )
+        sct_runner_classes = (AzureSctRunner,)
     else:
-        sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
+        sct_runner_classes = (
+            AwsSctRunner,
+            GceSctRunner,
+            AzureSctRunner,
+        )
     sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
     if test_runner_ip:
         if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
-            sct_runners = [sct_runner_info, ]
+            sct_runners = [
+                sct_runner_info,
+            ]
         else:
             LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
             return []
@@ -1230,8 +1292,9 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: b
 def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test_id: str = None, tags: dict = None):
     LOGGER.info("Test runner ip in update_sct_runner_tags: %s; test_id: %s", test_runner_ip, test_id)
     if not test_runner_ip and not test_id:
-        raise ValueError("update_sct_runner_tags requires either the "
-                         "test_runner_ip or test_id argument to find the runner")
+        raise ValueError(
+            "update_sct_runner_tags requires either the test_runner_ip or test_id argument to find the runner"
+        )
 
     runner_to_update = None
 
@@ -1242,8 +1305,9 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
         runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
 
     if not runner_to_update:
-        LOGGER.warning("Could not find SCT runner with IP: %s, test_id: %s to update tags for.",
-                       test_runner_ip, test_id)
+        LOGGER.warning(
+            "Could not find SCT runner with IP: %s, test_id: %s to update tags for.", test_runner_ip, test_id
+        )
         return
 
     try:
@@ -1254,13 +1318,15 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
         LOGGER.warning("Could not set SCT runner tags to: %s due to exc:\n%s", tags, exc)
 
 
-def _manage_runner_keep_tag_value(utc_now: datetime,
-                                  timeout_flag: bool,
-                                  test_status: str,
-                                  sct_runner_info: SctRunnerInfo,
-                                  dry_run: bool = False) -> SctRunnerInfo:
-    LOGGER.info("Managing runner's tags. Timeout flag: %s, logs_collected: %s, dry_run: %s",
-                timeout_flag, sct_runner_info.logs_collected, dry_run)
+def _manage_runner_keep_tag_value(
+    utc_now: datetime, timeout_flag: bool, test_status: str, sct_runner_info: SctRunnerInfo, dry_run: bool = False
+) -> SctRunnerInfo:
+    LOGGER.info(
+        "Managing runner's tags. Timeout flag: %s, logs_collected: %s, dry_run: %s",
+        timeout_flag,
+        sct_runner_info.logs_collected,
+        dry_run,
+    )
     current_run_time_hrs = int((utc_now - sct_runner_info.launch_time).total_seconds() // 3600)
     if timeout_flag and sct_runner_info.logs_collected:
         new_keep_value = int(sct_runner_info.keep) - current_run_time_hrs + 6
@@ -1285,12 +1351,9 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
         return sct_runner_info
 
 
-def clean_sct_runners(test_status: str,
-                      test_runner_ip: str = None,
-                      backend: str = None,
-                      dry_run: bool = False,
-                      force: bool = False) -> None:
-
+def clean_sct_runners(
+    test_status: str, test_runner_ip: str = None, backend: str = None, dry_run: bool = False, force: bool = False
+) -> None:
     sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
@@ -1303,8 +1366,7 @@ def clean_sct_runners(test_status: str,
         return
 
     for sct_runner_info in sct_runners_list:
-        LOGGER.info("Managing SCT runner: %s in region: %s",
-                    sct_runner_info.instance_name, sct_runner_info.region_az)
+        LOGGER.info("Managing SCT runner: %s in region: %s", sct_runner_info.instance_name, sct_runner_info.region_az)
         cmd = 'cat /home/ubuntu/sct-results/latest/events_log/critical.log | grep "TestTimeoutEvent"'
 
         if sct_runner_info.cloud_provider == "aws":
@@ -1315,8 +1377,9 @@ def clean_sct_runners(test_status: str,
         # ssh_run_cmd currently only works on AWS, no point of wasting time
         # trying to lookup on AWS instance from GCP/Azure
         if sct_runner_info.public_ips and sct_runner_info.cloud_provider == "aws":
-            ssh_run_cmd_result = ssh_run_cmd(command=cmd, test_id=sct_runner_info.test_id,
-                                             node_name=sct_runner_name, force_use_public_ip=True)
+            ssh_run_cmd_result = ssh_run_cmd(
+                command=cmd, test_id=sct_runner_info.test_id, node_name=sct_runner_name, force_use_public_ip=True
+            )
 
             timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
 
@@ -1324,9 +1387,13 @@ def clean_sct_runners(test_status: str,
         LOGGER.info("UTC now: %s", utc_now)
 
         if not dry_run and test_runner_ip:
-            _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
-                                          timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
-                                          dry_run=dry_run)
+            _manage_runner_keep_tag_value(
+                test_status=test_status,
+                utc_now=utc_now,
+                timeout_flag=timeout_flag,
+                sct_runner_info=sct_runner_info,
+                dry_run=dry_run,
+            )
 
         if sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):
@@ -1361,4 +1428,4 @@ def clean_sct_runners(test_status: str,
 
 class AwsFipsSctRunner(AwsSctRunner):
     VERSION = f"{SctRunner.VERSION}-fips"
-    BASE_IMAGE = 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest'
+    BASE_IMAGE = "resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest"

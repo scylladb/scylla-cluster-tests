@@ -56,19 +56,23 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def throttle_steps(self, workload_type):
         throttle_steps = self.params["perf_gradual_throttle_steps"]
         if workload_type not in throttle_steps:
-            TestFrameworkEvent(source=self.__class__.__name__,
-                               message=f"Throttle steps for '{workload_type}' test is not defined in "
-                               f"'perf_gradual_throttle_steps' parameter",
-                               severity=Severity.CRITICAL).publish()
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Throttle steps for '{workload_type}' test is not defined in "
+                f"'perf_gradual_throttle_steps' parameter",
+                severity=Severity.CRITICAL,
+            ).publish()
         return throttle_steps[workload_type]
 
     def step_duration(self, workload_type):
         step_duration = self.params["perf_gradual_step_duration"]
         if workload_type not in step_duration:
-            TestFrameworkEvent(source=self.__class__.__name__,
-                               message=f"Step duration for '{workload_type}' test is not defined in "
-                               f"'perf_gradual_step_duration' parameter",
-                               severity=Severity.CRITICAL).publish()
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Step duration for '{workload_type}' test is not defined in "
+                f"'perf_gradual_step_duration' parameter",
+                severity=Severity.CRITICAL,
+            ).publish()
         return step_duration[workload_type]
 
     def test_mixed_gradual_increase_load(self):
@@ -79,17 +83,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a mixed workload with gradual increase load
         """
         workload_type = "mixed"
-        workload = Workload(workload_type=workload_type,
-                            cs_cmd_tmpl=self.params.get('stress_cmd_m'),
-                            cs_cmd_warm_up=self.params.get('stress_cmd_cache_warmup'),
-                            num_threads=self.params["perf_gradual_threads"][workload_type],
-                            throttle_steps=self.throttle_steps(workload_type),
-                            preload_data=True,
-                            drop_keyspace=False,
-                            wait_no_compactions=True,
-                            step_duration=self.step_duration(workload_type))
-        self._base_test_workflow(workload=workload,
-                                 test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_m"),
+            cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
+            num_threads=self.params["perf_gradual_threads"][workload_type],
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=True,
+            drop_keyspace=False,
+            wait_no_compactions=True,
+            step_duration=self.step_duration(workload_type),
+        )
+        self._base_test_workflow(workload=workload, test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
 
     def test_write_gradual_increase_load(self):
         """
@@ -99,17 +104,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a write workload with gradual increase load
         """
         workload_type = "write"
-        workload = Workload(workload_type=workload_type,
-                            cs_cmd_tmpl=self.params.get('stress_cmd_w'),
-                            cs_cmd_warm_up=None,
-                            num_threads=self.params["perf_gradual_threads"][workload_type],
-                            throttle_steps=self.throttle_steps(workload_type),
-                            preload_data=False,
-                            drop_keyspace=True,
-                            wait_no_compactions=False,
-                            step_duration=self.step_duration(workload_type))
-        self._base_test_workflow(workload=workload,
-                                 test_name="test_write_gradual_increase_load (100% writes)")
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_w"),
+            cs_cmd_warm_up=None,
+            num_threads=self.params["perf_gradual_threads"][workload_type],
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=False,
+            drop_keyspace=True,
+            wait_no_compactions=False,
+            step_duration=self.step_duration(workload_type),
+        )
+        self._base_test_workflow(workload=workload, test_name="test_write_gradual_increase_load (100% writes)")
 
     def test_read_gradual_increase_load(self):
         """
@@ -119,26 +125,27 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         2. Run a read workload with gradual increase load
         """
         workload_type = "read"
-        workload = Workload(workload_type=workload_type,
-                            cs_cmd_tmpl=self.params.get('stress_cmd_r'),
-                            cs_cmd_warm_up=self.params.get('stress_cmd_cache_warmup'),
-                            num_threads=self.params["perf_gradual_threads"][workload_type],
-                            throttle_steps=self.throttle_steps(workload_type),
-                            preload_data=True,
-                            drop_keyspace=False,
-                            wait_no_compactions=True,
-                            step_duration=self.step_duration(workload_type))
-        self._base_test_workflow(workload=workload,
-                                 test_name="test_read_gradual_increase_load (100% reads)")
+        workload = Workload(
+            workload_type=workload_type,
+            cs_cmd_tmpl=self.params.get("stress_cmd_r"),
+            cs_cmd_warm_up=self.params.get("stress_cmd_cache_warmup"),
+            num_threads=self.params["perf_gradual_threads"][workload_type],
+            throttle_steps=self.throttle_steps(workload_type),
+            preload_data=True,
+            drop_keyspace=False,
+            wait_no_compactions=True,
+            step_duration=self.step_duration(workload_type),
+        )
+        self._base_test_workflow(workload=workload, test_name="test_read_gradual_increase_load (100% reads)")
 
     def _base_test_workflow(self, workload: Workload, test_name):
         stress_num = 1
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
-        if workload.preload_data and not skip_optional_stage('perf_preload_data'):
+        if workload.preload_data and not skip_optional_stage("perf_preload_data"):
             self.preload_data()
-            if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
+            if post_prepare_cql_cmds := self.params.get("post_prepare_cql_cmds"):
                 self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
                 self._run_cql_commands(post_prepare_cql_cmds)
 
@@ -152,10 +159,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.wait_for_no_tablets_splits()
             self.run_fstrim_on_all_db_nodes()
 
-        self.run_gradual_increase_load(workload=workload,
-                                       stress_num=stress_num,
-                                       num_loaders=num_loaders,
-                                       test_name=test_name)
+        self.run_gradual_increase_load(
+            workload=workload, stress_num=stress_num, num_loaders=num_loaders, test_name=test_name
+        )
 
     def preload_data(self, compaction_strategy=None):
         population_commands: list = self.params.get("prepare_write_cmd")
@@ -164,21 +170,23 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         # Check if it should be round_robin across loaders
         params = {}
         stress_queue = []
-        if self.params.get('round_robin'):
-            self.log.debug('Populating data using round_robin')
-            params.update({'stress_num': 1, 'round_robin': True})
+        if self.params.get("round_robin"):
+            self.log.debug("Populating data using round_robin")
+            params.update({"stress_num": 1, "round_robin": True})
         if compaction_strategy:
-            self.log.debug('Next compaction strategy will be used %s', compaction_strategy)
-            params['compaction_strategy'] = compaction_strategy
+            self.log.debug("Next compaction strategy will be used %s", compaction_strategy)
+            params["compaction_strategy"] = compaction_strategy
 
         for stress_cmd in population_commands:
-            params.update({
-                'stress_cmd': stress_cmd,
-                'duration': self.params.get('prepare_stress_duration'),
-            })
+            params.update(
+                {
+                    "stress_cmd": stress_cmd,
+                    "duration": self.params.get("prepare_stress_duration"),
+                }
+            )
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+            self.log.debug("RUNNING stress cmd: {}".format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:
@@ -189,14 +197,18 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     def check_latency_during_steps(self, step):
         with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
-        self.log.debug('Step %s: latency_results were loaded from file %s and its result is %s',
-                       step, self.latency_results_file, latency_results)
+        self.log.debug(
+            "Step %s: latency_results were loaded from file %s and its result is %s",
+            step,
+            self.latency_results_file,
+            latency_results,
+        )
         if latency_results and self.create_stats:
             latency_results[step]["step"] = step
             latency_results[step] = calculate_latency(latency_results[step])
             latency_results = analyze_hdr_percentiles(latency_results)
             pathlib.Path(self.latency_results_file).unlink()
-            self.log.debug('collected latency values are: %s', latency_results)
+            self.log.debug("collected latency values are: %s", latency_results)
             self.update({"latency_during_ops": latency_results})
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
@@ -206,13 +218,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         stress_queue = []
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd.replace(
-                "$threads", f"{num_threads}").replace("$throttle", f"{current_throttle}")
+            stress_cmd_to_run = stress_cmd.replace("$threads", f"{num_threads}").replace(
+                "$throttle", f"{current_throttle}"
+            )
             if step_duration is not None:
                 stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
-            params.update({'stress_cmd': stress_cmd_to_run})
+            params.update({"stress_cmd": stress_cmd_to_run})
             # Run all stress commands
-            self.log.debug('RUNNING stress cmd: %s', stress_cmd_to_run)
+            self.log.debug("RUNNING stress cmd: %s", stress_cmd_to_run)
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:
@@ -222,9 +235,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         return results, stress_queue
 
     def drop_keyspace(self):
-        self.log.debug(f'Drop keyspace {"keyspace1"}')
+        self.log.debug(f"Drop keyspace {'keyspace1'}")
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            session.execute(f'DROP KEYSPACE IF EXISTS {"keyspace1"};')
+            session.execute(f"DROP KEYSPACE IF EXISTS {'keyspace1'};")
 
     @staticmethod
     def _step_names(step_names, total_counts):
@@ -299,14 +312,31 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
-        for throttle_step, num_threads, current_throttle_step in zip(workload.throttle_steps, workload.num_threads, sequential_steps):
-            self.log.info("Run cs command with rate: %s Kops; threads: %s; step name: %s", throttle_step, num_threads,
-                          current_throttle_step)
-            current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
-            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
-                                                      cycle_name=current_throttle_step))(self.run_step))
-            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
-                                  num_threads=num_threads, step_duration=workload.step_duration)
+        for throttle_step, num_threads, current_throttle_step in zip(
+            workload.throttle_steps, workload.num_threads, sequential_steps
+        ):
+            self.log.info(
+                "Run cs command with rate: %s Kops; threads: %s; step name: %s",
+                throttle_step,
+                num_threads,
+                current_throttle_step,
+            )
+            current_throttle = (
+                f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s"
+                if throttle_step != "unthrottled"
+                else ""
+            )
+            run_step = (
+                latency_calculator_decorator(
+                    legend=f"Gradual test step {current_throttle_step} op/s", cycle_name=current_throttle_step
+                )
+            )(self.run_step)
+            results, _ = run_step(
+                stress_cmds=workload.cs_cmd_tmpl,
+                current_throttle=current_throttle,
+                num_threads=num_threads,
+                step_duration=workload.step_duration,
+            )
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details()
@@ -346,23 +376,25 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
     def run_performance_analyzer(self, total_summary):
         perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get('email_recipients'))
+            es_index=self._test_index, email_recipients=self.params.get("email_recipients")
+        )
         # Keep next 2 lines for debug purpose
         self.log.debug("es_index: %s", self._test_index)
         self.log.debug("total_summary: %s", total_summary)
-        is_gce = bool(self.params.get('cluster_backend') == 'gce')
+        is_gce = bool(self.params.get("cluster_backend") == "gce")
         try:
-            perf_analyzer.check_regression(test_id=self._test_id,
-                                           data=total_summary,
-                                           is_gce=is_gce,
-                                           email_subject_postfix=self.params.get('email_subject_postfix'))
+            perf_analyzer.check_regression(
+                test_id=self._test_id,
+                data=total_summary,
+                is_gce=is_gce,
+                email_subject_postfix=self.params.get("email_subject_postfix"),
+            )
         except Exception as exc:  # noqa: BLE001
             TestFrameworkEvent(
-                message='Failed to check regression',
+                message="Failed to check regression",
                 source=self.__class__.__name__,
-                source_method='check_regression',
-                exception=exc
+                source_method="check_regression",
+                exception=exc,
             ).publish_or_dump()
 
     @staticmethod
@@ -392,9 +424,9 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for stress_cmd in stress_cmd_templ:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
             stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
-            params.update({'stress_cmd': stress_cmd_to_run})
+            params.update({"stress_cmd": stress_cmd_to_run})
             # Run all stress commands
-            self.log.debug('RUNNING warm up stress cmd: %s', stress_cmd_to_run)
+            self.log.debug("RUNNING warm up stress cmd: %s", stress_cmd_to_run)
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:

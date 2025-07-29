@@ -35,7 +35,7 @@ class AwsRegion:
     SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt{index}"
     SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
-    SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
+    SCT_SSH_GROUP_NAME = "SCT-ssh-sg"
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
 
     def __init__(self, region_name):
@@ -57,8 +57,9 @@ class AwsRegion:
         existing_vpcs = vpcs.get("Vpcs", [])
         if len(existing_vpcs) == 0:
             return None
-        assert len(existing_vpcs) == 1, \
+        assert len(existing_vpcs) == 1, (
             f"More than 1 VPC with {self.SCT_VPC_NAME} found in {self.region_name}: {existing_vpcs}"
+        )
         return self.resource.Vpc(existing_vpcs[0]["VpcId"])
 
     def create_sct_vpc(self):
@@ -79,22 +80,22 @@ class AwsRegion:
     @cached_property
     def availability_zones(self):
         response = self.client.describe_availability_zones()
-        return [zone["ZoneName"]for zone in response['AvailabilityZones'] if zone["State"] == "available"]
+        return [zone["ZoneName"] for zone in response["AvailabilityZones"] if zone["State"] == "available"]
 
     @cache
     def get_availability_zones_for_instance_type(self, instance_type):
         response = self.client.describe_instance_type_offerings(
-            LocationType='availability-zone',
+            LocationType="availability-zone",
             Filters=[
                 {
-                    'Name': 'instance-type',
-                    'Values': [
+                    "Name": "instance-type",
+                    "Values": [
                         instance_type,
-                    ]
+                    ],
                 },
-            ]
+            ],
         )
-        return [offering['Location'] for offering in response['InstanceTypeOfferings']]
+        return [offering["Location"] for offering in response["InstanceTypeOfferings"]]
 
     @cached_property
     def vpc_ipv6_cidr(self):
@@ -102,14 +103,16 @@ class AwsRegion:
 
     def az_subnet_name(self, region_az, subnet_index):
         # To support existing VPC/subnet names convention, ignore the index number for first subnet
-        return self.SCT_SUBNET_NAME.format(availability_zone=region_az,
-                                           subnet_index="" if not subnet_index else f"-{subnet_index}")
+        return self.SCT_SUBNET_NAME.format(
+            availability_zone=region_az, subnet_index="" if not subnet_index else f"-{subnet_index}"
+        )
 
     def sct_subnet(self, region_az, subnet_index: int = None) -> EC2ServiceResource.Subnet:
         @retrying(n=5, message="Wait for subnet became available...")
         def wait_for_subnet_available():
-            assert existing_subnets[0]['State'] == 'available', \
+            assert existing_subnets[0]["State"] == "available", (
                 f"State of {subnet_name} is not available. Fix it (delete or make it available) and re-run"
+            )
 
         subnet_name = self.az_subnet_name(region_az, subnet_index=subnet_index)
         subnets = self.client.describe_subnets(Filters=[{"Name": "tag:Name", "Values": [subnet_name]}])
@@ -117,8 +120,9 @@ class AwsRegion:
         existing_subnets = subnets.get("Subnets", [])
         if len(existing_subnets) == 0:
             return None
-        assert len(existing_subnets) == 1, \
+        assert len(existing_subnets) == 1, (
             f"More than 1 Subnet with {subnet_name} found in {self.region_name}: {existing_subnets}!"
+        )
         wait_for_subnet_available()
         return self.resource.Subnet(existing_subnets[0]["SubnetId"])
 
@@ -130,21 +134,19 @@ class AwsRegion:
             LOGGER.warning("Subnet '%s' already exists!  Id: '%s'.", subnet_name, subnet_id)
             return
 
-        result = self.client.create_subnet(CidrBlock=str(ipv4_cidr), Ipv6CidrBlock=str(ipv6_cidr),
-                                           VpcId=self.sct_vpc.vpc_id, AvailabilityZone=region_az)
+        result = self.client.create_subnet(
+            CidrBlock=str(ipv4_cidr),
+            Ipv6CidrBlock=str(ipv6_cidr),
+            VpcId=self.sct_vpc.vpc_id,
+            AvailabilityZone=region_az,
+        )
         subnet_id = result["Subnet"]["SubnetId"]
         subnet = self.resource.Subnet(subnet_id)
         subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
         LOGGER.info("Configuring to automatically assign public IPv4 and IPv6 addresses...")
-        self.client.modify_subnet_attribute(
-            MapPublicIpOnLaunch={"Value": True},
-            SubnetId=subnet_id
-        )
+        self.client.modify_subnet_attribute(MapPublicIpOnLaunch={"Value": True}, SubnetId=subnet_id)
         # for some reason boto3 throws error when both AssignIpv6AddressOnCreation and MapPublicIpOnLaunch are used
-        self.client.modify_subnet_attribute(
-            AssignIpv6AddressOnCreation={"Value": True},
-            SubnetId=subnet_id
-        )
+        self.client.modify_subnet_attribute(AssignIpv6AddressOnCreation={"Value": True}, SubnetId=subnet_id)
         LOGGER.info("'%s' with id '%s' created.", subnet_name, subnet_id)
 
     def create_sct_subnets(self):
@@ -162,62 +164,87 @@ class AwsRegion:
         # To prevent this failure, first the primary subnets in all AZ will be created and then the secondary subnets in all AZ
         for range_index in range(self.SCT_SUBNET_PER_AZ):
             for az_name in self.availability_zones:
-                self.create_sct_subnet(region_az=az_name, ipv4_cidr=next(ipv4_cidrs_iter), ipv6_cidr=next(ipv6_cidrs_iter),
-                                       subnet_index=range_index)
-                self.create_sct_subnet_route_table(subnet_name=self.az_subnet_name(region_az=az_name, subnet_index=range_index),
-                                                   index=range_index)
+                self.create_sct_subnet(
+                    region_az=az_name,
+                    ipv4_cidr=next(ipv4_cidrs_iter),
+                    ipv6_cidr=next(ipv6_cidrs_iter),
+                    subnet_index=range_index,
+                )
+                self.create_sct_subnet_route_table(
+                    subnet_name=self.az_subnet_name(region_az=az_name, subnet_index=range_index), index=range_index
+                )
                 self.associate_subnet_with_route_table(region_az=az_name, index=range_index)
 
     def associate_subnet_with_route_table(self, region_az: str, index: int = None):
         subnet = self.sct_subnet(region_az, subnet_index=index)
         sct_route_table = self.sct_route_table(index=index)
         response = self.client.describe_route_tables(
-            Filters=[{'Name': 'association.subnet-id', 'Values': [subnet.subnet_id]}])
+            Filters=[{"Name": "association.subnet-id", "Values": [subnet.subnet_id]}]
+        )
 
         # If subnet is not associated with route table or associated with main route table
-        if not (associated_route_table := response['RouteTables']):
+        if not (associated_route_table := response["RouteTables"]):
             self.client.associate_route_table(RouteTableId=sct_route_table.route_table_id, SubnetId=subnet.subnet_id)
-            LOGGER.info("Subnet '%s' has been associated with '%s' route table.",
-                        subnet.subnet_id, sct_route_table.route_table_id)
+            LOGGER.info(
+                "Subnet '%s' has been associated with '%s' route table.",
+                subnet.subnet_id,
+                sct_route_table.route_table_id,
+            )
             return
 
-        associated_route_table_id = associated_route_table[0].get('RouteTableId')
+        associated_route_table_id = associated_route_table[0].get("RouteTableId")
         # If subnet is associated with route table but not that was created for this subnet
         if associated_route_table_id != sct_route_table.route_table_id:
             self.client.replace_route_table_association(
-                AssociationId=associated_route_table_id, RouteTableId=sct_route_table.route_table_id)
-            LOGGER.info("Subnet '%s' has been associated with '%s' route table.",
-                        subnet.subnet_id, sct_route_table.route_table_id)
+                AssociationId=associated_route_table_id, RouteTableId=sct_route_table.route_table_id
+            )
+            LOGGER.info(
+                "Subnet '%s' has been associated with '%s' route table.",
+                subnet.subnet_id,
+                sct_route_table.route_table_id,
+            )
         # If subnet is associated with appropriate route table
         else:
-            LOGGER.info("Subnet '%s' is already associated with '%s' route table.",
-                        subnet.subnet_id, sct_route_table.route_table_id)
+            LOGGER.info(
+                "Subnet '%s' is already associated with '%s' route table.",
+                subnet.subnet_id,
+                sct_route_table.route_table_id,
+            )
 
     @property
     def sct_internet_gateway(self) -> EC2ServiceResource.InternetGateway:
-        igws = self.client.describe_internet_gateways(Filters=[{"Name": "tag:Name",
-                                                                "Values": [self.SCT_INTERNET_GATEWAY_NAME]}])
+        igws = self.client.describe_internet_gateways(
+            Filters=[{"Name": "tag:Name", "Values": [self.SCT_INTERNET_GATEWAY_NAME]}]
+        )
         LOGGER.debug("Found Internet gateways: %s", igws)
         existing_igws = igws.get("InternetGateways", [])
         if len(existing_igws) == 0:
             return None
-        assert len(existing_igws) == 1, \
-            f"More than 1 Internet Gateway with {self.SCT_INTERNET_GATEWAY_NAME} found " \
+        assert len(existing_igws) == 1, (
+            f"More than 1 Internet Gateway with {self.SCT_INTERNET_GATEWAY_NAME} found "
             f"in {self.region_name}: {existing_igws}!"
+        )
         return self.resource.InternetGateway(existing_igws[0]["InternetGatewayId"])
 
     def create_sct_internet_gateway(self):
         LOGGER.info("Creating Internet Gateway..")
         if self.sct_internet_gateway:
-            LOGGER.warning("Internet Gateway '%s' already exists! Id: '%s'.",
-                           self.SCT_INTERNET_GATEWAY_NAME, self.sct_internet_gateway.internet_gateway_id)
+            LOGGER.warning(
+                "Internet Gateway '%s' already exists! Id: '%s'.",
+                self.SCT_INTERNET_GATEWAY_NAME,
+                self.sct_internet_gateway.internet_gateway_id,
+            )
         else:
             result = self.client.create_internet_gateway()
             igw_id = result["InternetGateway"]["InternetGatewayId"]
             igw = self.resource.InternetGateway(igw_id)
             igw.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_INTERNET_GATEWAY_NAME}])
-            LOGGER.info("'%s' with id '%s' created. Attaching to '%s'",
-                        self.SCT_INTERNET_GATEWAY_NAME, igw_id, self.sct_vpc.vpc_id)
+            LOGGER.info(
+                "'%s' with id '%s' created. Attaching to '%s'",
+                self.SCT_INTERNET_GATEWAY_NAME,
+                igw_id,
+                self.sct_vpc.vpc_id,
+            )
             igw.attach_to_vpc(VpcId=self.sct_vpc.vpc_id)
 
     def sct_route_table_name(self, index: int = None):
@@ -229,70 +256,79 @@ class AwsRegion:
 
     def sct_route_table(self, index: int = None) -> EC2ServiceResource.RouteTable:
         sct_route_table_name = self.sct_route_table_name(index=index)
-        route_tables = self.client.describe_route_tables(Filters=[{"Name": "tag:Name",
-                                                                   "Values": [sct_route_table_name]}])
+        route_tables = self.client.describe_route_tables(
+            Filters=[{"Name": "tag:Name", "Values": [sct_route_table_name]}]
+        )
         LOGGER.debug("Found Route Tables: %s", route_tables)
         existing_rts = route_tables.get("RouteTables", [])
         if len(existing_rts) == 0:
             return None
-        assert len(existing_rts) == 1, \
+        assert len(existing_rts) == 1, (
             f"More than 1 Route Table with {sct_route_table_name} found in {self.region_name}: {existing_rts}!"
+        )
         return self.resource.RouteTable(existing_rts[0]["RouteTableId"])
 
     def create_sct_subnet_route_table(self, subnet_name: str, index: int = None):
         subnet_route_table = self.sct_route_table_name(index=index)
         LOGGER.info("Configuring SCT subnet Route Table %s for subnet %s...", subnet_route_table, subnet_name)
         if sct_route_table := self.sct_route_table(index=index):
-            LOGGER.warning("Route Table '%s' already exists! Id: '%s'.",
-                           subnet_route_table, sct_route_table.route_table_id)
+            LOGGER.warning(
+                "Route Table '%s' already exists! Id: '%s'.", subnet_route_table, sct_route_table.route_table_id
+            )
             return
 
-        self.client.create_route_table(DryRun=False,
-                                       VpcId=self.sct_vpc.vpc_id,
-                                       TagSpecifications=[
-                                           {'ResourceType': "route-table",
-                                            'Tags': [{'Key': 'Name',
-                                                      'Value': subnet_route_table
-                                                      }]
-                                            }],
-                                       )
+        self.client.create_route_table(
+            DryRun=False,
+            VpcId=self.sct_vpc.vpc_id,
+            TagSpecifications=[{"ResourceType": "route-table", "Tags": [{"Key": "Name", "Value": subnet_route_table}]}],
+        )
         LOGGER.info("Setting routing of all outbound traffic via Internet Gateway...")
         route_table = self.sct_route_table(index=index)
-        route_table.create_route(DestinationCidrBlock="0.0.0.0/0",
-                                 GatewayId=self.sct_internet_gateway.internet_gateway_id)
-        route_table.create_route(DestinationIpv6CidrBlock="::/0",
-                                 GatewayId=self.sct_internet_gateway.internet_gateway_id)
+        route_table.create_route(
+            DestinationCidrBlock="0.0.0.0/0", GatewayId=self.sct_internet_gateway.internet_gateway_id
+        )
+        route_table.create_route(
+            DestinationIpv6CidrBlock="::/0", GatewayId=self.sct_internet_gateway.internet_gateway_id
+        )
 
     def configure_sct_route_table(self, index: int = None):
         # add route to Internet: 0.0.0.0/0 -> igw
         LOGGER.info("Configuring main Route Table...")
         if sct_route_table := self.sct_route_table(index=index):
-            LOGGER.warning("Route Table '%s' already exists! Id: '%s'.",
-                           self.sct_route_table_name(index=index), sct_route_table.route_table_id)
+            LOGGER.warning(
+                "Route Table '%s' already exists! Id: '%s'.",
+                self.sct_route_table_name(index=index),
+                sct_route_table.route_table_id,
+            )
         else:
             route_tables = list(self.sct_vpc.route_tables.all())
-            assert len(route_tables) == 1, f"Only one main route table should exist for {self.SCT_VPC_NAME}. " \
-                f"Found {len(route_tables)}!"
+            assert len(route_tables) == 1, (
+                f"Only one main route table should exist for {self.SCT_VPC_NAME}. Found {len(route_tables)}!"
+            )
             route_table: EC2ServiceResource.RouteTable = route_tables[0]
 
             route_table.create_tags(Tags=[{"Key": "Name", "Value": self.sct_route_table_name(index=index)}])
             LOGGER.info("Setting routing of all outbound traffic via Internet Gateway...")
-            route_table.create_route(DestinationCidrBlock="0.0.0.0/0",
-                                     GatewayId=self.sct_internet_gateway.internet_gateway_id)
-            route_table.create_route(DestinationIpv6CidrBlock="::/0",
-                                     GatewayId=self.sct_internet_gateway.internet_gateway_id)
+            route_table.create_route(
+                DestinationCidrBlock="0.0.0.0/0", GatewayId=self.sct_internet_gateway.internet_gateway_id
+            )
+            route_table.create_route(
+                DestinationIpv6CidrBlock="::/0", GatewayId=self.sct_internet_gateway.internet_gateway_id
+            )
 
     @property
     def sct_security_group(self) -> EC2ServiceResource.SecurityGroup:
-        security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
-                                                                         "Values": [self.SCT_SECURITY_GROUP_NAME]}])
+        security_groups = self.client.describe_security_groups(
+            Filters=[{"Name": "tag:Name", "Values": [self.SCT_SECURITY_GROUP_NAME]}]
+        )
         LOGGER.debug("Found Security Groups: %s", security_groups)
         existing_sgs = security_groups.get("SecurityGroups", [])
         if len(existing_sgs) == 0:
             return None
-        assert len(existing_sgs) == 1, \
-            f"More than 1 Security group with {self.SCT_SECURITY_GROUP_NAME} found " \
+        assert len(existing_sgs) == 1, (
+            f"More than 1 Security group with {self.SCT_SECURITY_GROUP_NAME} found "
             f"in {self.region_name}: {existing_sgs}!"
+        )
         return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def create_sct_security_group(self):
@@ -304,12 +340,17 @@ class AwsRegion:
         """
         LOGGER.info("Creating Security Group...")
         if self.sct_security_group:
-            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
-                           self.SCT_SECURITY_GROUP_NAME, self.sct_security_group.group_id)
+            LOGGER.warning(
+                "Security Group '%s' already exists! Id: '%s'.",
+                self.SCT_SECURITY_GROUP_NAME,
+                self.sct_security_group.group_id,
+            )
         else:
-            result = self.client.create_security_group(Description='Security group that is used by SCT',
-                                                       GroupName=self.SCT_SECURITY_GROUP_NAME,
-                                                       VpcId=self.sct_vpc.vpc_id)
+            result = self.client.create_security_group(
+                Description="Security group that is used by SCT",
+                GroupName=self.SCT_SECURITY_GROUP_NAME,
+                VpcId=self.sct_vpc.vpc_id,
+            )
             sg_id = result["GroupId"]
             security_group = self.resource.SecurityGroup(sg_id)
             security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_SECURITY_GROUP_NAME}])
@@ -323,27 +364,25 @@ class AwsRegion:
                             {
                                 "Description": "Allow ALL traffic inside the Security group",
                                 "GroupId": sg_id,
-                                "UserId": security_group.owner_id
+                                "UserId": security_group.owner_id,
                             }
-                        ]
+                        ],
                     },
                 ]
             )
 
     def get_sct_test_security_group(self, test_id) -> EC2ServiceResource.SecurityGroup:
         name = self.SCT_TEST_SECURITY_GROUP_NAME_TMPL.format(test_id)
-        security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
-                                                                         "Values": [name]},
-                                                                        {"Name": "tag:TestId",
-                                                                         "Values": [test_id]
-                                                                         }])
+        security_groups = self.client.describe_security_groups(
+            Filters=[{"Name": "tag:Name", "Values": [name]}, {"Name": "tag:TestId", "Values": [test_id]}]
+        )
         LOGGER.debug("Found Security Groups: %s", security_groups)
         existing_sgs = security_groups.get("SecurityGroups", [])
         if len(existing_sgs) == 0:
             return None
-        assert len(existing_sgs) == 1, \
-            f"More than 1 Security group with {name} found " \
-            f"in {self.region_name}: {existing_sgs}!"
+        assert len(existing_sgs) == 1, (
+            f"More than 1 Security group with {name} found in {self.region_name}: {existing_sgs}!"
+        )
         return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def provide_sct_test_security_group(self, test_id: str):
@@ -356,20 +395,21 @@ class AwsRegion:
         LOGGER.info("Creating Security Group for test %s...", test_id)
         name = self.SCT_TEST_SECURITY_GROUP_NAME_TMPL.format(test_id)
         if security_group := self.get_sct_test_security_group(test_id=test_id):
-            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
-                           name, self.sct_security_group.group_id)
+            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.", name, self.sct_security_group.group_id)
         else:
-
-            result = self.client.create_security_group(Description=f'Security group that is used by test {test_id}',
-                                                       GroupName=name,
-                                                       VpcId=self.sct_vpc.vpc_id)
+            result = self.client.create_security_group(
+                Description=f"Security group that is used by test {test_id}", GroupName=name, VpcId=self.sct_vpc.vpc_id
+            )
             sg_id = result["GroupId"]
             security_group = self.resource.SecurityGroup(sg_id)
-            security_group.create_tags(Tags=[{"Key": "Name",
-                                              "Value": name},
-                                             {"Key": "RunByUser", "Value": get_username()},
-                                             {"Key": "CreatedBy", "Value": "SCT"},
-                                             {"Key": "TestId", "Value": test_id}])
+            security_group.create_tags(
+                Tags=[
+                    {"Key": "Name", "Value": name},
+                    {"Key": "RunByUser", "Value": get_username()},
+                    {"Key": "CreatedBy", "Value": "SCT"},
+                    {"Key": "TestId", "Value": test_id},
+                ]
+            )
             LOGGER.debug("'%s' with id '%s' created. ", name, self.sct_security_group.group_id)
             LOGGER.debug("Creating common ingress rules...")
             security_group.authorize_ingress(
@@ -378,182 +418,194 @@ class AwsRegion:
                         "FromPort": 22,
                         "ToPort": 22,
                         "IpProtocol": "tcp",
-                        "IpRanges": [
-                            {'CidrIp': '0.0.0.0/0', 'Description': 'SSH connectivity to the instances'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'SSH connectivity to the instances'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "SSH connectivity to the instances"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "SSH connectivity to the instances"}],
                     },
                     {
                         "FromPort": 3000,
                         "ToPort": 3000,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Grafana for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Grafana for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Grafana for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Grafana for ALL"}],
                     },
                     {
                         "FromPort": 9042,
                         "ToPort": 9042,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow CQL for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow CQL for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow CQL for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow CQL for ALL"}],
                     },
                     {
                         "FromPort": 19042,
                         "ToPort": 19042,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow shard-aware CQL for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow shard-aware CQL for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow shard-aware CQL for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow shard-aware CQL for ALL"}],
                     },
                     {
                         "FromPort": 9142,
                         "ToPort": 9142,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow SSL CQL for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow SSL CQL for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow SSL CQL for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow SSL CQL for ALL"}],
                     },
                     {
                         "FromPort": 19142,
                         "ToPort": 19142,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow shard-aware SSL CQL for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow shard-aware SSL CQL for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow shard-aware SSL CQL for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow shard-aware SSL CQL for ALL"}],
                     },
                     {
                         "FromPort": 9100,
                         "ToPort": 9100,
                         "IpProtocol": "tcp",
-                        "IpRanges": [
-                            {'CidrIp': '0.0.0.0/0', 'Description': 'Allow node_exporter on Db nodes for ALL'}],
-                        "Ipv6Ranges": [
-                            {'CidrIpv6': '::/0', 'Description': 'Allow node_exporter on Db nodes for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow node_exporter on Db nodes for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow node_exporter on Db nodes for ALL"}],
                     },
                     {
                         "FromPort": 8080,
                         "ToPort": 8080,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Alternator for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Alternator for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Alternator for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Alternator for ALL"}],
                     },
                     {
                         "FromPort": 9090,
                         "ToPort": 9090,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow  Prometheus for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Prometheus for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow  Prometheus for ALL"}],
                     },
                     {
                         "FromPort": 9093,
                         "ToPort": 9093,
                         "IpProtocol": "tcp",
-                        "IpRanges": [
-                            {'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus Alert Manager For All'}],
-                        "Ipv6Ranges": [
-                            {'CidrIpv6': '::/0', 'Description': 'Allow Prometheus Alert Manager For All'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Prometheus Alert Manager For All"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Prometheus Alert Manager For All"}],
                     },
                     {
                         "FromPort": 9180,
                         "ToPort": 9180,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus API for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Prometheus API for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Prometheus API for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Prometheus API for ALL"}],
                     },
                     {
                         "FromPort": 7000,
                         "ToPort": 7000,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Inter-node communication (RPC) for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Inter-node communication (RPC) for ALL'}]
+                        "IpRanges": [
+                            {"CidrIp": "0.0.0.0/0", "Description": "Allow Inter-node communication (RPC) for ALL"}
+                        ],
+                        "Ipv6Ranges": [
+                            {"CidrIpv6": "::/0", "Description": "Allow Inter-node communication (RPC) for ALL"}
+                        ],
                     },
                     {
                         "FromPort": 7001,
                         "ToPort": 7001,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow SSL inter-node communication (RPC) for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow SSL inter-node communication (RPC) for ALL'}]
+                        "IpRanges": [
+                            {"CidrIp": "0.0.0.0/0", "Description": "Allow SSL inter-node communication (RPC) for ALL"}
+                        ],
+                        "Ipv6Ranges": [
+                            {"CidrIpv6": "::/0", "Description": "Allow SSL inter-node communication (RPC) for ALL"}
+                        ],
                     },
                     {
                         "FromPort": 7199,
                         "ToPort": 7199,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow JMX management for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow JMX management for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow JMX management for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow JMX management for ALL"}],
                     },
                     {
                         "FromPort": 10001,
                         "ToPort": 10001,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager Agent REST API  for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager Agent REST API for ALL'}]
+                        "IpRanges": [
+                            {"CidrIp": "0.0.0.0/0", "Description": "Allow Scylla Manager Agent REST API  for ALL"}
+                        ],
+                        "Ipv6Ranges": [
+                            {"CidrIpv6": "::/0", "Description": "Allow Scylla Manager Agent REST API for ALL"}
+                        ],
                     },
                     {
                         "FromPort": 56090,
                         "ToPort": 56090,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}]
+                        "IpRanges": [
+                            {
+                                "CidrIp": "0.0.0.0/0",
+                                "Description": "Allow Scylla Manager Agent version 2.1 Prometheus API for ALL",
+                            }
+                        ],
+                        "Ipv6Ranges": [
+                            {
+                                "CidrIpv6": "::/0",
+                                "Description": "Allow Scylla Manager Agent version 2.1 Prometheus API for ALL",
+                            }
+                        ],
                     },
                     {
                         "IpProtocol": "-1",
-                        "IpRanges": [{'CidrIp': '172.0.0.0/11',
-                                      'Description': 'Allow traffic from Scylla Cloud lab while VPC peering for ALL'}],
+                        "IpRanges": [
+                            {
+                                "CidrIp": "172.0.0.0/11",
+                                "Description": "Allow traffic from Scylla Cloud lab while VPC peering for ALL",
+                            }
+                        ],
                     },
                     {
                         "FromPort": 5080,
                         "ToPort": 5080,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager HTTP API for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager HTTP API for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Scylla Manager HTTP API for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Scylla Manager HTTP API for ALL"}],
                     },
                     {
                         "FromPort": 5443,
                         "ToPort": 5443,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager HTTPS API for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager HTTPS API for ALL'}]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "Allow Scylla Manager HTTPS API for ALL"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Scylla Manager HTTPS API for ALL"}],
                     },
                     {
                         "FromPort": 5090,
                         "ToPort": 5090,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}]
+                        "IpRanges": [
+                            {"CidrIp": "0.0.0.0/0", "Description": "Allow Scylla Manager Agent Prometheus API for ALL"}
+                        ],
+                        "Ipv6Ranges": [
+                            {"CidrIpv6": "::/0", "Description": "Allow Scylla Manager Agent Prometheus API for ALL"}
+                        ],
                     },
                     {
                         "FromPort": 5112,
                         "ToPort": 5112,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager pprof Debug For ALL'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager pprof Debug For ALL'}]
-                    }
+                        "IpRanges": [
+                            {"CidrIp": "0.0.0.0/0", "Description": "Allow Scylla Manager pprof Debug For ALL"}
+                        ],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "Allow Scylla Manager pprof Debug For ALL"}],
+                    },
                 ]
             )
         return security_group
 
     @property
     def sct_ssh_security_group(self) -> EC2ServiceResource.SecurityGroup:
-        security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
-                                                                         "Values": [self.SCT_SSH_GROUP_NAME]}])
+        security_groups = self.client.describe_security_groups(
+            Filters=[{"Name": "tag:Name", "Values": [self.SCT_SSH_GROUP_NAME]}]
+        )
         existing_sgs = security_groups.get("SecurityGroups", [])
         if len(existing_sgs) == 0:
             return None
-        assert len(existing_sgs) == 1, \
-            f"More than 1 Security group with {self.SCT_SSH_GROUP_NAME} found " \
-            f"in {self.region_name}: {existing_sgs}!"
+        assert len(existing_sgs) == 1, (
+            f"More than 1 Security group with {self.SCT_SSH_GROUP_NAME} found in {self.region_name}: {existing_sgs}!"
+        )
         return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def create_sct_ssh_security_group(self):
@@ -565,18 +617,21 @@ class AwsRegion:
         """
         LOGGER.info("Creating Security Group...")
         if self.sct_ssh_security_group:
-            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
-                           self.SCT_SSH_GROUP_NAME, self.sct_ssh_security_group.group_id)
+            LOGGER.warning(
+                "Security Group '%s' already exists! Id: '%s'.",
+                self.SCT_SSH_GROUP_NAME,
+                self.sct_ssh_security_group.group_id,
+            )
         else:
-            result = self.client.create_security_group(Description='Security group for builders '
-                                                       'that is used by SCT',
-                                                       GroupName=self.SCT_SSH_GROUP_NAME,
-                                                       VpcId=self.sct_vpc.vpc_id)
+            result = self.client.create_security_group(
+                Description="Security group for builders that is used by SCT",
+                GroupName=self.SCT_SSH_GROUP_NAME,
+                VpcId=self.sct_vpc.vpc_id,
+            )
             sg_id = result["GroupId"]
             security_group = self.resource.SecurityGroup(sg_id)
             security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_SSH_GROUP_NAME}])
-            LOGGER.info("'%s' with id '%s' created. ", self.SCT_SSH_GROUP_NAME,
-                        self.sct_ssh_security_group.group_id)
+            LOGGER.info("'%s' with id '%s' created. ", self.SCT_SSH_GROUP_NAME, self.sct_ssh_security_group.group_id)
             LOGGER.info("Creating common ingress rules...")
             security_group.authorize_ingress(
                 IpPermissions=[
@@ -584,9 +639,10 @@ class AwsRegion:
                         "FromPort": 22,
                         "ToPort": 22,
                         "IpProtocol": "tcp",
-                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'SSH connectivity to the builders'}],
-                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'SSH connectivity to the builders'}]
-                    }]
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "SSH connectivity to the builders"}],
+                        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "SSH connectivity to the builders"}],
+                    }
+                ]
             )
 
     @property
@@ -599,9 +655,9 @@ class AwsRegion:
             raise
         LOGGER.debug("Found key pairs: %s", key_pairs)
         existing_key_pairs = key_pairs.get("KeyPairs", [])
-        assert len(existing_key_pairs) == 1, \
-            f"More than 1 Key Pair with {self.SCT_KEY_PAIR_NAME} found " \
-            f"in {self.region_name}: {existing_key_pairs}!"
+        assert len(existing_key_pairs) == 1, (
+            f"More than 1 Key Pair with {self.SCT_KEY_PAIR_NAME} found in {self.region_name}: {existing_key_pairs}!"
+        )
         return self.resource.KeyPair(existing_key_pairs[0]["KeyName"])
 
     def create_sct_key_pair(self):
@@ -611,8 +667,7 @@ class AwsRegion:
         else:
             ks = KeyStore()
             sct_key_pair = ks.get_ec2_ssh_key_pair()
-            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME,
-                                          PublicKeyMaterial=sct_key_pair.public_key)
+            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME, PublicKeyMaterial=sct_key_pair.public_key)
             LOGGER.info("SCT Key Pair created.")
 
     def configure(self):
