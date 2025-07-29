@@ -65,9 +65,49 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
+<<<<<<< HEAD
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
     docker_version = "scylladb/scylla-nightly:5.2.0-dev-0.20220820.516089beb0b8"
     cluster = LocalScyllaClusterDummy()
+||||||| parent of 89eec8399 (fix(podman): make sure refs to dockerhub are full)
+    alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
+    docker_version = docker_scylla_args.get(
+        'image', "scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+    cluster = LocalScyllaClusterDummy(params=params)
+
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+
+    if ssl:
+        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        create_ca(localhost)
+
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
+                         ' --entrypoint /entry.sh')
+
+    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
+                          command_line=f"--smp 1 {alternator_flags}",
+                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+=======
+    alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
+    docker_version = docker_scylla_args.get(
+        'image', "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269")
+    cluster = LocalScyllaClusterDummy(params=params)
+
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+
+    if ssl:
+        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        create_ca(localhost)
+
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
+                         ' --entrypoint /entry.sh')
+
+    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
+                          command_line=f"--smp 1 {alternator_flags}",
+                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+>>>>>>> 89eec8399 (fix(podman): make sure refs to dockerhub are full)
 
     if ssl:
         curr_dir = os.getcwd()

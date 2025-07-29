@@ -162,11 +162,17 @@ else
   die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
+<<<<<<< HEAD
 if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+||||||| parent of 89eec8399 (fix(podman): make sure refs to dockerhub are full)
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+=======
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} -q`" ]]; then
+>>>>>>> 89eec8399 (fix(podman): make sure refs to dockerhub are full)
     echo "Pull version $VERSION from Docker Hub..."
     $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
-    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, using it."
+    echo "There is ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} in local cache, using it."
 fi
 
 # Check for SSH keys
@@ -227,7 +233,7 @@ function run_in_docker () {
            )
     else
         PODMAN_PORT=$(EPHEMERAL_PORT)
-        podman system service -t 0 tcp:localhost:${PODMAN_PORT} &
+        podman system --log-level=error service -t 0 tcp:localhost:${PODMAN_PORT} &
         trap "exit" INT TERM
         trap "kill 0" EXIT
         docker_common_args+=(
@@ -278,7 +284,7 @@ function run_in_docker () {
         --ulimit core=-1 \
         -v /var/lib/systemd/coredump:/var/lib/systemd/coredump \
         --name="${SCT_TEST_ID}_$(date +%s)" \
-        ${DOCKER_REPO}:${VERSION} \
+        ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION} \
         /bin/bash -c "${PREPARE_CMD}; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
 }
 
