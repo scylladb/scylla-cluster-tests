@@ -665,7 +665,7 @@ If reuse_cluster is set it should hold test_id of the cluster that will be reuse
 
 ## **test_id** / SCT_TEST_ID
 
-test id to filter by. Could be used multiple times
+Set the test_id of the run manually. Use only from the env before running Hydra
 
 **default:** N/A
 

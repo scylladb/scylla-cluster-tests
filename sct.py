@@ -131,8 +131,9 @@ LOGGER = setup_stdout_logger()
 def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
     multimple_use = kwargs.pop('multiple', False)
-    sct_opt.update(kwargs)
-    return click.option(name, type=sct_opt['type'], help=sct_opt['help'], multiple=multimple_use)
+    return click.option(name,
+                        type=kwargs.get('type', sct_opt['type']),
+                        help=kwargs.get('help', sct_opt['help']), multiple=multimple_use)
 
 
 def install_callback(ctx, _, value):
