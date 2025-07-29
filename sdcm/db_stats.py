@@ -247,7 +247,7 @@ class PrometheusDBStats:
         """
         :param start: time=<rfc3339 | unix_timestamp>: Start timestamp.
         :param end: time=<rfc3339 | unix_timestamp>: End timestamp.
-        :param scrap_metrics_step is the granularity of data requested from Prometheus DB
+        :param scrap_metrics_step: is the granularity of data requested from Prometheus DB
         :param query:
         :return: {
                   metric: { },
