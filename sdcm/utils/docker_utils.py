@@ -549,4 +549,5 @@ def docker_hub_login(remoter: CommandRunner, use_sudo: bool = False) -> None:
         fobj.write(docker_hub_creds["password"])
     remoter.log.debug("Login to Docker Hub as `%s'", docker_hub_creds["username"])
     remote_cmd(f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
+    remote_cmd(f"cat ~/.docker/config.json", ignore_status=True)
     remote_cmd(f"rm '{password_file}'")
