@@ -17,15 +17,15 @@ stress_after_cluster_upgrade: scylla-bench -workload=sequential -mode=read -repl
 n_db_nodes: 4
 n_loaders: 1
 
-instance_type_db: 'i4i.2xlarge'
-instance_type_loader: 'c7i.2xlarge'
+instance_type_db: "i4i.2xlarge"
+instance_type_loader: "c7i.2xlarge"
 
-user_prefix: 'rolling-upgrade'
+user_prefix: "rolling-upgrade"
 
 server_encrypt: true
-authenticator: 'PasswordAuthenticator'
-authenticator_user: 'cassandra'
-authenticator_password: 'cassandra'
+authenticator: "PasswordAuthenticator"
+authenticator_user: "cassandra"
+authenticator_password: "cassandra"
 
 use_mgmt: false
 
@@ -40,6 +40,8 @@ gemini_cmd: |
 
 gemini_seed: 66
 
-gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_schema_url: "https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json" # currently is not used
 
 use_preinstalled_scylla: false
+
+gemini_log_cql_statements: false
