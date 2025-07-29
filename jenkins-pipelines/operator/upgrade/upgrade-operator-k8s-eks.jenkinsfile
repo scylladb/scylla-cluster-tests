@@ -12,5 +12,5 @@ rollingOperatorUpgradePipeline(
     k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable',
     k8s_scylla_operator_chart_version: '1.17.1',
     k8s_scylla_operator_upgrade_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest',
-    k8s_scylla_operator_upgrade_chart_version: '1.18.0-beta.1',
+    k8s_scylla_operator_upgrade_chart_version: '1.18.0-beta.2',
 )
