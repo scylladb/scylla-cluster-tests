@@ -36,13 +36,13 @@ class Retry(Exception):
 
 class retrying:  # pylint: disable=invalid-name,too-few-public-methods
     """
-        Used as a decorator to retry function run that can possibly fail with allowed exceptions list
+    Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
     # pylint: disable=too-many-arguments,redefined-outer-name
-    def __init__(self, n=3, sleep_time=1,
-                 allowed_exceptions=(Exception,), message="", timeout=0,
-                 raise_on_exceeded=True):
+    def __init__(
+        self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message="", timeout=0, raise_on_exceeded=True
+    ):
         if n:
             self.n = n  # number of times to retry  # pylint: disable=invalid-name
         else:
@@ -87,26 +87,26 @@ timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
 
 def log_run_info(arg):
     """
-        Decorator that prints BEGIN before the function runs and END when function finished running.
-        Uses function name as a name of action or string that can be given to the decorator.
-        If the function is a method of a class object, the class name will be printed out.
+    Decorator that prints BEGIN before the function runs and END when function finished running.
+    Uses function name as a name of action or string that can be given to the decorator.
+    If the function is a method of a class object, the class name will be printed out.
 
-        Usage examples:
-            @log_run_info
-            def foo(x, y=1):
-                pass
-            In: foo(1)
-            Out:
-                BEGIN: foo
-                END: foo (ran 0.000164)s
+    Usage examples:
+        @log_run_info
+        def foo(x, y=1):
+            pass
+        In: foo(1)
+        Out:
+            BEGIN: foo
+            END: foo (ran 0.000164)s
 
-            @log_run_info("Execute nemesis")
-            def disrupt():
-                pass
-            In: disrupt()
-            Out:
-                BEGIN: Execute nemesis
-                END: Execute nemesis (ran 0.000271)s
+        @log_run_info("Execute nemesis")
+        def disrupt():
+            pass
+        In: disrupt()
+        Out:
+            BEGIN: Execute nemesis
+            END: Execute nemesis (ran 0.000271)s
     """
 
     def _inner(func, msg=None):
@@ -168,31 +168,30 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
 
     def wrapper(func):
-
         @wraps(func)
         def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
             start = time.time()
             start_node_list = args[0].cluster.nodes[:]
             reactor_stall_stats = {}
-            with EventCounterContextManager(name=func.__name__,
-                                            event_type=(DatabaseLogEvent.REACTOR_STALLED, )) as counter:
-
+            with EventCounterContextManager(
+                name=func.__name__, event_type=(DatabaseLogEvent.REACTOR_STALLED,)
+            ) as counter:
                 res = func(*args, **kwargs)
                 reactor_stall_stats = counter.get_stats().copy()
             end_node_list = args[0].cluster.nodes[:]
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
-            test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
+            test_name = args[0].tester.__repr__().split("testMethod=")[-1].split(">")[0]
             if not args[0].monitoring_set or not args[0].monitoring_set.nodes:
                 return res
             monitor = args[0].monitoring_set.nodes[0]
             screenshots = args[0].monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
-            if 'read' in test_name:
-                workload = 'read'
-            elif 'write' in test_name:
-                workload = 'write'
-            elif 'mixed' in test_name:
-                workload = 'mixed'
+            if "read" in test_name:
+                workload = "read"
+            elif "write" in test_name:
+                workload = "write"
+            elif "mixed" in test_name:
+                workload = "mixed"
             else:
                 return res
 
@@ -202,33 +201,33 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             else:
                 with open(latency_results_file_path, encoding="utf-8") as file:
                     data = file.read().strip()
-                    latency_results = json.loads(data or '{}')
+                    latency_results = json.loads(data or "{}")
 
             if "steady" not in func.__name__.lower():
                 if func.__name__ not in latency_results:
                     latency_results[func.__name__] = {"legend": legend or func.__name__}
-                if 'cycles' not in latency_results[func.__name__]:
-                    latency_results[func.__name__]['cycles'] = []
+                if "cycles" not in latency_results[func.__name__]:
+                    latency_results[func.__name__]["cycles"] = []
 
             result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
             result["duration_in_sec"] = int(end - start)
-            result["hdr"] = args[0].tester.get_cs_range_histogram_by_interval(stress_operation=workload,
-                                                                              start_time=start,
-                                                                              end_time=end)
-            result["hdr_summary"] = args[0].tester.get_cs_range_histogram(stress_operation=workload,
-                                                                          start_time=start,
-                                                                          end_time=end)
+            result["hdr"] = args[0].tester.get_cs_range_histogram_by_interval(
+                stress_operation=workload, start_time=start, end_time=end
+            )
+            result["hdr_summary"] = args[0].tester.get_cs_range_histogram(
+                stress_operation=workload, start_time=start, end_time=end
+            )
             result["reactor_stalls_stats"] = reactor_stall_stats
 
             if "steady" in func.__name__.lower():
-                if 'Steady State' not in latency_results:
-                    latency_results['Steady State'] = result
+                if "Steady State" not in latency_results:
+                    latency_results["Steady State"] = result
             else:
-                latency_results[func.__name__]['cycles'].append(result)
+                latency_results[func.__name__]["cycles"].append(result)
 
-            with open(latency_results_file_path, 'w', encoding="utf-8") as file:
+            with open(latency_results_file_path, "w", encoding="utf-8") as file:
                 json.dump(latency_results, file)
 
             return res
@@ -241,8 +240,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     return wrapper
 
 
-class NoValue(Exception):
-    ...
+class NoValue(Exception): ...
 
 
 class optional_cached_property(cached_property):  # pylint: disable=invalid-name,too-few-public-methods
@@ -275,6 +273,7 @@ def skip_on_capacity_issues(func: callable) -> callable:
     """
     Decorator to skip nemesis that fail due to capacity issues
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -283,6 +282,7 @@ def skip_on_capacity_issues(func: callable) -> callable:
             if "InsufficientInstanceCapacity" in str(ex):
                 raise UnsupportedNemesis("Capacity Issue") from ex
             raise
+
     return wrapper
 
 
@@ -291,15 +291,19 @@ def critical_on_capacity_issues(func: callable) -> callable:
     Decorator to end the test with a critical event due to capacity issues
     This should be used when a failure would leave the cluster in an inconsistent topology state
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except ClientError as ex:
             if "InsufficientInstanceCapacity" in str(ex):
-                TestFrameworkEvent(source=callable.__name__,
-                                   message=f"Test failed due to capacity issues: {ex} "
-                                   "cluster is probably unbalanced, continuing with test would yield unknown results",
-                                   severity=Severity.CRITICAL).publish()
+                TestFrameworkEvent(
+                    source=callable.__name__,
+                    message=f"Test failed due to capacity issues: {ex} "
+                    "cluster is probably unbalanced, continuing with test would yield unknown results",
+                    severity=Severity.CRITICAL,
+                ).publish()
             raise
+
     return wrapper

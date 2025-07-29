@@ -28,7 +28,8 @@ class MockRemoter:
     >>> mock_remoter_result = mock_remoter.run('echo "Do something with remoter"')
     >>> assert mock_remoter_result == remoter_result
     """
-    user = 'scylla-test'
+
+    user = "scylla-test"
 
     def __init__(self, responses: Union[dict, str] = None):
         self.command_counter = {}
@@ -48,10 +49,18 @@ class MockRemoter:
         return None
 
     # pylint: disable=too-many-arguments,unused-argument
-    def run(self, cmd: str, timeout: Optional[float] = None,
-            ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False) -> Result:
+    def run(
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        log_file: Optional[str] = None,
+        retry: int = 1,
+        watchers: Optional[List[StreamWatcher]] = None,
+        change_context: bool = False,
+    ) -> Result:
         response = self.responses.get(cmd)
         if response is None:
             raise RuntimeError("Can't find response")
@@ -67,6 +76,6 @@ class MockRemoter:
             self.command_counter[cmd] = try_number + 1
             return self._process_response(output)
         else:
-            raise RuntimeError('Wrong response value, could be Result or Exception')
+            raise RuntimeError("Wrong response value, could be Result or Exception")
 
     sudo = CommandRunner.sudo

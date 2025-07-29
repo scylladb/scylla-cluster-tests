@@ -16,9 +16,17 @@ from typing import Optional, Any
 
 from pydantic import Field
 
-from sdcm.provision.helpers.certificate import install_client_certificate, CLIENT_CERTFILE, CLIENT_KEYFILE, CLIENT_TRUSTSTORE
-from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
-    ServerEncryptionOptions
+from sdcm.provision.helpers.certificate import (
+    install_client_certificate,
+    CLIENT_CERTFILE,
+    CLIENT_KEYFILE,
+    CLIENT_TRUSTSTORE,
+)
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    ScyllaYamlAttrBuilderBase,
+    ClientEncryptionOptions,
+    ServerEncryptionOptions,
+)
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
@@ -27,31 +35,32 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption
     """
+
     node: Any = Field(as_dict=False)
 
     @cached_property
     def _ssl_files_path(self) -> str:
         install_client_certificate(self.node.remoter)
-        return '/etc/scylla/ssl_conf'
+        return "/etc/scylla/ssl_conf"
 
     @property
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
-        if not self.params.get('client_encrypt'):
+        if not self.params.get("client_encrypt"):
             return None
         return ClientEncryptionOptions(
             enabled=True,
-            certificate=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_CERTFILE)),
-            keyfile=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_KEYFILE)),
-            truststore=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_TRUSTSTORE)),
+            certificate=os.path.join(self._ssl_files_path, "client", os.path.basename(CLIENT_CERTFILE)),
+            keyfile=os.path.join(self._ssl_files_path, "client", os.path.basename(CLIENT_KEYFILE)),
+            truststore=os.path.join(self._ssl_files_path, "client", os.path.basename(CLIENT_TRUSTSTORE)),
         )
 
     @property
     def server_encryption_options(self) -> Optional[ServerEncryptionOptions]:
-        if not self.params.get('internode_encryption') or not self.params.get('server_encrypt'):
+        if not self.params.get("internode_encryption") or not self.params.get("server_encrypt"):
             return None
         return ServerEncryptionOptions(
-            internode_encryption=self.params.get('internode_encryption'),
-            certificate=self._ssl_files_path + '/db.crt',
-            keyfile=self._ssl_files_path + '/db.key',
-            truststore=self._ssl_files_path + '/cadb.pem',
+            internode_encryption=self.params.get("internode_encryption"),
+            certificate=self._ssl_files_path + "/db.crt",
+            keyfile=self._ssl_files_path + "/db.key",
+            truststore=self._ssl_files_path + "/cadb.pem",
         )

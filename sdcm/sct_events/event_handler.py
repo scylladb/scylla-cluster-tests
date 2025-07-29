@@ -17,9 +17,12 @@ from functools import partial
 from typing import Tuple, Any
 
 from sdcm.cluster import TestConfig
-from sdcm.sct_events.events_processes import \
-    EVENTS_HANDLER_ID, BaseEventsProcess, \
-    start_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_HANDLER_ID,
+    BaseEventsProcess,
+    start_events_process,
+    verbose_suppress,
+)
 from sdcm.sct_events.handlers.schema_disagreement import SchemaDisagreementHandler
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +35,8 @@ class TestFailure(Exception):
 class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
     """Runs handlers for events (according to EventsHandler.handlers mapping dict).
 
-     Handlers are created to gather additional information for issue investigation purposes."""
+    Handlers are created to gather additional information for issue investigation purposes."""
+
     handlers = {
         "CassandraStressLogEvent.SchemaDisagreement": SchemaDisagreementHandler(),
     }
@@ -50,8 +54,9 @@ class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
                 if not tester_obj:
                     LOGGER.error("Tester object was not initialized, skipping handling event: %s", event_class)
                 try:
-                    LOGGER.debug("Found handler %s for %s event. Running it.",
-                                 handler.__class__.__name__, full_class_name)
+                    LOGGER.debug(
+                        "Found handler %s for %s event. Running it.", handler.__class__.__name__, full_class_name
+                    )
                     handler.handle(event=event, tester_obj=tester_obj)
                 except Exception as exc:  # pylint: disable=broad-except
                     LOGGER.exception("failed to handle event using event handler: %s", exc)

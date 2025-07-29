@@ -159,14 +159,15 @@ class DataForValidation(NamedTuple):
 
 # pylint: disable=too-many-instance-attributes, too-many-public-methods
 class LongevityDataValidator:
-    SUFFIX_FOR_VIEW_AFTER_UPDATE = '_after_update'
-    SUFFIX_EXPECTED_DATA_TABLE = '_expect'
-    SUBSTRING_NOT_UPDATED = '_not_updated'
-    SUBSTRING_DELETION = '_deletions'
+    SUFFIX_FOR_VIEW_AFTER_UPDATE = "_after_update"
+    SUFFIX_EXPECTED_DATA_TABLE = "_expect"
+    SUBSTRING_NOT_UPDATED = "_not_updated"
+    SUBSTRING_DELETION = "_deletions"
     DEFAULT_FETCH_SIZE = 5000
 
-    def __init__(self, longevity_self_object, user_profile_name, base_table_partition_keys,
-                 stress_cmds_part='prepare_write_cmd'):
+    def __init__(
+        self, longevity_self_object, user_profile_name, base_table_partition_keys, stress_cmds_part="prepare_write_cmd"
+    ):
         """
 
         :param longevity_self_object: "self" object of longevity test that inherited from ClusterTester
@@ -203,13 +204,12 @@ class LongevityDataValidator:
                 self._validate_not_updated_data = False
                 self._validate_updated_data = False
 
-                LOGGER.warning('Keyspace is not recognized. '
-                               'Data validation can\'t be performed')
+                LOGGER.warning("Keyspace is not recognized. Data validation can't be performed")
                 return self._keyspace_name
 
             cs_profile = profiles[0]
             _, profile = get_profile_content(cs_profile)
-            self._keyspace_name = profile['keyspace']
+            self._keyspace_name = profile["keyspace"]
             LOGGER.debug("Keyspace name: %s, profile: %s", self._keyspace_name, profile)
 
         return self._keyspace_name
@@ -221,8 +221,9 @@ class LongevityDataValidator:
         """
         if not self._mvs_for_updated_data:
             mvs_names = self.get_view_name_from_profile(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, all_entries=True)
-            self._mvs_for_updated_data = [view_name.replace(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, '')
-                                          for view_name in mvs_names]
+            self._mvs_for_updated_data = [
+                view_name.replace(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, "") for view_name in mvs_names
+            ]
         return self._mvs_for_updated_data
 
     @property
@@ -231,8 +232,9 @@ class LongevityDataValidator:
         Get MV name that holds rows which were updated
         """
         if not self._mvs_after_updated_data:
-            self._mvs_after_updated_data = self.get_view_name_from_profile(self.SUFFIX_FOR_VIEW_AFTER_UPDATE,
-                                                                           all_entries=True)
+            self._mvs_after_updated_data = self.get_view_name_from_profile(
+                self.SUFFIX_FOR_VIEW_AFTER_UPDATE, all_entries=True
+            )
             return self._mvs_after_updated_data
 
         return self._mvs_after_updated_data
@@ -292,7 +294,7 @@ class LongevityDataValidator:
     def get_base_table_from_profile(self, cs_profile=None):
         for profile in self.get_profile_content(cs_profile):
             _, profile_content = get_profile_content(profile)
-            if table_name := profile_content['table']:
+            if table_name := profile_content["table"]:
                 return table_name
 
         return None
@@ -303,7 +305,7 @@ class LongevityDataValidator:
         for profile in self.get_profile_content(cs_profile):
             _, profile_content = get_profile_content(profile)
             mv_create_cmd = self.get_view_cmd_from_profile(profile_content, name_substr, all_entries)
-            LOGGER.debug('Create commands: %s', mv_create_cmd)
+            LOGGER.debug("Create commands: %s", mv_create_cmd)
             for cmd in mv_create_cmd:
                 view_name = self.get_view_name_from_stress_cmd(cmd, name_substr)
                 if view_name:
@@ -315,7 +317,7 @@ class LongevityDataValidator:
 
     @staticmethod
     def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
-        all_mvs = profile_content['extra_definitions']
+        all_mvs = profile_content["extra_definitions"]
         mv_cmd = [cmd for cmd in all_mvs if name_substr in cmd]
 
         mv_cmd = [mv_cmd[0]] if not all_entries and mv_cmd else mv_cmd
@@ -323,7 +325,7 @@ class LongevityDataValidator:
 
     @staticmethod
     def get_view_name_from_stress_cmd(mv_create_cmd, name_substr):
-        find_mv_name = re.search(r'materialized view (.*%s.*) as' % name_substr, mv_create_cmd, re.I)
+        find_mv_name = re.search(r"materialized view (.*%s.*) as" % name_substr, mv_create_cmd, re.I)
         return find_mv_name.group(1) if find_mv_name else None
 
     @staticmethod
@@ -339,26 +341,31 @@ class LongevityDataValidator:
                 DataValidatorEvent.DataValidator(
                     severity=Severity.WARNING,
                     message=f"Problem during copying expected data: view not found."
-                            f"View name for not updated_data: {self.view_name_for_not_updated_data}; "
-                            f"Expected data table name {self.expected_data_table_name}. "
-                            f"Data validation of not updated rows won' be performed"
+                    f"View name for not updated_data: {self.view_name_for_not_updated_data}; "
+                    f"Expected data table name {self.expected_data_table_name}. "
+                    f"Data validation of not updated rows won' be performed",
                 ).publish()
                 return
 
-            LOGGER.debug('Copy expected data for immutable rows: %s -> %s',
-                         self.view_name_for_not_updated_data, self.expected_data_table_name)
-            if not self.longevity_self_object.copy_view(node=self.longevity_self_object.db_cluster.nodes[0],
-                                                        src_keyspace=self.keyspace_name,
-                                                        src_view=self.view_name_for_not_updated_data,
-                                                        dest_keyspace=self.keyspace_name,
-                                                        dest_table=self.expected_data_table_name,
-                                                        copy_data=True):
+            LOGGER.debug(
+                "Copy expected data for immutable rows: %s -> %s",
+                self.view_name_for_not_updated_data,
+                self.expected_data_table_name,
+            )
+            if not self.longevity_self_object.copy_view(
+                node=self.longevity_self_object.db_cluster.nodes[0],
+                src_keyspace=self.keyspace_name,
+                src_view=self.view_name_for_not_updated_data,
+                dest_keyspace=self.keyspace_name,
+                dest_table=self.expected_data_table_name,
+                copy_data=True,
+            ):
                 self._validate_not_updated_data = False
                 DataValidatorEvent.DataValidator(
                     severity=Severity.ERROR,
                     error=f"Problem during copying expected data from {self.view_name_for_not_updated_data} "
-                          f"to {self.expected_data_table_name}. "
-                          f"Data validation of not updated rows won' be performed"
+                    f"to {self.expected_data_table_name}. "
+                    f"Data validation of not updated rows won' be performed",
                 ).publish()
 
     def copy_updated_expected_data(self):
@@ -369,26 +376,29 @@ class LongevityDataValidator:
                 DataValidatorEvent.DataValidator(
                     severity=Severity.WARNING,
                     message=f"Problem during copying expected data: view not found. "
-                            f"View names for updated data: {self.view_names_for_updated_data}. "
-                            f"Data validation of updated rows won' be performed"
+                    f"View names for updated data: {self.view_names_for_updated_data}. "
+                    f"Data validation of updated rows won' be performed",
                 ).publish()
                 return
 
-            LOGGER.debug('Copy expected data for updated rows. %s', self.view_names_for_updated_data)
+            LOGGER.debug("Copy expected data for updated rows. %s", self.view_names_for_updated_data)
             for src_view in self.view_names_for_updated_data:
                 expected_data_table_name = self.set_expected_data_table_name(src_view)
-                LOGGER.debug('Expected data table name %s', expected_data_table_name)
-                if not self.longevity_self_object.copy_view(node=self.longevity_self_object.db_cluster.nodes[0],
-                                                            src_keyspace=self.keyspace_name, src_view=src_view,
-                                                            dest_keyspace=self.keyspace_name,
-                                                            dest_table=expected_data_table_name,
-                                                            columns_list=self.base_table_partition_keys,
-                                                            copy_data=True):
+                LOGGER.debug("Expected data table name %s", expected_data_table_name)
+                if not self.longevity_self_object.copy_view(
+                    node=self.longevity_self_object.db_cluster.nodes[0],
+                    src_keyspace=self.keyspace_name,
+                    src_view=src_view,
+                    dest_keyspace=self.keyspace_name,
+                    dest_table=expected_data_table_name,
+                    columns_list=self.base_table_partition_keys,
+                    copy_data=True,
+                ):
                     self._validate_updated_per_view.append(False)
                     DataValidatorEvent.DataValidator(
                         severity=Severity.ERROR,
                         error=f"Problem during copying expected data from {src_view} to {expected_data_table_name}. "
-                              f"Data validation of updated rows won' be performed"
+                        f"Data validation of updated rows won' be performed",
                     ).publish()
                 self._validate_updated_per_view.append(True)
 
@@ -397,17 +407,21 @@ class LongevityDataValidator:
             DataValidatorEvent.DataValidator(
                 severity=Severity.WARNING,
                 message=f"Problem during copying expected data: not found. "
-                        f"View name for deletion data: {self.view_name_for_deletion_data}. "
-                        f"Data validation of deleted rows won' be performed"
+                f"View name for deletion data: {self.view_name_for_deletion_data}. "
+                f"Data validation of deleted rows won' be performed",
             ).publish()
             return
 
-        LOGGER.debug('Get rows count in %s MV before stress', self.view_name_for_deletion_data)
+        LOGGER.debug("Get rows count in %s MV before stress", self.view_name_for_deletion_data)
         pk_name = self.base_table_partition_keys[0]
         with self.longevity_self_object.db_cluster.cql_connection_patient(
-                self.longevity_self_object.db_cluster.nodes[0], keyspace=self.keyspace_name) as session:
-            rows_before_deletion = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                                  statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}")
+            self.longevity_self_object.db_cluster.nodes[0], keyspace=self.keyspace_name
+        ) as session:
+            rows_before_deletion = fetch_all_rows(
+                session=session,
+                default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}",
+            )
             if rows_before_deletion:
                 self.rows_before_deletion = len(rows_before_deletion)
                 LOGGER.debug("%s rows for deletion", self.rows_before_deletion)
@@ -422,35 +436,44 @@ class LongevityDataValidator:
         is same
         """
 
-        if not (self._validate_not_updated_data and self.view_name_for_not_updated_data
-                and self.expected_data_table_name):
-            LOGGER.debug('Verify immutable rows can\'t be performed as expected data has not been saved. '
-                         'See error above in the sct.log')
+        if not (
+            self._validate_not_updated_data and self.view_name_for_not_updated_data and self.expected_data_table_name
+        ):
+            LOGGER.debug(
+                "Verify immutable rows can't be performed as expected data has not been saved. "
+                "See error above in the sct.log"
+            )
             return
 
         if not during_nemesis:
-            LOGGER.debug('Verify immutable rows')
+            LOGGER.debug("Verify immutable rows")
 
-        actual_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                       statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
-                                       verbose=not during_nemesis)
+        actual_result = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
+            verbose=not during_nemesis,
+        )
         if not actual_result:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate immutable rows. "
-                        f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
-                        f"See error above in the sct.log"
+                f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
+                f"See error above in the sct.log",
             ).publish()
             return
 
-        expected_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                         statement=f"SELECT * FROM {self.expected_data_table_name}",
-                                         verbose=not during_nemesis)
+        expected_result = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT * FROM {self.expected_data_table_name}",
+            verbose=not during_nemesis,
+        )
         if not expected_result:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate immutable rows. Fetch all rows from {self.expected_data_table_name} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log",
             ).publish()
             return
 
@@ -460,90 +483,110 @@ class LongevityDataValidator:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Actual dataset length more then expected ({len(actual_result)} > {len(expected_result)}). "
-                        f"Issue #6181"
+                f"Issue #6181",
             ).publish()
         else:
             if not during_nemesis:
-                assert len(actual_result) == len(expected_result), \
-                    'One or more rows are not as expected, suspected LWT wrong update. ' \
-                    'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                    len(expected_result))
+                assert len(actual_result) == len(expected_result), (
+                    "One or more rows are not as expected, suspected LWT wrong update. "
+                    "Actual dataset length: {}, Expected dataset length: {}".format(
+                        len(actual_result), len(expected_result)
+                    )
+                )
 
-                assert actual_result == expected_result, \
-                    'One or more rows are not as expected, suspected LWT wrong update'
+                assert actual_result == expected_result, (
+                    "One or more rows are not as expected, suspected LWT wrong update"
+                )
 
                 # Raise info event at the end of the test only.
                 DataValidatorEvent.ImmutableRowsValidator(
-                    severity=Severity.NORMAL,
-                    message="Validation immutable rows finished successfully"
+                    severity=Severity.NORMAL, message="Validation immutable rows finished successfully"
                 ).publish()
             else:
                 if len(actual_result) < len(expected_result):
                     DataValidatorEvent.ImmutableRowsValidator(
                         severity=Severity.ERROR,
                         error=f"Verify immutable rows. "
-                              f"One or more rows not found as expected, suspected LWT wrong update. "
-                              f"Actual dataset length: {len(actual_result)}, "
-                              f"Expected dataset length: {len(expected_result)}"
+                        f"One or more rows not found as expected, suspected LWT wrong update. "
+                        f"Actual dataset length: {len(actual_result)}, "
+                        f"Expected dataset length: {len(expected_result)}",
                     ).publish()
                 else:
-                    LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
-                                 len(actual_result), len(expected_result))
+                    LOGGER.debug(
+                        "Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s",
+                        len(actual_result),
+                        len(expected_result),
+                    )
 
     def list_of_view_names_for_update_test(self):
         # List of tuples of correlated  view names for validation: before update, after update, expected data
-        return list(zip(self.view_names_for_updated_data,
-                        self.view_names_after_updated_data,
-                        [self.set_expected_data_table_name(view) for view in
-                         self.view_names_for_updated_data],
-                        self._validate_updated_per_view, ))
+        return list(
+            zip(
+                self.view_names_for_updated_data,
+                self.view_names_after_updated_data,
+                [self.set_expected_data_table_name(view) for view in self.view_names_for_updated_data],
+                self._validate_updated_per_view,
+            )
+        )
 
-    def fetch_data_for_validation_after_update(self, during_nemesis: bool, views_set: tuple, session) -> \
-            Optional[DataForValidation]:
+    def fetch_data_for_validation_after_update(
+        self, during_nemesis: bool, views_set: tuple, session
+    ) -> Optional[DataForValidation]:
         # views_set[0] - view name with rows before update
         # views_set[1] - view name with rows after update
         # views_set[2] - view name with all expected partition keys
         # views_set[3] - do perform validation for the view or not
-        partition_keys = ', '.join(self.base_table_partition_keys)
+        partition_keys = ", ".join(self.base_table_partition_keys)
 
-        before_update_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                            statement=f"SELECT {partition_keys} FROM {views_set[0]}",
-                                            verbose=not during_nemesis)
+        before_update_rows = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT {partition_keys} FROM {views_set[0]}",
+            verbose=not during_nemesis,
+        )
         if not before_update_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated rows. Fetch all rows from {views_set[0]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log",
             ).publish()
             return None
 
-        after_update_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                           statement=f"SELECT {partition_keys} FROM {views_set[1]}",
-                                           verbose=not during_nemesis)
+        after_update_rows = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT {partition_keys} FROM {views_set[1]}",
+            verbose=not during_nemesis,
+        )
         if not after_update_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated rows. Fetch all rows from {views_set[1]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log",
             ).publish()
             return None
 
-        expected_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                       statement=f"SELECT {partition_keys} FROM {views_set[2]}",
-                                       verbose=not during_nemesis)
+        expected_rows = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT {partition_keys} FROM {views_set[2]}",
+            verbose=not during_nemesis,
+        )
         if not expected_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
                 message=f"Can't validate updated row. Fetch all rows from {views_set[2]} failed. "
-                        f"See error above in the sct.log"
+                f"See error above in the sct.log",
             ).publish()
             return None
 
-        return DataForValidation(views=views_set,
-                                 actual_data=sorted(before_update_rows + after_update_rows),
-                                 expected_data=sorted(expected_rows),
-                                 before_update_rows=before_update_rows,
-                                 after_update_rows=after_update_rows)
+        return DataForValidation(
+            views=views_set,
+            actual_data=sorted(before_update_rows + after_update_rows),
+            expected_data=sorted(expected_rows),
+            before_update_rows=before_update_rows,
+            after_update_rows=after_update_rows,
+        )
 
     @staticmethod
     def save_data_for_debugging(data_for_validation: DataForValidation) -> str:
@@ -552,23 +595,29 @@ class LongevityDataValidator:
         os.makedirs(logdir, exist_ok=True)
         unique_index = uuid.UUID
 
-        with open(os.path.join(logdir, f"{data_for_validation.views[0]}_{unique_index}_debug.json"), "w",
-                  encoding='utf8') as json_file:
+        with open(
+            os.path.join(logdir, f"{data_for_validation.views[0]}_{unique_index}_debug.json"), "w", encoding="utf8"
+        ) as json_file:
             json.dump(sorted(data_for_validation.before_update_rows), json_file)
             LOGGER.info("before_update_rows json: %s", json_file.name)
 
-        with open(os.path.join(logdir, f"{data_for_validation.views[1]}_{unique_index}_debug.json"), "w",
-                  encoding='utf8') as json_file:
+        with open(
+            os.path.join(logdir, f"{data_for_validation.views[1]}_{unique_index}_debug.json"), "w", encoding="utf8"
+        ) as json_file:
             json.dump(sorted(data_for_validation.after_update_rows), json_file)
             LOGGER.info("after_update_rows json: %s", json_file.name)
 
-        with open(os.path.join(logdir, f"{data_for_validation.views[2]}_{unique_index}_debug.json"), "w",
-                  encoding='utf8') as json_file:
+        with open(
+            os.path.join(logdir, f"{data_for_validation.views[2]}_{unique_index}_debug.json"), "w", encoding="utf8"
+        ) as json_file:
             json.dump(sorted(data_for_validation.expected_data), json_file)
             LOGGER.info("expected_rows json: %s", json_file.name)
 
-        with open(os.path.join(logdir, f"{data_for_validation.views[0]}_{unique_index}_actual_data_debug.json"), "w",
-                  encoding='utf8') as json_file:
+        with open(
+            os.path.join(logdir, f"{data_for_validation.views[0]}_{unique_index}_actual_data_debug.json"),
+            "w",
+            encoding="utf8",
+        ) as json_file:
             json.dump(sorted(data_for_validation.actual_data), json_file)
             LOGGER.info("actual_data json: %s", json_file.name)
 
@@ -583,11 +632,12 @@ class LongevityDataValidator:
         if not self.base_table_name:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.ERROR,
-                error="Analyzing of updated rows failed. Failed to get base table name from profile").publish()
+                error="Analyzing of updated rows failed. Failed to get base table name from profile",
+            ).publish()
             return
 
         result = {}
-        select_pk_columns = ', '.join(self.base_table_partition_keys)
+        select_pk_columns = ", ".join(self.base_table_partition_keys)
         for i, diff_row in enumerate(difference_set):
             pks_for_missed_row = {}
             missed_row_as_str = []
@@ -595,28 +645,28 @@ class LongevityDataValidator:
                 pks_for_missed_row[pk_name] = diff_row[pk_index]
                 missed_row_as_str.append(f"{pk_name} = {diff_row[pk_index]}")
 
-            result[i] = {'row': ", ".join(missed_row_as_str)}
+            result[i] = {"row": ", ".join(missed_row_as_str)}
             # data_for_validation.views[0] - view name with rows before update
             # data_for_validation.views[1] - view name with rows after update
             # data_for_validation.views[2] - view name with all expected partition keys
-            columns_for_validation = ', '.join(self.get_entity_columns(entity_name=data_for_validation.views[0],
-                                                                       session=session))
-            query = f"select %s f" \
-                    f"rom %s where {' and '.join(missed_row_as_str)}"
+            columns_for_validation = ", ".join(
+                self.get_entity_columns(entity_name=data_for_validation.views[0], session=session)
+            )
+            query = f"select %s from %s where {' and '.join(missed_row_as_str)}"
 
             row_data = {}
             for table in data_for_validation.views[:-1]:
-                if 'after_update' in table:
-                    key = 'after'
+                if "after_update" in table:
+                    key = "after"
                     select_columns = columns_for_validation
-                elif 'actual_data' in table:
-                    key = 'actual'
+                elif "actual_data" in table:
+                    key = "actual"
                     select_columns = columns_for_validation
-                elif 'expect' in table:
-                    key = 'expect'
+                elif "expect" in table:
+                    key = "expect"
                     select_columns = select_pk_columns
                 else:
-                    key = 'before'
+                    key = "before"
                     select_columns = columns_for_validation
 
                 try:
@@ -624,32 +674,38 @@ class LongevityDataValidator:
                 except Exception as error:  # pylint: disable=broad-except
                     LOGGER.error("Query %s failed. Error: %s", query % table, error)
 
-            row_data.update({'source_all_columns': list(session.execute(query % (columns_for_validation,
-                                                                                 self.base_table_name)))})
+            row_data.update(
+                {"source_all_columns": list(session.execute(query % (columns_for_validation, self.base_table_name)))}
+            )
 
-            if row_data['before'] or row_data['after']:
-                message = (f"Row {diff_row} is found in the "
-                           f"{data_for_validation.views[0] if row_data['before'] else data_for_validation.views[1]} "
-                           f"view despite was not fetched. Test problem, failure in the fetcher\n"
-                           f"Row data in the source table: {row_data['source_all_columns']}\n"
-                           f"Row data in the expected table: {row_data['expect']}")
+            if row_data["before"] or row_data["after"]:
+                message = (
+                    f"Row {diff_row} is found in the "
+                    f"{data_for_validation.views[0] if row_data['before'] else data_for_validation.views[1]} "
+                    f"view despite was not fetched. Test problem, failure in the fetcher\n"
+                    f"Row data in the source table: {row_data['source_all_columns']}\n"
+                    f"Row data in the expected table: {row_data['expect']}"
+                )
                 LOGGER.debug(message)
 
             else:
-                error = (f"Row {diff_row} is expected to be find in whether before (the row was not updated) or "
-                         f"after (the row was updated) update view, but was not found.\n"
-                         f"Possible reason of the problem: "
-                         f"the row was updated but with not expected value as it defined in profile.\n"
-                         f"Row data in the source table: {row_data['source_all_columns']}")
+                error = (
+                    f"Row {diff_row} is expected to be find in whether before (the row was not updated) or "
+                    f"after (the row was updated) update view, but was not found.\n"
+                    f"Possible reason of the problem: "
+                    f"the row was updated but with not expected value as it defined in profile.\n"
+                    f"Row data in the source table: {row_data['source_all_columns']}"
+                )
                 LOGGER.error(error)
-                result[i].update({'rows': row_data})
+                result[i].update({"rows": row_data})
 
         if result:
-            with open(os.path.join(logdir, f"{data_for_validation.views[0]}_analyze_result_debug.json"), "w",
-                      encoding='utf8') as json_file:
+            with open(
+                os.path.join(logdir, f"{data_for_validation.views[0]}_analyze_result_debug.json"), "w", encoding="utf8"
+            ) as json_file:
                 try:
                     json.dump(result, json_file)
-                except:   # pylint: disable=bare-except
+                except:  # pylint: disable=bare-except
                     json_file.write(str(result))
                 LOGGER.info("analyze_result_debug json: %s", json_file.name)
 
@@ -657,8 +713,9 @@ class LongevityDataValidator:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.CRITICAL,
                 error=f"Validation updated rows failed. View {data_for_validation.views[0]}."
-                      "Failed data has been analyzed and saved with json format. "
-                      "Find the result files in sct-runner archive").publish()
+                "Failed data has been analyzed and saved with json format. "
+                "Find the result files in sct-runner archive",
+            ).publish()
 
     def validate_range_expected_to_change(self, session, during_nemesis=False):
         """
@@ -677,12 +734,14 @@ class LongevityDataValidator:
         2. Also validate row counts in the both veiws agains
         """
         if not (self._validate_updated_data and self.view_names_for_updated_data):
-            LOGGER.debug('Verify updated rows can\'t be performed as expected data has not been saved. '
-                         'See error above in the sct.log')
+            LOGGER.debug(
+                "Verify updated rows can't be performed as expected data has not been saved. "
+                "See error above in the sct.log"
+            )
             return
 
         if not during_nemesis:
-            LOGGER.debug('Verify updated rows')
+            LOGGER.debug("Verify updated rows")
 
         # List of tuples of correlated  view names for validation: before update, after update, expected data
         views_list = self.list_of_view_names_for_update_test()
@@ -692,19 +751,19 @@ class LongevityDataValidator:
             # # views_set[2] - view name with all expected partition keys
             # # views_set[3] - do perform validation for the view or not
             if not during_nemesis:
-                LOGGER.debug('Verify updated row. View %s', views_set[0])
+                LOGGER.debug("Verify updated row. View %s", views_set[0])
 
             if not views_set[3]:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.WARNING,
                     message=f"Can't start validation for {views_set[0]}. Copying expected data failed. "
-                            f"See error above in the sct.log"
+                    f"See error above in the sct.log",
                 ).publish()
                 continue
 
-            data_for_validation = self.fetch_data_for_validation_after_update(during_nemesis=during_nemesis,
-                                                                              views_set=views_set,
-                                                                              session=session)
+            data_for_validation = self.fetch_data_for_validation_after_update(
+                during_nemesis=during_nemesis, views_set=views_set, session=session
+            )
             if data_for_validation is None:
                 continue
 
@@ -714,36 +773,42 @@ class LongevityDataValidator:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.WARNING,
                     message=f"View {views_set[0]}. "
-                            f"Actual dataset length {len(data_for_validation.actual_data)} "
-                            f"more then expected dataset length: {len(data_for_validation.expected_data)}. "
-                            f"Issue #6181"
+                    f"Actual dataset length {len(data_for_validation.actual_data)} "
+                    f"more then expected dataset length: {len(data_for_validation.expected_data)}. "
+                    f"Issue #6181",
                 ).publish()
                 continue
 
             if during_nemesis:
-                LOGGER.debug('Validation updated rows.  View %s. Actual dataset length %s, '
-                             'Expected dataset length: %s.',
-                             data_for_validation.views[0], len(data_for_validation.actual_data),
-                             len(data_for_validation.expected_data))
+                LOGGER.debug(
+                    "Validation updated rows.  View %s. Actual dataset length %s, Expected dataset length: %s.",
+                    data_for_validation.views[0],
+                    len(data_for_validation.actual_data),
+                    len(data_for_validation.expected_data),
+                )
                 continue
 
-            if (len(data_for_validation.actual_data) != len(data_for_validation.expected_data)) \
-                    or data_for_validation.actual_data != data_for_validation.expected_data:
-                LOGGER.debug("%s. Rows amount:\n  before update: %s\n  after update: %s\n  expected: %s\n "
-                             "actual: %s",
-                             data_for_validation.views[0], len(data_for_validation.before_update_rows),
-                             len(data_for_validation.after_update_rows), len(data_for_validation.expected_data),
-                             len(data_for_validation.actual_data))
+            if (
+                len(data_for_validation.actual_data) != len(data_for_validation.expected_data)
+            ) or data_for_validation.actual_data != data_for_validation.expected_data:
+                LOGGER.debug(
+                    "%s. Rows amount:\n  before update: %s\n  after update: %s\n  expected: %s\n actual: %s",
+                    data_for_validation.views[0],
+                    len(data_for_validation.before_update_rows),
+                    len(data_for_validation.after_update_rows),
+                    len(data_for_validation.expected_data),
+                    len(data_for_validation.actual_data),
+                )
 
                 logdir = self.save_data_for_debugging(data_for_validation)
 
-                self.analyze_updated_data_and_save_in_file(data_for_validation=data_for_validation,
-                                                           session=session,
-                                                           logdir=logdir)
+                self.analyze_updated_data_and_save_in_file(
+                    data_for_validation=data_for_validation, session=session, logdir=logdir
+                )
             else:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.NORMAL,
-                    message=f"Validation updated rows finished successfully. View {data_for_validation.views[0]}"
+                    message=f"Validation updated rows finished successfully. View {data_for_validation.views[0]}",
                 ).publish()
 
     def validate_deleted_rows(self, session, during_nemesis=False):
@@ -757,21 +822,24 @@ class LongevityDataValidator:
         was saved in self.rows_before_deletion
         """
         if not self.rows_before_deletion:
-            LOGGER.debug('Verify deleted rows can\'t be performed as expected rows count had not been saved')
+            LOGGER.debug("Verify deleted rows can't be performed as expected rows count had not been saved")
             return
 
         pk_name = self.base_table_partition_keys[0]
         if not during_nemesis:
-            LOGGER.debug('Verify deleted rows')
+            LOGGER.debug("Verify deleted rows")
 
-        actual_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                       statement=f"SELECT {pk_name} FROM "
-                                                 f"{self.view_name_for_deletion_data}", verbose=not during_nemesis)
+        actual_result = fetch_all_rows(
+            session=session,
+            default_fetch_size=self.DEFAULT_FETCH_SIZE,
+            statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}",
+            verbose=not during_nemesis,
+        )
         if actual_result is None:
             DataValidatorEvent.DeletedRowsValidator(
                 severity=Severity.ERROR,
                 error=f"Can't validate deleted rows. Fetch all rows from {self.view_name_for_deletion_data} failed. "
-                      f"See error above in the sct.log"
+                f"See error above in the sct.log",
             ).publish()
             return
 
@@ -779,17 +847,18 @@ class LongevityDataValidator:
             if not during_nemesis:
                 # raise info event in the end of test only
                 DataValidatorEvent.DeletedRowsValidator(
-                    severity=Severity.NORMAL,
-                    message="Validation deleted rows finished successfully"
+                    severity=Severity.NORMAL, message="Validation deleted rows finished successfully"
                 ).publish()
             else:
-                LOGGER.debug('Validation deleted rows finished successfully')
+                LOGGER.debug("Validation deleted rows finished successfully")
         elif len(actual_result) == self.rows_before_deletion:
             DataValidatorEvent.DeletedRowsValidator(
-                severity=Severity.WARNING,
-                message="Rows were not deleted. Maybe need to increase dataset for delete."
+                severity=Severity.WARNING, message="Rows were not deleted. Maybe need to increase dataset for delete."
             ).publish()
         else:
-            LOGGER.warning('Deleted row were not found. May be issue #6181. '
-                           'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                           self.rows_before_deletion))
+            LOGGER.warning(
+                "Deleted row were not found. May be issue #6181. "
+                "Actual dataset length: {}, Expected dataset length: {}".format(
+                    len(actual_result), self.rows_before_deletion
+                )
+            )

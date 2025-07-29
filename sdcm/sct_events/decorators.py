@@ -31,4 +31,4 @@ def raise_event_on_failure(func):
     return wrapper
 
 
-__all__ = ("raise_event_on_failure", )
+__all__ = ("raise_event_on_failure",)

@@ -32,7 +32,6 @@ class CDCLogReaderThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.cdc-stresser"
 
     def __init__(self, *args, **kwargs):
-
         self.keyspace = kwargs.pop("keyspace_name")
         self.cdc_log_table = kwargs.pop("base_table_name") + CDC_LOGTABLE_SUFFIX
         self.batching = kwargs.pop("enable_batching")
@@ -52,37 +51,43 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
         worker_count = self.max_workers
         worker_id = loader_idx * self.stress_num + cpu_idx
-        log_file_name = loader_node_logdir.joinpath(f'cdclogreader-l{loader_idx}-{worker_id}-{uuid.uuid4()}.log')
-        LOGGER.debug('cdc-stressor local log: %s', log_file_name)
+        log_file_name = loader_node_logdir.joinpath(f"cdclogreader-l{loader_idx}-{worker_id}-{uuid.uuid4()}.log")
+        LOGGER.debug("cdc-stressor local log: %s", log_file_name)
 
         self.build_stress_command(worker_id, worker_count)
 
         LOGGER.info(self.stress_cmd)
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name, extra_docker_opts=f"--network=host --label shell_marker={self.shell_marker}"
+        )
 
-        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'
+        node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}"
 
         CDCReaderStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         try:
             with cleanup_context:
-                result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + self.shutdown_timeout,
-                                    ignore_status=True,
-                                    log_file=log_file_name,
-                                    verbose=True,
-                                    retry=0
-                                    )
+                result = docker.run(
+                    cmd=node_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    ignore_status=True,
+                    log_file=log_file_name,
+                    verbose=True,
+                    retry=0,
+                )
                 if not result.ok:
-                    CDCReaderStressEvent.error(node=loader,
-                                               stress_cmd=self.stress_cmd,
-                                               errors=result.stderr.split("\n")).publish()
+                    CDCReaderStressEvent.error(
+                        node=loader, stress_cmd=self.stress_cmd, errors=result.stderr.split("\n")
+                    ).publish()
                 return result
         except Exception as exc:  # pylint: disable=broad-except
-            CDCReaderStressEvent.failure(node=loader,
-                                         stress_cmd=self.stress_cmd,
-                                         errors=[format_stress_cmd_error(exc), ]).publish()
+            CDCReaderStressEvent.failure(
+                node=loader,
+                stress_cmd=self.stress_cmd,
+                errors=[
+                    format_stress_cmd_error(exc),
+                ],
+            ).publish()
         finally:
             CDCReaderStressEvent.finish(node=loader, stress_cmd=self.stress_cmd).publish()
         return None

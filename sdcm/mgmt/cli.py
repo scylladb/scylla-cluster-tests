@@ -27,18 +27,25 @@ from invoke.exceptions import Failure as InvokeFailure
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 
 from sdcm import wait
-from sdcm.mgmt.common import \
-    TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
+from sdcm.mgmt.common import (
+    TaskStatus,
+    ScyllaManagerError,
+    HostStatus,
+    HostSsl,
+    HostRestStatus,
+    duration_to_timedelta,
+    DEFAULT_TASK_TIMEOUT,
+)
 from sdcm.utils.distro import Distro
 from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
-STATUS_DONE = 'done'
-STATUS_ERROR = 'error'
-SSL_CONF_DIR = '/tmp/ssl_conf'
-SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
-SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
+STATUS_DONE = "done"
+STATUS_ERROR = "error"
+SSL_CONF_DIR = "/tmp/ssl_conf"
+SSL_USER_CERT_FILE = SSL_CONF_DIR + "/db.crt"
+SSL_USER_KEY_FILE = SSL_CONF_DIR + "/db.key"
 REPAIR_TIMEOUT_SEC = 7200  # 2 hours
 
 
@@ -47,7 +54,6 @@ new_command_structure_minimum_version = LooseVersion("3.0")
 
 
 class ScyllaManagerBase:  # pylint: disable=too-few-public-methods
-
     def __init__(self, id, manager_node):  # pylint: disable=redefined-builtin
         self.id = id  # pylint: disable=invalid-name
         self.manager_node = manager_node
@@ -58,7 +64,6 @@ class ScyllaManagerBase:  # pylint: disable=too-few-public-methods
 
 
 class ManagerTask:
-
     def __init__(self, task_id, cluster_id, manager_node):
         self.manager_node = manager_node
         self.sctool = SCTool(manager_node=manager_node)
@@ -88,7 +93,7 @@ class ManagerTask:
     @staticmethod
     def _add_kwargs_to_cmd(cmd, **kwargs):
         for key, value in kwargs.items():
-            cmd += ' --{}={}'.format(key, value)
+            cmd += " --{}={}".format(key, value)
         return cmd
 
     def get_task_info_dict(self):
@@ -187,16 +192,15 @@ class ManagerTask:
             cmd = "task list -c {}".format(self.cluster_id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         if self.sctool.is_v3_cli:
-            return self.get_property(parsed_table=res, column_name='Next')
-        return self.get_property(parsed_table=res, column_name='next run')
+            return self.get_property(parsed_table=res, column_name="Next")
+        return self.get_property(parsed_table=res, column_name="next run")
 
     @property
     def latest_run_id(self):
         history = self.history
         all_dates = self.sctool.get_all_column_values_from_table(history, "start time")
         latest_run_date = self.get_max_date(all_dates)
-        latest_run_id = self.sctool.get_table_value(parsed_table=history, column_name="id",
-                                                    identifier=latest_run_date)
+        latest_run_id = self.sctool.get_table_value(parsed_table=history, column_name="id", identifier=latest_run_date)
         return latest_run_id
 
     @staticmethod
@@ -206,9 +210,9 @@ class ManagerTask:
         """
         time_format = "%d %b %y %H:%M:%S"
         converted_max_date = datetime.datetime(1970, 1, 3, 0, 0, 0)
-        timezone = date_list[0][date_list[0].rindex(" ") + 1:]
+        timezone = date_list[0][date_list[0].rindex(" ") + 1 :]
         for date_string in date_list:
-            converted_date = datetime.datetime.strptime(date_string[:date_string.rindex(" ")], time_format)
+            converted_date = datetime.datetime.strptime(date_string[: date_string.rindex(" ")], time_format)
             if converted_date > converted_max_date:
                 converted_max_date = converted_date
         return f"{datetime.datetime.strftime(converted_max_date, time_format)} {timezone}"
@@ -230,12 +234,12 @@ class ManagerTask:
         # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
         res = self.sctool.run(cmd=cmd)
-        str_status = self.get_property(parsed_table=res, column_name='status')
+        str_status = self.get_property(parsed_table=res, column_name="status")
         # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
         # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
         tmp = str_status.split()
         # We don't examine the whole string, since sometimes error messages can appear after the status
-        if ' '.join(tmp[0:2]) == 'ERROR (4/4)':
+        if " ".join(tmp[0:2]) == "ERROR (4/4)":
             return TaskStatus.ERROR_FINAL
         return TaskStatus.from_str(tmp[0])
 
@@ -267,7 +271,7 @@ class ManagerTask:
         # ╰───────────────┴──────────┴──────────┴──────────┴──────────────┴────────╯
         for task_property in res:
             if task_property[0].startswith("Arguments"):
-                arguments_string = task_property[0].split(':', maxsplit=1)[1].strip()
+                arguments_string = task_property[0].split(":", maxsplit=1)[1].strip()
                 break
         return arguments_string
 
@@ -327,7 +331,7 @@ class ManagerTask:
         progress = "N/A"
         for task_property in res:
             if task_property[0].startswith("Progress"):
-                progress = task_property[0].split(':')[1]
+                progress = task_property[0].split(":")[1]
                 break
         return progress
 
@@ -369,7 +373,7 @@ class ManagerTask:
         duration_string = "0"
         for task_property in res:
             if task_property[0].startswith("Duration"):
-                duration_string = task_property[0].split(':')[1]
+                duration_string = task_property[0].split(":")[1]
                 break
         duration_timedelta = duration_to_timedelta(duration_string=duration_string)
         return duration_timedelta
@@ -396,19 +400,32 @@ class ManagerTask:
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
         text = "Waiting until task: {} reaches status of: {}".format(self.id, list_status)
         try:
-            return wait.wait_for(func=self.is_status_in_list, step=step, throw_exc=True,
-                                 text=text, list_status=list_status, check_task_progress=check_task_progress,
-                                 timeout=timeout)
+            return wait.wait_for(
+                func=self.is_status_in_list,
+                step=step,
+                throw_exc=True,
+                text=text,
+                list_status=list_status,
+                check_task_progress=check_task_progress,
+                timeout=timeout,
+            )
         except WaitForTimeoutError as ex:
             raise WaitForTimeoutError(
                 "Failed on waiting until task: {} reaches status of {}: current task status {}: {}".format(
-                    self.id, list_status, self.status, str(ex))) from ex
+                    self.id, list_status, self.status, str(ex)
+                )
+            ) from ex
 
     def wait_for_percentage(self, minimum_percentage, timeout=3600, step=10):
         text = f"Waiting until task: {self.id} reaches at least {minimum_percentage}% progress"
-        is_percentage_reached = wait.wait_for(func=self.has_progress_reached_percentage,
-                                              minimum_percentage=minimum_percentage,
-                                              step=step, text=text, timeout=timeout, throw_exc=True)
+        is_percentage_reached = wait.wait_for(
+            func=self.has_progress_reached_percentage,
+            minimum_percentage=minimum_percentage,
+            step=step,
+            text=text,
+            timeout=timeout,
+            throw_exc=True,
+        )
         return is_percentage_reached
 
     def has_progress_reached_percentage(self, minimum_percentage):
@@ -433,7 +450,12 @@ class ManagerTask:
             list_final_status = [TaskStatus.ERROR_FINAL, TaskStatus.DONE]
         else:
             list_final_status = [
-                TaskStatus.ERROR, TaskStatus.ERROR_FINAL, TaskStatus.STOPPED, TaskStatus.DONE, TaskStatus.ABORTED]
+                TaskStatus.ERROR,
+                TaskStatus.ERROR_FINAL,
+                TaskStatus.STOPPED,
+                TaskStatus.DONE,
+                TaskStatus.ABORTED,
+            ]
         LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, str(list_final_status)))
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
@@ -479,14 +501,16 @@ class BackupTask(ManagerTask):
         return snapshot_tag
 
     def is_task_in_uploading_stage(self):
-        full_progress_string = self.progress_string(parse_table_res=False,
-                                                    is_verify_errorless_result=True).stdout.lower()
+        full_progress_string = self.progress_string(
+            parse_table_res=False, is_verify_errorless_result=True
+        ).stdout.lower()
         return "uploading data" in full_progress_string.lower()
 
     def wait_for_uploading_stage(self, timeout=1440, step=10):
         text = "Waiting until backup task: {} starts to upload snapshots".format(self.id)
-        is_status_reached = wait.wait_for(func=self.is_task_in_uploading_stage, step=step,
-                                          text=text, timeout=timeout, throw_exc=True)
+        is_status_reached = wait.wait_for(
+            func=self.is_task_in_uploading_stage, step=step, text=text, timeout=timeout, throw_exc=True
+        )
         return is_status_reached
 
     def delete_backup_snapshot(self):
@@ -495,8 +519,10 @@ class BackupTask(ManagerTask):
             command = f" -c {self.cluster_id} backup delete --snapshot-tag {snapshot_tag}"
             self.sctool.run(command, parse_table_res=False, is_verify_errorless_result=True)
         else:
-            LOGGER.warning("Did not delete the snapshot of task {}, since the status of said task is {}, and the "
-                           "manager can only delete snapshots of finished tasks".format(self.id, str(self.status)))
+            LOGGER.warning(
+                "Did not delete the snapshot of task {}, since the status of said task is {}, and the "
+                "manager can only delete snapshots of finished tasks".format(self.id, str(self.status))
+            )
 
 
 class RestoreTask(ManagerTask):
@@ -505,7 +531,6 @@ class RestoreTask(ManagerTask):
 
 
 class ManagerCluster(ScyllaManagerBase):
-
     def __init__(self, manager_node, cluster_id=None, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
@@ -521,7 +546,8 @@ class ManagerCluster(ScyllaManagerBase):
                 if "cluster id" in column_names:
                     column_to_search = "cluster id"
             return self.sctool.get_table_value(
-                parsed_table=cluster_list, column_name=column_to_search, identifier=cluster_name)
+                parsed_table=cluster_list, column_name=column_to_search, identifier=cluster_name
+            )
         except ScyllaManagerError as ex:
             LOGGER.warning("Cluster name not found in Scylla-Manager: {}".format(ex))
             return None
@@ -536,7 +562,7 @@ class ManagerCluster(ScyllaManagerBase):
         if restore_data:
             cmd += " --restore-tables"
         if location_list:
-            locations_names = ','.join(location_list)
+            locations_names = ",".join(location_list)
             cmd += " --location {} ".format(locations_names)
         if snapshot_tag:
             cmd += f" --snapshot-tag {snapshot_tag}"
@@ -546,36 +572,49 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return RestoreTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
-                           dry_run=None, interval=None, keyspace_list=None, cron=None,
-                           location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
-                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, legacy_args=None):
+    def create_backup_task(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
+        self,
+        dc_list=None,
+        dry_run=None,
+        interval=None,
+        keyspace_list=None,
+        cron=None,
+        location_list=None,
+        num_retries=None,
+        rate_limit_list=None,
+        retention=None,
+        show_tables=None,
+        snapshot_parallel_list=None,
+        start_date=None,
+        upload_parallel_list=None,
+        legacy_args=None,
+    ):
         cmd = "backup -c {}".format(self.id)
 
         if dc_list is not None:
-            dc_names = ','.join(dc_list)
+            dc_names = ",".join(dc_list)
             cmd += " --dc {} ".format(dc_names)
         if dry_run is not None:
             cmd += " --dry-run"
         if interval is not None:
             cmd += " --interval {}".format(interval)
         if keyspace_list is not None:
-            keyspaces_names = ','.join(keyspace_list)
+            keyspaces_names = ",".join(keyspace_list)
             cmd += " --keyspace {} ".format(keyspaces_names)
         if location_list is not None:
-            locations_names = ','.join(location_list)
+            locations_names = ",".join(location_list)
             cmd += " --location {} ".format(locations_names)
         if num_retries is not None:
             cmd += " --num-retries {}".format(num_retries)
         if rate_limit_list is not None:
-            rate_limit_string = ','.join(rate_limit_list)
+            rate_limit_string = ",".join(rate_limit_list)
             cmd += " --rate-limit {} ".format(rate_limit_string)
         if retention is not None:
             cmd += " --retention {} ".format(retention)
         if show_tables is not None:
             cmd += " --show-tables {} ".format(show_tables)
         if snapshot_parallel_list is not None:
-            snapshot_parallel_string = ','.join(snapshot_parallel_list)
+            snapshot_parallel_string = ",".join(snapshot_parallel_list)
             cmd += " --snapshot-parallel {} ".format(snapshot_parallel_string)
         if start_date is not None:
             cmd += " --start-date {} ".format(start_date)
@@ -585,7 +624,7 @@ class ManagerCluster(ScyllaManagerBase):
         if cron is not None:
             cmd += " --cron '{}' ".format(" ".join(cron))
         if upload_parallel_list is not None:
-            upload_parallel_string = ','.join(upload_parallel_list)
+            upload_parallel_string = ",".join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
         if legacy_args:
             cmd += f" {legacy_args}"
@@ -595,9 +634,18 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
-                           keyspace=None, interval=None, num_retries=None, fail_fast=None,
-                           intensity=None, parallel=None, cron=None, start_date=None):
+    def create_repair_task(  # pylint: disable=too-many-arguments
+        self,
+        dc_list=None,
+        keyspace=None,
+        interval=None,
+        num_retries=None,
+        fail_fast=None,
+        intensity=None,
+        parallel=None,
+        cron=None,
+        start_date=None,
+    ):
         # the interval string:
         # Amount of time after which a successfully completed task would be run again. Supported time units include:
         #
@@ -607,7 +655,7 @@ class ManagerCluster(ScyllaManagerBase):
         # s - seconds.
         cmd = "repair -c {}".format(self.id)
         if dc_list is not None:
-            dc_names = ','.join(dc_list)
+            dc_names = ",".join(dc_list)
             cmd += " --dc {} ".format(dc_names)
         if keyspace is not None:
             cmd += " --keyspace {} ".format(keyspace)
@@ -637,15 +685,16 @@ class ManagerCluster(ScyllaManagerBase):
             raise ScyllaManagerError("Manager cannot run repair where no keyspace exists.")
 
         # expected result output is to have a format of: "repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d"
-        if 'repair' not in res.stdout:
+        if "repair" not in res.stdout:
             LOGGER.error("Encountered an error on '{}' command response".format(cmd))
             raise ScyllaManagerError(res.stderr)
 
-        task_id = res.stdout.split('\n')[0]
+        task_id = res.stdout.split("\n")[0]
         LOGGER.debug("Created task id is: {}".format(task_id))
 
-        return RepairTask(task_id=task_id, cluster_id=self.id,
-                          manager_node=self.manager_node)  # return the manager's object with new repair-task-id
+        return RepairTask(
+            task_id=task_id, cluster_id=self.id, manager_node=self.manager_node
+        )  # return the manager's object with new repair-task-id
 
     def control_repair(self, intensity=None, parallel=None):
         cmd = " repair control -c {} ".format(self.id)
@@ -672,9 +721,9 @@ class ManagerCluster(ScyllaManagerBase):
     def snapshot_files_to_dict(snapshot_file_lines):
         per_node_keyspaces_and_tables_backup_files = {}
         for line in snapshot_file_lines:
-            s3_file_path, keyspace_and_table = [string.strip() for string in line.split(' ')]
-            node_id = s3_file_path[s3_file_path.find("/node/") + len("/node/"):s3_file_path.find("/keyspace")]
-            keyspace, table = keyspace_and_table.split('/')
+            s3_file_path, keyspace_and_table = [string.strip() for string in line.split(" ")]
+            node_id = s3_file_path[s3_file_path.find("/node/") + len("/node/") : s3_file_path.find("/keyspace")]
+            keyspace, table = keyspace_and_table.split("/")
             if node_id not in per_node_keyspaces_and_tables_backup_files:
                 per_node_keyspaces_and_tables_backup_files[node_id] = {}
             if keyspace not in per_node_keyspaces_and_tables_backup_files[node_id]:
@@ -722,7 +771,7 @@ class ManagerCluster(ScyllaManagerBase):
             cmd = "-c {} task delete {}".format(self.id, task_id)
         LOGGER.debug("Task Delete command to execute is: {}".format(cmd))
         self.sctool.run(cmd=cmd, parse_table_res=False)
-        LOGGER.debug("Deleted the task '{}' successfully!". format(task_id))
+        LOGGER.debug("Deleted the task '{}' successfully!".format(task_id))
 
     def delete_automatic_repair_task(self):
         repair_tasks_list = self.repair_task_list
@@ -749,7 +798,7 @@ class ManagerCluster(ScyllaManagerBase):
         # ├──────────────────────────────────────┼──────┼─────────────┤
         # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │
         # ╰──────────────────────────────────────┴──────┴─────────────╯
-        return self.get_property(parsed_table=self._cluster_list, column_name='name')
+        return self.get_property(parsed_table=self._cluster_list, column_name="name")
 
     def _get_task_list(self):
         if self.sctool.is_v3_cli:
@@ -778,17 +827,19 @@ class ManagerCluster(ScyllaManagerBase):
 
     @property
     def repair_task_list(self):
-        return self._get_task_list_filtered('repair/', RepairTask)
+        return self._get_task_list_filtered("repair/", RepairTask)
 
     @property
     def backup_task_list(self):
-        return self._get_task_list_filtered('backup/', BackupTask)
+        return self._get_task_list_filtered("backup/", BackupTask)
 
     def get_healthcheck_task(self):
-        healthcheck_id = self.sctool.get_table_value(parsed_table=self._get_task_list(), column_name="task",
-                                                     identifier="healthcheck/", is_search_substring=True)
-        return HealthcheckTask(task_id=healthcheck_id, cluster_id=self.id,
-                               manager_node=self.manager_node)  # return the manager's health-check-task object with the found id
+        healthcheck_id = self.sctool.get_table_value(
+            parsed_table=self._get_task_list(), column_name="task", identifier="healthcheck/", is_search_substring=True
+        )
+        return HealthcheckTask(
+            task_id=healthcheck_id, cluster_id=self.id, manager_node=self.manager_node
+        )  # return the manager's health-check-task object with the found id
 
     def get_hosts_health(self):
         """
@@ -832,27 +883,35 @@ class ManagerCluster(ScyllaManagerBase):
                     status = list_cql[0]
                     rtt = self._extract_value_with_regex(string=list_cql[-1], regex_pattern=r"\(([^)]+ms)")
                     rest_value = line[rest_col_idx]
-                    if rest_value == '-':
+                    if rest_value == "-":
                         rest_status = rest_value
                     else:
-                        rest_status = rest_value[:rest_value.find("(")].strip()
+                        rest_status = rest_value[: rest_value.find("(")].strip()
                     rest_rtt = self._extract_value_with_regex(string=rest_value, regex_pattern=r"\(([^)]+ms)")
-                    rest_http_status_code = self._extract_value_with_regex(string=rest_value,
-                                                                           regex_pattern=r"\(([0-9]*?)\)")
+                    rest_http_status_code = self._extract_value_with_regex(
+                        string=rest_value, regex_pattern=r"\(([0-9]*?)\)"
+                    )
                     ssl = line[cql_status_col_idx]
                     # Whether or not SSL is on is now described in the cql column
                     # If SSL is on the column value will include "SSL" in it, and if not it will not.
-                    dict_hosts_health[host] = self._HostHealth(status=HostStatus.from_str(status), rtt=rtt,
-                                                               rest_status=HostRestStatus.from_str(rest_status),
-                                                               rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl),
-                                                               rest_http_status_code=rest_http_status_code)
+                    dict_hosts_health[host] = self._HostHealth(
+                        status=HostStatus.from_str(status),
+                        rtt=rtt,
+                        rest_status=HostRestStatus.from_str(rest_status),
+                        rest_rtt=rest_rtt,
+                        ssl=HostSsl.from_str(ssl),
+                        rest_http_status_code=rest_http_status_code,
+                    )
             LOGGER.debug("Cluster {} Hosts Health is:".format(self.id))
             for ip, health in dict_hosts_health.items():
-                LOGGER.debug("{}: {},{},{},{},{}".format(ip, health.status, health.rtt,
-                                                         health.rest_status, health.rest_rtt, health.ssl))
+                LOGGER.debug(
+                    "{}: {},{},{},{},{}".format(
+                        ip, health.status, health.rtt, health.rest_status, health.rest_rtt, health.ssl
+                    )
+                )
         return dict_hosts_health
 
-    class _HostHealth():  # pylint: disable=too-few-public-methods
+    class _HostHealth:  # pylint: disable=too-few-public-methods
         def __init__(self, status, rtt, ssl, rest_status, rest_rtt, rest_http_status_code=None):  # pylint: disable=too-many-arguments
             self.status = status
             self.rtt = rtt
@@ -893,8 +952,11 @@ class ManagerCluster(ScyllaManagerBase):
 
 def verify_errorless_result(cmd, res):
     if res.exited != 0:
-        raise ScyllaManagerError("Encountered an error on '{}' command response {}\ncommand exit code:{}\nstderr:{}".format(
-            cmd, res, res.exited, res.stderr))
+        raise ScyllaManagerError(
+            "Encountered an error on '{}' command response {}\ncommand exit code:{}\nstderr:{}".format(
+                cmd, res, res.exited, res.stderr
+            )
+        )
     if res.stderr:
         LOGGER.error("Encountered an error on '{}' stderr: {}".format(cmd, str(res.stderr)))  # TODO: just for checking
 
@@ -910,17 +972,16 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         self._initial_wait(20)
         LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.sctool.version))
-        list_supported_distros = [Distro.CENTOS7,
-                                  Distro.DEBIAN10, Distro.DEBIAN11,
-                                  Distro.UBUNTU20, Distro.UBUNTU22]
+        list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN10, Distro.DEBIAN11, Distro.UBUNTU20, Distro.UBUNTU22]
         self.default_user = "centos"
         if manager_node.distro not in list_supported_distros:
             raise ScyllaManagerError(
-                "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
+                "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro)
+            )
 
     @staticmethod
     def _initial_wait(seconds: int):
-        LOGGER.debug('Sleep %s seconds, waiting for manager service ready to respond', seconds)
+        LOGGER.debug("Sleep %s seconds, waiting for manager service ready to respond", seconds)
         time.sleep(seconds)
 
     @property
@@ -956,8 +1017,17 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def get_cluster_hosts_with_ips(db_cluster):
         return [[n, n.ip_address] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,  # pylint: disable=too-many-arguments
-                    auth_token=None, credentials=None, force_non_ssl_session_port=False):
+    def add_cluster(  # pylint: disable=too-many-arguments
+        self,
+        name,
+        host=None,
+        db_cluster=None,
+        client_encrypt=None,
+        disable_automatic_repair=True,
+        auth_token=None,
+        credentials=None,
+        force_non_ssl_session_port=False,
+    ):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -985,7 +1055,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
         host = host or self.get_cluster_hosts_ip(db_cluster=db_cluster)[0]
 
-        cmd = 'cluster add --host {} --name {} --auth-token {}'.format(host, name, auth_token)
+        cmd = "cluster add --host {} --name {} --auth-token {}".format(host, name, auth_token)
 
         if force_non_ssl_session_port:
             cmd += " --force-non-ssl-session-port"
@@ -993,38 +1063,46 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # Adding client-encryption parameters if required
         if client_encrypt:
             if not db_cluster:
-                LOGGER.warning("db_cluster is not given. Scylla-Manager connection to cluster may "
-                               "fail since not using client-encryption parameters.")
+                LOGGER.warning(
+                    "db_cluster is not given. Scylla-Manager connection to cluster may "
+                    "fail since not using client-encryption parameters."
+                )
             else:  # check if scylla-node has client-encrypt
                 db_node, _ip = self.get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
                 if db_node.is_client_encrypt:
-                    cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
-                                                                                    SSL_USER_KEY_FILE)
+                    cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(
+                        SSL_USER_CERT_FILE, SSL_USER_KEY_FILE
+                    )
 
         if credentials:
             username, password = credentials
             cmd += f" --username {username} --password {password}"
 
         res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
-        if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:
-            raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(
-                res_cluster_add))
-        cluster_id = res_cluster_add.stdout.split('\n')[0]
+        if not res_cluster_add or "Cluster added" not in res_cluster_add.stderr:
+            raise ScyllaManagerError(
+                "Encountered an error on 'sctool cluster add' command response: {}".format(res_cluster_add)
+            )
+        cluster_id = res_cluster_add.stdout.split("\n")[0]
 
         # return ManagerCluster instance with the manager's new cluster-id
-        manager_cluster = self.clusterClass(manager_node=self.manager_node, cluster_id=cluster_id,
-                                            client_encrypt=client_encrypt)
+        manager_cluster = self.clusterClass(
+            manager_node=self.manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt
+        )
         if disable_automatic_repair:
             manager_cluster.delete_automatic_repair_task()
         return manager_cluster
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):
         manager_from_version = self.sctool.version
-        LOGGER.debug('Running Manager upgrade from: {} to version in repo: {}'.format(
-            manager_from_version, scylla_mgmt_upgrade_to_repo))
+        LOGGER.debug(
+            "Running Manager upgrade from: {} to version in repo: {}".format(
+                manager_from_version, scylla_mgmt_upgrade_to_repo
+            )
+        )
         self.manager_node.upgrade_mgmt(scylla_mgmt_address=scylla_mgmt_upgrade_to_repo)
         new_manager_version = self.sctool.version
-        LOGGER.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
+        LOGGER.debug("The Manager version after upgrade is: {}".format(new_manager_version))
         return new_manager_version
 
     def rollback_upgrade(self, scylla_mgmt_address):
@@ -1037,20 +1115,20 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
 
 class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
-
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
-        self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+        self.manager_repo_path = "/etc/yum.repos.d/scylla-manager.repo"
 
     def rollback_upgrade(self, scylla_mgmt_address):
-
-        remove_post_upgrade_repo = dedent("""
+        remove_post_upgrade_repo = dedent(
+            """
                         sudo systemctl stop scylla-manager
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
                         sudo rm -rf {}
                         sudo yum clean all
                         sudo rm -rf /var/cache/yum
-                    """.format(self.manager_repo_path))
+                    """.format(self.manager_repo_path)
+        )
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
 
         # Downgrade to pre-upgrade scylla-manager repository
@@ -1071,11 +1149,12 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
-        self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+        self.manager_repo_path = "/etc/apt/sources.list.d/scylla-manager.list"
 
     def rollback_upgrade(self, scylla_mgmt_address):
         manager_from_version = self.sctool.version[0]
-        remove_post_upgrade_repo = dedent("""
+        remove_post_upgrade_repo = dedent(
+            """
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
                         sudo systemctl stop scylla-manager
                         sudo systemctl stop scylla-server.service
@@ -1084,14 +1163,15 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
                         sudo apt-get remove scylla-manager-client -y
                         sudo rm -rf {}
                         sudo apt-get clean
-                    """.format(self.manager_repo_path))  # +" /var/lib/scylla-manager/*"))
+                    """.format(self.manager_repo_path)
+        )  # +" /var/lib/scylla-manager/*"))
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
-        self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
+        self.manager_node.remoter.run("sudo apt-get update", ignore_status=True)
 
         # Downgrade to pre-upgrade scylla-manager repository
         self.manager_node.download_scylla_manager_repo(scylla_mgmt_address)
-        res = self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
-        res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
+        res = self.manager_node.remoter.run("sudo apt-get update", ignore_status=True)
+        res = self.manager_node.remoter.run("apt-cache  show scylla-manager-client | grep Version:")
         rollback_to_version = res.stdout.split()[1]
         LOGGER.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
         # self.manager_node.install_mgmt(scylla_mgmt_address=scylla_mgmt_address)
@@ -1113,12 +1193,14 @@ class SCTool:
     def __init__(self, manager_node):
         self.manager_node = manager_node
 
-    def run(self,  # pylint: disable=too-many-arguments
-            cmd,
-            is_verify_errorless_result=False,
-            parse_table_res=True,
-            is_multiple_tables=False,
-            replace_broken_unicode_values=True):
+    def run(  # pylint: disable=too-many-arguments
+        self,
+        cmd,
+        is_verify_errorless_result=False,
+        parse_table_res=True,
+        is_multiple_tables=False,
+        replace_broken_unicode_values=True,
+    ):
         LOGGER.debug("Issuing: 'sctool %s'", cmd)
         try:
             res = self.manager_node.remoter.sudo(f"sctool {cmd}")
@@ -1143,7 +1225,9 @@ class SCTool:
 
     @staticmethod
     def replace_chars_with_line_character(string, chars_to_replace_index_range):
-        replaced_string = string[:chars_to_replace_index_range[0]] + '│' + string[chars_to_replace_index_range[1] + 1:]
+        replaced_string = (
+            string[: chars_to_replace_index_range[0]] + "│" + string[chars_to_replace_index_range[1] + 1 :]
+        )
         return replaced_string
 
     def replace_broken_unicode_values(self, string):
@@ -1159,19 +1243,22 @@ class SCTool:
     @staticmethod
     def parse_result_table(res):
         parsed_table = []
-        lines = res.stdout.split('\n')
+        lines = res.stdout.split("\n")
         filtered_lines = [line for line in lines if line]
         if filtered_lines:
-            if '╭' in res.stdout:
-                filtered_lines = [line.replace('│', "|") for line in filtered_lines if
-                                  not (line.startswith('╭') or line.startswith('├') or line.startswith(
-                                      '╰'))]  # filter out the dashes lines
+            if "╭" in res.stdout:
+                filtered_lines = [
+                    line.replace("│", "|")
+                    for line in filtered_lines
+                    if not (line.startswith("╭") or line.startswith("├") or line.startswith("╰"))
+                ]  # filter out the dashes lines
             else:
-                filtered_lines = [line for line in filtered_lines if
-                                  not line.startswith('+')]  # filter out the dashes lines
+                filtered_lines = [
+                    line for line in filtered_lines if not line.startswith("+")
+                ]  # filter out the dashes lines
         for line in filtered_lines:
-            list_line = [s if s else 'EMPTY' for s in line.split("|")]  # filter out spaces and "|" column seperators
-            list_line_no_spaces = [s.split() for s in list_line if s != 'EMPTY']
+            list_line = [s if s else "EMPTY" for s in line.split("|")]  # filter out spaces and "|" column seperators
+            list_line_no_spaces = [s.split() for s in list_line if s != "EMPTY"]
             list_line_multiple_words_join = []
             for words in list_line_no_spaces:
                 list_line_multiple_words_join.append(" ".join(words))
@@ -1233,18 +1320,23 @@ class SCTool:
         #  ['54.203.234.42', 'DOWN', '0']]
         # usage flow example: mgr_cluster1.host -> mgr_cluster1.get_property -> get_table_value
 
-        if not parsed_table or not self._is_found_in_table(parsed_table=parsed_table, identifier=identifier,
-                                                           is_search_substring=is_search_substring):
+        if not parsed_table or not self._is_found_in_table(
+            parsed_table=parsed_table, identifier=identifier, is_search_substring=is_search_substring
+        ):
             raise ScyllaManagerError(
-                "Encountered an error retrieving sctool table value: {} not found in: {}".format(identifier,
-                                                                                                 str(parsed_table)))
-        column_titles = [title.upper() for title in
-                         parsed_table[0]]  # get all table column titles capital (for comparison)
+                "Encountered an error retrieving sctool table value: {} not found in: {}".format(
+                    identifier, str(parsed_table)
+                )
+            )
+        column_titles = [
+            title.upper() for title in parsed_table[0]
+        ]  # get all table column titles capital (for comparison)
         if column_name and column_name.upper() not in column_titles:
             raise ScyllaManagerError("Column name: {} not found in table: {}".format(column_name, parsed_table))
-        column_name_index = column_titles.index(
-            column_name.upper()) if column_name else 1  # "1" is used in a case like "task progress" where no column names exist.
-        ret_val = 'N/A'
+        column_name_index = (
+            column_titles.index(column_name.upper()) if column_name else 1
+        )  # "1" is used in a case like "task progress" where no column names exist.
+        ret_val = "N/A"
         for row in parsed_table:
             if is_search_substring:
                 if any(identifier in cur_str for cur_str in row):
@@ -1262,8 +1354,9 @@ class SCTool:
         Receives a parsed table of an sctool command output and a column name that appears in the table
         and returns a list of all of the values of said column in the table
         """
-        column_titles = [title.upper() for title in
-                         parsed_table[0]]  # get all table column titles capital (for comparison)
+        column_titles = [
+            title.upper() for title in parsed_table[0]
+        ]  # get all table column titles capital (for comparison)
         if column_name and column_name.upper() not in column_titles:
             raise ScyllaManagerError("Column name: {} not found in table: {}".format(column_name, parsed_table))
 
@@ -1305,26 +1398,26 @@ class ScyllaMgmt:
     """
 
     def __init__(self, server, port=9090):
-        self._url = 'http://{}:{}/api/v1/'.format(server, port)
+        self._url = "http://{}:{}/api/v1/".format(server, port)
 
     def get(self, path, params=None):
         if not params:
             params = {}
         resp = requests.get(url=self._url + path, params=params)
         if resp.status_code not in [200, 201, 202]:
-            err_msg = 'GET request to scylla-manager failed! error: {}'.format(resp.content)
+            err_msg = "GET request to scylla-manager failed! error: {}".format(resp.content)
             LOGGER.error(err_msg)
             raise Exception(err_msg)
         try:
             return json.loads(resp.content)
         except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.error('Failed load data from json %s, error: %s', resp.content, ex)
+            LOGGER.error("Failed load data from json %s, error: %s", resp.content, ex)
         return resp.content
 
     def post(self, path, data):
         resp = requests.post(url=self._url + path, data=json.dumps(data))
         if resp.status_code not in [200, 201]:
-            err_msg = 'POST request to scylla-manager failed! error: {}'.format(resp.content)
+            err_msg = "POST request to scylla-manager failed! error: {}".format(resp.content)
             LOGGER.error(err_msg)
             raise Exception(err_msg)
         return resp
@@ -1334,7 +1427,7 @@ class ScyllaMgmt:
             data = {}
         resp = requests.put(url=self._url + path, data=json.dumps(data))
         if resp.status_code not in [200, 201]:
-            err_msg = 'PUT request to scylla-manager failed! error: {}'.format(resp.content)
+            err_msg = "PUT request to scylla-manager failed! error: {}".format(resp.content)
             LOGGER.error(err_msg)
             raise Exception(err_msg)
         return resp
@@ -1342,7 +1435,7 @@ class ScyllaMgmt:
     def delete(self, path):
         resp = requests.delete(url=self._url + path)
         if resp.status_code not in [200, 204]:
-            err_msg = 'DELETE request to scylla-manager failed! error: {}'.format(resp.content)
+            err_msg = "DELETE request to scylla-manager failed! error: {}".format(resp.content)
             LOGGER.error(err_msg)
             raise Exception(err_msg)
 
@@ -1352,12 +1445,12 @@ class ScyllaMgmt:
         :param cluster_name: cluster name
         :return: cluster id if found, otherwise None
         """
-        resp = self.get('clusters', params={'name': cluster_name})
+        resp = self.get("clusters", params={"name": cluster_name})
 
         if not resp:
-            LOGGER.debug('Cluster %s not found in scylla-manager', cluster_name)
+            LOGGER.debug("Cluster %s not found in scylla-manager", cluster_name)
             return None
-        return resp[0]['id']
+        return resp[0]["id"]
 
     def add_cluster(self, cluster_name, hosts, shard_count=16):
         """
@@ -1367,9 +1460,9 @@ class ScyllaMgmt:
         :param shard_count: number of shards in nodes
         :return: cluster id
         """
-        cluster_obj = {'name': cluster_name, 'hosts': hosts, 'shard_count': shard_count}
-        resp = self.post('clusters', cluster_obj)
-        return resp.headers['Location'].split('/')[-1]
+        cluster_obj = {"name": cluster_name, "hosts": hosts, "shard_count": shard_count}
+        resp = self.post("clusters", cluster_obj)
+        return resp.headers["Location"].split("/")[-1]
 
     def delete_cluster(self, cluster_id):
         """
@@ -1377,7 +1470,7 @@ class ScyllaMgmt:
         :param cluster_id: cluster id/name
         :return: nothing
         """
-        self.delete('cluster/{}'.format(cluster_id))
+        self.delete("cluster/{}".format(cluster_id))
 
     def get_schedule_task(self, cluster_id):
         """
@@ -1387,20 +1480,18 @@ class ScyllaMgmt:
         """
         resp = []
         while not resp:
-            resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair_auto_schedule'})
+            resp = self.get(path="cluster/{}/tasks".format(cluster_id), params={"type": "repair_auto_schedule"})
         return resp[0]
 
     def disable_task_schedule(self, cluster_id, task):
         start_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
-        task['schedule'] = {'start_date': start_time.isoformat() + 'Z',
-                            'interval_days': 0,
-                            'num_retries': 0}
-        task['enabled'] = True
+        task["schedule"] = {"start_date": start_time.isoformat() + "Z", "interval_days": 0, "num_retries": 0}
+        task["enabled"] = True
 
-        self.put(path='cluster/{}/task/repair_auto_schedule/{}'.format(cluster_id, task['id']), data=task)
+        self.put(path="cluster/{}/task/repair_auto_schedule/{}".format(cluster_id, task["id"]), data=task)
 
-    def start_repair_task(self, cluster_id, task_id, task_type='repair'):
-        self.put(path='cluster/{}/task/{}/{}/start'.format(cluster_id, task_type, task_id))
+    def start_repair_task(self, cluster_id, task_id, task_type="repair"):
+        self.put(path="cluster/{}/task/{}/{}/start".format(cluster_id, task_type, task_id))
 
     def get_repair_tasks(self, cluster_id):
         """
@@ -1410,19 +1501,19 @@ class ScyllaMgmt:
         """
         resp = []
         while not resp:
-            resp = self.get(path='cluster/{}/tasks'.format(cluster_id), params={'type': 'repair'})
+            resp = self.get(path="cluster/{}/tasks".format(cluster_id), params={"type": "repair"})
         tasks = {}
         for task in resp:
-            unit_id = task['properties']['unit_id']
-            if unit_id not in tasks and 'status' not in task:
-                tasks[unit_id] = task['id']
+            unit_id = task["properties"]["unit_id"]
+            if unit_id not in tasks and "status" not in task:
+                tasks[unit_id] = task["id"]
         return tasks
 
     def get_task_progress(self, cluster_id, repair_unit):
         try:
-            return self.get(path='cluster/{}/repair/unit/{}/progress'.format(cluster_id, repair_unit))
+            return self.get(path="cluster/{}/repair/unit/{}/progress".format(cluster_id, repair_unit))
         except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.exception('Failed to get repair progress: %s', ex)
+            LOGGER.exception("Failed to get repair progress: %s", ex)
         return None
 
     def run_repair(self, cluster_id, timeout=0):
@@ -1434,28 +1525,32 @@ class ScyllaMgmt:
         """
         sched_task = self.get_schedule_task(cluster_id)
 
-        if sched_task['schedule']['interval_days'] > 0:
+        if sched_task["schedule"]["interval_days"] > 0:
             self.disable_task_schedule(cluster_id, sched_task)
 
-        self.start_repair_task(cluster_id, sched_task['id'], 'repair_auto_schedule')
+        self.start_repair_task(cluster_id, sched_task["id"], "repair_auto_schedule")
 
         tasks = self.get_repair_tasks(cluster_id)
 
         status = True
         # start repair tasks one by one:
         # currently scylla-manager cannot execute tasks simultaneously, only one can run
-        LOGGER.info('Start repair tasks per cluster %s keyspace', cluster_id)
+        LOGGER.info("Start repair tasks per cluster %s keyspace", cluster_id)
         unit_to = timeout / len(tasks)
         start_time = time.time()
         for unit, task in tasks.items():
-            self.start_repair_task(cluster_id, task, 'repair')
+            self.start_repair_task(cluster_id, task, "repair")
             task_status = self.wait_for_repair_done(cluster_id, unit, unit_to)
-            if task_status['status'] != STATUS_DONE or task_status['error']:
-                LOGGER.error('Repair unit %s failed, status: %s, error count: %s', unit,
-                             task_status['status'], task_status['error'])
+            if task_status["status"] != STATUS_DONE or task_status["error"]:
+                LOGGER.error(
+                    "Repair unit %s failed, status: %s, error count: %s",
+                    unit,
+                    task_status["status"],
+                    task_status["error"],
+                )
                 status = False
 
-        LOGGER.debug('Repair finished with status: %s, time elapsed: %s', status, time.time() - start_time)
+        LOGGER.debug("Repair finished with status: %s, time elapsed: %s", status, time.time() - start_time)
         return status
 
     def wait_for_repair_done(self, cluster_id, unit, timeout=0):
@@ -1467,25 +1562,25 @@ class ScyllaMgmt:
         :return: task status dict
         """
         done = False
-        status = {'status': 'unknown', 'percent': 0, 'error': 0}
+        status = {"status": "unknown", "percent": 0, "error": 0}
         interval = 10
         wait_time = 0
 
-        LOGGER.info('Wait for repair unit done: %s', unit)
+        LOGGER.info("Wait for repair unit done: %s", unit)
         while not done and wait_time <= timeout:
             time.sleep(interval)
             resp = self.get_task_progress(cluster_id, unit)
             if not resp:
                 break
-            status['status'] = resp['status']
-            status['percent'] = resp['percent_complete']
-            if resp['error']:
-                status['error'] = resp['error']
-            if status['status'] in [STATUS_DONE, STATUS_ERROR]:
+            status["status"] = resp["status"]
+            status["percent"] = resp["percent_complete"]
+            if resp["error"]:
+                status["error"] = resp["error"]
+            if status["status"] in [STATUS_DONE, STATUS_ERROR]:
                 done = True
-            LOGGER.debug('Repair status: %s', status)
+            LOGGER.debug("Repair status: %s", status)
             if timeout:
                 wait_time += interval
                 if wait_time > timeout:
-                    LOGGER.error('Waiting for repair unit %s: timeout expired: %s', unit, timeout)
+                    LOGGER.error("Waiting for repair unit %s: timeout expired: %s", unit, timeout)
         return status

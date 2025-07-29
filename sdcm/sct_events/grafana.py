@@ -20,17 +20,27 @@ from collections import defaultdict
 
 import requests
 
-from sdcm.sct_events.events_processes import \
-    EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
-    EventsProcessesRegistry, BaseEventsProcess, EventsProcessPipe, \
-    start_events_process, get_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_GRAFANA_ANNOTATOR_ID,
+    EVENTS_GRAFANA_AGGREGATOR_ID,
+    EVENTS_GRAFANA_POSTMAN_ID,
+    EventsProcessesRegistry,
+    BaseEventsProcess,
+    EventsProcessPipe,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+)
 
 
 GRAFANA_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
 GRAFANA_EVENT_AGGREGATOR_MAX_DUPLICATES: int = 5
 GRAFANA_EVENT_AGGREGATOR_QUEUE_WAIT_TIMEOUT: float = 1  # seconds
 GRAFANA_ANNOTATIONS_API_ENDPOINT: str = "/api/annotations"
-GRAFANA_ANNOTATIONS_API_AUTH: Tuple[str, str] = ("admin", "admin", )
+GRAFANA_ANNOTATIONS_API_AUTH: Tuple[str, str] = (
+    "admin",
+    "admin",
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,18 +56,24 @@ class GrafanaAnnotator(EventsProcessPipe[Tuple[str, Any], Annotation]):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
                 if not event.publish_to_grafana:
                     continue
-                tags = [event_class, event.severity.name, "events", ]
+                tags = [
+                    event_class,
+                    event.severity.name,
+                    "events",
+                ]
                 if event_type := getattr(event, "type", None):
                     tags.append(event_type)
                 if event_subtype := getattr(event, "subtype", None):
                     tags.append(event_subtype)
                 self.outbound_queue.put(
-                    Annotation({
-                        "time": int(event.timestamp * 1000.0),
-                        "tags": tags,
-                        "isRegion": False,
-                        "text": str(event),
-                    })
+                    Annotation(
+                        {
+                            "time": int(event.timestamp * 1000.0),
+                            "tags": tags,
+                            "isRegion": False,
+                            "text": str(event),
+                        }
+                    )
                 )
 
 
@@ -111,10 +127,12 @@ class GrafanaEventPostman(BaseEventsProcess[Annotation, None], threading.Thread)
 
         for annotation in self.inbound_events():  # events from GrafanaAggregator
             for grafana_post_url in self._grafana_post_urls:
-                with verbose_suppress("GrafanaEventPostman failed to post an annotation to '%s' "
-                                      "endpoint.\nAnnotation: %s", grafana_post_url, annotation):
-                    requests.post(
-                        grafana_post_url, json=annotation, auth=self.api_auth).raise_for_status()
+                with verbose_suppress(
+                    "GrafanaEventPostman failed to post an annotation to '%s' endpoint.\nAnnotation: %s",
+                    grafana_post_url,
+                    annotation,
+                ):
+                    requests.post(grafana_post_url, json=annotation, auth=self.api_auth).raise_for_status()
 
     def set_grafana_url(self, grafana_base_url: str) -> None:
         if not grafana_base_url:

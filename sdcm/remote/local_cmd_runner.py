@@ -36,7 +36,7 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
         """
         Return instance parameters required to rebuild instance
         """
-        return {'hostname': self.hostname, 'user': self.user}
+        return {"hostname": self.hostname, "user": self.user}
 
     def _create_connection(self) -> Connection:
         return Connection(host=self.hostname, user=self.user)
@@ -44,10 +44,18 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
     def is_up(self, timeout: float = None) -> bool:  # pylint: disable=no-self-use
         return True
 
-    def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
-            verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False) -> Result:
-
+    def run(  # pylint: disable=too-many-arguments
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        log_file: Optional[str] = None,
+        retry: int = 1,
+        watchers: Optional[List[StreamWatcher]] = None,
+        change_context: bool = False,
+    ) -> Result:
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
         # in `@retrying` retry==0 means retrying `sys.maxsize * 2 + 1`, we never want that
@@ -56,19 +64,20 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
         @retrying(n=retry)
         def _run():
-
             start_time = time.perf_counter()
             if verbose:
                 self.log.debug('Running command "%s"...', cmd)
             try:
                 command_kwargs = dict(
-                    command=cmd, warn=ignore_status,
-                    encoding='utf-8',
+                    command=cmd,
+                    warn=ignore_status,
+                    encoding="utf-8",
                     hide=True,
                     watchers=watchers,
                     timeout=timeout,
-                    env=os.environ, replace_env=True,
-                    in_stream=False
+                    env=os.environ,
+                    replace_env=True,
+                    in_stream=False,
                 )
                 if new_session:
                     with self._create_connection() as connection:
@@ -90,16 +99,28 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def receive_files(  # pylint: disable=too-many-arguments,unused-argument
-            self, src: str, dst: str, delete_dst: bool = False, preserve_perm: bool = True,
-            preserve_symlinks: bool = False, timeout: float = 300) -> bool:  # pylint: disable=too-many-arguments,unused-argument
+        self,
+        src: str,
+        dst: str,
+        delete_dst: bool = False,
+        preserve_perm: bool = True,
+        preserve_symlinks: bool = False,
+        timeout: float = 300,
+    ) -> bool:  # pylint: disable=too-many-arguments,unused-argument
         if src == dst:
             return True
-        return self.run(f'cp {src} {dst}', timeout=timeout).ok
+        return self.run(f"cp {src} {dst}", timeout=timeout).ok
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def send_files(  # pylint: disable=too-many-arguments,unused-argument
-            self, src: str, dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False,
-            timeout: float = 300) -> bool:  # pylint: disable=unused-argument
+        self,
+        src: str,
+        dst: str,
+        delete_dst: bool = False,
+        preserve_symlinks: bool = False,
+        verbose: bool = False,
+        timeout: float = 300,
+    ) -> bool:  # pylint: disable=unused-argument
         if src == dst:
             return True
-        return self.run(f'cp {src} {dst}', timeout=timeout).ok
+        return self.run(f"cp {src} {dst}", timeout=timeout).ok

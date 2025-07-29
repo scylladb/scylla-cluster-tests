@@ -8,8 +8,14 @@ from sdcm.keystore import KeyStore
 from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
-from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_COLUMN_1_DATA, COLUMN_1_DATA,
-                                               MULTI_NODE_DATA, BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA)
+from sdcm.utils.sstable.load_inventory import (
+    TestDataInventory,
+    BIG_SSTABLE_COLUMN_1_DATA,
+    COLUMN_1_DATA,
+    MULTI_NODE_DATA,
+    BIG_SSTABLE_MULTI_COLUMNS_DATA,
+    MULTI_COLUMNS_DATA,
+)
 from sdcm.utils.node import RequestMethods, build_node_api_command
 from sdcm.wait import wait_for_log_lines
 
@@ -17,16 +23,17 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
 class SstableLoadUtils:
-    LOAD_AND_STREAM_RUN_EXPR = r'(?:storage_service|sstables_loader) - load_and_stream:'
+    LOAD_AND_STREAM_RUN_EXPR = r"(?:storage_service|sstables_loader) - load_and_stream:"
     LOAD_AND_STREAM_DONE_EXPR = (
-        r'(?:storage_service|sstables_loader) - '
-        r'Done loading new SSTables for keyspace={}, table={}, '
-        r'load_and_stream=true.*status=(.*)'
+        r"(?:storage_service|sstables_loader) - "
+        r"Done loading new SSTables for keyspace={}, table={}, "
+        r"load_and_stream=true.*status=(.*)"
     )
 
     @staticmethod
-    def calculate_columns_count_in_table(target_node, keyspace_name: str = 'keyspace1',
-                                         table_name: str = 'standard1') -> int:
+    def calculate_columns_count_in_table(
+        target_node, keyspace_name: str = "keyspace1", table_name: str = "standard1"
+    ) -> int:
         query_cmd = f"SELECT * FROM {keyspace_name}.{table_name} LIMIT 1"
         result = target_node.run_cqlsh(query_cmd)
         return len(re.findall(r"(\| C\d+)", result.stdout))
@@ -58,35 +65,51 @@ class SstableLoadUtils:
 
     @staticmethod
     # pylint: disable=too-many-arguments,too-many-locals
-    def upload_sstables(node, test_data: TestDataInventory, keyspace_name: str = 'keyspace1', table_name=None,
-                        create_schema: bool = False, is_cloud_cluster=False, **kwargs):
+    def upload_sstables(
+        node,
+        test_data: TestDataInventory,
+        keyspace_name: str = "keyspace1",
+        table_name=None,
+        create_schema: bool = False,
+        is_cloud_cluster=False,
+        **kwargs,
+    ):
         key_store = KeyStore()
         creds = key_store.get_scylladb_upload_credentials()
         # Download the sstable files from S3
         if is_cloud_cluster:
-            local_temp_path = '/tmp/' + os.path.basename(test_data.sstable_file)
+            local_temp_path = "/tmp/" + os.path.basename(test_data.sstable_file)
             try:
-                remote_get_file(LOCAL_CMD_RUNNER, test_data.sstable_url, local_temp_path,
-                                hash_expected=test_data.sstable_md5, retries=2,
-                                user_agent=creds['user_agent'])
+                remote_get_file(
+                    LOCAL_CMD_RUNNER,
+                    test_data.sstable_url,
+                    local_temp_path,
+                    hash_expected=test_data.sstable_md5,
+                    retries=2,
+                    user_agent=creds["user_agent"],
+                )
                 node.remoter.send_files(local_temp_path, test_data.sstable_file)
             finally:
                 LOCAL_CMD_RUNNER.run(f"rm -f {local_temp_path}", ignore_status=True)
         else:
-            remote_get_file(node.remoter, test_data.sstable_url, test_data.sstable_file,
-                            hash_expected=test_data.sstable_md5, retries=2,
-                            user_agent=creds['user_agent'])
+            remote_get_file(
+                node.remoter,
+                test_data.sstable_url,
+                test_data.sstable_file,
+                hash_expected=test_data.sstable_md5,
+                retries=2,
+                user_agent=creds["user_agent"],
+            )
 
         if create_schema:
             with RemoteTemporaryFolder(node=node) as tmp_folder:
                 # Extract tarball to temporary folder when test keyspace and table do not exist and need to be created
-                node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/')
-                SstableLoadUtils.create_keyspace(node=node,
-                                                 replication_factor=kwargs["replication_factor"])
+                node.remoter.run(f"tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/")
+                SstableLoadUtils.create_keyspace(node=node, replication_factor=kwargs["replication_factor"])
 
-                SstableLoadUtils.create_table_for_load(node=node,
-                                                       schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql",
-                                                       session=kwargs["session"])
+                SstableLoadUtils.create_table_for_load(
+                    node=node, schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql", session=kwargs["session"]
+                )
 
         keyspace_folder = f"/var/lib/scylla/data/{keyspace_name}"
         command = f"ls -t {keyspace_folder}/" if not table_name else f"ls -d {keyspace_folder}/{table_name}-*"
@@ -101,39 +124,47 @@ class SstableLoadUtils:
         # Extract tarball again (in case create_schema=True) directly to Scylla table upload folder to simplify the code
         # and prevent changes of permissions and increasing possibility of failures with "Permission denied" error
         if node.is_docker():
-            node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {table_folder}/upload/')
+            node.remoter.run(f"tar xvfz {test_data.sstable_file} -C {table_folder}/upload/")
         else:
-            node.remoter.sudo(
-                f'tar xvfz {test_data.sstable_file} -C {table_folder}/upload/', user='scylla')
+            node.remoter.sudo(f"tar xvfz {test_data.sstable_file} -C {table_folder}/upload/", user="scylla")
 
         # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-        node.remoter.sudo(f'rm -f {table_folder}/upload/schema.cql')
-        node.remoter.sudo(f'rm -f {table_folder}/upload/manifest.json')
+        node.remoter.sudo(f"rm -f {table_folder}/upload/schema.cql")
+        node.remoter.sudo(f"rm -f {table_folder}/upload/manifest.json")
 
     @classmethod
-    def run_load_and_stream(cls, node,  # pylint: disable=too-many-arguments
-                            keyspace_name: str = 'keyspace1', table_name: str = 'standard1',
-                            start_timeout=60, end_timeout=300):
+    def run_load_and_stream(  # pylint: disable=too-many-arguments
+        cls,
+        node,
+        keyspace_name: str = "keyspace1",
+        table_name: str = "standard1",
+        start_timeout=60,
+        end_timeout=300,
+    ):
         """runs load and stream using API request and waits for it to finish"""
-        with wait_for_log_lines(node, start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],
-                                end_line_patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)],
-                                start_timeout=start_timeout, end_timeout=end_timeout):
+        with wait_for_log_lines(
+            node,
+            start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],
+            end_line_patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)],
+            start_timeout=start_timeout,
+            end_timeout=end_timeout,
+        ):
             LOGGER.info("Running load and stream on the node %s for %s.%s'", node.name, keyspace_name, table_name)
 
             # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
             # https://github.com/scylladb/scylla-tools-java/issues/253
-            path = f'/storage_service/sstables/{keyspace_name}?cf={table_name}&load_and_stream=true'
+            path = f"/storage_service/sstables/{keyspace_name}?cf={table_name}&load_and_stream=true"
             load_api_cmd = build_node_api_command(path_url=path, request_method=RequestMethods.POST, silent=False)
             node.remoter.run(load_api_cmd)
 
     @staticmethod
     def run_refresh(node, test_data: namedtuple) -> Iterable[str]:
-        LOGGER.debug('Loading %s keys to %s by refresh', test_data.keys_num, node.name)
+        LOGGER.debug("Loading %s keys to %s by refresh", test_data.keys_num, node.name)
         # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
         # So we need to validate that resharded files are placed in the "upload" folder before moving.
         # Find the compaction output that reported about the resharding
 
-        system_log_follower = node.follow_system_log(patterns=[r'Resharded.*'])
+        system_log_follower = node.follow_system_log(patterns=[r"Resharded.*"])
         node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
         return system_log_follower
 
@@ -141,7 +172,8 @@ class SstableLoadUtils:
     @timeout_decor(
         timeout=60,
         allowed_exceptions=(AssertionError,),
-        message="Waiting for resharding completion message to appear in logs")
+        message="Waiting for resharding completion message to appear in logs",
+    )
     def validate_resharding_after_refresh(node, system_log_follower):
         """
         # Validate that files after resharding were saved in the "upload" folder.
@@ -176,12 +208,14 @@ class SstableLoadUtils:
             # Find all files that were created after resharding
             for one_file in re.findall(r"(/var/.*?),", line, re.IGNORECASE):
                 # The file path have to include "upload" folder
-                assert '/upload/' in one_file, \
+                assert "/upload/" in one_file, (
                     f"Loaded file was resharded not in 'upload' folder on the node {node.name}"
+                )
 
     @classmethod
-    def get_load_test_data_inventory(cls, column_number: int, big_sstable: bool,
-                                     load_and_stream: bool) -> List[TestDataInventory]:
+    def get_load_test_data_inventory(
+        cls, column_number: int, big_sstable: bool, load_and_stream: bool
+    ) -> List[TestDataInventory]:
         if column_number == 1:
             # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
             if big_sstable:
@@ -203,11 +237,17 @@ class SstableLoadUtils:
         return []
 
     @classmethod
-    def create_keyspace(cls, node, keyspace_name: str = "keyspace1", strategy: str = 'NetworkTopologyStrategy',
-                        replication_factor: int = 1):
+    def create_keyspace(
+        cls,
+        node,
+        keyspace_name: str = "keyspace1",
+        strategy: str = "NetworkTopologyStrategy",
+        replication_factor: int = 1,
+    ):
         node.run_cqlsh(
-            "CREATE KEYSPACE %s WITH replication = {'class': '%s', 'replication_factor': %s}" % (
-                keyspace_name, strategy, replication_factor))
+            "CREATE KEYSPACE %s WITH replication = {'class': '%s', 'replication_factor': %s}"
+            % (keyspace_name, strategy, replication_factor)
+        )
 
     @classmethod
     def create_table_for_load(cls, node, schema_file_and_path: str, session):
@@ -215,7 +255,7 @@ class SstableLoadUtils:
         session.execute(schema.replace("\n", ""))
 
     @classmethod
-    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = 'standard1'):
+    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = "standard1"):
         result = node.run_cqlsh(f"consistency QUORUM;SELECT COUNT(*) FROM {keyspace_name}.{table_name}")
 
         next_line_is_result = False

@@ -74,8 +74,10 @@ class TestEventsFilter(unittest.TestCase):
 
     def test_regex_string(self):
         db_events_filter = EventsFilter(regex="lalala")
-        self.assertEqual(db_events_filter._regex,  # pylint: disable=protected-access
-                         re.compile("lalala", re.MULTILINE | re.DOTALL))
+        self.assertEqual(
+            db_events_filter._regex,  # pylint: disable=protected-access
+            re.compile("lalala", re.MULTILINE | re.DOTALL),
+        )
         self.assertEqual(db_events_filter._regex.pattern, "lalala")  # pylint: disable=protected-access
         self.assertEqual(db_events_filter.regex, "lalala")
         self.assertEqual(db_events_filter, pickle.loads(pickle.dumps(db_events_filter)))

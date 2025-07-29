@@ -25,7 +25,7 @@ from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase
 
 
-class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):  # pylint: disable=too-many-instance-attributes
+class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport="fabric", default=True):  # pylint: disable=too-many-instance-attributes
     connection: Connection
     ssh_config: Config = None
     ssh_is_up: threading.Event = None
@@ -34,21 +34,29 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
     exception_unexpected = UnexpectedExit
     exception_failure = Failure
     exception_retryable = (
-        NoValidConnectionsError, SSHException, EOFError, AuthenticationException, ConnectionResetError,
-        ConnectionAbortedError, ConnectionError, ConnectionRefusedError
+        NoValidConnectionsError,
+        SSHException,
+        EOFError,
+        AuthenticationException,
+        ConnectionResetError,
+        ConnectionAbortedError,
+        ConnectionError,
+        ConnectionRefusedError,
     )
 
     def _prepare(self):
         self.ssh_is_up = threading.Event()
         self.ssh_up_thread_termination = threading.Event()
-        self.ssh_config = Config(overrides={
-            'load_ssh_config': False,
-            'UserKnownHostsFile': self.known_hosts_file,
-            'ServerAliveInterval': 300,
-            'StrictHostKeyChecking': 'no',
-            # NOTE: 'gateway' define explicitely to avoid errors reaching the 'gateway' config attr
-            'gateway': None,
-        })
+        self.ssh_config = Config(
+            overrides={
+                "load_ssh_config": False,
+                "UserKnownHostsFile": self.known_hosts_file,
+                "ServerAliveInterval": 300,
+                "StrictHostKeyChecking": "no",
+                # NOTE: 'gateway' define explicitely to avoid errors reaching the 'gateway' config attr
+                "gateway": None,
+            }
+        )
         self.start_ssh_up_thread()
         super()._prepare()
 
@@ -57,7 +65,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             # creating new connection each time in order not to interfere the main connection to decrease probability
             # of the EOF bug https://github.com/paramiko/paramiko/issues/1584
             with self._create_connection() as connection:
-                result = connection.run("true", timeout=30, warn=False, encoding='utf-8', hide=True)
+                result = connection.run("true", timeout=30, warn=False, encoding="utf-8", hide=True)
                 return result.ok
         except AuthenticationException as auth_exception:
             # in order not to overwhelm SSH server with connection attempts that can cause further connection drops
@@ -79,7 +87,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             self.ssh_up_thread_termination.wait(5)
 
     def start_ssh_up_thread(self):
-        self.ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name='SSHPingThread', daemon=True)
+        self.ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name="SSHPingThread", daemon=True)
         self.ssh_up_thread.start()
 
     def stop_ssh_up_thread(self):
@@ -97,13 +105,20 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
         self.stop_ssh_up_thread()
         super().stop()
 
-    def _run_pre_run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
-                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None):
+    def _run_pre_run(  # pylint: disable=too-many-arguments
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        log_file: Optional[str] = None,
+        retry: int = 1,
+        watchers: Optional[List[StreamWatcher]] = None,
+    ):
         if not self.is_up(timeout=self.connect_timeout):
             raise SSHConnectTimeoutError(
-                'Unable to run "%s": failed connecting to "%s" during %ss' %
-                (cmd, self.hostname, self.connect_timeout)
+                'Unable to run "%s": failed connecting to "%s" during %ss' % (cmd, self.hostname, self.connect_timeout)
             )
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
@@ -122,5 +137,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             connect_timeout=self.connect_timeout,
             connect_kwargs={
                 "key_filename": os.path.expanduser(self.key_file),
-            } if self.key_file else None,
+            }
+            if self.key_file
+            else None,
         )

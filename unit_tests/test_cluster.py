@@ -64,10 +64,10 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     @cached_property
     def node(self):
         dummy_node = DummyNode(
-            name='test_node',
+            name="test_node",
             parent_cluster=None,
             base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
         )
         dummy_node.parent_cluster = DummyDbCluster(nodes=[dummy_node])
         dummy_node.init()
@@ -82,12 +82,12 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             node_name=str(self),
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=None,
-            log_lines=False
+            log_lines=False,
         )
 
     def _read_and_publish_events(self, log_text=None):
         if log_text:
-            with tempfile.NamedTemporaryFile(mode='wt') as temp_log:
+            with tempfile.NamedTemporaryFile(mode="wt") as temp_log:
                 self.node.system_log = temp_log.name
 
                 for line in log_text.splitlines(keepends=True):
@@ -102,19 +102,20 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         cls.teardown_events_processes()
 
     def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
         self.assertEqual(33, len(critical_errors))
 
     def test_search_system_log_specific_log(self):
-        errors = list(self.node.follow_system_log(
-            patterns=['Failed to load schema version'], start_from_beginning=True))
+        errors = list(
+            self.node.follow_system_log(patterns=["Failed to load schema version"], start_from_beginning=True)
+        )
         self.assertEqual(len(errors), 2)
 
     def test_search_system_interlace_reactor_stall(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
 
         self._read_and_publish_events()
 
@@ -131,8 +132,8 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_b["line_number"] == 3
 
     def test_search_kernel_callstack(self):
-        self.node.parent_cluster = {'params': {'print_kernel_callstack': True}}
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'kernel_callstack.log')
+        self.node.parent_cluster = {"params": {"print_kernel_callstack": True}}
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "kernel_callstack.log")
         self._read_and_publish_events()
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
@@ -147,34 +148,34 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_b["line_number"] == 5
 
     def test_search_cdc_invalid_request(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_cdc_invalid_request.log")
         with ignore_upgrade_schema_errors():
             self._read_and_publish_events()
 
         time.sleep(0.2)
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
-            cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
+            cdc_err_events = [line for line in events_file if "cdc - Could not retrieve CDC streams" in line]
             assert cdc_err_events != []
 
     def test_search_power_off(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "power_off.log")
         with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
             self._read_and_publish_events()
 
         InstanceStatusEvent.POWER_OFF().add_info(
-            node="A", line_number=22,
+            node="A",
+            line_number=22,
             line=f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00} "
-                 "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off..."
+            "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...",
         ).publish()
 
         time.sleep(0.1)
         with self.get_events_logger().events_logs_by_severity[Severity.WARNING].open() as events_file:
-            events = [line for line in events_file if 'Powering Off' in line]
+            events = [line for line in events_file if "Powering Off" in line]
             assert events
 
     def test_search_system_suppressed_messages(self):
-        self.node.system_log = os.path.join(os.path.dirname(
-            __file__), 'test_data', 'system_suppressed_messages.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_suppressed_messages.log")
 
         self._read_and_publish_events()
 
@@ -184,11 +185,11 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             event_a = events[-1]
             print(event_a)
 
-            assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
-            assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])
+            assert event_a["type"] == "SUPPRESSED_MESSAGES", "Not expected event type {}".format(event_a["type"])
+            assert event_a["line_number"] == 6, "Not expected event line number {}".format(event_a["line_number"])
 
     def test_search_one_line_backtraces(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_one_line_backtrace.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_one_line_backtrace.log")
 
         self._read_and_publish_events()
 
@@ -205,7 +206,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_backtrace2["raw_backtrace"]
 
     def test_gate_closed_ignored_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'gate_closed_ignored_exception.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "gate_closed_ignored_exception.log")
 
         self._read_and_publish_events()
 
@@ -222,7 +223,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_backtrace2["line_number"] == 3
 
     def test_compaction_stopped_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'compaction_stopped_exception.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "compaction_stopped_exception.log")
 
         self._read_and_publish_events()
 
@@ -255,7 +256,7 @@ INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
             event = reactor_stalls[0]
             assert event["type"] == "REACTOR_STALLED"
             assert event["line_number"] == 2
-            assert 'Reactor stalled for 32 ms on shard 1' in event['line']
+            assert "Reactor stalled for 32 ms on shard 1" in event["line"]
 
 
 class VersionDummyRemote:
@@ -279,111 +280,153 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
-        self.node = DummyNode(name='test_node',
-                              parent_cluster=None,
-                              base_logdir=self.temp_dir,
-                              ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        self.node = DummyNode(
+            name="test_node",
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+        )
         self.node.parent_cluster = DummyDbCluster([self.node])
 
     def test_no_scylla_binary_rhel_like(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-            ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+                ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
+            ),
+        )
         self.assertEqual("3.3.rc1", self.node.scylla_version)
         self.assertEqual("3.3.rc1", self.node.scylla_version_detailed)
 
     def test_no_scylla_binary_other(self):
         self.node.distro = Distro.DEBIAN10
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-            ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+                ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
+            ),
+        )
         self.assertEqual("3.3.rc1", self.node.scylla_version)
         self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188-1", self.node.scylla_version_detailed)
 
     def test_scylla(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("3.3.rc1", self.node.scylla_version)
         self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_master(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("666.development", self.node.scylla_version)
         self.assertEqual("666.development-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_master_new_format(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("4.4.dev", self.node.scylla_version)
         self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("2019.1.4", self.node.scylla_version)
         self.assertEqual("2019.1.4-0.20191217.b59e92dbd with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-            ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+                ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
+            ),
+        )
         self.assertEqual("2019.1.4", self.node.scylla_version)
         self.assertEqual("2019.1.4", self.node.scylla_version_detailed)
 
     def test_scylla_binary_version_unparseable(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "x.y.z\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "x.y.z\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertIsNone(self.node.scylla_version)
         self.assertEqual("x.y.z with build-id xxx", self.node.scylla_version_detailed)
 
     def test_get_scylla_version_from_second_attempt(self):
         self.node.distro = Distro.DEBIAN10
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-            ("dpkg-query --show --showformat '${Version}' scylla",
-             (1, "", "dpkg-query: no packages found matching scylla\n")),
-            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
-            ("dpkg-query --show --showformat '${Version}' scylla",
-             (1, "", "dpkg-query: no packages found matching scylla\n")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+                (
+                    "dpkg-query --show --showformat '${Version}' scylla",
+                    (1, "", "dpkg-query: no packages found matching scylla\n"),
+                ),
+                ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
+                (
+                    "dpkg-query --show --showformat '${Version}' scylla",
+                    (1, "", "dpkg-query: no packages found matching scylla\n"),
+                ),
+            ),
+        )
         self.assertIsNone(self.node.scylla_version)
         self.assertIsNone(self.node.scylla_version_detailed)
 
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("4.4.dev", self.node.scylla_version)
         self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_forget_scylla_version(self):
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual("4.4.dev", self.node.scylla_version)
         self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
 
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
 
         self.assertEqual("4.4.dev", self.node.scylla_version)
         self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.scylla_version_detailed)
@@ -404,10 +447,12 @@ class TestBaseMonitorSet(unittest.TestCase):
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
-        self.node = DummyNode(name='test_node',
-                              parent_cluster=None,
-                              base_logdir=self.temp_dir,
-                              ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        self.node = DummyNode(
+            name="test_node",
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
+        )
         self.db_cluster = DummyDbCluster([self.node])
         self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, {})
         self.monitor_cluster.log = logging
@@ -416,15 +461,17 @@ class TestBaseMonitorSet(unittest.TestCase):
         """
         verify that dev version are mapped to monitor master version
         """
-        self.node.remoter = VersionDummyRemote(self, (
-            ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
-            ("/usr/bin/scylla --build-id", (0, "xxx", "")),
-        ))
+        self.node.remoter = VersionDummyRemote(
+            self,
+            (
+                ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+                ("/usr/bin/scylla --build-id", (0, "xxx", "")),
+            ),
+        )
         self.assertEqual(self.monitor_cluster.monitoring_version, "master")
 
 
 class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
-
     def __init__(self, resp, myregion=None, myname=None, myrack=None):  # pylint: disable=super-init-not-called
         self.resp = resp
         self.myregion = myregion
@@ -445,11 +492,11 @@ class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
 
 
 class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abstract-method
-    nodes: List['NodetoolDummyNode']
+    nodes: List["NodetoolDummyNode"]
 
     def __init__(self, params):  # pylint: disable=super-init-not-called
         self.nodes = params
-        self.name = 'dummy_cluster'
+        self.name = "dummy_cluster"
         self.added_password_suffix = False
         self.log = logging.getLogger(self.name)
 
@@ -459,190 +506,251 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abs
 
 
 class TestNodetoolStatus(unittest.TestCase):
-
     def test_can_get_nodetool_status_typical(self):  # pylint: disable=no-self-use
-        resp = "\n".join(["Datacenter: eastus",
-                          "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
-                          ]
-                         )
+        resp = "\n".join(
+            [
+                "Datacenter: eastus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+            ]
+        )
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
         status = db_cluster.get_nodetool_status()
 
-        assert status == {'eastus':
-                          {'10.0.59.34':
-                           {'state': 'UN', 'load': '21.71GB', 'tokens': '256', 'owns': '?',
-                            'host_id': 'e5bcb094-e4de-43aa-8dc9-b1bf74b3b346', 'rack': '1a'},
-                           '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
-                                            'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
+        assert status == {
+            "eastus": {
+                "10.0.59.34": {
+                    "state": "UN",
+                    "load": "21.71GB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "e5bcb094-e4de-43aa-8dc9-b1bf74b3b346",
+                    "rack": "1a",
+                },
+                "10.0.198.153": {
+                    "state": "UN",
+                    "load": "?",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "fba174cd-917a-40f6-ab62-cc58efaaf301",
+                    "rack": "1a",
+                },
+            }
+        }
 
     def test_datacenter_name_per_region(self):  # pylint: disable=no-self-use
-        resp = "\n".join(["Datacenter: eastus",
-                          "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                          "Datacenter: westus",
-                          "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-                          ]
-                         )
+        resp = "\n".join(
+            [
+                "Datacenter: eastus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+                "Datacenter: westus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
+            ]
+        )
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34')
+        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34")
         db_cluster = DummyScyllaCluster([node1, node2, node3])
         node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
         datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
-        assert datacenter_name_per_region == {'east-us': 'eastus', 'west-us': 'westus'}
+        assert datacenter_name_per_region == {"east-us": "eastus", "west-us": "westus"}
 
         datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1])
-        assert datacenter_name_per_region == {'east-us': 'eastus'}
+        assert datacenter_name_per_region == {"east-us": "eastus"}
 
     def test_get_rack_names_per_datacenter_and_rack_idx(self):  # pylint: disable=no-self-use
-        resp = "\n".join(["Datacenter: eastus",
-                          "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
-                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
-                          "Datacenter: westus",
-                          "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
-                          ]
-                         )
+        resp = "\n".join(
+            [
+                "Datacenter: eastus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+                "Datacenter: westus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a",
+            ]
+        )
         node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", myrack=1)
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153", myrack=1)
-        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34', myrack=2)
+        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname="10.1.59.34", myrack=2)
         db_cluster = DummyScyllaCluster([node1, node2, node3])
         node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
         datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx()
-        assert datacenter_name_per_region == {('east-us', '1'): '1a', ('west-us', '2'): '2a'}
+        assert datacenter_name_per_region == {("east-us", "1"): "1a", ("west-us", "2"): "2a"}
 
         datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[node1])
-        assert datacenter_name_per_region == {('east-us', '1'): '1a'}
+        assert datacenter_name_per_region == {("east-us", "1"): "1a"}
 
         nodes_per_region = db_cluster.get_nodes_per_datacenter_and_rack_idx()
-        assert nodes_per_region == {('east-us', '1'): [node1, node2], ('west-us', '2'): [node3, ]}
+        assert nodes_per_region == {
+            ("east-us", "1"): [node1, node2],
+            ("west-us", "2"): [
+                node3,
+            ],
+        }
 
     def test_can_get_nodetool_status_ipv6(self):  # pylint: disable=no-self-use
-        resp = "\n".join(["Datacenter: eu-north",
-                          "====================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address                                 Load       Tokens       Owns    Host ID                Rack",
-                          "UN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a",
-                          "UN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a",
-                          ]
-                         )
+        resp = "\n".join(
+            [
+                "Datacenter: eu-north",
+                "====================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address                                 Load       Tokens       Owns    Host ID                Rack",
+                "UN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a",
+                "UN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a",
+            ]
+        )
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
         status = db_cluster.get_nodetool_status()
 
-        assert status == {'eu-north':
-                          {'2a05:d016:0cf8:de00:e07d:5832:c5c0:36a0':
-                           {'state': 'UN', 'load': '774KB', 'tokens': '256', 'owns': '?',
-                            'host_id': 'e2ed6943', 'rack': '1a'},
-                           '2a05:d016:0cf8:de00:339e:0d0d:9446:1980': {'state': 'UN', 'load': '1.04MB', 'tokens': '256', 'owns': '?',
-                                                                       'host_id': 'd67e8502', 'rack': '1a'}}}
+        assert status == {
+            "eu-north": {
+                "2a05:d016:0cf8:de00:e07d:5832:c5c0:36a0": {
+                    "state": "UN",
+                    "load": "774KB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "e2ed6943",
+                    "rack": "1a",
+                },
+                "2a05:d016:0cf8:de00:339e:0d0d:9446:1980": {
+                    "state": "UN",
+                    "load": "1.04MB",
+                    "tokens": "256",
+                    "owns": "?",
+                    "host_id": "d67e8502",
+                    "rack": "1a",
+                },
+            }
+        }
 
     def test_can_get_nodetool_status_azure(self):  # pylint: disable=no-self-use
-        resp = "\n".join(["Datacenter: eastus",
-                         "==================",
-                          "Status=Up/Down",
-                          "|/ State=Normal/Leaving/Joining/Moving",
-                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
-                          "UN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  ",
-                          "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1",
-                          "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  ",
-                          ""
-                          ]
-                         )
+        resp = "\n".join(
+            [
+                "Datacenter: eastus",
+                "==================",
+                "Status=Up/Down",
+                "|/ State=Normal/Leaving/Joining/Moving",
+                "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                "UN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  ",
+                "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1",
+                "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  ",
+                "",
+            ]
+        )
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
         status = db_cluster.get_nodetool_status()
 
-        assert status == {'eastus': {'10.0.0.4': {'host_id': 'ed6af9a0-8c22-4813-ac9b-6fbeb462b687',
-                                                  'load': '431KB',
-                                                  'owns': '?',
-                                                  'rack': '',
-                                                  'state': 'UN',
-                                                  'tokens': '256'},
-                                     '10.0.0.5': {'host_id': 'caa15869-cfb4-4229-85d7-0f4832986237',
-                                                  'load': '612KB',
-                                                  'owns': '?',
-                                                  'rack': '1',
-                                                  'state': 'UN',
-                                                  'tokens': '256'},
-                                     '10.0.0.6': {'host_id': '3046ded9-ce17-4a3a-ac44-a3ada6916972',
-                                                  'load': '806KB',
-                                                  'owns': '?',
-                                                  'rack': '',
-                                                  'state': 'UN',
-                                                  'tokens': '256'}
-                                     }
-                          }
+        assert status == {
+            "eastus": {
+                "10.0.0.4": {
+                    "host_id": "ed6af9a0-8c22-4813-ac9b-6fbeb462b687",
+                    "load": "431KB",
+                    "owns": "?",
+                    "rack": "",
+                    "state": "UN",
+                    "tokens": "256",
+                },
+                "10.0.0.5": {
+                    "host_id": "caa15869-cfb4-4229-85d7-0f4832986237",
+                    "load": "612KB",
+                    "owns": "?",
+                    "rack": "1",
+                    "state": "UN",
+                    "tokens": "256",
+                },
+                "10.0.0.6": {
+                    "host_id": "3046ded9-ce17-4a3a-ac44-a3ada6916972",
+                    "load": "806KB",
+                    "owns": "?",
+                    "rack": "",
+                    "state": "UN",
+                    "tokens": "256",
+                },
+            }
+        }
 
 
-@pytest.mark.parametrize("cat_results,expected_core_number", (
-    ("1", 1), ("2", 1), ("9", 1), ("10", 1), ("11", 1),
-
-    ("1-7", 7), ("2-7", 6), ("1-6", 6), ("2-6", 5),
-
-    ("1-7,9", 8), ("1,9-15", 8), ("1-7,9-15", 14), ("2-7,10-15", 12),
-
-    ("1-7,9-15,17-23", 21),
-    ("1-7,9-15,17", 15),
-    ("1-7,9,17-23", 15),
-    ("1,9-15,17-23", 15),
-    ("1,9,17", 3),
-    ("1,9-15,17", 9),
-    ("1-7,9,17", 9),
-    ("1,9,17-23", 9),
-
-    ("1-7,9-15,17-23,25-31", 28),
-    ("1,9-15,17-23,25-31", 22),
-    ("1-7,9,17-23,25-31", 22),
-    ("1-7,9-15,23,25-31", 22),
-    ("1-7,9-15,17-23,31", 22),
-    ("1-7,15,17,25-31", 16),
-    ("1,9-15,17-23,31", 16),
-    ("1,15,17-23,31", 10),
-    ("1,15,17,31", 4),
-    ("1,9-15,17,25-31", 16),
-    ("1-7,9,17-23,25", 16),
-))
+@pytest.mark.parametrize(
+    "cat_results,expected_core_number",
+    (
+        ("1", 1),
+        ("2", 1),
+        ("9", 1),
+        ("10", 1),
+        ("11", 1),
+        ("1-7", 7),
+        ("2-7", 6),
+        ("1-6", 6),
+        ("2-6", 5),
+        ("1-7,9", 8),
+        ("1,9-15", 8),
+        ("1-7,9-15", 14),
+        ("2-7,10-15", 12),
+        ("1-7,9-15,17-23", 21),
+        ("1-7,9-15,17", 15),
+        ("1-7,9,17-23", 15),
+        ("1,9-15,17-23", 15),
+        ("1,9,17", 3),
+        ("1,9-15,17", 9),
+        ("1-7,9,17", 9),
+        ("1,9,17-23", 9),
+        ("1-7,9-15,17-23,25-31", 28),
+        ("1,9-15,17-23,25-31", 22),
+        ("1-7,9,17-23,25-31", 22),
+        ("1-7,9-15,23,25-31", 22),
+        ("1-7,9-15,17-23,31", 22),
+        ("1-7,15,17,25-31", 16),
+        ("1,9-15,17-23,31", 16),
+        ("1,15,17-23,31", 10),
+        ("1,15,17,31", 4),
+        ("1,9-15,17,25-31", 16),
+        ("1-7,9,17-23,25", 16),
+    ),
+)
 def test_base_node_cpuset(cat_results, expected_core_number):
     dummy_node = DummyNode(
-        name='dummy_node',
+        name="dummy_node",
         parent_cluster=None,
         base_logdir=tempfile.mkdtemp(),
-        ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+        ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()
-    cat_results_obj = type("FakeGrepResults", (), {
-        "stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'
-    })
-    dummy_node.remoter = type("FakeRemoter", (), {
-        "run": (lambda *args, **kwargs: cat_results_obj),
-    })
+    cat_results_obj = type("FakeGrepResults", (), {"stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'})
+    dummy_node.remoter = type(
+        "FakeRemoter",
+        (),
+        {
+            "run": (lambda *args, **kwargs: cat_results_obj),
+        },
+    )
 
     cpuset_value = dummy_node.cpuset
 
@@ -650,122 +758,199 @@ def test_base_node_cpuset(cat_results, expected_core_number):
     assert cpuset_value == expected_core_number
 
 
-@pytest.mark.parametrize("cat_results", (
-    "",
-    "# one comment-line file",
-    "# first comment line\n# second comment line",
-    "# first comment line\n# second comment linei\n # third comment line",
-    "# CPUSET=\"--cpuset 1-7,9-15,17-23,31' \"",
-))
+@pytest.mark.parametrize(
+    "cat_results",
+    (
+        "",
+        "# one comment-line file",
+        "# first comment line\n# second comment line",
+        "# first comment line\n# second comment linei\n # third comment line",
+        '# CPUSET="--cpuset 1-7,9-15,17-23,31\' "',
+    ),
+)
 def test_base_node_cpuset_not_configured(cat_results):
     dummy_node = DummyNode(
-        name='dummy_node',
+        name="dummy_node",
         parent_cluster=None,
         base_logdir=tempfile.mkdtemp(),
-        ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+        ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
     )
     dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()
     cat_results_obj = type("FakeCatResults", (), {"stdout": cat_results})
-    dummy_node.remoter = type("FakeRemoter", (), {
-        "run": (lambda *args, **kwargs: cat_results_obj),
-    })
+    dummy_node.remoter = type(
+        "FakeRemoter",
+        (),
+        {
+            "run": (lambda *args, **kwargs: cat_results_obj),
+        },
+    )
     assert dummy_node.cpuset == ""
 
 
 @pytest.mark.integration
 def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=unused-argument
-
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
 
     with cluster.cql_connection_patient(docker_scylla) as session:
         session.execute(
-            "CREATE KEYSPACE mview WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}")
+            "CREATE KEYSPACE mview WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}"
+        )
         session.execute(
             "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, "
-            "last_access timeuuid, PRIMARY KEY(username))")
+            "last_access timeuuid, PRIMARY KEY(username))"
+        )
         session.execute(
             "CREATE MATERIALIZED VIEW mview.users_by_first_name AS SELECT * FROM mview.users WHERE first_name "
-            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (first_name, username)")
+            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (first_name, username)"
+        )
         session.execute(
             "CREATE MATERIALIZED VIEW mview.users_by_last_name AS SELECT * FROM mview.users WHERE last_name "
-            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username)")
+            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username)"
+        )
         session.execute(
             "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
-            "('fruch', 'Israel', 'Fruchter', '1111')")
+            "('fruch', 'Israel', 'Fruchter', '1111')"
+        )
         session.execute(
-            "CREATE KEYSPACE \"123_keyspace\" WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}")
+            "CREATE KEYSPACE \"123_keyspace\" WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}"
+        )
         session.execute(
-            "CREATE TABLE \"123_keyspace\".users (username text, first_name text, last_name text, password text, email text, "
-            "last_access timeuuid, PRIMARY KEY(username))")
+            'CREATE TABLE "123_keyspace".users (username text, first_name text, last_name text, password text, email text, '
+            "last_access timeuuid, PRIMARY KEY(username))"
+        )
         session.execute(
-            "CREATE TABLE \"123_keyspace\".\"120users\" (username text, first_name text, last_name text, password text, email text, "
-            "last_access timeuuid, PRIMARY KEY(username))")
+            'CREATE TABLE "123_keyspace"."120users" (username text, first_name text, last_name text, password text, email text, '
+            "last_access timeuuid, PRIMARY KEY(username))"
+        )
         session.execute(
-            "INSERT INTO \"123_keyspace\".users (username, first_name, last_name, password) VALUES "
-            "('fruch', 'Israel', 'Fruchter', '1111')")
+            'INSERT INTO "123_keyspace".users (username, first_name, last_name, password) VALUES '
+            "('fruch', 'Israel', 'Fruchter', '1111')"
+        )
         session.execute(
-            "INSERT INTO \"123_keyspace\".\"120users\" (username, first_name, last_name, password) VALUES "
-            "('fruch', 'Israel', 'Fruchter', '1111')")
+            'INSERT INTO "123_keyspace"."120users" (username, first_name, last_name, password) VALUES '
+            "('fruch', 'Israel', 'Fruchter', '1111')"
+        )
 
-    docker_scylla.run_nodetool('flush')
+    docker_scylla.run_nodetool("flush")
 
     table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
-    assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
-                                'system.config', 'system.local', 'system.token_ring', 'system.clients',
-                                'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
-                                'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
-                                'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
-                                'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
-                                'system.size_estimates', 'system_schema.scylla_tables', 'system_auth.roles',
-                                'system.scylla_table_schema_history', 'system_schema.views',
-                                'system_distributed.view_build_status', 'system.built_views',
-                                'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users',
-                                'system."IndexInfo"', 'system.batchlog', 'system.compactions_in_progress',
-                                'system.hints', 'system.large_cells', 'system.large_partitions', 'system.large_rows',
-                                'system.paxos', 'system.peer_events', 'system.peers', 'system.range_xfers', 'system.repair_history',
-                                'system.scylla_views_builds_in_progress', 'system.snapshots', 'system.sstable_activity',
-                                'system.truncated', 'system.views_builds_in_progress', 'system_auth.role_attributes',
-                                'system_auth.role_members', 'system_distributed.service_levels', 'system_schema.aggregates',
-                                'system_schema.computed_columns', 'system_schema.dropped_columns', 'system_schema.functions',
-                                'system_schema.indexes', 'system_schema.scylla_aggregates', 'system_schema.scylla_keyspaces',
-                                'system_schema.triggers', 'system_schema.types', 'system_schema.view_virtual_columns',
-                                'system_traces.events', 'system_traces.node_slow_log', 'system_traces.node_slow_log_time_idx',
-                                'system_traces.sessions', 'system_traces.sessions_time_idx',
-                                '"123_keyspace"."120users"', '"123_keyspace".users'}
+    assert set(table_names) == {
+        "system.runtime_info",
+        "system_distributed.cdc_generation_timestamps",
+        "system.config",
+        "system.local",
+        "system.token_ring",
+        "system.clients",
+        "system_schema.tables",
+        "system_schema.columns",
+        "system.compaction_history",
+        "system.cdc_local",
+        "system.versions",
+        "system_distributed_everywhere.cdc_generation_descriptions_v2",
+        "system.scylla_local",
+        "system.cluster_status",
+        "system.protocol_servers",
+        "system_distributed.cdc_streams_descriptions_v2",
+        "system_schema.keyspaces",
+        "system.size_estimates",
+        "system_schema.scylla_tables",
+        "system_auth.roles",
+        "system.scylla_table_schema_history",
+        "system_schema.views",
+        "system_distributed.view_build_status",
+        "system.built_views",
+        "mview.users_by_first_name",
+        "mview.users_by_last_name",
+        "mview.users",
+        'system."IndexInfo"',
+        "system.batchlog",
+        "system.compactions_in_progress",
+        "system.hints",
+        "system.large_cells",
+        "system.large_partitions",
+        "system.large_rows",
+        "system.paxos",
+        "system.peer_events",
+        "system.peers",
+        "system.range_xfers",
+        "system.repair_history",
+        "system.scylla_views_builds_in_progress",
+        "system.snapshots",
+        "system.sstable_activity",
+        "system.truncated",
+        "system.views_builds_in_progress",
+        "system_auth.role_attributes",
+        "system_auth.role_members",
+        "system_distributed.service_levels",
+        "system_schema.aggregates",
+        "system_schema.computed_columns",
+        "system_schema.dropped_columns",
+        "system_schema.functions",
+        "system_schema.indexes",
+        "system_schema.scylla_aggregates",
+        "system_schema.scylla_keyspaces",
+        "system_schema.triggers",
+        "system_schema.types",
+        "system_schema.view_virtual_columns",
+        "system_traces.events",
+        "system_traces.node_slow_log",
+        "system_traces.node_slow_log_time_idx",
+        "system_traces.sessions",
+        "system_traces.sessions_time_idx",
+        '"123_keyspace"."120users"',
+        '"123_keyspace".users',
+    }
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
-    assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
+    assert set(table_names) == {"mview.users", '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False)
-    assert set(table_names) == {'mview.users_by_first_name', 'mview.users_by_last_name',
-                                'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
+    assert set(table_names) == {
+        "mview.users_by_first_name",
+        "mview.users_by_last_name",
+        "mview.users",
+        '"123_keyspace"."120users"',
+        '"123_keyspace".users',
+    }
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=True, filter_out_mv=True)
-    assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
+    assert set(table_names) == {"mview.users", '"123_keyspace"."120users"', '"123_keyspace".users'}
 
 
 class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):  # pylint: disable=no-self-use
-        """ Test "nodetool describering" output parsing """
-        resp = "\n".join(["Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:",
-                          "TokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, "
-                          "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
-                          "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
-                          "TokenRange(start_token:9154793403047166459, end_token:9156354786201613199, "
-                          "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
-                          "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
-                          ]
-                         )
+        """Test "nodetool describering" output parsing"""
+        resp = "\n".join(
+            [
+                "Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:",
+                "TokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, "
+                "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
+                "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
+                "TokenRange(start_token:9154793403047166459, end_token:9156354786201613199, "
+                "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
+                "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
+            ]
+        )
         node = NodetoolDummyNode(resp=resp)
         ranges = get_keyspace_partition_ranges(node=node, keyspace="")
-        assert ranges == [{'start_token': -9193109213506951143,
-                           'details': [{'host': '127.0.49.3', 'datacenter': 'datacenter1', 'rack': 'rack1'}],
-                           'end_token': 9202125676696964746, 'endpoints': '127.0.49.3', 'rpc_endpoints': '127.0.49.3'},
-                          {'start_token': 9154793403047166459,
-                           'details': [{'host': '127.0.49.3', 'datacenter': 'datacenter1', 'rack': 'rack1'}],
-                           'end_token': 9156354786201613199, 'endpoints': '127.0.49.3', 'rpc_endpoints': '127.0.49.3'}]
+        assert ranges == [
+            {
+                "start_token": -9193109213506951143,
+                "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
+                "end_token": 9202125676696964746,
+                "endpoints": "127.0.49.3",
+                "rpc_endpoints": "127.0.49.3",
+            },
+            {
+                "start_token": 9154793403047166459,
+                "details": [{"host": "127.0.49.3", "datacenter": "datacenter1", "rack": "rack1"}],
+                "end_token": 9156354786201613199,
+                "endpoints": "127.0.49.3",
+                "rpc_endpoints": "127.0.49.3",
+            },
+        ]
 
         min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
         assert min_token == -9193109213506951143

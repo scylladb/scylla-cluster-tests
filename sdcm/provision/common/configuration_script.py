@@ -36,10 +36,10 @@ SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     syslog_host_port: tuple[str, int] = None
-    logs_transport: str = 'syslog-ng'
+    logs_transport: str = "syslog-ng"
     configure_sshd: bool = True
     disable_ssh_while_running: bool = False
-    hostname: str = ''
+    hostname: str = ""
     install_docker: bool = False
 
     def to_string(self) -> str:
@@ -50,30 +50,30 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _wait_before_running_script() -> str:
-        return ''
+        return ""
 
     @staticmethod
     def _skip_if_already_run() -> str:
         """syslog-ng requires restart to retrigger sending logs in case it was configured before sct-runner"""
-        return f'if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then sudo systemctl restart syslog-ng; exit 0; fi\n'
+        return f"if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then sudo systemctl restart syslog-ng; exit 0; fi\n"
 
     @staticmethod
     def _mark_script_as_done() -> str:
         return f"mkdir -p {CLOUD_INIT_SCRIPTS_PATH} && touch {CLOUD_INIT_SCRIPTS_PATH}/done"
 
     def _start_script(self) -> str:
-        script = '#!/bin/bash\n'
-        script += 'set -x\n'
+        script = "#!/bin/bash\n"
+        script += "set -x\n"
         script += self._wait_before_running_script()
         script += self._skip_if_already_run()
         if self.disable_ssh_while_running:
-            script += 'systemctl stop sshd || true\n'
+            script += "systemctl stop sshd || true\n"
         return script
 
     def _end_script(self) -> str:
         script = ""
         if self.disable_ssh_while_running:
-            script += 'systemctl start sshd || true\n'
+            script += "systemctl start sshd || true\n"
         script += self._mark_script_as_done()
         return script
 
@@ -84,12 +84,12 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 3. scylla image is running it in such mode that "echo -e" is not working
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
-        script = ''
-        if self.logs_transport == 'syslog-ng':
+        script = ""
+        if self.logs_transport == "syslog-ng":
             script += install_syslogng_service()
             script += 'if [ -z "$SYSLOG_NG_INSTALLED" ]; then\n'
             script += self._rsyslog_configuration_script()
-            script += 'else\n'
+            script += "else\n"
             script += configure_syslogng_target_script(
                 host=self.syslog_host_port[0],
                 port=self.syslog_host_port[1],
@@ -97,15 +97,15 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 hostname=self.hostname,
             )
             script += restart_syslogng_service()
-            script += 'fi\n'
-        elif self.logs_transport == 'rsyslog':
+            script += "fi\n"
+        elif self.logs_transport == "rsyslog":
             script += self._rsyslog_configuration_script()
 
         if self.configure_sshd:
             script += configure_sshd_script()
             script += restart_sshd_service()
         elif self.disable_ssh_while_running:
-            script += 'systemctl start sshd || true\n'
+            script += "systemctl start sshd || true\n"
 
         if self.install_docker:
             script += install_docker_service()

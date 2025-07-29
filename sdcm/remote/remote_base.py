@@ -38,7 +38,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     auth_sleep_time = 30
     _use_rsync = None
     known_hosts_file = None
-    default_remoter_class: Type['RemoteCmdRunnerBase'] = None
+    default_remoter_class: Type["RemoteCmdRunnerBase"] = None
     remoter_classes = {}
     exception_unexpected: Type[Exception] = None
     exception_failure: Type[Exception] = None
@@ -46,9 +46,17 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     connection_thread_map = threading.local()
     default_run_retry = 3
 
-    def __init__(self, hostname: str, user: str = 'root',  # pylint: disable=too-many-arguments
-                 password: str = None, port: int = None, connect_timeout: int = None, key_file: str = None,
-                 extra_ssh_options: str = None, auth_sleep_time: float = None):
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        hostname: str,
+        user: str = "root",
+        password: str = None,
+        port: int = None,
+        connect_timeout: int = None,
+        key_file: str = None,
+        extra_ssh_options: str = None,
+        auth_sleep_time: float = None,
+    ):
         if port is not None:
             self.port = port
         if connect_timeout is not None:
@@ -85,9 +93,16 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         """
         Return instance parameters required to rebuild instance
         """
-        return {'hostname': self.hostname, 'user': self.user, 'password': self.password, 'port': self.port,
-                'connect_timeout': self.connect_timeout, 'key_file': self.key_file,
-                'extra_ssh_options': self.extra_ssh_options, 'auth_sleep_time': self.auth_sleep_time}
+        return {
+            "hostname": self.hostname,
+            "user": self.user,
+            "password": self.password,
+            "port": self.port,
+            "connect_timeout": self.connect_timeout,
+            "key_file": self.key_file,
+            "extra_ssh_options": self.extra_ssh_options,
+            "auth_sleep_time": self.auth_sleep_time,
+        }
 
     def __init_subclass__(cls, ssh_transport: str = None, default: bool = False):
         if default:
@@ -96,7 +111,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             cls.remoter_classes[ssh_transport] = cls
 
     @classmethod
-    def create_remoter(cls, *args, **kwargs) -> 'RemoteCmdRunnerBase':  # pylint: disable=unused-argument
+    def create_remoter(cls, *args, **kwargs) -> "RemoteCmdRunnerBase":  # pylint: disable=unused-argument
         """
         Use this function to create remote runner of the default type
         """
@@ -112,7 +127,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         RemoteCmdRunnerBase.default_remoter_class = remoter_class
 
     @staticmethod
-    def set_default_remoter_class(remoter_class: Type['RemoteCmdRunnerBase']):
+    def set_default_remoter_class(remoter_class: Type["RemoteCmdRunnerBase"]):
         RemoteCmdRunnerBase.default_remoter_class = remoter_class
 
     @abstractmethod
@@ -120,10 +135,10 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         pass
 
     def _bind_generation_to_connection(self, connection: object):
-        setattr(connection, '_context_generation', self._context_generation)
+        setattr(connection, "_context_generation", self._context_generation)
 
     def _is_connection_generation_ok(self, connection: object):
-        return getattr(connection, '_context_generation', self._context_generation) == self._context_generation
+        return getattr(connection, "_context_generation", self._context_generation) == self._context_generation
 
     def stop(self):
         self._close_connection()
@@ -141,9 +156,9 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     @retrying(n=5, sleep_time=1, allowed_exceptions=(Exception,), message="Reconnecting")
     def _reconnect(self):
         """
-            Close and reopen connection to the remote endpoint.
-            It is done only for connection specific for given thread.
-            Connections for other threads are not affected.
+        Close and reopen connection to the remote endpoint.
+        It is done only for connection specific for given thread.
+        Connections for other threads are not affected.
         """
         self.log.debug("Reconnecting to '%s'", self.hostname)
         self._close_connection()
@@ -152,20 +167,24 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
     def ssh_debug_cmd(self) -> str:
         if self.key_file:
-            return "SSH access -> 'ssh -i %s %s@%s'" % (self.key_file,
-                                                        self.user,
-                                                        self.hostname)
+            return "SSH access -> 'ssh -i %s %s@%s'" % (self.key_file, self.user, self.hostname)
         else:
-            return "SSH access -> 'ssh %s@%s'" % (self.user,
-                                                  self.hostname)
+            return "SSH access -> 'ssh %s@%s'" % (self.user, self.hostname)
 
     @abstractmethod
     def is_up(self, timeout: float = 30):
         pass
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def receive_files(self, src: str, dst: str, delete_dst: bool = False,  # pylint: disable=too-many-arguments
-                      preserve_perm: bool = True, preserve_symlinks: bool = False, timeout: float = 300):
+    def receive_files(  # pylint: disable=too-many-arguments
+        self,
+        src: str,
+        dst: str,
+        delete_dst: bool = False,
+        preserve_perm: bool = True,
+        preserve_symlinks: bool = False,
+        timeout: float = 300,
+    ):
         """
         Copy files from the remote host to a local path.
 
@@ -193,7 +212,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed.
         """
-        self.log.debug('<%s>: Receive files (src) %s -> (dst) %s', self.hostname, src, dst)
+        self.log.debug("<%s>: Receive files (src) %s -> (dst) %s", self.hostname, src, dst)
         # Start a master SSH connection if necessary.
 
         if isinstance(src, str):
@@ -207,8 +226,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             try:
                 remote_source = self._encode_remote_paths(src)
                 local_dest = quote(dst)
-                rsync = self._make_rsync_cmd([remote_source], local_dest,
-                                             delete_dst, preserve_symlinks, timeout)
+                rsync = self._make_rsync_cmd([remote_source], local_dest, delete_dst, preserve_symlinks, timeout)
                 result = LocalCmdRunner().run(rsync, timeout=timeout)
                 self.log.debug(result.exited)
                 try_scp = False
@@ -226,8 +244,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             remote_source = self._make_rsync_compatible_source(src, False)
             if remote_source:
                 # _make_rsync_compatible_source() already did the escaping
-                remote_source = self._encode_remote_paths(remote_source,
-                                                          escape=False)
+                remote_source = self._encode_remote_paths(remote_source, escape=False)
                 local_dest = quote(dst)
                 scp = self._make_scp_cmd([remote_source], local_dest)
                 try:
@@ -253,8 +270,14 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         return files_received
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def send_files(self, src: str,  # pylint: disable=too-many-arguments,too-many-statements
-                   dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False) -> bool:
+    def send_files(  # pylint: disable=too-many-arguments,too-many-statements
+        self,
+        src: str,
+        dst: str,
+        delete_dst: bool = False,
+        preserve_symlinks: bool = False,
+        verbose: bool = False,
+    ) -> bool:
         """
         Copy files from a local path to the remote host.
 
@@ -282,7 +305,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         """
 
         # pylint: disable=too-many-branches,too-many-locals
-        self.log.debug('<%s>: Send files (src) %s -> (dst) %s', self.hostname, src, dst)
+        self.log.debug("<%s>: Send files (src) %s -> (dst) %s", self.hostname, src, dst)
         # Start a master SSH connection if necessary.
         source_is_dir = False
         if isinstance(src, str):
@@ -296,8 +319,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         if self.use_rsync():
             try:
                 local_sources = [quote(os.path.expanduser(path)) for path in src]
-                rsync = self._make_rsync_cmd(local_sources, remote_dest,
-                                             delete_dst, preserve_symlinks)
+                rsync = self._make_rsync_cmd(local_sources, remote_dest, delete_dst, preserve_symlinks)
                 LocalCmdRunner().run(rsync)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as details:
@@ -349,7 +371,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
-                self.log.debug('<%s>: Command %s with status %s', self.hostname, result.command, result.exited)
+                self.log.debug("<%s>: Command %s with status %s", self.hostname, result.command, result.exited)
                 if result.exited:
                     files_sent = False
         return files_sent
@@ -387,14 +409,23 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         appropriate scp command for encoding it. Remote paths must be
         pre-encoded.
         """
-        key_option = ''
+        key_option = ""
         if self.key_file:
-            key_option = '-i %s' % os.path.expanduser(self.key_file)
-        command = ("scp -r -o StrictHostKeyChecking=no -o BatchMode=yes "
-                   "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
-                   "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
-        return command % (connect_timeout, alive_interval,
-                          self.known_hosts_file, self.port, key_option, " ".join(src), dst)
+            key_option = "-i %s" % os.path.expanduser(self.key_file)
+        command = (
+            "scp -r -o StrictHostKeyChecking=no -o BatchMode=yes "
+            "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
+            "-o UserKnownHostsFile=%s -P %d %s %s '%s'"
+        )
+        return command % (
+            connect_timeout,
+            alive_interval,
+            self.known_hosts_file,
+            self.port,
+            key_option,
+            " ".join(src),
+            dst,
+        )
 
     def _make_rsync_compatible_globs(self, pth: str, is_local: bool) -> List[str]:
         """
@@ -415,11 +446,13 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         # make a function to test if a pattern matches any files
         if is_local:
+
             def glob_matches_files(path, pattern):
                 return glob.glob(path + pattern)
         else:
+
             def glob_matches_files(path, pattern):
-                match_cmd = "ls \"%s\"%s" % (quote(path), pattern)
+                match_cmd = 'ls "%s"%s' % (quote(path), pattern)
                 result = self.run(match_cmd, ignore_status=True)
                 return result.exit_status == 0
 
@@ -429,11 +462,9 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         # convert them into a set of paths suitable for the commandline
         if is_local:
-            return ["\"%s\"%s" % (quote(pth), pattern)
-                    for pattern in patterns]
+            return ['"%s"%s' % (quote(pth), pattern) for pattern in patterns]
         else:
-            return [self._scp_remote_escape(pth) + pattern
-                    for pattern in patterns]
+            return [self._scp_remote_escape(pth) + pattern for pattern in patterns]
 
     def _make_rsync_compatible_source(self, source: List[str], is_local: bool) -> List[str]:
         """
@@ -443,8 +474,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         applies it to an entire list of sources, producing a new list of
         sources, properly quoted.
         """
-        return sum((self._make_rsync_compatible_globs(path, is_local)
-                    for path in source), [])
+        return sum((self._make_rsync_compatible_globs(path, is_local) for path in source), [])
 
     @staticmethod
     def _set_umask_perms(dest: str):
@@ -492,15 +522,20 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             set_file_privs(dest)
 
     def _make_rsync_cmd(  # pylint: disable=too-many-arguments
-            self, src: list, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300) -> str:
+        self, src: list, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300
+    ) -> str:
         """
         Given a list of source paths and a destination path, produces the
         appropriate rsync command for copying them. Remote paths must be
         pre-encoded.
         """
-        ssh_cmd = self._make_ssh_command(user=self.user, port=self.port, hosts_file=self.known_hosts_file,
-                                         key_file=self.key_file,
-                                         extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'))
+        ssh_cmd = self._make_ssh_command(
+            user=self.user,
+            port=self.port,
+            hosts_file=self.known_hosts_file,
+            key_file=self.key_file,
+            extra_ssh_options=self.extra_ssh_options.replace("-tt", "-t"),
+        )
 
         if delete_dst:
             delete_flag = "--delete"
@@ -511,20 +546,28 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         else:
             symlink_flag = "-L"
         command = "rsync %s %s --timeout=%s --rsh='%s' -az %s %s"
-        return command % (symlink_flag, delete_flag, timeout, ssh_cmd,
-                          " ".join(src), dst)
+        return command % (symlink_flag, delete_flag, timeout, ssh_cmd, " ".join(src), dst)
 
-    def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
-                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     watchers: Optional[List[StreamWatcher]] = None):
+    def _run_execute(  # pylint: disable=too-many-arguments
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        watchers: Optional[List[StreamWatcher]] = None,
+    ):
         if verbose:
             self.log.debug('<%s>: Running command "%s"...', self.hostname, cmd)
         start_time = time.perf_counter()
         command_kwargs = dict(
-            command=cmd, warn=ignore_status,
-            encoding='utf-8', hide=True,
-            watchers=watchers, timeout=timeout,
-            in_stream=False
+            command=cmd,
+            warn=ignore_status,
+            encoding="utf-8",
+            hide=True,
+            watchers=watchers,
+            timeout=timeout,
+            in_stream=False,
         )
         if new_session:
             with self._create_connection() as connection:
@@ -540,9 +583,17 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         result.exit_status = result.exited
         return result
 
-    def _run_pre_run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
-                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None):
+    def _run_pre_run(  # pylint: disable=too-many-arguments
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        log_file: Optional[str] = None,
+        retry: int = 1,
+        watchers: Optional[List[StreamWatcher]] = None,
+    ):
         pass
 
     @abstractmethod
@@ -565,21 +616,22 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             retry = self.default_run_retry
         else:
             # Retry times that user wants on any exception
-            allowed_exceptions = (Exception, )
-        return {'n': retry, 'sleep_time': 5, 'allowed_exceptions': allowed_exceptions}
+            allowed_exceptions = (Exception,)
+        return {"n": retry, "sleep_time": 5, "allowed_exceptions": allowed_exceptions}
 
     # pylint: disable=too-many-arguments
-    def run(self,
-            cmd: str,
-            timeout: float | None = None,
-            ignore_status: bool = False,
-            verbose: bool = True,
-            new_session: bool = False,
-            log_file: str | None = None,
-            retry: int = 1,
-            watchers: List[StreamWatcher] | None = None,
-            change_context: bool = False
-            ) -> Result:
+    def run(
+        self,
+        cmd: str,
+        timeout: float | None = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        log_file: str | None = None,
+        retry: int = 1,
+        watchers: List[StreamWatcher] | None = None,
+        change_context: bool = False,
+    ) -> Result:
         """
         Run command at the remote endpoint and return result
         :param cmd: Command to execute

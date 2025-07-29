@@ -58,32 +58,34 @@ class UserDataObject(abc.ABC):
 @dataclass
 class UserDataBuilder:
     """Generates content for cloud-init"""
+
     user_data_objects: List[UserDataObject] = field(default_factory=list)
 
     @property
     def yum_repos(self) -> Dict:
         return {
-            "yum_repos":
-                {
-                    "epel-release": {
-                        "baseurl": "http://download.fedoraproject.org/pub/epel/7/$basearch",
-                        "enabled": True,
-                        "failovermethod": "priority",
-                        "gpgcheck": True,
-                        "gpgkey": "http://download.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7",
-                        "name": "Extra Packages for Enterprise Linux 7 - Release"
-                    }
+            "yum_repos": {
+                "epel-release": {
+                    "baseurl": "http://download.fedoraproject.org/pub/epel/7/$basearch",
+                    "enabled": True,
+                    "failovermethod": "priority",
+                    "gpgcheck": True,
+                    "gpgkey": "http://download.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7",
+                    "name": "Extra Packages for Enterprise Linux 7 - Release",
                 }
+            }
         }
 
     @property
     def apt_configuration(self) -> Dict:
-        return yaml.safe_load(dedent("""
+        return yaml.safe_load(
+            dedent("""
                                         apt:
                                           conf: |
                                             Acquire::Retries "60";
                                             DPkg::Lock::Timeout "60";
-                                     """))
+                                     """)
+        )
 
     def build_user_data_yaml(self) -> str:
         """
@@ -99,20 +101,18 @@ class UserDataBuilder:
             script_path = f"{CLOUD_INIT_SCRIPTS_PATH}/{idx}_{user_data_object.name}.sh"
             packages.update(user_data_object.packages_to_install)
             if user_data_object.script_to_run:
-                scripts.append({"content": user_data_object.script_to_run,
-                                "path": script_path,
-                                "permissions": "0644"
-                                })
+                scripts.append({"content": user_data_object.script_to_run, "path": script_path, "permissions": "0644"})
                 runcmds.append(
-                    f"cd {CLOUD_INIT_SCRIPTS_PATH}; bash -eux {script_path}; test  $? = 0 || touch {script_path}.failed")
+                    f"cd {CLOUD_INIT_SCRIPTS_PATH}; bash -eux {script_path}; test  $? = 0 || touch {script_path}.failed"
+                )
         # in case of problems with creating scripts, cloud-init won't run anything and will not report any error
         # to fix it create 'done' file as last step to enable further verification if executed at all
         runcmds.append(f"mkdir -p {CLOUD_INIT_SCRIPTS_PATH} && touch {CLOUD_INIT_SCRIPTS_PATH}/done")
-        user_data_yaml = yaml.dump(data={
-            "packages": list(packages),
-            "write_files": scripts,
-            "runcmd": runcmds
-        } | self.yum_repos | self.apt_configuration)
+        user_data_yaml = yaml.dump(
+            data={"packages": list(packages), "write_files": scripts, "runcmd": runcmds}
+            | self.yum_repos
+            | self.apt_configuration
+        )
         return "#cloud-config\n" + user_data_yaml
 
     def get_scylla_machine_image_json(self):

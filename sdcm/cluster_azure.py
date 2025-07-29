@@ -32,32 +32,41 @@ class CreateAzureNodeError(Exception):
 
 
 class AzureNode(cluster.BaseNode):
-
     """
     Wraps Azure instances, so that we can also control the instance through SSH.
     """
 
     log = LOGGER
 
-    def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
-                 credentials, parent_cluster,
-                 node_prefix='node', node_index=1,
-                 base_logdir=None, dc_idx=0):
-        region = parent_cluster.params.get('azure_region_name')[dc_idx]
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        azure_instance: VmInstance,
+        credentials,
+        parent_cluster,
+        node_prefix="node",
+        node_index=1,
+        base_logdir=None,
+        dc_idx=0,
+    ):
+        region = parent_cluster.params.get("azure_region_name")[dc_idx]
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
         self._instance = azure_instance
         self.last_event_document_incarnation = -1
-        ssh_login_info = {'hostname': None,
-                          'user': azure_instance.user_name,
-                          'key_file': credentials.key_file,
-                          'extra_ssh_options': '-tt'}
-        super().__init__(name=name,
-                         parent_cluster=parent_cluster,
-                         ssh_login_info=ssh_login_info,
-                         base_logdir=base_logdir,
-                         node_prefix=node_prefix,
-                         dc_idx=dc_idx)
+        ssh_login_info = {
+            "hostname": None,
+            "user": azure_instance.user_name,
+            "key_file": credentials.key_file,
+            "extra_ssh_options": "-tt",
+        }
+        super().__init__(
+            name=name,
+            parent_cluster=parent_cluster,
+            ssh_login_info=ssh_login_info,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            dc_idx=dc_idx,
+        )
 
     def init(self) -> None:
         super().init()
@@ -69,8 +78,10 @@ class AzureNode(cluster.BaseNode):
 
     @cached_property
     def tags(self) -> Dict[str, str]:
-        return {**super().tags,
-                "NodeIndex": str(self.node_index), }
+        return {
+            **super().tags,
+            "NodeIndex": str(self.node_index),
+        }
 
     @retrying(n=6, sleep_time=1)
     def _set_keep_alive(self) -> bool:
@@ -104,7 +115,9 @@ class AzureNode(cluster.BaseNode):
         try:
             self.wait_ssh_up(verbose=False)
             result = self.remoter.run(
-                'curl http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01 -H "Metadata: true"', verbose=False)
+                'curl http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01 -H "Metadata: true"',
+                verbose=False,
+            )
             status = json.loads(result.stdout.strip())
             if status["DocumentIncarnation"] == self.last_event_document_incarnation:
                 # each change in status["Events"] increments "DocumentIncarnation", return if there was no change.
@@ -118,7 +131,7 @@ class AzureNode(cluster.BaseNode):
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
                     self.log.warning(f"Unhandled Azure scheduled event: {event}")
         except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Error during getting Azure scheduled events: %s', details)
+            self.log.warning("Error during getting Azure scheduled events: %s", details)
             return 0
         return SPOT_TERMINATION_CHECK_DELAY
 
@@ -138,13 +151,13 @@ class AzureNode(cluster.BaseNode):
 
     def get_console_output(self):
         # TODO adding console output from instance on Azure
-        self.log.warning('Method is not implemented for AzureNode')
-        return ''
+        self.log.warning("Method is not implemented for AzureNode")
+        return ""
 
     def get_console_screenshot(self):
         # TODO adding console output from instance on Azure
-        self.log.warning('Method is not implemented for AzureNode')
-        return b''
+        self.log.warning("Method is not implemented for AzureNode")
+        return b""
 
     def _get_ipv6_ip_address(self):
         # todo: fix it
@@ -165,12 +178,23 @@ class AzureNode(cluster.BaseNode):
         return
 
 
-class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
-                 provisioners: List[AzureProvisioner], credentials,
-                 cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
-                 user_name='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, params=None, node_type=None):
+class AzureCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes
+    def __init__(  # pylint: disable=too-many-arguments, too-many-locals
+        self,
+        image_id,
+        root_disk_size,
+        provisioners: List[AzureProvisioner],
+        credentials,
+        cluster_uuid=None,
+        instance_type="Standard_L8s_v3",
+        region_names=None,
+        user_name="root",
+        cluster_prefix="cluster",
+        node_prefix="node",
+        n_nodes=3,
+        params=None,
+        node_type=None,
+    ):
         self.provisioners: List[AzureProvisioner] = provisioners
         self._image_id = image_id
         self._root_disk_size = root_disk_size
@@ -180,22 +204,24 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self._azure_region_names = region_names
         self._node_prefix = node_prefix
         self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
-        super().__init__(cluster_uuid=cluster_uuid,
-                         cluster_prefix=cluster_prefix,
-                         node_prefix=node_prefix,
-                         n_nodes=n_nodes,
-                         params=params,
-                         region_names=region_names,
-                         node_type=node_type)
+        super().__init__(
+            cluster_uuid=cluster_uuid,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            region_names=region_names,
+            node_type=node_type,
+        )
         self.log.debug("AzureCluster constructor")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
         self.log.info("Adding nodes to cluster")
         nodes = []
 
         instances = self._create_instances(count, dc_idx, instance_type=instance_type)
 
-        self.log.debug('instances: %s', instances)
+        self.log.debug("instances: %s", instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
             node = self._create_node(instance, node_index, dc_idx)
             nodes.append(node)
@@ -204,35 +230,42 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
             node.enable_auto_bootstrap = enable_auto_bootstrap
 
         self._node_index += count
-        self.log.info('added nodes: %s', nodes)
+        self.log.info("added nodes: %s", nodes)
         return nodes
 
     def _create_node(self, instance, node_index, dc_idx):
         try:
-            node = AzureNode(azure_instance=instance,
-                             credentials=self._credentials[0],
-                             parent_cluster=self,
-                             node_prefix=self.node_prefix,
-                             node_index=node_index,
-                             base_logdir=self.logdir,
-                             dc_idx=dc_idx)
+            node = AzureNode(
+                azure_instance=instance,
+                credentials=self._credentials[0],
+                parent_cluster=self,
+                node_prefix=self.node_prefix,
+                node_index=node_index,
+                base_logdir=self.logdir,
+                dc_idx=dc_idx,
+            )
             node.init()
             return node
         except Exception as ex:
-            raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
+            raise CreateAzureNodeError("Failed to create node: %s" % ex) from ex
 
     def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
-        pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
+        pricing_model = PricingModel.SPOT if "spot" in self.instance_provision else PricingModel.ON_DEMAND
         definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             definitions.append(
                 self._definition_builder.build_instance_definition(
-                    region=region, node_type=self.node_type, index=node_index, instance_type=instance_type)
+                    region=region, node_type=self.node_type, index=node_index, instance_type=instance_type
+                )
             )
-        return provision_instances_with_fallback(self.provisioners[dc_idx], definitions=definitions, pricing_model=pricing_model,
-                                                 fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"))
+        return provision_instances_with_fallback(
+            self.provisioners[dc_idx],
+            definitions=definitions,
+            pricing_model=pricing_model,
+            fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"),
+        )
 
     def get_node_ips_param(self, public_ip=True):
         # todo lukasz: why gce cluster didn't have to implement this?
@@ -251,15 +284,22 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
 
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
-
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments
-                 provisioners: List[AzureProvisioner], credentials,
-                 instance_type='Standard_L8s_v3',
-                 user_name='ubuntu',
-                 user_prefix=None, n_nodes=3, params=None, region_names=None):
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        image_id,
+        root_disk_size,
+        provisioners: List[AzureProvisioner],
+        credentials,
+        instance_type="Standard_L8s_v3",
+        user_name="ubuntu",
+        user_prefix=None,
+        n_nodes=3,
+        params=None,
+        region_names=None,
+    ):
         # pylint: disable=too-many-locals
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "db-node")
         super().__init__(
             image_id=image_id,
             root_disk_size=root_disk_size,
@@ -272,9 +312,9 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
             n_nodes=n_nodes,
             params=params,
             region_names=region_names,
-            node_type='scylla-db'
+            node_type="scylla-db",
         )
-        self.version = '2.1'
+        self.version = "2.1"
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
@@ -282,56 +322,73 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
-
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
-                 instance_type='Standard_D2_v4',
-                 user_name='centos',
-                 user_prefix=None, n_nodes=1, params=None, region_names=None):
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        image_id,
+        root_disk_size,
+        provisioners,
+        credentials,
+        instance_type="Standard_D2_v4",
+        user_name="centos",
+        user_prefix=None,
+        n_nodes=1,
+        params=None,
+        region_names=None,
+    ):
         # pylint: disable=too-many-locals
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "loader-node")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "loader-set")
         cluster.BaseLoaderSet.__init__(self, params=params)
-        AzureCluster.__init__(self,
-                              image_id=image_id,
-                              root_disk_size=root_disk_size,
-                              instance_type=instance_type,
-                              user_name=user_name,
-                              provisioners=provisioners,
-                              credentials=credentials,
-                              cluster_prefix=cluster_prefix,
-                              node_prefix=node_prefix,
-                              n_nodes=n_nodes,
-                              params=params,
-                              node_type='loader',
-                              region_names=region_names
-                              )
+        AzureCluster.__init__(
+            self,
+            image_id=image_id,
+            root_disk_size=root_disk_size,
+            instance_type=instance_type,
+            user_name=user_name,
+            provisioners=provisioners,
+            credentials=credentials,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            node_type="loader",
+            region_names=region_names,
+        )
 
 
 class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
-
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
-                 instance_type='Standard_D2_v4',
-                 user_name='centos', user_prefix=None, n_nodes=1,
-                 targets=None, params=None, region_names=None):
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        image_id,
+        root_disk_size,
+        provisioners,
+        credentials,
+        instance_type="Standard_D2_v4",
+        user_name="centos",
+        user_prefix=None,
+        n_nodes=1,
+        targets=None,
+        params=None,
+        region_names=None,
+    ):
         # pylint: disable=too-many-locals
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-node")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-set")
 
         targets = targets if targets else {}
-        cluster.BaseMonitorSet.__init__(self,
-                                        targets=targets,
-                                        params=params)
-        AzureCluster.__init__(self,
-                              image_id=image_id,
-                              root_disk_size=root_disk_size,
-                              instance_type=instance_type,
-                              user_name=user_name,
-                              provisioners=provisioners,
-                              credentials=credentials,
-                              cluster_prefix=cluster_prefix,
-                              node_prefix=node_prefix,
-                              n_nodes=n_nodes,
-                              params=params,
-                              node_type='monitor',
-                              region_names=region_names
-                              )
+        cluster.BaseMonitorSet.__init__(self, targets=targets, params=params)
+        AzureCluster.__init__(
+            self,
+            image_id=image_id,
+            root_disk_size=root_disk_size,
+            instance_type=instance_type,
+            user_name=user_name,
+            provisioners=provisioners,
+            credentials=credentials,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            node_type="monitor",
+            region_names=region_names,
+        )

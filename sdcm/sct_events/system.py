@@ -35,7 +35,7 @@ class TestTimeoutEvent(SctEvent):
 
     @property
     def msgfmt(self) -> str:
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.start_time))
         return f"{super().msgfmt}, Test started at {start_time}, reached it's timeout ({self.duration} minute)"
 
 
@@ -53,16 +53,17 @@ class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instan
     __test__ = False  # Mark this class to be not collected by pytest.
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 source: Any,
-                 source_method: Optional = None,
-                 args: Optional[Sequence] = None,
-                 kwargs: Optional[dict] = None,
-                 message: Optional = None,
-                 exception: Optional = None,
-                 trace: Optional = None,
-                 severity: Optional[Severity] = None):
-
+    def __init__(
+        self,
+        source: Any,
+        source_method: Optional = None,
+        args: Optional[Sequence] = None,
+        kwargs: Optional[dict] = None,
+        message: Optional = None,
+        exception: Optional = None,
+        trace: Optional = None,
+        severity: Optional[Severity] = None,
+    ):
         if severity is None:
             severity = Severity.ERROR
         super().__init__(severity=severity)
@@ -98,10 +99,9 @@ class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instan
 
 
 class SoftTimeoutEvent(TestFrameworkEvent):
-
     def __init__(self, operation: str, duration: int | float, soft_timeout: int | float):
         message = f"operation '{operation}' took {duration}s and soft-timeout was set to {soft_timeout}s"
-        super().__init__(source='SoftTimeout', severity=Severity.ERROR, trace=sys._getframe().f_back, message=message)
+        super().__init__(source="SoftTimeout", severity=Severity.ERROR, trace=sys._getframe().f_back, message=message)
 
 
 class ElasticsearchEvent(InformationalEvent):
@@ -152,11 +152,7 @@ class CpuNotHighEnoughEvent(InformationalEvent):
 
 
 class TestStepEvent(ContinuousEvent):
-
-    def __init__(self,
-                 step,
-                 severity=Severity.NORMAL,
-                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, step, severity=Severity.NORMAL, publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
         self.step = step
         self.duration = None
         self.full_traceback = ""
@@ -195,19 +191,19 @@ class ThreadFailedEvent(InformationalEvent):
         return super().msgfmt + ": message={0.message}\n{0.traceback}"
 
 
-class AwsKmsEvent(ThreadFailedEvent):
-    ...
+class AwsKmsEvent(ThreadFailedEvent): ...
 
 
 class CoreDumpEvent(InformationalEvent):
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 node: Any,
-                 corefile_url: str,
-                 backtrace: str,
-                 download_instructions: str,
-                 source_timestamp: Optional[float] = None):
-
+    def __init__(
+        self,
+        node: Any,
+        corefile_url: str,
+        backtrace: str,
+        download_instructions: str,
+        source_timestamp: Optional[float] = None,
+    ):
         super().__init__(severity=Severity.ERROR)
 
         self.node = str(node)
@@ -239,6 +235,7 @@ class TestResultEvent(InformationalEvent, Exception):
 
     It holds and displays all errors of the tests and framework happened.
     """
+
     __test__ = False  # Mark this class to be not collected by pytest.
 
     _marker_width = 80
@@ -265,7 +262,7 @@ class TestResultEvent(InformationalEvent, Exception):
         for event_group, events in self.events.items():
             if not events:
                 continue
-            result.append(f"""{f'{"":-<5} LAST {event_group} EVENT ':-<{self._marker_width - 2}}""")
+            result.append(f"""{f"{'':-<5} LAST {event_group} EVENT ":-<{self._marker_width - 2}}""")
             result.extend(events)
         return "\n".join(result)
 
@@ -288,8 +285,9 @@ class InstanceStatusEvent(LogEvent, abstract=True):
 
 
 InstanceStatusEvent.add_subevent_type("STARTUP", severity=Severity.WARNING, regex="kernel: Linux version")
-InstanceStatusEvent.add_subevent_type("REBOOT", severity=Severity.WARNING,
-                                      regex="Stopped target Host and Network Name Lookups")
+InstanceStatusEvent.add_subevent_type(
+    "REBOOT", severity=Severity.WARNING, regex="Stopped target Host and Network Name Lookups"
+)
 InstanceStatusEvent.add_subevent_type("POWER_OFF", severity=Severity.WARNING, regex="Reached target Power-Off")
 
 INSTANCE_STATUS_EVENTS = (
@@ -298,5 +296,6 @@ INSTANCE_STATUS_EVENTS = (
     InstanceStatusEvent.POWER_OFF(),
 )
 
-INSTANCE_STATUS_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex, re.IGNORECASE), event) for event in INSTANCE_STATUS_EVENTS]
+INSTANCE_STATUS_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex, re.IGNORECASE), event) for event in INSTANCE_STATUS_EVENTS
+]

@@ -24,17 +24,18 @@ class FakeRemoter(RemoteCmdRunnerBase):
 
     result_map: Dict[Pattern, Result] = {}
 
-    def run(self,  # pylint: disable=too-many-arguments
-            cmd: str,
-            timeout=None,
-            ignore_status=False,
-            verbose=True,
-            new_session=False,
-            log_file=None,
-            retry=1,
-            watchers=None,
-            change_context=False
-            ) -> Result:
+    def run(  # pylint: disable=too-many-arguments
+        self,
+        cmd: str,
+        timeout=None,
+        ignore_status=False,
+        verbose=True,
+        new_session=False,
+        log_file=None,
+        retry=1,
+        watchers=None,
+        change_context=False,
+    ) -> Result:
         for pattern, result in self.result_map.items():
             if re.match(pattern, cmd) is not None:
                 if ignore_status is True:
@@ -43,8 +44,10 @@ class FakeRemoter(RemoteCmdRunnerBase):
                     if result.failed:
                         raise Exception(f"Exception occurred when running command: {cmd}")
                     return result
-        raise ValueError(f"No fake result specified for command: {cmd}."
-                         f"Set {self.__class__.__name__}.result_map variable with Dict[Pattern, Result] mapping")
+        raise ValueError(
+            f"No fake result specified for command: {cmd}."
+            f"Set {self.__class__.__name__}.result_map variable with Dict[Pattern, Result] mapping"
+        )
 
     def _create_connection(self):
         pass
