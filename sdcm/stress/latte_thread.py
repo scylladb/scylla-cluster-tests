@@ -216,6 +216,8 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             self.docker_image_name,
             command_line="-c 'tail -f /dev/null'",
             extra_docker_opts=(
+                "--network=host "
+                "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
             ),
