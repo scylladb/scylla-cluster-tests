@@ -659,7 +659,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
             self.metric_has_data(
-                metric_query='gemini_cql_requests', n=10)
+                metric_query='sum(increase(gemini_cql_requests[1m]))', n=10)
 
         with ignore_upgrade_schema_errors():
 
