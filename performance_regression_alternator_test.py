@@ -287,7 +287,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_write', sub_type='without-lwt',
                            stress_cmd=base_cmd_w + cmd_add_throughput_params, stress_num=1, keyspace_num=1, row_name = 'alternator-no-lwt')
 
-        tests_to_run = ( test for test, condition in (
+        tests_to_run = tuple( test for test, condition in (
             ( run_read_cql, not is_basic and run_read),
             ( run_read_alternator_no_lwt, run_read),
             ( run_write_cql, not is_basic and run_write),
@@ -300,7 +300,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
             ( run_read_throughput_alternator_no_lwt, run_read_throughput),
             ( run_write_throughput_cql, not is_basic and run_write_throughput),
             ( run_write_throughput_alternator_no_lwt, run_write_throughput),
-        ) if condition)
+        ) if condition )
         
         single_test_duration_in_seconds = int(60 * self.params.get('stress_duration') / len(tests_to_run))
         target_ops_per_sec_for_unlimited_scenario = 999999
