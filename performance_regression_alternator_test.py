@@ -160,6 +160,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
             for stress in stress_queue:
                 self.get_stress_results(queue=stress, store_results=False)
             self.log.debug(f'Loaders completed.')
+            self.build_histogram('<unused>', hdr_tags=['_tag_'])
             self.update_test_details()
         else:
             self.log.warning("No prepare command defined in YAML!")
