@@ -20,7 +20,7 @@ class SstableUtils:
 
     """
 
-    REMOTE_SSTABLEDUMP_PATH = "/tmp/sstabledump.json"
+    REMOTE_SSTABLEDUMP_PATH = "/var/tmp/sstabledump.json"
 
     def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None,
                  db_node: 'BaseNode' = None,  # noqa: F821
@@ -223,7 +223,7 @@ class SstableUtils:
         # Proceed with dump command
         dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
         dump_result = self.db_node.remoter.run(
-            f'sudo {dump_cmd} {sstable} 1>{remote_json_path}', verbose=False, ignore_status=True)
+            f'sudo bash -c "{dump_cmd} {sstable} 1>{remote_json_path}"', verbose=False, ignore_status=True)
 
         if not dump_result.ok:
             self.log.error("Failed to run SSTable dump for %s: %s", sstable, dump_result.stderr)
@@ -233,14 +233,15 @@ class SstableUtils:
 
     def _are_tombstones_in_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
         # Check if tombstones exist in the dumped sstable JSON
-        check_tombstones_cmd = f'sudo grep -q tombstone {remote_json_path}'
+        check_tombstones_cmd = f"sudo jq -e '.. | .tombstone? | select(. != null)' {remote_json_path} > /dev/null"
         result = self.db_node.remoter.run(check_tombstones_cmd, verbose=False, ignore_status=True)
 
-        if result.exit_status != 0:
+        if result.exit_status == 0:
+            self.log.debug("Tombstones are found in SSTable %s.", sstable)
+            return True  # Tombstones exist
+        else:
             self.log.debug("No tombstones found in SSTable %s.", sstable)
-            return False
-        self.log.debug("Tombstones are found in SSTable %s.", sstable)
-        return True
+            return False  # No tombstones
 
     def get_compacted_tombstone_deletion_info(self, sstable: str) -> list:
         """
