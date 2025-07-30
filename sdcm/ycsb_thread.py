@@ -137,8 +137,8 @@ class YcsbStressThread(DockerBasedStressThread):
         self.hdrh_logger_contextes = []
         self.cluster_tester = cluster_tester
 
-    def _hdr_files_directory_inside_ycsb_container(self):
-        return '/tmp/hdr-output-directory'
+    def _hdr_files_directory_inside_ycsb_container(self, loader_idx, cpu_idx):
+        return f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
     
     def _hdr_files_directory_on_master_node(self, loader_idx, cpu_idx):
         return self.directory_for_hdr_files
@@ -225,7 +225,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 memo[loader_name] = "done"
         return None
 
-    def build_stress_cmd(self):
+    def build_stress_cmd(self, loader_idx, cpu_idx):
         hosts = ",".join([i.cql_address for i in self.node_list])
 
         stress_cmd = f'{self.stress_cmd} -s '
@@ -239,7 +239,7 @@ class YcsbStressThread(DockerBasedStressThread):
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
         if self.params.get("use_hdrhistogram"):
-            stress_cmd += f" -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path={self._hdr_files_directory_inside_ycsb_container()}/hdrh-"
+            stress_cmd += f" -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1 -p hdrhistogram.output.path={self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}/hdrh-"
         return stress_cmd
 
     @staticmethod
@@ -418,7 +418,7 @@ class YcsbStressThread(DockerBasedStressThread):
             extra_docker_opts = f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
             if self.params["use_hdrhistogram"]:
                 hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
-                extra_docker_opts += f' -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container()}:z'
+                extra_docker_opts += f' -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z'
 
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,
@@ -427,7 +427,7 @@ class YcsbStressThread(DockerBasedStressThread):
             cmd_runner_name = str(loader)
 
         self.copy_template(cmd_runner, loader.name)
-        stress_cmd = self.build_stress_cmd()
+        stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)

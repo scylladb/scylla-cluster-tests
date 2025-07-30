@@ -276,6 +276,7 @@ class silence:
                 self.log.debug("Finished '%s'. No errors were silenced.", name)
             except Exception as exc:  # noqa: BLE001
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
+                self.log.debug("Stacktrace is %s", traceback.format_exc())
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
             return result
 
