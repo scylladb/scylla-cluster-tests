@@ -45,9 +45,10 @@ class ClusterTesterForTests(ClusterTester):
     __test__ = True
 
     k8s_clusters = None
+    argus_heartbeat_stop_signal = threading.Event()
 
     def init_argus_run(self):
-        pass
+        self.argus_heartbeat_stop_signal = threading.Event()
 
     def _init_params(self):
         self.params = FakeSCTConfiguration()
