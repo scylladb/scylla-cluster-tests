@@ -24,7 +24,6 @@ from datetime import datetime
 from functools import cached_property
 from threading import Lock, Thread, Event as ThreadEvent
 from typing import TYPE_CHECKING
-from multiprocessing import Process, Event
 from textwrap import dedent
 
 import kubernetes as k8s
@@ -77,19 +76,18 @@ class SSHLoggerBase(LoggerBase):
     def __init__(self, node: BaseNode, target_log_file: str):
         super().__init__(target_log_file=target_log_file)
         self._node = node
-        self._termination_event = Event()
-        self._child_process = Process(target=self._journal_thread, daemon=True)
+        self._termination_event = ThreadEvent()
+        self._child_thread = ThreadPoolExecutor(max_workers=1)
+        self._thread = None
 
     def start(self) -> None:
         self._termination_event.clear()
-        self._child_process.start()
+        self._thread = self._child_thread.submit(self._journal_thread)
 
     def stop(self, timeout: float | None = None) -> None:
         self._termination_event.set()
-        self._child_process.terminate()
-        self._child_process.join(timeout=timeout)
-        if self._child_process.is_alive():
-            self._child_process.kill()  # pylint: disable=no-member
+        if self._thread.running():
+            self._thread.cancel()
 
     @raise_event_on_failure
     def _journal_thread(self) -> None:
@@ -118,12 +116,7 @@ class SSHLoggerBase(LoggerBase):
 
     @cached_property
     def _remoter(self) -> RemoteCmdRunnerBase:
-        if self._node.is_docker():
-            # NOTE: K8S and docker backends use separate non-SSH remoters
-            #       where each new call is a separate process.
-            #       So, reuse the remoter class we already have defined in the node.
-            return self._node.remoter
-        return RemoteCmdRunnerBase.create_remoter(**self._node.remoter.get_init_arguments())
+        return self._node.remoter
 
     @property
     @abstractmethod
