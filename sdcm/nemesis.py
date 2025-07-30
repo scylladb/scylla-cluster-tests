@@ -792,6 +792,7 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_soft_reboot_node(self):
+        self.switch_target_node_to_loader_rack()
         self.reboot_node(target_node=self.target_node, hard=False)
         self.target_node.wait_node_fully_start()
 
@@ -1224,8 +1225,15 @@ class Nemesis(NemesisFlags):
                 self.nodetool_cleanup_on_all_nodes_parallel()
         return new_node
 
+    def switch_target_node_to_loader_rack(self):
+        if self.cluster.params.get("rack_aware_loader") and self.target_node.parent_cluster.racks_count > 1:
+            loader_rack = self.loaders.nodes[0].rack
+            self.set_target_node(rack=loader_rack)
+            self.log.info("Target node rack %s, loader rack %s", self.target_node.rack, loader_rack)
+
     @target_all_nodes
     def disrupt_nodetool_decommission(self, add_node=True):
+        self.switch_target_node_to_loader_rack()
         return self._nodetool_decommission(add_node=add_node)
 
     @target_all_nodes
@@ -1474,6 +1482,7 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_terminate_and_replace_node(self):
+        self.switch_target_node_to_loader_rack()
         self._terminate_and_replace_node()
 
     def _terminate_and_replace_node(self):
@@ -5360,6 +5369,13 @@ class Nemesis(NemesisFlags):
     def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=False)
 
+    def switch_target_node_to_another_rack(self):
+        if self.cluster.params.get("rack_aware_loader") and self.target_node.parent_cluster.racks_count > 1:
+            loader_rack = self.loaders.nodes[0].rack
+            target_node_rack = [node.rack for node in self.cluster.nodes if node.rack != loader_rack][0]
+            self.set_target_node(rack=target_node_rack)
+            self.log.info("Target node rack %s, loader rack %s", self.target_node.rack, loader_rack)
+
     def _refuse_connection_from_banned_node(self, use_iptables=False):
         """Banned node could not connect with rest nodes in cluster
 
@@ -5379,6 +5395,9 @@ class Nemesis(NemesisFlags):
             raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+
+        self.switch_target_node_to_another_rack()
+
         keyspace_name = "banned_keyspace"
         table_name = "table1"
 
@@ -6111,9 +6130,13 @@ class MdcChaosMonkey(Nemesis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disruptions_list = self.build_disruptions_by_name([
-            'disrupt_destroy_data_then_repair',
-            'disrupt_no_corrupt_repair',
-            'disrupt_nodetool_decommission'
+            'disrupt_nodetool_decommission',
+            'disrupt_terminate_and_replace_node',
+            'disrupt_rolling_restart_cluster',
+            'disrupt_soft_reboot_node'
+            # 'disrupt_destroy_data_then_repair',
+            # 'disrupt_no_corrupt_repair',
+            # 'disrupt_nodetool_decommission'
         ])
         self.disruptions_list = self.shuffle_list_of_disruptions(self.disruptions_list)
 
