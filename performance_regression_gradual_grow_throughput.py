@@ -248,7 +248,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for throttle_step in workload.throttle_steps:
             self.log.info("Run cs command with rate: %s Kops", throttle_step)
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
-            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
+            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s", workload_type=workload.workload_type,
                                                       cycle_name=throttle_step))(self.run_step))
             results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
                                   num_threads=workload.num_threads, step_duration=workload.step_duration)
