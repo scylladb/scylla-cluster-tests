@@ -3003,9 +3003,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 credential.destroy()
             self.credentials = []
 
-    @classmethod
     @property
-    def left_processes_log(cls):
+    def left_processes_log(self):
         return os.path.join(TestConfig().logdir(), 'left_processes.log')
 
     @silence()
@@ -3149,12 +3148,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 
-        self.argus_finalize_test_run()
         try:
             ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
         except Exception:  # noqa: BLE001
             pass
-        self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
 
@@ -3243,7 +3240,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         pass
 
     @pytest.fixture(autouse=True)
-    def report_failures_as_event(self, request: pytest.FixtureRequest, validate):
+    def report_failures_as_event(self, request: pytest.FixtureRequest, event_system, validate):
         yield
         if subtests_results := SUBTESTS_FAILURES.pop(request.node.nodeid, None):
             for report in subtests_results:
@@ -3262,6 +3259,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     exception=request.node.rep_call.longreprtext,
                     severity=Severity.ERROR,
                 ).publish_or_dump(default_logger=self.log)
+
+    @pytest.fixture(autouse=True, name="argus_finalize", scope="session")
+    def fixture_argus_finalize(self):
+        """
+        Fixture to handle Argus cleanup operations after test completion.
+        """
+        yield
+        self.argus_finalize_test_run()
+        self.argus_heartbeat_stop_signal.set()
 
     @silence()
     def destroy_localhost(self):
