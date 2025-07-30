@@ -130,22 +130,22 @@ class YcsbStressThread(DockerBasedStressThread):
 
     def __init__(self, *args, cluster_tester, **kwargs):
         super().__init__(*args, **kwargs)
-        uuid_val = uuid.uuid4()
-        self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{uuid_val}')
+        self._uuid_val = uuid.uuid4()
+        self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{self._uuid_val}')
         LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
         os.makedirs(self.directory_for_hdr_files, exist_ok=True)
         self.hdrh_logger_contextes = []
         self.cluster_tester = cluster_tester
 
     def _hdr_files_directory_inside_ycsb_container(self, loader_idx, cpu_idx):
-        return f'/tmp/hdr-output-directory/{loader_idx}/{cpu_idx}'
+        return f'/tmp/hdr-output-directory/{self._uuid_val}/{loader_idx}/{cpu_idx}'
     
-    def _hdr_files_directory_on_master_node(self, loader_idx, cpu_idx):
+    def _hdr_files_directory_on_master_node(self):
         return self.directory_for_hdr_files
 
     def _hdr_main_dir_on_loaders_node(self):
-        return '/tmp/hdr-output-directory'
-    
+        return f'/tmp/hdr-output-directory/{self._uuid_val}'
+
     def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
         return f'{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}'
     
@@ -303,7 +303,7 @@ class YcsbStressThread(DockerBasedStressThread):
             for cpu_idx in range(self.stress_num):
                 for work_type, tag in self.WORK_TYPES.items():
                     tag_text = f'Tag={tag}'
-                    dst_pth = os.path.join(self.directory_for_hdr_files, f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
+                    dst_pth = os.path.join(self._hdr_files_directory_on_master_node(), f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
                     src_pth = dst_pth + '.untagged'
                     if os.path.isfile(src_pth):
                         LOGGER.debug(f'Fixing HDR file {src_pth}')
@@ -362,7 +362,7 @@ class YcsbStressThread(DockerBasedStressThread):
             for cpu_idx in range(self.stress_num):
                 for work_type in self.WORK_TYPES:
                     loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
-                    master_node_path = self._hdr_files_directory_on_master_node(loader_idx, cpu_idx)
+                    master_node_path = self._hdr_files_directory_on_master_node()
                     LOGGER.debug(f'Creating masters node HDR files directory: {master_node_path}')
                     os.makedirs(master_node_path, exist_ok=True)
                     LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
