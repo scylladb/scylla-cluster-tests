@@ -5689,7 +5689,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             node.remoter.sudo(
                 cmd='add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"')
             node.remoter.sudo(cmd="apt update")
-            node.install_package('docker-ce python3 python-setuptools wget unzip python3-pip')
+            node.install_package('docker-ce python3 python3-setuptools wget unzip python3-pip')
             prereqs_script = dedent("""
                 cat /etc/debian_version
             """)
