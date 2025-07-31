@@ -223,7 +223,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         run_mixed = mode in ('full', 'basic', 'basic-mixed')
         run_read_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-read')
         run_write_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-write')
-        self.hdr_tags = [ 'read', 'write' ]
+        self.hdr_tags = [ 'READ', 'SCAN', 'UPDATE', 'INSERT', 'DELETE', 'WRITE' ]
 
         def run_read_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
