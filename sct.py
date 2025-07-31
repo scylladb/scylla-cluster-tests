@@ -697,7 +697,11 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
               help="architecture of the AMI (default: x86_64)")
-def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
+@click.option('-o', '--output-format',
+              type=str,
+              default='table',
+              help="")
+def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType, output_format: str = "table"):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
@@ -719,10 +723,14 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
             match cloud_provider:
                 case "aws":
                     rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
-                    click.echo(
-                        create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
-                            title=f"AWS Machine Images by Version in region {region}")
-                    )
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                                title=f"AWS Machine Images by Version in region {region}")
+                        )
+                    elif output_format == "text":
+                        result = [row[1] for row in rows]
+                        click.echo(click.echo(",".join(result)))
                 case "gce":
                     if arch:
                         #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
@@ -755,11 +763,16 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
             match cloud_provider:
                 case "aws":
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch)
-                    click.echo(
-                        create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
-                            title=f"AMI Machine Images for {branch} in region {region}"
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
+                            )
                         )
-                    )
+                    elif output_format == "text":
+                        click.echo(ami_images)
+                        result = [row[1] for row in ami_images]
+                        click.echo(",".join(result))
                 case "gce":
                     gce_images = get_gce_images(branch=branch, arch=arch)
                     click.echo(
