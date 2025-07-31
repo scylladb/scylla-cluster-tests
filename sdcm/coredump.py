@@ -306,6 +306,12 @@ class CoredumpThreadBase(Thread):
     def _get_core_by_pid(self, pid: str) -> Optional[dict]:
         result = self.node.remoter.sudo(f"coredumpctl list {pid} -q --json=short", verbose=False, ignore_status=True)
         if not result.ok:
+            self.log.warning(
+                f"""Failed to get coredump info for pid {pid}:
+                Stdout:
+                {result.stdout}
+                Stderr:
+                {result.stderr}""")
             return None
 
         try:
@@ -330,9 +336,9 @@ class CoredumpThreadBase(Thread):
         return self._extract_version(release_version)
 
     def update_new_coredump_with_exec_information(self, core_info: CoreDumpInfo) -> None:
-        core = self._get_core_by_pid(core_info.pid)
-        core_info.update(executable=core.get('exe', r'N\A'),
-                         executable_version=self._get_executable_version(core.get('exe', r'N\A')))
+        if core := self._get_core_by_pid(core_info.pid):
+            core_info.update(executable=core.get('exe', r'N\A'),
+                             executable_version=self._get_executable_version(core.get('exe', r'N\A')))
 
     @staticmethod
     def _extract_version(release_version: str) -> Optional[str]:
