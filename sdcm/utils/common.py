@@ -16,6 +16,7 @@ from __future__ import absolute_import, annotations
 
 import atexit
 import itertools
+import json
 import os
 import logging
 import random
@@ -1545,6 +1546,24 @@ def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str
         tbl.add_row(row)
 
     return tbl
+
+
+def images_dict_in_json_format(rows: list[str] | list[list[str]], field_names: list[str]) -> str:
+    """
+    Convert the rows to a JSON format string.
+    :param rows: list of rows to convert
+    :param field_names: list of field names for the JSON keys
+    :return: JSON formatted string
+    """
+    if not rows:
+        return "{"
+
+    images_dict = {}
+    for image in rows:
+        images_dict.update({image[1]: {field: image[num] for num, field in enumerate(field_names)}})
+    images_json = json.dumps(images_dict)
+
+    return images_json
 
 
 def get_branched_gce_images(

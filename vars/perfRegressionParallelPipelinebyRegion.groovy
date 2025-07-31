@@ -6,6 +6,11 @@ def call(Map pipelineParams) {
                    label builder.label
             }
         }
+        environment {
+            AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+            AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+        }
+
         parameters {
             string(name: 'scylla_version', defaultValue: '', description: 'Scylla version to test')
             string(name: 'base_versions', defaultValue: '', description: 'Base versions')
@@ -21,19 +26,20 @@ def call(Map pipelineParams) {
                 '''
             )
         }
+
         stages {
             stage('Get Scylla Version') {
                 steps {
                     script {
                         def scylla_version = params.scylla_version?.trim()
                         def labels_selector = params.labels_selector?.trim()
-                        println("Scylla version: ${scylla_version}")
-                        println("Labels selector: $labels_selector")
                         if (scylla_version == "master:latest") {
                             scylla_version = "master"
                             if (!labels_selector) {
                                 error "Labels selector is not set. Please provide one of a valid 'labels_selector' values: 'master-weekly' OR 'master-daily' OR 'master-3weeks'."
                             }
+
+
                         }
                         def testRegionMatrix = [
                             [
@@ -170,21 +176,34 @@ def call(Map pipelineParams) {
                         println("testRegionMatrix: $testRegionMatrix")
                         def jobs_names = testRegionMatrix*.job_name.toSet()
                         println("Jobs names: $jobs_names")
+                        def image_name = null
                         for (job_name in jobs_names) {
                             println("Job name: $job_name")
                             for (def entry in testRegionMatrix) {
-                                def version = null
-                                def sub_tests = []
-                                def region = null
+                                 def cloud_provider = entry.cloud_provider ?: 'aws'
+                                 def version = null
+                                 def sub_tests = []
+                                 def region = null
+                                 if (scylla_version == "master" && !image_name){
+                                    region = entry.region ?: 'us-east-1'
+                                    def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o text", returnStdout: true).trim()
+                                    println("Output from hydra list-images: $output")
+                                    def image_name_json = output.split('\n')[-1].trim()
+                                    println("Image name json: $image_name_json")
+                                    if (!image_name_json){
+                                        error "Image name is empty. Please check the hydra.sh command output."
+                                    }
+
+                                    image_name = new groovy.json.JsonSlurper().parseText(image_name_json).keySet()[0]
+                                    println("Image name: $image_name")
+                                 }
+
                                 if (entry.job_name == job_name) {
                                     println("job_name: ${entry.job_name}, sub_tests: ${entry.sub_tests}")
                                     for (def ver in entry.versions) {
-                                        println("Checking version: $ver against scylla_version: $scylla_version")
-                                        println("If scylla_version is needed: ${scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")}")
                                         if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
                                             version = params.scylla_version
                                         }
-                                        println("Is scylla_version supported: $version")
                                     if (version) {
                                         if (labels_selector && !(entry.labels.contains(labels_selector))) {
                                             println("Skipping job $job_name for labels_selector: $labels_selector")
@@ -202,7 +221,8 @@ def call(Map pipelineParams) {
                                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                                     println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
                                         build job: job_name, wait: false, parameters: [
-                                            string(name: 'scylla_version', value: params.scylla_version),
+                                            string(name: 'scylla_version', value: image_name ? null : params.scylla_version),
+                                            string(name: 'scylla_ami_id', value: image_name ? image_name : null),
                                             string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
                                             string(name: 'provision_type', value: 'on_demand'),
                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
