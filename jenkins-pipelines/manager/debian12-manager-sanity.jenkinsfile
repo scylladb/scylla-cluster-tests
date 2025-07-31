@@ -6,12 +6,14 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
-    test_name: 'mgmt_cli_test.ManagerInstallationTests.test_manager_installed_and_functional',
-    test_config: '''["test-cases/manager/manager-installation-set-distro.yaml", "configurations/manager/debian11.yaml"]''',
+    test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/debian12.yaml"]''',
 
     scylla_version: '2025.1',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
+
+    downstream_jobs_to_run: 'debian11-upgrade-test'
 )
