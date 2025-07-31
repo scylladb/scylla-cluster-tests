@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -84,7 +83,7 @@ from sdcm.utils.common import (
     list_resources_docker,
     list_parallel_timelines_report_urls,
     search_test_id_in_latest,
-    get_latest_scylla_release,
+    get_latest_scylla_release, images_dict_in_json_format,
 )
 from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -697,7 +696,11 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
               help="architecture of the AMI (default: x86_64)")
-def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
+@click.option('-o', '--output-format',
+              type=str,
+              default='table',
+              help="")
+def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType, output_format: str = "table"):  # noqa: PLR0912
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
@@ -719,20 +722,28 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
             match cloud_provider:
                 case "aws":
                     rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
-                    click.echo(
-                        create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
-                            title=f"AWS Machine Images by Version in region {region}")
-                    )
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                                title=f"AWS Machine Images by Version in region {region}")
+                        )
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=rows, field_names=version_fields_with_tag_name)
+                        click.echo(ami_images_json)
                 case "gce":
                     if arch:
                         #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
                         click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
                     rows = get_gce_images_versioned(version=version)
-
-                    click.echo(
-                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                            title="GCE Machine Images by version")
-                    )
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="GCE Machine Images by version")
+                        )
+                    elif output_format == "text":
+                        gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(gce_images_json)
                 case "azure":
                     if arch:
                         click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
@@ -740,10 +751,15 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                     rows = []
                     for image in azure_images:
                         rows.append(['Azure', image.name, image.unique_id, 'N/A'])
-                    click.echo(
-                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                            title="Azure Machine Images by version")
-                    )
+
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version")
+                        )
+                    elif output_format == "text":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
 
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
@@ -755,18 +771,27 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
             match cloud_provider:
                 case "aws":
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch)
-                    click.echo(
-                        create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
-                            title=f"AMI Machine Images for {branch} in region {region}"
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                                title=f"AMI Machine Images for {branch} in region {region}"
+                            )
                         )
-                    )
+                    elif output_format == "text":
+                        ami_images_json = images_dict_in_json_format(
+                            rows=ami_images, field_names=branch_fields_with_tag_name)
+                        click.echo(ami_images_json)
                 case "gce":
                     gce_images = get_gce_images(branch=branch, arch=arch)
-                    click.echo(
-                        create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
-                            title=f"GCE Machine Images for {branch}"
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                                title=f"GCE Machine Images for {branch}"
+                            )
                         )
-                    )
+                    elif output_format == "text":
+                        gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
+                        click.echo(gce_images_json)
                 case "azure":
                     if arch:
                         click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
@@ -774,11 +799,15 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                     rows = []
                     for image in azure_images:
                         rows.append(['Azure', image.name, image.id, 'N/A'])
-                    click.echo(
-                        create_pretty_table(rows=rows, field_names=version_fields).get_string(
-                            title="Azure Machine Images by version")
-                    )
 
+                    if output_format == "table":
+                        click.echo(
+                            create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                                title="Azure Machine Images by version")
+                        )
+                    elif output_format == "text":
+                        azure_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
+                        click.echo(azure_images_json)
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
 
