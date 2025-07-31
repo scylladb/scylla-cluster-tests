@@ -310,40 +310,41 @@ class YcsbStressThread(DockerBasedStressThread):
                         LOGGER.debug(f'Fixing HDR file {src_pth}')
                         with open(src_pth, 'r', encoding='utf8') as input:
                             data = input.readlines()
-                        data2 = []
-                        ignored_tail_lines = 0
-                        faulty_lines = 0
+                        # data2 = []
+                        # ignored_tail_lines = 0
+                        # faulty_lines = 0
                         for e, d in enumerate(data):
                             LOGGER.debug(f'hdr file {src_pth} line {e}: `{d.strip()}`')
-                        for e, d in enumerate(data):
-                            d = d.strip()
-                            if not d:
-                                continue
-                            if d.startswith('tail: '):
-                                ignored_tail_lines += 1
-                            elif d.startswith(('#', '"')):
-                                if d.startswith('#[Logging for:'):
-                                    if data2:
-                                        LOGGER.warning(f'File {src_pth}, line {e} removing previous content ({len(data2)} lines)')
-                                    data2 = []
-                                data2.append(d)
-                            else:
-                                payload = d.split(',')[-1]
-                                try:
-                                    base64.b64decode(payload, validate=True)
-                                except (ValueError, binascii.Error) as exc:
-                                    if faulty_lines == 0:
-                                        LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`: {exc}')
-                                    else:
-                                        LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`')
-                                    faulty_lines += 1
-                                    continue
-                                if d[0].isdigit() or d[0] == '.':
-                                    data2.append(f'{tag_text},{d}')
-                                else:
-                                    data2.append(d)
-                        removed = len(data) - len(data2)
-                        LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), faulty lines {faulty_lines}, left {len(data2)} lines')
+                        data2 = data
+                        # for e, d in enumerate(data):
+                        #     d = d.strip()
+                        #     if not d:
+                        #         continue
+                        #     if d.startswith('tail: '):
+                        #         ignored_tail_lines += 1
+                        #     elif d.startswith(('#', '"')):
+                        #         if d.startswith('#[Logging for:'):
+                        #             if data2:
+                        #                 LOGGER.warning(f'File {src_pth}, line {e} removing previous content ({len(data2)} lines)')
+                        #             data2 = []
+                        #         data2.append(d)
+                        #     else:
+                        #         payload = d.split(',')[-1]
+                        #         try:
+                        #             base64.b64decode(payload, validate=True)
+                        #         except (ValueError, binascii.Error) as exc:
+                        #             if faulty_lines == 0:
+                        #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`: {exc}')
+                        #             else:
+                        #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`')
+                        #             faulty_lines += 1
+                        #             continue
+                        #         if d[0].isdigit() or d[0] == '.':
+                        #             data2.append(f'{tag_text},{d}')
+                        #         else:
+                        #             data2.append(d)
+                        # removed = len(data) - len(data2)
+                        # LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), faulty lines {faulty_lines}, left {len(data2)} lines')
                         if data2:
                             with open(dst_pth, 'w', encoding='utf8') as output:
                                 for d in data2:
@@ -356,7 +357,7 @@ class YcsbStressThread(DockerBasedStressThread):
         class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
             @cached_property
             def _logger_cmd_template(self) -> str:
-                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file}"
+                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file} -c +0"
 
         for loader in self.loaders:
             loader_idx = loader.node_index
