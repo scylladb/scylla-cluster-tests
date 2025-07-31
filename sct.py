@@ -1822,6 +1822,7 @@ def create_argus_test_run():
 @click.option("-s", "--jenkins-status", type=str, help="jenkins build status", required=True)
 def finish_argus_test_run(jenkins_status):
     try:
+        LOGGER.info("Finishing Argus TestRun with jenkins status %s", jenkins_status)
         params = SCTConfiguration()
         test_config = get_test_config()
         if not params.get('test_id'):
@@ -1835,6 +1836,7 @@ def finish_argus_test_run(jenkins_status):
             return
         new_status = TestStatus.FAILED
         if jenkins_status == "ABORTED":
+            LOGGER.info("Jenkins build status is ABORTED, setting Argus TestRun status to ABORTED")
             new_status = TestStatus.ABORTED
         test_config.argus_client().set_sct_run_status(new_status)
         test_config.argus_client().finalize_sct_run()
