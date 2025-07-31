@@ -85,6 +85,22 @@ class LatencyCalculatorReadResult(StaticGenericResultTable):
         ]
 
 
+class LatencyCalculatorReadDiskOnlyResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # to be set by the decorator to differentiate different operations
+        description = ""
+        Columns = [
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+        ]
+
+
 class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
@@ -140,7 +156,8 @@ class PerfSimpleQueryResult(StaticGenericResultTable):
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
-    "read": LatencyCalculatorReadResult
+    "read": LatencyCalculatorReadResult,
+    "read_disk_only": LatencyCalculatorReadDiskOnlyResult
 }
 
 
@@ -177,8 +194,9 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
     result_table.description = f"{workload} workload - {description}"
     result_table_summary.name = f"{workload} - {name} - Summary latencies"
     result_table_summary.description = f"{workload} workload summary - {description}"
-    if error_thresholds:
-        error_thresholds = error_thresholds[workload]["default"] | error_thresholds[workload].get(name, {})
+
+    if error_threshold := error_thresholds.get(workload):
+        error_thresholds = error_threshold["default"] | error_threshold.get(name, {})
         result_table.validation_rules = {metric: ValidationRule(**rules) for metric, rules in error_thresholds.items()}
         result_table_summary.validation_rules = result_table.validation_rules
     try:

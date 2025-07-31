@@ -287,3 +287,10 @@ latency_decorator_error_thresholds:
           fixed_limit: 10
       P99 read:
           fixed_limit: 10
+
+  read_disk_only:
+    default:
+      P90 read_disk_only:
+        fixed_limit: null
+      P99 read_disk_only:
+        fixed_limit: null
