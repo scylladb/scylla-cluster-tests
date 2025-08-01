@@ -116,7 +116,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
-    def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches
+    def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches  # noqa: B006
         if loader_name in memo:
             return None
         web_protocol = "http"

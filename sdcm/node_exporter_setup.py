@@ -6,7 +6,7 @@ NODE_EXPORTER_VERSION = '1.7.0'
 
 class NodeExporterSetup:  # pylint: disable=too-few-public-methods
     @staticmethod
-    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
+    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):  # noqa: F821
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             remoter = node.remoter
