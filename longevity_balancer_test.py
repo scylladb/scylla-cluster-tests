@@ -15,7 +15,7 @@
 
 
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from itertools import count
 from time import sleep, strftime, time
 from argus.client.base import ArgusClientError
@@ -24,7 +24,8 @@ from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.system import InfoEvent, SoftTimeoutEvent, TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
@@ -32,6 +33,17 @@ from threading import Thread
 
 SOFT_BALANCE_THRESHOLD = 5
 HARD_BALANCE_THRESHOLD = 10
+
+
+@contextmanager
+def ignore_soft_timeout():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.NORMAL,
+            event_class=SoftTimeoutEvent,
+            extra_time_to_expiration=60
+        ))
+        yield
 
 
 class LongevityBalancerTest(LongevityTest):
@@ -187,7 +199,9 @@ class LongevityBalancerTest(LongevityTest):
 
     def scale_in(self, nodes: list[BaseNode]):
         parallel_obj = ParallelObject(objects=nodes, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION, num_workers=len(nodes))
+        InfoEvent(f'Started decommissioning {len(nodes)} nodes').publish()
         parallel_obj.run(self.db_cluster.decommission, ignore_exceptions=False, unpack_objects=True)
+        InfoEvent(f'Finished decommissioning {len(nodes)} nodes').publish()
         self.monitors.reconfigure_scylla_monitoring()
 
     def test_load_balance(self):
@@ -212,6 +226,7 @@ class LongevityBalancerTest(LongevityTest):
             self.run_prepare_write_cmd()
             new_nodes = self.scale_out()
             self.assemble_and_run_all_stress_cmd([], self.params.get('stress_cmd'), self.params.get('keyspace_num'))
-            self.scale_in(new_nodes)
+            with ignore_soft_timeout():
+                self.scale_in(new_nodes)
             self.wait_for_balance()
             self.check_final_balance()
