@@ -243,6 +243,7 @@ class BaseNode(AutoSshContainerMixin):
     OLD_MANAGER_PORT = 56080
 
     log = LOGGER
+    _instance_type = "N/A"
 
     GOSSIP_STATUSES_FILTER_OUT = ['LEFT',    # in case the node was decommissioned
                                   'removed',  # in case the node was removed by nodetool removenode
@@ -433,6 +434,7 @@ class BaseNode(AutoSshContainerMixin):
                 provider=self.parent_cluster.cluster_backend,
                 shards_amount=shards,
                 state=ResourceState.RUNNING,
+                instance_type=self._instance_type
             )
         except Exception:
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
