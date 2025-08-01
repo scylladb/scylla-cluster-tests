@@ -15,7 +15,11 @@
 
 
 from collections import defaultdict
-from time import time
+from contextlib import contextmanager
+from itertools import count
+from time import sleep, strftime, time
+from argus.client.base import ArgusClientError
+from argus.client.generic_result import ColumnMetadata, ResultType, StaticGenericResultTable, Status
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
@@ -24,6 +28,7 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
+from threading import Thread
 
 SOFT_BALANCE_THRESHOLD = 5
 HARD_BALANCE_THRESHOLD = 10
@@ -73,6 +78,84 @@ class LongevityBalancerTest(LongevityTest):
         except (IndexError, ValueError, TypeError):
             # Catch any errors in case the results are malformed
             return -1
+
+    def result_table(self, rack_groups: dict[str, list[BaseNode]], prev: list = []):  # noqa: B006
+        columns: list[ColumnMetadata] = [ColumnMetadata(name="time", unit="", type=ResultType.TEXT),]
+        for rack, rack_nodes in rack_groups.items():
+            for node in rack_nodes:
+                columns.append(ColumnMetadata(name=f"node{node.name.split('-')[-1]}", unit="%", type=ResultType.FLOAT))
+            columns.append(ColumnMetadata(name=f"RACK{rack}", unit="%", type=ResultType.FLOAT))
+
+        # ensure that the columns are consistent with previous calls
+        prev.append(columns)
+        columns = max(prev, key=len)
+        prev[:] = [columns]
+
+        class DiskUsageResult(StaticGenericResultTable):
+            class Meta:
+                name = "Disk Usage"
+                description = f"""
+                    The disk usage of the nodes in the cluster and the balance status per rack.
+                    The status is determined based on the balance of disk usage inside a rack.
+                    GREEN: balanced within {SOFT_BALANCE_THRESHOLD}%
+                    YELLOW: balanced within {HARD_BALANCE_THRESHOLD}%
+                    RED: unbalanced, more than {HARD_BALANCE_THRESHOLD}% difference in disk usage
+                    """
+                Columns = columns
+
+        return DiskUsageResult()
+
+    def disk_usage_to_argus(self, cycle: dict[str, count] = {"row": count(1)}) -> None:  # noqa: B006
+        """
+        Collect disk usage for each node and submit the results to Argus.
+        """
+        rack_groups: defaultdict[str, list[BaseNode]] = defaultdict(list)
+        for node in self.db_cluster.data_nodes:
+            rack_groups[node.rack].append(node)
+
+        data_table = self.result_table(rack_groups)
+        row = f"#{next(cycle['row'])}"
+
+        current_time = time()
+        data_table.add_result(column="time", row=row, value=strftime('%H:%M:%S'), status=Status.UNSET)
+
+        rack_usages: defaultdict[str, list[float]] = defaultdict(list)
+        for rack, rack_nodes in rack_groups.items():
+            for node in rack_nodes:
+                if (usage := self.get_disk_usage(node, end_time=current_time)) != -1:
+                    rack_usages[rack].append(usage)
+                    data_table.add_result(column=f"node{node.name.split('-')[-1]}", row=row, value=usage,
+                                          status=Status.UNSET)
+            # Calculate the average usage for the rack
+            if rack_usages[rack]:
+                rack_delta = max(rack_usages[rack]) - min(rack_usages[rack])
+                status = (Status.PASS if rack_delta <= SOFT_BALANCE_THRESHOLD else
+                          Status.WARNING if rack_delta <= HARD_BALANCE_THRESHOLD else
+                          Status.ERROR)
+                data_table.add_result(column=f"RACK{rack}", row=row, value=rack_delta, status=status)
+
+        try:
+            self.test_config.argus_client().submit_results(data_table)
+        except ArgusClientError as exc:
+            if exc.args[1] == "DataValidationError":
+                pass  # Ignore validation errors, the status is just used to color the table in Argus
+            else:
+                raise
+
+    @contextmanager
+    def periodic_disk_usage_to_argus(self, interval=600):
+        """
+        Periodically collect disk usage and submit it to Argus.
+        """
+        def collect_disk_usage():
+            while True:
+                self.disk_usage_to_argus()
+                sleep(interval)
+
+        thread = Thread(target=collect_disk_usage, daemon=True)
+        thread.start()
+        yield
+        thread.join(timeout=1)
 
     def check_final_balance(self):
         rack_usages = defaultdict(list)
@@ -124,9 +207,11 @@ class LongevityBalancerTest(LongevityTest):
         7. Check the final balance of the cluster.
         """
         self.expand_cluster_heterogenous()
-        self.run_prepare_write_cmd()
-        new_nodes = self.scale_out()
-        self.assemble_and_run_all_stress_cmd([], self.params.get('stress_cmd'), self.params.get('keyspace_num'))
-        self.scale_in(new_nodes)
-        self.wait_for_balance()
-        self.check_final_balance()
+        sleep(600)  # wait for new nodes to have prometheus_db metrics
+        with self.periodic_disk_usage_to_argus(interval=600):
+            self.run_prepare_write_cmd()
+            new_nodes = self.scale_out()
+            self.assemble_and_run_all_stress_cmd([], self.params.get('stress_cmd'), self.params.get('keyspace_num'))
+            self.scale_in(new_nodes)
+            self.wait_for_balance()
+            self.check_final_balance()
