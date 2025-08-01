@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+simpleTrigger([
+ "longevity/longevity-10gb-3h-test",
+ "no_tablets/longevity-lwt-3h-no-tablets-test",
+ "longevity/longevity-twcs-3h-test",
+ "alternator/longevity-alternator-3h-test",
+ "no_tablets/longevity-cdc-100gb-4h-no-tablets-test",
+ "longevity/longevity-large-partition-asymmetric-cluster-3h-test"
+])
