@@ -214,10 +214,11 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             tzinfo=timezone.utc) if 'creation_time' in tags else None
         image = str(v_m.storage_profile.image_reference)
         pricing_model = self._get_pricing_model(v_m)
+        instance_type = v_m.hardware_profile.vm_size
 
         return VmInstance(name=v_m.name, region=v_m.location, user_name=ssh_user, ssh_key_name=ssh_key, public_ip_address=pub_address,
                           private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image, creation_time=creation_time, _provisioner=self)
+                          image=image, creation_time=creation_time, instance_type=instance_type, _provisioner=self)
 
     @staticmethod
     def _get_pricing_model(v_m: VirtualMachine) -> PricingModel:

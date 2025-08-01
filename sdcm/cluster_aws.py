@@ -407,7 +407,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return node
 
 
-class AWSNode(cluster.BaseNode):
+class AWSNode(cluster.BaseNode):  # pylint: disable=too-many-instance-attributes
     """
     Wraps EC2.Instance, so that we can also control the instance through SSH.
     """
@@ -419,6 +419,7 @@ class AWSNode(cluster.BaseNode):
                  base_logdir=None, dc_idx=0, rack=0):
         self.node_index = node_index
         self._instance = ec2_instance
+        self._instance_type = ec2_instance.instance_type
         self._ec2_service: EC2ServiceResource = ec2_service
         self._eth1_private_ip_address = None
         self.eip_allocation_id = None
