@@ -246,6 +246,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     OLD_MANAGER_PORT = 56080
 
     log = LOGGER
+    _instance_type = "N/A"
 
     GOSSIP_STATUSES_FILTER_OUT = ['LEFT',    # in case the node was decommissioned
                                   'removed',  # in case the node was removed by nodetool removenode
@@ -407,6 +408,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 provider=self.parent_cluster.cluster_backend,
                 shards_amount=shards,
                 state=ResourceState.RUNNING,
+                instance_type=self._instance_type
             )
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
