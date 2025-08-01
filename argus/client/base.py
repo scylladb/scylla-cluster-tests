@@ -97,14 +97,17 @@ class ArgusClient:
         }
 
     def get(self, endpoint: str, location_params: dict[str, str] = None, params: dict = None) -> requests.Response:
+        url = self.get_url_for_endpoint(
+            endpoint=endpoint,
+            location_params=location_params
+        )
+        LOGGER.debug("GET Request: %s, params: %s", url, params)
         response = requests.get(
-            url=self.get_url_for_endpoint(
-                endpoint=endpoint,
-                location_params=location_params
-            ),
+            url=url,
             params=params,
             headers=self.request_headers
         )
+        LOGGER.debug("GET Response: %s %s", response.status_code, response.url)
 
         return response
 
@@ -115,15 +118,18 @@ class ArgusClient:
         params: dict = None,
         body: dict = None,
     ) -> requests.Response:
+        url = self.get_url_for_endpoint(
+            endpoint=endpoint,
+            location_params=location_params
+        )
+        LOGGER.debug("POST Request: %s, params: %s, body: %s", url, params, body)
         response = requests.post(
-            url=self.get_url_for_endpoint(
-                endpoint=endpoint,
-                location_params=location_params
-            ),
+            url=url,
             params=params,
             json=body,
             headers=self.request_headers,
         )
+        LOGGER.debug("POST Response: %s %s", response.status_code, response.url)
 
         return response
 
