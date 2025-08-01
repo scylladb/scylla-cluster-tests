@@ -373,7 +373,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.test_config.argus_client().set_sct_runner(
                 public_ip=get_sct_runner_ip(),
                 private_ip=get_my_ip(),
-                region="undefined_region",
+                region="N/A",
                 backend=self.params.get("cluster_backend"))
             self.log.info("sct_runner info in Argus TestRun is updated")
         except ArgusClientError:
