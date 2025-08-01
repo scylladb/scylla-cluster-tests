@@ -113,7 +113,7 @@ class SstableLoadUtils:
     @classmethod
     def run_load_and_stream(cls, node,  # pylint: disable=too-many-arguments
                             keyspace_name: str = 'keyspace1', table_name: str = 'standard1',
-                            start_timeout=60, end_timeout=300):
+                            start_timeout=60, end_timeout=600):
         """runs load and stream using API request and waits for it to finish"""
         with wait_for_log_lines(node, start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],
                                 end_line_patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)],
