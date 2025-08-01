@@ -94,7 +94,7 @@ from sdcm.utils.resources_cleanup import (
 from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import docker_hub_login
+from sdcm.utils.docker_utils import docker_hub_login, running_in_podman
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
 from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
@@ -1128,16 +1128,17 @@ def integration_tests(test):
     get_test_config().logdir()
     add_file_logger()
 
-    # setup prerequisites for the integration test is identical
-    # to the kind local functional tests
-    # TODO: to refactor setup_prerequisites out of LocalKindCluster
-    sct_config = SCTConfiguration()
-    local_cluster = mini_k8s.LocalKindCluster(
-        software_version="",
-        user_prefix="",
-        params=sct_config,
-    )
-    local_cluster.setup_prerequisites()
+    if not running_in_podman():  # we can't do sudo commands within rootless podman
+        # setup prerequisites for the integration test is identical
+        # to the kind local functional tests
+        # TODO: to refactor setup_prerequisites out of LocalKindCluster
+        sct_config = SCTConfiguration()
+        local_cluster = mini_k8s.LocalKindCluster(
+            software_version="",
+            user_prefix="",
+            params=sct_config,
+        )
+        local_cluster.setup_prerequisites()
 
     sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'integration', 'unit_tests/{}'.format(test)]))
 
