@@ -37,6 +37,11 @@ def call(String backend, String region=null, String datacenter=null, String loca
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
+    // for xcloud backend, use the underlying cloud provider
+    if (backend == 'xcloud') {
+        cloud_provider = params.xcloud_provider?.trim()?.toLowerCase()
+    }
+
     if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location) || (cloud_provider == 'aws-fibs' && region)) {
         def supported_regions = []
 
@@ -69,6 +74,11 @@ def call(String backend, String region=null, String datacenter=null, String loca
     } else if (region == 'fips') {
         return [ "label": jenkins_labels['aws-fips'], "region": '' ]
     } else {
-        return [ "label": jenkins_labels[cloud_provider], "region": region ]
+        def label = jenkins_labels.get(cloud_provider, null)
+        if (label == null) {
+            throw new Exception("=================== No Jenkins builder label mapping found for backend '${backend}' (resolved " +
+                                "to cloud_provider '${cloud_provider}'). Available mappings: ${jenkins_labels.keySet().sort()} ===================")
+        }
+        return [ "label": label, "region": region ]
     }
 }
