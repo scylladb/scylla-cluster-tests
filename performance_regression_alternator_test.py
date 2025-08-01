@@ -51,6 +51,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         self.stack = contextlib.ExitStack()
         self.stack.enter_context(ignore_alternator_client_errors())
         self.stack.enter_context(ignore_operation_errors())
+        self.hdr_tags = [ 'READ', 'SCAN', 'UPDATE', 'INSERT', 'DELETE', 'WRITE' ]
 
     def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
         # test_name must end with one of '_read', '_write', '_mixed', '_throughput_read', '_throughput_write'
@@ -223,7 +224,6 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         run_mixed = mode in ('full', 'basic', 'basic-mixed')
         run_read_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-read')
         run_write_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-write')
-        self.hdr_tags = [ 'READ', 'SCAN', 'UPDATE', 'INSERT', 'DELETE', 'WRITE' ]
 
         def run_read_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(

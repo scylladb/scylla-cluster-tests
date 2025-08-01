@@ -239,6 +239,7 @@ class _HdrRangeHistogramBuilder:
             LOGGER.error("File doesn't exists: %s", hdr_file)
             return _HdrRangeHistogram(start_time=0, end_time=0, histogram=None, hdr_tag=None)
 
+        LOGGER.debug("Parsing file: %s", hdr_file)
         histogram = _HdrHistogram()
         histogram.set_tag(hdr_tag)
         _, file_with_correct_time_interval = analyze_hdr_file()
