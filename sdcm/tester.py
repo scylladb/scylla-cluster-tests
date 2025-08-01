@@ -91,8 +91,9 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_servi
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, change_default_password, \
+    make_threads_be_daemonic_by_default, change_default_password, \
     parse_python_thread_command, get_data_dir_path
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
@@ -3466,7 +3467,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                     events=get_events_grouped_by_category(
                                         _registry=self.events_processes_registry))
         with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.load(file)
+            try:
+                self.log.debug(f"Reading file: {file.name}")
+                self.log.debug(f"File content: {file.read()}")
+                latency_results = json.load(file)
+            except json.JSONDecodeError as e:
+                InfoEvent(message=f"Failed to decode JSON: {e}").publish()
+                self.log.error(f"Failed to decode JSON from file {file.name}: {e}")
+                return
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
