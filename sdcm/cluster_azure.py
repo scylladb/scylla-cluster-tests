@@ -50,6 +50,7 @@ class AzureNode(cluster.BaseNode):
         self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster
         self._instance = azure_instance
+        self._instance_type = azure_instance.instance_type
         name = f"{node_prefix}-{self.region}-{node_index}".lower()
         self.last_event_document_incarnation = -1
         ssh_login_info = {'hostname': None,
