@@ -62,9 +62,10 @@ class LongevityBalancerTest(LongevityTest):
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
 
     def wait_for_balance(self):
+        nodes = self.db_cluster.data_nodes
+        parallel_obj = ParallelObject(objects=nodes, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION, num_workers=len(nodes))
         for _ in range(3):
-            for node in self.db_cluster.data_nodes:
-                wait_no_tablets_migration_running(node, timeout=3600 * 2)
+            parallel_obj.run(wait_no_tablets_migration_running, ignore_exceptions=False, unpack_objects=True)
 
     def get_disk_usage(self, node: BaseNode, end_time: float = None) -> float:
         """
@@ -225,7 +226,11 @@ class LongevityBalancerTest(LongevityTest):
         with self.periodic_disk_usage_to_argus(interval=600):
             self.run_prepare_write_cmd()
             new_nodes = self.scale_out()
-            self.assemble_and_run_all_stress_cmd([], self.params.get('stress_cmd'), self.params.get('keyspace_num'))
+            stress_queue = []
+            self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get(
+                'stress_cmd'), self.params.get('keyspace_num'))
+            for stress in stress_queue:
+                self.verify_stress_thread(stress)
             with ignore_soft_timeout():
                 self.scale_in(new_nodes)
             self.wait_for_balance()
