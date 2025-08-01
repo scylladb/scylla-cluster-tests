@@ -49,6 +49,7 @@ class FakeProvisioner(Provisioner):
                          pricing_model=pricing_model,
                          image=definition.image_id,
                          creation_time=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc),
+                         instance_type=definition.type,
                          _provisioner=self)
         self._instances[definition.name] = v_m
         return v_m

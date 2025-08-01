@@ -85,6 +85,7 @@ class GCENode(cluster.BaseNode):
         self.node_index = node_index
         self.project = gce_project
         self._instance = gce_instance
+        self._instance_type = gce_instance.machine_type.split('/')[-1]
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
         self._last_logs_fetch_time = 0.0

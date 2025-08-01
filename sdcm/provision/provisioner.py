@@ -84,6 +84,7 @@ class VmInstance:
     pricing_model: PricingModel
     image: str
     creation_time: datetime | None
+    instance_type: str
     _provisioner: "Provisioner"
 
     def terminate(self, wait: bool = True) -> None:

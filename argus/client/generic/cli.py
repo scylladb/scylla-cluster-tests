@@ -32,13 +32,14 @@ def cli():
 @click.option("--build-id", required=True, help="Unique job identifier in the build system, e.g. scylla-master/group/job for jenkins (The full path)")
 @click.option("--build-url", required=True, help="Job URL in the build system")
 @click.option("--started-by", required=True, help="Username of the user who started the job")
+@click.option("--sub-type", required=False, help="Sub-type of the generic test: pytest, dtest")
 @click.option("--scylla-version", required=False, default=None, help="Version of Scylla used for this job")
 @click.option("--extra-headers", default={}, type=click.UNPROCESSED, callback=validate_extra_headers, help="extra headers to pass to argus, should be in json format", envvar='ARGUS_EXTRA_HEADERS')
-def submit_run(api_key: str, base_url: str, id: str, build_id: str, build_url: str, started_by: str, scylla_version: str = None, extra_headers: dict | None = None):
+def submit_run(api_key: str, base_url: str, id: str, build_id: str, build_url: str, started_by: str, sub_type: str = None, scylla_version: str = None, extra_headers: dict | None = None):
     LOGGER.info("Submitting %s (%s) to Argus...", build_id, id)
     client = ArgusGenericClient(auth_token=api_key, base_url=base_url, extra_headers=extra_headers)
     client.submit_generic_run(build_id=build_id, run_id=id, started_by=started_by,
-                              build_url=build_url, scylla_version=scylla_version)
+                              build_url=build_url, scylla_version=scylla_version, sub_type=sub_type)
     LOGGER.info("Done.")
 
 
