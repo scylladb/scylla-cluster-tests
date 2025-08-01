@@ -447,6 +447,7 @@ class AWSNode(cluster.BaseNode):
                  base_logdir=None, dc_idx=0, rack=0):
         self.node_index = node_index
         self._instance = ec2_instance
+        self._instance_type = ec2_instance.instance_type
         self._ec2_service: EC2ServiceResource = ec2_service
         self.eip_allocation_id = None
         self._aws_metadata_token = {"token": "", "expires": 0}
