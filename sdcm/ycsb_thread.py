@@ -348,7 +348,7 @@ class YcsbStressThread(DockerBasedStressThread):
                         if data2:
                             with open(dst_pth, 'w', encoding='utf8') as output:
                                 for d in data2:
-                                    output.write(d)
+                                    output.write(d.strip())
                                     output.write('\n')
                     else:
                         LOGGER.debug(f'File {src_pth} does not exist, skipping update')
