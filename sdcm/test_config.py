@@ -256,7 +256,7 @@ class TestConfig(metaclass=Singleton):
                 syslogng_host = "127.0.0.1"
                 syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
             else:
-                syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
+                syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS
             return syslogng_host, syslogng_port
         elif cls.VECTOR_ADDRESS:
             if cls.IP_SSH_CONNECTIONS == "public":

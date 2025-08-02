@@ -1862,7 +1862,7 @@ class Nemesis(NemesisFlags):
                 try:
                     with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 3):
                         node.run_nodetool(sub_cmd="repair -pr", publish_event=publish_event)
-                except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as err:  # noqa: BLE001
                     self.log.warning(f"Repair failed to complete on node: {node}, with error: {str(err)}")
         else:
             self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts)
