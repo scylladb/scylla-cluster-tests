@@ -314,7 +314,7 @@ class YcsbStressThread(DockerBasedStressThread):
                         # ignored_tail_lines = 0
                         # faulty_lines = 0
                         for e, d in enumerate(data):
-                            LOGGER.debug(f'hdr file {src_pth} line {e}: `{d.strip()}`')
+                            LOGGER.info(f'hdr file {src_pth} line {e}: {repr(d)}')
                         data2 = data
                         # for e, d in enumerate(data):
                         #     d = d.strip()
