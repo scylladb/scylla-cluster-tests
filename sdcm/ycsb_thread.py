@@ -300,6 +300,21 @@ class YcsbStressThread(DockerBasedStressThread):
         # - the generated files are created way after we try to download them via HDRHistogramFileLogger
         #   which produces a lot of tail command errors in the files, which we need to remove
         LOGGER.debug('Fixing HDR files')
+
+
+        for loader in self.loaders:
+            for cpu_idx in range(self.stress_num):
+                for work_type, tag in self.WORK_TYPES.items():
+                    src_pth = os.path.join(self._hdr_files_directory_on_master_node(), f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
+                    if os.path.isfile(src_pth):
+                        LOGGER.info(f'Fixing HDR file {src_pth}')
+                        with open(src_pth, 'r', encoding='utf8') as input:
+                            data = input.readlines()
+                        for e, d in enumerate(data):
+                            LOGGER.info(f'hdr file {src_pth} line {e}: {repr(d)}')
+                    else:
+                        LOGGER.info(f'File {src_pth} does not exist, skipping update')
+
         # for loader in self.loaders:
         #     for cpu_idx in range(self.stress_num):
         #         for work_type, tag in self.WORK_TYPES.items():
