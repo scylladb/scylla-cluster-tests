@@ -87,7 +87,7 @@ class LongevityOutOfSpaceTest(LongevityTest):
 
         super().tearDown()
 
-    def _query_disk_usage(self, node: BaseNode, start: float, end: float) -> float:
+    def _query_disk_usage(self, node: BaseNode, start: float = None, end: float = None) -> float:
         """
         :param node: The node to get the disk usage for.
         :param start: The start time for the query as a timestamp. Defaults to end - 60.
