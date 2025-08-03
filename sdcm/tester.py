@@ -714,9 +714,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_config.test_id())
 
-    def _init_params(self):
-        self.params = init_and_verify_sct_config()
-
     def _init_logging(self):
         self.log = logging.getLogger(self.__class__.__name__)
         self.actions_log = get_action_logger('tester')
@@ -897,7 +894,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.status = "RUNNING"
         self.start_time = time.time()
         self.teardown_started = False
-        self._init_params()
         reuse_cluster_id = self.params.get('reuse_cluster')
         if reuse_cluster_id:
             self.test_config.reuse_cluster(True)
@@ -956,8 +952,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                              self.params.get('email_recipients'),
                                              self.logdir)
 
-        self.init_argus_run()
-        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
         self.localhost = self._init_localhost()
 
@@ -3155,7 +3149,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
 
-    @pytest.fixture(autouse=True, name='setup_logging')
+    @pytest.fixture(autouse=True, name='setup_logging', scope='session')
     def fixture_setup_logging(self):
         self._init_logging()
 
@@ -3260,14 +3254,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     severity=Severity.ERROR,
                 ).publish_or_dump(default_logger=self.log)
 
-    @pytest.fixture(autouse=True, name="argus_finalize", scope="session")
-    def fixture_argus_finalize(self):
+    @pytest.fixture(autouse=True, name="params", scope="session")
+    def fixture_params(self):
+        self.params = init_and_verify_sct_config()
+
+    @pytest.fixture(autouse=True, name="argus_connection", scope="session")
+    def fixture_argus_connection(self, params, setup_logging):
         """
-        Fixture to handle Argus cleanup operations after test completion.
+        Fixture to handle Argus init and finalization after test completion.
         """
+        self.init_argus_run()
+        argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         yield
         self.argus_finalize_test_run()
-        self.argus_heartbeat_stop_signal.set()
+        argus_heartbeat_stop_signal.set()
 
     @silence()
     def destroy_localhost(self):

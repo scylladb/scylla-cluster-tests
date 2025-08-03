@@ -67,8 +67,6 @@ def test_test_user_batch_custom_time(params, pytester):
         class DummyLongevityTest(LongevityTest):
             __test__ = True
 
-            argus_heartbeat_stop_signal = threading.Event()
-
             @pytest.fixture(autouse=True)
             def fixture_params(self, params):
                 self.params = params
