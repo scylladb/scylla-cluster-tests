@@ -340,6 +340,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     monitors: BaseMonitorSet = None
     loaders: Union[BaseLoaderSet, LoaderSetAWS, LoaderSetGCE] = None
     db_cluster: Union[BaseCluster, BaseScyllaCluster] = None
+    argus_heartbeat_stop_signal = threading.Event()
 
     @property
     def k8s_cluster(self):
