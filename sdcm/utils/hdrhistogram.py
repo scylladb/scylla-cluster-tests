@@ -242,8 +242,12 @@ class _HdrRangeHistogramBuilder:
         LOGGER.debug("Parsing file: %s", hdr_file)
         histogram = _HdrHistogram()
         histogram.set_tag(hdr_tag)
-        _, file_with_correct_time_interval = analyze_hdr_file()
-
+        try:
+            _, file_with_correct_time_interval = analyze_hdr_file()
+        except Exception as e:
+            LOGGER.error("Failed to parse file %s with tag %s: %s", hdr_file, hdr_tag, e)
+            LOGGER.error(traceback.format_exc())
+            raise
         if not file_with_correct_time_interval:
             LOGGER.debug(f'The file {hdr_file} does not include the time interval from `{self.start_time}` to `{self.end_time}`')
             # Keep this message for future debug
