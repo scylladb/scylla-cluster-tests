@@ -300,58 +300,57 @@ class YcsbStressThread(DockerBasedStressThread):
         # - the generated files are created way after we try to download them via HDRHistogramFileLogger
         #   which produces a lot of tail command errors in the files, which we need to remove
         LOGGER.debug('Fixing HDR files')
-        for loader in self.loaders:
-            for cpu_idx in range(self.stress_num):
-                for work_type, tag in self.WORK_TYPES.items():
-                    tag_text = f'Tag={tag}'
-                    dst_pth = os.path.join(self._hdr_files_directory_on_master_node(), f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
-                    src_pth = dst_pth + '.untagged'
-                    if os.path.isfile(src_pth):
-                        LOGGER.debug(f'Fixing HDR file {src_pth}')
-                        with open(src_pth, 'r', encoding='utf8') as input:
-                            data = input.readlines()
-                        # data2 = []
-                        # ignored_tail_lines = 0
-                        # faulty_lines = 0
-                        for e, d in enumerate(data):
-                            LOGGER.info(f'hdr file {src_pth} line {e}: {repr(d)}')
-                        data2 = data
-                        # for e, d in enumerate(data):
-                        #     d = d.strip()
-                        #     if not d:
-                        #         continue
-                        #     if d.startswith('tail: '):
-                        #         ignored_tail_lines += 1
-                        #     elif d.startswith(('#', '"')):
-                        #         if d.startswith('#[Logging for:'):
-                        #             if data2:
-                        #                 LOGGER.warning(f'File {src_pth}, line {e} removing previous content ({len(data2)} lines)')
-                        #             data2 = []
-                        #         data2.append(d)
-                        #     else:
-                        #         payload = d.split(',')[-1]
-                        #         try:
-                        #             base64.b64decode(payload, validate=True)
-                        #         except (ValueError, binascii.Error) as exc:
-                        #             if faulty_lines == 0:
-                        #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`: {exc}')
-                        #             else:
-                        #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`')
-                        #             faulty_lines += 1
-                        #             continue
-                        #         if d[0].isdigit() or d[0] == '.':
-                        #             data2.append(f'{tag_text},{d}')
-                        #         else:
-                        #             data2.append(d)
-                        # removed = len(data) - len(data2)
-                        # LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), faulty lines {faulty_lines}, left {len(data2)} lines')
-                        if data2:
-                            with open(dst_pth, 'w', encoding='utf8') as output:
-                                for d in data2:
-                                    output.write(d.strip())
-                                    output.write('\n')
-                    else:
-                        LOGGER.debug(f'File {src_pth} does not exist, skipping update')
+        # for loader in self.loaders:
+        #     for cpu_idx in range(self.stress_num):
+        #         for work_type, tag in self.WORK_TYPES.items():
+        #             tag_text = f'Tag={tag}'
+        #             dst_pth = os.path.join(self._hdr_files_directory_on_master_node(), f'hdrh-{loader.node_index}-{work_type}-{cpu_idx}.hdr')
+        #             src_pth = dst_pth + '.untagged'
+        #             if os.path.isfile(src_pth):
+        #                 LOGGER.debug(f'Fixing HDR file {src_pth}')
+        #                 with open(src_pth, 'r', encoding='utf8') as input:
+        #                     data = input.readlines()
+        #                 # data2 = []
+        #                 # ignored_tail_lines = 0
+        #                 # faulty_lines = 0
+        #                 for e, d in enumerate(data):
+        #                     LOGGER.info(f'hdr file {src_pth} line {e}: {repr(d)}')
+        #                 data2 = data
+        #                 # for e, d in enumerate(data):
+        #                 #     d = d.strip()
+        #                 #     if not d:
+        #                 #         continue
+        #                 #     if d.startswith('tail: '):
+        #                 #         ignored_tail_lines += 1
+        #                 #     elif d.startswith(('#', '"')):
+        #                 #         if d.startswith('#[Logging for:'):
+        #                 #             if data2:
+        #                 #                 LOGGER.warning(f'File {src_pth}, line {e} removing previous content ({len(data2)} lines)')
+        #                 #             data2 = []
+        #                 #         data2.append(d)
+        #                 #     else:
+        #                 #         payload = d.split(',')[-1]
+        #                 #         try:
+        #                 #             base64.b64decode(payload, validate=True)
+        #                 #         except (ValueError, binascii.Error) as exc:
+        #                 #             if faulty_lines == 0:
+        #                 #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`: {exc}')
+        #                 #             else:
+        #                 #                 LOGGER.warning(f'File {src_pth} has faulty {e} line: `{d}`')
+        #                 #             faulty_lines += 1
+        #                 #             continue
+        #                 #         if d[0].isdigit() or d[0] == '.':
+        #                 #             data2.append(f'{tag_text},{d}')
+        #                 #         else:
+        #                 #             data2.append(d)
+        #                 # removed = len(data) - len(data2)
+        #                 # LOGGER.debug(f'File {src_pth} removed {removed} lines ({ignored_tail_lines} tail lines), faulty lines {faulty_lines}, left {len(data2)} lines')
+        #                 if data2:
+        #                     with open(dst_pth, 'w', encoding='utf8') as output:
+        #                         for d in data2:
+        #                             output.write(d)
+        #             else:
+        #                 LOGGER.debug(f'File {src_pth} does not exist, skipping update')
 
     def _initialize_hdr_loggers(self):
         class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
@@ -367,11 +366,13 @@ class YcsbStressThread(DockerBasedStressThread):
                     master_node_path = self._hdr_files_directory_on_master_node()
                     LOGGER.debug(f'Creating masters node HDR files directory: {master_node_path}')
                     os.makedirs(master_node_path, exist_ok=True)
-                    LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
+                    # LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged')
+                    LOGGER.debug(f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr')
                     hdrh_logger = HDRHistogramFileLoggerCheckForExistingFile(
                         node=loader,
                         remote_log_file=f'{loaders_node_path}/hdrh-{work_type}.hdr',
-                        target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged',
+                        # target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr.untagged',
+                        target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr',
                     )
                     self.hdrh_logger_contextes.append(hdrh_logger)
                     hdrh_logger.remove_remote_log_file()
