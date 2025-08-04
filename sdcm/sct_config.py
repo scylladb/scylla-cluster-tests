@@ -3136,10 +3136,6 @@ class SCTConfiguration(dict):
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 
-        if self.get('n_monitor_nodes') > 0:
-            self.log.warning("Cloud provides built-in monitoring. Setting n_monitor_nodes to 0.")
-            self['n_monitor_nodes'] = 0
-
 
 def init_and_verify_sct_config() -> SCTConfiguration:
     sct_config = SCTConfiguration()

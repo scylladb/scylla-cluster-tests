@@ -2045,7 +2045,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_cloud(self, loader_info, db_info):
+    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.params.cloud_env_credentials['base_url'],
             auth_token=self.params.cloud_env_credentials['api_token'],
@@ -2081,7 +2081,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.info("Creating LoaderSet for Scylla Cloud cluster on '%s' cloud provider", cloud_provider)
         if cloud_provider == 'aws':
-            regions = [self.params.cloud_provider_params.get('region'), ]
+            regions = [self.params.cloud_provider_params.get("region"),]
+            init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
             services = get_ec2_services(regions)
 
             user_credentials = self.params.get('user_credentials_path')
@@ -2111,6 +2112,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 ec2_block_device_mappings=loader_info['device_mappings'],
                 n_nodes=loader_info['n_nodes'],
                 **common_params)
+
+            if monitor_info["n_nodes"] > 0:
+                self.monitors = MonitorSetAWS(
+                    ec2_ami_id=self.params.get("ami_id_monitor").split(),
+                    ec2_ami_username=self.params.get("ami_monitor_user"),
+                    ec2_instance_type=monitor_info["type"],
+                    ec2_block_device_mappings=monitor_info["device_mappings"],
+                    n_nodes=monitor_info["n_nodes"],
+                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                    **common_params,
+                )
+            else:
+                self.monitors = NoMonitorSet()
+
         elif cloud_provider == 'gce':
             gce_datacenter = self.params.cloud_provider_params.get('region')
             loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
@@ -2121,21 +2136,51 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             if loader_info['disk_type'] is None:
                 loader_info['disk_type'] = self.params.cloud_provider_params.get('root_disk_type_loader')
 
+            if monitor_info["n_nodes"] is None:
+                monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
+            if monitor_info["type"] is None:
+                monitor_info["type"] = self.params.get("gce_instance_type_monitor")
+            if monitor_info["disk_type"] is None:
+                monitor_info["disk_type"] = self.params.get("gce_root_disk_type_monitor")
+            if monitor_info["disk_size"] is None:
+                monitor_info["disk_size"] = self.params.get("root_disk_size_monitor")
+            if monitor_info["n_local_ssd"] is None:
+                monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
+
+            common_params = dict(
+                gce_image_username=self.params.get("gce_image_username"),
+                gce_network=self.params.get("gce_network"),
+                credentials=self.credentials,
+                user_prefix=user_prefix,
+                params=self.params,
+                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter],
+                gce_service=get_gce_compute_instances_client(),
+            )
+
             self.loaders = LoaderSetGCE(
                 gce_image=self.params.get('gce_image_loader'),
                 gce_image_type=loader_info.get('disk_type'),
                 gce_image_size=loader_info.get('disk_size'),
                 gce_n_local_ssd=loader_info.get('n_local_ssd'),
                 gce_instance_type=loader_info['type'],
-                gce_network=self.params.get('gce_network'),
-                gce_service=get_gce_compute_instances_client(),
-                gce_image_username=self.params.get('gce_image_username'),
-                credentials=self.credentials,
-                user_prefix=user_prefix,
                 n_nodes=loader_info['n_nodes'],
                 add_disks=loader_additional_disks,
-                params=self.params,
-                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter])
+                **common_params)
+
+            if monitor_info['n_nodes'] > 0:
+                monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
+                self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image_monitor').strip(),
+                                              gce_image_type=monitor_info['disk_type'],
+                                              gce_image_size=monitor_info['disk_size'],
+                                              gce_n_local_ssd=monitor_info['n_local_ssd'],
+                                              gce_instance_type=monitor_info['type'],
+                                              n_nodes=monitor_info['n_nodes'],
+                                              add_disks=monitor_additional_disks,
+                                              targets=dict(db_cluster=self.db_cluster,
+                                                           loaders=self.loaders),
+                                              **common_params)
+            else:
+                self.monitors = NoMonitorSet()
         else:
             self.log.warning("Unsupported cloud provider '%s' for loaders, skipping loader provisioning", cloud_provider)
             self.loaders = None
@@ -2153,8 +2198,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             add_nodes=True,
             allowed_ips=loader_ips)
 
-        # TODO: implement routing of monitoring data to SCT monitor instance
-        self.monitors = NoMonitorSet()
+        if monitor_info['n_nodes'] > 0:
+            self.monitors.targets['db_cluster'] = self.db_cluster
+            self.monitors.promproxy_config = self.db_cluster.get_promproxy_config()
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -2196,7 +2242,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
         elif cluster_backend == 'xcloud':
-            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info)
+            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info,
+                                   monitor_info=monitor_info)
 
         # NOTE: following starts processing of the monitoring inbound events which will be posted
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
