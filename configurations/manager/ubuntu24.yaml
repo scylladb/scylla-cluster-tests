@@ -1,3 +1,3 @@
 ami_id_monitor: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'  # Canonical, Ubuntu, 24.04 LTS, amd64 focal latest image
 ami_monitor_user: 'ubuntu'
-monitor_branch: 'branch-4.7'  # Pass it as the image is not the formal monitor image
+monitor_branch: 'branch-4.11'  # Pass it as the image is not the formal monitor image
