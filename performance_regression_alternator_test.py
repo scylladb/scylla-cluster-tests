@@ -103,7 +103,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
             self.log.error(traceback.format_exc())
             raise
         self.log.info(f'Completed stress cmd: {stress_cmd}')
-        self.build_histogram('<unused>', hdr_tags=self.hdr_tags)
+        self.build_histogram(self.params['workload_name'], hdr_tags=self.hdr_tags)
         if save_stats:
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 

@@ -86,7 +86,7 @@ class DockerBasedStressThread:
         for loader in self.loaders:
             for cpu_idx in range(self.stress_num):
                 self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader.node_index, cpu_idx))]
-
+        LOGGER.debug("Started %d stress threads", len(self.results_futures))
         return self
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
@@ -95,7 +95,7 @@ class DockerBasedStressThread:
     def get_results(self):
         results = []
         timeout = self.hard_timeout + 120
-        LOGGER.debug('Wait for %s stress threads results', self.max_workers)
+        LOGGER.debug('Wait for %s stress threads results', len(self.results_futures))
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
