@@ -118,7 +118,7 @@ class CloudNode(cluster.BaseNode):
 
     @property
     def vm_region(self):
-        return self._cloud_instance_data.get('region', 'unknown')
+        return self._cloud_instance_data.get('region', {}).get('name', 'unknown')
 
     @property
     def region(self):
@@ -420,6 +420,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'jump_start': False,
             'encryption_at_rest': None,
             'maintenance_windows': [],
+            'prom_proxy': True,
             'scaling': {}
         }
 
@@ -431,8 +432,9 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 cluster_details = self._api_client.get_cluster_details(
                     account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)
                 status = cluster_details.get('status', '').upper()
-                self.log.debug("Cluster status: %s", status)
-                return status == 'ACTIVE'
+                prom_proxy_enabled = cluster_details.get('promProxyEnabled', False)
+                self.log.debug("Cluster status: %s, prom_proxy_enabled: %s", status, prom_proxy_enabled)
+                return status == 'ACTIVE' and prom_proxy_enabled
             except Exception as e:  # noqa: BLE001
                 self.log.debug("Error checking cluster status: %s", e)
                 return False
@@ -444,6 +446,11 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             timeout=timeout,
             throw_exc=True)
         self.log.info("Scylla Cloud cluster is ready")
+
+    def get_promproxy_config(self):
+        """Retrieve Prometheus proxy configuration for Scylla Cloud cluster"""
+        return self._api_client.get_cluster_promproxy_config(
+            account_id=self._account_id, cluster_id=self._cluster_id)
 
     def _resize_cluster(self, count, dc_idx, rack, instance_type):
         """Handle subsequent add_nodes calls using cluster resize operations"""
