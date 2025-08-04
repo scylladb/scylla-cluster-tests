@@ -142,7 +142,7 @@ class RemoteDocker(BaseNode):
     @staticmethod
     @cache
     def pull_image(node, image):
-        prefix = "sudo" if node.is_docker else ""
+        prefix = "sudo" if node.is_docker() else ""
         node.remoter.run(
             f'{prefix} docker pull {image}', verbose=True, retry=3)
 
