@@ -5073,8 +5073,8 @@ class Nemesis:
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
-            if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
-                raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
