@@ -354,6 +354,16 @@ class YcsbStressThread(DockerBasedStressThread):
             @cached_property
             def _logger_cmd_template(self) -> str:
                 return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file} -c +0"
+            
+            def stop(self):
+                LOGGER.debug(f'Stopping HDR logger {self}')
+                super().stop()
+                try:
+                    if os.path.isfile(self.target_log_file) and os.path.getsize(self.target_log_file) == 0:
+                        LOGGER.debug(f'Removing empty hdr file {self.target_log_file}')
+                        os.remove(self.target_log_file)
+                except Exception as e:
+                    LOGGER.exception(f'Error removing empty hdr file {self.target_log_file}, error is ignored: {e}')
 
         contextes = []
         for work_type in self.WORK_TYPES:
