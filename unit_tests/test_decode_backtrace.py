@@ -101,6 +101,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
+        # Accesses the test_config to ensure it is initialized
+        self.test_config
         self.monitor_node.start_decode_on_monitor_node_thread()
         self._read_and_publish_events_no_decoding()
         self.monitor_node.termination_event.set()
