@@ -252,6 +252,7 @@ class ScyllaCloudAPIClient:
         encryption_at_rest: dict | None,
         maintenance_windows: list[dict],
         scaling: dict[str, str],
+        prom_proxy: bool,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -276,6 +277,7 @@ class ScyllaCloudAPIClient:
         :param encryption_at_rest: encryption at rest configuration
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
+        :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
 
         :return: created cluster details
         """
@@ -299,7 +301,9 @@ class ScyllaCloudAPIClient:
             jumpStart=jump_start,
             encryptionAtRest=encryption_at_rest,
             maintenanceWindows=maintenance_windows,
-            scaling=scaling,)
+            scaling=scaling,
+            promProxy=prom_proxy,
+        )
         return self._parse_response_data(response)
 
     def get_clusters(self, *, account_id: int, metrics: str = '', enriched: bool = False) -> list[dict[str, Any]]:
@@ -340,6 +344,20 @@ class ScyllaCloudAPIClient:
         if enriched:
             params['enriched'] = 'true'
         return self.request('GET', url, params=params)['dataCenters']
+
+    def get_cluster_promproxy_config(self, *, account_id: int, cluster_id: int) -> str:
+        """
+        Get the Prometheus proxy configuration for a cluster.
+        """
+
+        url = f'/account/{account_id}/cluster/{cluster_id}/promproxy/config'
+        url = urljoin(self.api_url, url.lstrip('/'))
+
+        LOGGER.debug("Making get request to %s", url)
+        response = self.session.get(url)
+        response.raise_for_status()
+        LOGGER.info("Got Prometheus proxy config for cluster %d: %s", cluster_id, response.text)
+        return response.text
 
     def delete_cluster(self, *, account_id: int,  cluster_id: int, cluster_name: str) -> dict[str, Any]:
         """Delete a cluster"""
