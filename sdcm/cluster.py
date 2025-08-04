@@ -5547,6 +5547,7 @@ class BaseMonitorSet:
         self._sct_dashboard_json_file = None
         self.test_config = TestConfig()
         self.monitor_id = monitor_id or self.test_config.test_id()
+        self.promproxy_config = None
 
     @property
     def parallel_startup(self):
@@ -5598,6 +5599,8 @@ class BaseMonitorSet:
 
     @property
     def monitoring_version(self):
+        if scylla_version := self.params.get('scylla_version'):
+            return scylla_version
         scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
@@ -5927,6 +5930,11 @@ class BaseMonitorSet:
                                            bearer_token=cloud_prom_bearer_token,
                                            static_configs=[dict(targets=[cloud_prom_host])]))
 
+            if self.params.get('cluster_backend') == 'xcloud' and self.promproxy_config:
+                yaml_from_xcloud = yaml.safe_load(self.promproxy_config)
+                xcloud_config = next(iter(yaml_from_xcloud.get("scrape_configs", [])), None)
+                scrape_configs.append(xcloud_config)
+
             if self.params.get('gemini_cmd'):
                 gemini_loader_targets_list = ["%s:2112" % getattr(node, self.DB_NODES_IP_ADDRESS)
                                               for node in self.targets["loaders"].nodes]
@@ -6009,11 +6017,10 @@ class BaseMonitorSet:
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         scylla_targets_per_dc = {}
-        node_export_targets_per_dc = {}
         node_export_targets_per_dc = {"sct-runner": {
             "labels": {"dc": "sct-runner"}, "targets": [f'{normalize_ipv6_url(get_my_ip())}:9100'],
         }}
-        for db_node in self.targets["db_cluster"].nodes:
+        for db_node in getattr(self.targets.get("db_cluster"), 'nodes', []):
             if db_node.region not in scylla_targets_per_dc:
                 scylla_targets_per_dc[db_node.region] = []
             if db_node.region not in node_export_targets_per_dc:
@@ -6052,7 +6059,7 @@ class BaseMonitorSet:
                 for dc_data in node_export_targets_per_dc.values():
                     exporter_yaml.append(dc_data)
 
-            if self.params.get("cloud_prom_bearer_token"):
+            if self.params.get("cloud_prom_bearer_token") or (self.params.get("cluster_backend") == "xcloud" and self.promproxy_config):
                 node.remoter.run(shell_script_cmd(f"""\
                     echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
                     echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
