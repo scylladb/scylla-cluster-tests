@@ -2987,12 +2987,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         if describecluster_output.ok:
             desc_stdout = describecluster_output.stdout
-            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
-            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
+            name_pattern = re.compile(r"((?<=Name: )[\w _-]*)")
+            snitch_pattern = re.compile(r"((?<=Snitch: )[\w.]*)")
             partitioner_pattern = re.compile(
-                "((?<=Partitioner: )[\w.]*)")
+                r"((?<=Partitioner: )[\w.]*)")
             schema_versions_pattern = re.compile(
-                "([a-z0-9-]{36}: \[[\d., ]*\])")
+                r"([a-z0-9-]{36}: \[[\d., ]*\])")
 
             name = name_pattern.search(desc_stdout).group()
             snitch = snitch_pattern.search(desc_stdout).group()
