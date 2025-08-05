@@ -22,13 +22,25 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
             wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
-            result_for_base_table = session.execute(f"select count(*) from {ks_name}.{base_table_name}")
+            result_for_base_table = list(session.execute(f"select count(*) from {ks_name}.{base_table_name}"))
             self.log.debug("Result for base table %s", list(result_for_base_table))
-            result_for_mv_table = session.execute(f"select count(*) from {ks_name}.{view_name}")
+            result_for_mv_table = list(session.execute(f"select count(*) from {ks_name}.{view_name}"))
             self.log.debug("Result for mv table %s", list(result_for_mv_table))
             assert result_for_base_table == result_for_mv_table, f"Results are different {result_for_base_table} != {result_for_mv_table}"
 
-            # result_for_base_table = session.execute(f"select * from {ks_name}.{base_table_name}")
-            # self.log.debug("Result for base table %s", list(result_for_base_table))
-            # result_for_mv_table = session.execute(f"select * from {ks_name}.{view_name}")
-            # self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            mv_primary_key_columns = get_column_names(session, ks=ks_name, cf=view_name, is_primary_key=True)
+            mv_primary_key_columns.sort()
+            result_for_mv_table = session.execute(
+                f"select {','.join(mv_primary_key_columns)} from {ks_name}.{view_name}")
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            for row in result_for_mv_table:
+                key_values = list(row)
+                where_clause = [f"{key} = {value}" for key, value in zip(mv_primary_key_columns, key_values)]
+
+                result1 = session.execute(
+                    f"select * from {ks_name}.{base_table_name} where {' and '.join(where_clause)} ALLOW_FILTERING")
+                result2 = session.execute(f"select * from {ks_name}.{view_name} where {' and '.join(where_clause)}")
+                normalized_results1 = sorted([sorted(list(row)) for row in result1], key=lambda x: x[0])
+                normalized_results2 = sorted([sorted(list(row)) for row in result2], key=lambda x: x[0])
+
+                assert normalized_results1 == normalized_results2, f"ERROR! ERROR! list are wrong {normalized_results1} != {normalized_results2}"
