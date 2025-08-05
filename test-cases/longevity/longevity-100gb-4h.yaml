@@ -10,9 +10,9 @@ n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'KillMVBuildingCoordinator:1 ModifyTableMonkey:1'
+nemesis_class_name: ''
 nemesis_seed: '066'
 
 user_prefix: 'longevity-100gb-4h'
@@ -27,10 +27,10 @@ sstable_size: 100
 hinted_handoff: 'enabled'
 parallel_node_operations: true
 
-# experimental_features:
-#  - views-with-tablets
+experimental_features:
+  - views-with-tablets
 
 
-# append_scylla_args: "--logger-log-level storage_service=debug:raft_topology=debug:view_building_coordinator=debug:view_building_worker=debug"
+append_scylla_args: "--logger-log-level storage_service=debug:raft_topology=debug:view_building_coordinator=debug:view_building_worker=debug"
 
 nemesis_during_prepare: false
