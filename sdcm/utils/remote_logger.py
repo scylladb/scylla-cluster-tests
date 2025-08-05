@@ -214,7 +214,12 @@ class HDRHistogramFileLogger(SSHLoggerBase):
             if self._is_ready_to_retrieve():
                 LOGGER.debug("Remoter ready. %s -> %s", self._remote_log_file, self._target_log_file)
                 self._retrieve(since=read_from_timestamp)
-                LOGGER.debug("Retrieve finished. %s -> %s", self._remote_log_file, self._target_log_file)
+                file_size = -1
+                try:
+                    file_size = os.path.getsize(self._target_log_file)
+                except Exception:
+                    pass
+                LOGGER.debug("Retrieve finished. %s -> %s, dest file is size %d", self._remote_log_file, self._target_log_file, file_size)
                 read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             else:
                 LOGGER.debug("Remoter is not ready. %s -> %s", self._remote_log_file, self._target_log_file)

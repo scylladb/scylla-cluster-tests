@@ -356,7 +356,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file} -c +0"
             
             def stop(self):
-                LOGGER.debug(f'Stopping HDR logger {self}')
+                LOGGER.debug(f'Stopping HDR logger {self._remote_log_file} -> {self.target_log_file}')
                 super().stop()
                 try:
                     if os.path.isfile(self.target_log_file) and os.path.getsize(self.target_log_file) == 0:
