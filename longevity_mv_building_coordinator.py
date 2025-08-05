@@ -23,7 +23,12 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
             result_for_base_table = session.execute(f"select count(*) from {ks_name}.{base_table_name}")
-            self.log.debug("Result for base table %s", result_for_base_table)
+            self.log.debug("Result for base table %s", list(result_for_base_table))
             result_for_mv_table = session.execute(f"select count(*) from {ks_name}.{view_name}")
-            self.log.debug("Result for base table %s", result_for_mv_table)
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
             assert result_for_base_table == result_for_mv_table, f"Results are different {result_for_base_table} != {result_for_mv_table}"
+
+            # result_for_base_table = session.execute(f"select * from {ks_name}.{base_table_name}")
+            # self.log.debug("Result for base table %s", list(result_for_base_table))
+            # result_for_mv_table = session.execute(f"select * from {ks_name}.{view_name}")
+            # self.log.debug("Result for mv table %s", list(result_for_mv_table))
