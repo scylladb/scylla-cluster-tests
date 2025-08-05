@@ -143,12 +143,12 @@ def fake_region_definition_builder():
 
 
 @pytest.fixture(scope="function", name="params")
-def fixture_params(request: pytest.FixtureRequest):
+def fixture_params(request: pytest.FixtureRequest, monkeypatch):
     if sct_config_marker := request.node.get_closest_marker("sct_config"):
         config_files = sct_config_marker.kwargs.get('files')
-        os.environ['SCT_CONFIG_FILES'] = config_files
+        monkeypatch.setenv('SCT_CONFIG_FILES', config_files)
 
-    os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+    monkeypatch.setenv('SCT_CLUSTER_BACKEND', "docker")
     params = sct_config.SCTConfiguration()
     params.update(dict(
         authenticator='PasswordAuthenticator',
@@ -157,10 +157,6 @@ def fixture_params(request: pytest.FixtureRequest):
         authorizer='CassandraAuthorizer',
     ))
     yield params
-
-    for k in os.environ:
-        if k.startswith('SCT_'):
-            del os.environ[k]
 
 
 @pytest.fixture(scope='function', autouse=True)
