@@ -30,10 +30,11 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             assert result_for_base_table == result_for_mv_table, f"Results are different {result_for_base_table} != {result_for_mv_table}"
 
             mv_primary_key_columns = get_column_names(session, ks=ks_name, cf=view_name, is_primary_key=True)
+            self.log.debug("primary keys: %s", mv_primary_key_columns)
             mv_primary_key_columns.sort()
-            result_for_mv_table = session.execute(
-                f"select {','.join(mv_primary_key_columns)} from {ks_name}.{view_name}")
-            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            result_for_mv_table = list(session.execute(
+                f"select {', '.join([f"'{c}'" for c in mv_primary_key_columns])} from {ks_name}.{view_name}"))
+            self.log.debug("Result for mv table %s", result_for_mv_table)
             for row in result_for_mv_table:
                 key_values = list(row)
                 where_clause = [f"{key} = {value}" for key, value in zip(mv_primary_key_columns, key_values)]
