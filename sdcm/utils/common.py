@@ -54,6 +54,7 @@ from pathlib import Path
 from collections import OrderedDict
 import requests
 import boto3
+from botocore.exceptions import ClientError
 from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -772,10 +773,36 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
     for curr_region_name, per_region_instances in instances.items():
         if running:
-            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] == 'running']
+            # Filter for running and pending instances
+            pending_instances = [i for i in per_region_instances if i['State']['Name'] == 'pending']
+            running_instances = [i for i in per_region_instances if i['State']['Name'] == 'running']
+
+            # Wait for pending instances to become running
+            if pending_instances:
+                client = boto3.client('ec2', region_name=curr_region_name)
+                waiter = client.get_waiter('instance_running')
+                instance_ids = [i['InstanceId'] for i in pending_instances]
+                try:
+                    if verbose:
+                        LOGGER.info(
+                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running")
+                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={'Delay': 15, 'MaxAttempts': 40})
+                    # Refresh instance data after waiting
+                    response = client.describe_instances(InstanceIds=instance_ids)
+                    updated_instances = [instance for reservation in response['Reservations'] for instance in
+                                         reservation['Instances']]
+                    # Combine running and updated (now running) instances
+                    instances[curr_region_name] = running_instances + updated_instances
+                except ClientError as e:
+                    if verbose:
+                        LOGGER.error(f"Error waiting for instances in {curr_region_name}: {e}")
+                    # If waiter fails, keep only running instances
+                    instances[curr_region_name] = running_instances
+            else:
+                instances[curr_region_name] = running_instances
         else:
-            instances[curr_region_name] = [i for i in per_region_instances
-                                           if not i['State']['Name'] == 'terminated']
+            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] != 'terminated']
+
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
         for curr_region_name, per_region_instances in instances.items():
