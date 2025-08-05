@@ -34,7 +34,7 @@ from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
-LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
+LATTE_FN_NAME_RE = r'(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
 LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
 LOGGER = logging.getLogger(__name__)
 

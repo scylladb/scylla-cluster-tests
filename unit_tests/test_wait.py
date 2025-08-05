@@ -265,7 +265,7 @@ class TestWaitForLogLines:
         t = threading.Thread(target=write_to_file, args=(file_path, lines))
         t.daemon = True
         file_path.touch()
-        expected_match = "Timeout occurred while waiting for end log line \['end'\] on node: node_1. Context: Wait end line"
+        expected_match = r"Timeout occurred while waiting for end log line \['end'\] on node: node_1. Context: Wait end line"
         with pytest.raises(TimeoutError, match=expected_match), \
                 wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.4, end_timeout=0.7, error_msg_ctx="Wait end line"):
             t.start()
