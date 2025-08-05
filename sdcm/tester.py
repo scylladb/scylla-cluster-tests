@@ -3451,6 +3451,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.debug("resize_type all results: %s", results_set)
             assert results_set == {'none'} or not results_set, (
                 "Tablet splits or merges still in progress: %s" % results_set)
+
+        if not is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            self.log.debug("Tablets are not enabled, skipping wait for no tablets splits")
+            return
+
         _is_no_tablets_splits()
 
     def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
