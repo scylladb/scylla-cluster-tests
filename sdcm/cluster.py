@@ -5050,29 +5050,8 @@ class BaseLoaderSet():
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
-            return
-
-        elif node.distro.is_debian11:
-            node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
-
-        scylla_repo_loader = self.params.get('scylla_repo_loader')
-        if not scylla_repo_loader:
-            scylla_repo_loader = self.params.get('scylla_repo')
-        node.download_scylla_repo(scylla_repo_loader)
-        node.install_package(f'{node.scylla_pkg()}-tools')
-
-        node.wait_cs_installed(verbose=verbose)
-
-        # install docker
-        docker_install = dedent("""
-            curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
-            sh get-docker.sh
-            systemctl enable docker
-            systemctl start docker
-        """)
-        node.remoter.run('sudo bash -cxe "%s"' % docker_install)
-
-        node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
+        else:
+            node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
