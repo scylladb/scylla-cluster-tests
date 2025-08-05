@@ -55,6 +55,7 @@ from pathlib import Path
 from collections import OrderedDict
 import requests
 import boto3
+from botocore.exceptions import ClientError
 from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -145,7 +146,7 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
 
 def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
     query = f"select keyspace_name, view_name, base_table_name from system_schema.views " \
-            f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
+        f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     if not result:
@@ -156,7 +157,7 @@ def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
 
 def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -> list:
     query = f"select view_name from system_schema.views " \
-            f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
+        f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     views = []
@@ -168,7 +169,7 @@ def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -
 
 def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
     query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
-            f"and table_name='{entity_name}'"
+        f"and table_name='{entity_name}'"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     view_details = []
@@ -842,16 +843,42 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_instances, ignore_exceptions=True)
 
-    for curr_region_name in instances:
+    for curr_region_name, per_region_instances in instances.items():
         if running:
-            instances[curr_region_name] = [i for i in instances[curr_region_name] if i['State']['Name'] == 'running']
+            # Filter for running and pending instances
+            pending_instances = [i for i in per_region_instances if i['State']['Name'] == 'pending']
+            running_instances = [i for i in per_region_instances if i['State']['Name'] == 'running']
+
+            # Wait for pending instances to become running
+            if pending_instances:
+                client = boto3.client('ec2', region_name=curr_region_name)
+                waiter = client.get_waiter('instance_running')
+                instance_ids = [i['InstanceId'] for i in pending_instances]
+                try:
+                    if verbose:
+                        LOGGER.info(
+                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running")
+                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={'Delay': 15, 'MaxAttempts': 40})
+                    # Refresh instance data after waiting
+                    response = client.describe_instances(InstanceIds=instance_ids)
+                    updated_instances = [instance for reservation in response['Reservations'] for instance in
+                                         reservation['Instances']]
+                    # Combine running and updated (now running) instances
+                    instances[curr_region_name] = running_instances + updated_instances
+                except ClientError as e:
+                    if verbose:
+                        LOGGER.error(f"Error waiting for instances in {curr_region_name}: {e}")
+                    # If waiter fails, keep only running instances
+                    instances[curr_region_name] = running_instances
+            else:
+                instances[curr_region_name] = running_instances
         else:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
-                                           if not i['State']['Name'] == 'terminated']
+            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] != 'terminated']
+
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
-        for curr_region_name in instances:
-            instances[curr_region_name] = [i for i in instances[curr_region_name]
+        for curr_region_name, per_region_instances in instances.items():
+            instances[curr_region_name] = [i for i in per_region_instances
                                            if i['Placement']['AvailabilityZone'] == curr_region_name + availability_zone]
     if not group_as_region:
         instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
@@ -3062,7 +3089,7 @@ def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, promet
 
     if scylla_load < wait_cpu_utilization:
         CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
-                                      " The test results may be not correct.",
+                              " The test results may be not correct.",
                               severity=event_severity).publish()
         return False
 
@@ -3195,7 +3222,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
                    ).run(get_placement_groups, ignore_exceptions=True)
 
-    for curr_region_name in placement_groups:
+    for curr_region_name in placement_groups:  # noqa: PLC0206
         if available:
             placement_groups[curr_region_name] = [
                 i for i in placement_groups[curr_region_name] if i['State'] == 'available']
