@@ -27,6 +27,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TestConfig(metaclass=Singleton):
+    __test__ = False  # This class is not a test case
+
     TEST_DURATION = 60
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
