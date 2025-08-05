@@ -394,6 +394,14 @@ class AWSCluster(cluster.BaseCluster):
             group_as_region=True,
             availability_zone=availability_zone,
         )
+        results = list_instances_aws(
+            tags_dict={"TestId": test_id, "NodeType": self.node_type},
+            running=True,
+            region_name=self.region_names[dc_idx],
+            group_as_region=True,
+            availability_zone=availability_zone,
+            verbose=True,
+        )
         instances = results[self.region_names[dc_idx]]
 
         def sort_by_index(item):
