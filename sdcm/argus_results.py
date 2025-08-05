@@ -10,10 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+from collections import defaultdict
+from itertools import count
 import json
 import logging
+from threading import Event, Thread
 import time
 from datetime import timezone, datetime
+from typing import TYPE_CHECKING
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
@@ -28,6 +32,9 @@ from argus.client.generic_result import (
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode, BaseScyllaCluster
 
 
 LOGGER = logging.getLogger(__name__)
@@ -471,3 +478,81 @@ def send_iotune_results_to_argus(argus_client: ArgusClient, results: dict, node,
         )
 
     submit_results_to_argus(argus_client, table)
+
+
+class PeriodicDiskUsageToArgus:
+    """
+    Context manager that periodically collects disk usage from all nodes in the cluster and submits the results to Argus.
+    """
+
+    def __init__(self, cluster: "BaseScyllaCluster", argus_client: ArgusClient, interval: int = 600):
+        self.cluster = cluster
+        self.argus_client = argus_client
+        self.interval = interval
+        self.stop_event = Event()
+        self.thread = Thread(target=self.disk_usage_to_argus, daemon=True)
+        self.node_to_rack = dict()  # Keep tracks of all the nodes that have ever been in the cluster and their racks
+        self.cycle = count(1)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop_event.set()
+        self.thread.join()
+
+    def results_table(self):
+        # update the node_to_rack mapping in case new nodes have been added
+        for node in self.cluster.data_nodes:
+            self.node_to_rack[f"node{node.name.split('-')[-1]}"] = node.rack
+        # group nodes by rack
+        rack_groups = defaultdict(list)
+        for node_name, rack in self.node_to_rack.items():
+            rack_groups[rack].append(node_name)
+
+        columns = [
+            ColumnMetadata(name="time", unit="", type=ResultType.TEXT),
+        ]
+        # add columns for each node in the rack, grouped by rack
+        for rack, rack_nodes in rack_groups.items():
+            for node_name in rack_nodes:
+                columns.append(ColumnMetadata(name=node_name, unit="%", type=ResultType.FLOAT))
+            columns.append(ColumnMetadata(name=f"RACK{rack}", unit="%", type=ResultType.FLOAT))
+
+        return StaticGenericResultTable(
+            name="DISK USAGE - rack balance",
+            description="The disk usage of the nodes in the cluster and the balance status per rack.",
+            columns=columns,
+        )
+
+    def disk_usage_to_argus(self):
+        # import here to avoid circular imports
+        from sdcm.utils.common import get_node_disk_usage  # noqa: PLC0415
+
+        while not self.stop_event.is_set():
+            # table has to be recreated in case nodes were added or removed
+            data_table = self.results_table()
+            row = f"#{next(self.cycle)}"
+            data_table.add_result(column="time", row=row, value=time.strftime("%H:%M:%S"), status=Status.UNSET)
+            # Group current nodes by rack
+            rack_groups: defaultdict[str, list["BaseNode"]] = defaultdict(list)
+            for node in self.cluster.data_nodes:
+                rack_groups[node.rack].append(node)
+            # Collect disk usage for each node in the rack
+            rack_usages: defaultdict[str, list[float]] = defaultdict(list)
+            for rack, rack_nodes in rack_groups.items():
+                for node in rack_nodes:
+                    usage = get_node_disk_usage(node)
+                    rack_usages[rack].append(usage)
+                    data_table.add_result(
+                        column=f"node{node.name.split('-')[-1]}", row=row, value=usage, status=Status.UNSET
+                    )
+                if rack_usages[rack]:
+                    rack_delta = max(rack_usages[rack]) - min(rack_usages[rack])
+                    # if nodes differ by more than 5% in disk usage, mark the rack as unbalanced
+                    status = Status.PASS if rack_delta <= 5 else Status.WARNING
+                    data_table.add_result(column=f"RACK{rack}", row=row, value=rack_delta, status=status)
+
+            submit_results_to_argus(self.argus_client, data_table)
+            time.sleep(self.interval)
