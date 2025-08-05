@@ -146,7 +146,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'intra_node_comm_public': False,
                     'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                     'authorizer': 'CassandraAuthorizer',
-                    'alternator_port': True,
+                    'alternator_port': "1",
                     'use_ldap_authorization': True,
                     'ldap_server_type': 'openldap',
                     'internode_encryption': False,
@@ -158,7 +158,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
-                'alternator_port': True,
+                'alternator_port': "1",
                 'alternator_write_isolation': 'always_use_lwt',
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'CassandraAuthorizer',
@@ -189,7 +189,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'intra_node_comm_public': False,
                     'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                     'authorizer': 'CassandraAuthorizer',
-                    'alternator_port': False,
+                    'alternator_port': None,
                     'use_ldap_authorization': True,
                     'ldap_server_type': 'ms_ad',
                     'internode_encryption': True,
@@ -201,7 +201,6 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
-                'alternator_port': False,
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'CassandraAuthorizer',
                 'endpoint_snitch': 'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
@@ -628,11 +627,12 @@ class IntegrationTests(unittest.TestCase):
 
     @parameterized.expand([
         (
+            config_name,
             os.path.join(BASE_FOLDER, config_name),
             os.path.join(BASE_FOLDER, config_name.replace('.yaml', '.result.json')),
         ) for config_name in os.listdir(BASE_FOLDER) if config_name.endswith('.yaml')
     ])
-    def test_integration_node(self, config_path, result_path):
+    def test_integration_node(self, _, config_path, result_path):
         with open(result_path, encoding="utf-8") as result_file:
             expected_node_config = result_file.read()
         self._run_test(config_path, expected_node_config=expected_node_config,
@@ -640,11 +640,12 @@ class IntegrationTests(unittest.TestCase):
 
     @parameterized.expand([
         (
+            config_name,
             os.path.join(BASE_FOLDER, "multi_network_interfaces",  config_name),
             os.path.join(BASE_FOLDER, "multi_network_interfaces", config_name.replace('.yaml', '.result.json')),
         ) for config_name in os.listdir(os.path.join(BASE_FOLDER, "multi_network_interfaces")) if config_name.endswith('.yaml')
     ])
-    def test_integration_node_multi_interface(self, config_path, result_path):
+    def test_integration_node_multi_interface(self, _, config_path, result_path):
         with open(result_path, encoding="utf-8") as result_file:
             expected_node_config = result_file.read()
         self._run_test(config_path, expected_node_config=expected_node_config, region_names='["eu-west-1"]')
