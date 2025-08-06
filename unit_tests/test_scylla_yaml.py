@@ -412,7 +412,12 @@ class ScyllaYamlTest(unittest.TestCase):
                 'tablets_mode_for_new_keyspaces': None,
                 'force_gossip_topology_changes': None,
                 'reader_concurrency_semaphore_cpu_concurrency': None,
+<<<<<<< HEAD
                 'object_storage_endpoints': None,
+||||||| parent of c6443ae03 (feature(vectore-store): add support of VS for docker backend)
+=======
+                'vector_store_uri': None
+>>>>>>> c6443ae03 (feature(vectore-store): add support of VS for docker backend)
             }
         )
 
