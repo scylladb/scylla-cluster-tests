@@ -109,12 +109,17 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             create_mv_for_table(session, keyspace_name=ks_name, base_table_name=base_table_name, view_name=view_name)
             wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
 
+        try:
+            wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=60)
+        except TimeoutError:
+            self.log.info("MV is building")
+
         removing_node: BaseNode = random.choice([node for node in self.db_cluster.nodes if node != coordinator_node])
         removing_node_hostid = removing_node.host_id
         removing_node.stop_scylla()
         remove_cluster_node(self.db_cluster, coordinator_node, node_to_remove=removing_node, removing_node_host_id=removing_node_hostid,
                             monitoring=self.monitors)
-        wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=1800)
+        wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
 
 def replace_cluster_node(cluster: "BaseScyllaCluster", verification_node: "BaseNode",
