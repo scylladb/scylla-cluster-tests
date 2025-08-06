@@ -362,6 +362,8 @@ class ScyllaYaml(BaseModel):
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
 
+    vector_store_uri: str = None
+
     def model_dump(
         self,
         *,
