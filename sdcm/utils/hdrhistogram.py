@@ -220,6 +220,7 @@ class _HdrRangeHistogramBuilder:
             tag_not_found = True
             file_with_correct_time_interval = True
             index_errors = 0
+            line_index = 5
             while next_hist:
                 tag = next_hist.get_tag()
                 if tag == hdr_tag:
@@ -231,11 +232,13 @@ class _HdrRangeHistogramBuilder:
                     tag_not_found = False
 
                 while next_hist:
+                    line_index += 1
                     try:
                         next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
                                                                     range_end_time_sec=self.end_time,
                                                                     absolute=self.absolute_time)
                     except IndexError:
+                        LOGGER.warning(f'IndexError in file {hdr_file} in line {line_index}, skipping this line')
                         index_errors += 1
                         continue
                     break
