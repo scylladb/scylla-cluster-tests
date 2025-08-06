@@ -5307,7 +5307,7 @@ class Nemesis:
             time.sleep(5)
             with nodetool_context(node=self.target_node, start_command="disablegossip", end_command="enablegossip"):
                 self.target_node.run_nodetool("statusgossip")
-                self.target_node.run_nodetool("status")
+                self.target_node.run_nodetool("status", ignore_status=True)
                 time.sleep(30)
                 self._major_compaction()
         self.target_node.run_nodetool("statusgossip")
