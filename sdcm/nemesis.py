@@ -6631,11 +6631,29 @@ class RepairStreamingErrMonkey(Nemesis):
         self.disrupt_repair_streaming_err()
 
 
+class ManagerRcloneBackup(Nemesis):
+    manager_operation = True
+    disruptive = False
+    supports_high_disk_utilization = False
+
+    def disrupt(self):
+        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label='rclone_backup')
+
+
+class ManagerNativeBackup(Nemesis):
+    manager_operation = True
+    disruptive = False
+    supports_high_disk_utilization = False
+
+    def disrupt(self):
+        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label='native_backup')
+
+
 COMPLEX_NEMESIS = [NoOpMonkey, ScyllaCloudLimitedChaosMonkey,
                    MdcChaosMonkey, SisyphusMonkey,
                    DisruptKubernetesNodeThenReplaceScyllaNode,
                    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-                   CategoricalMonkey, NemesisSequence]
+                   CategoricalMonkey, NemesisSequence, ManagerNativeBackup, ManagerRcloneBackup]
 
 
 class CorruptThenScrubMonkey(Nemesis):
@@ -6850,21 +6868,3 @@ class IsolateNodeWithIptableRuleNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
-
-
-class ManagerRcloneBackup(Nemesis):
-    manager_operation = True
-    disruptive = False
-    supports_high_disk_utilization = False
-
-    def disrupt(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label='rclone_backup')
-
-
-class ManagerNativeBackup(Nemesis):
-    manager_operation = True
-    disruptive = False
-    supports_high_disk_utilization = False
-
-    def disrupt(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label='native_backup')
