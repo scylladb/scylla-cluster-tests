@@ -1083,6 +1083,12 @@ class SCTConfiguration(dict):
         dict(name="docker_network", env="SCT_DOCKER_NETWORK", type=str,
              help="local docker network to use, if there's need to have db cluster connect to other services running in docker"),
 
+        dict(name="vs_docker_image", env="SCT_VS_DOCKER_IMAGE", type=str,
+             help="Vector Store docker image repo"),
+
+        dict(name="vs_version", env="SCT_VS_VERSION", type=str,
+             help="Vector Store version / docker image tag"),
+
         # baremetal config options
 
         dict(name="s3_baremetal_config", env="SCT_S3_BAREMETAL_CONFIG", type=str,
@@ -1802,6 +1808,19 @@ class SCTConfiguration(dict):
 
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
              help="Replication factor for Scylla Cloud cluster (default: 3)"),
+
+        dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
+             help="Number of vector store nodes (0 = VS is disabled)"),
+
+        dict(name="vs_port", env="SCT_VS_PORT", type=int,
+             help="Vector Store API port"),
+
+        dict(name="vs_scylla_port", env="SCT_VS_SCYLLA_PORT", type=int,
+             help="ScyllaDB connection port for Vector Store"),
+
+        dict(name="vs_threads", env="SCT_VS_THREADS", type=int,
+             help="Vector indexing threads (default: number of CPU cores)"),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

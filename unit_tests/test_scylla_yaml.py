@@ -412,6 +412,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'tablets_mode_for_new_keyspaces': None,
                 'force_gossip_topology_changes': None,
                 'reader_concurrency_semaphore_cpu_concurrency': None,
+                'vector_store_uri': None
             }
         )
 
