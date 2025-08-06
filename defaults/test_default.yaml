@@ -311,3 +311,11 @@ mgmt_snapshots_preparer_params:
   sequence_end: ''
 
 adaptive_timeout_store_metrics: true
+
+# Vector Search defaults
+n_vs_nodes: 0
+vs_port: 6080
+vs_scylla_port: 9042
+vs_threads: 2
+vs_docker_image: 'scylladb/vector-store'
+vs_version: 'latest'

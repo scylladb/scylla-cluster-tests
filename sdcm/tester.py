@@ -1048,6 +1048,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 else:
                     self.set_system_auth_rf(db_cluster=db_cluster)
 
+                if hasattr(db_cluster, 'vector_store_cluster') and db_cluster.vector_store_cluster:
+                    db_cluster.vector_store_cluster.configure_with_scylla_cluster(db_cluster)
+                    db_cluster.vector_store_cluster.wait_for_init()
+
         def _create_loaders():
             if self.loaders and not self.loaders_multitenant:
                 self.loaders_multitenant = [self.loaders]
@@ -1621,6 +1625,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
                                                              **container_node_params, **common_params)
+
+        if self.params.get('n_vs_nodes') > 0:
+            self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
+                params=self.params,
+                vs_docker_image=self.params.get('vs_docker_image'),
+                vs_docker_image_tag=self.params.get('vs_version'),
+                cluster_prefix=self.params.get('user_prefix'),
+                n_nodes=self.params.get('n_vs_nodes'),
+                node_key_file=self.credentials[0].key_file)
+
         self.loaders = cluster_docker.LoaderSetDocker(n_nodes=self.params.get("n_loaders"),
                                                       **container_node_params, **common_params)
         self.monitors = cluster_docker.MonitorSetDocker(n_nodes=self.params.get("n_monitor_nodes"),
