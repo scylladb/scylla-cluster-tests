@@ -49,7 +49,7 @@ def call(Map pipelineParams) {
 
             // Provisioning Configuration
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
-            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+            string(defaultValue: "${pipelineParams.get('provision_type', 'on_demand')}",
                    description: 'on_demand|spot_fleet|spot',
                    name: 'provision_type')
 
