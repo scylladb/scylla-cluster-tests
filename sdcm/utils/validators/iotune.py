@@ -49,10 +49,10 @@ class IOTuneValidator:
         with remote_file(self.node.remoter, io_props_path) as f:
             return yaml.safe_load(f)
 
-    def _run_io_tune(self, temp_props_path="/tmp/io_properties.yaml") -> IOProperties:
-        self.node.remoter.sudo(f"iotune  --evaluation-directory /var/lib/scylla --properties-file {temp_props_path}")
-        self.node_io_properties = self._read_io_properties(temp_props_path)
+    def _run_io_tune(self) -> IOProperties:
         self.preset_io_properties = self._read_io_properties()
+        self.node.remoter.sudo("scylla_io_setup", timeout=600)
+        self.node_io_properties = self._read_io_properties()
 
         preset_disk = next(iter(self.preset_io_properties.get("disks", [])), None)
         if not preset_disk:
