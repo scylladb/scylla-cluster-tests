@@ -2076,6 +2076,24 @@ local docker network to use, if there's need to have db cluster connect to other
 **type:** str (appendable)
 
 
+## **vs_docker_image** / SCT_VS_DOCKER_IMAGE
+
+Vector Store docker image repo
+
+**default:** scylladb/vector-store
+
+**type:** str (appendable)
+
+
+## **vs_version** / SCT_VS_VERSION
+
+Vector Store version / docker image tag
+
+**default:** latest
+
+**type:** str (appendable)
+
+
 ## **s3_baremetal_config** / SCT_S3_BAREMETAL_CONFIG
 
 
@@ -3676,6 +3694,7 @@ Replication factor for Scylla Cloud cluster
 **default:** N/A
 
 **type:** int
+<<<<<<< HEAD
 
 
 ## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
@@ -3685,3 +3704,42 @@ Dictionary of VPC peering parameters for private connectivity between<br>SCT inf
 **default:** N/A
 
 **type:** dict_or_str
+||||||| parent of c6443ae03 (feature(vectore-store): add support of VS for docker backend)
+=======
+
+
+## **n_vs_nodes** / SCT_N_VS_NODES
+
+Number of vector store nodes (0 = VS is disabled)
+
+**default:** N/A
+
+**type:** int
+
+
+## **vs_port** / SCT_VS_PORT
+
+Vector Store API port
+
+**default:** 6080
+
+**type:** int
+
+
+## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+
+ScyllaDB connection port for Vector Store
+
+**default:** 9042
+
+**type:** int
+
+
+## **vs_threads** / SCT_VS_THREADS
+
+Vector indexing threads (default: number of CPU cores)
+
+**default:** 2
+
+**type:** int
+>>>>>>> c6443ae03 (feature(vectore-store): add support of VS for docker backend)
