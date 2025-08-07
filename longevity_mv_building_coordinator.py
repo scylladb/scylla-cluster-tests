@@ -146,6 +146,36 @@ class LongevityMVBuildingCoordinator(LongevityTest):
 
         wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
+    def test_topology_operation_bootstrap_during_mv_building(self):
+        InfoEvent("Prepare Base table").publish()
+        self.run_prepare_write_cmd()
+        coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_with_tablets_list(
+            coordinator_node, filter_empty_tables=True, filter_out_mv=True, filter_out_table_with_counter=True)
+        ks_name, base_table_name = random.choice(ks_cf_list).split('.')
+        view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
+
+        with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+            create_mv_for_table(session, keyspace_name=ks_name, base_table_name=base_table_name, view_name=view_name)
+            wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
+
+        try:
+            wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=60)
+        except TimeoutError:
+            self.log.info("MV is building")
+
+        new_node: BaseNode = add_cluster_node(
+            self.db_cluster, dc_idx=coordinator_node.dc_idx, rack=coordinator_node.rack, monitoring=self.monitors)
+
+        wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
+        with self.db_cluster.cql_connection_exclusive(node=new_node) as session:
+            session.default_timeout = 600
+            result_for_base_table = list(session.execute(f"select count(*) from {ks_name}.{base_table_name}"))
+            self.log.debug("Result for base table %s", list(result_for_base_table))
+            result_for_mv_table = list(session.execute(f"select count(*) from {ks_name}.{view_name}"))
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            assert result_for_base_table == result_for_mv_table, f"Results are different {result_for_base_table} != {result_for_mv_table}"
+
 
 def replace_cluster_node(cluster: "BaseScyllaCluster", verification_node: "BaseNode",
                          replacing_host_id: str | None = None,
@@ -269,7 +299,7 @@ def remove_cluster_node(cluster: BaseScyllaCluster | BaseCluster, verification_n
         "Node was not removed properly (Node status:{})".format(removed_node_status)
 
 
-def add_cluster_node(cluster, dc_idx: int = 0, rack: int = 0, monitoring: BaseMonitorSet | None = None) -> "BaseNode":
+def add_cluster_node(cluster: BaseCluster | BaseScyllaCluster, dc_idx: int = 0, rack: int = 0, monitoring: BaseMonitorSet | None = None) -> "BaseNode":
     cluster.log.info("Adding new node")
     new_node = cluster.add_nodes(1, dc_idx=dc_idx, rack=rack, enable_auto_bootstrap=True)[0]
     cluster.wait_for_init(node_list=[new_node], timeout=900,
