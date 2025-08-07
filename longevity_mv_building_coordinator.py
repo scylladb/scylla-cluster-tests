@@ -121,6 +121,31 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                             monitoring=self.monitors)
         wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
+    def test_topology_operation_decommission_during_mv_building(self):
+        InfoEvent("Prepare Base table").publish()
+        self.run_prepare_write_cmd()
+        coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_with_tablets_list(
+            coordinator_node, filter_empty_tables=True, filter_out_mv=True, filter_out_table_with_counter=True)
+        ks_name, base_table_name = random.choice(ks_cf_list).split('.')
+        view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
+
+        with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+            create_mv_for_table(session, keyspace_name=ks_name, base_table_name=base_table_name, view_name=view_name)
+            wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
+
+        try:
+            wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=60)
+        except TimeoutError:
+            self.log.info("MV is building")
+
+        decommission_node: BaseNode = random.choice(
+            [node for node in self.db_cluster.nodes if node != coordinator_node])
+        self.db_cluster.decommission(decommission_node)
+        self.db_cluster.verify_decommission(decommission_node)
+
+        wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
+
 
 def replace_cluster_node(cluster: "BaseScyllaCluster", verification_node: "BaseNode",
                          replacing_host_id: str | None = None,
