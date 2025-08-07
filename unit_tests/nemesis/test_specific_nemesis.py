@@ -1,6 +1,5 @@
 """This module tests specific nemesis and is heavily dependent on the implementation"""
 import logging
-
 import pytest
 
 from sdcm.cluster_aws import ScyllaAWSCluster
@@ -16,25 +15,8 @@ from unit_tests.nemesis.test_sisyphus import TestNemesisClass
 LOGGER = logging.getLogger(__name__)
 
 
-class FakeCategoricalMonkey(CategoricalMonkey):
-    runs = []
-
-    def __new__(cls, *_, **__):
-        return object.__new__(cls)
-
-    def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
-        setattr(CategoricalMonkey, 'disrupt_m1', FakeCategoricalMonkey.disrupt_m1)
-        setattr(CategoricalMonkey, 'disrupt_m2', FakeCategoricalMonkey.disrupt_m2)
-        super().__init__(tester_obj, termination_event, dist, default_weight=default_weight)
-
-    def disrupt_m1(self):
-        self.runs.append(1)
-
-    def disrupt_m2(self):
-        self.runs.append(2)
-
-    def get_runs(self):
-        return self.runs
+class FakeCategorialMonkey(CategoricalMonkey, TestNemesisClass):
+    """Override CategoricalMonkey with a new disruption tree"""
 
 
 @pytest.mark.parametrize(
@@ -61,18 +43,19 @@ def test_is_it_on_kubernetes(parent, result):
     assert nemesis._is_it_on_kubernetes() == result
 
 
-def test_categorical_monkey():
-    tester = FakeTester()
+@pytest.mark.parametrize(
+    "dist, output",
+    [
+        ({"CustomNemesisA": 1}, "called test function a\n"),
+        ({"CustomNemesisC": 0.5}, "called test function c\n"),
+        ({"CustomNemesisAD": 1, "CustomNemesisA": 0}, "called test function d\n")
+    ]
+)
+def test_categorical_monkey_simple(dist, output, capsys):
 
-    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1}, default_weight=0)
-    nemesis._random_disrupt()
+    nemesis = FakeCategorialMonkey(FakeTester(), None, dist, default_weight=0)
+    method = nemesis.select_next_nemesis()
 
-    nemesis = FakeCategoricalMonkey(tester, None, {'m2': 1}, default_weight=0)
-    nemesis._random_disrupt()
-
-    assert nemesis.runs == [1, 2]
-
-    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1, 'm2': 1}, default_weight=0)
-    nemesis._random_disrupt()
-
-    assert nemesis.runs in ([1, 2, 1], [1, 2, 2])
+    method.disrupt()
+    captured = capsys.readouterr()
+    assert output in captured.out

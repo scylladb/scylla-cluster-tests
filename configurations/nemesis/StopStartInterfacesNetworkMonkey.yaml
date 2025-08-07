@@ -1,2 +1,3 @@
-nemesis_class_name: 'StopStartInterfacesNetworkMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'StopStartInterfacesNetworkMonkey'
 user_prefix: 'longevity-5gb-1h-StopStartInterfacesNetworkMonkey'
