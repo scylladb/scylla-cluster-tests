@@ -108,6 +108,11 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list of strings.")
 
 
+def int_list_or_eval(value: Union[str, List[int]]) -> List[int]:
+    values = str_or_list_or_eval(value)
+    return [int(v) for v in values]
+
+
 def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     """Convert an environment variable into a Python's list."""
 
@@ -281,6 +286,9 @@ class SCTConfiguration(dict):
 
         dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_space_separated_ints,
              help="Number list of monitor nodes in multiple data centers"),
+
+        dict(name="protected_db_nodes", env="SCT_PROTECTED_DB_NODES", type=int_list_or_eval,
+             help="List of protected db nodes indexes, that won't be select by nemesis"),
 
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
              help="If True, all communication between nodes are via public addresses"),
@@ -2565,6 +2573,9 @@ class SCTConfiguration(dict):
         if ((teardown_validators := self.get("teardown_validators.rackaware")) and
                 teardown_validators.get("enabled", False)):
             self._verify_rackaware_configuration()
+
+        if self.get('protected_db_nodes') and self.get('cluster_backend').startswith('k8s'):
+            raise ValueError("'protected_db_nodes' is not currently not supported for any of the k8s-* backends")
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')

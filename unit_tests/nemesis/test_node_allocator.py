@@ -5,6 +5,8 @@ nodes selection, release; state management and thread safety.
 
 import threading
 import time
+from unittest.mock import MagicMock
+
 import pytest
 import random
 
@@ -29,6 +31,8 @@ class MockNode(BaseNode):
         self.dc_idx = dc_idx
         self.rack = rack
         self._is_zero_token_node = (node_type == "zero_nodes")
+        self.parent_cluster = MagicMock()
+        self.parent_cluster.params = MagicMock()
 
     def __repr__(self):
         return f"MockNode({self.name})"
@@ -200,3 +204,55 @@ def test_context_manager_sets_and_releases_multiple_nodes(allocator_with_nodes):
         assert all(node in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
 
     assert all(node not in allocator.active_nemesis_on_nodes for node in nodes_to_mark)
+
+
+class ProtectedMockNode(MockNode):
+    def __init__(self, *args, is_protected=False, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # override the is_protected property to simulate protected nodes
+        self.is_protected = is_protected
+
+
+def test_protected_nodes_are_not_selected():
+    # Create nodes, some protected
+    nodes = [
+        ProtectedMockNode("node-1", is_protected=True),
+        ProtectedMockNode("node-2", is_protected=False),
+        ProtectedMockNode("node-3", is_protected=True),
+        ProtectedMockNode("node-4", is_protected=False),
+    ]
+    tester = MockTester(nodes)
+    allocator = NemesisNodeAllocator(tester)
+
+    # Try to select nodes multiple times, should never select protected
+
+    for _ in range(2):
+        node = allocator.select_target_node(
+            nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+        assert not getattr(node, "is_protected", False)
+
+    # After all unprotected nodes are used, should raise error
+    with pytest.raises(AllNodesRunNemesisError):
+        allocator.select_target_node(
+            nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+
+
+def test_unprotecting_node_allows_selection():
+    nodes = [
+        ProtectedMockNode("node-1", is_protected=True),
+        ProtectedMockNode("node-2", is_protected=True),
+    ]
+    tester = MockTester(nodes)
+    allocator = NemesisNodeAllocator(tester)
+
+    # All nodes protected: should raise error
+    with pytest.raises(AllNodesRunNemesisError):
+        allocator.select_target_node(
+            nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+
+    # Unprotect one node
+    nodes[1].is_protected = False
+    node = allocator.select_target_node(
+        nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+    assert node == nodes[1]
