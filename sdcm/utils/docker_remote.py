@@ -149,9 +149,23 @@ class RemoteDocker(BaseNode):
     @staticmethod
     @cache
     def pull_image(node, image):
+<<<<<<< HEAD
         prefix = "sudo" if node.is_docker else ""
         node.remoter.run(
             f'{prefix} docker pull {image}', verbose=True, retry=3)
+||||||| parent of a1b6db6c8 (fix(loader): align usage of sudo when pulling images)
+        # Login docker-hub before pull, in case node authentication is expired or not logged-in.
+        docker_hub_login(remoter=node.remoter, use_sudo=node.is_docker())
+        remote_cmd = node.remoter.sudo if RemoteDocker.running_in_docker(
+            node) and not RemoteDocker.running_in_podman(node) else node.remoter.run
+        remote_cmd(f"docker pull {image}", verbose=True, retry=3)
+=======
+        # Login docker-hub before pull, in case node authentication is expired or not logged-in.
+        use_sudo = node.is_docker() and (RemoteDocker.running_in_docker(node) and not RemoteDocker.running_in_podman(node))
+        docker_hub_login(remoter=node.remoter, use_sudo=use_sudo)
+        remote_cmd = node.remoter.sudo if use_sudo else node.remoter.run
+        remote_cmd(f"docker pull {image}", verbose=True, retry=3)
+>>>>>>> a1b6db6c8 (fix(loader): align usage of sudo when pulling images)
 
     def __enter__(self):
         return self
