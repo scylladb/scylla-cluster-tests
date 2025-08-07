@@ -21,6 +21,7 @@ from sdcm.sct_events.events_processes import \
     EVENTS_HANDLER_ID, BaseEventsProcess, \
     start_events_process, verbose_suppress
 from sdcm.sct_events.handlers.schema_disagreement import SchemaDisagreementHandler
+from sdcm.sct_events.handlers.cpu_bottleneck import CpuBottleneckHandler
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
      Handlers are created to gather additional information for issue investigation purposes."""
     handlers = {
         "CassandraStressLogEvent.SchemaDisagreement": SchemaDisagreementHandler(),
+        "DatabaseLogEvent.SUSPECTED_CPU_BOTTLENECK": CpuBottleneckHandler(),
     }
 
     def run(self) -> None:

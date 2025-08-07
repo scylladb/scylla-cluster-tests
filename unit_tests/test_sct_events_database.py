@@ -119,6 +119,14 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(expected_error_data["line_number"], disk_error_event.line_number)
         self.assertEqual(expected_error_data["line"], disk_error_event.line)
 
+    def test_suspected_cpu_bottleneck(self):
+        log_line = "reader_concurrency_semaphore -\n Identified bottleneck(s): CPU\n usage high"
+        node = type('FakeNode', (), {'name': 'node1'})()
+        event = DatabaseLogEvent.SUSPECTED_CPU_BOTTLENECK()
+        event.add_info(node=node, line=log_line, line_number=101)
+        self.assertEqual(event.severity.name, 'ERROR')
+        self.assertTrue(hasattr(event, 'line') or hasattr(event, 'message'))
+
 
 class TestFullScanEvent(unittest.TestCase):
     NODE_NAME = "db-node-1"
