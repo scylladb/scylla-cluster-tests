@@ -1,6 +1,6 @@
 n_db_nodes: 3
-n_loaders: 0
-n_monitor_nodes: 0
+n_loaders: 1
+n_monitor_nodes: 1
 
 use_mgmt: false
 

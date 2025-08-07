@@ -568,7 +568,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
 
 
 def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = False) -> None:
-    """Clean up Scylla Cloud resources (clusters) based on tags"""
+    """Clean up Scylla Cloud resources based on tags"""
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
 
     if dry_run:
@@ -617,3 +617,16 @@ def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = F
                 terminate_resource_in_argus(client=argus_client, resource_name=cluster_name)
             except Exception as e:  # noqa: BLE001
                 LOGGER.error(f"Failed to delete cluster {cluster_name}: {e}")
+
+    xcloud_provider = config.get('xcloud_provider')
+    if xcloud_provider == 'aws':
+        aws_regions = config.region_names
+        clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+    elif xcloud_provider == 'gce':
+        gce_projects = [config.get("gce_project") or 'gcp-sct-project-1']
+        for project in gce_projects:
+            with environment(SCT_GCE_PROJECT=project):
+                clean_instances_gce(tags_dict, dry_run=dry_run)

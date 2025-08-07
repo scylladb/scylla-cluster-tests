@@ -241,6 +241,15 @@ def provision_resources(backend, test_name: str, config: str):
             layout.provision()
         elif backend == "azure":
             provision_sct_resources(params=params, test_config=test_config)
+        elif backend == "xcloud":
+            cloud_provider = params.get('xcloud_provider').lower()
+            original_backend = params.get('cluster_backend')
+            if cloud_provider == 'aws':
+                params.update({'cluster_backend': 'aws', 'xcloud_provisioning_mode': True})
+                try:
+                    SCTProvisionLayout(params=params).provision()
+                finally:
+                    params.update({'cluster_backend': original_backend, 'xcloud_provisioning_mode': False})
         else:
             raise ValueError(f"backend {backend} is not supported")
     except Exception:

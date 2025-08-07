@@ -124,6 +124,11 @@ class DefinitionBuilder(abc.ABC):
         n_db_nodes = self._get_node_count_for_each_region(str(self.params.get("n_db_nodes")))
         n_loader_nodes = self._get_node_count_for_each_region(str(self.params.get("n_loaders")))
         n_monitor_nodes = self._get_node_count_for_each_region(str(self.params.get("n_monitor_nodes")))
+
+        # skip DB node provisioning for Scylla Cloud
+        if self.params.get('cluster_backend') == 'xcloud' or self.params.get('xcloud_provisioning_mode'):
+            n_db_nodes = [0] * len(self.regions)
+
         for region, db_nodes, loader_nodes, monitor_nodes in zip(self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes):
             region_definitions.append(
                 self.build_region_definition(region=region, availability_zone=availability_zone, n_db_nodes=db_nodes,

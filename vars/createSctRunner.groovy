@@ -2,6 +2,12 @@
 
 def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
+
+    // for xcloud backend, use the underlying cloud provider
+    if ( params.backend.equals("xcloud") ) {
+        cloud_provider = params.xcloud_provider
+    }
+
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def test_name = groovy.json.JsonOutput.toJson(params.test_name)
 

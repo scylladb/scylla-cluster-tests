@@ -793,6 +793,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     @property
     def rack_names_per_datacenter_and_rack_idx_map(self):
+        if self.db_cluster is None:
+            return None
         if ready_nodes := [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]:
             return self.db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=ready_nodes)
         return None
@@ -1977,7 +1979,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_cloud(self, loader_info, db_info):
+    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.params.cloud_env_credentials['base_url'],
             auth_token=self.params.cloud_env_credentials['api_token'],
@@ -2003,19 +2005,136 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             else:
                 self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
 
-        self.log.info("Creating Scylla Cloud cluster")
+        # create loaders first as their IPs should be allowed in Scylla Cloud cluster
+        cloud_provider = self.params.get('xcloud_provider').lower()
+
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.cloud_provider_params.get('instance_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.cloud_provider_params.get('root_disk_size_loader')
+
+        self.log.info("Creating LoaderSet for Scylla Cloud cluster on '%s' cloud provider", cloud_provider)
+        if cloud_provider == 'aws':
+            regions = [self.params.cloud_provider_params.get("region"),]
+            init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
+            services = get_ec2_services(regions)
+
+            user_credentials = self.params.get('user_credentials_path')
+            for _ in regions:
+                self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+            common_params = get_common_params(
+                params=self.params, regions=regions, credentials=self.credentials, services=services)
+
+            if loader_info['device_mappings'] is None:
+                if loader_info['disk_size']:
+                    loader_info['device_mappings'] = [{
+                        "DeviceName": ec2_ami_get_root_device_name(
+                            image_id=self.params.get('ami_id_loader').split()[0], region_name=regions[0]),
+                        "Ebs": {
+                            "VolumeType": 'gp3',
+                            "VolumeSize": int(loader_info['disk_size']),
+                        }
+                    }]
+                else:
+                    loader_info['device_mappings'] = []
+
+            self.loaders = LoaderSetAWS(
+                ec2_ami_id=self.params.get('ami_id_loader').split(),
+                ec2_ami_username=self.params.get('ami_loader_user'),
+                ec2_instance_type=loader_info['type'],
+                ec2_block_device_mappings=loader_info['device_mappings'],
+                n_nodes=loader_info['n_nodes'],
+                **common_params)
+
+            if monitor_info["n_nodes"] > 0:
+                self.monitors = MonitorSetAWS(
+                    ec2_ami_id=self.params.get("ami_id_monitor").split(),
+                    ec2_ami_username=self.params.get("ami_monitor_user"),
+                    ec2_instance_type=monitor_info["type"],
+                    ec2_block_device_mappings=monitor_info["device_mappings"],
+                    n_nodes=monitor_info["n_nodes"],
+                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                    **common_params,
+                )
+            else:
+                self.monitors = NoMonitorSet()
+
+        elif cloud_provider == 'gce':
+            gce_datacenter = self.params.cloud_provider_params.get('region')
+            loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
+
+            user_credentials = self.params.get('user_credentials_path')
+            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+            if loader_info['disk_type'] is None:
+                loader_info['disk_type'] = self.params.cloud_provider_params.get('root_disk_type_loader')
+
+            if monitor_info["n_nodes"] is None:
+                monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
+            if monitor_info["type"] is None:
+                monitor_info["type"] = self.params.get("gce_instance_type_monitor")
+            if monitor_info["disk_type"] is None:
+                monitor_info["disk_type"] = self.params.get("gce_root_disk_type_monitor")
+            if monitor_info["disk_size"] is None:
+                monitor_info["disk_size"] = self.params.get("root_disk_size_monitor")
+            if monitor_info["n_local_ssd"] is None:
+                monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
+
+            common_params = dict(
+                gce_image_username=self.params.get("gce_image_username"),
+                gce_network=self.params.get("gce_network"),
+                credentials=self.credentials,
+                user_prefix=user_prefix,
+                params=self.params,
+                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter],
+                gce_service=get_gce_compute_instances_client(),
+            )
+
+            self.loaders = LoaderSetGCE(
+                gce_image=self.params.get('gce_image_loader'),
+                gce_image_type=loader_info.get('disk_type'),
+                gce_image_size=loader_info.get('disk_size'),
+                gce_n_local_ssd=loader_info.get('n_local_ssd'),
+                gce_instance_type=loader_info['type'],
+                credentials=self.credentials,
+                n_nodes=loader_info['n_nodes'],
+                add_disks=loader_additional_disks,
+                **common_params)
+
+            if monitor_info['n_nodes'] > 0:
+                monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
+                self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image_monitor').strip(),
+                                              gce_image_type=monitor_info['disk_type'],
+                                              gce_image_size=monitor_info['disk_size'],
+                                              gce_n_local_ssd=monitor_info['n_local_ssd'],
+                                              gce_instance_type=monitor_info['type'],
+                                              n_nodes=monitor_info['n_nodes'],
+                                              add_disks=monitor_additional_disks,
+                                              targets=dict(db_cluster=self.db_cluster,
+                                                           loaders=self.loaders),
+                                              **common_params)
+            else:
+                self.monitors = NoMonitorSet()
+        else:
+            self.log.warning("Unsupported cloud provider '%s' for loaders, skipping loader provisioning", cloud_provider)
+            self.loaders = None
+
+        loader_ips = [
+            node.public_ip_address for node in self.loaders.nodes if node.public_ip_address
+        ] if self.loaders else []
+
+        self.log.info("Creating Scylla Cloud cluster with allowed IPs: client + %d loader nodes", len(loader_ips))
         self.db_cluster = ScyllaCloudCluster(
             cloud_api_client=cloud_api_client,
             user_prefix=user_prefix,
             n_nodes=db_info['n_nodes'][0],
             params=self.params,
-            add_nodes=True)
+            add_nodes=True,
+            allowed_ips=loader_ips)
 
-        # TODO: implement loaders provisioning in Scylla Cloud
-        self.loaders = None
-
-        # TODO: implement routing of monitoring data to SCT monitor instance
-        self.monitors = NoMonitorSet()
+        if monitor_info['n_nodes'] > 0:
+            self.monitors.promproxy_config = self.db_cluster.get_promproxy_config()
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -2057,7 +2176,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
         elif cluster_backend == 'xcloud':
-            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info)
+            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info,
+                                   monitor_info=monitor_info)
 
         # NOTE: following starts processing of the monitoring inbound events which will be posted
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
