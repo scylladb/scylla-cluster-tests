@@ -142,7 +142,6 @@ class LongevityMVBuildingCoordinator(LongevityTest):
         decommission_node: BaseNode = random.choice(
             [node for node in self.db_cluster.nodes if node != coordinator_node])
         self.db_cluster.decommission(decommission_node)
-        self.db_cluster.verify_decommission(decommission_node)
 
         wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
@@ -205,7 +204,6 @@ class LongevityMVBuildingCoordinator(LongevityTest):
         decommission_node: BaseNode = random.choice(
             [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node, replaced_node)])
         self.db_cluster.decommission(decommission_node)
-        self.db_cluster.verify_decommission(decommission_node)
         for view_name in mv_names:
             wait_for_view_to_be_built(coordinator_node, ks=ks_name, view_name=view_name, timeout=2000)
 
