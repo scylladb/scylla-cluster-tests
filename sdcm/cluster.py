@@ -55,7 +55,7 @@ from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
 from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy, RackAwareRoundRobinPolicy
 from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
@@ -3690,6 +3690,23 @@ class BaseCluster:
 
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
+    def get_load_balancing_policy(self, node, whitelist_nodes=None):
+        node_ips = self.get_node_cql_ips(nodes=whitelist_nodes if whitelist_nodes else self.nodes)
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        if self.params.get("rack_aware_loader") and node.parent_cluster.racks_count > 1:
+            # - if there are multiple rack/AZs configured, we'll try to configue RackAwareRoundRobinPolicy
+            # - if there is only one rack configured, we'll use WhiteListRoundRobinPolicy
+
+            # - The only nemeses, that pass 'whitelist_nodes', are 'disrupt_refuse_connection_with_'.
+            # The whitelist_nodes keeps the alive nodes.
+            loader = self.nodes[0].test_config.tester_obj().loaders.nodes[0]
+            loader_rack = loader.node_rack
+            loader_dc = loader.datacenter
+            wlrr = RackAwareRoundRobinPolicy(local_dc=loader_dc, local_rack=loader_rack)
+            LOGGER.debug("Using RackAwareRoundRobinPolicy %s. Loader rack: %s. Loader datacenter: %s. Node IPs: %s",
+                         node.name, loader_rack, loader_dc, node_ips)
+        return wlrr, node_ips
+
     def cql_connection(self, node, keyspace=None, user=None,
 
                        password=None, compression=True, protocol_version=None,
@@ -3722,8 +3739,8 @@ class BaseCluster:
             wlrr = None
             node_ips = []
         else:
-            node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
-            wlrr = WhiteListRoundRobinPolicy(node_ips)
+            wlrr, node_ips = self.get_load_balancing_policy(node, whitelist_nodes=whitelist_nodes)
+
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
                                     node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
@@ -3746,8 +3763,7 @@ class BaseCluster:
             wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
             node_ips = []
         else:
-            node_ips = [node.cql_address]
-            wlrr = WhiteListRoundRobinPolicy(node_ips)
+            wlrr, node_ips = self.get_load_balancing_policy(node)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
                                     node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
