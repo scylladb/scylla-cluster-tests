@@ -6,7 +6,7 @@ import concurrent.futures
 
 import pytest
 
-from sdcm.utils.common import ParallelObject, ParallelObjectException
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
 

@@ -127,7 +127,8 @@ class ManagerBackupBenchmarkResult(StaticGenericResultTable):
         name = "Backup benchmark"
         description = "Backup benchmark"
         Columns = [
-            ColumnMetadata(name="backup time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="Size", unit="bytes", type=ResultType.TEXT, higher_is_better=False),
+            ColumnMetadata(name="Time", unit="s", type=ResultType.DURATION, higher_is_better=False),
         ]
 
 

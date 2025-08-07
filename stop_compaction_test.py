@@ -26,7 +26,7 @@ from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.group_common_events import ignore_compaction_stopped_exceptions
 from sdcm.send_email import FunctionalEmailReporter
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps, COMPACTION_TYPES
 LOGGER = logging.getLogger(__name__)
 
