@@ -18,15 +18,14 @@ import logging
 import pytest
 
 from sdcm.utils.decorators import retrying
-from sdcm.sct_events import events_processes
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category
-from sdcm.sct_events.setup import start_events_device
 from sdcm.utils.action_logger import get_action_logger
+from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class FakeSCTConfiguration(SCTConfiguration):
@@ -41,7 +40,7 @@ class FakeSCTConfiguration(SCTConfiguration):
 ClusterTester.__test__ = False
 
 
-class ClusterTesterForTests(ClusterTester):
+class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
     __test__ = True
 
     k8s_clusters = None
@@ -115,11 +114,9 @@ class ClusterTesterForTests(ClusterTester):
 
     @pytest.fixture(autouse=True, name='event_system')
     def fixture_event_system(self, setup_logging):
-        start_events_device(log_dir=self.logdir,
-                            _registry=self.events_processes_registry)
+        self.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
         yield
-        self.stop_event_device()
-        events_processes._EVENTS_PROCESSES = None
+        self.teardown_events_processes()
 
 
 @pytest.mark.xfail(reason="this test fails if run after `test_test_user_batch_custom_time`", strict=False)
