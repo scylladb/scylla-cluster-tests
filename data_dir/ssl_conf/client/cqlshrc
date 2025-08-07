@@ -1,4 +1,6 @@
 [connection]
+timeout = 120
+request_timeout = 60
 factory = cqlshlib.ssl.ssl_transport_factory
 
 [ssl]
