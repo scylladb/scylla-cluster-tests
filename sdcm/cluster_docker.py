@@ -76,12 +76,14 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
                  node_prefix: str = "node",
                  base_logdir: Optional[str] = None,
                  ssh_login_info: Optional[dict] = None,
-                 node_index: int = 1) -> None:
+                 node_index: int = 1,
+                 shard_num: Optional[int] = None) -> None:
         super().__init__(name=f"{node_prefix}-{node_index}",
                          parent_cluster=parent_cluster,
                          ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
-                         node_prefix=node_prefix)
+                         node_prefix=node_prefix,
+                         shard_num=shard_num)
         self.node_index = node_index
 
         if container is not None:
@@ -260,7 +262,8 @@ class DockerCluster(cluster.BaseCluster):
                  node_prefix: str = "node",
                  node_type: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
-                 params: dict = None) -> None:
+                 params: dict = None,
+                 nodes_smp: Optional[list[int]] = None) -> None:
         self.source_image = f"{docker_image}:{docker_image_tag}"
         self.node_container_key_file = node_key_file
 
@@ -269,7 +272,8 @@ class DockerCluster(cluster.BaseCluster):
                          n_nodes=n_nodes,
                          params=params,
                          region_names=["localhost-dc", ],  # Multi DC is not supported currently.
-                         node_type=node_type)
+                         node_type=node_type,
+                         nodes_smp=nodes_smp or [])
 
     @property
     def node_container_context_path(self):
@@ -285,7 +289,8 @@ class DockerCluster(cluster.BaseCluster):
                                               key_file=self.node_container_key_file),
                           base_logdir=self.logdir,
                           node_prefix=self.node_prefix,
-                          node_index=node_index)
+                          node_index=node_index,
+                          shard_num=self.get_node_shard_num(node_index))
 
         if container is None:
             ContainerManager.run_container(
@@ -331,7 +336,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                  node_key_file: Optional[str] = None,
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, str] = 3,
-                 params: dict = None) -> None:
+                 params: dict = None,
+                 nodes_smp: Optional[list[int]] = None) -> None:
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super().__init__(docker_image=docker_image,
@@ -341,7 +347,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
                          node_prefix=node_prefix,
                          node_type="scylla-db",
                          n_nodes=n_nodes,
-                         params=params)
+                         params=params,
+                         nodes_smp=nodes_smp or [])
 
     def node_setup(self, node, verbose=False, timeout=3600):
         node.is_scylla_installed(raise_if_not_installed=True)
