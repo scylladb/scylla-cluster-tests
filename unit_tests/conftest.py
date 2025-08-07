@@ -45,9 +45,7 @@ pytest_plugins = ["pytester"]
 
 @pytest.fixture(scope='module')
 def events():
-    class LocalMixing(EventsUtilsMixin):
-        pass
-    mixing = LocalMixing()
+    mixing = EventsUtilsMixin()
     mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
     yield mixing
 
