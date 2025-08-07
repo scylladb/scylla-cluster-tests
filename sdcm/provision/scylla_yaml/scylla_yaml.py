@@ -115,7 +115,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     batch_size_warn_threshold_in_kb: int = None  # 5
     batch_size_fail_threshold_in_kb: int = None  # 50
     listen_on_broadcast_address: bool = None  # False
-    initial_token: int = None  # None
+    initial_token: int | str = None  # None
     num_tokens: int = None  # 1
     # 'org.apache.cassandra.dht.Murmur3Partitioner'
     partitioner: Literal['org.apache.cassandra.dht.Murmur3Partitioner'] = None
