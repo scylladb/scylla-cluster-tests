@@ -176,6 +176,39 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             self.log.debug("Result for mv table %s", list(result_for_mv_table))
             assert result_for_base_table == result_for_mv_table, f"Results are different {result_for_base_table} != {result_for_mv_table}"
 
+    def test_all_topology_operations_during_building_mvs(self):
+        InfoEvent("Prepare Base table").publish()
+        self.run_prepare_write_cmd()
+        mv_names: list[str] = []
+        coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_with_tablets_list(
+            coordinator_node, filter_empty_tables=True, filter_out_mv=True, filter_out_table_with_counter=True)
+        ks_name, base_table_name = random.choice(ks_cf_list).split('.')
+        for _ in range(10):
+            view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
+
+            with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+                create_mv_for_table(session, keyspace_name=ks_name,
+                                    base_table_name=base_table_name, view_name=view_name)
+                # wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
+            mv_names.append(view_name)
+
+        new_node: BaseNode = add_cluster_node(
+            self.db_cluster, dc_idx=coordinator_node.dc_idx, rack=coordinator_node.rack, monitoring=self.monitors)
+
+        replacing_node: BaseNode = random.choice(
+            [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node)])
+        replacing_node_hostid = replacing_node.host_id
+        replacing_node.stop_scylla()
+        replaced_node = replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
+                                             replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
+        decommission_node: BaseNode = random.choice(
+            [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node, replaced_node)])
+        self.db_cluster.decommission(decommission_node)
+        self.db_cluster.verify_decommission(decommission_node)
+        for view_name in mv_names:
+            wait_for_view_to_be_built(coordinator_node, ks=ks_name, view_name=view_name, timeout=2000)
+
 
 def replace_cluster_node(cluster: "BaseScyllaCluster", verification_node: "BaseNode",
                          replacing_host_id: str | None = None,
