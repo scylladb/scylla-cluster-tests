@@ -176,23 +176,6 @@ def pytest_sessionfinish():
     logging.raiseExceptions = False
 
 
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
-    """
-    Hook to capture the test report and attach it to the test item,
-    so it can be accessed later during teardown or in fixtures.
-    """
-    outcome = yield
-    report: pytest.TestReport = outcome.get_result()
-    setattr(item, "rep_" + report.when, report)
-
-    if report.when in ("call", "teardown") and item.get_closest_marker("override_pass"):
-        # overite the results of specific under test_tester that are supposed to fail
-        report.outcome = "passed"
-
-    return report
-
-
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_logreport(report: pytest.TestReport):
     """
