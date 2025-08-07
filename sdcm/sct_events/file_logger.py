@@ -126,7 +126,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
             try:
                 with log_file.open() as fobj:
                     for line in fobj:
-                        if line := line.strip():
+                        if line := line.rstrip():
                             if LINE_START_RE.match(line):
                                 if event:
                                     events_bucket.append("\n".join(event))
