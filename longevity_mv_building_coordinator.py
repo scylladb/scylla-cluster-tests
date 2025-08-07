@@ -43,7 +43,7 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 f"select {', '.join([f'"{c}"' for c in mv_primary_key_columns])} from {ks_name}.{view_name}")
             for row in result_for_mv_table:
                 key_values = list(row)
-                where_clause = [f'"{key}" = {value}' for key, value in zip(mv_primary_key_columns, key_values)]
+                where_clause = [f'"{key}" = "{value}"' for key, value in zip(mv_primary_key_columns, key_values)]
 
                 result1 = session.execute(
                     f"select * from {ks_name}.{base_table_name} where {' and '.join(where_clause)} ALLOW_FILTERING")
