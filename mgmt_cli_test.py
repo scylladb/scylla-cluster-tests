@@ -1871,6 +1871,15 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
         self.db_cluster.unlock_ear_key(ignore_status=True)
         super().tearDown()
 
+    def _send_one_one_restore_results_to_argus(self, bootstrap_duration: int, restore_duration: int) -> None:
+        results = {
+            "bootstrap time": bootstrap_duration,
+            "restore time": restore_duration,
+            "total": bootstrap_duration + restore_duration,
+        }
+        send_manager_benchmark_results_to_argus(argus_client=self.test_config.argus_client(), result=results,
+                                                report_type="one_to_one")
+
     def _define_cloud_provider_id(self) -> int:
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend == "aws":
@@ -1910,7 +1919,14 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
                 account_credential_id=snapshot_data.one_one_restore_params["account_credential_id"],
                 provider_id=self._define_cloud_provider_id(),
             )
-        self.log.info(f"1-1 restore took {timer.duration} seconds")
+        restore_duration = int(timer.duration.total_seconds())
+        self.log.debug(f"1-1 restore took {restore_duration} seconds")
+
+        self.log.info("Report results to Argus")
+        self._send_one_one_restore_results_to_argus(
+            bootstrap_duration=int(self.params.get("one_one_restore_cluster_bootstrap_duration")),
+            restore_duration=restore_duration,
+        )
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")

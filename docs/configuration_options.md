@@ -2436,6 +2436,15 @@ Custom parameters of c-s write operation used in snapshots preparer
 **type:** dict_or_str
 
 
+## **one_one_restore_cluster_bootstrap_duration** / SCT_ONE_ONE_RESTORE_CLUSTER_BOOTSTRAP_DURATION
+
+Time in seconds it took Siren to bootstrap 1-1-restore cluster
+
+**default:** N/A
+
+**type:** int
+
+
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
