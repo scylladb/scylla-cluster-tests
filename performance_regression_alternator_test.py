@@ -135,7 +135,10 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
                     if self.params.get('round_robin'):
                         self.log.debug('Populating data using round_robin')
                         params.update({'stress_num': 1, 'round_robin': True})
-
+                    else:
+                        loaders = self.params.get('n_loaders', 1)
+                        self.log.debug(f'Populating data using {loaders} loaders')
+                        params.update({'stress_num': loaders})
                     for stress_cmd in prepare_write_cmd:
                         params.update({
                             'stress_cmd': stress_cmd.replace('dynamodb', stress_type),
