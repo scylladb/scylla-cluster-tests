@@ -139,7 +139,7 @@ class LoaderUtilsMixin:
             else:
                 stress_queue.append(self.run_stress_thread(**stress_params))
 
-            time.sleep(10)
+            time.sleep(60)
 
         return stress_queue
 
