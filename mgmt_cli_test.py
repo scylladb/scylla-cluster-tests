@@ -1860,6 +1860,8 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
     In current shape, 1-1 restore is supposed to be used for Scylla Cloud clusters only.
     So, the test is not applicable for on-prem clusters used for regular Manager SCT tests.
     """
+    AWS_CLOUD_PROVIDER_ID = 1
+    GCP_CLOUD_PROVIDER_ID = 2
 
     def setUp(self):
         super().setUp()
@@ -1886,9 +1888,9 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
     def _define_cloud_provider_id(self) -> int:
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend == "aws":
-            return 1
+            return self.AWS_CLOUD_PROVIDER_ID
         elif cluster_backend == "gce":
-            return 2
+            return self.GCP_CLOUD_PROVIDER_ID
         else:
             raise ValueError("Unsupported cloud provider")
 
@@ -1907,17 +1909,10 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
         mgr_cluster.delete_task(auto_backup_task)
 
         self.log.info("Run 1-1 restore")
-        # Siren cli requires locations to be sent in a format different from the one used in the Manager
-        # Thus, all locations should be reformatted from "AWS_US_EAST_1:s3:bucket_name" to "us-east-1:s3:bucket_name"
-        locations = []
-        for location in snapshot_data.locations:
-            dc_prefix = "-".join(location.split(":")[0].split("_")[1:]).lower()
-            locations.append(dc_prefix + ":" + location.split(":", 1)[1])
-
         with ExecutionTimer() as timer:
             self.db_cluster.run_one_to_one_restore(
                 sm_cluster_id=snapshot_data.one_one_restore_params["sm_cluster_id"],
-                buckets=",".join(locations),
+                buckets=",".join(snapshot_data.locations),
                 snapshot_tag=snapshot_data.tag,
                 account_credential_id=snapshot_data.one_one_restore_params["account_credential_id"],
                 provider_id=self._define_cloud_provider_id(),

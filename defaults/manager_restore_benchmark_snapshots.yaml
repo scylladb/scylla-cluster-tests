@@ -191,17 +191,17 @@ sizes:  # size of backed up dataset in GB
 
   ### Cloud(Siren) cluster backups
 
-  50gb_1t_ics_cloud_single:
-    tag: "sm_20250404103340UTC"
+  aws_single_50gb:
+    tag: "sm_20250807105835UTC"
     locations:
-      - "AWS_US_EAST_1:s3:scylla-cloud-backup-74-89-1ph7p0-manager-tests"
+      - "us-east-1:s3:scylla-cloud-backup-284-306-96tvd9-manager-tests"
     exp_timeout: 3600  # 1 hour
-    scylla_version: "2024.2.5"
+    scylla_version: "2025.2.1"
     number_of_nodes: 3
     prohibit_verification_read: false
     dataset:
       schema:
-        "50gb_ics_quorum_1024_1_2024_2_5":
+        "50gb_ics_quorum_1024_1_2025_2_1":
           - standard1: 50
       num_of_rows: 52428800
       compaction: "IncrementalCompactionStrategy"
@@ -211,44 +211,21 @@ sizes:  # size of backed up dataset in GB
       replication: "NetworkTopologyStrategy"
       rf: 3
     one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "37299ddb-66af-4d5f-8b52-4d3b44872520"
+      account_credential_id: 1
+      sm_cluster_id: "808e3f91-7c65-4706-b5b3-06b9eaec2e84"
 
-  50gb_1t_ics_cloud_single_non_encrypted:
-    tag: "sm_20250428100042UTC"
+  aws_multi_50gb_byoa:
+    tag: "sm_20250806161516UTC"
     locations:
-      - "AWS_US_EAST_1:s3:scylla-cloud-backup-164-193-s510gk-manager-tests"
+      - "eu-west-1:s3:scylla-cloud-backup-278-298-9b4qi5-manager-tests"
+      - "eu-west-2:s3:scylla-cloud-backup-278-299-086dhz-manager-tests"
     exp_timeout: 3600  # 1 hour
-    scylla_version: "2024.2.5"
-    number_of_nodes: 3
-    prohibit_verification_read: false
-    dataset:
-      schema:
-        "50gb_ics_quorum_1024_1_2024_2_5":
-          - standard1: 50
-      num_of_rows: 52428800
-      compaction: "IncrementalCompactionStrategy"
-      cl: "QUORUM"
-      col_size: 1024
-      col_n: 1
-      replication: "NetworkTopologyStrategy"
-      rf: 3
-    one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "fb0ef6d1-5a70-45e4-82e1-73da00646400"
-
-  50gb_1t_ics_cloud_multi:
-    tag: "sm_20250407152554UTC"
-    locations:
-      - "AWS_EU_WEST_1:s3:scylla-cloud-backup-85-100-72z8hn-manager-tests"
-      - "AWS_EU_WEST_2:s3:scylla-cloud-backup-85-101-5sq81w-manager-tests"
-    exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.5"
+    scylla_version: "2025.2.1"
     number_of_nodes: 6
     prohibit_verification_read: false
     dataset:
       schema:
-        "50gb_ics_quorum_1024_1_2024_2_5":
+        "50gb_ics_quorum_1024_1_2025_2_1":
           - standard1: 50
       num_of_rows: 52428800
       compaction: "IncrementalCompactionStrategy"
@@ -258,69 +235,23 @@ sizes:  # size of backed up dataset in GB
       replication: "NetworkTopologyStrategy"
       rf: 3
     one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "b113c1a7-66bc-46c0-813a-bad4b49bb5a6"
+      account_credential_id: 1150
+      sm_cluster_id: "53035d14-80b2-4999-8ef8-c23a0f72757e"
 
-  1tb_1t_ics_cloud_single:
-    tag: "sm_20250410142519UTC"
+  aws_multi_0gb_byoa:
+    tag: "sm_20250729180522UTC"
     locations:
-      - "AWS_US_EAST_1:s3:scylla-cloud-backup-100-120-8gr7m6-manager-tests"
-    exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.5"
-    number_of_nodes: 3
-    prohibit_verification_read: false
-    dataset:
-      schema:
-        "1024gb_ics_quorum_1024_1_2024_2_5":
-          - standard1: 1024
-      num_of_rows: 1073741824
-      compaction: "IncrementalCompactionStrategy"
-      cl: "QUORUM"
-      col_size: 1024
-      col_n: 1
-      replication: "NetworkTopologyStrategy"
-      rf: 3
-    one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "54be9444-7438-4130-9636-25307df16dae"
-
-  1tb_1t_ics_cloud_single_4xlarge:
-    tag: "sm_20250424214635UTC"
-    locations:
-      - "AWS_US_EAST_1:s3:scylla-cloud-backup-158-187-76l6lg-manager-tests"
-    exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.5"
-    number_of_nodes: 3
-    prohibit_verification_read: false
-    dataset:
-      schema:
-        "1024gb_ics_quorum_1024_1_2024_2_5":
-          - standard1: 1024
-      num_of_rows: 1073741824
-      compaction: "IncrementalCompactionStrategy"
-      cl: "QUORUM"
-      col_size: 1024
-      col_n: 1
-      replication: "NetworkTopologyStrategy"
-      rf: 3
-    one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "1ae9c048-523d-48e8-9174-fde4abee800d"
-
-  1tb_1t_ics_cloud_multi:
-    tag: "sm_20250415113357UTC"
-    locations:
-      - "AWS_EU_WEST_1:s3:scylla-cloud-backup-113-139-ab9m67-manager-tests"
-      - "AWS_EU_WEST_2:s3:scylla-cloud-backup-113-141-xo80f3-manager-tests"
-    exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.5"
+      - "eu-west-1:s3:scylla-cloud-backup-269-284-9wj31g-manager-tests"
+      - "eu-west-2:s3:scylla-cloud-backup-269-285-y14t5i-manager-tests"
+    exp_timeout: 3600  # 1 hour
+    scylla_version: "2025.2.1"
     number_of_nodes: 6
     prohibit_verification_read: false
     dataset:
       schema:
-        "1024gb_ics_quorum_1024_1_2024_2_5":
-          - standard1: 1024
-      num_of_rows: 1073741824
+        "50gb_ics_quorum_1024_1_2025_2_1":
+          - standard1: 50
+      num_of_rows: 52428800
       compaction: "IncrementalCompactionStrategy"
       cl: "QUORUM"
       col_size: 1024
@@ -328,5 +259,52 @@ sizes:  # size of backed up dataset in GB
       replication: "NetworkTopologyStrategy"
       rf: 3
     one_one_restore_params:
-      account_credential_id: 1001
-      sm_cluster_id: "929c53c2-725f-48ec-912f-f0b1a7629243"
+      account_credential_id: 1150
+      sm_cluster_id: "b115b262-cf22-4d0b-9ab4-ec8ae45f8a84"
+
+  gcp_single_50gb:
+    tag: "sm_20250807110840UTC"
+    locations:
+      - "us-east1:gcs:scylla-cloud-backup-282-305-dw80f9-manager-tests"
+    exp_timeout: 3600  # 1 hour
+    scylla_version: "2025.2.1"
+    number_of_nodes: 3
+    prohibit_verification_read: false
+    dataset:
+      schema:
+        "50gb_ics_quorum_1024_1_2025_2_1":
+          - standard1: 50
+      num_of_rows: 52428800
+      compaction: "IncrementalCompactionStrategy"
+      cl: "QUORUM"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
+    one_one_restore_params:
+      account_credential_id: 200
+      sm_cluster_id: "27a615e8-b1ca-4e72-8e48-09f0d93ae438"
+
+  gcp_multi_50gb_byok:
+    tag: "sm_20250807165015UTC"
+    locations:
+      - "us-east1:gcs:scylla-cloud-backup-288-312-4bo09m-manager-tests"
+      - "us-east4:gcs:scylla-cloud-backup-288-313-83as6q-manager-tests"
+    exp_timeout: 3600  # 1 hour
+    scylla_version: "2025.2.1"
+    number_of_nodes: 3
+    prohibit_verification_read: false
+    dataset:
+      schema:
+        "50gb_ics_quorum_1024_1_2025_2_1":
+          - standard1: 50
+      num_of_rows: 52428800
+      compaction: "IncrementalCompactionStrategy"
+      cl: "QUORUM"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
+    one_one_restore_params:
+      account_credential_id: 200
+      sm_cluster_id: "39aacb96-842c-4800-8875-94af66adfe8d"
