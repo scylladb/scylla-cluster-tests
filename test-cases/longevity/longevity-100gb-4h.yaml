@@ -1,10 +1,11 @@
 test_duration: 330
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.yaml ops'(insert=15,read1=1,read2=1,read3=1,read4=1,read5=1)' cl=QUORUM n=100000000 -mode cql3 native -rate threads=100",
+                     "cassandra-stress user profile=/tmp/c-s_profile_3si_5queries.yaml ops'(insert=25,si_read1=1,si_read2=1,si_read3=1,si_read4=1,si_read5=1)' cl=QUORUM n=100000000 -mode cql3 native -rate threads=100",
+                     "cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries_tablets_disabled.yaml ops'(insert=10,si_read1=1,si_read2=1,si_read3=1,si_read4=1,si_read5=1)' cl=QUORUM n=100000000 -mode cql3 native -rate threads=100",
+                    ]
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-             ]
+stress_cmd: []
 
 n_db_nodes: 6
 n_loaders: 2
