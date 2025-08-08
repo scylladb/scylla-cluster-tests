@@ -31,7 +31,7 @@ stress_cmd_m: >-2
 
 
 n_db_nodes: 3
-n_loaders: 5
+n_loaders: 7
 n_monitor_nodes: 1
 
 instance_type_loader: 'c7i.2xlarge'
