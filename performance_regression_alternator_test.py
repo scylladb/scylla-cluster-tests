@@ -136,7 +136,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
                         self.log.debug('Populating data using round_robin')
                         params.update({'stress_num': 1, 'round_robin': True})
                     else:
-                        loaders = self.params.get('n_loaders', 1)
+                        loaders = self.params.get('n_loaders')
                         self.log.debug(f'Populating data using {loaders} loaders')
                         params.update({'stress_num': loaders})
                     for stress_cmd in prepare_write_cmd:
@@ -227,7 +227,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         run_mixed = mode in ('full', 'basic', 'basic-mixed')
         run_read_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-read')
         run_write_throughput = mode in ('full', 'basic', 'basic-throoughput', 'basic-throughput-write')
-        loaders = self.params.get('n_loaders', 1)
+        loaders = self.params.get('n_loaders')
 
         def run_read_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
