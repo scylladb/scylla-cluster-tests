@@ -169,7 +169,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_dummy_credentials_file
                 dynamodb.endpoint = {0}://{1}:{2}
-                dynamodb.connectMax = 2000
+                dynamodb.connectMax = 500
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
             '''.format(web_protocol, target_address, self.params.get('alternator_port')))
