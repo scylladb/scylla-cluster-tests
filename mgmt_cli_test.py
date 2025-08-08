@@ -531,7 +531,7 @@ class SnapshotPreparerOperations(ClusterTester):
             col_n=cs_cmd_params.get("col_n"),
             scylla_version=scylla_version,
         )
-        return ks_name
+        return ks_name.replace("~", "_")
 
     def calculate_rows_per_loader(self, overall_rows_num: int) -> int:
         """Calculate number of rows per loader thread based on the overall number of rows and the number of loaders."""
