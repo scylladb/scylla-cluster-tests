@@ -1442,6 +1442,9 @@ class SCTConfiguration(dict):
              help="The time interval in minutes which gets waited before the KMS key rotation happens."
                   " Applied when the AWS KMS service is configured to be used."),
 
+        dict(name="enable_kms_key_rotation", env="SCT_ENABLE_KMS_KEY_ROTATION", type=boolean,
+             help="Enable automatic KMS key rotation (supports Azure for now)"),
+
         dict(name="enterprise_disable_kms", env="SCT_ENTERPRISE_DISABLE_KMS", type=boolean,
              help="An escape hatch to disable KMS for enterprise run, when needed, "
                   "we enable kms by default since if we use scylla 2023.1.3 and up"),

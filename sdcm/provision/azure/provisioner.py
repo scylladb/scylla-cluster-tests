@@ -37,10 +37,11 @@ LOGGER = logging.getLogger(__name__)
 class AzureProvisioner(Provisioner):
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
 
-    def __init__(self, test_id: str, region: str, availability_zone: str,
+    def __init__(self, test_id: str, region: str, availability_zone: str, enable_azure_kms: bool = False,
                  azure_service: AzureService = AzureService(), **_):
         availability_zone = self._convert_az_to_zone(availability_zone)
         super().__init__(test_id, region, availability_zone)
+        self._enable_azure_kms = enable_azure_kms
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
         LOGGER.debug("getting resources for %s...", self._resource_group_name)
@@ -54,7 +55,7 @@ class AzureProvisioner(Provisioner):
         self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._az, self._azure_service)
         self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
         self._vm_provider = VirtualMachineProvider(
-            self._resource_group_name, self._region, self._az, self._azure_service)
+            self._resource_group_name, self._region, self._enable_azure_kms, self._az, self._azure_service)
         for v_m in self._vm_provider.list():
             try:
                 self._cache[v_m.name] = self._vm_to_instance(v_m)
@@ -145,7 +146,7 @@ class AzureProvisioner(Provisioner):
                 self._resource_group_name, self._region, self._az, self._azure_service)
             self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
             self._vm_provider = VirtualMachineProvider(
-                self._resource_group_name, self._region, self._az, self._azure_service)
+                self._resource_group_name, self._region, self._enable_azure_kms, self._az, self._azure_service)
             raise
         for definition, v_m in zip(definitions, v_ms):
             instance = self._vm_to_instance(v_m)
