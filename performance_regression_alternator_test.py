@@ -253,7 +253,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         def run_write_alternator_with_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_params,
+                test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_write_always_lwt_params,
                 stress_num=1, keyspace_num=1, row_name = 'alternator-always-lwt')
 
         def run_mixed_cql():
@@ -269,7 +269,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         def run_mixed_alternator_with_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
-                           stress_cmd=base_cmd_m + cmd_add_params, stress_num=1, keyspace_num=1, row_name = 'alternator-always-lwt')
+                           stress_cmd=base_cmd_m + cmd_add_write_always_lwt_params, stress_num=1, keyspace_num=1, row_name = 'alternator-always-lwt')
 
         def run_read_throughput_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
@@ -314,10 +314,17 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         except KeyError:
             target_ops_per_sec = int(15000 / loaders)
             self.log.info(f"Parameter alternator_stress_rate not found, using default target {target_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
+        try:
+            target_write_always_lwt_ops_per_sec = int(self.params.get('alternator_write_always_lwt_stress_rate') / loaders)
+            self.log.info(f"Using target {target_write_always_lwt_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
+        except KeyError:
+            target_write_always_lwt_ops_per_sec = int(15000 / loaders)
+            self.log.info(f"Parameter alternator_write_always_lwt_stress_rate not found, using default target {target_write_always_lwt_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
         if single_test_duration_in_seconds < 60:
             self.log.warning(f"Increasing single stress duration to 1 minute - after calculating got {self.params.get('stress_duration')}s. Total runtime will be around {len(tests_to_run)} minutes.")
             single_test_duration_in_seconds = 60
         cmd_add_params = f" -target {target_ops_per_sec} -p maxexecutiontime={single_test_duration_in_seconds}"
+        cmd_add_write_always_lwt_params = f" -target {target_write_always_lwt_ops_per_sec} -p maxexecutiontime={single_test_duration_in_seconds}"
         cmd_add_throughput_params = f" -target {target_ops_per_sec_for_unlimited_scenario} -p maxexecutiontime={single_test_duration_in_seconds}"
 
         self.pre_create_alternator_tables()
