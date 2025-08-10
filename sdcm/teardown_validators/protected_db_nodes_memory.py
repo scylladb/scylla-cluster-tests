@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import re
 import time
 import logging
 from pathlib import Path
@@ -28,6 +29,7 @@ from sdcm.sct_events.teardown_validators import ValidatorEvent
 from sdcm.teardown_validators.base import TeardownValidator
 from sdcm.utils.validators.anomalies_detection import detect_isolation_forest_anomalies, bytes_to_readable
 from sdcm.utils.decorators import silence
+from sdcm.sct_events.file_logger import get_events_grouped_by_category
 
 
 LOG = logging.getLogger(__name__)
@@ -52,6 +54,71 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
             self.get_memory_usage(node)
             self.take_grafana_memory_screenshot(node)
 
+    def get_active_nemesis_names(self, anomaly_timestamps: List[int]) -> dict:
+        """
+        Returns a dict mapping anomaly timestamps to comma-separated nemesis names active at those times.
+        Parses both begin and end event strings to extract nemesis name and timestamp.
+        Matches if anomaly timestamp is between begin and end for the same event_id.
+        """
+        events_by_category = get_events_grouped_by_category(
+            _registry=getattr(self.tester, 'events_processes_registry', None))
+        begin_events = {}
+        end_events = {}
+        for event_str in events_by_category.get('NORMAL', []):
+            if 'DisruptionEvent' in event_str and 'period_type=begin' in event_str:
+                m = re.match(
+                    r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+):.*period_type=begin event_id=([\w-]+): nemesis_name=([\w-]+)", event_str)
+                if m:
+                    dt_str = m.group(1)
+                    event_id = m.group(2)
+                    nemesis_name = m.group(3)
+                    try:
+                        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+                        ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
+                        begin_events[event_id] = (ts, nemesis_name)
+                    except Exception:  # noqa: BLE001
+                        continue
+            if 'DisruptionEvent' in event_str and 'period_type=end' in event_str:
+                m = re.match(
+                    r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+):.*period_type=end event_id=([\w-]+) duration=[^:]*: nemesis_name=([\w-]+)", event_str)
+                if m:
+                    dt_str = m.group(1)
+                    event_id = m.group(2)
+                    nemesis_name = m.group(3)
+                    try:
+                        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+                        ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
+                        end_events[event_id] = (ts, nemesis_name)
+                    except Exception:  # noqa: BLE001
+                        continue
+        for event_str in events_by_category.get('ERROR', []):
+            if 'DisruptionEvent' in event_str and 'period_type=end' in event_str:
+                m = re.match(
+                    r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+):.*period_type=end event_id=([\w-]+) duration=[^:]*: nemesis_name=([\w-]+)", event_str)
+                if m:
+                    dt_str = m.group(1)
+                    event_id = m.group(2)
+                    nemesis_name = m.group(3)
+                    try:
+                        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
+                        ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
+                        end_events[event_id] = (ts, nemesis_name)
+                    except Exception:  # noqa: BLE001
+                        continue
+        # For each anomaly timestamp, find active nemesis
+        result = {}
+        for anomaly_timestamp in anomaly_timestamps:
+            active_nemesis = []
+            for event_id, (begin_ts, nemesis_name) in begin_events.items():
+                end_ts = end_events.get(event_id, (None, None))[0]
+                if end_ts:
+                    if begin_ts <= anomaly_timestamp <= end_ts:
+                        active_nemesis.append(nemesis_name)
+                elif begin_ts <= anomaly_timestamp <= begin_ts:
+                    active_nemesis.append(nemesis_name)
+            result[anomaly_timestamp] = ', '.join(set(active_nemesis)) if active_nemesis else "No nemesis running"
+        return result
+
     def detect_anomalies(self, prom_values: List[Tuple[int, Union[str, int, float]]], node: BaseNode, metric_name: str):
         """
         Detect anomalies in memory usage data using Isolation Forest.
@@ -71,9 +138,12 @@ class ProtectedDbNodesMemoryValidator(TeardownValidator):
         if anomalies:
             LOG.warning("Detected memory usage anomalies:")
             event_message = f"Memory usage anomalies detected for {metric_name} on node {node}:\n"
+            anomaly_timestamps = [timestamp for _, (timestamp, _), _, _ in anomalies]
+            nemesis_map = self.get_active_nemesis_names(anomaly_timestamps)
             for index, (timestamp, value), kind, score in anomalies:
                 formatted_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-                line = f" - At {index}: {formatted_timestamp} - {bytes_to_readable(value)} ({kind} - score: {score})"
+                nemesis_names = nemesis_map.get(timestamp, "No nemesis running")
+                line = f" - At {index}: {formatted_timestamp} - {bytes_to_readable(value)} ({kind} - score: {score}) | Nemesis: {nemesis_names}"
                 LOG.warning(line)
                 event_message += line + "\n"
 
