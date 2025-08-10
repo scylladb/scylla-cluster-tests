@@ -90,28 +90,32 @@ def call(Map pipelineParams) {
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 sub_tests: ['microbenchmark'],
-                                labels: ['master-weekly']
+                                labels: ['master-weekly'],
+                                microbenchmark: true
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 sub_tests: ['microbenchmark'],
-                                labels: ['master-weekly']
+                                labels: ['master-weekly'],
+                                microbenchmark: true
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 sub_tests: ['microbenchmark'],
-                                labels: ['master-weekly']
+                                labels: ['master-weekly'],
+                                microbenchmark: true
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
                                 sub_tests: ['microbenchmark'],
-                                labels: ['master-weekly']
+                                labels: ['master-weekly'],
+                                microbenchmark: true
                             ],
                             [
                                 job_name: 'scylla-master/perf-regression/perf-regression-predefined-throughput-steps-sanity-vnodes',
@@ -184,6 +188,7 @@ def call(Map pipelineParams) {
                                  def version = null
                                  def sub_tests = []
                                  def region = null
+                                 def image_name_for_job = null
                                  if (scylla_version == "master" && !image_name){
                                     region = entry.region ?: 'us-east-1'
                                     def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o text", returnStdout: true).trim()
@@ -215,14 +220,21 @@ def call(Map pipelineParams) {
                                         break
                                     }
                                     rolling_upgrade_test = entry.rolling_upgrade_test
+                                    microbenchmark = entry.microbenchmark
+                                    if (rolling_upgrade_test || entry.microbenchmark) {
+                                        image_name_for_job = null
+                                    } else {
+                                        image_name_for_job = image_name
+                                    }
                                 }
                             }
                             if (region && version && sub_tests) {
                                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                                    println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}")
+                                    println("Building job: $job_name with sub_test: ${sub_tests}, region: ${region}, image_name_for_job: ${image_name_for_job}, scylla_version: ${version}")
+                                    println("Send to job: scylla_version: ${rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)}; scylla_ami_id: ${image_name_for_job ? image_name_for_job : null}")
                                         build job: job_name, wait: false, parameters: [
-                                            string(name: 'scylla_version', value: image_name ? null : params.scylla_version),
-                                            string(name: 'scylla_ami_id', value: image_name ? image_name : null),
+                                            string(name: 'scylla_version', value: rolling_upgrade_test ? null : (image_name_for_job ? null : params.scylla_version)),
+                                            string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
                                             string(name: 'base_versions', value: rolling_upgrade_test ? params.base_versions : null),
                                             string(name: 'provision_type', value: 'on_demand'),
                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
