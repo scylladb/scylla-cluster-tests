@@ -138,7 +138,7 @@ class SctRunnerInfo:
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.11"  # Version of the Image
+    VERSION = "1.12"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -229,7 +229,7 @@ class SctRunner(ABC):
             pip3 install awscli
 
             # disable unattended-upgrades
-            sudo systemctl disable --now unattended-upgrades
+            sudo systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
 
             # Install Docker.
             apt-get -qq install --no-install-recommends \
