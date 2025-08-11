@@ -4581,8 +4581,10 @@ class Nemesis(NemesisFlags):
             InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting grow disruption').publish()
-        self._grow_cluster(rack=None)
+        new_nodes = self._grow_cluster(rack=None)
         InfoEvent(message='Finished grow disruption').publish()
+        for node in new_nodes:
+            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting terminate_and_replace disruption').publish()
         self._terminate_and_replace_node()
@@ -4590,7 +4592,7 @@ class Nemesis(NemesisFlags):
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting shrink disruption').publish()
         self._shrink_cluster(rack=None)
-        InfoEvent(message='Starting shrink disruption').publish()
+        InfoEvent(message='Finished shrink disruption').publish()
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
