@@ -63,7 +63,20 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):
         return False
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
-        self.log.error(exc, exc_info=exc)
+        # Check if this is a logger command for scylla-cluster-tests to reduce log noise
+        is_logger_command = False
+        if hasattr(exc, 'result') and hasattr(exc.result, 'command'):
+            command = exc.result.command
+            is_logger_command = (command and 
+                               'logger' in command and 
+                               'scylla-cluster-tests' in command)
+        
+        # Use DEBUG level for logger commands to suppress noise, ERROR for others
+        if is_logger_command:
+            self.log.debug("Failed to log test action on node (this is expected for unreachable nodes): %s", exc)
+        else:
+            self.log.error(exc, exc_info=exc)
+            
         if isinstance(exc, FailedToRunCommand) and not new_session:
             self.log.debug('Reestablish the session...')
             try:

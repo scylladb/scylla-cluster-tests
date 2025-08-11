@@ -107,7 +107,20 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             )
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
-        self.log.error(exc, exc_info=exc)
+        # Check if this is a logger command for scylla-cluster-tests to reduce log noise
+        is_logger_command = False
+        if hasattr(exc, 'result') and hasattr(exc.result, 'command'):
+            command = exc.result.command
+            is_logger_command = (command and 
+                               'logger' in command and 
+                               'scylla-cluster-tests' in command)
+        
+        # Use DEBUG level for logger commands to suppress noise, ERROR for others
+        if is_logger_command:
+            self.log.debug("Failed to log test action on node (this is expected for unreachable nodes): %s", exc)
+        else:
+            self.log.error(exc, exc_info=exc)
+            
         self.ssh_is_up.clear()
         if self._is_error_retryable(str(exc)):
             raise RetryableNetworkException(str(exc), original=exc)
