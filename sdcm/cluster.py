@@ -374,6 +374,14 @@ class BaseNode(AutoSshContainerMixin):
     def network_configuration(self):
         raise NotImplementedError()
 
+    @cached_property
+    def is_protected(self) -> bool:
+        if protected_db_nodes := self.parent_cluster.params.get("protected_db_nodes") or []:
+            node_index = getattr(self,  "node_index", "0")
+            if int(node_index) in protected_db_nodes:
+                return True
+        return False
+
     def do_default_installations(self):
         """
         Install default packages for all types of nodes

@@ -250,6 +250,8 @@ teardown_validators:
       - event_class: CoreDumpEvent
   rackaware:
     enabled: false
+  protected_db_nodes_memory:
+    enabled: false
 
 kafka_backend: null
 kafka_connectors: []

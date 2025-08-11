@@ -750,7 +750,7 @@ class AWSNode(cluster.BaseNode):
             # Due to https://github.com/scylladb/scylla/issues/7588, when we restart a node that is defined as "seed",
             # we must state a different, living node as the seed provider in the scylla yaml of the restarted node
             other_nodes = list(set(self.parent_cluster.nodes) - {self})
-            free_nodes = [node for node in other_nodes if not node.running_nemesis]
+            free_nodes = [node for node in other_nodes if not node.running_nemesis and not node.is_protected]
             random_node = random.choice(free_nodes)
             seed_provider = SeedProvider(
                 class_name="org.apache.cassandra.locator.SimpleSeedProvider",
