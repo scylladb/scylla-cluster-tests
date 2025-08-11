@@ -57,9 +57,11 @@ class TestLoggerSuppression(unittest.TestCase):
             is_logger_command = False
             if hasattr(exc, 'result') and hasattr(exc.result, 'command'):
                 command = exc.result.command
+                # More precise detection: look for logger with -t scylla-cluster-tests
                 is_logger_command = (command and 
+                                   isinstance(command, str) and
                                    'logger' in command and 
-                                   'scylla-cluster-tests' in command)
+                                   '-t scylla-cluster-tests' in command)
             
             # Use DEBUG level for logger commands to suppress noise, ERROR for others
             if is_logger_command:
