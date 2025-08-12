@@ -784,12 +784,12 @@ class ManagerTestFunctionsMixIn(
                     self.log.info(f"[Node {index}][{keyspace}.{table}] Nodetool refresh took {timer.duration}")
 
     def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
-                                 location_list=None, extra_params=None, object_storage_method=None):
+                                 location_list=None, extra_params=None, manager_backup_restore_method=None):
         location_list = location_list if location_list else self.locations
         dc_mapping = self.get_dc_mapping() if restore_data else None
         restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
                                                        location_list=location_list, snapshot_tag=snapshot_tag,
-                                                       dc_mapping=dc_mapping, extra_params=extra_params, object_storage_method=object_storage_method)
+                                                       dc_mapping=dc_mapping, extra_params=extra_params, manager_backup_restore_method=manager_backup_restore_method)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
@@ -830,23 +830,23 @@ class ManagerTestFunctionsMixIn(
         InfoEvent(message="Repair ended").publish()
 
 
-def run_manager_backup(mgr_cluster, locations, object_storage_upload_mode=None, timeout=7200):
+def run_manager_backup(mgr_cluster, locations, method=None, timeout=7200):
     """
     Perform a Manager backup task and wait for its completion.
 
     Args:
         mgr_cluster: The ManagerCluster object.
         locations: List of backup locations.
-        object_storage_upload_mode: The upload mode (e.g., RCLONE or NATIVE).
+        method: The upload mode (e.g., RCLONE or NATIVE).
         timeout: Timeout for the backup task.
 
     Returns:
         The completed backup task.
     """
     InfoEvent(
-        message=f'Starting a Manager backup (Object Storage Upload Mode: {object_storage_upload_mode})').publish()
+        message=f'Starting a Manager backup (Object Storage Upload Mode: {method})').publish()
     task = mgr_cluster.create_backup_task(location_list=locations, rate_limit_list=["0"],
-                                          object_storage_upload_mode=object_storage_upload_mode)
+                                          method=method)
     backup_status = task.wait_and_get_final_status(timeout=timeout)
     assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
     return task

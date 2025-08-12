@@ -8,10 +8,12 @@ managerPipeline(
     region: 'us-east-1',
     provision_type: 'on_demand',
     test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_benchmark',
-    test_config: '''["test-cases/manager/manager-backup-restore-set-dataset.yaml", "configurations/manager/1TB_dataset.yaml", "configurations/object_storage.yaml", "configurations/object_storage_native_method.yaml"]''',
-    mgmt_reuse_backup_snapshot_name: '1tb_1t_ics',
+    test_config: '''["test-cases/manager/manager-backup-restore-set-dataset.yaml", "configurations/manager/1TB_dataset.yaml", "configurations/object_storage.yaml", "configurations/object_storage_rclone_method.yaml"]''',
+    mgmt_reuse_backup_snapshot_name: '1tb_2t_twcs',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy'
+    post_behavior_monitor_nodes: 'destroy',
+
+    extra_environment_variables: 'SCT_N_DB_NODES=9'
 )

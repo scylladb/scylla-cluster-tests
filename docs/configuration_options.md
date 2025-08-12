@@ -384,6 +384,15 @@ Url to the scylla manager packages to install for management tests
 **type:** str (appendable)
 
 
+## **manager_backup_restore_method** / SCT_MANAGER_BACKUP_RESTORE_METHOD
+
+The object storage transfer method to use by Scylla Manager in backup or restore. Supported methods: native, rclone, auto.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **stress_cmd_lwt_i** / SCT_STRESS_CMD_LWT_I
 
 Stress command for LWT performance test for INSERT baseline
