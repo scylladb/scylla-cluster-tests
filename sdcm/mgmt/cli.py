@@ -603,7 +603,7 @@ class ManagerCluster(ScyllaManagerBase):
         self.id = value
 
     def create_restore_task(self, restore_schema=False, restore_data=False, location_list=None, snapshot_tag=None,
-                            dc_mapping=None, extra_params=None):
+                            dc_mapping=None, object_storage_method=None, extra_params=None):
         cmd = f"restore -c {self.id}"
         if restore_schema:
             cmd += " --restore-schema"
@@ -618,6 +618,8 @@ class ManagerCluster(ScyllaManagerBase):
             # --dc-mapping flag is applicable only for --restore-tables mode
             # https://manager.docs.scylladb.com/stable/sctool/restore.html#dc-mapping
             cmd += f" --dc-mapping {dc_mapping}"
+        if object_storage_method is not None:
+            cmd += " --method {} ".format(object_storage_method.value)
         if extra_params:
             cmd += f" {extra_params}"
 

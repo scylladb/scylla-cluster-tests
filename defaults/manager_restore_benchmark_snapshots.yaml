@@ -169,11 +169,11 @@ sizes:  # size of backed up dataset in GB
       rf: 3
     one_one_restore_params: None
   2tb_1t_ics:
-    tag: "sm_20240816185129UTC"
+    tag: "sm_20250807135410UTC"
     locations:
       - "s3:manager-backup-tests-permanent-snapshots-us-east-1"
     exp_timeout: 57600  # 16 hours
-    scylla_version: "2024.2.0-rc1"
+    scylla_version: "2025.3"
     number_of_nodes: 3
     prohibit_verification_read: false
     dataset:
