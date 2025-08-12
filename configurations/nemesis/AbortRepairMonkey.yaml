@@ -1,2 +1,3 @@
-nemesis_class_name: 'AbortRepairMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'AbortRepairMonkey'
 user_prefix: 'longevity-5gb-1h-AbortRepairMonkey'

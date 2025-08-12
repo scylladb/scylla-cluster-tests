@@ -1,2 +1,3 @@
-nemesis_class_name: 'TerminateKubernetesHostThenReplaceScyllaNode'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'TerminateKubernetesHostThenReplaceScyllaNode'
 user_prefix: 'longevity-5gb-1h-TerminateKubernetesHostThenReplaceScyllaNode'
