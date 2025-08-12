@@ -428,6 +428,10 @@ class SCTConfiguration(dict):
              type=str,
              help="Url to the scylla manager packages to install for management tests"),
 
+        dict(name="manager_backup_restore_method", env="SCT_MANAGER_BACKUP_RESTORE_METHOD",
+             type=str,
+             help="The object storage transfer method to use by Scylla Manager in backup or restore. Supported methods: native, rclone, auto."),
+
         dict(name="stress_cmd_lwt_i", env="SCT_STRESS_CMD_LWT_I",
              type=str,
              help="Stress command for LWT performance test for INSERT baseline"),
