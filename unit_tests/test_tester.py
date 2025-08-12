@@ -44,7 +44,6 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
     __test__ = True
 
     k8s_clusters = None
-    argus_heartbeat_stop_signal = threading.Event()
 
     def init_argus_run(self):
         self.argus_heartbeat_stop_signal = threading.Event()

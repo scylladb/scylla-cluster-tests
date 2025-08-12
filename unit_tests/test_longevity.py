@@ -29,8 +29,6 @@ class DummyLongevityTest(LongevityTest):
     test_custom_time = None
     test_batch_custom_time = None
 
-    argus_heartbeat_stop_signal = threading.Event()
-
     @pytest.fixture(autouse=True)
     def fixture_params(self, params):
         self.params = params
