@@ -19,6 +19,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+import pytest
+
 from sdcm import sct_config
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.utils.distro import Distro
@@ -190,8 +192,12 @@ class TestSstableLoadUtils(unittest.TestCase):
         cls.node.parent_cluster = DummyDbCluster([cls.node])
         cls.node.init()
 
-    def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'load_and_stream.log')
+    @pytest.fixture(autouse=True)
+    def fixture_setup(self, tmp_path):
+        source = os.path.join(os.path.dirname(__file__), 'test_data', 'load_and_stream.log')
+        target = tmp_path / 'load_and_stream.log'
+        shutil.copy(source, target)
+        self.node.system_log = str(target)
 
     @staticmethod
     def test_load_column_1_data_inventory():
