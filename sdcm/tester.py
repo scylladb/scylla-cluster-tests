@@ -338,7 +338,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     monitors: BaseMonitorSet = None
     loaders: Union[BaseLoaderSet, LoaderSetAWS, LoaderSetGCE] = None
     db_cluster: Union[BaseCluster, BaseScyllaCluster] = None
-    argus_heartbeat_stop_signal = threading.Event()
 
     @property
     def k8s_cluster(self):
@@ -3316,7 +3315,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         pass
 
     @pytest.fixture(autouse=True)
-    def report_failures_as_event(self, request: pytest.FixtureRequest, event_system, validate):
+    def report_failures_as_event(self, request: pytest.FixtureRequest, event_system, validate, argus_finalize):
         yield
         if subtests_results := SUBTESTS_FAILURES.pop(request.node.nodeid, None):
             for report in subtests_results:
@@ -3336,7 +3335,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     severity=Severity.ERROR,
                 ).publish_or_dump(default_logger=self.log)
 
-    @pytest.fixture(autouse=True, name="argus_finalize", scope="session")
+    @pytest.fixture(autouse=True, name="argus_finalize")
     def fixture_argus_finalize(self):
         """
         Fixture to handle Argus cleanup operations after test completion.
