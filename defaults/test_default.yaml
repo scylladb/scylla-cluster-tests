@@ -327,3 +327,4 @@ vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
 
 download_from_s3: []
+object_storage_method: ''
