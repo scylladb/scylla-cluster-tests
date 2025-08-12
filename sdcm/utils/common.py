@@ -39,7 +39,7 @@ import tempfile
 import traceback
 import ctypes
 import shlex
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
+from typing import TYPE_CHECKING, Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
@@ -96,6 +96,8 @@ from sdcm.utils.gce_utils import (
     get_gce_storage_client,
 )
 
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -2772,3 +2774,9 @@ def parse_python_thread_command(cmd: str) -> dict:
                         tokens_iter = iter([next_token] + list(tokens_iter))
 
     return options
+
+
+def get_node_disk_usage(node: 'BaseNode') -> float:
+    """Returns disk usage percentage for a node"""
+    result = node.remoter.run("df --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
+    return float(result.stdout.strip())
