@@ -12,13 +12,6 @@ n_loaders: 4
 n_monitor_nodes: 1
 region_name: us-east-1
 backup_bucket_location: 'manager-backup-tests-us-east-1'
-append_scylla_yaml:
-  auto_snapshot: false
-  object_storage_endpoints:
-    - name: s3.us-east-1.amazonaws.com
-      port: 443
-      https: true
-      aws_region: us-east-1
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 user_prefix: 'manager-backup-benchmark'
 use_hdrhistogram: true
