@@ -85,7 +85,7 @@ from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.system import AwsKmsEvent
 from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
-from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
@@ -2586,7 +2586,8 @@ class BaseNode(AutoSshContainerMixin):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_up_before:
             self.wait_db_up(timeout=verify_up_timeout)
-        with adaptive_timeout(operation=Operations.RESTART_SCYLLA, node=self, timeout=timeout):
+        with adaptive_timeout(operation=Operations.RESTART_SCYLLA, node=self, timeout=timeout,
+                              stats_storage=AdaptiveTimeoutStore()):
             self.restart_service(service_name='scylla-server', timeout=timeout * 2)
         if verify_up_after:
             self.wait_db_up(timeout=verify_up_timeout)
