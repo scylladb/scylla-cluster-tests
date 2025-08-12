@@ -31,7 +31,7 @@ stress_cmd_m: >-2
 
 
 n_db_nodes: 3
-n_loaders: 9
+n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_loader: 'c7i.2xlarge'
@@ -49,8 +49,8 @@ user_prefix: 'perf-alternator-latency'
 space_node_threshold: 644245094
 
 use_hdrhistogram: true
-alternator_stress_rate: 90000
-alternator_write_always_lwt_stress_rate: 25000
+alternator_stress_rate: 90
+alternator_write_always_lwt_stress_rate: 25
 
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
