@@ -20,7 +20,7 @@ pre_create_keyspace: [
 run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 240}']
 round_robin: true
 
-n_db_nodes: 5
+n_db_nodes: 6
 n_loaders: 4
 
 instance_type_db: 'i3en.3xlarge'

@@ -77,8 +77,8 @@ round_robin: true
 dynamodb_primarykey_type: HASH_AND_RANGE
 
 n_loaders: 4
-instance_type_db: 'i4i.4xlarge'
-n_db_nodes: 4
+instance_type_db: 'i4i.2xlarge'
+n_db_nodes: 6
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_seed: '033'
