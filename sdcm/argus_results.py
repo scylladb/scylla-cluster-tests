@@ -259,7 +259,12 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
     result_table_summary.name = f"{workload} - {name} - Summary latencies"
     result_table_summary.description = f"{workload} workload summary - {description}"
     if error_thresholds:
+        LOGGER.info(F"workload `{workload}`")
+        LOGGER.info(f"name `{name}`")
+        LOGGER.info("description `{description}'")
+        LOGGER.info(f"error thresholds for {workload} - {name}: {error_thresholds}: {error_thresholds[workload]['default']}   {error_thresholds[workload].get(name, {})}")
         error_thresholds = error_thresholds[workload]["default"] | error_thresholds[workload].get(name, {})
+        LOGGER.info(f"error thresholds for {workload} - {name}: result {result}")
         result_table.validation_rules = {metric: ValidationRule(**rules) for metric, rules in error_thresholds.items()}
         result_table_summary.validation_rules = result_table.validation_rules
     try:
