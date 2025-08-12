@@ -14,7 +14,7 @@ stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/c
 stress_before_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data
 stress_after_cluster_upgrade: scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=one -rows-per-request=100 -timeout=30s -validate-data
 
-n_db_nodes: 4
+n_db_nodes: 6
 n_loaders: 1
 
 instance_type_db: 'i4i.2xlarge'
