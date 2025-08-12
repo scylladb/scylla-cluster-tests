@@ -1190,7 +1190,8 @@ cli.add_command(investigate)
 @click.option("-t", "--test", required=False, default=[""], multiple=True,
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'not integration', *(f'unit_tests/{t}' for t in test)]))
+    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'not integration',
+             '-n', '2', *(f'unit_tests/{t}' for t in test)]))
 
 
 @cli.command('integration-tests', help="Run all the SCT internal integration-tests")
