@@ -62,8 +62,9 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
                     pass
         return False
 
-    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
-        self.log.error(exc)
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:
+        if not suppress_errors:
+            self.log.error(exc, exc_info=exc)
         if isinstance(exc, FailedToRunCommand) and not new_session:
             self.log.debug('Reestablish the session...')
             try:

@@ -32,7 +32,7 @@ class RemoterRecorder(RemoteCmdRunner):
     def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False) -> Result:
+            change_context: bool = False, suppress_errors: bool = False) -> Result:
         try:
             output = super().run(cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers, change_context)
         except Exception as exc:

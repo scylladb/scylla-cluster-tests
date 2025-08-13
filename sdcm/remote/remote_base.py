@@ -546,7 +546,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         pass
 
     @abstractmethod
-    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:
         pass
 
     def _run_on_exception(self, exc: Exception, verbose: bool, ignore_status: bool) -> bool:
@@ -578,7 +578,8 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             log_file: str | None = None,
             retry: int = 1,
             watchers: List[StreamWatcher] | None = None,
-            change_context: bool = False
+            change_context: bool = False,
+            suppress_errors: bool = False
             ) -> Result:
         """
         Run command at the remote endpoint and return result
@@ -593,6 +594,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         :param change_context: If True, next run will trigger reconnect on all threads.
           Needed for cases when environment context is changed by the command,
           for example group has been added to the user.
+        :param suppress_errors: If True, suppress errors logging for retryable exceptions
         :return:
         """
 
@@ -604,7 +606,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             try:
                 return self._run_execute(cmd, timeout, ignore_status, verbose, new_session, watchers)
             except self.exception_retryable as exc:
-                if self._run_on_retryable_exception(exc, new_session):
+                if self._run_on_retryable_exception(exc, new_session, suppress_errors):
                     raise
             except Exception as exc:  # pylint: disable=broad-except
                 if self._run_on_exception(exc, verbose, ignore_status):

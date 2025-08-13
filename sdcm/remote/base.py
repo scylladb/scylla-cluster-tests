@@ -100,7 +100,8 @@ class CommandRunner(metaclass=ABCMeta):
             log_file: Optional[str] = None,
             retry: int = 1,
             watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False
+            change_context: bool = False,
+            suppress_errors: bool = False
             ) -> Result:
         pass
 
