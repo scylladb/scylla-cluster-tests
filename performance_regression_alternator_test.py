@@ -53,26 +53,22 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         self.stack.enter_context(ignore_operation_errors())
         self.hdr_tags = [ 'READ', 'SCAN', 'UPDATE', 'INSERT', 'DELETE', 'WRITE' ]
 
-    def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, stress_num=1, **kwargs):
+    def _prepare_and_execute_workload_with_latency_calculator_decorator(self, *, test_name, row_name, throughput, stress_num=1, **kwargs):
         self.log.info(f'Running workload with test_name={test_name}, stress_num={stress_num}, kwargs={kwargs}')
         try:
             # test_name must end with one of '_read', '_write', '_mixed', '_throughput_read', '_throughput_write'
             # indicating the type of workload that will be run
+            cycle_name = str(throughput)
             if test_name.endswith('_throughput_read'):
                 self.params['workload_name'] = 'throughput'
-                cycle_name = 'throughput-read'
             elif test_name.endswith('_throughput_write'):
                 self.params['workload_name'] = 'throughput'
-                cycle_name = 'throughput-write'
             elif test_name.endswith('_read'):
                 self.params['workload_name'] = 'read'
-                cycle_name = '100% read'
             elif test_name.endswith('_write'):
                 self.params['workload_name'] = 'write'
-                cycle_name = '100% write'
             elif test_name.endswith('_mixed'):
                 self.params['workload_name'] = 'mixed'
-                cycle_name = '50% read 50% write'
             else:
                 raise ValueError(f"Unknown test_name {test_name} for workload, only test_name values ending with '_read', '_write', '_mixed', '_throughput_read', or '_throughput_write' are supported.")
 
@@ -237,65 +233,65 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
 
         def run_read_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=1,
+                throughput=total_target_ops_per_sec_text, test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_params, stress_num=1,
                 keyspace_num=1, is_alternator=False, row_name = 'cql')
 
         def run_read_alternator_no_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=1,
+                throughput=total_target_ops_per_sec_text, test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r + cmd_add_params, stress_num=1,
                 keyspace_num=1, row_name = 'alternator-no-lwt')
 
         def run_write_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
+                throughput=total_target_ops_per_sec_text, test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=1, keyspace_num=1, is_alternator=False, row_name = 'cql')
 
         def run_write_alternator_no_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + cmd_add_params,
+                throughput=total_target_ops_per_sec_text, test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + cmd_add_params,
                 stress_num=1, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         def run_write_alternator_with_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_write_always_lwt_params,
+                throughput=total_target_always_lwt_ops_per_sec_text, test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + cmd_add_write_always_lwt_params,
                 stress_num=1, keyspace_num=1, row_name = 'alternator-always-lwt')
 
         def run_mixed_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
+                throughput=total_target_ops_per_sec_text, test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + cmd_add_params,
                 stress_num=1, keyspace_num=1, is_alternator=False, row_name = 'cql')
 
         def run_mixed_alternator_no_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(throughput=total_target_ops_per_sec_text, test_name=self.id() + '_mixed', sub_type='without-lwt',
                            stress_cmd=base_cmd_m + cmd_add_params, stress_num=1, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         def run_mixed_alternator_with_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_mixed', sub_type='with-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(throughput=total_target_always_lwt_ops_per_sec_text, test_name=self.id() + '_mixed', sub_type='with-lwt',
                            stress_cmd=base_cmd_m + cmd_add_write_always_lwt_params, stress_num=1, keyspace_num=1, row_name = 'alternator-always-lwt')
 
         def run_read_throughput_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_throughput_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
+                throughput="unthrottled", test_name=self.id() + '_throughput_read', sub_type='cql', stress_cmd=base_cmd_r + cmd_add_throughput_params,
                 stress_num=1, keyspace_num=1, is_alternator=False, row_name = 'cql')
 
         def run_read_throughput_alternator_no_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_read', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(throughput="unthrottled", test_name=self.id() + '_throughput_read', sub_type='without-lwt',
                            stress_cmd=base_cmd_r + cmd_add_throughput_params, stress_num=1, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         def run_write_throughput_cql():
             self._prepare_and_execute_workload_with_latency_calculator_decorator(
-                test_name=self.id() + '_throughput_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_throughput_params,
+                throughput="unthrottled", test_name=self.id() + '_throughput_write', sub_type='cql', stress_cmd=base_cmd_w + cmd_add_throughput_params,
                 stress_num=1, keyspace_num=1, is_alternator=False, row_name = 'cql')
 
         def run_write_throughput_alternator_no_lwt():
             self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-            self._prepare_and_execute_workload_with_latency_calculator_decorator(test_name=self.id() + '_throughput_write', sub_type='without-lwt',
+            self._prepare_and_execute_workload_with_latency_calculator_decorator(throughput="unthrottled", test_name=self.id() + '_throughput_write', sub_type='without-lwt',
                            stress_cmd=base_cmd_w + cmd_add_throughput_params, stress_num=1, keyspace_num=1, row_name = 'alternator-no-lwt')
 
         tests_to_run = tuple( test for test, condition in (
@@ -315,17 +311,22 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         
         single_test_duration_in_seconds = int(60 * self.params.get('stress_duration') / len(tests_to_run))
         target_ops_per_sec_for_unlimited_scenario = 999999
-        # target_ops_per_sec_for_unlimited_scenario = 100
         try:
-            target_ops_per_sec = int(self.params.get('alternator_stress_rate') / loaders)
+            rate = self.params.get('alternator_stress_rate')
+            total_target_ops_per_sec_text = str(rate)
+            target_ops_per_sec = int(rate / loaders)
             self.log.info(f"Using target {target_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
         except KeyError:
+            total_target_ops_per_sec_text = '15000'
             target_ops_per_sec = int(15000 / loaders)
             self.log.info(f"Parameter alternator_stress_rate not found, using default target {target_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
         try:
-            target_write_always_lwt_ops_per_sec = int(self.params.get('alternator_write_always_lwt_stress_rate') / loaders)
+            rate = self.params.get('alternator_write_always_lwt_stress_rate')
+            total_target_always_lwt_ops_per_sec_text = str(rate)
+            target_write_always_lwt_ops_per_sec = int(rate / loaders)
             self.log.info(f"Using target {target_write_always_lwt_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
         except KeyError:
+            total_target_always_lwt_ops_per_sec_text = '15000'
             target_write_always_lwt_ops_per_sec = int(15000 / loaders)
             self.log.info(f"Parameter alternator_write_always_lwt_stress_rate not found, using default target {target_write_always_lwt_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
         if single_test_duration_in_seconds < 60:
