@@ -14,15 +14,34 @@
 from typing import Optional, List
 import os
 import threading
+import types
 
 from fabric import Connection, Config
-from paramiko import SSHException
+from paramiko import SSHException, Transport
 from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
 from invoke.watchers import StreamWatcher
 from invoke.exceptions import UnexpectedExit, Failure
 
 from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase
+
+
+def open_none_auth(self):
+    """
+    Overrides Fabric's Connection.open() method to support Paramiko's "none" authentication.
+    This workaround is necessary because Paramiko does not natively support "none" authentication
+    via Fabric's Connection interface. When neither a key file nor a password is provided,
+    attempting to connect normally results in an "Authentication failed" error.
+    This method manually creates a Paramiko Transport, starts the SSH client, and authenticates
+    using the "none" method for the specified user. It then assigns the resulting transport
+    to the connection instance, allowing commands to be executed without standard authentication.
+    Args:
+        self: The Fabric Connection instance being modified.
+    """
+    transport = Transport(sock=(self.host, self.port))
+    transport.start_client()
+    transport.auth_none(self.user)
+    self.transport = self.client._transport = transport
 
 
 class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):
@@ -127,7 +146,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
                 }
             )
 
-        return Connection(
+        conn = Connection(
             host=self.hostname,
             user=self.user,
             port=self.port,
@@ -138,3 +157,9 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             } if self.key_file else None,
             gateway=gateway_connection
         )
+        if not self.key_file and not self.password:
+            # apply this trick only if no key file and password is provided
+            # this is needed to avoid "Authentication failed" error
+            # when using none authentication
+            conn.open = types.MethodType(open_none_auth, conn)
+        return conn
