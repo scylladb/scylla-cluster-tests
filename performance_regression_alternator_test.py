@@ -59,11 +59,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
             # test_name must end with one of '_read', '_write', '_mixed', '_throughput_read', '_throughput_write'
             # indicating the type of workload that will be run
             cycle_name = str(throughput)
-            if test_name.endswith('_throughput_read'):
-                self.params['workload_name'] = 'throughput'
-            elif test_name.endswith('_throughput_write'):
-                self.params['workload_name'] = 'throughput'
-            elif test_name.endswith('_read'):
+            if test_name.endswith('_read'):
                 self.params['workload_name'] = 'read'
             elif test_name.endswith('_write'):
                 self.params['workload_name'] = 'write'
