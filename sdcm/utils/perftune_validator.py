@@ -22,7 +22,10 @@ PERFTUNE_EXPECTED_RESULTS_PATH = "defaults/perftune_results.json"
 
 
 def count_bits(mask_string) -> int:
-    return sum([int(m, base=16).bit_count() for m in mask_string.split(",")])
+    return sum([
+        int(m, base=16).bit_count() if m else 0
+        for m in mask_string.split(",")
+    ])
 
 
 def get_number_of_cpu_cores(node) -> int:
