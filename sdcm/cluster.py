@@ -3116,8 +3116,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         try:
             self.remoter.run(
                 f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
-                ignore_status=True, verbose=False, retry=0, timeout=10)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                ignore_status=True, verbose=False, retry=0, timeout=10, suppress_errors=True)
+        except Exception:  # pylint: disable=broad-except # noqa: BLE001
             pass
 
 

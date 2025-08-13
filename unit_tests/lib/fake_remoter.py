@@ -33,7 +33,8 @@ class FakeRemoter(RemoteCmdRunnerBase):
             log_file=None,
             retry=1,
             watchers=None,
-            change_context=False
+            change_context=False,
+            suppress_errors=False
             ) -> Result:
         for pattern, result in self.result_map.items():
             if re.match(pattern, cmd) is not None:
@@ -55,5 +56,5 @@ class FakeRemoter(RemoteCmdRunnerBase):
     def is_up(self, timeout: float = 30):
         return True
 
-    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:
         return True
