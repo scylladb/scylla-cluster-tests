@@ -128,6 +128,8 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
     def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
+        record_count = self.params.get('recordcount')
+
         self.log.info(f'Preloading data with `{prepare_write_cmd}` write command.')
         if prepare_write_cmd:
             # create new document in ES with doc_id = test_id + timestamp
@@ -313,6 +315,7 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         
         single_test_duration_in_seconds = int(60 * self.params.get('stress_duration') / len(tests_to_run))
         target_ops_per_sec_for_unlimited_scenario = 999999
+        # target_ops_per_sec_for_unlimited_scenario = 100
         try:
             target_ops_per_sec = int(self.params.get('alternator_stress_rate') / loaders)
             self.log.info(f"Using target {target_ops_per_sec} ops/s per node ({loaders} nodes) for stress tests.")
