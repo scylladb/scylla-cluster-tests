@@ -227,8 +227,9 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
                                     container=self.container, timeout=300)
         return True
 
-    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
-        self.log.error(exc, exc_info=exc)
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool, suppress_errors: bool = False) -> bool:
+        if not suppress_errors:
+            self.log.error(exc, exc_info=exc)
         if isinstance(exc, self.exception_retryable):
             raise RetryableNetworkException(str(exc), original=exc)
         return True
