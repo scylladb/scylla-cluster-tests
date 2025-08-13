@@ -49,7 +49,7 @@ user_prefix: 'perf-alternator-latency'
 space_node_threshold: 644245094
 
 use_hdrhistogram: true
-alternator_stress_rate: 90000
+alternator_stress_rate: 80000
 alternator_write_always_lwt_stress_rate: 25000
 
 round_robin: true
