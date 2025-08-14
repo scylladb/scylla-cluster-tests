@@ -29,7 +29,6 @@ from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.common import (
-    ParallelObject,
     all_aws_regions,
     aws_tags_to_dict,
     get_post_behavior_actions,
@@ -46,6 +45,7 @@ from sdcm.utils.common import (
     list_resources_docker,
     list_test_security_groups,
 )
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
