@@ -2,20 +2,21 @@ test_duration: 255
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]
 
-n_db_nodes: 6
-n_loaders: 2
+n_db_nodes: 3
+n_loaders: 1
 
 instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 gce_instance_type_loader: 'e2-standard-4'
 azure_instance_type_db: 'Standard_L8s_v3'
-run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
+#run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
+run_fullscan: []
 nemesis_class_name: 'BootstrapStreamingErrorNemesis'
 nemesis_seed: '111'
-nemesis_interval: 2
 
 user_prefix: 'longevity-10gb-3h'
 space_node_threshold: 64424
 
 gce_n_local_ssd_disk_db: 2
 run_db_node_benchmarks: false
+nemesis_interval: 2
