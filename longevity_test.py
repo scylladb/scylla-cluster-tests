@@ -584,14 +584,14 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
                     self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
-                nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
-                current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
-                if current_cluster_size[0] % 10 == 0 and current_cluster_size[0] < 199:
-                    InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
-                    InfoEvent("----------------Truncate cdc tables---------------").publish()
-                    with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
-                        session.execute("TRUNCATE system_distributed.cdc_generation_timestamps;")
-                        session.execute("TRUNCATE system_distributed.cdc_streams_descriptions_v2;")
+                # nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+                # current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+                # if current_cluster_size[0] % 10 == 0 and current_cluster_size[0] < 199:
+                #     InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
+                #     InfoEvent("----------------Truncate cdc tables---------------").publish()
+                #     with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+                #         session.execute("TRUNCATE system_distributed.cdc_generation_timestamps;")
+                #         session.execute("TRUNCATE system_distributed.cdc_streams_descriptions_v2;")
 
             InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
             InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
