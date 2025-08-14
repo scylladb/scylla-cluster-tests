@@ -1913,7 +1913,7 @@ class SCTConfiguration(dict):
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
                     'eks_cluster_version', 'eks_nodegroup_role_arn'],
 
-        'xcloud': ['user_prefix', 'xcloud_env', 'xcloud_provider', 'scylla_version'],
+        'xcloud': ['user_prefix', 'xcloud_provider', 'scylla_version'],
     }
 
     defaults_config_files = {
