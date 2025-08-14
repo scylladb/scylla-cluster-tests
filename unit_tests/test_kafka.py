@@ -45,6 +45,7 @@ def fixture_kafka_cluster(tmp_path_factory, params):
 @pytest.mark.sct_config(
     files="unit_tests/test_data/kafka_connectors/scylla-cdc-source-connector.yaml"
 )
+@pytest.mark.skip("https://github.com/scylladb/scylla-cluster-tests/issues/11628")
 def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, params, events):
     """
     setup kafka with scylla-cdc-source-connector with docker based scylla node
