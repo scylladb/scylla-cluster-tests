@@ -13,7 +13,7 @@ jobs:
       - run: |
           mkdir -p issues
           mkdir -p issues/pull-requests
-          for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java ; do
+          for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java siren ; do
             gh issue list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/scylladb_$repo.csv
             gh pr list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/pull-requests/scylladb_$repo.csv
           done
