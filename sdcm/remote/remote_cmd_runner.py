@@ -14,9 +14,10 @@
 from typing import Optional, List
 import os
 import threading
+import types
 
 from fabric import Connection, Config
-from paramiko import SSHException
+from paramiko import SSHException, Transport
 from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
 from invoke.watchers import StreamWatcher
 from invoke.exceptions import UnexpectedExit, Failure
@@ -127,7 +128,14 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
                 }
             )
 
-        return Connection(
+        def open_none_auth(_self):
+            # override fabric Connection.open() support none authorization
+            transport = Transport((self.hostname, self.port))
+            transport.start_client()
+            transport.auth_none(self.user)
+            _self.transport = _self.client._transport = transport
+
+        conn = Connection(
             host=self.hostname,
             user=self.user,
             port=self.port,
@@ -138,3 +146,9 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             } if self.key_file else None,
             gateway=gateway_connection
         )
+        if not self.key_file and not self.password:
+            # apply this trick only if no key file and password is provided
+            # this is needed to avoid "Authentication failed" error
+            # when using none authentication
+            conn.open = types.MethodType(open_none_auth, conn)
+        return conn
