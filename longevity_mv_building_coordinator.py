@@ -199,11 +199,12 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node)])
         replacing_node_hostid = replacing_node.host_id
         replacing_node.stop_scylla()
-        replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
-                             replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
-        # decommission_node: BaseNode = random.choice(
-        #     [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node, replaced_node)])
-        # self.db_cluster.decommission(decommission_node)
+        replaced_node = replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
+                                             replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
+        decommission_node: BaseNode = random.choice(
+            [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node, replaced_node)])
+        self.db_cluster.decommission(decommission_node)
+
         for view_name in mv_names:
             wait_for_view_to_be_built(coordinator_node, ks=ks_name, view_name=view_name, timeout=2000)
 
