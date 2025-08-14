@@ -584,6 +584,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
                     self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+                InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
                 # nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                 # current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
                 # if current_cluster_size[0] % 10 == 0 and current_cluster_size[0] < 199:
