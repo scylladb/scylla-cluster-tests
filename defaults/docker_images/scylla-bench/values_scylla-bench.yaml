@@ -1,2 +1,8 @@
 scylla-bench:
+<<<<<<< HEAD
   image: scylladb/scylla-bench:0.1.25
+||||||| parent of 6fa21ca66 (chore: upgrade s-b to 0.2.5)
+  image: scylladb/scylla-bench:0.2.4
+=======
+  image: scylladb/scylla-bench:0.2.5
+>>>>>>> 6fa21ca66 (chore: upgrade s-b to 0.2.5)
