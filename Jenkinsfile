@@ -175,7 +175,7 @@ pipeline {
                 }
             }
             options {
-                timeout(time: 40, unit: 'MINUTES')
+                timeout(time: 45, unit: 'MINUTES')
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
