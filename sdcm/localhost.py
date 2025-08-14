@@ -21,12 +21,13 @@ from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
 from sdcm.utils.syslogng import SyslogNGContainerMixin
 from sdcm.utils.vector_dev import VectorDevContainerMixin
+from sdcm.utils.internal_modules import XCloudConnectivityContainerMixin
 
 LOGGER = logging.getLogger(__name__)
 
 
 class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin,
-                JavaContainerMixin, VectorDevContainerMixin):
+                JavaContainerMixin, VectorDevContainerMixin, XCloudConnectivityContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}

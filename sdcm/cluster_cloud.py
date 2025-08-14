@@ -16,12 +16,16 @@ import logging
 from functools import cached_property
 from types import SimpleNamespace
 from typing import Any
+import functools
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
 from sdcm.utils.gce_region import GceRegion
+from sdcm.test_config import TestConfig
+from sdcm.remote import RemoteCmdRunner
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +34,22 @@ def format_ip_with_cidr(ip_str: str) -> str:
     """Format IP address with CIDR notation."""
     ip = ipaddress.ip_address(ip_str)
     return f"{ip_str}/32" if ip.version == 4 else f"{ip_str}/128"
+
+
+def xcloud_super_if_supported(method):
+    """
+    Decorator for instance methods: if self.xcloud_connect_supported is True,
+    call the super method with all arguments; otherwise, do nothing.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if getattr(self, 'xcloud_connect_supported', False):
+            # Call the super method with the same name and arguments
+            return getattr(super(type(self), self), method.__name__)(*args, **kwargs)
+        # Optionally, log or return None
+        self.log.debug(f"Skip {method.__name__} on scylla-cloud, no ssh connectivity available")
+        return None
+    return wrapper
 
 
 class ScyllaCloudError(Exception):
@@ -132,8 +152,7 @@ class CloudNode(cluster.BaseNode):
         return None
 
     def wait_for_cloud_init(self):
-        # TODO: Implement waiting for cloud-init completion for Scylla Cloud
-        self.log.debug("Skip waiting for cloud-init on scylla-cloud, no approach to SSHing nodes for now")
+        pass
 
     def _init_port_mapping(self):
         pass
@@ -175,33 +194,49 @@ class CloudNode(cluster.BaseNode):
     def public_dns_name(self):
         return self.public_ip_address
 
+    @cached_property
+    def xcloud_connect_supported(self):
+        localhost = TestConfig().tester_obj().localhost
+        return localhost.xcloud_connect_supported(self.parent_cluster.params)
+
     def _init_remoter(self, ssh_login_info):
-        # TODO: Implement remoter initialization for Scylla Cloud
-        self.log.debug(
-            "Skip initializing remoter abstraction on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        localhost = TestConfig().tester_obj().localhost
+        if localhost.xcloud_connect_supported(self.parent_cluster.params):
+            ssh_login_info = localhost.xcloud_connect_get_ssh_address(node=self)
+            # hardcode the fabric implementation for now, as it the only one we support right now
+            self.remoter = RemoteCmdRunner(**ssh_login_info)
+            self.log.debug(self.remoter.ssh_debug_cmd())
+        else:
+            self.log.debug("XCloud connectivity is not supported, SSH remoter is not initialized")
 
+    @xcloud_super_if_supported
     def wait_ssh_up(self, verbose=True, timeout=500):
-        # TODO: Implement waiting for SSH up for Scylla Cloud
-        self.log.debug("Skip waiting for SSH up on scylla-cloud, pending until approach to SSHing nodes is developed")
+        pass
 
+    @xcloud_super_if_supported
     def wait_db_up(self, verbose=True, timeout=3600):
-        # TODO: Implement waiting for DB up for Scylla Cloud
-        self.log.debug("Skip waiting for DB up on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        pass
 
+    @xcloud_super_if_supported
     def do_default_installations(self):
-        # TODO: Implement default installations for Scylla Cloud
-        self.log.debug(
-            "Skip default installations on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        pass
+
+    def db_up(self):
+        if (self.parent_cluster.vpc_peering_enabled and
+                ssh_connection_ip_type(self.parent_cluster.params) == 'public'):
+            self.log.info("Skipping db_up check for node %s in VPC peering mode + public communication", self.name)
+            return True
+        else:
+            return super().db_up()
 
     def configure_remote_logging(self):
         # TODO: Implement remote logging configuration for Scylla Cloud
         self.log.debug(
             "Skip configuring remote logging on scylla-cloud, pending until API/approach to collect logs is developed")
 
+    @xcloud_super_if_supported
     def start_coredump_thread(self):
-        # TODO: Implement coredump thread for Scylla Cloud
-        self.log.debug(
-            "Skip starting coredump thread on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        pass
 
     @staticmethod
     def is_cloud() -> bool:
