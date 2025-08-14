@@ -261,7 +261,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
     if error_thresholds:
         LOGGER.info(F"workload `{workload}`")
         LOGGER.info(f"name `{name}`")
-        LOGGER.info("description `{description}'")
+        LOGGER.info(f"description `{description}'")
         LOGGER.info(f"error thresholds for {workload} - {name}: {error_thresholds}: {error_thresholds[workload]['default']}   {error_thresholds[workload].get(name, {})}")
         error_thresholds = error_thresholds[workload]["default"] | error_thresholds[workload].get(name, {})
         LOGGER.info(f"error thresholds for {workload} - {name}: result {result}")

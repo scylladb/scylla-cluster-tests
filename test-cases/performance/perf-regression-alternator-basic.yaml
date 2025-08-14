@@ -63,9 +63,9 @@ email_recipients: ['alternator-perf-results@scylladb.com']
 latency_decorator_error_thresholds:
   write:
     unthrottled:
-      P90 read:
+      P90 write:
         fixed_limit: 99999999
-      P99 read:
+      P99 write:
         fixed_limit: 99999999
     default:
       P90 write:
@@ -88,6 +88,10 @@ latency_decorator_error_thresholds:
       P90 read:
         fixed_limit: 99999999
       P99 read:
+        fixed_limit: 99999999
+      P90 write:
+        fixed_limit: 99999999
+      P99 write:
         fixed_limit: 99999999
     default:
       P90 write:
