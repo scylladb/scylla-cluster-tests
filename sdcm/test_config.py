@@ -241,6 +241,12 @@ class TestConfig(metaclass=Singleton):
         cls.VECTOR_ADDRESS = (address, port)
 
     @classmethod
+    def configure_xcloud_connectivity(cls, node, params):
+        if node.xcloud_connect_supported(params):
+            ContainerManager.run_container(node, "xcloud_connect", params=params)
+            node.xcloud_connect_wait_to_be_ready()
+
+    @classmethod
     def get_startup_script(cls) -> str:
         host_port = cls.get_logging_service_host_port()
         if not host_port or not host_port[0]:
