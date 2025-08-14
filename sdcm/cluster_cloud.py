@@ -19,6 +19,8 @@ from typing import Any
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.test_config import TestConfig
+from sdcm.remote import RemoteCmdRunner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,23 +170,38 @@ class CloudNode(cluster.BaseNode):
     def public_dns_name(self):
         return self.public_ip_address
 
+    @cached_property
+    def xcloud_connect_supported(self):
+        localhost = TestConfig().tester_obj().localhost
+        return localhost.xcloud_connect_supported(self.parent_cluster.params)
+
     def _init_remoter(self, ssh_login_info):
-        # TODO: Implement remoter initialization for Scylla Cloud
-        self.log.debug(
-            "Skip initializing remoter abstraction on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        localhost = TestConfig().tester_obj().localhost
+        if localhost.xcloud_connect_supported(self.parent_cluster.params):
+            ssh_login_info = localhost.xcloud_connect_get_ssh_address(node=self)
+            # hardcode the fabric implementation for now, as it the only one we support right now
+            self.remoter = RemoteCmdRunner(**ssh_login_info)
+            self.log.debug(self.remoter.ssh_debug_cmd())
+        else:
+            self.log.debug("XCloud connectivity is not supported, SSH remoter is not initialized")
 
     def wait_ssh_up(self, verbose=True, timeout=500):
-        # TODO: Implement waiting for SSH up for Scylla Cloud
-        self.log.debug("Skip waiting for SSH up on scylla-cloud, pending until approach to SSHing nodes is developed")
+        if self.xcloud_connect_supported:
+            super().wait_ssh_up(verbose=verbose, timeout=timeout)
+        else:
+            self.log.debug("Skip waiting for SSH up on scylla-cloud, no ssh connectivity available")
 
     def wait_db_up(self, verbose=True, timeout=3600):
-        # TODO: Implement waiting for DB up for Scylla Cloud
-        self.log.debug("Skip waiting for DB up on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        if self.xcloud_connect_supported:
+            super().wait_db_up(verbose=verbose, timeout=timeout)
+        else:
+            self.log.debug("Skip waiting for DB up on scylla-cloud, no ssh connectivity available")
 
     def do_default_installations(self):
-        # TODO: Implement default installations for Scylla Cloud
-        self.log.debug(
-            "Skip default installations on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        if self.xcloud_connect_supported:
+            super().do_default_installations()
+        else:
+            self.log.debug("Skip default installations on scylla-cloud, no ssh connectivity available")
 
     def configure_remote_logging(self):
         # TODO: Implement remote logging configuration for Scylla Cloud
@@ -192,9 +209,10 @@ class CloudNode(cluster.BaseNode):
             "Skip configuring remote logging on scylla-cloud, pending until API/approach to collect logs is developed")
 
     def start_coredump_thread(self):
-        # TODO: Implement coredump thread for Scylla Cloud
-        self.log.debug(
-            "Skip starting coredump thread on scylla-cloud, pending until approach to SSHing/accessing nodes is developed")
+        if self.xcloud_connect_supported:
+            super().start_coredump_thread()
+        else:
+            self.log.debug("Skip starting coredump thread on scylla-cloud, no ssh connectivity available")
 
     @staticmethod
     def is_cloud() -> bool:
