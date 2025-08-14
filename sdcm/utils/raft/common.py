@@ -21,6 +21,7 @@ from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, Bas
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.utils.decorators import retrying
+from sdcm.utils.features import is_group0_limited_voters_enabled
 
 
 LOGGER = logging.getLogger(__name__)
@@ -208,17 +209,31 @@ class NodeBootstrapAbortManager:
         # check only latest host_id.
         host_id = host_ids[-1]
         LOGGER.info("Check group0 and token ring")
+        with self.db_cluster.cql_connection_patient(node=self.verification_node) as session:
+            limited_group0_voters_enabled = is_group0_limited_voters_enabled(session)
+
         for node in [node for node in self.verification_node.parent_cluster.nodes if node != self.bootstrap_node]:
             token_ring = node.get_token_ring_members()
             group0 = node.raft.get_group0_members()
-            all_nodes_token_ring.append(host_id in [n["host_id"] for n in token_ring])
-
+            all_nodes_token_ring.append(host_id in [n.host_id for n in token_ring])
+            LOGGER.info("Next group0 members %s will be checked for host: %s", group0, node.name)
             for n in group0:
-                if host_id == n["host_id"] and n['voter']:
-                    all_nodes_group0.append(True)
+                if host_id == n.host_id:
+                    LOGGER.info("Next will be added to all_nodes_group0: %s, %s: %s",
+                                limited_group0_voters_enabled, n.voter, limited_group0_voters_enabled or n.voter)
+                    all_nodes_group0.append(limited_group0_voters_enabled or n.voter)
                     break
             else:
                 all_nodes_group0.append(False)
+        LOGGER.info(">>>RESULT of bootstrap: token_ring: %s, group0: %s",
+                    all_nodes_token_ring, all_nodes_group0)
+        LOGGER.info(">> Check status in verification node and raft topology coordinator")
+        node_state = get_node_status_from_system_by(verification_node=self.verification_node, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
+        coordinator = get_topology_coordinator_node(self.verification_node)
+        node_state = get_node_status_from_system_by(verification_node=coordinator, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
+
         return all(all_nodes_group0) and all(all_nodes_token_ring)
 
     def clean_and_restart_bootstrap_after_abort(self):
