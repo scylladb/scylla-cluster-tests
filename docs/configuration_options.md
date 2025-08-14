@@ -3694,7 +3694,6 @@ Replication factor for Scylla Cloud cluster
 **default:** N/A
 
 **type:** int
-<<<<<<< HEAD
 
 
 ## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
@@ -3704,8 +3703,6 @@ Dictionary of VPC peering parameters for private connectivity between<br>SCT inf
 **default:** N/A
 
 **type:** dict_or_str
-||||||| parent of c6443ae03 (feature(vectore-store): add support of VS for docker backend)
-=======
 
 
 ## **n_vs_nodes** / SCT_N_VS_NODES
@@ -3742,4 +3739,3 @@ Vector indexing threads (default: number of CPU cores)
 **default:** 2
 
 **type:** int
->>>>>>> c6443ae03 (feature(vectore-store): add support of VS for docker backend)

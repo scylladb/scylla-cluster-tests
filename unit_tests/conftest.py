@@ -95,21 +95,7 @@ def prom_address():
     yield start_metrics_server()
 
 
-<<<<<<< HEAD
 def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
-||||||| parent of c6443ae03 (feature(vectore-store): add support of VS for docker backend)
-@pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest, params):
-    docker_scylla_args = {}
-    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
-        docker_scylla_args = test_marker.kwargs
-=======
-@pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
-    docker_scylla_args = {}
-    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
-        docker_scylla_args = test_marker.kwargs
->>>>>>> c6443ae03 (feature(vectore-store): add support of VS for docker backend)
     ssl = docker_scylla_args.get('ssl')
     docker_network = docker_scylla_args.get('docker_network')
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
@@ -180,7 +166,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
                   timeout=120, throw_exc=True)
-<<<<<<< HEAD
 
 
 @pytest.fixture(name='docker_scylla', scope='function')
@@ -201,10 +186,6 @@ def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, param
         docker_scylla_args = test_marker.kwargs
     docker_scylla_args['seeds'] = docker_scylla.ip_address
     scylla = configure_scylla_node(docker_scylla_args, params)
-||||||| parent of c6443ae03 (feature(vectore-store): add support of VS for docker backend)
-=======
-
->>>>>>> c6443ae03 (feature(vectore-store): add support of VS for docker backend)
     yield scylla
 
     scylla.kill()
