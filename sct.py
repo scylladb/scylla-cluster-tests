@@ -1190,7 +1190,7 @@ cli.add_command(investigate)
 @click.option("-t", "--test", required=False, default=[""], multiple=True,
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'not integration', *(f'unit_tests/{t}' for t in test)]))
+    sys.exit(pytest.main(['-v', '-m', 'not integration', *(f'unit_tests/{t}' for t in test)]))
 
 
 @cli.command('integration-tests', help="Run all the SCT internal integration-tests")
@@ -1212,7 +1212,7 @@ def integration_tests(test):
         )
         local_cluster.setup_prerequisites()
 
-    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'integration', *(f'unit_tests/{t}' for t in test)]))
+    sys.exit(pytest.main(['-v', '-m', 'integration', *(f'unit_tests/{t}' for t in test)]))
 
 
 @cli.command('pre-commit', help="Run pre-commit checkers")
@@ -1275,7 +1275,7 @@ def run_test(argv, backend, config, logdir):
     if not target:
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
-    return_code = pytest.main(['-s', '-vv', '-rN', '-p', 'no:logging', '-p', 'no:warnings', target])
+    return_code = pytest.main(['-s', '-vv', '-rN', '-p', 'no:logging', target])
     sys.exit(return_code)
 
 
@@ -1300,7 +1300,7 @@ def run_pytest(target, backend, config, logdir):
     if not target:
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
-    return_code = pytest.main(['-s', '-v', f'--junit-xml={junit_file}', '-p', 'no:warnings', target])
+    return_code = pytest.main(['-s', '-v', f'--junit-xml={junit_file}', target])
     test_config = get_test_config()
     test_config.argus_client().sct_submit_junit_report(file_name=junit_file.name, raw_content=junit_file.read_text())
     sys.exit(return_code)
