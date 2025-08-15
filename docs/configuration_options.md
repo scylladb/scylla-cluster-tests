@@ -2852,11 +2852,20 @@ options will be used for enable encryption at-rest for tables
 
 ## **kms_key_rotation_interval** / SCT_KMS_KEY_ROTATION_INTERVAL
 
-The time interval in minutes which gets waited before the KMS key rotation happens. Applied when the AWS KMS service is configured to be used.
+The time interval in minutes which gets waited before the KMS key rotation happens. Applied when AWS KMS or Azure KMS service is configured to be used. NOTE: Be aware that Azure Key rotations cost $1/rotation.
 
 **default:** N/A
 
 **type:** int
+
+
+## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
+
+Enable automatic KMS key rotation (supports Azure for now)
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **enterprise_disable_kms** / SCT_ENTERPRISE_DISABLE_KMS
