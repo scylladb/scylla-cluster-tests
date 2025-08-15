@@ -19,10 +19,25 @@ LOGGER = logging.getLogger()
 class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     cluster_name: str
+<<<<<<< HEAD
     bootstrap: bool = Field(default=None, as_dict=False)
     user_data_format_version: str = Field(default='2', as_dict=False)
     scylla_yaml_raw: ScyllaYaml = Field(default=None, as_dict=False)
     syslog_host_port: tuple[str, int] = Field(default=None, as_dict=False)
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+    bootstrap: bool = Field(default=None, exclude=True)
+    user_data_format_version: str = Field(default='2', exclude=True)
+    scylla_yaml_raw: ScyllaYaml = Field(default=None, exclude=True)
+    syslog_host_port: tuple[str, int] | None = Field(default=None, exclude=True)
+    test_config: Any = Field(exclude=True)
+=======
+    bootstrap: bool = Field(default=None, exclude=True)
+    user_data_format_version: str = Field(default='2', exclude=True)
+    scylla_yaml_raw: ScyllaYaml = Field(default=None, exclude=True)
+    syslog_host_port: tuple[str, int] | None = Field(default=None, exclude=True)
+    test_config: Any = Field(exclude=True)
+    install_docker: bool = Field(default=False, exclude=True)
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
 
     @property
     def scylla_yaml(self) -> dict:
@@ -60,6 +75,13 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+            test_config=self.test_config,
+=======
+            test_config=self.test_config,
+            install_docker=self.install_docker,
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
         ).to_string()
         LOGGER.debug("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
@@ -115,6 +137,7 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     syslog_host_port: tuple[str, int] = None
     aws_additional_interface: bool = False
+    install_docker: bool = False
 
     def to_string(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
@@ -123,5 +146,12 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
+<<<<<<< HEAD
+||||||| parent of 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
+            test_config=self.test_config,
+=======
+            test_config=self.test_config,
+            install_docker=self.install_docker,
+>>>>>>> 610f9dd34 (feature(docker): move docker installations as need to cloud-init)
         ).to_string()
         return post_boot_script
