@@ -1,7 +1,17 @@
 import contextlib
 import random
 import re
+import logging
+import time
+
 from uuid import uuid4
+from typing import Callable, Any
+from concurrent.futures import ThreadPoolExecutor, Future
+from dataclasses import dataclass
+
+
+from cassandra.cluster import Session
+from cassandra.concurrent import execute_concurrent_with_args
 
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseScyllaCluster, BaseMonitorSet, BaseNode, BaseCluster
@@ -12,6 +22,22 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.nemesis_utils.indexes import *
 from sdcm.utils.raft.common import get_topology_coordinator_node
+
+LOGGER = logging.getLogger(__name__)
+
+
+KEYSPACE = "defined_ks"
+TABLE = "defined_table"
+PARTITION_KEY_TYPE = {"key": "int"}
+CLUSTER_KEY_TYPE = {"ckey": "int"}
+COLUMNS = {"value1": "text", "value2": "text"}
+
+
+@dataclass
+class PartitionSet:
+    partitions_range: tuple[int, int]
+    clustering_keys: int
+    data_columns: dict[str, Callable[..., Any]]
 
 
 class LongevityMVBuildingCoordinator(LongevityTest):
@@ -52,6 +78,90 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 normalized_results2 = sorted([sorted(list(row)) for row in result2], key=lambda x: x[0])
 
                 assert normalized_results1 == normalized_results2, f"ERROR! ERROR! list are wrong {normalized_results1} != {normalized_results2}"
+
+    def test_consistency_base_table_and_mv_with_predefined_dataset(self):  # noqa: PLR0914
+        total_parttn_number = 1_000_000
+        row_per_parttn = 5
+        num_of_intrvls = 100
+        start_points = list(range(1, total_parttn_number + 1, total_parttn_number // num_of_intrvls))
+        end_points = start_points[1:] + [total_parttn_number]
+        intervals = list(zip(start_points, end_points))
+        dataset_with_all_data = []
+        for intrvl in intervals[:50]:
+            dataset_with_all_data.append(
+                PartitionSet(
+                    partitions_range=intrvl,
+                    clustering_keys=row_per_parttn,
+                    data_columns={"value1": return_text_data, "value2": return_text_data}
+                ),
+            )
+        datasets_with_null_value1_column = []
+        for intrvl in intervals[51:70]:
+            datasets_with_null_value1_column.append(
+                PartitionSet(
+                    partitions_range=intrvl,
+                    clustering_keys=row_per_parttn,
+                    data_columns={"value1": return_null_data, "value2": return_text_data}
+                ),
+            )
+
+        datasets_with_null_value2_column = []
+        for intrvl in intervals[71:90]:
+            datasets_with_null_value2_column.append(
+                PartitionSet(
+                    partitions_range=intrvl,
+                    clustering_keys=row_per_parttn,
+                    data_columns={"value1": return_text_data, "value2": return_null_data}
+                ),
+            )
+        datasets_with_all_nulls = []
+        for intrvl in intervals[91:]:
+            datasets_with_all_nulls.append(
+                PartitionSet(
+                    partitions_range=intrvl,
+                    clustering_keys=row_per_parttn,
+                    data_columns={"value1": return_null_data, "value2": return_null_data}
+                ),
+            )
+        coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
+        with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+            create_db(session)
+            for dataset in [dataset_with_all_data, datasets_with_all_nulls, datasets_with_null_value1_column, datasets_with_null_value2_column]:
+                populate_table(session, dataset, len(dataset))
+
+        ks_name, base_table_name = (KEYSPACE, TABLE)
+        view_name_all_data = f'{base_table_name}_all_data_view'
+        view_name_value1_not_null_data = f'{base_table_name}_value1_not_null_data_view'
+        view_name_value2_not_null_data = f'{base_table_name}_value2_not_null_data_view'
+
+        with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+
+            create_materialized_view(session, ks_name, base_table_name, view_name_all_data, ["ckey"],
+                                     ["key"],
+                                     mv_columns=["value1", "value2"])
+            create_materialized_view(session, ks_name, base_table_name, view_name_value1_not_null_data, ["value1"],
+                                     ["key", "ckey"],
+                                     mv_columns=["value1", "value2"])
+            create_materialized_view(session, ks_name, base_table_name, view_name_value2_not_null_data, ["value2"],
+                                     ["key", "ckey"],
+                                     mv_columns=["value1", "value2"])
+
+            for view_name in [view_name_all_data, view_name_value1_not_null_data, view_name_value2_not_null_data]:
+                wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
+
+            result_for_base_table = list(session.execute(f"select count(*) from {ks_name}.{base_table_name}"))
+            self.log.debug("Result for base table %s", list(result_for_base_table))
+            result_for_mv_table = list(session.execute(f"select count(*) from {ks_name}.{view_name_all_data}"))
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            assert result_for_base_table[0].count == result_for_mv_table[0].count
+            result_for_mv_table = list(session.execute(
+                f"select count(*) from {ks_name}.{view_name_value1_not_null_data}"))
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
+            result_for_mv_table = list(session.execute(
+                f"select count(*) from {ks_name}.{view_name_value2_not_null_data}"))
+            self.log.debug("Result for mv table %s", list(result_for_mv_table))
+            assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
 
     def test_stop_node_during_building_mv(self):
         InfoEvent("Prepare Base table").publish()
@@ -349,3 +459,109 @@ def add_cluster_node(cluster: BaseCluster | BaseScyllaCluster, dc_idx: int = 0, 
         monitoring.reconfigure_scylla_monitoring()
 
     return new_node
+
+
+def create_db(session: Session):
+    LOGGER.info("Create keyspaces")
+    session.execute(f"""
+    CREATE KEYSPACE IF NOT EXISTS {KEYSPACE}
+        WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': {3} }}
+        AND durable_writes = true and TABLETS = {{ 'enabled': true }};
+    """)
+    columns = ", ".join(f"{key} {value_type}" for key, value_type in (
+        PARTITION_KEY_TYPE | CLUSTER_KEY_TYPE | COLUMNS).items())
+    partition_keys = ", ".join(PARTITION_KEY_TYPE.keys())
+    clustering_keys = ", ".join(CLUSTER_KEY_TYPE.keys())
+    session.execute(f"""
+    CREATE TABLE IF NOT EXISTS {KEYSPACE}.{TABLE} (
+    {columns}, PRIMARY KEY (({partition_keys}), {clustering_keys}))
+    """)
+    LOGGER.info("Keyspaces created")
+
+
+def build_data(partition_id, clustering_key_set: int, data_set: list[Callable[..., Any]]):
+    k = partition_id
+    while k < partition_id + 50:
+        for j in range(clustering_key_set):
+            row = [k, j]
+            for func in data_set:
+                row.append(func(k, j))
+            yield tuple(row)
+        k += 1
+
+
+def verify_data(session: Session, table: str, partition_set: tuple[int, int], clustering_key_set: int, data_set: dict[str, Callable[..., Any]], select_colums: list[str], where_columns: list[str]):
+
+    start, end = partition_set
+
+    where = [f"{cl} = ?" for cl in where_columns]
+    query = session.prepare(f"""
+        SELECT {', '.join(select_colums)} from {KEYSPACE}.{table}
+        WHERE {'and '.join(where)}
+    """)
+    columns_names = list(COLUMNS.keys())
+    for i in range(start, end, 50):
+        # k = i
+        # data = []
+        # while k < i + 50:
+        #     for j in range(clustering_key_set):
+        #         row = [k, j]
+        #         for name in columns_names:
+        #             row.append(data_set[name](k, j))
+        #         data.append(tuple(row))
+        #     k += 1
+        data = build_data(i, clustering_key_set, [data_set[name] for name in columns_names])
+        execute_concurrent_with_args(session, query, data, concurrency=100)
+
+
+def write_data(session: Session, partition_set: tuple[int, int], clustering_key_set: int, data_set: dict[str, Callable[..., Any]]):
+    start, end = partition_set
+    columns = (PARTITION_KEY_TYPE | CLUSTER_KEY_TYPE | COLUMNS).keys()
+    query = session.prepare(f"""
+        INSERT INTO {KEYSPACE}.{TABLE} ({", ".join(columns)}) VALUES ({",".join(["?"]*len(columns))})
+    """)
+    columns_names = list(COLUMNS.keys())
+    for i in range(start, end, 50):
+        # k = i
+        # data = []
+        # while k < i + 50:
+        #     for j in range(clustering_key_set):
+        #         row = [k, j]
+        #         for name in columns_names:
+        #             row.append(data_set[name](k, j))
+        #         data.append(tuple(row))
+        #     k += 1
+        data = build_data(i, clustering_key_set, [data_set[name] for name in columns_names])
+        execute_concurrent_with_args(session, query, data, concurrency=100)
+
+
+def return_text_data(*args):
+    return "a"*512 + f"<{'-'.join(map(str, args))}>"
+
+
+def return_null_data(*args):
+    return None
+
+
+def populate_table(session, data_sets: list[PartitionSet], max_workers: int):
+    LOGGER.info("Start populate data")
+    futures: list[Future] = []
+    with ThreadPoolExecutor(thread_name_prefix="Populate_cluster", max_workers=max_workers) as pool:
+        # for prtset in [(1, 100_000), (100_001, 200_000), (200_001, 300_000), (300_001, 400_000)]:
+        for data_set in data_sets:
+            futures.append(pool.submit(write_data, session=session,
+                                       partition_set=data_set.partitions_range,
+                                       clustering_key_set=data_set.clustering_keys,
+                                       data_set=data_set.data_columns))
+
+    while futures:
+        f = futures.pop()
+        if f.running():
+            futures.append(f)
+            time.sleep(5)
+        else:
+            if exc := f.exception():
+                raise exc
+            if result := f.result():
+                print(result)
+    LOGGER.info("End populate data")
