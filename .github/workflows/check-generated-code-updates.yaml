@@ -17,7 +17,7 @@ jobs:
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
-          username: ${{ github.actor }}
+          username: ${{ github.event.pull_request.user.login }}
           team: ${{ secrets.SCT_ACTION_GITHUB_TEAM }}
 
   run_validations:
