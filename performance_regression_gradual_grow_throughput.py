@@ -283,7 +283,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload = replace(workload, num_threads=[workload.num_threads[0]] * len(workload.throttle_steps))
         return workload
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
         workload = self.update_num_threads_for_steps(workload=workload)
 

@@ -124,6 +124,13 @@ def call(Map pipelineParams) {
                                 sub_tests: [],
                                 labels: ['master-daily']
                             ],
+                            [
+                                job_name: 'scylla-master/perf-regression/scylla-release-perf-regression-alternator'
+                                region: '',
+                                versions: [],
+                                sub_tests: [],
+                                labels: ['master-weekly']
+                            ],
                             // Tablets
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets',
