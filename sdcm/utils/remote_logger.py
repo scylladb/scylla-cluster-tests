@@ -177,7 +177,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
-        return f"tail -f {self._remote_log_file}"
+        return f"tail -f {self._remote_log_file} -c +0"
 
     def validate_and_collect_hdr_file(self):
         """
@@ -313,7 +313,7 @@ class SSHGeneralFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
-        return f"sudo tail -f {self.REMOTE_LOG_PATH}"
+        return f"sudo tail -f {self.REMOTE_LOG_PATH} -c +0"
 
 
 class SSHScyllaFileLogger(SSHGeneralFileLogger):
