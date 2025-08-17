@@ -44,7 +44,8 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):
             host=self.hostname,
             user=self.user,
             port=self.port,
-            pkey=os.path.expanduser(self.key_file),
+            pkey=os.path.expanduser(self.key_file) if self.key_file else None,
+            password=self.password,
             timings=Timings(keepalive_timeout=0, connect_timeout=self.connect_timeout)
         )
 

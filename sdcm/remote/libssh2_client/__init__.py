@@ -357,7 +357,21 @@ class Client:
                 return
             except Exception:  # noqa: BLE001
                 pass
-        self._password_auth()
+        if self.password is not None:
+            self._password_auth()
+            return
+        # If no pkey, no agent, and no password, try none auth
+        self._none_auth()
+
+    def _none_auth(self):
+        try:
+            self.session.eagain(
+                self.session.userauth_list,
+                args=(self.user,),
+                timeout=self.timings.auth_timeout
+            )
+        except Exception as error:
+            raise AuthenticationException("None authentication failed") from error
 
     def _pkey_auth(self):
         self.session.eagain(
