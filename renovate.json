@@ -43,6 +43,9 @@
         "minor",
         "patch"
       ],
+      "matchManagers": [
+        "pep621"
+      ],
       "enabled": false,
       "addLabels": [
         "New Hydra Version"
@@ -51,6 +54,9 @@
     {
       "matchPackageNames": [
         "scylla-driver"
+      ],
+      "matchManagers": [
+        "pep621"
       ],
       "enabled": true,
       "addLabels": [
