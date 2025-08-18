@@ -2,6 +2,11 @@
 import groovy.json.JsonSlurper
 
 def call(String backend, String region=null, String datacenter=null, String location=null) {
+    if (!backend) {
+        backend = 'aws'
+        println("Backend is null or empty, defaulting to 'aws'")
+    }
+
     try {
         regionList = new JsonSlurper().parseText(region)
         region = regionList[0]
