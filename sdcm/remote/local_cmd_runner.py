@@ -46,9 +46,10 @@ class LocalCmdRunner(CommandRunner):
 
     def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,
             verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False) -> Result:
+            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False, timestamp_logs: bool = False) -> Result:
 
-        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
+        watchers = self._setup_watchers(
+            verbose=verbose, log_file=log_file, additional_watchers=watchers, timestamp_logs=timestamp_logs)
 
         # in `@retrying` retry==0 means retrying `sys.maxsize * 2 + 1`, we never want that
         if retry == 0:

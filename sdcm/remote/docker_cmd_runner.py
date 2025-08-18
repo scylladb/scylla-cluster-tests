@@ -61,10 +61,11 @@ class DockerCmdRunner(CommandRunner):
     def run(
         self, cmd: str, timeout: float | None = None, ignore_status: bool = False, verbose: bool = True,
         new_session: bool = False, log_file: str | None = None, retry: int = 1,
-        watchers: list[StreamWatcher] | None = None, change_context: bool = False, user: str | None = ''
+        watchers: list[StreamWatcher] | None = None, change_context: bool = False, user: str | None = '',
+        timestamp_logs: bool = False
     ) -> Result:
         """Execute a command inside a Docker container"""
-        watchers_list = self._setup_watchers(verbose, log_file, watchers)
+        watchers_list = self._setup_watchers(verbose, log_file, watchers, timestamp_logs=timestamp_logs)
 
         @retrying(n=retry, sleep_time=3, allowed_exceptions=(RetryableNetworkException,))
         def _run():
