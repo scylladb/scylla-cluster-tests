@@ -13,6 +13,7 @@
 
 from typing import Optional, List, Callable
 from abc import abstractmethod, ABCMeta
+from datetime import datetime
 import shlex
 import logging
 import re
@@ -81,12 +82,14 @@ class CommandRunner(metaclass=ABCMeta):
     def __str__(self):
         return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
 
-    def _setup_watchers(self, verbose: bool, log_file: str, additional_watchers: list) -> List[StreamWatcher]:
+    def _setup_watchers(
+            self, verbose: bool, log_file: str, additional_watchers: list, timestamp_logs: bool = False) -> List[StreamWatcher]:
         watchers = additional_watchers if additional_watchers else []
         if verbose:
             watchers.append(OutputWatcher(self.log, self.hostname))
         if log_file:
-            watchers.append(LogWriteWatcher(log_file))
+            watcher_class = TimestampedLogWriteWatcher if timestamp_logs else LogWriteWatcher
+            watchers.append(watcher_class(log_file))
         return watchers
 
     @abstractmethod
@@ -99,7 +102,8 @@ class CommandRunner(metaclass=ABCMeta):
             log_file: Optional[str] = None,
             retry: int = 1,
             watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False
+            change_context: bool = False,
+            timestamp_logs: bool = False
             ) -> Result:
         pass
 
@@ -112,6 +116,7 @@ class CommandRunner(metaclass=ABCMeta):
              log_file: Optional[str] = None,
              retry: int = 1,
              watchers: Optional[List[StreamWatcher]] = None,
+             timestamp_logs: bool = False,
              user: Optional[str] = 'root') -> Result:
         if user != self.user:
             if user == 'root':
@@ -125,7 +130,8 @@ class CommandRunner(metaclass=ABCMeta):
                         new_session=new_session,
                         log_file=log_file,
                         retry=retry,
-                        watchers=watchers)
+                        watchers=watchers,
+                        timestamp_logs=timestamp_logs)
 
     @abstractmethod
     def _create_connection(self):
@@ -238,16 +244,37 @@ class LogWriteWatcher(StreamWatcher):
 
         self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
 
+    def _format_line(self, line: str) -> str:
+        return line
+
     def submit(self, stream: str) -> list:
         stream_buffer = stream[self.len:]
-
-        self.file_object.write(stream_buffer)
+        lines = stream_buffer.splitlines(True)
+        formatted_lines = [self._format_line(line) for line in lines]
+        self.file_object.write(''.join(formatted_lines))
 
         self.len = len(stream)
         return []
 
     def submit_line(self, line: str):
-        self.file_object.write(line)
+        self.file_object.write(self._format_line(line))
+
+    def __del__(self):
+        if not self.file_object.closed:
+            self.file_object.close()
+
+
+class TimestampedLogWriteWatcher(LogWriteWatcher):
+    def __init__(self, log_file: str):
+        super().__init__(log_file)
+
+    def _format_line(self, line: str) -> str:
+        if line.strip():
+            timestamp = datetime.now().isoformat(timespec='milliseconds').replace('T', ' ')
+            line_end = line if line.endswith(('\n', '\r\n', '\r')) else line + '\n'
+            return f"[{timestamp}] {line_end}"
+        else:
+            return line
 
 
 class FailuresWatcher(Responder):
