@@ -101,6 +101,7 @@ class CassandraHarryThread(DockerBasedStressThread):
                                                log_file=log_file_name,
                                                verbose=True,
                                                retry=0,
+                                               timestamp_logs=True,
                                                )
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
             except Exception as exc:  # noqa: BLE001

@@ -33,6 +33,7 @@ class FakeRemoter(RemoteCmdRunnerBase):
             log_file=None,
             retry=1,
             watchers=None,
+            timestamp_logs=False,
             change_context=False
             ) -> Result:
         for pattern, result in self.result_map.items():

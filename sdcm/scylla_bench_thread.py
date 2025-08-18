@@ -13,7 +13,6 @@
 
 import os
 import re
-import uuid
 import time
 import builtins
 import logging
@@ -262,7 +261,8 @@ class ScyllaBenchThread(DockerBasedStressThread):
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
 
-        log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
+        log_id = self._build_log_file_id(loader_idx, cpu_idx, None)
+        log_file_name = os.path.join(loader.logdir, f'scylla-bench-{self.sb_mode.value}-{log_id}.log')
         stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
         try:
             prefix, *_ = stress_cmd.split("scylla-bench", maxsplit=1)
@@ -288,6 +288,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
                     timeout=self.timeout,
                     log_file=log_file_name,
                     retry=0,
+                    timestamp_logs=True,
                 )
             except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)
