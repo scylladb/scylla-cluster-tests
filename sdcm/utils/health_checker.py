@@ -137,12 +137,12 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         return
 
     if not peers_details:
-        LOGGER.warning("SYSTEM.PEERS info is not availble. Search for the warning above. "
+        LOGGER.warning("SYSTEM.PEERS info is not available. Search for the warning above. "
                        "Verify schema version can\'t be performed")
         return
 
     if not gossip_info:
-        LOGGER.warning("Gossip info is not availble. Search for the warning above. "
+        LOGGER.warning("Gossip info is not available. Search for the warning above. "
                        "Verify schema version can\'t be performed")
         return
 
@@ -159,11 +159,13 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
         is_target = current_node.print_node_running_nemesis(node.ip_address)
         if node not in peers_details.keys():
+            # The selection of peer nodes is non-deterministic, making the contents of the system.peers table unpredictable.
+            # Log a warning if a node is absent from the SYSTEM.PEERS table.
             LOGGER.debug(debug_message)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
-                severity=Severity.ERROR,
+                severity=Severity.WARNING,
                 node=current_node.name,
-                error=f"Current node {current_node}. "
+                message=f"Current node {current_node}. "
                 f"Node {node}{is_target} exists in the gossip but missed in SYSTEM.PEERS.",
             )
             continue
