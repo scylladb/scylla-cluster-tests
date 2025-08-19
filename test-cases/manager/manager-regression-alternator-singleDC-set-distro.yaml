@@ -1,0 +1,55 @@
+test_duration: 240
+
+round_robin: true
+
+stress_cmd:
+    "bin/ycsb load dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup' -p dynamodb.ttlKey=TTL -p dynamodb.ttlDuration=86400
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\""
+
+stress_read_cmd: [
+    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup' -p dynamodb.ttlKey=TTL -p dynamodb.ttlDuration=86400
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000 -p operationcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup:-Gsi_.0'
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup:1-.Lsi_'
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+]
+
+alternator_port: '8080'
+dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_test_table:
+    name: '.0-Usertable_Backup'
+    lsi_name: '1-.Lsi_'
+    gsi_name: '-Gsi_.0'
+    tags:
+        key1: value1
+    items: 1000
+
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+
+
+
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.large'
+
+region_name: 'us-east-1'
+n_db_nodes: '3'
+n_loaders: 1
+
+client_encrypt: true
+
+user_prefix: manager-regression
+space_node_threshold: 6442
+
+aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'

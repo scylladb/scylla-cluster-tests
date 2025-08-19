@@ -1045,7 +1045,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         return [[n, n.ip_address] for n in db_cluster.nodes]
 
     def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,
-                    auth_token=None, credentials=None, force_non_ssl_session_port=False):
+                    auth_token=None, credentials=None, force_non_ssl_session_port=False, alternator_credentials=None):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -1056,6 +1056,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         :param auth_token: a token used to authenticate requests to the Agent
         :param credentials: a tuple of the username and password that are used to access the cluster.
         :param force_non_ssl_session_port: force SM to always use the non-SSL port for TLS-enabled cluster CQL sessions.
+        :param alternator_credentials: a tuple of the alternator access key and secret key that are used to access the Alternator API.
         :return: ManagerCluster
 
         Add a cluster to manager
@@ -1092,6 +1093,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if credentials:
             username, password = credentials
             cmd += f" --username {username} --password {password}"
+
+        if alternator_credentials:
+            access_key_id, secret_access_key = alternator_credentials
+            cmd += f" --alternator-access-key-id='{access_key_id}' --alternator-secret-access-key='{secret_access_key}'"
 
         res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
         if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:

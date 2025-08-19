@@ -701,6 +701,15 @@ class ManagerTestFunctionsMixIn(
             self.restore_backup_without_manager(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
                                                 ks_tables_list=ks_tables_map)
 
+    def verify_alternator_backup_success(self, mgr_cluster, backup_task, delete_tables: list = None, timeout=None):
+        for table_name in delete_tables:
+            self.log.info(f'running delete on {table_name}')
+            self.alternator.delete_table(self.db_cluster.nodes[0], table_name=table_name, wait_until_table_removed=True)
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                      timeout=timeout, restore_schema=True)
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                      timeout=timeout, restore_data=True)
+
     def restore_backup_without_manager(self, mgr_cluster, snapshot_tag, ks_tables_list, location=None,
                                        precreated_backup=False):
         """Restore backup without Scylla Manager but using the `nodetool refresh` operation
