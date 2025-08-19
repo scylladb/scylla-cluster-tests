@@ -931,7 +931,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Rollback Node %s ended' % node).publish()
         node.check_node_health()
 
-    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> [CassandraStressThread]:
+    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False,
+                             round_robin: bool = False) -> [CassandraStressThread]:
         """Runs workload from param name specified in test-case yaml"""
         InfoEvent(message=f"Starting {workload_name}").publish()
         stress_commands = self.params.get(workload_name)
@@ -940,7 +941,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             stress_commands = [stress_commands]
 
         for stress_command in stress_commands:
-            workload_thread_pools.append(self.run_stress_thread(stress_cmd=stress_command))
+            workload_thread_pools.append(
+                self.run_stress_thread(stress_cmd=stress_command, round_robin=round_robin))
 
         if self.params.get('alternator_port'):
             self.pre_create_alternator_tables()
@@ -1023,6 +1025,188 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         self._run_stress_workload("stress_after_cluster_upgrade", wait_for_finish=True)
 
+<<<<<<< HEAD
+||||||| parent of b29cdcc02 (fix(upgrade): make latte-based upgrade test use round_robin only)
+    def test_cluster_upgrade_latency_regression(self):
+        """Check latency regression after a ScyllaDB cluster upgrade using latte stress commands.
+
+        Number of 'before' and 'after' commands must match. Their latency values will be compaired.
+
+        - Write initial latte data (prepare_write_cmd?)
+        - Wait for end of compactions
+        - Read latte data generating report file (stress_before_upgrade)
+        - Run a read latte stress (stress_during_entire_upgrade) not waiting for it's end
+        - Upgrade the DB cluster
+        * self.run_raft_topology_upgrade_procedure()
+        - Wait for the end of the stress command (stress_during_entire_upgrade)
+        - Wait for end of compactions
+        - Read latte data (stress_after_cluster_upgrade) generating report file
+        - Compare latte report files and raise SCT ERROR event if latencies are worse for more than 10%
+        """
+        self.upgrade_os(self.db_cluster.nodes)
+
+        InfoEvent(message="Step1 - Populate DB data").publish()
+        # Prepare keyspace and tables for truncate test
+        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        self.run_prepare_write_cmd()
+
+        InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
+        step = itertools_count(start=1)
+        stress_before_upgrade_thread_pools = self._run_stress_workload(
+            "stress_before_upgrade", wait_for_finish=False)
+        stress_before_upgrade_results = []
+        for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
+            stress_before_upgrade_results.append(self.get_stress_results(stress_before_upgrade_thread_pool))
+        stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
+            "stress_during_entire_upgrade", wait_for_finish=False)
+
+        InfoEvent(message="Step3 - Upgrade cluster to '%s' version" % self.params.get('new_version')).publish()
+
+        InfoEvent(message="Upgrade part of nodes nodes before roll-back").publish()
+        nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
+        upgraded_nodes = []
+        for node_to_upgrade in nodes_to_upgrade[:self.params.get('num_nodes_to_rollback')]:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+            upgraded_nodes.append(node_to_upgrade)
+
+        # Rollback all nodes that where upgraded (not necessarily in the same order)
+        random.shuffle(upgraded_nodes)
+        InfoEvent(message="Roll-back following nodes: %s" % ", ".join(
+            node.name for node in upgraded_nodes)).publish()
+        for node in upgraded_nodes:
+            self._start_and_wait_for_node_rollback(node, step=next(step))
+
+        InfoEvent(message="Upgrade all nodes").publish()
+        for node_to_upgrade in nodes_to_upgrade:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+        InfoEvent(message="All nodes were upgraded successfully").publish()
+
+        InfoEvent(message="Step4 - Run raft topology upgrade procedure").publish()
+        self.run_raft_topology_upgrade_procedure()
+
+        InfoEvent(message="Step5 - Wait for stress_during_entire_upgrade to finish").publish()
+        for stress_during_entire_upgrade_thread_pool in stress_during_entire_upgrade_thread_pools:
+            self.verify_stress_thread(stress_during_entire_upgrade_thread_pool)
+        self.wait_no_compactions_running(n=240, sleep_time=30)
+
+        InfoEvent(message="Step6 - run 'stress_after_cluster_upgrade' stress command(s)").publish()
+        time.sleep(60)
+        stress_after_upgrade_thread_pools = self._run_stress_workload(
+            "stress_after_cluster_upgrade", wait_for_finish=False)
+        stress_after_upgrade_results = []
+        for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
+            stress_after_upgrade_results.append(self.get_stress_results(stress_after_upgrade_thread_pool))
+
+        self.log.info(
+            "Going to compare following READ stress results:\nbefore upgrade: %s\nafter upgrade: %s",
+            stress_before_upgrade_results, stress_after_upgrade_results)
+        assert len(stress_before_upgrade_results) > 0
+        for stress_before_upgrade_result in stress_before_upgrade_results:
+            assert len(stress_before_upgrade_result) > 0
+        assert len(stress_before_upgrade_results) == len(stress_after_upgrade_results)
+        for stress_after_upgrade_result in stress_after_upgrade_results:
+            assert len(stress_after_upgrade_result) > 0
+        for i in range(len(stress_before_upgrade_results)):
+            for j in range(len(stress_before_upgrade_results[i])):
+                assert 'latency 99th percentile' in stress_before_upgrade_results[i][j]
+                current_latency_before = float(stress_before_upgrade_results[i][j]['latency 99th percentile'])
+                assert current_latency_before > 0
+                assert 'latency 99th percentile' in stress_after_upgrade_results[i][j]
+                current_latency_after = float(stress_after_upgrade_results[i][j]['latency 99th percentile'])
+                assert current_latency_after > 0
+                assert current_latency_after / current_latency_before < 1.2
+
+=======
+    def test_cluster_upgrade_latency_regression(self):
+        """Check latency regression after a ScyllaDB cluster upgrade using latte stress commands.
+
+        Number of 'before' and 'after' commands must match. Their latency values will be compaired.
+
+        - Write initial latte data (prepare_write_cmd?)
+        - Wait for end of compactions
+        - Read latte data generating report file (stress_before_upgrade)
+        - Run a read latte stress (stress_during_entire_upgrade) not waiting for it's end
+        - Upgrade the DB cluster
+        * self.run_raft_topology_upgrade_procedure()
+        - Wait for the end of the stress command (stress_during_entire_upgrade)
+        - Wait for end of compactions
+        - Read latte data (stress_after_cluster_upgrade) generating report file
+        - Compare latte report files and raise SCT ERROR event if latencies are worse for more than 10%
+        """
+        self.upgrade_os(self.db_cluster.nodes)
+
+        InfoEvent(message="Step1 - Populate DB data").publish()
+        # Prepare keyspace and tables for truncate test
+        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        self.run_prepare_write_cmd()
+
+        InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
+        step = itertools_count(start=1)
+        stress_before_upgrade_thread_pools = self._run_stress_workload(
+            "stress_before_upgrade", wait_for_finish=False, round_robin=True)
+        stress_before_upgrade_results = []
+        for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
+            stress_before_upgrade_results.append(self.get_stress_results(stress_before_upgrade_thread_pool))
+        stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
+            "stress_during_entire_upgrade", wait_for_finish=False, round_robin=True)
+
+        InfoEvent(message="Step3 - Upgrade cluster to '%s' version" % self.params.get('new_version')).publish()
+
+        InfoEvent(message="Upgrade part of nodes nodes before roll-back").publish()
+        nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
+        upgraded_nodes = []
+        for node_to_upgrade in nodes_to_upgrade[:self.params.get('num_nodes_to_rollback')]:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+            upgraded_nodes.append(node_to_upgrade)
+
+        # Rollback all nodes that where upgraded (not necessarily in the same order)
+        random.shuffle(upgraded_nodes)
+        InfoEvent(message="Roll-back following nodes: %s" % ", ".join(
+            node.name for node in upgraded_nodes)).publish()
+        for node in upgraded_nodes:
+            self._start_and_wait_for_node_rollback(node, step=next(step))
+
+        InfoEvent(message="Upgrade all nodes").publish()
+        for node_to_upgrade in nodes_to_upgrade:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+        InfoEvent(message="All nodes were upgraded successfully").publish()
+
+        InfoEvent(message="Step4 - Run raft topology upgrade procedure").publish()
+        self.run_raft_topology_upgrade_procedure()
+
+        InfoEvent(message="Step5 - Wait for stress_during_entire_upgrade to finish").publish()
+        for stress_during_entire_upgrade_thread_pool in stress_during_entire_upgrade_thread_pools:
+            self.verify_stress_thread(stress_during_entire_upgrade_thread_pool)
+        self.wait_no_compactions_running(n=240, sleep_time=30)
+
+        InfoEvent(message="Step6 - run 'stress_after_cluster_upgrade' stress command(s)").publish()
+        time.sleep(60)
+        stress_after_upgrade_thread_pools = self._run_stress_workload(
+            "stress_after_cluster_upgrade", wait_for_finish=False, round_robin=True)
+        stress_after_upgrade_results = []
+        for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
+            stress_after_upgrade_results.append(self.get_stress_results(stress_after_upgrade_thread_pool))
+
+        self.log.info(
+            "Going to compare following READ stress results:\nbefore upgrade: %s\nafter upgrade: %s",
+            stress_before_upgrade_results, stress_after_upgrade_results)
+        assert len(stress_before_upgrade_results) > 0
+        for stress_before_upgrade_result in stress_before_upgrade_results:
+            assert len(stress_before_upgrade_result) > 0
+        assert len(stress_before_upgrade_results) == len(stress_after_upgrade_results)
+        for stress_after_upgrade_result in stress_after_upgrade_results:
+            assert len(stress_after_upgrade_result) > 0
+        for i in range(len(stress_before_upgrade_results)):
+            for j in range(len(stress_before_upgrade_results[i])):
+                assert 'latency 99th percentile' in stress_before_upgrade_results[i][j]
+                current_latency_before = float(stress_before_upgrade_results[i][j]['latency 99th percentile'])
+                assert current_latency_before > 0
+                assert 'latency 99th percentile' in stress_after_upgrade_results[i][j]
+                current_latency_after = float(stress_after_upgrade_results[i][j]['latency 99th percentile'])
+                assert current_latency_after > 0
+                assert current_latency_after / current_latency_before < 1.2
+
+>>>>>>> b29cdcc02 (fix(upgrade): make latte-based upgrade test use round_robin only)
     def test_kubernetes_scylla_upgrade(self):
         """
         Run a set of different cql queries against various types/tables before
