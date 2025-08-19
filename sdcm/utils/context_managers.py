@@ -11,9 +11,12 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import logging
 import os
 import time
 from contextlib import contextmanager
+
+LOGGER = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -69,7 +72,22 @@ class DbNodeLogger:
         self.additional_info = additional_info
         self.start_time = None
 
+        # Check for required attributes in target_node and nodes and skip logging if some of them are missing.
+        # It's a case for Cloud nodes which come from siren-tests integration.
+        self.active = True
+
+        if target_node and not all(hasattr(self.target_node, attr) for attr in ['name', 'private_ip_address']):
+            LOGGER.warning(f"Target node {self.target_node} is missing required attributes. Skipping logging.")
+            self.active = False
+
+        if not all(hasattr(node, 'log_message') for node in self.nodes):
+            LOGGER.warning("One or more nodes are missing the 'log_message' method. Skipping logging.")
+            self.active = False
+
     def __enter__(self):
+        if not self.active:
+            return None
+
         self.start_time = time.time()
         message = f"executing {self.operation_name}"
         if self.target_node:
@@ -82,6 +100,9 @@ class DbNodeLogger:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.active:
+            return None
+
         duration = time.time() - self.start_time
         status = "failed" if exc_type else "completed"
         message = f"{self.operation_name} {status} after {duration:.2f}s"
