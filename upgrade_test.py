@@ -881,7 +881,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.rollback_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
         node.check_node_health()
 
-    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> [CassandraStressThread]:
+    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False,
+                             round_robin: bool = False) -> [CassandraStressThread]:
         """Runs workload from param name specified in test-case yaml"""
         self.actions_log.info(f"Starting {workload_name}")
         stress_commands = self.params.get(workload_name)
@@ -890,7 +891,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             stress_commands = [stress_commands]
 
         for stress_command in stress_commands:
-            workload_thread_pools.append(self.run_stress_thread(stress_cmd=stress_command))
+            workload_thread_pools.append(
+                self.run_stress_thread(stress_cmd=stress_command, round_robin=round_robin))
 
         if self.params.get('alternator_port'):
             self.pre_create_alternator_tables()
@@ -1004,12 +1006,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
         step = itertools_count(start=1)
         stress_before_upgrade_thread_pools = self._run_stress_workload(
-            "stress_before_upgrade", wait_for_finish=False)
+            "stress_before_upgrade", wait_for_finish=False, round_robin=True)
         stress_before_upgrade_results = []
         for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
             stress_before_upgrade_results.append(self.get_stress_results(stress_before_upgrade_thread_pool))
         stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
-            "stress_during_entire_upgrade", wait_for_finish=False)
+            "stress_during_entire_upgrade", wait_for_finish=False, round_robin=True)
 
         InfoEvent(message="Step3 - Upgrade cluster to '%s' version" % self.params.get('new_version')).publish()
 
@@ -1043,7 +1045,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="Step6 - run 'stress_after_cluster_upgrade' stress command(s)").publish()
         time.sleep(60)
         stress_after_upgrade_thread_pools = self._run_stress_workload(
-            "stress_after_cluster_upgrade", wait_for_finish=False)
+            "stress_after_cluster_upgrade", wait_for_finish=False, round_robin=True)
         stress_after_upgrade_results = []
         for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
             stress_after_upgrade_results.append(self.get_stress_results(stress_after_upgrade_thread_pool))
