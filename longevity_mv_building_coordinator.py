@@ -30,7 +30,7 @@ KEYSPACE = "defined_ks"
 TABLE = "defined_table"
 PARTITION_KEY_TYPE = {"key": "int"}
 CLUSTER_KEY_TYPE = {"ckey": "int"}
-COLUMNS = {"value1": "text", "value2": "text"}
+COLUMNS = {"value1": "text", "value2": "text", "value3": "text", "value4": "text"}
 
 
 @dataclass
@@ -92,7 +92,8 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 PartitionSet(
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
-                    data_columns={"value1": return_text_data, "value2": return_text_data}
+                    data_columns={"value1": return_text_data, "value2": return_text_data,
+                                  "value3": return_text_data, "value4": return_text_data, }
                 ),
             )
         datasets_with_null_value1_column = []
@@ -101,7 +102,8 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 PartitionSet(
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
-                    data_columns={"value1": return_null_data, "value2": return_text_data}
+                    data_columns={"value1": return_null_data, "value2": return_text_data,
+                                  "value3": return_text_data, "value4": return_text_data, }
                 ),
             )
 
@@ -111,7 +113,8 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 PartitionSet(
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
-                    data_columns={"value1": return_text_data, "value2": return_null_data}
+                    data_columns={"value1": return_text_data, "value2": return_null_data,
+                                  "value3": return_text_data, "value4": return_text_data, }
                 ),
             )
         datasets_with_all_nulls = []
@@ -120,7 +123,8 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                 PartitionSet(
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
-                    data_columns={"value1": return_null_data, "value2": return_null_data}
+                    data_columns={"value1": return_null_data, "value2": return_null_data,
+                                  "value3": return_text_data, "value4": return_text_data, }
                 ),
             )
         coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
@@ -164,9 +168,9 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
 
         with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
-            validate_data(session, datasets_with_null_value1_column, view_name_value1_not_null_data, select_colums=["value1", "value2"],
+            validate_data(session, dataset_with_all_data + datasets_with_null_value2_column, view_name_value1_not_null_data, select_colums=["value1", "value2"],
                           where_columns=["value1", "key", "ckey"])
-            validate_data(session, datasets_with_null_value2_column, view_name_value2_not_null_data,
+            validate_data(session, dataset_with_all_data + datasets_with_null_value1_column, view_name_value2_not_null_data,
                           select_colums=["value1", "value2"],
                           where_columns=["value2", "key", "ckey"])
 
@@ -566,7 +570,7 @@ def write_data(session: Session, partition_set: tuple[int, int], clustering_key_
 
 
 def return_text_data(*args):
-    return "a"*10 + f"<{'-'.join(map(str, args))}>"
+    return "a"*1024 + f"<{'-'.join(map(str, args))}>"
 
 
 def return_null_data(*args):
