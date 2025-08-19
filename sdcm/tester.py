@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
 from functools import wraps, cache
+from contextlib import contextmanager
 import threading
 import signal
 import json
@@ -1242,13 +1243,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         node = self.db_cluster.nodes[0]
         if self.params.get('alternator_port'):
             self.log.info("Going to create alternator tables")
-            if self.params.get('alternator_enforce_authorization'):
-                with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
-                                    (self.params.get('alternator_access_key_id'),
-                                     self.params.get('alternator_secret_access_key')))
+            self.alternator.set_credentials(node=node)
 
-            tablets_enabled = is_tablets_feature_enabled(self.db_cluster.nodes[0])
+            tablets_enabled = is_tablets_feature_enabled(node)
             prepare_cmd = self.params.get('prepare_write_cmd')
             stress_cmd = self.params.get('stress_cmd')
             is_ttl_in_workload = any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd])
@@ -1270,6 +1267,41 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             if is_ttl_in_workload:
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.TABLE_NAME)
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.NO_LWT_TABLE_NAME)
+
+    def pre_create_alternator_backuped_tables(self, **kwargs):
+        node = self.db_cluster.nodes[0]
+        if self.params.get('alternator_port'):
+            self.log.info("Going to create alternator tables")
+            self.alternator.set_credentials(node=node)
+
+            tablets_enabled = is_tablets_feature_enabled(node)
+            schema = self.params.get("dynamodb_primarykey_type")
+            table_name = self.params.get('alternator_test_table').get('name', alternator.consts.NO_LWT_TABLE_NAME)
+            self.alternator.create_table(node=node, schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+                                         table_name=table_name,
+                                         tablets_enabled=tablets_enabled, **kwargs)
+
+            stress_cmd = self.params.get('stress_cmd')
+            stress_read_cmd = self.params.get('stress_read_cmd')
+            is_ttl_in_workload = any('dynamodb.ttlKey' in str(cmd) for cmd in [stress_cmd, stress_read_cmd])
+            if is_ttl_in_workload:
+                self.alternator.update_table_ttl(node=node, table_name=table_name)
+
+            return {table_name: schema}
+        return None
+
+    @contextmanager
+    def alternator_backuped_tables(self, **kwargs):
+        tables = self.pre_create_alternator_backuped_tables(**kwargs)
+        yield tables
+        for table in tables.keys() or []:
+            self.alternator.delete_table(node=self.db_cluster.nodes[0], table_name=table)
+
+    def verify_alternator_tables_features(self, tables: dict = None, **kwargs):
+        node = self.db_cluster.nodes[0]
+        if tables:
+            for table_name, schema in tables.items():
+                self.alternator.verify_table_features(node, table_name, schema=schema, **kwargs)
 
     def get_nemesis_class(self):
         """
