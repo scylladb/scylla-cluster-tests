@@ -163,6 +163,13 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             self.log.debug("Result for mv table %s", list(result_for_mv_table))
             assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
 
+        with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
+            validate_data(session, datasets_with_null_value1_column, view_name_value1_not_null_data, select_colums=["value1", "value2"],
+                          where_columns=["value1", "key", "ckey"])
+            validate_data(session, datasets_with_null_value2_column, view_name_value2_not_null_data,
+                          select_colums=["value1", "value2"],
+                          where_columns=["value2", "key", "ckey"])
+
     def test_stop_node_during_building_mv(self):
         InfoEvent("Prepare Base table").publish()
         self.run_prepare_write_cmd()
@@ -466,7 +473,7 @@ def create_db(session: Session):
     session.execute(f"""
     CREATE KEYSPACE IF NOT EXISTS {KEYSPACE}
         WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': {3} }}
-        AND durable_writes = true and TABLETS = {{ 'enabled': true }};
+        AND durable_writes = true and TABLETS = {{ 'enabled': true}};
     """)
     columns = ", ".join(f"{key} {value_type}" for key, value_type in (
         PARTITION_KEY_TYPE | CLUSTER_KEY_TYPE | COLUMNS).items())
@@ -490,10 +497,35 @@ def build_data(partition_id, clustering_key_set: int, data_set: list[Callable[..
         k += 1
 
 
-def verify_data(session: Session, table: str, partition_set: tuple[int, int], clustering_key_set: int, data_set: dict[str, Callable[..., Any]], select_colums: list[str], where_columns: list[str]):
+def validate_data(session, data_sets: list[PartitionSet], table: str,
+                  where_columns: list[str], select_colums: list[str], max_workers: int = 4):
+    LOGGER.info("Start data validation")
+    futures: list[Future] = []
+    with ThreadPoolExecutor(thread_name_prefix="validate_cluster", max_workers=max_workers) as pool:
+        for data_set in data_sets:
+            futures.append(pool.submit(verify_parition_data, session=session, table=table,
+                                       partition_set=data_set.partitions_range,
+                                       clustering_key_set=data_set.clustering_keys,
+                                       data_set=data_set.data_columns, where_columns=where_columns, select_colums=select_colums))
 
+    while futures:
+        f = futures.pop()
+        if f.running():
+            futures.append(f)
+            time.sleep(5)
+        else:
+            if exc := f.exception():
+                raise exc
+            if result := f.result():
+                print(result)
+    LOGGER.info("End data validation")
+
+
+def verify_parition_data(session: Session, table: str, partition_set: tuple[int, int], clustering_key_set: int,
+                         data_set: dict[str, Callable[..., Any]],  where_columns: list[str], select_colums: list[str]):
+    LOGGER.info("Start verify partition set %s", partition_set)
     start, end = partition_set
-
+    columns = list((PARTITION_KEY_TYPE | CLUSTER_KEY_TYPE | COLUMNS).keys())
     where = [f"{cl} = ?" for cl in where_columns]
     query = session.prepare(f"""
         SELECT {', '.join(select_colums)} from {KEYSPACE}.{table}
@@ -501,17 +533,15 @@ def verify_data(session: Session, table: str, partition_set: tuple[int, int], cl
     """)
     columns_names = list(COLUMNS.keys())
     for i in range(start, end, 50):
-        # k = i
-        # data = []
-        # while k < i + 50:
-        #     for j in range(clustering_key_set):
-        #         row = [k, j]
-        #         for name in columns_names:
-        #             row.append(data_set[name](k, j))
-        #         data.append(tuple(row))
-        #     k += 1
-        data = build_data(i, clustering_key_set, [data_set[name] for name in columns_names])
-        execute_concurrent_with_args(session, query, data, concurrency=100)
+        for row in build_data(i, clustering_key_set, [data_set[name] for name in columns_names]):
+            column_indexes = [columns.index(name) for name in where_columns]
+            result = session.execute(query, [row[i] for i in column_indexes])
+            for raw_row in result:
+                actual_row = list(raw_row)
+                expected_row = [row[i] for i in [columns.index(name) for name in select_colums]]
+                # LOGGER.info("Actual row %s == Expected row %s", actual_row, expected_row)
+                assert actual_row == expected_row, "rows are not the same"
+    LOGGER.info("Done validate partition set %s", partition_set)
 
 
 def write_data(session: Session, partition_set: tuple[int, int], clustering_key_set: int, data_set: dict[str, Callable[..., Any]]):
@@ -536,7 +566,7 @@ def write_data(session: Session, partition_set: tuple[int, int], clustering_key_
 
 
 def return_text_data(*args):
-    return "a"*512 + f"<{'-'.join(map(str, args))}>"
+    return "a"*10 + f"<{'-'.join(map(str, args))}>"
 
 
 def return_null_data(*args):
