@@ -81,6 +81,21 @@ class Alternator:
                 self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
         return self.alternator_apis[endpoint_url]
 
+    def set_credentials(self, node):
+        if self.params.get('alternator_enforce_authorization'):
+            with node.parent_cluster.cql_connection_patient(node) as session:
+                session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
+                                (self.params.get('alternator_access_key_id'),
+                                    self.params.get('alternator_secret_access_key')))
+
+    def get_credentials(self, node):
+        access_key_id = self.params.get('alternator_access_key_id')
+        if self.params.get('alternator_enforce_authorization'):
+            return (access_key_id, self.get_salted_hash(node=node, username=access_key_id))
+        else:
+            access_key = self.params.get('alternator_access_key')
+            return (access_key_id, access_key) if access_key_id and access_key else None
+
     def set_write_isolation(self, node, isolation, table_name=consts.TABLE_NAME):
         dynamodb_api = self.get_dynamodb_api(node=node)
         isolation = isolation if not isinstance(isolation, enums.WriteIsolation) else isolation.value
@@ -96,17 +111,42 @@ class Alternator:
 
     def create_table(self, node,
                      schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
-                     wait_until_table_exists=True, tablets_enabled: bool = False, **kwargs) -> Table:
+                     wait_until_table_exists=True, tablets_enabled: bool = False, lsi: bool = False, gsi: bool = False,
+                     tags: dict[str, str] = None, **kwargs) -> Table:
         if isinstance(schema, enums.YCSBSchemaTypes):
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
+        if lsi:
+            schema['LocalSecondaryIndexes'] = [
+                {
+                    'IndexName': "lsi",
+                    'KeySchema': schema['KeySchema'],
+                    'Projection': {'ProjectionType': 'ALL'}
+                }
+            ]
+        if gsi:
+            schema['GlobalSecondaryIndexes'] = [
+                {
+                    'IndexName': "gsi",
+                    'KeySchema': schema['KeySchema'],
+                    'Projection': {'ProjectionType': 'ALL'}
+                }
+            ]
+        tags_list = []
+        if tags:
+            tags_list.extend({'Key': k, 'Value': v} for k, v in tags.items())
+
         dynamodb_api = self.get_dynamodb_api(node=node)
         # Tablets feature is currently supported by Alternator, but disabled by default (since LWT is not supported).
         # It should be explicitly requested by the specified tag.
         # TODO: the 'tablets_enabled' parameter might become un-needed once Alternator tablets default is switched to be enabled.
         # This might be dependant on tablets LWT support issue (scylladb/scylladb#18068)
         if tablets_enabled:
-            kwargs['Tags'] = [{'Key': 'experimental:initial_tablets', 'Value': '0'}]
+            tags_list.append({'Key': 'experimental:initial_tablets', 'Value': '0'})
+
+        if tags_list:
+            kwargs['Tags'] = tags_list
+
         LOGGER.debug("Creating a new table '{}' using node '{}'".format(table_name, node.name))
         table = dynamodb_api.resource.create_table(
             TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
@@ -121,6 +161,22 @@ class Alternator:
             self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
         LOGGER.debug("Table's schema and configuration are: {}".format(response))
         return table
+
+    def verify_table_features(self, node, table_name=consts.TABLE_NAME,
+                              lsi: bool = None, gsi: bool = None, tags: dict[str, str] = None):
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        table = dynamodb_api.client.describe_table(TableName=table_name)["Table"]
+
+        # TODO: check more details
+
+        if lsi is not None:
+            assert ('LocalSecondaryIndexes' in table) == lsi, f"Expected LSI {"not " if not lsi else ""}to be present"
+        if gsi is not None:
+            assert ('GlobalSecondaryIndexes' in table) == gsi, f"Expected GSI {"not " if not gsi else ""}to be present"
+
+        table['Tags'] = dynamodb_api.client.list_tags_of_resource(ResourceArn=table['TableArn'])['Tags']
+        for key, value in (tags or {}).items():
+            assert {'Key': key, 'Value': value} in table['Tags'], f"Expected tag {key}:{value} to be present"
 
     def update_table_ttl(self, node, table_name, enabled: bool = True):
         dynamodb_api = self.get_dynamodb_api(node=node)
