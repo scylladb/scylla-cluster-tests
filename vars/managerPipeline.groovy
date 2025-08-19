@@ -108,7 +108,7 @@ def call(Map pipelineParams) {
                    name: 'ip_ssh_connections')
 
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
-                   description: 'master_latest|3.5|3.4',
+                   description: 'master_latest|3.6|3.5',
                    name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
@@ -124,7 +124,7 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_pkg')
 
             string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|3.5|3.4. Only for upgrade test',
+                   description: 'master_latest|3.6|3.5. Only for upgrade test',
                    name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
