@@ -888,6 +888,42 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
+## **alternator_table_name** / SCT_ALTERNATOR_TABLE_NAME
+
+The name of the table to create
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **alternator_table_lsi_name** / SCT_ALTERNATOR_TABLE_LSI_NAME
+
+The name of the local secondary index to create with a table
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **alternator_table_gsi_name** / SCT_ALTERNATOR_TABLE_GSI_NAME
+
+The name of the global secondary index to create with a table
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **alternator_table_tags** / SCT_ALTERNATOR_TABLE_TAGS
+
+The tags to apply to the created table
+
+**default:** N/A
+
+**type:** dict
+
+
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)

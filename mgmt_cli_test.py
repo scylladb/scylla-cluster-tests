@@ -693,6 +693,15 @@ class ManagerTestFunctionsMixIn(
             self.restore_backup_without_manager(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
                                                 ks_tables_list=ks_tables_map)
 
+    def verify_alternator_backup_success(self, mgr_cluster, backup_task, delete_tables: list = None, timeout=None):
+        for table_name in delete_tables:
+            self.log.info(f'running delete on {table_name}')
+            self.alternator.delete_table(self.db_cluster.nodes[0], table_name=table_name, wait_until_table_removed=True)
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                      timeout=timeout, restore_schema=True)
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                      timeout=timeout, restore_data=True)
+
     def restore_backup_without_manager(self, mgr_cluster, snapshot_tag, ks_tables_list, location=None,
                                        precreated_backup=False):
         """Restore backup without Scylla Manager but using the `nodetool refresh` operation
@@ -846,6 +855,23 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_restore_backup_with_task')
+
+    def test_restore_alternator_backup_with_task(self, delete_tables: list = None):
+        self.log.info('starting test_restore_alternator_backup_with_task')
+        mgr_cluster = self.db_cluster.get_cluster_manager(
+            alternator_credentials=self.alternator.get_credentials(node=self.db_cluster.nodes[0]))
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        soft_timeout = 36 * 60
+        hard_timeout = 50 * 60
+        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.data_nodes[0], timeout=soft_timeout):
+            self.verify_alternator_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, delete_tables=delete_tables,
+                                                  timeout=hard_timeout)
+        self.run_verification_read_stress()
+        mgr_cluster.delete()  # remove cluster at the end of the test
+        self.log.info('finishing test_restore_alternator_backup_with_task')
 
 
 class ManagerBackupTests(ManagerRestoreTests):
@@ -1004,6 +1030,17 @@ class ManagerBackupTests(ManagerRestoreTests):
             self.test_enospc_during_backup()
         with self.subTest('Test Restore end of space'):
             self.test_enospc_before_restore()
+
+    def test_alternator_backup_feature(self):
+        features = {"lsi": self.params.get("alternator_table_lsi_name"),
+                    "gsi": self.params.get("alternator_table_gsi_name"),
+                    "tags": self.params.get("alternator_table_tags")}
+        with self.alternator_backuped_tables(**features) as table_names:
+            self.verify_alternator_tables_features(table_names, **features)
+            self.generate_load_and_wait_for_results()
+            with self.subTest('Test restore alternator backup with restore task'):
+                self.test_restore_alternator_backup_with_task(delete_tables=table_names)
+                self.verify_alternator_tables_features(table_names, **features)
 
     def test_no_delta_backup_at_disabled_compaction(self):
         """The purpose of test is to check that delta backup (no changes to DB between backups) takes time -> 0.
