@@ -343,7 +343,7 @@ Branch of scylla manager server and agent to upgrade to. Options in defaults/man
 
 Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml
 
-**default:** 2024
+**default:** 2025
 
 **type:** str
 
