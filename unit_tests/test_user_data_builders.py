@@ -64,4 +64,3 @@ def test_user_data_format_version_v3_building(logs_transport, test_config):
     assert 'Content-Type: x-scylla/json' in output
     assert 'Content-Type: text/cloud-config' in output
     assert 'Content-Type: text/x-shellscript' in output
-    print(output)
