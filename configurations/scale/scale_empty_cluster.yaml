@@ -27,3 +27,4 @@ append_scylla_yaml:
 run_fullscan: []
 
 simulated_racks: 0
+instance_type_runner: 'c7i.16xlarge'
