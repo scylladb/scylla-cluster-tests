@@ -9,7 +9,7 @@ ip_ssh_connections: 'private'
 scylla_repo: ''
 
 manager_version: '3.6'
-manager_scylla_backend_version: '2024'
+manager_scylla_backend_version: '2025'
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
 round_robin: false
