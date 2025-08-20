@@ -351,13 +351,14 @@ class YcsbStressThread(DockerBasedStressThread):
                                    extra_docker_opts=f'--label shell_marker={self.shell_marker}',
                                    docker_network=self.params.get('docker_network'))
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
-            extra_docker_opts = f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
+            extra_docker_opts = f'{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}'
             if self.params["use_hdrhistogram"]:
                 hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
                 extra_docker_opts += f' -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z'
 
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,
+                command_line="-c 'tail -f /dev/null'",
                 extra_docker_opts=extra_docker_opts,
                 docker_network=self.params.get('docker_network'))
             cmd_runner_name = str(loader)
@@ -377,7 +378,8 @@ class YcsbStressThread(DockerBasedStressThread):
 
         LOGGER.debug("running: %s", stress_cmd)
 
-        node_cmd = 'cd /YCSB && {}'.format(stress_cmd)
+        stress_cmd = stress_cmd.replace('bin/ycsb', 'bin/ycsb.sh')
+        node_cmd = 'cd /usr/local/share/scylla-ycsb && {}'.format(stress_cmd)
 
         YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
 
