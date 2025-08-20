@@ -30,7 +30,8 @@ KEYSPACE = "defined_ks"
 TABLE = "defined_table"
 PARTITION_KEY_TYPE = {"key": "int"}
 CLUSTER_KEY_TYPE = {"ckey": "int"}
-COLUMNS = {"value1": "text", "value2": "text", "value3": "text", "value4": "text"}
+COLUMNS = {"value1": "text", "value2": "text", "value3": "text", "value4": "text",
+           "value11": "text", "value22": "text", "value33": "text", "value44": "text"}
 
 
 @dataclass
@@ -93,7 +94,9 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
                     data_columns={"value1": return_text_data, "value2": return_text_data,
-                                  "value3": return_text_data, "value4": return_text_data, }
+                                  "value3": return_text_data, "value4": return_text_data,
+                                  "value11": return_text_data, "value22": return_text_data,
+                                  "value33": return_text_data, "value44": return_text_data, }
                 ),
             )
         datasets_with_null_value1_column = []
@@ -103,7 +106,9 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
                     data_columns={"value1": return_null_data, "value2": return_text_data,
-                                  "value3": return_text_data, "value4": return_text_data, }
+                                  "value3": return_text_data, "value4": return_text_data,
+                                  "value11": return_text_data, "value22": return_text_data,
+                                  "value33": return_text_data, "value44": return_text_data, }
                 ),
             )
 
@@ -114,7 +119,9 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
                     data_columns={"value1": return_text_data, "value2": return_null_data,
-                                  "value3": return_text_data, "value4": return_text_data, }
+                                  "value3": return_text_data, "value4": return_text_data,
+                                  "value11": return_text_data, "value22": return_text_data,
+                                  "value33": return_text_data, "value44": return_text_data, }
                 ),
             )
         datasets_with_all_nulls = []
@@ -124,7 +131,9 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                     partitions_range=intrvl,
                     clustering_keys=row_per_parttn,
                     data_columns={"value1": return_null_data, "value2": return_null_data,
-                                  "value3": return_text_data, "value4": return_text_data, }
+                                  "value3": return_text_data, "value4": return_text_data,
+                                  "value11": return_text_data, "value22": return_text_data,
+                                  "value33": return_text_data, "value44": return_text_data, }
                 ),
             )
         coordinator_node = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
@@ -137,20 +146,28 @@ class LongevityMVBuildingCoordinator(LongevityTest):
         view_name_all_data = f'{base_table_name}_all_data_view'
         view_name_value1_not_null_data = f'{base_table_name}_value1_not_null_data_view'
         view_name_value2_not_null_data = f'{base_table_name}_value2_not_null_data_view'
+        view_name_value44_all_data = f'{base_table_name}_value44_not_null_data_view'
 
         with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
 
             create_materialized_view(session, ks_name, base_table_name, view_name_all_data, ["ckey"],
                                      ["key"],
                                      mv_columns=["value1", "value2"])
+            session.execute(f"ALTER TABLE {ks_name}.{base_table_name} WITH tablets = {{'min_tablet_count': 2}}")
             create_materialized_view(session, ks_name, base_table_name, view_name_value1_not_null_data, ["value1"],
                                      ["key", "ckey"],
                                      mv_columns=["value1", "value2"])
+            session.execute(f"ALTER TABLE {ks_name}.{base_table_name} WITH tablets = {{'min_tablet_count': 16}}")
             create_materialized_view(session, ks_name, base_table_name, view_name_value2_not_null_data, ["value2"],
                                      ["key", "ckey"],
                                      mv_columns=["value1", "value2"])
+            session.execute(f"ALTER TABLE {ks_name}.{base_table_name} WITH tablets = {{'min_tablet_count': 32}}")
+            create_materialized_view(session, ks_name, base_table_name, view_name_value44_all_data, ["value44"],
+                                     ["ckey", "key"],
+                                     mv_columns=["value1", "value2", "value3", "value33", "value44"])
+            session.execute(f"ALTER TABLE {ks_name}.{base_table_name} WITH tablets = {{'min_tablet_count': 2}}")
 
-            for view_name in [view_name_all_data, view_name_value1_not_null_data, view_name_value2_not_null_data]:
+            for view_name in [view_name_all_data, view_name_value1_not_null_data, view_name_value2_not_null_data, view_name_value44_all_data]:
                 wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
 
             result_for_base_table = list(session.execute(f"select count(*) from {ks_name}.{base_table_name}"))
@@ -168,11 +185,17 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
 
         with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
-            validate_data(session, dataset_with_all_data + datasets_with_null_value2_column, view_name_value1_not_null_data, select_colums=["value1", "value2"],
+            validate_data(session, dataset_with_all_data + datasets_with_null_value2_column, view_name_value1_not_null_data,
+                          select_colums=["value1", "value2"],
                           where_columns=["value1", "key", "ckey"])
             validate_data(session, dataset_with_all_data + datasets_with_null_value1_column, view_name_value2_not_null_data,
                           select_colums=["value1", "value2"],
                           where_columns=["value2", "key", "ckey"])
+            validate_data(session, dataset_with_all_data + datasets_with_null_value1_column + datasets_with_null_value2_column + datasets_with_all_nulls,
+                          view_name_value44_all_data,
+                          select_colums=["value1", "value2", "value3", "value33", "value44"],
+                          where_columns=["value44", "ckey", "key"]
+                          )
 
     def test_stop_node_during_building_mv(self):
         InfoEvent("Prepare Base table").publish()
