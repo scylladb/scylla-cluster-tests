@@ -331,10 +331,15 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
 
             with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
-                create_mv_for_table(session, keyspace_name=ks_name,
-                                    base_table_name=base_table_name, view_name=view_name)
+                # create_mv_for_table(session, keyspace_name=ks_name,
+                #                     base_table_name=base_table_name, view_name=view_name)
+                try:
+                    create_index_for_table(session, keyspace_name=ks_name,
+                                           base_table_name=base_table_name, index_name=view_name)
+                    mv_names.append(view_name)
+                except Exception as exc:  # noqa:  BLE001
+                    self.log.warning("Index % was not created due to : %s", view_name, exc)
                 # wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
-            mv_names.append(view_name)
 
         new_node: BaseNode = add_cluster_node(
             self.db_cluster, dc_idx=coordinator_node.dc_idx, rack=coordinator_node.rack, monitoring=self.monitors)
