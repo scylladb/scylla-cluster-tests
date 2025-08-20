@@ -46,7 +46,7 @@ def resolve_ip_to_dns(ip_address: str) -> str:
     try:
         return socket.gethostbyaddr(ip_address)[0]
     except socket.herror as e:
-        raise ValueError(f"Unable to resolve IP: {e}")
+        raise ValueError(f"Unable to resolve '{ip_address}' IP: {e}")
 
 
 def to_inet_ntop_format(ip_address: str) -> str:

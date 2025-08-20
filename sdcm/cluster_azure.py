@@ -187,7 +187,14 @@ class AzureNode(cluster.BaseNode):
 
     @cached_property
     def private_dns_name(self) -> str:
-        return resolve_ip_to_dns(self.private_ip_address)
+        try:
+            return resolve_ip_to_dns(self.private_ip_address)
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning(f"Failed to resolve private IP address into an internal DNS name: {exc}")
+            vm_name = self._instance.name
+            dns_name = f"{vm_name}.{self.region}.cloudapp.azure.com"
+            self.log.info(f"Generating following private DNS name based on VM name and region: {dns_name}")
+            return dns_name
 
 
 class AzureCluster(cluster.BaseCluster):
