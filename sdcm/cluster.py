@@ -2851,7 +2851,7 @@ class BaseNode(AutoSshContainerMixin):
             elif line.startswith('DC:'):
                 dc = line.replace('DC:', '').split(',')[0]
 
-            if schema and ip and status:
+            if schema and ip and status and dc:
                 if node := node_ip_map.get(ip):
                     gossip_node_schemas[node] = {'schema': schema, 'status': status, 'dc': dc}
                 elif status in self.GOSSIP_STATUSES_FILTER_OUT:
