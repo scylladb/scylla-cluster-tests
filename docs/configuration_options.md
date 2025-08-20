@@ -2924,7 +2924,7 @@ The time interval in minutes which gets waited before the KMS key rotation happe
 
 ## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
 
-Allows to disable KMS keys rotation. Applicable only to Azure backend. In case of AWS backend its KMS keys will always be rotated as of now.
+Allows to disable KMS keys rotation. Applicable to GCP and Azure backends. In case of AWS backend its KMS keys will always be rotated as of now.
 
 **default:** N/A
 

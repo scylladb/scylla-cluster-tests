@@ -90,6 +90,10 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_utils import AzureService
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
+from sdcm.utils.gcp_kms import GcpKms
+from sdcm.provision.gce.kms_provider import GcpKmsProvider
+from google.cloud.exceptions import GoogleCloudError
+from sdcm.keystore import KeyStore
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -4896,6 +4900,34 @@ class BaseScyllaCluster:
 
         threading.Thread(target=_rotate, daemon=True, name='AzureKmsRotationThread').start()
         self.log.info("Started Azure KMS rotation thread for test: %s", test_id)
+        return None
+
+    def start_gcp_key_rotation_thread(self) -> None:
+        if self.params.get("cluster_backend") != 'gce':
+            return None
+        if not self.params.get("enable_kms_key_rotation"):
+            return None
+
+        test_id = str(self.test_config.test_id())
+
+        def _rotate():
+            gcp_credentials = KeyStore().get_gcp_credentials()
+            gcp_kms_config = KeyStore().get_gcp_kms_config()
+
+            project_id = gcp_credentials['project_id']
+            location = gcp_kms_config['keyring_location']
+            key_name = GcpKmsProvider.get_key_name_for_test(test_id)
+            gcp_kms = GcpKms(project_id, location, key_name)
+            while True:
+                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
+                try:
+                    gcp_kms.rotate_key()
+                    self.log.info("GCP KMS key rotated for test %s: %s", test_id, key_name)
+                except GoogleCloudError as e:
+                    self.log.error("Failed to rotate GCP KMS key '%s': %s", key_name, e)
+
+        threading.Thread(target=_rotate, daemon=True, name='GcpKmsRotationThread').start()
+        self.log.info("Started GCP KMS rotation thread for test: %s", test_id)
         return None
 
     def scylla_configure_non_root_installation(self, node, devname):
