@@ -86,7 +86,7 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
 
     @classmethod
     def setup_default_env(cls):
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-eks'
 
     @classmethod

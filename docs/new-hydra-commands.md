@@ -4,13 +4,13 @@
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/sample.yaml
 
 # show test configuration in yaml format:
-hydra output-conf internal_test_data/minimal_test_case.yaml -b gce
+hydra output-conf unit_tests/test_configs/minimal_test_case.yaml -b gce
 
 # check if test config is o.k.
 
-hydra conf internal_test_data/minimal_test_case.yaml
+hydra conf unit_tests/test_configs/minimal_test_case.yaml
 # check test config for specific backend
-hydra conf internal_test_data/minimal_test_case.yaml --backend gce
+hydra conf unit_tests/test_configs/minimal_test_case.yaml --backend gce
 
 # listing resource used in cloud (AWS/GCE)
 hydra list-resources --test-id n3vik6-ssu84ld --user bentsi

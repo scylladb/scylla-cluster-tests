@@ -56,7 +56,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
 
     @classmethod
     def clear_sct_env_variables(cls):
@@ -86,7 +86,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -146,13 +146,13 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_09_unknown_configure(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/unknown_param_in_config.yaml'
         conf = sct_config.SCTConfiguration()
         self.assertRaises(ValueError, conf.verify_configuration)
 
     def test_09_unknown_env(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/unknown_param_in_config.yaml'
         os.environ['SCT_WHAT_IS_THAT'] = 'just_made_this_up'
         os.environ['SCT_WHAT_IS_THAT_2'] = 'what is this ?'
         conf = sct_config.SCTConfiguration()
@@ -165,7 +165,7 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_10_longevity(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/complex_test_case_with_version.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/complex_test_case_with_version.yaml'
         os.environ['SCT_AMI_ID_DB_SCYLLA_DESC'] = 'master'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -176,7 +176,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
@@ -186,7 +186,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         amis = conf.get('ami_id_db_scylla').split()
@@ -197,7 +197,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
@@ -206,7 +206,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         self.assertRaisesRegex(
             ValueError, "AMIs for scylla_version='99.0.3' not found in eu-west-1", sct_config.SCTConfiguration)
 
@@ -285,7 +285,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.2:latest'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
@@ -302,7 +302,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -320,7 +320,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -340,7 +340,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_LOADERS'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -360,7 +360,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_LOADERS'] = '1'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -376,7 +376,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_LOADERS'] = '1 0'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -393,7 +393,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_N_LOADERS'] = '1 1'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_TEARDOWN_VALIDATORS'] = """rackaware:
                  enabled: true
             """
@@ -406,7 +406,7 @@ class ConfigurationTests(unittest.TestCase):
         ami_id = get_ssm_ami(
             '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = ami_id
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml \
             ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"""
         conf = sct_config.SCTConfiguration()
@@ -415,7 +415,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_conf_check_required_files_negative(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/stress_cmd_with_bad_profile.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/stress_cmd_with_bad_profile.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)'\
             no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"""
         conf = sct_config.SCTConfiguration()
@@ -449,7 +449,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_13_bool(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_STORE_PERF_RESULTS'] = 'False'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
 
         self.assertEqual(conf['store_perf_results'], False)
@@ -467,7 +467,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_SECURITY_GROUP_IDS'] = "sg-89fi3rkl"
         os.environ['SCT_SUBNET_ID'] = "sub-d32f09sdf"
 
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/multi_region_dc_test_case.yaml'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -542,7 +542,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
 
         conf = sct_config.SCTConfiguration()
@@ -556,7 +556,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
 
         conf = sct_config.SCTConfiguration()
@@ -570,7 +570,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
 
         conf = sct_config.SCTConfiguration()
@@ -585,7 +585,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_AMI_ID_DB_ORACLE'] = 'ami-dummy'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
 
         with self.assertRaises(ValueError) as context:
             sct_config.SCTConfiguration()
@@ -645,7 +645,7 @@ class ConfigurationTests(unittest.TestCase):
                 continue
 
             os.environ['SCT_CLUSTER_BACKEND'] = backend
-            os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+            os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
 
             conf = sct_config.SCTConfiguration()
             with self.assertRaises(AssertionError, msg=f"{backend} didn't failed") as context:
@@ -746,7 +746,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('user_data_format_version', conf)
 
     def test_21_nested_values(self):
-        os.environ['SCT_CONFIG_FILES'] = ('["internal_test_data/minimal_test_case.yaml", '
+        os.environ['SCT_CONFIG_FILES'] = ('["unit_tests/test_configs/minimal_test_case.yaml", '
                                           '"unit_tests/test_data/stress_image_extra_config.yaml"]')
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-1234'
@@ -770,7 +770,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_22_get_none(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_CONFIG_FILES'] = "internal_test_data/minimal_test_case.yaml"
+        os.environ['SCT_CONFIG_FILES'] = "unit_tests/test_configs/minimal_test_case.yaml"
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-1234'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -781,8 +781,8 @@ class ConfigurationTests(unittest.TestCase):
     def test_23_1_include_nemesis_selector(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
-                                             "internal_test_data/nemesis_selector_list.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/minimal_test_case.yaml", \
+                                             "unit_tests/test_configs/nemesis_selector_list.yaml"]'''
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -794,8 +794,8 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
-                                             "internal_test_data/nemesis_selector_list_of_list.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/minimal_test_case.yaml", \
+                                             "unit_tests/test_configs/nemesis_selector_list_of_list.yaml"]'''
         os.environ['SCT_NEMESIS_CLASS_NAME'] = "NemesisClass:1 NemesisClass:2"
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -803,13 +803,13 @@ class ConfigurationTests(unittest.TestCase):
         assert conf["nemesis_selector"] == ["config_changes and topology_changes", "topology_changes", "disruptive"]
 
     def test_26_run_fullscan_params_validtion_positive(self):
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
-                                                   "internal_test_data/positive_fullscan_param.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/minimal_test_case.yaml", \
+                                                   "unit_tests/test_configs/positive_fullscan_param.yaml"]'''
         sct_config.SCTConfiguration()
 
     def test_27_run_fullscan_params_validtion_negative(self):
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
-                                                      "internal_test_data/negative_fullscan_param.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/minimal_test_case.yaml", \
+                                                      "unit_tests/test_configs/negative_fullscan_param.yaml"]'''
         try:
             sct_config.SCTConfiguration()
         except ValueError as exp:
@@ -851,7 +851,7 @@ class ConfigurationTests(unittest.TestCase):
         os.environ['SCT_REGION_NAME'] = '["eu-west-1"]'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/cs_user_profile.yaml'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/cs_user_profile.yaml'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -893,7 +893,7 @@ class ConfigurationTests(unittest.TestCase):
 
     @pytest.mark.integration
     def test_31_check_network_config_aws_interface_not_defined(self):
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_not_defined.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/network_config_interface_not_defined.yaml"]'''
 
         with self.assertRaises(ValueError) as context:
             sct_config.SCTConfiguration()
@@ -902,7 +902,7 @@ class ConfigurationTests(unittest.TestCase):
 
     @pytest.mark.integration
     def test_31_check_network_config_aws_interface_param_not_defined(self):
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_param_not_defined.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/network_config_interface_param_not_defined.yaml"]'''
 
         with self.assertRaises(ValueError) as context:
             sct_config.SCTConfiguration()
@@ -912,7 +912,7 @@ class ConfigurationTests(unittest.TestCase):
 
     @pytest.mark.integration
     def test_31_check_network_config_aws_interface_param_public_not_primary(self):
-        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_param_public_not_primary.yaml"]'''
+        os.environ['SCT_CONFIG_FILES'] = '''["unit_tests/test_configs/network_config_interface_param_public_not_primary.yaml"]'''
 
         with self.assertRaises(ValueError) as context:
             sct_config.SCTConfiguration()
