@@ -68,6 +68,7 @@ import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
+from sdcm.utils.docker_utils import get_docker_hub_credentials
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
@@ -450,8 +451,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         namespaces = yaml.safe_load(self.kubectl("get namespaces -o yaml").stdout)
         if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
             self.kubectl(f"create namespace {namespace}")
+            self.create_docker_hub_auth_secret(namespace)
         else:
             self.log.warning("The '%s' namespace already exists.")
+
+    def create_docker_hub_auth_secret(self, namespace: str) -> None:
+        self.log.info("Create docker hub auth secret in '%s'", namespace)
+        docker_hub_url="https://index.docker.io/v1/"
+        docker_hub_creds = get_docker_hub_credentials()
+        self.kubectl(f"create secret docker-registry docker-auth "
+                     f"--docker-server={docker_hub_url} "
+                     f"--docker-username={docker_hub_creds['username']} "
+                     f"--docker-password={docker_hub_creds['password']} "
+                     f"--docker-email={docker_hub_creds['email']}")
 
     @cached_property
     def cert_manager_log(self) -> str:
