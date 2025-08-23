@@ -288,6 +288,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
                     timeout=self.timeout,
                     log_file=log_file_name,
                     retry=0,
+                    timestamp_logs=True,
                 )
             except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)

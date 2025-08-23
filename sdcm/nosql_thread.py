@@ -106,14 +106,15 @@ class NoSQLBenchStressThread(DockerBasedStressThread):
                 loader.remoter.run(cmd=graphite_run_cmd,
                                    timeout=self.timeout + self.shutdown_timeout,
                                    log_file=log_file_name,
-                                   ignore_status=True)
+                                   ignore_status=True,
+                                   timestamp_logs=True)
 
                 result = loader.remoter.run(cmd=f'docker run '
                                             '--name=nb '
                                             '--network=nosql '
                                             f'{self.docker_image_name} '
                                             f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
-                                            timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
+                                            timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name, timestamp_logs=True)
             except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
 
