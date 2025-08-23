@@ -1814,6 +1814,43 @@ class SCTConfiguration(dict):
 
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
              help="Replication factor for Scylla Cloud cluster (default: 3)"),
+<<<<<<< HEAD
+||||||| parent of 59762c0e8 (feature(scylla-cloud): VPC peering for Scylla cloud clusters)
+
+        dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
+             help="Number of vector store nodes (0 = VS is disabled)"),
+
+        dict(name="vs_port", env="SCT_VS_PORT", type=int,
+             help="Vector Store API port"),
+
+        dict(name="vs_scylla_port", env="SCT_VS_SCYLLA_PORT", type=int,
+             help="ScyllaDB connection port for Vector Store"),
+
+        dict(name="vs_threads", env="SCT_VS_THREADS", type=int,
+             help="Vector indexing threads (default: number of CPU cores)"),
+
+=======
+
+        dict(name="xcloud_vpc_peering", env="SCT_XCLOUD_VPC_PEERING", type=dict_or_str,
+             help="""Dictionary of VPC peering parameters for private connectivity between
+             SCT infrastructure and Scylla Cloud. The following parameters are used:
+                enabled: bool - indicates whether VPC peering is to be used
+                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
+                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)"""),
+
+        dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
+             help="Number of vector store nodes (0 = VS is disabled)"),
+
+        dict(name="vs_port", env="SCT_VS_PORT", type=int,
+             help="Vector Store API port"),
+
+        dict(name="vs_scylla_port", env="SCT_VS_SCYLLA_PORT", type=int,
+             help="ScyllaDB connection port for Vector Store"),
+
+        dict(name="vs_threads", env="SCT_VS_THREADS", type=int,
+             help="Vector indexing threads (default: number of CPU cores)"),
+
+>>>>>>> 59762c0e8 (feature(scylla-cloud): VPC peering for Scylla cloud clusters)
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
