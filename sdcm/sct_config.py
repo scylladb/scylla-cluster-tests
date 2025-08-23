@@ -1813,6 +1813,9 @@ class SCTConfiguration(dict):
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
              help="Replication factor for Scylla Cloud cluster (default: 3)"),
 
+        dict(name="xcloud_vpc_peering", env="SCT_XCLOUD_VPC_PEERING", type=dict_or_str,
+             help="VPC peering settings for private connectivity between SCT infrastructure and Scylla Cloud"),
+
         dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
              help="Number of vector store nodes (0 = VS is disabled)"),
 
