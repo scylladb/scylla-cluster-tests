@@ -1813,6 +1813,13 @@ class SCTConfiguration(dict):
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
              help="Replication factor for Scylla Cloud cluster (default: 3)"),
 
+        dict(name="xcloud_vpc_peering", env="SCT_XCLOUD_VPC_PEERING", type=dict_or_str,
+             help="""Dictionary of VPC peering parameters for private connectivity between
+             SCT infrastructure and Scylla Cloud. The following parameters are used:
+                enabled: bool - indicates whether VPC peering is to be used
+                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
+                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)"""),
+
         dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
              help="Number of vector store nodes (0 = VS is disabled)"),
 

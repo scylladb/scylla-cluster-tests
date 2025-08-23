@@ -44,7 +44,7 @@ class AwsRegion:
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
         # cause import straight from common create cyclic dependency
-        from sdcm.utils.common import all_aws_regions
+        from sdcm.utils.common import all_aws_regions  # noqa: PLC0415
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
@@ -238,6 +238,21 @@ class AwsRegion:
         assert len(existing_rts) == 1, \
             f"More than 1 Route Table with {sct_route_table_name} found in {self.region_name}: {existing_rts}!"
         return self.resource.RouteTable(existing_rts[0]["RouteTableId"])
+
+    @cached_property
+    def sct_route_tables(self) -> list:
+        """Get all route tables associated with the SCT VPC"""
+        route_tables = set()
+        main_route_table = self.sct_route_table(index=None)
+        if main_route_table:
+            route_tables.add(main_route_table)
+
+        route_tables.update(
+            rt for index in range(self.SCT_SUBNET_PER_AZ) if (rt := self.sct_route_table(index=index))
+        )
+
+        LOGGER.debug("Discovered %d SCT route tables in %s", len(route_tables), self.region_name)
+        return list(route_tables)
 
     def create_sct_subnet_route_table(self, subnet_name: str, index: int = None):
         subnet_route_table = self.sct_route_table_name(index=index)
