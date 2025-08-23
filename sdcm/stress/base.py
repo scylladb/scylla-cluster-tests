@@ -17,6 +17,7 @@ import concurrent.futures
 from pathlib import Path
 from functools import cached_property
 import uuid
+from datetime import datetime
 
 from sdcm.cluster import BaseLoaderSet
 from sdcm.utils.common import generate_random_string
@@ -172,7 +173,8 @@ class DockerBasedStressThread:
     @staticmethod
     def _build_log_file_id(loader_idx, cpu_idx, keyspace_idx):
         keyspace_suffix = f"-k{keyspace_idx}" if keyspace_idx else ""
-        return f"l{loader_idx}-c{cpu_idx}{keyspace_suffix}-{uuid.uuid4()}"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"l{loader_idx}-c{cpu_idx}{keyspace_suffix}-{timestamp}-{uuid.uuid4()}"
 
 
 def format_stress_cmd_error(exc: Exception) -> str:

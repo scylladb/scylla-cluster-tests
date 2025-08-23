@@ -654,7 +654,8 @@ class RemoteCmdRunnerBase(CommandRunner):
             log_file: str | None = None,
             retry: int = 1,
             watchers: List[StreamWatcher] | None = None,
-            change_context: bool = False
+            change_context: bool = False,
+            timestamp_logs: bool = False
             ) -> Result:
         """
         Run command at the remote endpoint and return result
@@ -669,10 +670,14 @@ class RemoteCmdRunnerBase(CommandRunner):
         :param change_context: If True, next run will trigger reconnect on all threads.
           Needed for cases when environment context is changed by the command,
           for example group has been added to the user.
+        :param timestamp_logs: If True, log entries will be timestamped
         :return:
         """
 
-        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
+        if timestamp_logs:
+            watchers = self._setup_watchers_with_timestamps(verbose=verbose, log_file=log_file, additional_watchers=watchers)
+        else:
+            watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
         @retrying(**self._get_retry_params(retry))
         def _run():
