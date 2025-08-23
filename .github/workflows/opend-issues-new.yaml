@@ -16,7 +16,7 @@ jobs:
     if: github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'reopened')
     steps:
       - name: Move issue to ${{ env.new }}
-        uses: leonsteinhaeuser/project-beta-automations@v2.0.0
+        uses: leonsteinhaeuser/project-beta-automations@v2.2.1
         with:
           gh_token:  ${{ secrets.GITHUB_TOKEN }}
           organization: scylladb
