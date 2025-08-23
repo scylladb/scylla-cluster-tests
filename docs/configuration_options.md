@@ -2861,11 +2861,20 @@ options will be used for enable encryption at-rest for tables
 
 ## **kms_key_rotation_interval** / SCT_KMS_KEY_ROTATION_INTERVAL
 
-The time interval in minutes which gets waited before the KMS key rotation happens. Applied when the AWS KMS service is configured to be used.
+The time interval in minutes which gets waited before the KMS key rotation happens. Applied when the AWS KMS or GCP KMS service is configured to be used.
 
 **default:** N/A
 
 **type:** int
+
+
+## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
+
+Allows to disable KMS keys rotation. Applicable to GCP and Azure backends. In case of AWS backend its KMS keys will always be rotated as of now.
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **enterprise_disable_kms** / SCT_ENTERPRISE_DISABLE_KMS
