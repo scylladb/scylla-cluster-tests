@@ -28,6 +28,7 @@ from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
@@ -567,6 +568,59 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                     raise
 
 
+def cleanup_cluster_vpc_peering(api_client: ScyllaCloudAPIClient, account_id: str, cluster_id: int,
+                                cluster_name: str, config: dict) -> None:
+    try:
+        peers = api_client.get_vpc_peers(account_id=account_id, cluster_id=cluster_id)
+    except Exception as e:  # noqa: BLE001
+        if '041104' not in str(e):  # '041104' is the "The cluster does not have VPC peering enabled" Siren error code
+            LOGGER.error("Failed to cleanup VPC peering for cluster %s: %s", cluster_name, e)
+        return
+
+    xcloud_provider = config.get('xcloud_provider').lower()
+    region_name = config.cloud_provider_params.get('region')
+    for peer in peers:
+        peer_id = peer.get('id')
+        LOGGER.info("Deleting VPC peer %s for cluster %s", peer_id, cluster_name)
+
+        peer_details = api_client.get_vpc_peer_details(account_id=account_id, cluster_id=cluster_id, peer_id=peer_id)
+        cloud_vpc_cidr = api_client.get_cluster_details(
+            account_id=account_id, cluster_id=cluster_id, enriched=True)['dc']['cidrBlock']
+        peer_conn_id = peer_details.get('externalId')
+
+        if xcloud_provider == 'aws':
+            try:
+                _cleanup_aws_vpc_peering_configuration(region_name, cloud_vpc_cidr, peer_conn_id)
+            except Exception as e:  # noqa: BLE001
+                LOGGER.error("Failed to cleanup AWS VPC peering configuration for peer %s: %s", peer_id, e)
+        elif xcloud_provider == 'gce':
+            # TODO: implement GCE VPC peering cleanup
+            pass
+
+        api_client.delete_vpc_peer(account_id=account_id, cluster_id=cluster_id, peer_id=peer_id)
+        LOGGER.info("Deleted VPC peering %s for cluster %s", peer_id, cluster_name)
+
+
+def _cleanup_aws_vpc_peering_configuration(region_name: str, cloud_vpc_cidr: str, peer_conn_id: str) -> None:
+    aws_region = AwsRegion(region_name)
+    for index in [None, 0, 1]:
+        route_table = aws_region.sct_route_table(index=index)
+        if not route_table:
+            continue
+
+        for route in route_table.routes_attribute:
+            if (route.get('DestinationCidrBlock') == cloud_vpc_cidr and
+                    route.get('VpcPeeringConnectionId') == peer_conn_id):
+                try:
+                    LOGGER.info("Removing route: %s -> %s from route table %s",
+                                cloud_vpc_cidr, peer_conn_id, route_table.id)
+                    aws_region.client.delete_route(RouteTableId=route_table.id, DestinationCidrBlock=cloud_vpc_cidr)
+                    LOGGER.debug("Successfully removed route for %s", cloud_vpc_cidr)
+                except Exception as e:  # noqa: BLE001
+                    if 'InvalidRoute.NotFound' not in str(e):
+                        LOGGER.warning("Failed to remove route for %s: %s", cloud_vpc_cidr, e)
+
+
 def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = False) -> None:
     """Clean up Scylla Cloud resources based on tags"""
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
@@ -611,6 +665,7 @@ def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = F
 
         if not dry_run:
             try:
+                cleanup_cluster_vpc_peering(api_client, account_id, cluster_id, cluster_name, config)
                 api_client.delete_cluster(account_id=account_id, cluster_id=cluster_id, cluster_name=cluster_name)
 
                 argus_client = init_argus_client(tags_dict.get("TestId"))
