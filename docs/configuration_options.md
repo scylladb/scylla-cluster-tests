@@ -3676,3 +3676,88 @@ Replication factor for Scylla Cloud cluster (default: 3)
 **default:** N/A
 
 **type:** int
+<<<<<<< HEAD
+||||||| parent of 59762c0e8 (feature(scylla-cloud): VPC peering for Scylla cloud clusters)
+
+
+## **n_vs_nodes** / SCT_N_VS_NODES
+
+Number of vector store nodes (0 = VS is disabled)
+
+**default:** N/A
+
+**type:** int
+
+
+## **vs_port** / SCT_VS_PORT
+
+Vector Store API port
+
+**default:** 6080
+
+**type:** int
+
+
+## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+
+ScyllaDB connection port for Vector Store
+
+**default:** 9042
+
+**type:** int
+
+
+## **vs_threads** / SCT_VS_THREADS
+
+Vector indexing threads (default: number of CPU cores)
+
+**default:** 2
+
+**type:** int
+=======
+
+
+## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
+
+Dictionary of VPC peering parameters for private connectivity between<br>SCT infrastructure and Scylla Cloud. The following parameters are used:<br>enabled: bool - indicates whether VPC peering is to be used<br>cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)<br>cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
+## **n_vs_nodes** / SCT_N_VS_NODES
+
+Number of vector store nodes (0 = VS is disabled)
+
+**default:** N/A
+
+**type:** int
+
+
+## **vs_port** / SCT_VS_PORT
+
+Vector Store API port
+
+**default:** 6080
+
+**type:** int
+
+
+## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+
+ScyllaDB connection port for Vector Store
+
+**default:** 9042
+
+**type:** int
+
+
+## **vs_threads** / SCT_VS_THREADS
+
+Vector indexing threads (default: number of CPU cores)
+
+**default:** 2
+
+**type:** int
+>>>>>>> 59762c0e8 (feature(scylla-cloud): VPC peering for Scylla cloud clusters)
