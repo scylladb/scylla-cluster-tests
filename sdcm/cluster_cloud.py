@@ -19,6 +19,8 @@ from typing import Any
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.gce_region import GceRegion
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +33,10 @@ def format_ip_with_cidr(ip_str: str) -> str:
 
 class ScyllaCloudError(Exception):
     """Exception for Scylla Cloud related errors"""
+
+
+class VpcPeeringError(ScyllaCloudError):
+    """Exception for VPC peering related errors"""
 
 
 class CloudNode(cluster.BaseNode):
@@ -201,6 +207,10 @@ class CloudNode(cluster.BaseNode):
         return True
 
     @cached_property
+    def cql_address(self):
+        return self._private_ip if self.parent_cluster.vpc_peering_enabled else self._public_ip
+
+    @cached_property
     def raft(self):
         """Override BaseNode.raft property to return a dummy raft object for PoC purposes"""
         return SimpleNamespace(
@@ -222,9 +232,24 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self._api_client = cloud_api_client
         self._account_id = cloud_api_client.get_current_account_id()
+        self._cloud_provider = params.get('xcloud_provider').lower()
         self._cluster_id = None
         self._cluster_request_id = None
         self._allowed_ips = allowed_ips or []
+
+        self.vpc_peering_params = params.get('xcloud_vpc_peering')
+        self.vpc_peering_enabled = self.vpc_peering_params['enabled']
+        self.vpc_peering_id = None
+        self.vpc_peering_details = None
+        self._aws_region = None
+        self._gce_region = None
+
+        if self.vpc_peering_enabled:
+            region_name = params.cloud_provider_params.get('region')
+            if self._cloud_provider == 'aws':
+                self._aws_region = AwsRegion(region_name)
+            elif self._cloud_provider == 'gce':
+                self._gce_region = GceRegion(region_name)
 
         self._cluster_created = False
         self._pending_node_configs = []
@@ -250,6 +275,21 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
     def parallel_startup(self):
         # nodes provisioning and startup is managed by the Scylla Cloud itself
         return False
+
+    @cached_property
+    def provider_id(self) -> int:
+        cloud_provider_type = CloudProviderType.from_sct_backend(self._cloud_provider)
+        return self._api_client.cloud_provider_ids[cloud_provider_type]
+
+    @cached_property
+    def region_id(self) -> int:
+        region_name = self.params.cloud_provider_params.get('region')
+        return self._api_client.get_region_id_by_name(cloud_provider_id=self.provider_id, region_name=region_name)
+
+    @cached_property
+    def dc_id(self) -> int:
+        return self._api_client.get_cluster_details(
+            account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)['dc']['id']
 
     def _create_node(self, cloud_instance_data: dict[str, Any], node_index: int, dc_idx: int, rack: int) -> CloudNode:
         try:
@@ -301,6 +341,9 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
 
+        if self.vpc_peering_enabled:
+            self.setup_vpc_peering(self.dc_id)
+
         self._get_cluster_credentials()
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
@@ -336,30 +379,24 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         return created_nodes
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
-        cloud_provider_type = CloudProviderType.from_sct_backend(self.params.get('xcloud_provider'))
-
-        provider_id = self._api_client.cloud_provider_ids[cloud_provider_type]
-
-        region_name = self.params.cloud_provider_params.get('region')
-        region_id = self._api_client.get_region_id_by_name(
-            cloud_provider_id=provider_id, region_name=region_name)
-
         instance_type_name = instance_type or self.params.cloud_provider_params.get('instance_type_db')
         instance_id = self._api_client.get_instance_id_by_name(
-            cloud_provider_id=provider_id, region_id=region_id, instance_type_name=instance_type_name)
+            cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name)
 
         allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
         allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
+
+        broadcast_type = "PRIVATE" if self.vpc_peering_enabled else "PUBLIC"
 
         return {
             'account_id': self._account_id,
             'cluster_name': self.name,
             'scylla_version': self.params.get('scylla_version'),
             'cidr_block': None,
-            'broadcast_type': "PUBLIC",
+            'broadcast_type': broadcast_type,
             'allowed_ips': allowed_ips,
-            'cloud_provider_id': provider_id,
-            'region_id': region_id,
+            'cloud_provider_id': self.provider_id,
+            'region_id': self.region_id,
             'instance_id': instance_id,
             'replication_factor': self.params.get('xcloud_replication_factor'),
             'number_of_nodes': node_count,
@@ -402,6 +439,10 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
     def destroy(self):
         self.log.info("Destroying Scylla Cloud cluster %s", self.name)
+
+        if self.vpc_peering_enabled and self.vpc_peering_id:
+            self.cleanup_vpc_peering()
+
         if self._cluster_id:
             self._api_client.delete_cluster(
                 account_id=self._account_id, cluster_id=self._cluster_id, cluster_name=self.name)
@@ -502,3 +543,161 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
     def get_node_ips_param(self, public_ip=True):
         return 'xcloud_nodes_public_ip' if public_ip else 'xcloud_nodes_private_ip'
+
+    def setup_vpc_peering(self, dc_id: int) -> None:
+        """Set up VPC peering connection between SCT and Scylla Cloud VPC"""
+        if not self.vpc_peering_enabled:
+            return
+
+        self.log.info("Setting up Scylla Cloud VPC peering for cluster %s", self._cluster_id)
+        sct_vpc_info = self._get_sct_vpc_info()
+
+        if ipaddress.ip_network(sct_vpc_info['cidr']).overlaps(ipaddress.ip_network(self.cloud_cidr)):
+            raise VpcPeeringError(
+                f"SCT VPC CIDR {sct_vpc_info['cidr']} overlaps with Scylla Cloud VPC CIDR {self.cloud_cidr}")
+
+        self.vpc_peering_id = self._api_client.create_vpc_peer(
+            account_id=self._account_id,
+            cluster_id=self._cluster_id,
+            vpc_id=sct_vpc_info['vpc_id'],
+            cidr_block=sct_vpc_info['cidr'],
+            owner_id=sct_vpc_info['owner_id'],
+            region_id=self.region_id,
+            dc_id=dc_id,
+            allow_cql=True
+        ).get('id')
+        self.vpc_peering_details = self._api_client.get_vpc_peer_details(
+            account_id=self._account_id, cluster_id=self._cluster_id, peer_id=self.vpc_peering_id)
+
+        if self._cloud_provider == 'aws':
+            self.accept_aws_vpc_peering_connection()
+
+        self.configure_vpc_networking()
+
+    def _get_sct_vpc_info(self) -> dict[str, Any]:
+        """Get SCT infrastructure VPC information"""
+        if self._cloud_provider == 'aws':
+            return {
+                'vpc_id': self._aws_region.sct_vpc.vpc_id,
+                'cidr': str(self._aws_region.vpc_ipv4_cidr),
+                'owner_id': self._aws_region.sct_vpc.owner_id
+            }
+        if self._cloud_provider == 'gce':
+            return {
+                'vpc_id': self._gce_region.network.name,
+                'cidr': self._gce_region.region_subnet.ip_cidr_range,
+                'owner_id': self._gce_region.project
+            }
+        raise VpcPeeringError(f"Unsupported cloud provider for Scylla Cloud VPC peering: {self._cloud_provider}")
+
+    @cached_property
+    def cloud_cidr(self) -> str:
+        """Get actual Cloud CIDR from cluster details"""
+        return self._api_client.get_cluster_details(
+            account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)['dc']['cidrBlock']
+
+    def configure_vpc_networking(self) -> None:
+        """Configure routing tables for private connectivity"""
+        self.log.info("Configuring %s side VPC peering %s", self._cloud_provider.upper(), self.vpc_peering_id)
+        if self._cloud_provider == 'aws':
+            self.configure_aws_route_tables()
+        elif self._cloud_provider == 'gce':
+            self._gce_region.add_network_peering(
+                peering_name=self.gcp_peering_name,
+                peer_project=self.vpc_peering_details.get('projectId'),
+                peer_net=self.vpc_peering_details.get('networkName'),
+                wait_for_active=True)
+            if self._gce_region.get_peering_status(self.gcp_peering_name) != "ACTIVE":
+                raise VpcPeeringError(f"GCP network peering {self.gcp_peering_name} is not ACTIVE")
+        else:
+            raise VpcPeeringError(f"Unsupported provider: {self._cloud_provider}")
+        self.log.info("%s side VPC peering %s configuration completed",
+                      self._cloud_provider.upper(), self.vpc_peering_id)
+
+    def configure_aws_route_tables(self) -> None:
+        """Configure SCT* route tables to route traffic to Scylla Cloud VPC through peering connection"""
+        peering_id = self.vpc_peering_details.get('externalId')
+        for route_table in self._aws_region.sct_route_tables:
+            try:
+                self.log.debug("Adding route for %s via %s to route table %s",
+                               self.cloud_cidr, peering_id, route_table.id)
+                route_table.create_route(DestinationCidrBlock=self.cloud_cidr, VpcPeeringConnectionId=peering_id)
+            except Exception as e:  # noqa: BLE001
+                if 'RouteAlreadyExists' in str(e):
+                    self.log.debug("Route for %s already exists in route table %s", self.cloud_cidr, route_table.id)
+                else:
+                    raise VpcPeeringError(
+                        f"Failed to add route for {self.cloud_cidr} to route table {route_table.id}: {e}") from e
+
+    def cleanup_vpc_peering(self) -> None:
+        """Clean up VPC peering connection and local network configuration"""
+        if not self.vpc_peering_id:
+            return
+
+        self.log.info("Deleting Scylla Cloud VPC peering %s", self.vpc_peering_id)
+        try:
+            if self._cloud_provider == 'aws':
+                self.cleanup_aws_route_tables()
+            elif self._cloud_provider == 'gce':
+                cleanup_success = self._gce_region.cleanup_vpc_peering_connection(self.gcp_peering_name)
+                if not cleanup_success:
+                    self.log.error("Failed to clean up GCP side network peering for peering %s", self.vpc_peering_id)
+            self._api_client.delete_vpc_peer(
+                account_id=self._account_id, cluster_id=self._cluster_id, peer_id=self.vpc_peering_id)
+        except Exception as e:  # noqa: BLE001
+            self.log.error("Error during Scylla Cloud VPC peering cleanup: %s", e)
+        self.log.info("Scylla Cloud VPC peering %s cleanup completed", self.vpc_peering_id)
+
+    def cleanup_aws_route_tables(self) -> None:
+        """Remove SCT* route table entries for Scylla Cloud VPC CIDRs"""
+        peering_id = self.vpc_peering_details.get('externalId')
+        for route_table in self._aws_region.sct_route_tables:
+            routes = route_table.routes_attribute
+            for route in routes:
+                if (route.get('DestinationCidrBlock') == self.cloud_cidr and
+                        route.get('VpcPeeringConnectionId') == peering_id):
+                    try:
+                        self.log.debug("Removing route for %s from route table %s", self.cloud_cidr, route_table.id)
+                        self._aws_region.client.delete_route(
+                            RouteTableId=route_table.id, DestinationCidrBlock=self.cloud_cidr)
+                    except Exception as e:  # noqa: BLE001
+                        if 'InvalidRoute.NotFound' in str(e):
+                            self.log.debug(
+                                "Route for %s already removed from route table %s", self.cloud_cidr, route_table.id)
+                        else:
+                            self.log.warning(
+                                "Failed to remove route for %s from route table %s: %s", self.cloud_cidr, route_table.id, e)
+
+    def accept_aws_vpc_peering_connection(self) -> None:
+        """Accept the VPC peering connection on SCT/AWS side"""
+        peering_id = self.vpc_peering_details['externalId']
+        try:
+            self._aws_region.client.accept_vpc_peering_connection(VpcPeeringConnectionId=peering_id)
+
+            def check_peering_status():
+                try:
+                    connections = self._aws_region.client.describe_vpc_peering_connections(
+                        VpcPeeringConnectionIds=[peering_id]
+                    ).get('VpcPeeringConnections', [])
+                    if connections:
+                        status = connections[0]['Status']['Code']
+                        self.log.debug("AWS VPC peering connection %s status: %s", peering_id, status)
+                        return status == 'active'
+                    return False
+                except Exception as e:  # noqa: BLE001
+                    self.log.debug("Error checking AWS VPC peering status: %s", e)
+                    return False
+
+            wait.wait_for(
+                func=check_peering_status,
+                step=10,
+                text=f"Waiting for AWS VPC peering connection {peering_id} to become active",
+                timeout=180,
+                throw_exc=True)
+        except Exception as e:  # noqa: BLE001
+            raise VpcPeeringError(f"Failed to accept VPC peering connection {peering_id} on AWS side: {e}") from e
+        self.log.debug("VPC peering connection is accepted on AWS side")
+
+    @cached_property
+    def gcp_peering_name(self) -> str:
+        return f"sct-to-scylla-cloud-{self.vpc_peering_details.get('projectId')}-{self.vpc_peering_id}"
