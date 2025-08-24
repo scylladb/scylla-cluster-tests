@@ -13,7 +13,13 @@ jobs:
       - run: |
           mkdir -p issues
           mkdir -p issues/pull-requests
+<<<<<<< HEAD
           for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java ; do
+||||||| parent of 7cb1f0a71 (fix(skip issue): get issue from scylla-drivers repo)
+          for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java siren ; do
+=======
+          for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java siren scylla-drivers ; do
+>>>>>>> 7cb1f0a71 (fix(skip issue): get issue from scylla-drivers repo)
             gh issue list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/scylladb_$repo.csv
             gh pr list --state all --json number,state,labels,title --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}},{{.title}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/pull-requests/scylladb_$repo.csv
           done
