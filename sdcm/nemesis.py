@@ -1851,6 +1851,10 @@ class Nemesis(NemesisFlags):
         with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48), \
                 self.action_log_scope("Start nodetool repair", target=node.name):
             node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+        if is_tablets_feature_enabled(self.target_node):
+            with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 3), \
+                    self.action_log_scope("Start nodetool cluster repair", target=node.name):
+                node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
 
     def run_repair_on_nodes(self, nodes: list,  ignore_down_hosts=False, publish_event=True):
         """
@@ -1858,6 +1862,15 @@ class Nemesis(NemesisFlags):
         arise from failed or unavailable nodes during the process.
         """
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
+            # For cluster repair, we need any node
+            first_node = nodes[0]
+            if is_tablets_feature_enabled(first_node):
+                try:
+                    with adaptive_timeout(Operations.REPAIR, first_node, timeout=HOUR_IN_SEC * 3), \
+                            self.action_log_scope("Start nodetool cluster repair", target=first_node.name):
+                        first_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
+                except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
+                    self.log.warning(f"Cluster repair failed to complete on node: {first_node}, with error: {str(err)}")
             for node in nodes:
                 try:
                     with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 3):
