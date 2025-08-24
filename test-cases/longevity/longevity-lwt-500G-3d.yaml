@@ -28,6 +28,5 @@ space_node_threshold: 64424
 
 user_prefix: 'longevity-lwt-500G-3d'
 # Set tombstone_gc to 'repair' + a propagation_delay_in_seconds of 5 minutes for the tombstone-gc-verification table:
-# Disabled due to https://github.com/scylladb/scylladb/issues/23743
-# post_prepare_cql_cmds: "ALTER TABLE cqlstress_lwt_example.blogposts with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
-# run_tombstone_gc_verification: '{"ks_cf": "cqlstress_lwt_example.blogposts", "interval": 300, "propagation_delay_in_seconds": 300}' # 'ks.cf, interval(sec), propagation_delay_in_seconds(sec)'
+post_prepare_cql_cmds: "ALTER TABLE cqlstress_lwt_example.blogposts with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
+run_tombstone_gc_verification: '{"ks_cf": "cqlstress_lwt_example.blogposts", "interval": 300, "propagation_delay_in_seconds": 300}' # 'ks.cf, interval(sec), propagation_delay_in_seconds(sec)'
