@@ -1189,14 +1189,19 @@ cli.add_command(investigate)
 @cli.command('unit-tests', help="Run all the SCT internal unit-tests")
 @click.option("-t", "--test", required=False, default=[""], multiple=True,
               help="Run specific test file from unit-tests directory")
-def unit_tests(test):
-    sys.exit(pytest.main(['-v', '-m', 'not integration', *(f'unit_tests/{t}' for t in test)]))
+@click.option("-n", required=False, default=2,
+              help="Sets number of parallel tests to run, default is 2")
+def unit_tests(test, n):
+    sys.exit(pytest.main(['-v', '-m', 'not integration',
+             f'-n{n}', *(f'unit_tests/{t}' for t in test)]))
 
 
 @cli.command('integration-tests', help="Run all the SCT internal integration-tests")
 @click.option("-t", "--test", required=False, default=[""], multiple=True,
               help="Run specific test file from unit-tests directory")
-def integration_tests(test):
+@click.option("-n", required=False, default=4,
+              help="Sets number of parallel tests to run, default is 4")
+def integration_tests(test, n):
     get_test_config().logdir()
     add_file_logger()
 
@@ -1212,7 +1217,8 @@ def integration_tests(test):
         )
         local_cluster.setup_prerequisites()
 
-    sys.exit(pytest.main(['-v', '-m', 'integration', *(f'unit_tests/{t}' for t in test)]))
+    sys.exit(pytest.main(['-v', '-m', 'integration',
+             f'-n{n}', *(f'unit_tests/{t}' for t in test)]))
 
 
 @cli.command('pre-commit', help="Run pre-commit checkers")
