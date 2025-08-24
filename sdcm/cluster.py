@@ -3223,7 +3223,7 @@ class BaseNode(AutoSshContainerMixin):
         try:
             self.remoter.run(
                 f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
-                ignore_status=True, verbose=False, retry=0, timeout=10)
+                ignore_status=True, verbose=False, retry=0, timeout=10, suppress_errors=True)
         except Exception:  # noqa: BLE001
             pass
 
