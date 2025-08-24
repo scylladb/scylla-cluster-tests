@@ -235,6 +235,12 @@ class UserRemoteCredentials():
         pass
 
 
+@dataclass
+class TokenRingMember:
+    host_id: str
+    ip_address: str
+
+
 class BaseNode(AutoSshContainerMixin):
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
@@ -3177,7 +3183,7 @@ class BaseNode(AutoSshContainerMixin):
         self.remoter.run(f"sudo kill -s SIGHUP {pid}")
 
     @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
-    def get_token_ring_members(self) -> list[dict[str, str]]:
+    def get_token_ring_members(self) -> list[TokenRingMember]:
         self.log.debug("Get token ring members")
         token_ring_members = []
         token_ring_members_cmd = build_node_api_command('/storage_service/host_id')
@@ -3191,7 +3197,7 @@ class BaseNode(AutoSshContainerMixin):
             return []
 
         for member in result_json:
-            token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
+            token_ring_members.append(TokenRingMember(host_id=member.get("value"), ip_address=member.get("key")))
         return token_ring_members
 
     @retrying(n=360, sleep_time=10, allowed_exceptions=NodeNotReady, message="Waiting for native_transport")
