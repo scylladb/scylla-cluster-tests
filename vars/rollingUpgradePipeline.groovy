@@ -6,7 +6,7 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
+    def builder = getJenkinsLabels(pipelineParams.get('backend', 'aws'), pipelineParams.get('region'), pipelineParams.get('gce_datacenter'), pipelineParams.get('azure_region_name'))
 
     pipeline {
         agent none
