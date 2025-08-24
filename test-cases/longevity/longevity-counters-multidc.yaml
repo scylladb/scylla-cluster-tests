@@ -8,6 +8,10 @@ availability_zone: 'a,b,c'
 n_db_nodes: '3 3 3'
 n_loaders:  '1 1 1'
 
+rack_aware_loader: true
+region_aware_loader: true
+simulated_racks: 0
+
 instance_type_db: 'i4i.2xlarge'
 
 user_prefix: longevity-counters-multidc
