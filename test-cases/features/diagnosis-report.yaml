@@ -1,0 +1,21 @@
+test_duration: 30
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1625000"]
+
+stress_cmd: ["cassandra-stress mixed no-warmup cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1625000"]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+simulated_racks: 3
+
+instance_type_db: 'i4i.large'
+user_prefix: 'longevity-per-table-hints-1h'
+prepare_stress_duration: 3
+
+append_scylla_yaml:
+  enable_tablets: true
+  auto_snapshot: false
+
+teardown_validators:
+  diagnosis_report:
+    enabled: true
