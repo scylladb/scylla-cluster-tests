@@ -221,6 +221,7 @@ class NemesisFlags:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
     sla: bool = False               # flag that signal that nemesis is used for SLA tests
+    full_cluster_restart: bool = False  # A flag denotes a nemesis that restarts the whole cluster.
 
 
 class Nemesis(NemesisFlags):
@@ -1130,7 +1131,7 @@ class Nemesis(NemesisFlags):
         # it should be up and with scylla executable available
         verification_node = random.choice([
             node for node in self.cluster.nodes
-            if node not in (new_node, self.target_node) and not node.running_nemesis])
+            if node not in (new_node, self.target_node) and not node.running_nemesis and not node.is_protected])
 
         if verification_node.is_replacement_by_host_id_supported:
             new_node.replacement_host_id = host_id
@@ -5075,7 +5076,7 @@ class Nemesis(NemesisFlags):
                 raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
         unsupported_primary_key_columns = ['duration', 'counter']
-        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis and not node.is_protected]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
         cql_query_executor_node = random.choice(free_nodes)
@@ -5341,6 +5342,9 @@ class Nemesis(NemesisFlags):
             if coordinator_node != self.target_node and coordinator_node.running_nemesis:
                 raise UnsupportedNemesis(
                     f"Coordinator node is busy with {coordinator_node.running_nemesis}, Coordinator node was restarted: {num_of_restart}")
+            elif coordinator_node.is_protected:
+                raise UnsupportedNemesis(
+                    f"Coordinator node {coordinator_node.name} is protected, Coordinator node was restarted: {num_of_restart}")
             elif coordinator_node != self.target_node:
                 self.switch_target_node(coordinator_node)
             self.log.debug("Coordinator node: %s, %s", coordinator_node, coordinator_node.name)
@@ -5782,6 +5786,7 @@ class StopStartMonkey(Nemesis):
 class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(Nemesis):
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation()
@@ -5790,6 +5795,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(Nemesis):
 class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(Nemesis):
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation()
@@ -5798,6 +5804,7 @@ class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(Nemesis):
 class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+    full_cluster_restart = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -6211,6 +6218,7 @@ class MgmtRestore(Nemesis):
     kubernetes = True
     limited = True
     supports_high_disk_utilization = False  # Snapshot/Restore operations consume disk space
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_mgmt_restore()
@@ -6398,6 +6406,7 @@ class NodeRestartWithResharding(Nemesis):
 class ClusterRollingRestart(Nemesis):
     disruptive = True
     kubernetes = True
+    full_cluster_restart = True
     free_tier_set = True
 
     def disrupt(self):
@@ -6417,6 +6426,7 @@ class ClusterRollingRestartRandomOrder(Nemesis):
     disruptive = True
     kubernetes = True
     free_tier_set = True
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_rolling_restart_cluster(random_order=True)
@@ -6425,6 +6435,7 @@ class ClusterRollingRestartRandomOrder(Nemesis):
 class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
     disruptive = True  # the nemesis has rolling restart
     config_changes = True
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back()
@@ -6766,6 +6777,7 @@ class ToggleAuditNemesisSyslog(Nemesis):
     schema_changes = True
     config_changes = True
     free_tier_set = True
+    full_cluster_restart = True
 
     def disrupt(self):
         self.disrupt_toggle_audit_syslog()

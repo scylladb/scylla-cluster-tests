@@ -6,6 +6,7 @@ class Dashboard:
     path: str
     title: str
     resolution: tuple[int]
+    panel_title: str = None
 
 
 class OverviewDashboard(Dashboard):
@@ -29,4 +30,12 @@ class AlternatorDashboard(Dashboard):
     name = 'alternator'
     title = 'Alternator'
     path = 'd/alternator-{version}/{dashboard_name}'
+    resolution = (1920, 4000)
+
+
+class DetailedLsaTotalMemory(Dashboard):
+    name = 'detailed'
+    path = 'd/overview-{version}/{dashboard_name}'
+    title = 'Detailed'
+    panel_title = "LSA total memory"
     resolution = (1920, 4000)
