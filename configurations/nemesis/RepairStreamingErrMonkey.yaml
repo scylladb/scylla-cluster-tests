@@ -1,2 +1,3 @@
-nemesis_class_name: 'RepairStreamingErrMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'RepairStreamingErrMonkey'
 user_prefix: 'longevity-5gb-1h-RepairStreamingErrMonkey'
