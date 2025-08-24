@@ -347,7 +347,7 @@ class Client:
             self.keepalive_thread.start()
 
     def _auth(self):
-        if self.pkey is not None:
+        if self.pkey:
             self._pkey_auth()
             return
         if self.allow_agent:
@@ -357,7 +357,22 @@ class Client:
                 return
             except Exception:  # noqa: BLE001
                 pass
-        self._password_auth()
+        if self.password:
+            self._password_auth()
+            return
+        # If no pkey, no agent, and no password, try none auth
+        self._none_auth()
+
+    def _none_auth(self):
+        try:
+            output = self.session.eagain(
+                self.session.userauth_list,
+                args=(self.user,),
+                timeout=self.timings.auth_timeout
+            )
+            print(output)
+        except Exception as error:
+            raise AuthenticationException("None authentication failed") from error
 
     def _pkey_auth(self):
         self.session.eagain(
