@@ -3678,6 +3678,15 @@ Replication factor for Scylla Cloud cluster (default: 3)
 **type:** int
 
 
+## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
+
+VPC peering settings for private connectivity between SCT infrastructure and Scylla Cloud
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
 ## **n_vs_nodes** / SCT_N_VS_NODES
 
 Number of vector store nodes (0 = VS is disabled)
