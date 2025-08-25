@@ -293,6 +293,7 @@ class LatteStressThread(DockerBasedStressThread):
                     timeout=self.timeout + self.shutdown_timeout,
                     log_file=log_file_name,
                     retry=0,
+                    timestamp_logs=True,
                 )
                 result = self.parse_final_output(result)
             except Exception as exc:  # noqa: BLE001
