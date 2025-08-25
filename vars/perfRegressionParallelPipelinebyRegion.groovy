@@ -189,6 +189,8 @@ def call(Map pipelineParams) {
                                  def sub_tests = []
                                  def region = null
                                  def image_name_for_job = null
+                                 def rolling_upgrade_test = null
+                                 def microbenchmark = null
                                  if (scylla_version == "master" && !image_name){
                                     region = entry.region ?: 'us-east-1'
                                     def output = sh(script: "./docker/env/hydra.sh list-images -c ${cloud_provider} -r ${region} -o text", returnStdout: true).trim()
@@ -204,7 +206,6 @@ def call(Map pipelineParams) {
                                  }
 
                                 if (entry.job_name == job_name) {
-                                    println("job_name: ${entry.job_name}, sub_tests: ${entry.sub_tests}")
                                     for (def ver in entry.versions) {
                                         if (scylla_version?.trim() == ver || scylla_version?.trim().startsWith(ver + ".")) {
                                             version = params.scylla_version
@@ -217,11 +218,12 @@ def call(Map pipelineParams) {
                                         region = entry.region
                                         sub_tests = entry.sub_tests
                                         println("Found for job $job_name: region : $region, version: $version, sub_tests: $sub_tests")
-                                        break
+                                    } else {
+                                        continue
                                     }
                                     rolling_upgrade_test = entry.rolling_upgrade_test
                                     microbenchmark = entry.microbenchmark
-                                    if (rolling_upgrade_test || entry.microbenchmark) {
+                                    if (rolling_upgrade_test || microbenchmark) {
                                         image_name_for_job = null
                                     } else {
                                         image_name_for_job = image_name
