@@ -21,7 +21,8 @@ from sdcm.cluster import BaseNode
 from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.utils.common import ParallelObject, skip_optional_stage
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.parallel_object import ParallelObject
 from test_lib.compaction import CompactionStrategy, LOGGER
 
 KEYSPACE_NAME = 'keyspace1'
@@ -88,7 +89,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         self.log.info("Space amplification results after a write of: %s are: %s",
                       written_data_size_gb, dict_nodes_space_amplification)
         InfoEvent(message=f"Space amplification results after a write of: {written_data_size_gb} are: "
-                          f"{dict_nodes_space_amplification}").publish()
+                  f"{dict_nodes_space_amplification}").publish()
 
     def _get_nodes_used_capacity(self) -> dict:
         """
@@ -184,7 +185,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_capacity_before_overwrite_data = self._get_nodes_used_capacity()
             InfoEvent(
                 message=f"Nodes used capacity before start overwriting data:"
-                        f" {dict_nodes_capacity_before_overwrite_data}").publish()
+                f" {dict_nodes_capacity_before_overwrite_data}").publish()
             for node, capacity in dict_nodes_capacity_before_overwrite_data.items():
                 if capacity > nodes_original_capacity_with_delta[node]:
                     TestFrameworkEvent(source=self.__class__.__name__,
@@ -216,6 +217,6 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_capacity_after_overwrite_data = self._get_nodes_used_capacity()
             InfoEvent(
                 message=f"Nodes used capacity before start overwriting data:"
-                        f" {dict_nodes_capacity_after_overwrite_data}").publish()
+                f" {dict_nodes_capacity_after_overwrite_data}").publish()
 
         InfoEvent(message="Space-amplification-goal testing cycles are done.").publish()

@@ -17,7 +17,7 @@ import copy
 import logging
 import time
 
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.tester import silence
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes
 

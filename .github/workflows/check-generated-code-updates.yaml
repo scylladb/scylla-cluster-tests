@@ -17,7 +17,7 @@ jobs:
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
-          username: ${{ github.actor }}
+          username: ${{ github.event.pull_request.user.login }}
           team: ${{ secrets.SCT_ACTION_GITHUB_TEAM }}
 
   run_validations:
@@ -29,7 +29,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.head_ref }}

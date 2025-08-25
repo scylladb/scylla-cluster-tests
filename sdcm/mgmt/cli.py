@@ -1328,7 +1328,8 @@ class SCTool:
         if column_name and column_name.upper() not in column_titles:
             raise ScyllaManagerError("Column name: {} not found in table: {}".format(column_name, parsed_table))
         column_name_index = column_titles.index(
-            column_name.upper()) if column_name else 1  # "1" is used in a case like "task progress" where no column names exist.
+            # "1" is used in a case like "task progress" where no column names exist.
+            column_name.upper()) if column_name else 1
         ret_val = 'N/A'
         for row in parsed_table:
             if is_search_substring:

@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 import shutil
+import configparser
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -47,6 +48,7 @@ from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -59,6 +61,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.cluster_cloud import ScyllaCloudCluster
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
@@ -68,7 +71,9 @@ from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.provision.helpers.certificate import create_ca, update_certificate, cleanup_ssl_config
+from sdcm.provision.helpers.certificate import (
+    create_ca, update_certificate, cleanup_ssl_config, CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE, CA_CERT_FILE, SCYLLA_SSL_CONF_DIR)
 from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
@@ -86,8 +91,9 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_servi
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, change_default_password, \
+    make_threads_be_daemonic_by_default, change_default_password, \
     parse_python_thread_command, get_data_dir_path
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
@@ -104,7 +110,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerfo
     LatencyDuringOperationsPerformanceAnalyzer
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
-from sdcm.sct_events.setup import start_events_device, stop_events_device, enable_default_filters
+from sdcm.sct_events.setup import enable_teardown_filters, start_events_device, stop_events_device, enable_default_filters
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
@@ -165,8 +171,6 @@ except ImportError as import_exc:
     cluster_cloud = None
     CLUSTER_CLOUD_IMPORT_ERROR = str(import_exc)
 
-configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig().logdir()})
-
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
 
@@ -207,6 +211,23 @@ def teardown_on_exception(method):
             raise
 
     return wrapper
+
+
+def update_cqlshrc(cqlshrc_file: str) -> None:
+    """Update cqlshrc file according to SSL configuration of the test"""
+    config = configparser.ConfigParser()
+    config.read(cqlshrc_file)
+
+    config.setdefault('connection', {})['ssl'] = 'true'
+    config.setdefault('ssl', {})
+    config['ssl'] = {
+        'validate': 'true',
+        'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
+        'userkey': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}',
+        'usercert': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}'
+    }
+    with open(cqlshrc_file, 'w', encoding='utf-8') as file:
+        config.write(file)
 
 
 class silence:
@@ -356,7 +377,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.test_config.argus_client().set_sct_runner(
                 public_ip=get_sct_runner_ip(),
                 private_ip=get_my_ip(),
-                region="undefined_region",
+                region="N/A",
                 backend=self.params.get("cluster_backend"))
             self.log.info("sct_runner info in Argus TestRun is updated")
         except ArgusClientError:
@@ -770,6 +791,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     @property
     def rack_names_per_datacenter_and_rack_idx_map(self):
+        if self.db_cluster is None:
+            return None
         if ready_nodes := [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]:
             return self.db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=ready_nodes)
         return None
@@ -927,7 +950,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_perf_results')
         self.scylla_dir = SCYLLA_DIR
-        self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = None
@@ -982,6 +1004,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if (not self.params.get("cluster_backend").startswith("k8s") and
                 any([self.params.get('client_encrypt'), self.params.get('server_encrypt')])):
             create_ca(self.localhost)
+            if self.params.get('client_encrypt'):
+                cqlshrc_file = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
+                update_cqlshrc(cqlshrc_file)
 
         # download rpms for update_db_packages
         if self.params.get('update_db_packages'):
@@ -1023,6 +1048,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                             # TODO: Replace with strong password generation
                 else:
                     self.set_system_auth_rf(db_cluster=db_cluster)
+
+                if hasattr(db_cluster, 'vector_store_cluster') and db_cluster.vector_store_cluster:
+                    db_cluster.vector_store_cluster.configure_with_scylla_cluster(db_cluster)
+                    db_cluster.vector_store_cluster.wait_for_init()
 
         def _create_loaders():
             if self.loaders and not self.loaders_multitenant:
@@ -1116,7 +1145,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         db_cluster = db_cluster or self.db_cluster
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
-        if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") == "baremetal":
+        if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") in ("baremetal", "xcloud"):
             # TODO: move this skip to siren-tools when possible
             self.log.warning("Skipping this function due this job run from Siren cloud!")
             return
@@ -1597,6 +1626,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
                                                              **container_node_params, **common_params)
+
+        if self.params.get('n_vs_nodes') > 0:
+            self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
+                params=self.params,
+                vs_docker_image=self.params.get('vs_docker_image'),
+                vs_docker_image_tag=self.params.get('vs_version'),
+                cluster_prefix=self.params.get('user_prefix'),
+                n_nodes=self.params.get('n_vs_nodes'),
+                node_key_file=self.credentials[0].key_file)
+
         self.loaders = cluster_docker.LoaderSetDocker(n_nodes=self.params.get("n_loaders"),
                                                       **container_node_params, **common_params)
         self.monitors = cluster_docker.MonitorSetDocker(n_nodes=self.params.get("n_monitor_nodes"),
@@ -1952,6 +1991,117 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
+    def get_cluster_cloud(self, loader_info, db_info):
+        cloud_api_client = ScyllaCloudAPIClient(
+            api_url=self.params.cloud_env_credentials['base_url'],
+            auth_token=self.params.cloud_env_credentials['api_token'],
+            raise_for_status=True)
+
+        user_prefix = self.params.get('user_prefix')
+
+        if db_info['n_nodes'] is None:
+            n_db_nodes = self.params.get('n_db_nodes')
+            if isinstance(n_db_nodes, int):
+                db_info['n_nodes'] = [n_db_nodes]
+            elif isinstance(n_db_nodes, str):
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
+
+        if loader_info['n_nodes'] is None:
+            n_loader_nodes = self.params.get('n_loaders')
+            if isinstance(n_loader_nodes, int):
+                loader_info['n_nodes'] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):
+                loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
+
+        # create loaders first as their IPs should be allowed in Scylla Cloud cluster
+        cloud_provider = self.params.get('xcloud_provider').lower()
+
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.cloud_provider_params.get('instance_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.cloud_provider_params.get('root_disk_size_loader')
+
+        self.log.info("Creating LoaderSet for Scylla Cloud cluster on '%s' cloud provider", cloud_provider)
+        if cloud_provider == 'aws':
+            regions = [self.params.cloud_provider_params.get('region'), ]
+            services = get_ec2_services(regions)
+
+            user_credentials = self.params.get('user_credentials_path')
+            for _ in regions:
+                self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+            common_params = get_common_params(
+                params=self.params, regions=regions, credentials=self.credentials, services=services)
+
+            if loader_info['device_mappings'] is None:
+                if loader_info['disk_size']:
+                    loader_info['device_mappings'] = [{
+                        "DeviceName": ec2_ami_get_root_device_name(
+                            image_id=self.params.get('ami_id_loader').split()[0], region_name=regions[0]),
+                        "Ebs": {
+                            "VolumeType": 'gp3',
+                            "VolumeSize": int(loader_info['disk_size']),
+                        }
+                    }]
+                else:
+                    loader_info['device_mappings'] = []
+
+            self.loaders = LoaderSetAWS(
+                ec2_ami_id=self.params.get('ami_id_loader').split(),
+                ec2_ami_username=self.params.get('ami_loader_user'),
+                ec2_instance_type=loader_info['type'],
+                ec2_block_device_mappings=loader_info['device_mappings'],
+                n_nodes=loader_info['n_nodes'],
+                **common_params)
+        elif cloud_provider == 'gce':
+            gce_datacenter = self.params.cloud_provider_params.get('region')
+            loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
+
+            user_credentials = self.params.get('user_credentials_path')
+            self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
+
+            if loader_info['disk_type'] is None:
+                loader_info['disk_type'] = self.params.cloud_provider_params.get('root_disk_type_loader')
+
+            self.loaders = LoaderSetGCE(
+                gce_image=self.params.get('gce_image_loader'),
+                gce_image_type=loader_info.get('disk_type'),
+                gce_image_size=loader_info.get('disk_size'),
+                gce_n_local_ssd=loader_info.get('n_local_ssd'),
+                gce_instance_type=loader_info['type'],
+                gce_network=self.params.get('gce_network'),
+                gce_service=get_gce_compute_instances_client(),
+                gce_image_username=self.params.get('gce_image_username'),
+                credentials=self.credentials,
+                user_prefix=user_prefix,
+                n_nodes=loader_info['n_nodes'],
+                add_disks=loader_additional_disks,
+                params=self.params,
+                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter])
+        else:
+            self.log.warning("Unsupported cloud provider '%s' for loaders, skipping loader provisioning", cloud_provider)
+            self.loaders = None
+
+        loader_ips = [
+            node.public_ip_address for node in self.loaders.nodes if node.public_ip_address
+        ] if self.loaders else []
+
+        self.log.info("Creating Scylla Cloud cluster with allowed IPs: client + %d loader nodes", len(loader_ips))
+        self.db_cluster = ScyllaCloudCluster(
+            cloud_api_client=cloud_api_client,
+            user_prefix=user_prefix,
+            n_nodes=db_info['n_nodes'][0],
+            params=self.params,
+            add_nodes=True,
+            allowed_ips=loader_ips)
+
+        # TODO: implement routing of monitoring data to SCT monitor instance
+        self.monitors = NoMonitorSet()
+
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
 
@@ -1991,6 +2141,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         elif cluster_backend == 'azure':
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
+        elif cluster_backend == 'xcloud':
+            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info)
 
         # NOTE: following starts processing of the monitoring inbound events which will be posted
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
@@ -2571,7 +2723,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         cl_clause = ', '.join(mv_clustering_key)
 
         query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
-                f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
+            f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
         if compression is not None:
             query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
         if read_repair is not None:
@@ -2849,12 +3001,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         if describecluster_output.ok:
             desc_stdout = describecluster_output.stdout
-            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
-            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
+            name_pattern = re.compile(r"((?<=Name: )[\w _-]*)")
+            snitch_pattern = re.compile(r"((?<=Snitch: )[\w.]*)")
             partitioner_pattern = re.compile(
-                "((?<=Partitioner: )[\w.]*)")
+                r"((?<=Partitioner: )[\w.]*)")
             schema_versions_pattern = re.compile(
-                "([a-z0-9-]{36}: \[[\d., ]*\])")
+                r"([a-z0-9-]{36}: \[[\d., ]*\])")
 
             name = name_pattern.search(desc_stdout).group()
             snitch = snitch_pattern.search(desc_stdout).group()
@@ -2936,6 +3088,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             for credential in self.credentials:
                 credential.destroy()
             self.credentials = []
+
+    @property
+    def left_processes_log(self):
+        return os.path.join(TestConfig().logdir(), 'left_processes.log')
 
     @silence()
     def show_alive_threads(self):
@@ -3036,6 +3192,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def tearDown(self):
         self.teardown_started = True
+        with silence(parent=self, name='Enabling teardown filters'):
+            enable_teardown_filters()
         with silence(parent=self, name='Sending test end event'):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
@@ -3076,22 +3234,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 
-        self.argus_finalize_test_run()
         try:
             ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
         except Exception:  # noqa: BLE001
             pass
-        self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
-        self._check_alive_routines_and_report_them()
-        self._check_if_db_log_time_consistency_looks_good()
-        self.log.debug("Threads and processes at the end of the test:")
-        for t in threading.enumerate():
-            self.log.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
+
+    @pytest.fixture(scope="session", autouse=True)
+    def configure_logging_fixture(self):
+        configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig().logdir()})
 
     @pytest.fixture(autouse=True, name='setup_logging')
-    def fixture_setup_logging(self):
+    def fixture_setup_logging(self, configure_logging_fixture):
         self._init_logging()
 
     @pytest.fixture(autouse=True, name='event_system')
@@ -3103,18 +3258,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         yield
         self.stop_event_device()
 
+    @pytest.fixture(autouse=True, name='threads_checks', scope='session')
+    def fixture_threads_checks(self):
+
+        yield
+
+        self._check_alive_routines_and_report_them()
+        self._check_if_db_log_time_consistency_looks_good()
+        logging.debug("Threads and processes at the end of the test:")
+        for t in threading.enumerate():
+            logging.debug(f"Active thread: {t.name} (id={t.ident}, daemon={t.daemon}, repr={repr(t)})")
+
     @silence()
     def _check_if_db_log_time_consistency_looks_good(self):
-        result = DbLogTimeConsistencyAnalyzer.analyze_dir(self.logdir)
+        result = DbLogTimeConsistencyAnalyzer.analyze_dir(TestConfig().logdir())
         looks_good = True
         for value in result['TOTAL'].values():
             if value > 0:
                 looks_good = False
                 break
         if looks_good:
-            self.log.info('DB logs time consistency is perfect')
+            logging.info('DB logs time consistency is perfect')
         else:
-            self.log.error(
+            logging.error(
                 'DB logs time consistency is NOT perfect, details:\n%s',
                 yaml.safe_dump(result, sort_keys=False)
             )
@@ -3123,7 +3289,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         threads_alive = self.show_alive_threads()
         processes_alive = self.show_alive_processes()
         if processes_alive or threads_alive:
-            self.log.error('Please check %s log to see them', self.left_processes_log)
+            logging.error('Please check %s log to see them', self.left_processes_log)
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
@@ -3164,7 +3330,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         pass
 
     @pytest.fixture(autouse=True)
-    def report_failures_as_event(self, request: pytest.FixtureRequest, validate):
+    def report_failures_as_event(self, request: pytest.FixtureRequest, event_system, validate, argus_finalize):
         yield
         if subtests_results := SUBTESTS_FAILURES.pop(request.node.nodeid, None):
             for report in subtests_results:
@@ -3183,6 +3349,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     exception=request.node.rep_call.longreprtext,
                     severity=Severity.ERROR,
                 ).publish_or_dump(default_logger=self.log)
+
+    @pytest.fixture(autouse=True, name="argus_finalize")
+    def fixture_argus_finalize(self):
+        """
+        Fixture to handle Argus cleanup operations after test completion.
+        """
+        yield
+        self.argus_finalize_test_run()
+        self.argus_heartbeat_stop_signal.set()
 
     @silence()
     def destroy_localhost(self):
@@ -3232,8 +3407,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
         stress_fixed_params = f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={replication_factor}) " \
-                              "compaction(strategy=LeveledCompactionStrategy)' " \
-                              "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
+            "compaction(strategy=LeveledCompactionStrategy)' " \
+            "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="
         population = " -pop seq="
 
@@ -3369,7 +3544,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
-                             f"current size is: '{used}'"
+            f"current size is: '{used}'"
 
     def check_latency_during_ops(self, hdr_tags: list[str]):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
@@ -3543,6 +3718,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.log.debug("resize_type all results: %s", results_set)
             assert results_set == {'none'} or not results_set, (
                 "Tablet splits or merges still in progress: %s" % results_set)
+
+        if not is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            self.log.debug("Tablets are not enabled, skipping wait for no tablets splits")
+            return
+
         _is_no_tablets_splits()
 
     def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
@@ -3809,7 +3989,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ''
             all_nodes_shards['live_nodes'].append({'name': node.name,
                                                    'ip': f"{node.public_ip_address} | {node.private_ip_address}"
-                                                         f"{f' | {ipv6}' if ipv6 else ''}",
+                                                   f"{f' | {ipv6}' if ipv6 else ''}",
                                                    'shards': node.scylla_shards})
 
         all_nodes_shards['dead_nodes'] = [asdict(node) for node in self.db_cluster.dead_nodes_list]
@@ -3847,6 +4027,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
             region_name = "N/A"
+        elif backend == "xcloud":
+            scylla_instance_type = self.params.get("cloud_instance_type_db") or "Unknown"
+            region_name = self.params.get("cloud_region")
         else:
             self.log.error("Don't know how to get instance type for the '%s' backend.", backend)
             scylla_instance_type = "N/A"
@@ -3929,6 +4112,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         for event_str in all_events["NORMAL"]:
             if "type=RackAwarePolicy" in event_str:
                 return True
+
+        # TODO: temporary workaround to test rack-aware policy with stress tool, different from cassandra-stress.
+        #  It is because tools like scylla-bench does not print info about RackAwarePolicy using, like cassandra-stress prints.
+        #  https://github.com/scylladb/scylla-bench/issues/198
+        if self.params.get("rack_aware_loader"):
+            return True
+
         return False
 
     @property

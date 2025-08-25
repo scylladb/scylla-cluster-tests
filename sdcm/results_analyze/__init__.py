@@ -1128,10 +1128,10 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         if ycsb:
             subject = f'{self._get_email_tags(doc, is_gce)} (Alternator) Performance Regression - {test_name} - {test_version} - ' \
-                      f'{str(test_start_time)}'
+                f'{str(test_start_time)}'
         else:
             subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name}' \
-                      f' - {test_version} - {str(test_start_time)}'
+                f' - {test_version} - {str(test_start_time)}'
 
         template = 'results_performance_baseline.html'
         email_data = {'email_body': results,

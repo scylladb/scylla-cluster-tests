@@ -17,7 +17,7 @@ a list of config files that would be used
 
 ## **cluster_backend** / SCT_CLUSTER_BACKEND
 
-backend that will be used, aws/gce/docker
+backend that will be used, aws/gce/azure/docker/xcloud
 
 **default:** N/A
 
@@ -325,7 +325,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml
 
-**default:** 3.5
+**default:** 3.6
 
 **type:** str
 
@@ -343,7 +343,7 @@ Branch of scylla manager server and agent to upgrade to. Options in defaults/man
 
 Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml
 
-**default:** 2024
+**default:** 2025
 
 **type:** str
 
@@ -352,7 +352,7 @@ Branch of scylla db enterprise to install. Options in defaults/manager_versions.
 
 
 
-**default:** 3.5.0
+**default:** 3.6.0
 
 **type:** str
 
@@ -665,7 +665,7 @@ If reuse_cluster is set it should hold test_id of the cluster that will be reuse
 
 ## **test_id** / SCT_TEST_ID
 
-test id to filter by
+Set the test_id of the run manually. Use only from the env before running Hydra
 
 **default:** N/A
 
@@ -2035,7 +2035,7 @@ Number of nodes in monitoring pool that will be used for scylla-operator's deplo
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
-**default:** scylladb/scylla-manager:3.5.0
+**default:** scylladb/scylla-manager:3.6.0
 
 **type:** str (appendable)
 
@@ -2054,6 +2054,24 @@ Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from 
 local docker network to use, if there's need to have db cluster connect to other services running in docker
 
 **default:** N/A
+
+**type:** str (appendable)
+
+
+## **vs_docker_image** / SCT_VS_DOCKER_IMAGE
+
+Vector Store docker image repo
+
+**default:** scylladb/vector-store
+
+**type:** str (appendable)
+
+
+## **vs_version** / SCT_VS_VERSION
+
+Vector Store version / docker image tag
+
+**default:** latest
 
 **type:** str (appendable)
 
@@ -2416,6 +2434,15 @@ Custom parameters of c-s write operation used in snapshots preparer
 **default:** {'cs_cmd_template': "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}", 'operation': 'write', 'cl': 'QUORUM', 'replication': 'NetworkTopologyStrategy', 'rf': 3, 'compaction': 'IncrementalCompactionStrategy', 'threads_num': 500, 'col_size': 1024, 'col_n': 1, 'ks_name': '', 'num_of_rows': '', 'sequence_start': '', 'sequence_end': ''}
 
 **type:** dict_or_str
+
+
+## **one_one_restore_cluster_bootstrap_duration** / SCT_ONE_ONE_RESTORE_CLUSTER_BOOTSTRAP_DURATION
+
+Time in seconds it took Siren to bootstrap 1-1-restore cluster
+
+**default:** N/A
+
+**type:** int
 
 
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
@@ -3417,6 +3444,15 @@ When enabled, loaders will look for nodes on the same rack.
 **type:** boolean
 
 
+## **capacity_errors_check_mode** / SCT_CAPACITY_ERRORS_CHECK_MODE
+
+how to check if to continue test execution when capacity errors are detected.<br>per-initial_config - check if cluster layout is same as initial configuration, if not stop test execution<br>disabled - continue test execution even if capacity errors are detected
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **use_dns_names** / SCT_USE_DNS_NAMES
 
 Use dns names instead of ip addresses for nodes in cluster
@@ -3604,3 +3640,75 @@ Store adaptive timeout metrics in Argus. Disabled for performance tests only.
 **default:** True
 
 **type:** boolean
+
+
+## **xcloud_credentials_path** / SCT_XCLOUD_CREDENTIALS_PATH
+
+Path to Scylla Cloud credentials file, if stored locally
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_env** / SCT_XCLOUD_ENV
+
+Scylla Cloud environment (e.g., lab).
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_provider** / SCT_XCLOUD_PROVIDER
+
+Cloud provider for Scylla Cloud deployment (aws, gce)
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
+
+Replication factor for Scylla Cloud cluster (default: 3)
+
+**default:** N/A
+
+**type:** int
+
+
+## **n_vs_nodes** / SCT_N_VS_NODES
+
+Number of vector store nodes (0 = VS is disabled)
+
+**default:** N/A
+
+**type:** int
+
+
+## **vs_port** / SCT_VS_PORT
+
+Vector Store API port
+
+**default:** 6080
+
+**type:** int
+
+
+## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+
+ScyllaDB connection port for Vector Store
+
+**default:** 9042
+
+**type:** int
+
+
+## **vs_threads** / SCT_VS_THREADS
+
+Vector indexing threads (default: number of CPU cores)
+
+**default:** 2
+
+**type:** int

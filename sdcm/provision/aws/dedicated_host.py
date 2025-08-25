@@ -24,7 +24,8 @@ import tenacity
 
 from sdcm.wait import exponential_retry
 from sdcm.utils.aws_utils import tags_as_ec2_tags
-from sdcm.utils.common import ParallelObject, all_aws_regions
+from sdcm.utils.common import all_aws_regions
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.test_config import TestConfig
 
 
@@ -205,16 +206,15 @@ class SCTDedicatedHosts:
     def release_by_tags(cls, tags_dict: dict, regions=None, dry_run=False) -> None:
         """Cancel all dedicated hosts with specific tags in AWS."""
 
-        tags_dict.pop('NodeType', None)
-
-        assert tags_dict, "tags_dict not provided (can't clean all hosts)"
+        local_tags_dict = {k: v for k, v in tags_dict.items() if k != "NodeType"}
+        assert local_tags_dict, "tags_dict not provided (can't clean all hosts)"
         if regions:
             aws_hosts = {}
             for region in regions:
                 aws_hosts |= cls.list_hosts(
-                    tags_dict=tags_dict, region_name=region, group_as_region=True)
+                    tags_dict=local_tags_dict, region_name=region, group_as_region=True)
         else:
-            aws_hosts = cls.list_hosts(tags_dict=tags_dict, group_as_region=True)
+            aws_hosts = cls.list_hosts(tags_dict=local_tags_dict, group_as_region=True)
 
         for region, hosts_list in aws_hosts.items():
             if not hosts_list:

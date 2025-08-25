@@ -26,7 +26,7 @@ from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.group_common_events import ignore_compaction_stopped_exceptions
 from sdcm.send_email import FunctionalEmailReporter
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps, COMPACTION_TYPES
 LOGGER = logging.getLogger(__name__)
 
@@ -342,7 +342,7 @@ class StopCompactionTest(ClusterTester):
                     found_grepped_expression = True
 
         self.assertTrue(found_grepped_expression, msg=f'Did not find the expected "{self.GREP_PATTERN}" '
-                                                      f'expression in the logs.')
+                        f'expression in the logs.')
 
     @record_sub_test_result
     def _stop_compaction_on_ks_cf_base_scenario(self,

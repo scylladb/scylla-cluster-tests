@@ -123,6 +123,9 @@ class KeyStore:
     def get_baremetal_config(self, config_name: str):
         return self.get_json(f"{config_name}.json")
 
+    def get_cloud_rest_credentials(self, environment: str = "lab"):
+        return self.get_json(f"scylla_cloud_sct_api_creds_{environment}.json")
+
     @staticmethod
     def calculate_s3_etag(file: BinaryIO, chunk_size=8 * 1024 * 1024):
         """Calculates the S3 custom e-tag (a specially formatted MD5 hash)"""

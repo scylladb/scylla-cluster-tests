@@ -8,8 +8,8 @@ ip_ssh_connections: 'private'
 
 scylla_repo: ''
 
-manager_version: '3.5'
-manager_scylla_backend_version: '2024'
+manager_version: '3.6'
+manager_scylla_backend_version: '2025'
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
 round_robin: false
@@ -112,7 +112,6 @@ authenticator_password: ''
 
 # gemini defaults
 n_test_oracle_db_nodes: 1
-gemini_seed: 0
 oracle_scylla_version: '2022.1.14'
 append_scylla_args_oracle: '--enable-cache false'
 
@@ -159,8 +158,8 @@ jepsen_test_count: 1
 jepsen_test_run_policy: all
 
 max_events_severities: ""
-scylla_mgmt_agent_version: '3.5.1'
-mgmt_docker_image: 'scylladb/scylla-manager:3.5.1'
+scylla_mgmt_agent_version: '3.6.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.6.0'
 k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'
@@ -312,3 +311,11 @@ mgmt_snapshots_preparer_params:
   sequence_end: ''
 
 adaptive_timeout_store_metrics: true
+
+# Vector Search defaults
+n_vs_nodes: 0
+vs_port: 6080
+vs_scylla_port: 9042
+vs_threads: 2
+vs_docker_image: 'scylladb/vector-store'
+vs_version: 'latest'

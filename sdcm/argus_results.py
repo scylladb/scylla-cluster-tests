@@ -102,10 +102,10 @@ class ReactorStallStatsResult(StaticGenericResultTable):
         ]
 
 
-class ManagerRestoreBanchmarkResult(StaticGenericResultTable):
+class ManagerRestoreBenchmarkResult(StaticGenericResultTable):
     class Meta:
-        name = "Restore benchmark"
-        description = "Restore benchmark"
+        name = "Regular L&S restore benchmark"
+        description = "Regular L&S restore benchmark"
         Columns = [
             ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="download bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
@@ -120,6 +120,17 @@ class ManagerRestoreBanchmarkResult(StaticGenericResultTable):
             "repair time": ValidationRule(best_pct=10),
             "total": ValidationRule(best_pct=10),
         }
+
+
+class ManagerOneOneRestoreBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "1-1 restore benchmark"
+        description = "1-1 restore benchmark"
+        Columns = [
+            ColumnMetadata(name="bootstrap time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION),
+        ]
 
 
 class ManagerBackupBenchmarkResult(StaticGenericResultTable):
@@ -365,12 +376,13 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
     submit_results_to_argus(argus_client, result_table)
 
 
-def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: dict, sut_timestamp: int,
+def send_manager_benchmark_results_to_argus(argus_client: ArgusClient,
+                                            result: dict,
+                                            result_table: StaticGenericResultTable,
                                             row_name: str = None) -> None:
     if not row_name:
         row_name = "#1"
 
-    result_table = ManagerRestoreBanchmarkResult(sut_timestamp=sut_timestamp)
     for key, value in result.items():
         result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)

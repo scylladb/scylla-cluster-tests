@@ -6,7 +6,7 @@ import concurrent.futures
 
 import pytest
 
-from sdcm.utils.common import ParallelObject, ParallelObjectException
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectException
 
 LOGGER = logging.getLogger(name=__name__)
 
@@ -57,7 +57,7 @@ def dummy_func_with_several_parameters(timeout, msg):
 
 class ParallelObjectTester(unittest.TestCase):
     max_timout = 3
-    rand_timeouts = random.sample(range(1, max_timout + 1), max_timout)
+    rand_timeouts = random.sample(range(2, max_timout + 2), max_timout)
     unpacking_args = [[t, f"test{i}"] for i, t in enumerate(rand_timeouts)]
     list_as_arg = [[[t, f"test{i}"]] for i, t in enumerate(rand_timeouts)]
     unpacking_kwargs = [{"timeout": t, "msg": f"test{i}"} for i, t in enumerate(rand_timeouts)]
@@ -80,7 +80,7 @@ class ParallelObjectTester(unittest.TestCase):
         test_timeout = min(self.rand_timeouts)
         start_time = time.time()
         with self.assertRaises(ParallelObjectException) as exp:
-            parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout,
+            parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout - 1,
                                              num_workers=len(self.rand_timeouts))
             parallel_object.run(dummy_func_return_tuple)
         assert any(isinstance(e.exc, concurrent.futures.TimeoutError) for e in exp.exception.results)

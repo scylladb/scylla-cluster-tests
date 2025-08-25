@@ -118,7 +118,7 @@ class ScyllaYaml(BaseModel):
     batch_size_warn_threshold_in_kb: int = None  # 5
     batch_size_fail_threshold_in_kb: int = None  # 50
     listen_on_broadcast_address: bool = None  # False
-    initial_token: int = None  # None
+    initial_token: int | str = None  # None
     num_tokens: int = None  # 1
     # 'org.apache.cassandra.dht.Murmur3Partitioner'
     partitioner: Literal['org.apache.cassandra.dht.Murmur3Partitioner'] = None
@@ -361,6 +361,8 @@ class ScyllaYaml(BaseModel):
     force_gossip_topology_changes: bool = None  # False
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
+
+    vector_store_uri: str = None
 
     def model_dump(
         self,

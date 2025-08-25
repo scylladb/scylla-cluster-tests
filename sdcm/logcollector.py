@@ -42,7 +42,6 @@ from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import (
     S3Storage,
-    ParallelObject,
     list_instances_aws,
     list_instances_gce,
     remove_files,
@@ -54,6 +53,7 @@ from sdcm.utils.common import (
     get_sct_root_path,
     normalize_ipv6_url, create_remote_storage_dir,
 )
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.context_managers import environment
 from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
@@ -1752,4 +1752,4 @@ def upload_archive_to_s3(archive_path: str, storing_path: str) -> Optional[str]:
     if not check_archive(LocalCmdRunner(), archive_path):
         LOGGER.error("File `%s' will not be uploaded", archive_path)
         return None
-    return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path)
+    return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path, public=False)

@@ -4,6 +4,8 @@ import time
 import tempfile
 from abc import abstractmethod
 
+import pytest
+
 from sdcm.cluster import BaseNode
 from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
 from unit_tests.lib.data_pickle import Pickler
@@ -84,6 +86,7 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
         return Pickler.save_to_file(filepath, self._localize_results())
 
 
+@pytest.mark.usefixtures("events")
 class CoredumpExportTestBase(unittest.TestCase):
     maxDiff = None
     test_data_folder: str = None

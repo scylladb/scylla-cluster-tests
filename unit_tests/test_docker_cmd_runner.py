@@ -15,6 +15,8 @@ class DummyNode:
 
 
 class TestWatcher(StreamWatcher):
+    __test__ = False
+
     def __init__(self):
         self.submissions = []
 

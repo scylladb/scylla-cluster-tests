@@ -24,7 +24,6 @@ from datetime import datetime
 from functools import cached_property
 from threading import Lock, Thread, Event as ThreadEvent
 from typing import TYPE_CHECKING
-from multiprocessing import Process, Event
 from textwrap import dedent
 
 import kubernetes as k8s
@@ -77,19 +76,19 @@ class SSHLoggerBase(LoggerBase):
     def __init__(self, node: BaseNode, target_log_file: str):
         super().__init__(target_log_file=target_log_file)
         self._node = node
-        self._termination_event = Event()
-        self._child_process = Process(target=self._journal_thread, daemon=True)
+        self._termination_event = ThreadEvent()
+        self._child_thread = ThreadPoolExecutor(max_workers=1)
+        self._thread = None
 
     def start(self) -> None:
         self._termination_event.clear()
-        self._child_process.start()
+        self._thread = self._child_thread.submit(self._journal_thread)
 
     def stop(self, timeout: float | None = None) -> None:
         self._termination_event.set()
-        self._child_process.terminate()
-        self._child_process.join(timeout=timeout)
-        if self._child_process.is_alive():
-            self._child_process.kill()
+        self._remoter.run(f"kill -9 -{self.remote_pid}", ignore_status=True)
+        if self._thread.running():
+            self._thread.cancel()
 
     @raise_event_on_failure
     def _journal_thread(self) -> None:
@@ -104,12 +103,29 @@ class SSHLoggerBase(LoggerBase):
     def _is_ready_to_retrieve(self) -> bool:
         return self._remoter.is_up()
 
+    @property
+    def remote_pid(self) -> str:
+        """
+        Returns the PID of the remote logger process.
+        This is used to ensure that the logger is running and to manage its lifecycle.
+        """
+        remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+        if not self._remoter.run(f"test -f {remote_pid_file}", ignore_status=True).ok:
+            return ""
+        return self._remoter.run(f"cat {remote_pid_file}").stdout.strip()
+
     def _retrieve(self, since: str) -> None:
         self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(
             log_file=self._target_log_file, since=since or "the beginning"))
         try:
+            # Write the remote PID to a file before running the logger command
+            remote_pid_file = f"/tmp/logger_{os.getpid()}.pid"
+            cmd = self._logger_cmd_template.format(since=f'--since "{since}" ' if since else '')
+            remote_cmd = (f"cat <<'EOF' > /tmp/logger_cmd_{os.getpid()}.sh\n{cmd}\nEOF\n"
+                          f"setsid bash /tmp/logger_cmd_{os.getpid()}.sh & echo $! > {remote_pid_file}; wait"
+                          )
             self._remoter.run(
-                cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
+                cmd=remote_cmd,
                 verbose=self.VERBOSE_RETRIEVE,
                 ignore_status=True,
                 log_file=self._target_log_file,
@@ -119,12 +135,7 @@ class SSHLoggerBase(LoggerBase):
 
     @cached_property
     def _remoter(self) -> RemoteCmdRunnerBase:
-        if self._node.is_docker():
-            # NOTE: K8S and docker backends use separate non-SSH remoters
-            #       where each new call is a separate process.
-            #       So, reuse the remoter class we already have defined in the node.
-            return self._node.remoter
-        return RemoteCmdRunnerBase.create_remoter(**self._node.remoter.get_init_arguments())
+        return self._node.remoter
 
     @property
     @abstractmethod
@@ -166,7 +177,7 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
-        return f"tail -f {self._remote_log_file}"
+        return f"tail -f {self._remote_log_file} -c +0"
 
     def validate_and_collect_hdr_file(self):
         """
@@ -302,7 +313,7 @@ class SSHGeneralFileLogger(SSHLoggerBase):
 
     @cached_property
     def _logger_cmd_template(self) -> str:
-        return f"sudo tail -f {self.REMOTE_LOG_PATH}"
+        return f"sudo tail -f {self.REMOTE_LOG_PATH} -c +0"
 
 
 class SSHScyllaFileLogger(SSHGeneralFileLogger):
@@ -510,7 +521,7 @@ class K8sClientLogger(LoggerBase):
             if isoparse(log_timestamp) >= isoparse(self._last_log_timestamp):
                 TestFrameworkEvent(source="K8sClientLogger",
                                    message=f"Failed to find last log timestamp in the log stream for {self._pod_name} after reconnection."
-                                           f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
+                                   f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
                                    severity=Severity.ERROR).publish()
                 return
 

@@ -33,7 +33,8 @@ from invoke import exceptions
 from argus.client.generic_result import Status
 from sdcm import mgmt
 from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus,
-                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult)
+                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult,
+                                ManagerRestoreBenchmarkResult, ManagerOneOneRestoreBenchmarkResult)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
@@ -531,7 +532,7 @@ class SnapshotPreparerOperations(ClusterTester):
             col_n=cs_cmd_params.get("col_n"),
             scylla_version=scylla_version,
         )
-        return ks_name
+        return ks_name.replace("~", "_")
 
     def calculate_rows_per_loader(self, overall_rows_num: int) -> int:
         """Calculate number of rows per loader thread based on the overall number of rows and the number of loaders."""
@@ -1704,10 +1705,11 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             results["download bandwidth"] = download_bw
         if load_and_stream_bw:
             results["l&s bandwidth"] = load_and_stream_bw
+        result_table = ManagerRestoreBenchmarkResult(sut_timestamp=manager_version_timestamp)
         send_manager_benchmark_results_to_argus(
             argus_client=self.test_config.argus_client(),
             result=results,
-            sut_timestamp=manager_version_timestamp,
+            result_table=result_table,
             row_name=dataset_label,
         )
 
@@ -1858,6 +1860,8 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
     In current shape, 1-1 restore is supposed to be used for Scylla Cloud clusters only.
     So, the test is not applicable for on-prem clusters used for regular Manager SCT tests.
     """
+    AWS_CLOUD_PROVIDER_ID = 1
+    GCP_CLOUD_PROVIDER_ID = 2
 
     def setUp(self):
         super().setUp()
@@ -1871,12 +1875,22 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
         self.db_cluster.unlock_ear_key(ignore_status=True)
         super().tearDown()
 
+    def _send_one_one_restore_results_to_argus(self, bootstrap_duration: int, restore_duration: int) -> None:
+        results = {
+            "bootstrap time": bootstrap_duration,
+            "restore time": restore_duration,
+            "total": bootstrap_duration + restore_duration,
+        }
+        result_table = ManagerOneOneRestoreBenchmarkResult()
+        send_manager_benchmark_results_to_argus(argus_client=self.test_config.argus_client(), result=results,
+                                                result_table=result_table)
+
     def _define_cloud_provider_id(self) -> int:
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend == "aws":
-            return 1
+            return self.AWS_CLOUD_PROVIDER_ID
         elif cluster_backend == "gce":
-            return 2
+            return self.GCP_CLOUD_PROVIDER_ID
         else:
             raise ValueError("Unsupported cloud provider")
 
@@ -1895,22 +1909,22 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
         mgr_cluster.delete_task(auto_backup_task)
 
         self.log.info("Run 1-1 restore")
-        # Siren cli requires locations to be sent in a format different from the one used in the Manager
-        # Thus, all locations should be reformatted from "AWS_US_EAST_1:s3:bucket_name" to "us-east-1:s3:bucket_name"
-        locations = []
-        for location in snapshot_data.locations:
-            dc_prefix = "-".join(location.split(":")[0].split("_")[1:]).lower()
-            locations.append(dc_prefix + ":" + location.split(":", 1)[1])
-
         with ExecutionTimer() as timer:
             self.db_cluster.run_one_to_one_restore(
                 sm_cluster_id=snapshot_data.one_one_restore_params["sm_cluster_id"],
-                buckets=",".join(locations),
+                buckets=",".join(snapshot_data.locations),
                 snapshot_tag=snapshot_data.tag,
                 account_credential_id=snapshot_data.one_one_restore_params["account_credential_id"],
                 provider_id=self._define_cloud_provider_id(),
             )
-        self.log.info(f"1-1 restore took {timer.duration} seconds")
+        restore_duration = int(timer.duration.total_seconds())
+        self.log.debug(f"1-1 restore took {restore_duration} seconds")
+
+        self.log.info("Report results to Argus")
+        self._send_one_one_restore_results_to_argus(
+            bootstrap_duration=int(self.params.get("one_one_restore_cluster_bootstrap_duration")),
+            restore_duration=restore_duration,
+        )
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")

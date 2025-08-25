@@ -17,7 +17,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
         steps:
         - name: Checkout repository
-          uses: actions/checkout@v4
+          uses: actions/checkout@v5
         - name: Setup Docker
           uses: douglascamata/setup-docker-macos-action@v1-alpha
         - name: Run Hydra

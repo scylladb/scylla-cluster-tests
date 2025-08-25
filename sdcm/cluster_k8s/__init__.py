@@ -1564,7 +1564,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         files = [fname for fname in os.listdir(path) if os.path.isfile(os.path.join(path, fname)) and
                  (not only_files or fname in only_files)]
         cmd = f'create secret {secret_type} {secret_name} ' + \
-              ' '.join([f'--from-file={fname}={os.path.join(path, fname)}' for fname in files])
+            ' '.join([f'--from-file={fname}={os.path.join(path, fname)}' for fname in files])
         self.kubectl(cmd, namespace=namespace)
 
     def patch_kubectl_config(self):
@@ -2990,8 +2990,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     ClusterHealthValidatorEvent.MonitoringStatus(
                         error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
-                              f'{prometheus_ip}:{k8s_cluster.prometheus_port}, due to the: \n'
-                              ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+                        f'{prometheus_ip}:{k8s_cluster.prometheus_port}, due to the: \n'
+                        ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
                     ).publish()
                     kmh_event.message = "Kubernetes monitoring health checks have failed"
                     return False

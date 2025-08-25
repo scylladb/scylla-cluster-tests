@@ -14,8 +14,8 @@
 
 from __future__ import absolute_import, annotations
 
-import atexit
 import itertools
+import json
 import os
 import logging
 import random
@@ -35,24 +35,22 @@ import uuid
 import zipfile
 import io
 import tempfile
-import traceback
 import ctypes
 import shlex
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
+from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
 from contextlib import closing, contextmanager
-from functools import wraps, cached_property, lru_cache, singledispatch
+from functools import cached_property, lru_cache, singledispatch
 from collections import defaultdict, namedtuple
 import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
 from collections import OrderedDict
 import requests
 import boto3
+from botocore.exceptions import ClientError
 from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -75,6 +73,7 @@ from sdcm.utils.aws_utils import (
     get_ssm_ami,
     get_by_owner_ami,
 )
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -145,12 +144,13 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     while retries > 0 and _remote_get_hash(remoter, dst) != hash_expected:
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
-    assert _remote_get_hash(remoter, dst) == hash_expected
+    assert _remote_get_hash(
+        remoter, dst) == hash_expected, f"Hash mismatch: src={src}, dst={dst}, expected_hash={hash_expected}"
 
 
 def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
     query = f"select keyspace_name, view_name, base_table_name from system_schema.views " \
-            f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
+        f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     if not result:
@@ -161,7 +161,7 @@ def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
 
 def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -> list:
     query = f"select view_name from system_schema.views " \
-            f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
+        f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     views = []
@@ -173,7 +173,7 @@ def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -
 
 def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
     query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
-            f"and table_name='{entity_name}'"
+        f"and table_name='{entity_name}'"
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     view_details = []
@@ -282,7 +282,7 @@ class S3Storage():
                                                                                       file_name=file_name,
                                                                                       bucket_name=bucket_name)
 
-    def upload_file(self, file_path, dest_dir=''):
+    def upload_file(self, file_path, dest_dir='', public=True):
         s3_url = self.generate_url(file_path, dest_dir)
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
@@ -291,8 +291,9 @@ class S3Storage():
                                      Key=s3_obj,
                                      Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
-            LOGGER.info("Set public read access")
-            self.set_public_access(key=s3_obj)
+            if public:
+                LOGGER.info("Set public read access")
+                self.set_public_access(key=s3_obj)
             return s3_url
         except Exception as details:  # noqa: BLE001
             LOGGER.debug("Unable to upload to S3: %s", details)
@@ -418,204 +419,6 @@ def all_aws_regions(cached=False):
     else:
         client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
         return [region['RegionName'] for region in client.describe_regions()['Regions']]
-
-
-class ParallelObject:
-    """
-        Run function in with supplied args in parallel using thread.
-    """
-
-    def __init__(self, objects: Iterable, timeout: int = 6,
-                 num_workers: int = None, disable_logging: bool = False):
-        """Constructor for ParallelObject
-
-        Build instances of Parallel object. Item of objects is used as parameter for
-        disrupt_func which will be run in parallel.
-
-        :param objects: if item in object is list, it will be upacked to disrupt_func argument, ex *arg
-                if item in object is dict, it will be upacked to disrupt_func keyword argument, ex **kwarg
-                if item in object is any other type, will be passed to disrupt_func as is.
-                if function accept list as parameter, the item shuld be list of list item = [[]]
-
-        :param timeout: global timeout for running all
-        :param num_workers: num of parallel threads, defaults to None
-        :param disable_logging: disable logging for running disrupt_func, defaults to False
-        """
-        self.objects = objects
-        self.timeout = timeout
-        self.num_workers = num_workers
-        self.disable_logging = disable_logging
-        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)
-
-    def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False) -> List[ParallelObjectResult]:
-        """Run callable object "disrupt_func" in parallel
-
-        Allow to run callable object in parallel.
-        if ignore_exceptions is true,  return
-        list of FutureResult object instances which contains
-        two attributes:
-            - result - result of callable object execution
-            - exc - exception object, if happened during run
-        if ignore_exceptions is False, then running will
-        terminated on future where happened exception or by timeout
-        what has stepped first.
-
-        :param func: Callable object to run in parallel
-        :param ignore_exceptions: ignore exception and return result, defaults to False
-        :param unpack_objects: set to True when unpacking of objects to the disrupt_func as args or kwargs needed
-        :returns: list of FutureResult object
-        :rtype: {List[FutureResult]}
-        """
-
-        def func_wrap(fun):
-            @wraps(fun)
-            def inner(*args, **kwargs):
-                thread_name = threading.current_thread().name
-                fun_args = args
-                fun_kwargs = kwargs
-                fun_name = fun.__name__
-                LOGGER.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(thread_name=thread_name,
-                                                                                           fun_name=fun_name,
-                                                                                           fun_args=fun_args,
-                                                                                           fun_kwargs=fun_kwargs))
-                return_val = fun(*args, **kwargs)
-                LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
-                return return_val
-
-            return inner
-
-        results = []
-
-        if not self.disable_logging:
-            LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
-            func = func_wrap(func)
-
-        futures = []
-
-        for obj in self.objects:
-            if unpack_objects and isinstance(obj, (list, tuple)):
-                futures.append((self._thread_pool.submit(func, *obj), obj))
-            elif unpack_objects and isinstance(obj, dict):
-                futures.append((self._thread_pool.submit(func, **obj), obj))
-            else:
-                futures.append((self._thread_pool.submit(func, obj), obj))
-        time_out = self.timeout
-        for future, target_obj in futures:
-            try:
-                result = future.result(time_out)
-            except FuturesTimeoutError as exception:
-                results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
-                time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
-            except Exception as exception:  # noqa: BLE001
-                results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
-            else:
-                results.append(ParallelObjectResult(obj=target_obj, exc=None, result=result))
-
-        self.clean_up(futures)
-
-        if ignore_exceptions:
-            return results
-
-        runs_that_finished_with_exception = [res for res in results if res.exc]
-        if runs_that_finished_with_exception:
-            raise ParallelObjectException(results=results)
-        return results
-
-    def call_objects(self, ignore_exceptions: bool = False) -> list["ParallelObjectResult"]:
-        """
-        Use the ParallelObject run() method to call a list of
-        callables in parallel. Rather than running a single function
-        with a number of objects as arguments in parallel, we're
-        calling a list of callables in parallel.
-
-        If we need to run multiple callables with some arguments, one
-        solution is to use partial objects to pack the callable with
-        its arguments, e.g.:
-
-        partial_func_1 = partial(print, "lorem")
-        partial_func_2 = partial(sum, (2, 3))
-        ParallelObject(objects=[partial_func_1, partial_func_2]).call_objects()
-
-        This can be useful if we need to tightly synchronise the
-        execution of multiple functions.
-        """
-        return self.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
-
-    def clean_up(self, futures):
-        # if there are futures that didn't run  we cancel them
-        for future, _ in futures:
-            future.cancel()
-        self._thread_pool.shutdown(wait=False)
-        # we need to unregister internal function that waits for all threads to finish when interpreter exits
-        atexit.unregister(_python_exit)
-
-    @staticmethod
-    def run_named_tasks_in_parallel(tasks: dict[str, Callable],
-                                    timeout: int,
-                                    ignore_exceptions: bool = False) -> dict[str, ParallelObjectResult]:
-        """
-        Allows calling multiple Callables in parallel using Parallel
-        Object. Returns a dict with the results. Will raise an exception
-        if:
-        - ignore_exceptions is set to False and an exception was raised
-        during execution
-        - timeout is set and timeout was reached
-
-        Example:
-
-        Given:
-        tasks = {
-            "trigger": partial(time.sleep, 10))
-            "interrupt": partial(random.random)
-        }
-
-        Result:
-
-        {
-            "trigger": ParallelObjectResult >>> time.sleep result
-            "interrupt": ParallelObjectResult >>> random.random result
-        }
-        """
-        task_id_map = {str(id(task)): task_name for task_name, task in tasks.items()}
-        results_map = {}
-
-        task_results = ParallelObject(
-            objects=tasks.values(),
-            timeout=timeout if timeout else None
-        ).call_objects(ignore_exceptions=ignore_exceptions)
-
-        for result in task_results:
-            task_name = task_id_map.get(str(id(result.obj)))
-            results_map.update({task_name: result})
-
-        return results_map
-
-
-class ParallelObjectResult:
-    """Object for result of future in ParallelObject
-
-    Return as a result of ParallelObject.run method
-    and contain result of disrupt_func was run in parallel
-    and exception if it happened during run.
-    """
-
-    def __init__(self, obj, result=None, exc=None):
-        self.obj = obj
-        self.result = result
-        self.exc = exc
-
-
-class ParallelObjectException(Exception):
-    def __init__(self, results: List[ParallelObjectResult]):
-        super().__init__()
-        self.results = results
-
-    def __str__(self):
-        ex_str = ""
-        for res in self.results:
-            if res.exc:
-                ex_str += f"{res.obj}:\n {''.join(traceback.format_exception(type(res.exc), res.exc, res.exc.__traceback__))}"
-        return ex_str
 
 
 def docker_current_container_id() -> Optional[str]:
@@ -769,10 +572,36 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
     for curr_region_name, per_region_instances in instances.items():
         if running:
-            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] == 'running']
+            # Filter for running and pending instances
+            pending_instances = [i for i in per_region_instances if i['State']['Name'] == 'pending']
+            running_instances = [i for i in per_region_instances if i['State']['Name'] == 'running']
+
+            # Wait for pending instances to become running
+            if pending_instances:
+                client = boto3.client('ec2', region_name=curr_region_name)
+                waiter = client.get_waiter('instance_running')
+                instance_ids = [i['InstanceId'] for i in pending_instances]
+                try:
+                    if verbose:
+                        LOGGER.info(
+                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running")
+                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={'Delay': 15, 'MaxAttempts': 40})
+                    # Refresh instance data after waiting
+                    response = client.describe_instances(InstanceIds=instance_ids)
+                    updated_instances = [instance for reservation in response['Reservations'] for instance in
+                                         reservation['Instances']]
+                    # Combine running and updated (now running) instances
+                    instances[curr_region_name] = running_instances + updated_instances
+                except ClientError as e:
+                    if verbose:
+                        LOGGER.error(f"Error waiting for instances in {curr_region_name}: {e}")
+                    # If waiter fails, keep only running instances
+                    instances[curr_region_name] = running_instances
+            else:
+                instances[curr_region_name] = running_instances
         else:
-            instances[curr_region_name] = [i for i in per_region_instances
-                                           if not i['State']['Name'] == 'terminated']
+            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] != 'terminated']
+
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
         for curr_region_name, per_region_instances in instances.items():
@@ -859,7 +688,7 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(security_groups.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100,  num_workers=len(aws_regions)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
                    ).run(get_security_groups_ips, ignore_exceptions=True)
 
     if not group_as_region:
@@ -1544,6 +1373,24 @@ def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str
         tbl.add_row(row)
 
     return tbl
+
+
+def images_dict_in_json_format(rows: list[str] | list[list[str]], field_names: list[str]) -> str:
+    """
+    Convert the rows to a JSON format string.
+    :param rows: list of rows to convert
+    :param field_names: list of field names for the JSON keys
+    :return: JSON formatted string
+    """
+    if not rows:
+        return "{"
+
+    images_dict = {}
+    for image in rows:
+        images_dict.update({image[1]: {field: image[num] for num, field in enumerate(field_names)}})
+    images_json = json.dumps(images_dict)
+
+    return images_json
 
 
 def get_branched_gce_images(
@@ -2513,7 +2360,7 @@ def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, promet
 
     if scylla_load < wait_cpu_utilization:
         CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
-                                      " The test results may be not correct.",
+                              " The test results may be not correct.",
                               severity=event_severity).publish()
         return False
 

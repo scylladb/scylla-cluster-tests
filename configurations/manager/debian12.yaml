@@ -1,0 +1,3 @@
+ami_id_monitor: 'resolve:ssm:/aws/service/debian/release/12/latest/amd64'  # Debian Bookworm latest image
+ami_monitor_user: 'admin'
+monitor_branch: 'branch-4.11'  # Pass it as debian image is not the formal monitor image

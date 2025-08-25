@@ -86,23 +86,23 @@ def configure_vector_target_script(host: str, port: int) -> str:
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:
     return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
-           f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
+        f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
 
 
 def configure_sshd_script():
     return dedent("""
     if [ -f "/etc/security/limits.d/20-nproc.conf" ]; then
-        sed -i -e "s/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*.*/*\t\tsoft\tnproc\t\tunlimited/" \
+        sed -i -e "s/^\\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*.*/*\t\tsoft\tnproc\t\tunlimited/" \
     /etc/security/limits.d/20-nproc.conf || true
     else
         echo "*    hard    nproc    unlimited" > /etc/security/limits.d/20-nproc.conf || true
     fi
 
-    sed -i "s/#MaxSessions \(.*\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
-    sed -i "s/#MaxStartups \(.*\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
-    sed -i "s/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
-    sed -i "s/#ClientAliveInterval \(.*\)$/ClientAliveInterval 60/" /etc/ssh/sshd_config || true
-    sed -i "s/#ClientAliveCountMax \(.*\)$/ClientAliveCountMax 10/" /etc/ssh/sshd_config || true
+    sed -i "s/#MaxSessions \\(.*\\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
+    sed -i "s/#MaxStartups \\(.*\\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
+    sed -i "s/#LoginGraceTime \\(.*\\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
+    sed -i "s/#ClientAliveInterval \\(.*\\)$/ClientAliveInterval 60/" /etc/ssh/sshd_config || true
+    sed -i "s/#ClientAliveCountMax \\(.*\\)$/ClientAliveCountMax 10/" /etc/ssh/sshd_config || true
     """)
 
 
@@ -279,7 +279,10 @@ def install_syslogng_exporter():
 def disable_daily_apt_triggers():
     return dedent("""\
     if apt-get --help >/dev/null 2>&1 ; then
-        if [ ! -f /tmp/disable_daily_apt_triggers_done ]; then
+        smi_installed=false
+        dpkg -s scylla-machine-image &> /dev/null && smi_installed=true
+        dpkg -s scylla-enterprise-machine-image &> /dev/null && smi_installed=true
+        if [ ! -f /tmp/disable_daily_apt_triggers_done && ! $smi_installed ]; then
             rm -f /etc/apt/apt.conf.d/*unattended-upgrades /etc/apt/apt.conf.d/*auto-upgrades || true
             rm -f /etc/apt/apt.conf.d/*periodic /etc/apt/apt.conf.d/*update-notifier || true
             systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true

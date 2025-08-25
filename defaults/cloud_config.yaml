@@ -1,0 +1,7 @@
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 0
+
+use_mgmt: false
+
+use_cloud_manager: true

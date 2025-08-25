@@ -45,7 +45,7 @@ from argus.common.enums import NemesisStatus
 from sdcm.nemesis_registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
-from sdcm.utils.cql_utils import cql_unquote_if_needed
+from sdcm.utils.cql_utils import cql_unquote_if_needed, cql_quote_if_needed
 from sdcm import wait
 from sdcm.audit import Audit, AuditConfiguration, AuditStore
 from sdcm.cluster import (
@@ -105,8 +105,8 @@ from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
-                               update_authenticator, ParallelObject,
-                               ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+                               update_authenticator, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
@@ -1169,7 +1169,8 @@ class Nemesis(NemesisFlags):
             instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
             add_node_func_args.update({"is_zero_node": is_zero_node, "instance_type": instance_type})
 
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)
+        new_nodes = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         try:
             with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
@@ -2131,7 +2132,7 @@ class Nemesis(NemesisFlags):
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name, column_type in add:
                     added_columns_info['column_names'][column_name] = column_type
@@ -2198,12 +2199,16 @@ class Nemesis(NemesisFlags):
                 if not result:
                     continue
 
+                first_row = result.one()
+                if not first_row or first_row.ck is None:
+                    continue
+
                 if not with_clustering_key_data:
                     partitions_for_delete[partition_key] = []
                     continue
 
                 # Suppose that min ck value is 0 in the partition
-                partitions_for_delete[partition_key].extend([0, result[0].ck])
+                partitions_for_delete[partition_key].extend([0, first_row.ck])
 
                 if None in partitions_for_delete[partition_key]:
                     partitions_for_delete.pop(partition_key)
@@ -2218,8 +2223,17 @@ class Nemesis(NemesisFlags):
             Returns timestamp and the clustering key value as tuple
         """
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
-            number_of_rows = session.execute(
-                SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one().system_count_ck
+            count_result = session.execute(
+                SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one()
+            if not count_result or count_result.system_count_ck is None:
+                message = f"Unable to count rows in partition (pk = {pkey})"
+                self.log.error(message)
+                raise PartitionNotFound(message)
+            number_of_rows = count_result.system_count_ck
+            if number_of_rows == 0:
+                message = f"Partition (pk = {pkey}) is empty"
+                self.log.error(message)
+                raise PartitionNotFound(message)
             fetch_limit = max(math.ceil(number_of_rows * partition_percentage), 11)
             self.log.debug(
                 "[%s_using_timestamp] Partition size: %s, fetching up to %s",
@@ -2229,13 +2243,19 @@ class Nemesis(NemesisFlags):
             )
             partition = session.execute(SimpleStatement(
                 f"select pk, ck from {ks_cf} where pk = {pkey} limit {fetch_limit}")).all()
+            if not partition:
+                message = (f"No rows found in partition (pk = {pkey}) after counting {number_of_rows} rows. "
+                           "The partition may have been deleted.")
+                self.log.error(message)
+                raise PartitionNotFound(message)
             delete_mark = partition[-1].ck
-            timestamp = session.execute(
-                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")).one().writetime_v
-            if not timestamp:
+            timestamp_result = session.execute(
+                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")).one()
+            if not timestamp_result or timestamp_result.writetime_v is None:
                 message = f"Unable to get writetime for row (pk = {pkey}, ck = {delete_mark})"
                 self.log.error(message)
                 raise TimestampNotFound(message)
+            timestamp = timestamp_result.writetime_v
 
             return timestamp, delete_mark
 
@@ -2626,6 +2646,9 @@ class Nemesis(NemesisFlags):
         ks_cfs = self.cluster.get_non_system_ks_cf_list(
             db_node=self.target_node, filter_out_table_with_counter=True,
             filter_out_mv=True)
+
+        if not ks_cfs:
+            raise UnsupportedNemesis('No non-system user tables found')
 
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         keyspace, table = keyspace_table.split('.')
@@ -3787,11 +3810,11 @@ class Nemesis(NemesisFlags):
             if match_type == 'random':
                 probability = random.choice(['0.0001', '0.001', '0.01', '0.1', '0.3', '0.6', '0.8', '0.9'])
                 return f'randomly chosen packet with {probability} probability', \
-                       f'-m statistic --mode {mode} --probability {probability}'
+                    f'-m statistic --mode {mode} --probability {probability}'
             elif match_type == 'nth':
                 every = random.choice(['2', '4', '8', '16', '32', '64', '128'])
                 return f'every {every} packet', \
-                       f'-m statistic --mode {mode} --every {every} --packet 0'
+                    f'-m statistic --mode {mode} --every {every} --packet 0'
         elif match_type == 'limit':
             period = random.choice(['second', 'minute'])
             pkts_per_period = random.choice({
@@ -3799,11 +3822,11 @@ class Nemesis(NemesisFlags):
                 'minute': [2, 10, 40, 80]
             }.get(period))
             return f'string of {pkts_per_period} very first packets every {period}', \
-                   f'-m limit --limit {pkts_per_period}/{period}'
+                f'-m limit --limit {pkts_per_period}/{period}'
         elif match_type == 'connbytes':
             bytes_from = random.choice(['100', '200', '400', '800', '1600', '3200', '6400', '12800', '1280000'])
             return f'every packet from connection that total byte counter exceeds {bytes_from}', \
-                   f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
+                f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
         return 'every packet', ''
 
     @staticmethod
@@ -3823,7 +3846,7 @@ class Nemesis(NemesisFlags):
                 'icmp-admin-prohibited'
             ])
             return f'rejected with {reject_with}', \
-                   f'{target_type} --reject-with {reject_with}'
+                f'{target_type} --reject-with {reject_with}'
         return 'dropped', f'{target_type}'
 
     def _run_commands_wait_and_cleanup(
@@ -4364,7 +4387,7 @@ class Nemesis(NemesisFlags):
                 write_cmd = (
                     "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
                     " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
-                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data")
+                    f" -keyspace '{cql_quote_if_needed(keyspace_name)}' -table '{cql_quote_if_needed(table_name)}' -timeout=120s -validate-data")
                 run_write_scylla_bench_load(write_cmd)
                 upgrade_sstables(self.cluster.data_nodes)
 
@@ -4372,7 +4395,7 @@ class Nemesis(NemesisFlags):
                 read_cmd = (
                     "scylla-bench -mode=read -workload=sequential -consistency-level=all -replication-factor=3"
                     " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
-                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data"
+                    f" -keyspace '{cql_quote_if_needed(keyspace_name)}' -table '{cql_quote_if_needed(table_name)}' -timeout=120s -validate-data"
                     " -iterations=1 -concurrency=10 -connection-count=10 -rows-per-request=10")
                 read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(read_thread, error_handler=self._nemesis_stress_failure_handler)
@@ -4486,8 +4509,10 @@ class Nemesis(NemesisFlags):
             InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting grow disruption').publish()
-        self._grow_cluster(rack=None)
+        new_nodes = self._grow_cluster(rack=None)
         InfoEvent(message='Finished grow disruption').publish()
+        for node in new_nodes:
+            self.node_allocator.unset_running_nemesis(node, self.current_disruption)
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting terminate_and_replace disruption').publish()
         self._terminate_and_replace_node()
@@ -4495,7 +4520,7 @@ class Nemesis(NemesisFlags):
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting shrink disruption').publish()
         self._shrink_cluster(rack=None)
-        InfoEvent(message='Starting shrink disruption').publish()
+        InfoEvent(message='Finished shrink disruption').publish()
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
@@ -4659,7 +4684,8 @@ class Nemesis(NemesisFlags):
             "disruption_name": self.current_disruption,
             **({"is_zero_node": is_zero_node} if is_zero_node else {})
         }
-        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_func_args)[0]
+        new_node = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(
+            self.cluster.add_nodes)(**add_node_func_args)[0]
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -4680,9 +4706,9 @@ class Nemesis(NemesisFlags):
     def _write_read_data_to_multi_dc_keyspace(self, datacenters: List[str]) -> None:
         InfoEvent(message='Writing and reading data with new dc').publish()
         write_cmd = f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc " \
-                    f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
-                    f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
-                    f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
+            f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
+            f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
+            f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(write_thread, error_handler=self._nemesis_stress_failure_handler)
         with self.action_log_scope("Verify multi DC keyspace data", target=self.target_node.name):
@@ -4694,8 +4720,8 @@ class Nemesis(NemesisFlags):
 
     def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
         read_cmd = f"cassandra-stress read no-warmup cl={consistency_level} n=100000 -schema 'keyspace=keyspace_new_dc " \
-                   f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 " \
-                   f"-pop seq=1..100000 -log interval=5"
+            f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 " \
+            f"-pop seq=1..100000 -log interval=5"
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(read_thread, error_handler=self._nemesis_stress_failure_handler)
 
@@ -5002,8 +5028,8 @@ class Nemesis(NemesisFlags):
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
-            if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
-                raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+                raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
 
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
 
@@ -5045,8 +5071,8 @@ class Nemesis(NemesisFlags):
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
-            if SkipPerIssues(issues="https://github.com/scylladb/scylla-enterprise/issues/5461", params=self.tester.params):
-                raise UnsupportedNemesis("https://github.com/scylladb/scylla-enterprise/issues/5461")
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
         unsupported_primary_key_columns = ['duration', 'counter']
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
@@ -5142,16 +5168,16 @@ class Nemesis(NemesisFlags):
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             InfoEvent(message='Writing/Reading data from audited keyspace').publish()
             write_cmd = f"cassandra-stress write no-warmup cl=ONE n=1000 -schema" \
-                        f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
-                        f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
-                        f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
+                f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
+                f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
+                f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
             write_thread = self.tester.run_stress_thread(
                 stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(write_thread, error_handler=self._nemesis_stress_failure_handler)
             read_cmd = f"cassandra-stress read no-warmup cl=ONE n=1000 " \
-                       f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
-                       f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
-                       f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
+                f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
+                f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
+                f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
             read_thread = self.tester.run_stress_thread(
                 stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(read_thread, error_handler=self._nemesis_stress_failure_handler)
@@ -5223,7 +5249,7 @@ class Nemesis(NemesisFlags):
         """
         self.cluster.wait_all_nodes_un()
 
-        new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
+        new_node: BaseNode = skip_on_capacity_issues(db_cluster=self.tester.db_cluster)(self.cluster.add_nodes)(
             count=1,
             dc_idx=self.target_node.dc_idx,
             enable_auto_bootstrap=True,
@@ -5267,7 +5293,7 @@ class Nemesis(NemesisFlags):
             time.sleep(5)
             with nodetool_context(node=self.target_node, start_command="disablegossip", end_command="enablegossip"):
                 self.target_node.run_nodetool("statusgossip")
-                self.target_node.run_nodetool("status")
+                self.target_node.run_nodetool("status", ignore_status=True)
                 time.sleep(30)
                 self._major_compaction()
         self.target_node.run_nodetool("statusgossip")
@@ -5336,6 +5362,19 @@ class Nemesis(NemesisFlags):
     def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
         self._refuse_connection_from_banned_node(use_iptables=False)
 
+    def switch_target_node_to_another_rack(self):
+        """
+            Switches the target node to a rack different than loader node rack.
+
+            This method selects a node from a different rack than the loader node rack
+            and sets it as the new target node. It is useful for testing rack-aware scenarios.
+        """
+        if self.cluster.params.get("rack_aware_loader") and self.target_node.parent_cluster.racks_count > 1:
+            loader_rack = self.loaders.nodes[0].rack
+            target_node_rack = [node.rack for node in self.cluster.nodes if node.rack != loader_rack][0]
+            self.set_target_node(rack=target_node_rack)
+            self.log.info("Target node rack %s, loader rack %s", self.target_node.rack, loader_rack)
+
     def _refuse_connection_from_banned_node(self, use_iptables=False):
         """Banned node could not connect with rest nodes in cluster
 
@@ -5355,6 +5394,12 @@ class Nemesis(NemesisFlags):
             raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+
+        if SkipPerIssues("scylladb/scylla-drivers#95", self.cluster.params):
+            # until https://github.com/scylladb/scylla-drivers/issues/95 would be solved
+            # we should disable the target node switching
+            self.switch_target_node_to_another_rack()
+
         keyspace_name = "banned_keyspace"
         table_name = "table1"
 
@@ -6567,7 +6612,7 @@ COMPLEX_NEMESIS = [NoOpMonkey, ScyllaCloudLimitedChaosMonkey,
                    MdcChaosMonkey, SisyphusMonkey,
                    DisruptKubernetesNodeThenReplaceScyllaNode,
                    DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
-                   CategoricalMonkey]
+                   CategoricalMonkey, NemesisSequence]
 
 
 class CorruptThenScrubMonkey(Nemesis):

@@ -69,13 +69,13 @@ class UDA(BaseModel):
 
     def get_create_query_string(self, ks: str) -> str:
         query_string = f"CREATE AGGREGATE {ks}.{self.name}" \
-                       f"({self.args}) SFUNC {self.accumulator_udf.name} " \
-                       f'STYPE {self.accumulator_udf.return_type} '
+            f"({self.args}) SFUNC {self.accumulator_udf.name} " \
+            f'STYPE {self.accumulator_udf.return_type} '
         if self.reduce_udf:
             query_string += f"REDUCEFUNC {self.reduce_udf.name} "
 
         query_string += f"FINALFUNC {self.final_udf.name} " \
-                        f"INITCOND {self.initial_condition};"
+            f"INITCOND {self.initial_condition};"
         return query_string
 
     @classmethod

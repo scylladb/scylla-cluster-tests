@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
 
 import sys
 import time
@@ -18,9 +19,10 @@ import datetime
 import json
 import os
 from functools import wraps, partial, cached_property
-from typing import Optional, Callable
+from typing import Optional, Callable, TYPE_CHECKING
 
 from botocore.exceptions import ClientError
+from google.api_core.exceptions import ServiceUnavailable
 
 from sdcm.argus_results import send_result_to_argus
 from sdcm.sct_events import Severity
@@ -28,6 +30,10 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.event_counter import EventCounterContextManager
 from sdcm.exceptions import UnsupportedNemesis
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.cluster_tools import check_cluster_layout
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseCluster
 
 LOGGER = logging.getLogger(__name__)
 
@@ -360,19 +366,57 @@ def static_init(cls):
     return cls
 
 
-def skip_on_capacity_issues(func: callable) -> callable:
+def skip_on_capacity_issues(func: Callable | None = None, db_cluster: BaseCluster | None = None):
     """
-    Decorator to skip nemesis that fail due to capacity issues
+    Decorator to skip nemesis that fail due to capacity issues.
+    Can be used with or without parameters:
+        @skip_on_capacity_issues
+        def foo(...): ...
+    or
+        @skip_on_capacity_issues(db_cluster=cluster)
+        def foo(...): ...
     """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except ClientError as ex:
-            if "InsufficientInstanceCapacity" in str(ex):
-                raise UnsupportedNemesis("Capacity Issue") from ex
-            raise
-    return wrapper
+    def decorator(inner_func):
+        @wraps(inner_func)
+        def wrapper(*args, **kwargs):
+            cluster = db_cluster
+            # Try to get db_cluster from inner_func's bound instance if not provided
+            if cluster is None and args:
+                bound_self = getattr(inner_func, "__self__", None)
+                if bound_self and hasattr(bound_self, "nodes"):
+                    cluster = bound_self
+                else:
+                    for arg in args:
+                        if hasattr(arg, "nodes"):  # crude check for cluster-like object
+                            cluster = arg
+                            break
+            try:
+                return inner_func(*args, **kwargs)
+            except ClientError as ex:
+                if "InsufficientInstanceCapacity" in str(ex):
+                    if not check_cluster_layout(cluster):
+                        TestFrameworkEvent(
+                            source=inner_func.__name__,
+                            message=f"Test failed due to capacity issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                            severity=Severity.CRITICAL
+                        ).publish()
+                    else:
+                        raise UnsupportedNemesis("Capacity Issue") from ex
+                raise
+            except ServiceUnavailable as ex:
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                        severity=Severity.CRITICAL
+                    ).publish()
+                else:
+                    raise UnsupportedNemesis("Capacity Issue") from ex
+        return wrapper
+
+    if func is not None and callable(func):
+        return decorator(func)
+    return decorator
 
 
 def critical_on_capacity_issues(func: callable) -> callable:
@@ -386,11 +430,16 @@ def critical_on_capacity_issues(func: callable) -> callable:
             return func(*args, **kwargs)
         except ClientError as ex:
             if "InsufficientInstanceCapacity" in str(ex):
-                TestFrameworkEvent(source=callable.__name__,
+                TestFrameworkEvent(source=func.__name__,
                                    message=f"Test failed due to capacity issues: {ex} "
                                    "cluster is probably unbalanced, continuing with test would yield unknown results",
                                    severity=Severity.CRITICAL).publish()
             raise
+        except ServiceUnavailable as ex:
+            TestFrameworkEvent(source=func.__name__,
+                               message=f"Test failed due to service availability issues: {ex} "
+                               "cluster is probably unbalanced, continuing with test would yield unknown results",
+                               severity=Severity.CRITICAL).publish()
     return wrapper
 
 

@@ -331,8 +331,8 @@ class GceLoggingClient:
                 f"projects/{self.project_id}"
             ],
             "filter": f'protoPayload.resourceName="projects/{self.project_id}/zones/{self.zone}/instances/{self.instance_name}"'
-                      f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
-                      f' timestamp > "{from_}" timestamp < "{until}"'
+            f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
+            f' timestamp > "{from_}" timestamp < "{until}"'
         }
         with build('logging', 'v2', credentials=self.credentials, cache_discovery=False) as service:
             return self._get_log_entries(service, query)
@@ -541,11 +541,8 @@ def create_instance(  # noqa: PLR0913
     instance.scheduling = compute_v1.Scheduling()
 
     if "z3-highmem" in machine_type:
-        instance.scheduling.on_host_maintenance = "TERMINATE"
-        network_interface.nic_type = "GVNIC"
-        network_performance_config = compute_v1.NetworkPerformanceConfig()
-        network_performance_config.total_egress_bandwidth_tier = "TIER_1"
-        instance.network_performance_config = network_performance_config
+        instance.scheduling.on_host_maintenance = "MIGRATE"
+        instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
 
     if spot:
         # Set the Spot VM setting

@@ -138,7 +138,7 @@ class SctRunnerInfo:
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.11"  # Version of the Image
+    VERSION = "1.12"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -229,7 +229,7 @@ class SctRunner(ABC):
             pip3 install awscli
 
             # disable unattended-upgrades
-            sudo systemctl disable --now unattended-upgrades
+            sudo systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service
 
             # Install Docker.
             apt-get -qq install --no-install-recommends \
@@ -1197,7 +1197,20 @@ def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 
-def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
+def _get_runner_user_tag(sct_runner_info: SctRunnerInfo) -> str | None:
+    if sct_runner_info.cloud_provider == "aws":
+        tags = aws_tags_to_dict(sct_runner_info.instance.get("Tags", []))
+        return tags.get("RunByUser")
+    elif sct_runner_info.cloud_provider == "gce":
+        tags = gce_meta_to_dict(sct_runner_info.instance.metadata)
+        return tags.get("RunByUser")
+    elif sct_runner_info.cloud_provider == "azure":
+        if hasattr(sct_runner_info.instance, 'tags') and sct_runner_info.instance.tags:
+            return sct_runner_info.instance.tags.get("RunByUser")
+    return None
+
+
+def list_sct_runners(backend: str = None, test_runner_ip: str = None, user: str = None, test_id: str | tuple = None, verbose: bool = True) -> list[SctRunnerInfo]:
     if verbose:
         log = LOGGER.info
     else:
@@ -1213,18 +1226,36 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: b
         sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
     sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
-    if test_runner_ip:
-        if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
-            sct_runners = [sct_runner_info, ]
-        else:
+    filtered_runners = []
+    for runner in sct_runners:
+        if test_runner_ip and test_runner_ip not in runner.public_ips:
+            continue
+        if user and _get_runner_user_tag(runner) != user:
+            continue
+        if test_id:
+            if isinstance(test_id, (tuple, list)) and runner.test_id not in test_id:
+                continue
+            elif runner.test_id != test_id:
+                continue
+
+        filtered_runners.append(runner)
+
+    if not filtered_runners:
+        if test_runner_ip:
             LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
-            return []
-    else:
-        sct_runners = list(sct_runners)
+        elif user or test_id:
+            filter_desc = []
+            if user:
+                filter_desc.append(f"User: '{user}'")
+            if test_id:
+                filter_desc.append(
+                    f"TestIds: {list(test_id) if isinstance(test_id, (tuple, list)) else f'TestId: {test_id}'}")
+            LOGGER.warning("No SCT Runners were found (Backend: '%s', Filters: %s)", backend, ", ".join(filter_desc))
+        return []
 
-    log("%d SCT runner(s) found:\n    %s", len(sct_runners), "\n    ".join(map(str, sct_runners)))
+    log("%d SCT runner(s) found:\n    %s", len(filtered_runners), "\n    ".join(map(str, filtered_runners)))
 
-    return sct_runners
+    return filtered_runners
 
 
 def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test_id: str = None, tags: dict = None):
@@ -1238,8 +1269,7 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
     if test_runner_ip:
         runner_to_update = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     elif test_id:
-        listed_runners = list_sct_runners(backend=backend, verbose=False)
-        runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
+        runner_to_update = list_sct_runners(backend=backend, test_id=test_id, verbose=False)
 
     if not runner_to_update:
         LOGGER.warning("Could not find SCT runner with IP: %s, test_id: %s to update tags for.",
@@ -1288,10 +1318,12 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
 def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
                       backend: str = None,
+                      user: str = None,
+                      test_id: str | tuple = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
 
-    sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
+    sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip, user=user, test_id=test_id)
     timeout_flag = False
     runners_terminated = 0
     end_message = ""
@@ -1328,7 +1360,7 @@ def clean_sct_runners(test_status: str,
                                           timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
                                           dry_run=dry_run)
 
-        if sct_runner_info.keep:
+        if not force and sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):
                 LOGGER.info("Skip %s because `keep' == `alive. No runners have been terminated'", sct_runner_info)
                 continue

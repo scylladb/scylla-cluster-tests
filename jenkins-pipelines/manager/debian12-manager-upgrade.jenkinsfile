@@ -9,11 +9,13 @@ managerPipeline(
 
     scylla_version: '2025.1',
 
-    manager_version: '3.4',
+    // Upgrade from some old Manager release which is still used in production
+    // Use Metabase to check it (https://scylladb.metabaseapp.com/question/1685-manager-version)
+    manager_version: '3.4.2',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
-    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian11.yaml"]''',
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian12.yaml"]''',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',

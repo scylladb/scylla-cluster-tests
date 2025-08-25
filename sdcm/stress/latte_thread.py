@@ -34,7 +34,7 @@ from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
-LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
+LATTE_FN_NAME_RE = r'(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
 LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
 LOGGER = logging.getLogger(__name__)
 
@@ -230,6 +230,8 @@ class LatteStressThread(DockerBasedStressThread):
             self.docker_image_name,
             command_line="-c 'tail -f /dev/null'",
             extra_docker_opts=(
+                "--network=host "
+                "--security-opt seccomp=unconfined "
                 f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
                 f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
             ),

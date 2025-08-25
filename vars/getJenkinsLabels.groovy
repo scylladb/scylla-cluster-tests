@@ -26,16 +26,21 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws-us-west-2' : 'aws-sct-builders-us-west-2-v3-asg',
                           'aws-eu-west-3' : 'aws-sct-builders-eu-west-3-v3-asg',
                           'aws-ca-central-1' : 'aws-sct-builders-ca-central-1-v3-asg',
-                          'gce-us-east1': "${gcp_project}-builders-us-east1-template-v4",
-                          'gce-us-west1': "${gcp_project}-builders-us-west1-template-v4",
-                          'gce-us-central1': "${gcp_project}-builders-us-central1-template-v4",
-                          'gce': "${gcp_project}-builders-us-east1-template-v4",
+                          'gce-us-east1': "${gcp_project}-builders-us-east1-template-v5",
+                          'gce-us-west1': "${gcp_project}-builders-us-west1-template-v5",
+                          'gce-us-central1': "${gcp_project}-builders-us-central1-template-v5",
+                          'gce': "${gcp_project}-builders-us-east1-template-v5",
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg',
                           'aws-fips': 'aws-sct-builders-us-east-1-v3-fibs-CI-FIPS',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)
+
+    // for xcloud backend, use the underlying cloud provider
+    if (backend == 'xcloud') {
+        cloud_provider = params.xcloud_provider?.trim()?.toLowerCase()
+    }
 
     if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location) || (cloud_provider == 'aws-fibs' && region)) {
         def supported_regions = []
@@ -69,6 +74,11 @@ def call(String backend, String region=null, String datacenter=null, String loca
     } else if (region == 'fips') {
         return [ "label": jenkins_labels['aws-fips'], "region": '' ]
     } else {
-        return [ "label": jenkins_labels[cloud_provider], "region": region ]
+        def label = jenkins_labels.get(cloud_provider, null)
+        if (label == null) {
+            throw new Exception("=================== No Jenkins builder label mapping found for backend '${backend}' (resolved " +
+                                "to cloud_provider '${cloud_provider}'). Available mappings: ${jenkins_labels.keySet().sort()} ===================")
+        }
+        return [ "label": label, "region": region ]
     }
 }

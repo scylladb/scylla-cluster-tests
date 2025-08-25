@@ -31,6 +31,11 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
+    if [[ "${params.backend}" == "xcloud" ]] ; then
+        export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+        export SCT_XCLOUD_ENV="${params.xcloud_env}"
+    fi
+
     if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
         export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
     fi
@@ -158,6 +163,20 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}" ]] ; then
         export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand}"
     fi
+
+    if [[ -n "${params.use_preinstalled_scylla ? params.use_preinstalled_scylla : ''}" ]] ; then
+        export SCT_USE_PREINSTALLED_SCYLLA="${params.use_preinstalled_scylla}"
+    fi
+    if [[ -n "${params.disable_raft ? params.disable_raft : ''}" ]] ; then
+        export SCT_DISABLE_RAFT=${params.disable_raft}
+    fi
+    if [[ -n "${params.linux_distro ? params.linux_distro : ''}" ]] ; then
+        export SCT_SCYLLA_LINUX_DISTRO=${params.linux_distro}
+    fi
+    if [[ -n "${params.internode_compression ? params.internode_compression : ''}" ]] ; then
+        export SCT_INTERNODE_COMPRESSION=${params.internode_compression}
+    fi
+
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
     if [[ "${params.update_db_packages || false}" == "true" ]] ; then

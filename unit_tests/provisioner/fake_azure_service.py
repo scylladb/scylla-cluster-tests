@@ -120,7 +120,7 @@ class FakeNetworkSecurityGroup:
                                parameters: Dict[str, Any]) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
-                  f"/Microsoft.Network/networkSecurityGroups/default",
+            f"/Microsoft.Network/networkSecurityGroups/default",
             "name": network_security_group_name,
             "type": "Microsoft.Network/networkSecurityGroups",
             "location": parameters["location"],
@@ -136,7 +136,7 @@ class FakeNetworkSecurityGroup:
         for rule in parameters["security_rules"]:
             rules.append({
                 "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
-                      f"/providers/Microsoft.Network/networkSecurityGroups/default/securityRules/{rule['name']}",
+                f"/providers/Microsoft.Network/networkSecurityGroups/default/securityRules/{rule['name']}",
                 "name": rule["name"],
                 "etag": "W/\"90369d69-7507-4e77-8b90-66e1f971f290\"",
                 "type": "Microsoft.Network/networkSecurityGroups/securityRules",
@@ -190,7 +190,7 @@ class FakeVirtualNetwork:
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
-                  f"/Microsoft.Network/virtualNetworks/{virtual_network_name}",
+            f"/Microsoft.Network/virtualNetworks/{virtual_network_name}",
             "name": virtual_network_name,
             "type": "Microsoft.Network/virtualNetworks",
             "location": parameters["location"],
@@ -241,7 +241,7 @@ class FakeSubnet:
                                subnet_parameters: Dict[str, Any]) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
-                  f"/Microsoft.Network/virtualNetworks/{virtual_network_name}/subnets/{subnet_name}",
+            f"/Microsoft.Network/virtualNetworks/{virtual_network_name}/subnets/{subnet_name}",
             "name": subnet_name,
             "etag": "W/\"821c1ea3-6313-4798-859b-63ba15e882cc\"",
             "type": "Microsoft.Network/virtualNetworks/subnets",
@@ -291,7 +291,7 @@ class FakeIpAddress:
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
-                  f"/Microsoft.Network/publicIPAddresses/{public_ip_address_name}",
+            f"/Microsoft.Network/publicIPAddresses/{public_ip_address_name}",
             "name": public_ip_address_name,
             "type": "Microsoft.Network/publicIPAddresses",
             "location": parameters["location"],
@@ -348,7 +348,7 @@ class FakeNetworkInterface:
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
-                  f"/Microsoft.Network/networkInterfaces/{network_interface_name}",
+            f"/Microsoft.Network/networkInterfaces/{network_interface_name}",
             "name": network_interface_name,
             "type": "Microsoft.Network/networkInterfaces",
             "location": parameters["location"],
@@ -357,8 +357,8 @@ class FakeNetworkInterface:
                 "ipConfigurations": [
                     {
                         "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                              f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/"
-                              f"{network_interface_name}/ipConfigurations/{parameters['ip_configurations'][0]['name']}",
+                        f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/"
+                        f"{network_interface_name}/ipConfigurations/{parameters['ip_configurations'][0]['name']}",
                         "name": parameters['ip_configurations'][0]['name'],
                         "etag": "W/\"a1a80a74-a244-4e0b-9883-41eb47fa633e\"",
                         "type": "Microsoft.Network/networkInterfaces/ipConfigurations",
@@ -384,9 +384,9 @@ class FakeNetworkInterface:
                                     "publicIPAddressVersion": "IPv4",
                                     "ipConfiguration": {
                                         "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                                              f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces"
-                                              f"/{network_interface_name}/ipConfigurations"
-                                              f"/{parameters['ip_configurations'][0]['name']}"
+                                        f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces"
+                                        f"/{network_interface_name}/ipConfigurations"
+                                        f"/{parameters['ip_configurations'][0]['name']}"
                                     },
                                     "ipTags": [],
                                     "idleTimeoutInMinutes": 4,
@@ -477,7 +477,7 @@ class FakeVirtualMachines:
 
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
-                  f"/providers/Microsoft.Compute/virtualMachines/{vm_name}",
+            f"/providers/Microsoft.Compute/virtualMachines/{vm_name}",
             "name": vm_name,
             "type": "Microsoft.Compute/virtualMachines",
             "location": location,
@@ -536,7 +536,7 @@ class FakeVirtualMachines:
                     "networkInterfaces": [
                         {
                             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                                  f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/lukasz-3-nic",
+                            f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/lukasz-3-nic",
                             "properties": {
                                 "deleteOption": "Delete"
                             }

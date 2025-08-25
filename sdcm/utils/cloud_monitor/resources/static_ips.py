@@ -99,12 +99,17 @@ class StaticIPs(CloudResources):
         self.all.extend(self["gce"])
 
     def get_azure_static_ips(self):
-        # all azure public ip's are external resources and we pay for it
-        query_bits = ["Resources", "where type =~ 'Microsoft.Network/publicIPAddresses'",
-                      "project id, resourceGroup, name, location, properties"]
-        res = AzureService().resource_graph_query(query=' | '.join(query_bits))
-        self["azure"] = [AzureStaticIP(ip, ip["resourceGroup"]) for ip in res if "ipAddress" in ip["properties"]]
-        self.all.extend(self["azure"])
+        try:
+            # all azure public ip's are external resources and we pay for it
+            query_bits = ["Resources", "where type =~ 'Microsoft.Network/publicIPAddresses'",
+                          "project id, resourceGroup, name, location, properties"]
+            res = AzureService().resource_graph_query(query=' | '.join(query_bits))
+            self["azure"] = [AzureStaticIP(ip, ip["resourceGroup"]) for ip in res if "ipAddress" in ip["properties"]]
+            self.all.extend(self["azure"])
+            LOGGER.info("Successfully retrieved Azure static IPs")
+        except Exception as e:  # noqa: BLE001
+            LOGGER.error("Failed to retrieve Azure static IPs: %s. Continuing with other cloud providers.", e)
+            self["azure"] = []  # Set empty list to indicate partial failure
 
     def get_all(self):
         self.get_aws_elastic_ips()

@@ -70,9 +70,9 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
 
         # Run a stress while new user permissions are removed
         new_test_user_stress = f"cassandra-stress write no-warmup cl=QUORUM duration=10m -schema 'keyspace={ldap_keyspace} " \
-                               f" replication(strategy=NetworkTopologyStrategy,replication_factor=3)'" \
-                               f" -mode cql3 native user={new_test_user} password={LDAP_PASSWORD}" \
-                               " -rate threads=2 -pop seq=1..1002003 -log interval=5"
+            f" replication(strategy=NetworkTopologyStrategy,replication_factor=3)'" \
+            f" -mode cql3 native user={new_test_user} password={LDAP_PASSWORD}" \
+            " -rate threads=2 -pop seq=1..1002003 -log interval=5"
         stress_queue.append(self.run_stress_thread(stress_cmd=new_test_user_stress, round_robin=True))
         InfoEvent(message="Let stress of new user run for few minutes before removing permissions").publish()
         time.sleep(120)
