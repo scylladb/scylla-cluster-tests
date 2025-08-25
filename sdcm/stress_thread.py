@@ -378,7 +378,7 @@ class CassandraStressThread(DockerBasedStressThread):
             publisher.event_id = cs_stress_event.event_id
             try:
                 with SoftTimeoutContext(timeout=self.soft_timeout, operation="cassandra-stress"):
-                    result = cmd_runner.run(cmd=node_cmd, timeout=self.hard_timeout, log_file=log_file_name, retry=0, timestamp_logs=True)
+                    result = cmd_runner.run(cmd=node_cmd, timeout=self.hard_timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 

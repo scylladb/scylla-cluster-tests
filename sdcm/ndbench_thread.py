@@ -159,8 +159,7 @@ class NdBenchStressThread(DockerBasedStressThread):
                                     ignore_status=True,
                                     log_file=log_file_name,
                                     verbose=True,
-                                    retry=0,
-                                    timestamp_logs=True)
+                                    retry=0)
             except Exception as exc:  # noqa: BLE001
                 ndbench_failure_event = NdBenchStressEvent.failure(
                     node=str(loader),

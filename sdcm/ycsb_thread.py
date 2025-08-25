@@ -305,7 +305,6 @@ class YcsbStressThread(DockerBasedStressThread):
                         )
                     ],
                     retry=0,
-                    timestamp_logs=True,
                 )
                 result = self.parse_final_output(result)
             except Exception as exc:

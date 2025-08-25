@@ -88,15 +88,6 @@ class CommandRunner(metaclass=ABCMeta):
         if log_file:
             watchers.append(LogWriteWatcher(log_file))
         return watchers
-    
-    def _setup_watchers_with_timestamps(self, verbose: bool, log_file: str, additional_watchers: list) -> List[StreamWatcher]:
-        """Setup watchers with timestamped logging for stress commands."""
-        watchers = additional_watchers if additional_watchers else []
-        if verbose:
-            watchers.append(OutputWatcher(self.log, self.hostname))
-        if log_file:
-            watchers.append(TimestampedLogWriteWatcher(log_file))
-        return watchers
 
     @abstractmethod
     def run(self,
@@ -108,8 +99,7 @@ class CommandRunner(metaclass=ABCMeta):
             log_file: Optional[str] = None,
             retry: int = 1,
             watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False,
-            timestamp_logs: bool = False
+            change_context: bool = False
             ) -> Result:
         pass
 
@@ -122,7 +112,6 @@ class CommandRunner(metaclass=ABCMeta):
              log_file: Optional[str] = None,
              retry: int = 1,
              watchers: Optional[List[StreamWatcher]] = None,
-             timestamp_logs: bool = False,
              user: Optional[str] = 'root') -> Result:
         if user != self.user:
             if user == 'root':
@@ -136,8 +125,7 @@ class CommandRunner(metaclass=ABCMeta):
                         new_session=new_session,
                         log_file=log_file,
                         retry=retry,
-                        watchers=watchers,
-                        timestamp_logs=timestamp_logs)
+                        watchers=watchers)
 
     @abstractmethod
     def _create_connection(self):
@@ -260,51 +248,6 @@ class LogWriteWatcher(StreamWatcher):
 
     def submit_line(self, line: str):
         self.file_object.write(line)
-
-
-class TimestampedLogWriteWatcher(StreamWatcher):
-    def __init__(self, log_file: str):
-        super().__init__()
-        self.len = 0
-        self.log_file = log_file
-        # open file with line buffering, so prom stats would be as accurate as possible
-        self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
-        
-    def submit(self, stream: str) -> list:
-        from datetime import datetime
-        
-        stream_buffer = stream[self.len:]
-        
-        # Add timestamps to each line in the buffer
-        if stream_buffer:
-            lines = stream_buffer.splitlines(True)  # Keep line endings
-            timestamped_lines = []
-            
-            for line in lines:
-                if line.strip():  # Only add timestamp to non-empty lines
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # millisecond precision
-                    # Check if line already has a newline, if not add one
-                    line_end = line if line.endswith(('\n', '\r\n', '\r')) else line + '\n'
-                    timestamped_line = f"[{timestamp}] {line_end}"
-                    timestamped_lines.append(timestamped_line)
-                else:
-                    # Empty lines pass through as-is
-                    timestamped_lines.append(line)
-            
-            self.file_object.write(''.join(timestamped_lines))
-        
-        self.len = len(stream)
-        return []
-    
-    def submit_line(self, line: str):
-        from datetime import datetime
-        
-        if line.strip():  # Only add timestamp to non-empty lines  
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # millisecond precision
-            timestamped_line = f"[{timestamp}] {line}"
-            self.file_object.write(timestamped_line)
-        else:
-            self.file_object.write(line)
 
 
 class FailuresWatcher(Responder):

@@ -196,7 +196,6 @@ class GeminiStressThread(DockerBasedStressThread):
                     ignore_status=False,
                     log_file=log_file_name,
                     retry=0,
-                    timestamp_logs=True,
                 )
                 # sleep to gather all latest log messages
                 time.sleep(5)
