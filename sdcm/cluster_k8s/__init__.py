@@ -460,6 +460,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         docker_hub_url="https://index.docker.io/v1/"
         docker_hub_creds = get_docker_hub_credentials()
         self.kubectl(f"create secret docker-registry docker-auth "
+                     f"--namespace {namespace} "
                      f"--docker-server={docker_hub_url} "
                      f"--docker-username={docker_hub_creds['username']} "
                      f"--docker-password={docker_hub_creds['password']} "
