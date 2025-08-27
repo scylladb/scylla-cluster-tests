@@ -3690,6 +3690,44 @@ class BaseCluster:
 
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
+<<<<<<< HEAD
+||||||| parent of d66316a78 (fix(cluster): cql_connection for exclusive node)
+    def get_load_balancing_policy(self, node, whitelist_nodes=None):
+        node_ips = self.get_node_cql_ips(nodes=whitelist_nodes if whitelist_nodes else self.nodes)
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        if self.params.get("rack_aware_loader") and node.parent_cluster.racks_count > 1:
+            # - if there are multiple rack/AZs configured, we'll try to configue RackAwareRoundRobinPolicy
+            # - if there is only one rack configured, we'll use WhiteListRoundRobinPolicy
+
+            # - The only nemeses, that pass 'whitelist_nodes', are 'disrupt_refuse_connection_with_'.
+            # The whitelist_nodes keeps the alive nodes.
+            loader = self.nodes[0].test_config.tester_obj().loaders.nodes[0]
+            loader_rack = loader.node_rack
+            loader_dc = loader.datacenter
+            wlrr = RackAwareRoundRobinPolicy(local_dc=loader_dc, local_rack=loader_rack)
+            LOGGER.debug("Using RackAwareRoundRobinPolicy %s. Loader rack: %s. Loader datacenter: %s. Node IPs: %s",
+                         node.name, loader_rack, loader_dc, node_ips)
+        return wlrr, node_ips
+
+=======
+    def get_load_balancing_policy(self, whitelist_nodes=None):
+        node_ips = self.get_node_cql_ips(nodes=whitelist_nodes if whitelist_nodes else self.nodes)
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        if self.params.get("rack_aware_loader") and self.racks_count > 1:
+            # - if there are multiple rack/AZs configured, we'll try to configue RackAwareRoundRobinPolicy
+            # - if there is only one rack configured, we'll use WhiteListRoundRobinPolicy
+
+            # - The only nemeses, that pass 'whitelist_nodes', are 'disrupt_refuse_connection_with_'.
+            # The whitelist_nodes keeps the alive nodes.
+            loader = self.nodes[0].test_config.tester_obj().loaders.nodes[0]
+            loader_rack = loader.node_rack
+            loader_dc = loader.datacenter
+            wlrr = RackAwareRoundRobinPolicy(local_dc=loader_dc, local_rack=loader_rack)
+            LOGGER.debug("Using RackAwareRoundRobinPolicy. Loader rack: %s. Loader datacenter: %s. Node IPs: %s",
+                         loader_rack, loader_dc, node_ips)
+        return wlrr, node_ips
+
+>>>>>>> d66316a78 (fix(cluster): cql_connection for exclusive node)
     def cql_connection(self, node, keyspace=None, user=None,
 
                        password=None, compression=True, protocol_version=None,
@@ -3722,8 +3760,16 @@ class BaseCluster:
             wlrr = None
             node_ips = []
         else:
+<<<<<<< HEAD
             node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
             wlrr = WhiteListRoundRobinPolicy(node_ips)
+||||||| parent of d66316a78 (fix(cluster): cql_connection for exclusive node)
+            wlrr, node_ips = self.get_load_balancing_policy(node, whitelist_nodes=whitelist_nodes)
+
+=======
+            wlrr, node_ips = self.get_load_balancing_policy(whitelist_nodes=whitelist_nodes)
+
+>>>>>>> d66316a78 (fix(cluster): cql_connection for exclusive node)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
                                     node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
@@ -3746,8 +3792,18 @@ class BaseCluster:
             wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
             node_ips = []
         else:
+<<<<<<< HEAD
             node_ips = [node.cql_address]
             wlrr = WhiteListRoundRobinPolicy(node_ips)
+||||||| parent of d66316a78 (fix(cluster): cql_connection for exclusive node)
+            wlrr, node_ips = self.get_load_balancing_policy(node)
+=======
+            # Use WhiteListRoundRobinPolicy with a single node IP.
+            # RackAwareRoundRobinPolicy is not applicable for exclusive node connections,
+            # as it operates based on rack and datacenter, not individual nodes.
+            node_ips = [node.cql_address]
+            wlrr = WhiteListRoundRobinPolicy(node_ips)
+>>>>>>> d66316a78 (fix(cluster): cql_connection for exclusive node)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
                                     node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
