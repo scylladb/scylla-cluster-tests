@@ -34,7 +34,7 @@ from .local_cmd_runner import LocalCmdRunner
 class RemoteCmdRunnerBase(CommandRunner):
     port: int = 22
     connect_timeout: int = 60
-    key_file: str = ""
+    key_file: Optional[str] = None
     extra_ssh_options: str = ""
     auth_sleep_time = 30
     proxy_host: str = None
