@@ -2497,7 +2497,7 @@ class PodCluster(cluster.BaseCluster):
                 if candidate_namespace not in namespaces:
                     # NOTE: the namespaces must match for all the K8S clusters
                     for k8s_cluster in self.k8s_clusters:
-                        k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
+                        k8s_cluster.create_namespace(candidate_namespace)
                     return candidate_namespace
                 # TODO: make it work correctly for case with reusage of multi-tenant cluster
                 k8s_cluster = self.k8s_clusters[0]
