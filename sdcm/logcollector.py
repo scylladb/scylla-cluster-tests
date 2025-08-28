@@ -25,6 +25,7 @@ from collections import OrderedDict
 from typing import Optional, Tuple, List
 from pathlib import Path
 from functools import cached_property
+from unittest.mock import MagicMock
 
 import requests
 from invoke.exceptions import UnexpectedExit
@@ -62,6 +63,8 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
+from sdcm.localhost import LocalHost
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1425,6 +1428,7 @@ class Collector:
         self.sct_set = []
         self.pt_report_set = []
         self.cluster_log_collectors = {}
+        self.localhost = None
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors |= {
                 KubernetesLogCollector: self.kubernetes_set,
@@ -1654,6 +1658,53 @@ class Collector:
                                                   global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
 
+    def get_xcloud_instances_by_testid(self):
+
+        if not self.localhost.xcloud_connect_supported(self.params):
+            LOGGER.warning("X-Cloud connectivity is not supported, can't collect db logs")
+            return
+
+        TestConfig().configure_xcloud_connectivity(self.localhost, self.params)
+
+        api_client = ScyllaCloudAPIClient(api_url=self.params.cloud_env_credentials["base_url"],
+                                          auth_token=self.params.cloud_env_credentials["api_token"])
+
+        account_id = api_client.get_account_details().get("accountId")
+        clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+        LOGGER.info("Found %s cluster(s) in Scylla Cloud account", len(clusters))
+
+        for cluster_data in clusters:
+            cluster_name = cluster_data.get('clusterName', '')
+            cluster_id = cluster_data.get('id')
+
+            if self.test_id and str(self.test_id)[:8] in cluster_name:
+                break
+        else:
+            LOGGER.info("No cluster found in Scylla Cloud account matching test_id: %s", self.test_id)
+            return
+        LOGGER.info("Found matching cluster: %s, id: %s", cluster_name, cluster_id)
+
+        cluster_nodes = api_client.get_cluster_nodes(account_id=account_id, cluster_id=cluster_id, enriched=True)
+
+        for node_data in cluster_nodes:
+            parent_cluster_mock = MagicMock()
+            parent_cluster_mock.params = self.params
+            node_mock = MagicMock()
+            node_mock._cluster_id = cluster_id
+            node_mock._node_id = node_data.get('id')
+            node_mock.parent_cluster = parent_cluster_mock
+
+            ssh_login_info = self.localhost.xcloud_connect_get_ssh_address(node=node_mock)
+            self.db_cluster.append(CollectingNode(name=str(node_data.get('id')),
+                                                  ssh_login_info=ssh_login_info,
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
+
+        xcloud_provider = self.params.get('xcloud_provider')
+        if xcloud_provider == 'aws':
+            self.get_aws_instances_by_testid()
+        elif xcloud_provider == 'gce':
+            self.get_gce_instances_by_testid()
+
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
             self.get_aws_instances_by_testid()
@@ -1661,6 +1712,8 @@ class Collector:
             self.get_gce_instances_by_testid()
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
+        elif backend == 'xcloud':
+            self.get_xcloud_instances_by_testid()
         else:
             self.create_collecting_nodes()
 
@@ -1671,6 +1724,8 @@ class Collector:
         as single stage in pipeline for defined cluster sets
         """
         results = {}
+        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_id)
+
         self.define_test_id()
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
@@ -1698,6 +1753,8 @@ class Collector:
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__, exc_info=True)
+
+        self.localhost.destroy()
         return results
 
     def create_base_storage_dir(self, test_dir=None):
