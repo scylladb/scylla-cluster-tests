@@ -172,15 +172,15 @@ class OperationThread:
     def join(self, timeout=None):
         return self._thread.join(timeout)
 
-    def _wait_until_user_table_exists(self, timeout_min: int = 20):
+    def _wait_until_user_table_exists(self, timeout_min: int = 40):
         text = f'Waiting until {self.thread_params.ks_cf} user table exists'
         db_node = random.choice(self.thread_params.db_cluster.nodes)
 
         if self.thread_params.ks_cf.lower() == 'random':
             wait.wait_for(func=lambda: len(self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)) > 0,
-                          step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
+                          step=60, text=text, timeout=60 * timeout_min, throw_exc=True)
             self.thread_params.ks_cf = self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)[0]
         else:
             wait.wait_for(func=lambda: self.thread_params.ks_cf in (
                 self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)
-            ), step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
+            ), step=60, text=text, timeout=60 * timeout_min, throw_exc=True)
