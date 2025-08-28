@@ -139,7 +139,7 @@ def configure_logging(exception_handler=None,
         formatters = {
             'default': {
                 '()': MultilineMessagesFormatter,
-                'format': '< t:%(asctime)s f:%(filename)-15s l:%(lineno)-4s c:%(name)-20s p:%(levelname)-5s > %(message)s'
+                'format': '%(strftime("%H:%M:%S,%f")[:-3])s %(levelname)-5s %(filename)-15s:%(lineno)-4s %(message)s'
             },
             'action_logger': {
                 '()': JSONLFormatter,
