@@ -207,7 +207,7 @@ class CommandRunner(metaclass=ABCMeta):
                          "-o UserKnownHostsFile=%s -o BatchMode=yes "
                          "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
                          "-l %s -p %d %s")
-        if key_file is not None:
+        if key_file:
             base_command += ' -i %s' % os.path.expanduser(key_file)
         assert connect_timeout > 0  # can't disable the timeout
         return base_command % (opts, hosts_file, connect_timeout,
