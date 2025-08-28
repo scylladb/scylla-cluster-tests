@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def base_versions_list = []
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(pipelineParams.get('backend', 'aws'), pipelineParams.get('region'), pipelineParams.get('gce_datacenter'))
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent none

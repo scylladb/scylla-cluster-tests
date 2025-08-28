@@ -4,7 +4,7 @@ import groovy.json.JsonSlurper
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(pipelineParams.get('backend', 'aws'), pipelineParams.get('region'), pipelineParams.get('gce_datacenter'))
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent none
