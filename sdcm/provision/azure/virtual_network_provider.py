@@ -54,9 +54,6 @@ class VirtualNetworkProvider:
                 "zones": [self._az] if self._az else [],
                 "address_space": {
                     "address_prefixes": ["10.0.0.0/16"],
-                },
-                "dhcp_options": {
-                    "dns_servers": ["8.8.8.8", "1.1.1.1"]
                 }
             }
         ).wait()
