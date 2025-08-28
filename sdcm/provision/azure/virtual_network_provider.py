@@ -56,7 +56,11 @@ class VirtualNetworkProvider:
                     "address_prefixes": ["10.0.0.0/16"],
                 },
                 "dhcp_options": {
-                    "dns_servers": ["8.8.8.8", "1.1.1.1"]
+                    "dns_servers": [
+                        "8.8.8.8",  # Google
+                        "1.1.1.1",  # Cloudflare
+                        "168.63.129.16",  # Azure
+                    ]
                 }
             }
         ).wait()
