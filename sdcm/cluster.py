@@ -2926,7 +2926,7 @@ class BaseNode(AutoSshContainerMixin):
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
         # cqlsh uses rpc_address/broadcast_rps_address.
-        host = '' if self.is_docker() else self.cql_address
+        host = '' if self.is_docker() or self.is_cloud() else self.cql_address
         # escape double quotes, that might be on keyspace/tables names
         command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
