@@ -27,7 +27,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 class MultilineMessagesFormatter(logging.Formatter):
 
-    def format(self, record):
+    def format(self, record, datefmt=None):
         """
         This is mostly the same as logging.Formatter.format except for the splitlines() thing.
         This is done so (copied the code) to not make logging a bottleneck. It's not lots of code
@@ -35,7 +35,7 @@ class MultilineMessagesFormatter(logging.Formatter):
         """
         record.message = record.getMessage()
         if self.usesTime():
-            record.asctime = self.formatTime(record, self.datefmt)
+            record.asctime = datetime.fromtimestamp(record.created).strftime("%H:%M:%S,%f")[:-3]
         if '\n' in record.message:
             splitted = record.message.splitlines()
             output = self._fmt % dict(record.__dict__, message=splitted.pop(0))
