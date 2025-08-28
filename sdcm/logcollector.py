@@ -25,6 +25,7 @@ from collections import OrderedDict
 from typing import Optional, Tuple, List
 from pathlib import Path
 from functools import cached_property
+from dataclasses import dataclass
 
 import requests
 from invoke.exceptions import UnexpectedExit
@@ -62,6 +63,8 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
+from sdcm.localhost import LocalHost
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
 
 LOGGER = logging.getLogger(__name__)
 
@@ -873,7 +876,7 @@ def collect_log_entities(node, log_entities: List[BaseLogEntity]):
                              log_entity.name)
                 continue
             try:
-                log_entity.collect(node, node.logdir, remote_node_dir)
+                log_entity.collect(node, node.logdir, remote_dst=remote_node_dir)
                 LOGGER.debug("Diagnostic file '%s' collected", log_entity.name)
             except Exception as details:  # noqa: BLE001
                 LOGGER.error("Error occurred during collecting diagnostics data on host: %s\n%s", node.name, details)
@@ -1425,6 +1428,7 @@ class Collector:
         self.sct_set = []
         self.pt_report_set = []
         self.cluster_log_collectors = {}
+        self.localhost = None
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors |= {
                 KubernetesLogCollector: self.kubernetes_set,
@@ -1655,11 +1659,50 @@ class Collector:
                                                   tags={**self.tags, "NodeType": "loader", }))
 
     def get_xcloud_instances_by_testid(self):
+
         xcloud_provider = self.params.get('xcloud_provider')
         if xcloud_provider == 'aws':
             self.get_aws_instances_by_testid()
         elif xcloud_provider == 'gce':
             self.get_gce_instances_by_testid()
+
+        if not self.localhost.xcloud_connect_supported(self.params):
+            LOGGER.warning("X-Cloud connectivity is not supported, can't collect db logs")
+            return
+
+        TestConfig().configure_xcloud_connectivity(self.localhost, self.params)
+
+        api_client = ScyllaCloudAPIClient(api_url=self.params.cloud_env_credentials["base_url"],
+                                          auth_token=self.params.cloud_env_credentials["api_token"])
+
+        account_id = api_client.get_account_details().get("accountId")
+        clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+        LOGGER.info("Found %s cluster(s) in Scylla Cloud account", len(clusters))
+
+        for cluster_data in clusters:
+            cluster_name = cluster_data.get('clusterName', '')
+            cluster_id = cluster_data.get('id')
+
+            if self.test_id and str(self.test_id)[:8] in cluster_name:
+                break
+        else:
+            LOGGER.info("No cluster found in Scylla Cloud account matching test_id: %s", self.test_id)
+            return
+        LOGGER.info("Found matching cluster: %s, id: %s", cluster_name, cluster_id)
+
+        cluster_nodes = api_client.get_cluster_nodes(account_id=account_id, cluster_id=cluster_id, enriched=True)
+
+        for node_data in cluster_nodes:
+            parent_cluster_mock = XCloudParentClusterMock(self.params)
+            node_mock = XCloudNodeMock(
+                _cluster_id=cluster_id,
+                _node_id=node_data.get('id'),
+                parent_cluster=parent_cluster_mock
+            )
+            ssh_login_info = self.localhost.xcloud_connect_get_ssh_address(node=node_mock)
+            self.db_cluster.append(CollectingNode(name=str(node_data.get('id')),
+                                                  ssh_login_info=ssh_login_info,
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
 
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
@@ -1680,6 +1723,8 @@ class Collector:
         as single stage in pipeline for defined cluster sets
         """
         results = {}
+        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_id)
+
         self.define_test_id()
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
@@ -1707,6 +1752,8 @@ class Collector:
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__, exc_info=True)
+
+        self.localhost.destroy()
         return results
 
     def create_base_storage_dir(self, test_dir=None):
@@ -1762,3 +1809,21 @@ def upload_archive_to_s3(archive_path: str, storing_path: str) -> Optional[str]:
         LOGGER.error("File `%s' will not be uploaded", archive_path)
         return None
     return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path, public=False)
+
+
+class XCloudParentClusterMock:
+    def __init__(self, params):
+        self.params = params
+        # Add any other attributes needed for compatibility
+
+
+@dataclass
+class XCloudNodeMock:
+    _cluster_id: str
+    _node_id: str
+    parent_cluster: XCloudParentClusterMock
+    _instance_name: str = None
+
+    def __post_init__(self):
+        if self._instance_name is None:
+            self._instance_name = self._node_id
