@@ -2960,12 +2960,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             for node in nodes_with_old_image.copy():
                 # NOTE: 'node.image' may be 'docker.io/scylladb/scylla:4.5.3'
                 #       as well as 'scylladb/scylla:4.5.3'
-                if node.image.endswith(new_image):
+                #       as well as 'scylladb/scylla-enterprise:2024.1.19' or 'scylladb/scylla:2025.1.5'
+                if node.image.endswith(new_version):
                     nodes_with_old_image.remove(node)
                     return True
             actual_versions = [f"{node.name}: {node.image}" for node in nodes_with_old_image]
             raise RuntimeError(
-                f"No node was upgraded. Expected image version '{new_image}', "
+                f"No node was upgraded. Expected image version '{new_version}', "
                 f"but found {actual_versions}"
             )
 
