@@ -639,3 +639,7 @@ class FakeAzureService:
     @property
     def compute(self) -> Compute:
         return Compute(self.path)
+
+    @property
+    def keyvault(self):
+        return None
