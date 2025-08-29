@@ -2963,9 +2963,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 if node.image.endswith(new_image):
                     nodes_with_old_image.remove(node)
                     return True
+            actual_versions = [f"{node.name}: {node.image}" for node in nodes_with_old_image]
             raise RuntimeError(
                 f"No node was upgraded. Expected image version '{new_image}', "
-                f"but found {[node.image for node in nodes_with_old_image]}"
+                f"but found {actual_versions}"
             )
 
         nodes = self.nodes.copy()
