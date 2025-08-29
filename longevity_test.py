@@ -571,6 +571,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
             while not is_target_reached(current_cluster_size, cluster_target_size):
                 added_nodes = []
+
                 for dcx, target in enumerate(cluster_target_size):
                     if current_cluster_size[dcx] < target:
                         add_nodes_num = add_node_cnt if (
@@ -596,3 +597,22 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
             InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
             InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
+
+    def test_decommission_nodes_after_bootstrap_failed(self):
+        try:
+            self.test_scale_empty_cluster()
+        except Exception as exc:  # noqa: BLE001
+            self.log.info("Bootstrap failed with error: %s", exc)
+            self.log.info("Start decommission operations")
+            nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+            current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+            try:
+                for dcx, dc_nodes_num in enumerate(current_cluster_size):
+                    decommissioned = 0
+                    while dc_nodes_num - decommissioned > 2:
+                        self.db_cluster.decommission(node=nodes_by_dcx[dcx][-1], timeout=7200)
+                        decommissioned += 1
+            finally:
+                nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+                current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+                self.log.info("Cluster size after decommission %s", current_cluster_size)
