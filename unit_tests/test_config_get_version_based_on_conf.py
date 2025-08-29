@@ -34,7 +34,7 @@ def setup():
 
 @pytest.fixture(scope='function', autouse=True)
 def function_setup():
-    os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+    os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
 
     yield
 

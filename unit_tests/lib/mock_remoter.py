@@ -50,7 +50,7 @@ class MockRemoter:
     def run(self, cmd: str, timeout: Optional[float] = None,
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False) -> Result:
+            timestamp_logs=False, change_context: bool = False) -> Result:
         response = self.responses.get(cmd)
         if response is None:
             raise RuntimeError("Can't find response")

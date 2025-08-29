@@ -141,7 +141,7 @@ class TestDockerCmdRunner(unittest.TestCase):
             result = self.runner.run('echo hello', timeout=30, verbose=True)
 
         self.assertEqual(result, mock_result)
-        mock_setup.assert_called_once_with(True, None, None)
+        mock_setup.assert_called_once_with(True, None, None, timestamp_logs=False)
         mock_exec.assert_called_once_with('echo hello', 30, False, True, [], '')
         mock_print.assert_called_once_with(mock_result, True, False)
 
