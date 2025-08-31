@@ -19,6 +19,7 @@ import unittest
 from typing import List
 from unittest.mock import patch
 
+import pytest
 from parameterized import parameterized
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
@@ -580,50 +581,42 @@ class IntegrationTests(unittest.TestCase):
     def temp_dir(self):
         return tempfile.mkdtemp()
 
+    @pytest.fixture(autouse=True)
+    def fixture_env(self, monkeypatch):
+        self.monkeypatch = monkeypatch
+
     def _run_test(self, config_path: str, expected_node_config: str, region_names: str):
-        old_environ = os.environ.copy()
-        old_test_config = {key: value for key, value in TestConfig().__class__.__dict__.items() if
-                           is_builtin(type(value)) and not key.startswith('__')}
-        while os.environ:
-            os.environ.popitem()
-        try:
-            with patch("sdcm.sct_config.get_scylla_ami_versions", return_value=[self.get_scylla_ami_version_output]), \
-                    patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate",
-                          return_value=None):
-                os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-                os.environ['SCT_REGION_NAME'] = region_names
-                os.environ['SCT_CONFIG_FILES'] = config_path
-                os.environ['SCT_PREPARE_SASLAUTHD'] = "true"
+        with patch("sdcm.sct_config.get_scylla_ami_versions", return_value=[self.get_scylla_ami_version_output]), \
+                patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate",
+                      return_value=None):
+            self.monkeypatch.setenv('SCT_CLUSTER_BACKEND', 'aws')
+            self.monkeypatch.setenv('SCT_REGION_NAME', region_names)
+            self.monkeypatch.setenv('SCT_CONFIG_FILES', config_path)
+            self.monkeypatch.setenv('SCT_PREPARE_SASLAUTHD', "true")
 
-                conf = SCTConfiguration()
-                test_config = TestConfig()
+            conf = SCTConfiguration()
+            test_config = TestConfig()
 
-                cluster_backend = conf.get('cluster_backend')
-                if cluster_backend == 'aws':
-                    test_config.set_multi_region(len(conf.get('region_name').split()) > 1)
-                elif cluster_backend == 'gce':
-                    test_config.set_multi_region(len(conf.get('gce_datacenter').split()) > 1)
-                    test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))
+            cluster_backend = conf.get('cluster_backend')
+            if cluster_backend == 'aws':
+                test_config.set_multi_region(len(conf.get('region_name').split()) > 1)
+            elif cluster_backend == 'gce':
+                test_config.set_multi_region(len(conf.get('gce_datacenter').split()) > 1)
+                test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))
 
-                test_config.set_ip_ssh_connections(ssh_connection_ip_type(conf))
+            test_config.set_ip_ssh_connections(ssh_connection_ip_type(conf))
 
-                cluster = DummyCluster(params=conf)
-                for node_num in range(3):
-                    node = DummyNode(node_num=node_num + 1, parent_cluster=cluster, base_logdir=self.temp_dir)
-                    node.init()
-                    node.is_seed = False
-                    cluster.nodes.append(node)
-                cluster.nodes[0].is_seed = True
-                cluster.init_nodes()
-                seed_node_ips = ','.join(cluster.seed_nodes_addresses)
-                for node in cluster.nodes:
-                    node.validate_scylla_yaml(expected_node_config=expected_node_config, seed_node_ips=seed_node_ips)
-        finally:
-            while os.environ:
-                os.environ.popitem()
-            os.environ.update(old_environ)
-            for key, value in old_test_config.items():
-                setattr(TestConfig, key, value)
+            cluster = DummyCluster(params=conf)
+            for node_num in range(3):
+                node = DummyNode(node_num=node_num + 1, parent_cluster=cluster, base_logdir=self.temp_dir)
+                node.init()
+                node.is_seed = False
+                cluster.nodes.append(node)
+            cluster.nodes[0].is_seed = True
+            cluster.init_nodes()
+            seed_node_ips = ','.join(cluster.seed_nodes_addresses)
+            for node in cluster.nodes:
+                node.validate_scylla_yaml(expected_node_config=expected_node_config, seed_node_ips=seed_node_ips)
 
     @parameterized.expand([
         (

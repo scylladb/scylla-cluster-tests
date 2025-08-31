@@ -7,6 +7,7 @@ import unittest
 from functools import cached_property
 from typing import Dict, Union, Tuple, Iterable, Sequence, List
 
+import pytest
 from parameterized import parameterized
 
 from sdcm import sct_abs_path
@@ -387,23 +388,17 @@ class LongevityPipelineTest:
 class TestHydraSh(unittest.TestCase):
     cmd_runner = LocalCmdRunner()
 
-    @staticmethod
-    def prepare_environment(env):
+    @pytest.fixture(autouse=True)
+    def fixture_env(self, monkeypatch):
+        self.monkeypatch = monkeypatch
+
         for name in os.environ:
             if any(name.startswith(prefix) for prefix in ['SCT_', 'AWS_', 'GOOGLE_']):
-                del os.environ[name]
+                self.monkeypatch.delenv(name)
 
+    def prepare_environment(self, env):
         for name, value in env.items():
-            os.environ[name] = value
-
-    @staticmethod
-    @contextlib.contextmanager
-    def environ():
-        old_environment = os.environ.copy()
-        yield
-        os.environ.clear()
-        for name, value in old_environment.items():
-            os.environ[name] = value
+            self.monkeypatch.setenv(name, value)
 
     @staticmethod
     def validate_result(
@@ -443,7 +438,7 @@ class TestHydraSh(unittest.TestCase):
         LongevityPipelineTest(backend='gce-siren', runner=True, aws_creds=True).hydra_test_cases
     )
     def test_run_test(self, test_case_params: HydraTestCaseParams, tmp_dir: HydraTestCaseTmpDir):
-        with tmp_dir, self.environ():
+        with tmp_dir:
             cmd, expected, not_expected, expected_status, env = test_case_params.as_tuple
             self.prepare_environment(env)
             result = self.cmd_runner.run(
