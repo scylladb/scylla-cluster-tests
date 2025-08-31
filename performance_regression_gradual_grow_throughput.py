@@ -307,6 +307,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                                                       cycle_name=current_throttle_step))(self.run_step))
             results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
                                   num_threads=num_threads, step_duration=workload.step_duration)
+            self.log.debug("All c-s commands results collected and saved in Argus")
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details()
