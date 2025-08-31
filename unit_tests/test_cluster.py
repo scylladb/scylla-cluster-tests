@@ -874,6 +874,30 @@ def test_is_table_has_no_sstables(docker_scylla, params, events):
                                  f"Actual snapshot content: {sorted(snapshot_content_list)}")
 
 
+@pytest.mark.integration
+def test_exclusive_connection(docker_scylla, docker_scylla_2, params, events):
+    """
+    Test exclusive CQL connection creation for each node in the cluster.
+    Ensures that the session connects to the correct node.
+    Run 10 times to increase the chance of catching intermittent issues.
+    """
+    cluster = DummyScyllaCluster([docker_scylla, docker_scylla_2])
+    cluster.params = params
+
+    for i in range(10):
+        for node in cluster.nodes:
+            with cluster.cql_connection_patient_exclusive(node) as session:
+                print(f"Iteration {i}, Node {node.cql_address}")
+                local = session.execute("SELECT host_id, rpc_address FROM system.local").one()
+                peers = session.execute("SELECT host_id, peer, rpc_address FROM system.peers").one()
+                assert local.rpc_address == node.cql_address, (
+                    f"Local rpc_address: {local.rpc_address}, expected: {node.cql_address}"
+                )
+                assert peers.rpc_address != node.cql_address, (
+                    f"Peers rpc_address: {peers.rpc_address}, expected not: {node.cql_address}"
+                )
+
+
 class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):
         """ Test "nodetool describering" output parsing """
