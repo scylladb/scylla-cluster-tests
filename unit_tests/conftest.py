@@ -56,11 +56,21 @@ def prom_address():
     yield start_metrics_server()
 
 
+<<<<<<< HEAD
 @pytest.fixture(name='docker_scylla', scope='function')
 def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: disable=too-many-locals
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
+||||||| parent of 46403d4eb (test(unit test): unit test for exclusive connection)
+@pytest.fixture(name='docker_scylla', scope='function')
+def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
+    docker_scylla_args = {}
+    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
+        docker_scylla_args = test_marker.kwargs
+=======
+def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
+>>>>>>> 46403d4eb (test(unit test): unit test for exclusive connection)
     ssl = docker_scylla_args.get('ssl')
     docker_network = docker_scylla_args.get('docker_network')
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
@@ -73,6 +83,45 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:6.1.0-dev-0.20240605.2c3f7c996f98")
     cluster = LocalScyllaClusterDummy(params=params)
 
+<<<<<<< HEAD
+||||||| parent of 46403d4eb (test(unit test): unit test for exclusive connection)
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+
+    if ssl:
+        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        create_ca(localhost)
+
+    env_vars = '-e VECTOR_SEARCH_TEST=true' if docker_scylla_args.get('scylla_docker_image') else ''
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
+                         f' --user root {env_vars} --entrypoint /entry.sh')
+
+    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
+                          command_line=f"--smp 1 {alternator_flags}",
+                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+
+=======
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+
+    if ssl:
+        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        create_ca(localhost)
+
+    env_vars = '-e VECTOR_SEARCH_TEST=true' if docker_scylla_args.get('scylla_docker_image') else ''
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
+                         f' --user root {env_vars} --entrypoint /entry.sh')
+
+    if seeds := docker_scylla_args.get("seeds"):
+        seeds = f" --seeds={seeds}"
+    else:
+        seeds = ""
+
+    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
+                          command_line=f"--smp 1 {alternator_flags}{seeds}",
+                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+
+>>>>>>> 46403d4eb (test(unit test): unit test for exclusive connection)
     if ssl:
         curr_dir = os.getcwd()
         try:
@@ -115,6 +164,27 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
                   timeout=120, throw_exc=True)
 
+    return scylla
+
+
+@pytest.fixture(name='docker_scylla', scope='function')
+def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
+    docker_scylla_args = {}
+    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
+        docker_scylla_args = test_marker.kwargs
+    scylla = configure_scylla_node(docker_scylla_args, params)
+    yield scylla
+
+    scylla.kill()
+
+
+@pytest.fixture(name='docker_scylla_2', scope='function')
+def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params):  # noqa: PLR0914
+    docker_scylla_args = {}
+    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
+        docker_scylla_args = test_marker.kwargs
+    docker_scylla_args['seeds'] = docker_scylla.ip_address
+    scylla = configure_scylla_node(docker_scylla_args, params)
     yield scylla
 
     scylla.kill()
