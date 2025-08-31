@@ -227,28 +227,10 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.resources_cleanup.clean_load_balancers_aws",
     )
 
-<<<<<<< HEAD
-    @classmethod
-    def setUpClass(cls) -> None:
-        with environment(SCT_CLUSTER_BACKEND="aws", SCT_REGION_NAME="eu-north-1 eu-west-1"):
-            cls.config = SCTConfiguration()
-        if not cls.integration:
-            for func in cls.functions_to_patch:
-                patch(func).start()
-||||||| parent of cc04051b1 (fix(unittests): make sure test_id is define for a test)
-    @classmethod
-    def setUpClass(cls) -> None:
-        with environment(SCT_CLUSTER_BACKEND="aws", SCT_REGION_NAME='eu-north-1 eu-west-1'):
-            cls.config = SCTConfiguration()
-        if not cls.integration:
-            for func in cls.functions_to_patch:
-                patch(func).start()
-=======
     @pytest.fixture(autouse=True)
     def fixture_config(self, monkeypatch):
         monkeypatch.setenv(name="SCT_CLUSTER_BACKEND", value="aws")
         monkeypatch.setenv(name="SCT_REGION_NAME", value="eu-north-1 eu-west-1")
->>>>>>> cc04051b1 (fix(unittests): make sure test_id is define for a test)
 
         self.config = SCTConfiguration()
 

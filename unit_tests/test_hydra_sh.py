@@ -378,16 +378,8 @@ class TestHydraSh(unittest.TestCase):
         self.monkeypatch = monkeypatch
 
         for name in os.environ:
-<<<<<<< HEAD
             if any(name.startswith(prefix) for prefix in ["SCT_", "AWS_", "GOOGLE_"]):
-                del os.environ[name]
-||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
-            if any(name.startswith(prefix) for prefix in ['SCT_', 'AWS_', 'GOOGLE_']):
-                del os.environ[name]
-=======
-            if any(name.startswith(prefix) for prefix in ['SCT_', 'AWS_', 'GOOGLE_']):
                 self.monkeypatch.delenv(name)
->>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
 
     def prepare_environment(self, env):
         for name, value in env.items():
