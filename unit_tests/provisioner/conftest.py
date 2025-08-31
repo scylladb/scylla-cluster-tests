@@ -43,8 +43,7 @@ def fallback_on_demand(monkeypatch):
 
 
 @pytest.fixture
-<<<<<<< HEAD
-def params():
+def params(monkeypatch):
     EnvConfig = namedtuple(
         "EnvConfig",
         [
@@ -60,21 +59,6 @@ def params():
             "SCT_IP_SSH_CONNECTIONS",
         ],
     )
-||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
-def params():
-    EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
-                            "SCT_N_DB_NODES",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE",
-                            "SCT_IP_SSH_CONNECTIONS"])
-=======
-def params(monkeypatch):
-    EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
-                            "SCT_N_DB_NODES",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE",
-                            "SCT_IP_SSH_CONNECTIONS"])
->>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
