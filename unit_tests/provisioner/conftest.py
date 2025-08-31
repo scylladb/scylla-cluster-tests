@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import os
 import uuid
 from collections import namedtuple
 from pathlib import Path
@@ -37,13 +36,14 @@ def azure_service(tmp_path_factory) -> AzureService:
 
 
 @pytest.fixture
-def fallback_on_demand():
-    os.environ["SCT_INSTANCE_PROVISION"] = "spot"
-    os.environ["SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND"] = "true"
-    os.environ["BUILD_TAG"] = "FailSpotDB"
+def fallback_on_demand(monkeypatch):
+    monkeypatch.setenv("SCT_INSTANCE_PROVISION", "spot")
+    monkeypatch.setenv("SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND", "true")
+    monkeypatch.setenv("BUILD_TAG", "FailSpotDB")
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def params():
     EnvConfig = namedtuple(
         "EnvConfig",
@@ -60,6 +60,21 @@ def params():
             "SCT_IP_SSH_CONNECTIONS",
         ],
     )
+||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
+def params():
+    EnvConfig = namedtuple('EnvConfig',
+                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
+                            "SCT_N_DB_NODES",
+                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE",
+                            "SCT_IP_SSH_CONNECTIONS"])
+=======
+def params(monkeypatch):
+    EnvConfig = namedtuple('EnvConfig',
+                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
+                            "SCT_N_DB_NODES",
+                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE",
+                            "SCT_IP_SSH_CONNECTIONS"])
+>>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
@@ -73,7 +88,8 @@ def params():
         SCT_AVAILABILITY_ZONE="a",
         SCT_IP_SSH_CONNECTIONS="public",
     )
-    os.environ.update(env_config._asdict())
+    for key, value in env_config._asdict().items():
+        monkeypatch.setenv(key, value)
     return SCTConfiguration()
 
 

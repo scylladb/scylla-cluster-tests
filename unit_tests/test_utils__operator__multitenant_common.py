@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import os
 import unittest
+
+import pytest
 
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
@@ -76,13 +77,23 @@ class FakeMultitenantPerformanceTest(FakeMultitenantTestBase, FakePerformanceTes
 
 
 class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
+<<<<<<< HEAD
+||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
+
+=======
+
+    @pytest.fixture(autouse=True)
+    def fixture_env(self, monkeypatch):
+        self.monkeypatch = monkeypatch
+
+>>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
     def setUp(self):
         self.setup_default_env()
 
     def tearDown(self):
-        self.clear_sct_env_variables()
         self.setup_default_env()
 
+<<<<<<< HEAD
     @classmethod
     def setup_default_env(cls):
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
@@ -93,9 +104,33 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         for k in os.environ:
             if k.startswith("SCT_"):
                 del os.environ[k]
+||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
+    @classmethod
+    def setup_default_env(cls):
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_configs/minimal_test_case.yaml'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-eks'
+
+    @classmethod
+    def clear_sct_env_variables(cls):
+        for k in os.environ:
+            if k.startswith('SCT_'):
+                del os.environ[k]
+=======
+    def setup_default_env(self):
+        self.monkeypatch.setenv('SCT_CONFIG_FILES', 'unit_tests/test_configs/minimal_test_case.yaml')
+        self.monkeypatch.setenv('SCT_CLUSTER_BACKEND', 'k8s-eks')
+>>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
 
     def _multitenant_class_with_shared_options(self, klass):
+<<<<<<< HEAD
         os.environ["SCT_CONFIG_FILES"] = "unit_tests/test_data/test_config/multitenant/shared_option_values.yaml"
+||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
+        os.environ['SCT_CONFIG_FILES'] = (
+            'unit_tests/test_data/test_config/multitenant/shared_option_values.yaml')
+=======
+        self.monkeypatch.setenv(
+            'SCT_CONFIG_FILES', 'unit_tests/test_data/test_config/multitenant/shared_option_values.yaml')
+>>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
 
         fake_multitenant_test_class_instance = klass()
         tenants = get_tenants(fake_multitenant_test_class_instance)
@@ -140,7 +175,15 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         self._multitenant_class_with_shared_options(FakeMultitenantPerformanceTest)
 
     def _multitenant_class_with_unique_options(self, klass):
+<<<<<<< HEAD
         os.environ["SCT_CONFIG_FILES"] = "unit_tests/test_data/test_config/multitenant/unique_option_values.yaml"
+||||||| parent of 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
+        os.environ['SCT_CONFIG_FILES'] = (
+            'unit_tests/test_data/test_config/multitenant/unique_option_values.yaml')
+=======
+        self.monkeypatch.setenv('SCT_CONFIG_FILES', (
+            'unit_tests/test_data/test_config/multitenant/unique_option_values.yaml'))
+>>>>>>> 5a32a624e (fix(unittests): stop setting os.environ as much as possible)
 
         fake_multitenant_longevity_test_class_instance = klass()
         tenants = get_tenants(fake_multitenant_longevity_test_class_instance)
@@ -209,7 +252,3 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
 
     def test_multitenant_performance_class_with_unique_options(self):
         self._multitenant_class_with_unique_options(FakeMultitenantPerformanceTest)
-
-
-if __name__ == "__main__":
-    unittest.main()
