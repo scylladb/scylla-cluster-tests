@@ -209,10 +209,23 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         for throttle_step in workload.throttle_steps:
             self.log.info("Run cs command with rate: %s Kops", throttle_step)
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
+<<<<<<< HEAD
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
             results, _ = run_step(
                 stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle, num_threads=workload.num_threads)
+||||||| parent of 71b5772c3 (test(decorator): add log print outs)
+            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
+                                                      cycle_name=current_throttle_step))(self.run_step))
+            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
+                                  num_threads=num_threads, step_duration=workload.step_duration)
+=======
+            run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
+                                                      cycle_name=current_throttle_step))(self.run_step))
+            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
+                                  num_threads=num_threads, step_duration=workload.step_duration)
+            self.log.debug("All c-s commands results collected and saved in Argus")
+>>>>>>> 71b5772c3 (test(decorator): add log print outs)
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details()
