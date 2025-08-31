@@ -14,6 +14,7 @@ jobs:
     steps:
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
+        if: github.event.pull_request.user.login != 'renovate[bot]'
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
