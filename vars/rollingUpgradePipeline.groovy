@@ -204,6 +204,8 @@ def call(Map pipelineParams) {
                             def base_version = version
                             params_mapping[base_version] = params.collectEntries { param -> [param.key, param.value] }
                             params_mapping[base_version].put('scylla_version', base_version)
+                            // since scylla-pkg might pass this one, we are not supporting it here, as we always starts by version
+                            params_mapping[base_version].remove('scylla_repo')
 
                             // those params are not in the job params, so user can`t change them
                             // but they are coming from the pipelineParams, i.e. hardcoded per use case
