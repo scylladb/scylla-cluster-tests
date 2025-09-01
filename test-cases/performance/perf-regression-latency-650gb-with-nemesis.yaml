@@ -34,6 +34,7 @@ use_hdrhistogram: true
 use_placement_group: true
 use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
+parallel_node_operations: false  # doing this to align the measurement
 cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
