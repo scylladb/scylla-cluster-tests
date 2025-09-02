@@ -829,7 +829,15 @@ class AWSNode(cluster.BaseNode):
         self._instance.wait_until_terminated()
 
         client: EC2Client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
-        client.release_address(AllocationId=self.eip_allocation_id)
+        try:
+            client.release_address(AllocationId=self.eip_allocation_id)
+        except botocore.exceptions.ClientError as exc:
+            if exc.response['Error']['Code'] == 'InvalidAllocationID.NotFound':
+                self.log.warning("Ignoring InvalidAllocationID.NotFound error when releasing address: %s. "
+                                 "The allocation ID '%s' does not exist, likely already released.",
+                                 exc, self.eip_allocation_id)
+            else:
+                raise
 
     def destroy(self):
         self.stop_task_threads()
