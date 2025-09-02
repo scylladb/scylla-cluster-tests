@@ -502,6 +502,13 @@ class ArtifactsTest(ClusterTester):
                 "Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
             return
 
+        if self.db_cluster.nodes[0].is_nonroot_install and \
+                SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/10540", self.params):
+            self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
+            self.actions_log.info(
+                "Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254.")
+            return
+
         if self.node.parent_cluster.cluster_backend == "docker":
             self.log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
             self.actions_log.info("Scylla Doctor check in SCT isn't yet supported for docker backend")
