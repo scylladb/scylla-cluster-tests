@@ -47,6 +47,7 @@ class GceRegion:
         self.network_client = compute_v1.NetworksClient(credentials=credentials)
         self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
         self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials)
+        self.routes_client = compute_v1.RoutesClient(credentials=credentials)
         self.storage_client = storage.Client(credentials=credentials)
 
     @property
@@ -271,6 +272,20 @@ class GceRegion:
                            peering_name, final_status)
             return False
         return True
+
+    def get_peering_routes(self) -> list[str]:
+        """Discover all network peering routes in SCT VPC network"""
+        peering_routes = []
+
+        routes = self.routes_client.list(project=self.project)
+        for route in routes:
+            if hasattr(route, 'next_hop_peering') and route.next_hop_peering:  # peering routes have `next_hop_peering` attribute
+                if route.network and self.SCT_NETWORK_NAME in route.network:
+                    if route.dest_range and route.dest_range not in peering_routes:
+                        peering_routes.append(route.dest_range)
+
+        LOGGER.debug("Discovered %s peering routes in %s", peering_routes, self.region_name)
+        return peering_routes
 
 
 if __name__ == "__main__":

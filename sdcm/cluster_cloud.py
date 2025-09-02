@@ -20,6 +20,7 @@ from typing import Any
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
 from sdcm.utils.gce_region import GceRegion
 
 LOGGER = logging.getLogger(__name__)
@@ -388,11 +389,23 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         broadcast_type = "PRIVATE" if self.vpc_peering_enabled else "PUBLIC"
 
+        cidr_block = None
+        if self.vpc_peering_enabled:
+            try:
+                cidr_manager = CidrPoolManager(
+                    cidr_base=self.vpc_peering_params['cidr_pool_base'],
+                    subnet_size=self.vpc_peering_params['cidr_subnet_size'])
+                cidr_block = cidr_manager.get_available_cidr(
+                    cloud_provider=self._cloud_provider, region=self.params.cloud_provider_params.get('region'))
+                self.log.info("'%s' CIDR block is allocated for Scylla Cloud cluster %s", cidr_block, self.name)
+            except CidrAllocationError as e:
+                raise ScyllaCloudError(f"CIDR allocation failed: {e}") from e
+
         return {
             'account_id': self._account_id,
             'cluster_name': self.name,
             'scylla_version': self.params.get('scylla_version'),
-            'cidr_block': None,
+            'cidr_block': cidr_block,
             'broadcast_type': broadcast_type,
             'allowed_ips': allowed_ips,
             'cloud_provider_id': self.provider_id,
