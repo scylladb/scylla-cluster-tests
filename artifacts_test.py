@@ -397,6 +397,12 @@ class ArtifactsTest(ClusterTester):
                 assert node_info_service.cpu_load_5
                 assert node_info_service.get_node_boot_time_seconds()
 
+        if self.params.get("run_scylla_doctor"):
+            with self.logged_subtest("check scylla_doctor results"):
+                self.run_scylla_doctor()
+        else:
+            self.log.info("Running scylla-doctor is disabled")
+
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
         if backend != "docker":
@@ -488,12 +494,6 @@ class ArtifactsTest(ClusterTester):
         if backend == 'docker':
             with self.logged_subtest("Check docker latest tags"):
                 self.verify_docker_latest_match_release()
-
-        if self.params.get("run_scylla_doctor"):
-            with self.logged_subtest("Run scylla-doctor on the installation"):
-                self.run_scylla_doctor()
-        else:
-            self.log.info("Running scylla-doctor is disabled")
 
     def run_scylla_doctor(self):
         if self.params.get('client_encrypt') and SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2280", self.params):
