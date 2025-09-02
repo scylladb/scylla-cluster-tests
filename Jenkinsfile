@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
-def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce']
+def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -40,6 +40,20 @@ def createRunConfiguration(String backend) {
         configuration.test_name = "functional_tests/scylla_operator"
         configuration.functional_tests = true
         configuration.availability_zone = 'a,b'
+    } else if (backend in  ['xcloud-aws', 'xcloud-gce']) {
+        configuration.backend = 'xcloud'
+        configuration.xcloud_env = 'staging'
+
+        // TODO: remove once xcloud connectivity is enabled by default
+        configuration.ip_ssh_connections =  "public"
+        if (backend == 'xcloud-gce') {
+            configuration.xcloud_provider = 'gce'
+            configuration.gce_datacenter = "us-east1"
+        }
+        if (backend == 'xcloud-aws') {
+            configuration.xcloud_provider = 'aws'
+            configuration.test_config = '["test-cases/PR-provision-test.yaml","configurations/network_config/test_communication_public.yaml"]'
+        }
     }
     return configuration
 }
@@ -230,7 +244,9 @@ pipeline {
                         "test-provision-gce", "test-provision-gce-reuse",
                         "test-provision-azure", "test-provision-azure-reuse",
                         "test-provision-k8s-local-kind-aws", "test-provision-k8s-local-kind-aws-reuse",
-                        "test-provision-k8s-eks", "test-provision-k8s-eks-reuse"
+                        "test-provision-k8s-eks", "test-provision-k8s-eks-reuse",
+                        "test-provision-xcloud-aws", "test-provision-xcloud-aws-reuse",
+                        "test-provision-xcloud-gce", "test-provision-xcloud-gce-reuse",
                     ].join(",")
                     return pullRequestContainsLabels(labels)
                 }
@@ -244,7 +260,7 @@ pipeline {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
-                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null
