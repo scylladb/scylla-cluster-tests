@@ -630,6 +630,20 @@ class AwsRegion:
                                           PublicKeyMaterial=sct_key_pair.public_key)
             LOGGER.info("SCT Key Pair created.")
 
+    def get_vpc_peering_routes(self) -> list[str]:
+        """Discover all VPC peering routes in SCT route tables"""
+        peering_routes = []
+        for route_table in self.sct_route_tables:
+            routes = route_table.routes_attribute
+            for route in routes:
+                if route.get('VpcPeeringConnectionId') and route.get('DestinationCidrBlock'):
+                    dest_cidr = route.get('DestinationCidrBlock')
+                    if dest_cidr != '0.0.0.0/0' and dest_cidr not in peering_routes:
+                        peering_routes.append(dest_cidr)
+
+        LOGGER.debug("Discovered %s VPC peering routes in %s", peering_routes, self.region_name)
+        return peering_routes
+
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.create_sct_vpc()
