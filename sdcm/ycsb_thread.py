@@ -202,6 +202,10 @@ class YcsbStressThread(DockerBasedStressThread):
             stress_cmd += f' -p hosts={hosts} -p cassandra.readconsistencylevel=QUORUM -p cassandra.writeconsistencylevel=QUORUM'
         if "scylla" in self.stress_cmd:
             stress_cmd += f" -p scylla.hosts={hosts}"
+            if self.params.get("authenticator") == "PasswordAuthenticator":
+                stress_cmd += f" -p scylla.username={self.params.get('authenticator_user')}"
+                stress_cmd += f" -p scylla.password={self.params.get('authenticator_password')}"
+
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
 
