@@ -111,7 +111,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, sleep_for_percent_of_duration, get_views_of_base_table)
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
-from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.features import is_tablets_feature_enabled, is_views_with_tablets_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
@@ -132,9 +132,9 @@ from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_
 from sdcm.utils.nemesis_utils.indexes import (get_random_column_name, create_index,
                                               wait_for_index_to_be_built, verify_query_by_index_works,
                                               drop_index, wait_for_view_to_be_built, drop_materialized_view,
-                                              is_cf_a_view, create_materialized_view_for_random_column)
+                                              is_cf_a_view, create_materialized_view_for_random_column, wait_materialized_view_building_tasks_started)
 from sdcm.utils.nemesis_utils import node_operations
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
+from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocationError, NemesisNodeAllocator
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -5627,6 +5627,77 @@ class Nemesis(NemesisFlags):
                 LOGGER.debug("Query result %s", result)
                 assert not result, f"New rows were added from banned node, {result}"
 
+    @target_all_nodes
+    def disrupt_kill_mv_building_coordinator(self):
+        """
+        MV building coordinator is responsible for building MV from base table in
+        keyspaces with tablets enabled and located on the same node as raft topology coordinator.
+        If mv building coordinator is died during the mv building process, new mv building coordinator
+        as (group0 leader and raft topology coordinator) should be elected and mv building process continue.
+
+        Nemesis kill mv building coordinator several times while materialized view is being built,
+        and validate that after the node is restarted, the view is successfully built.
+        """
+        if not self.target_node.raft.is_consistent_topology_changes_enabled:
+            raise UnsupportedNemesis("Consistent topology changes feature is disabled")
+
+        if not is_tablets_feature_enabled(self.target_node):
+            raise UnsupportedNemesis("MV building coordinator works only with tablets")
+
+        with self.cluster.cql_connection_patient(node=self.target_node, connect_timeout=600) as session:
+            if not is_views_with_tablets_enabled(session):
+                raise UnsupportedNemesis("MV building coordinator works only with tablets")
+            ks_cfs = self.cluster.get_non_system_ks_cf_with_tablets_list(db_node=self.target_node,
+                                                                         filter_empty_tables=True, filter_out_mv=True,
+                                                                         filter_out_table_with_counter=True)
+            if not ks_cfs:
+                raise UnsupportedNemesis(
+                    'Non-system keyspaces with enabled tablets are not found. nemesis can\'t be run')
+
+        coordinator_node = get_topology_coordinator_node(self.target_node)
+        try:
+            self.switch_target_node(coordinator_node)
+        except NemesisNodeAllocationError:
+            raise UnsupportedNemesis(
+                f"Coordinator node is busy with {coordinator_node.running_nemesis}")
+
+        with self.node_allocator.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Verification node for MV") as working_node:
+            ks_name, base_table_name = random.choice(ks_cfs).split('.')
+            view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
+            with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
+                try:
+                    create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
+                    wait_materialized_view_building_tasks_started(session, ks_name, view_name)
+                except Exception as error:  # pylint: disable=broad-except
+                    self.log.error('Failed creating a materialized view: %s', error)
+                    raise
+            try:
+                num_of_restarts = len(self.cluster.nodes) // 2
+                self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
+
+                for i in range(num_of_restarts):
+                    self.log.debug("Kill coordinator node: %s round: %s", self.target_node.name, i + 1)
+                    self._kill_scylla_daemon()
+                    coordinator_node = get_topology_coordinator_node(working_node)
+                    self.log.debug("New coordinator node %s", coordinator_node.name)
+                    try:
+                        self.switch_target_node(coordinator_node)
+                    except NemesisNodeAllocationError:
+                        self.log.debug("Coordinator node is busy with %s, number of coordinator successful restarts: %s",
+                                       coordinator_node.running_nemesis, i)
+                        break
+
+                with adaptive_timeout(operation=Operations.CREATE_MV, node=working_node, timeout=14400) as timeout:
+                    wait_for_view_to_be_built(working_node, ks_name, view_name, timeout=timeout * 2)
+
+                with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
+                    result = list(session.execute(SimpleStatement(
+                        f'SELECT * FROM {ks_name}.{view_name} limit 1', fetch_size=10)))
+                    assert len(result) >= 1, f"MV {ks_name}.{view_name} was not built"
+            finally:
+                with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
+                    drop_materialized_view(session, ks_name, view_name)
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
     """
@@ -7012,3 +7083,11 @@ class IsolateNodeWithIptableRuleNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
+
+
+class KillMVBuildingCoordinator(Nemesis):
+    disruptive = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_kill_mv_building_coordinator()
