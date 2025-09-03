@@ -82,7 +82,7 @@ from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2Unexp
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
+from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (
     ignore_alternator_client_errors,
     ignore_no_space_errors,
@@ -129,9 +129,10 @@ from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperi
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
-from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
-    wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
-    wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
+from sdcm.utils.nemesis_utils.indexes import (get_random_column_name, create_index,
+                                              wait_for_index_to_be_built, verify_query_by_index_works,
+                                              drop_index, wait_for_view_to_be_built, drop_materialized_view,
+                                              is_cf_a_view, create_materialized_view_for_random_column)
 from sdcm.utils.nemesis_utils import node_operations
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.utils.node import build_node_api_command
@@ -5227,7 +5228,6 @@ class Nemesis(NemesisFlags):
             if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
                 raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
-        unsupported_primary_key_columns = ['duration', 'counter']
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
@@ -5241,31 +5241,10 @@ class Nemesis(NemesisFlags):
                     'Non-system keyspace and table are not found. nemesis can\'t be run')
             ks_name, base_table_name = random.choice(ks_cfs).split('.')
             view_name = f'{base_table_name}_view'
+            self.target_node.stop_scylla()
             with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
-                primary_key_columns = get_column_names(
-                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True,
-                    filter_out_column_types=unsupported_primary_key_columns)
-                # selecting a supported column for creating a materialized-view (not a collection type).
-                column = get_random_column_name(session=session, ks=ks_name,
-                                                cf=base_table_name, filter_out_collections=True,
-                                                filter_out_static_columns=True,
-                                                filter_out_column_types=unsupported_primary_key_columns)
-                if not column:
-                    raise UnsupportedNemesis(
-                        'A supported column for creating MV is not found. nemesis can\'t run')
-                self.log.info("Stopping Scylla on node %s", self.target_node.name)
-                self.actions_log.info(f"Stop Scylla on {self.target_node.name} node")
-                self.target_node.stop_scylla()
-                InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
                 try:
-                    with EventsFilter(event_class=DatabaseLogEvent,
-                                      regex='.*Error applying view update.*',
-                                      extra_time_to_expiration=180), \
-                            self.action_log_scope(f"Create {view_name} materialized view "
-                                                  f"on {ks_name}.{base_table_name} {column} {primary_key_columns}"):
-                        self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
-                                                             primary_key_columns, session,
-                                                             mv_columns=[column] + primary_key_columns)
+                    create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                 except Exception as error:
                     self.log.warning('Failed creating a materialized view: %s', error)
                     self.target_node.start_scylla()
