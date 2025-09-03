@@ -30,7 +30,8 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
-from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
+from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built, create_materialized_view
+
 
 KB = 1024
 
@@ -355,8 +356,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # Create materialized view
             view_name = base_table_name + '_mv'
             self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-            self.create_materialized_view(ks_name, base_table_name, view_name, ['C0'], ['key'], session,
-                                          mv_columns=['C0', 'key'])
+            create_materialized_view(session, ks_name, base_table_name, view_name,
+                                     ['C0'], ['key'], mv_columns=['C0', 'key'])
 
             # Wait for the materialized view is built
             self._wait_for_view(self.db_cluster, session, ks_name, view_name)
