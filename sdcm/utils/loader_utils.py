@@ -117,10 +117,11 @@ class LoaderUtilsMixin:
             # also tablets doesn't yet support counters, so we skip the command and error about it
             if 'counter_' in stress_cmd:
                 if self.tablets_enabled and SkipPerIssues('scylladb/scylladb#18180', params=self.params):
-                    TestFrameworkEvent(severity=Severity.ERROR,
+                    TestFrameworkEvent(severity=Severity.WARNING,
                                        source=self.__class__.__name__,
                                        source_method='_run_all_stress_cmds',
                                        message=f"Tablets feature is enabled, skipping counter stress:\n\n{stress_cmd}",).publish()
+                    continue
                 else:
                     self._create_counter_table()
 
