@@ -5456,10 +5456,18 @@ class Nemesis(NemesisFlags):
                 nemesis_label=f"{simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
             stack.enter_context(node_operations.block_loaders_payload_for_scylla_node(
                 self.target_node, loader_nodes=self.loaders.nodes))
-            stack.callback(drop_keyspace, node=working_node)
             target_host_id = self.target_node.host_id
-            stack.callback(self._remove_node_add_node, verification_node=working_node, node_to_remove=self.target_node,
-                           remove_node_host_id=target_host_id)
+
+            def _finalizer(exc_type, *_):
+                if exc_type is not KillNemesis:
+                    self._remove_node_add_node(
+                        verification_node=working_node, node_to_remove=self.target_node,
+                        remove_node_host_id=target_host_id
+                    )
+                    drop_keyspace(node=working_node)
+                return False
+            stack.push(_finalizer)
+
             self.tester.create_keyspace(keyspace_name, replication_factor=3)
             self.tester.create_table(name=table_name, keyspace_name=keyspace_name, key_type="bigint",
                                      columns={"name": "text"})
