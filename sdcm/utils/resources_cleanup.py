@@ -14,6 +14,7 @@
 from __future__ import absolute_import, annotations
 import logging
 import os
+import ipaddress
 from typing import Optional
 from unittest.mock import MagicMock
 
@@ -624,6 +625,62 @@ def _cleanup_gcp_vpc_peering_configuration(region_name: str, peering_id: str, pe
         LOGGER.error("Failed to clean up GCP side network peering %s", peering_id)
 
 
+def clean_blackhole_routes_aws(config: dict, regions=None, dry_run=False) -> None:
+    cidr_pool = ipaddress.ip_network(config.get('xcloud_vpc_peering').get('cidr_pool_base'))
+    regions = regions or [config.cloud_provider_params.get('region')]
+    for region_name in regions:
+        aws_region = AwsRegion(region_name)
+        cleaned_routes = []
+
+        for index in [None, 0, 1]:
+            route_table = aws_region.sct_route_table(index=index)
+            if not route_table:
+                continue
+
+            for route in route_table.routes_attribute:
+                dest_cidr = route.get('DestinationCidrBlock')
+                route_state = route.get('State')
+
+                if not dest_cidr or route_state != 'blackhole':
+                    continue
+
+                route_network = ipaddress.ip_network(dest_cidr)
+                if route_network.subnet_of(cidr_pool):
+                    LOGGER.info("Removing blackhole route: %s from route table %s in region %s",
+                                dest_cidr, route_table.id, region_name)
+                    if not dry_run:
+                        aws_region.client.delete_route(RouteTableId=route_table.id, DestinationCidrBlock=dest_cidr)
+                        cleaned_routes.append(dest_cidr)
+
+        if cleaned_routes:
+            LOGGER.info("Cleaned %s blackhole routes in region %s", cleaned_routes, region_name)
+
+
+def clean_inactive_peerings_gce(config: dict, regions=None, dry_run=False) -> None:
+    regions = regions or [config.cloud_provider_params.get('region')]
+    for region_name in regions:
+        gce_region = GceRegion(region_name)
+        cleaned_peerings = []
+
+        network = gce_region.network
+        if not network.peerings:
+            continue
+
+        for peering in network.peerings:
+            if peering.state != "INACTIVE":
+                continue
+
+            peer_project = peering.network.split('/')[-4]
+            LOGGER.info("Removing inactive peering %s to %s Scylla Cloud project, in region %s",
+                        peering.name, peer_project, region_name)
+            if not dry_run:
+                gce_region.cleanup_vpc_peering_connection(peering.name)
+                cleaned_peerings.append(peering.name)
+
+        if cleaned_peerings:
+            LOGGER.info("Cleaned %s inactive peerings in region %s", cleaned_peerings, region_name)
+
+
 def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = False) -> None:
     """Clean up Scylla Cloud resources based on tags"""
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
@@ -683,8 +740,11 @@ def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = F
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_blackhole_routes_aws(config, regions=aws_regions, dry_run=dry_run)
     elif xcloud_provider == 'gce':
         gce_projects = [config.get("gce_project") or 'gcp-sct-project-1']
+        gce_regions = config.gce_datacenters
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
                 clean_instances_gce(tags_dict, dry_run=dry_run)
+        clean_inactive_peerings_gce(config, regions=gce_regions, dry_run=dry_run)
