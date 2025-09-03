@@ -1,3 +1,4 @@
+import concurrent
 import glob
 import os.path
 import time
@@ -139,12 +140,12 @@ class _HdrRangeHistogramBuilder:
             with ProcessPoolExecutor(max_workers=len(self.hdr_tags)) as executor:
                 futures = [
                     executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
-            scan_results = {}
-            for e, future in enumerate(futures):
-                result = future.result()
-                LOGGER.debug(f"Got result for {e} future for tag {self.hdr_tags[e]}")
-                if result:
-                    scan_results.update(result)
+                scan_results = {}
+                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
+                    result = future.result()
+                    LOGGER.debug(f"Got result for {e} future for tag {self.hdr_tags[e]}")
+                    if result:
+                        scan_results.update(result)
             return [scan_results]
         except Exception as e:
             LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
