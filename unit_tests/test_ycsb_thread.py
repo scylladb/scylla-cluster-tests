@@ -130,7 +130,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        regex = re.compile(r"^sct_ycsb_update_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_ycsb_read_gauge" in output
         assert "sct_ycsb_update_gauge" in output
 
@@ -214,14 +214,15 @@ def test_02_dynamodb_api_dataintegrity(
 @pytest.mark.usefixtures("create_cql_ks_and_table")
 @pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_03_cql(request, docker_scylla, prom_address, params):
+    params['docker_network'] = "ycsb_net"
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
         "bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 "
-        f"-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s"
+        "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
     ycsb_thread = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
     )
 
     def cleanup_thread():
@@ -242,7 +243,11 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         assert all(float(i) > 0 for i in matches), output
 
     check_metrics()
-    ycsb_thread.get_results()
+    results, _ = ycsb_thread.parse_results()
+
+    assert float(results[0]['latency 99th percentile']) > 0
+    assert float(results[0]['latency mean']) > 0
+    assert float(results[0]['op rate']) > 0
 
 
 @pytest.mark.usefixtures("create_table")
