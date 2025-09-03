@@ -32,6 +32,7 @@
 - HardRebootNodeMonkey
 - IsolateNodeWithIptableRuleNemesis
 - IsolateNodeWithProcessSignalNemesis
+- KillMVBuildingCoordinator
 - LoadAndStreamMonkey
 - MajorCompactionMonkey
 - ManagerNativeBackup

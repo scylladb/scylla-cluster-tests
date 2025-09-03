@@ -3846,6 +3846,20 @@ class BaseCluster:
     def is_table_has_no_sstables(keyspace_name: str, node: BaseNode, table_name: str, **kwarg) -> bool:
         return not bool(node.sstable_folder_exists(keyspace_name, table_name, verbose=False))
 
+    def get_non_system_ks_cf_with_tablets_list(self, db_node,
+                                               filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
+                                               filter_func: Callable[..., bool] = None) -> List[str]:
+        with self.cql_connection_patient(db_node, connect_timeout=600) as session:
+            session.default_timeout = 60.0 * 5
+            keyspaces = [row.keyspace_name for row in session.execute(
+                "select keyspace_name from system_schema.scylla_keyspaces")]
+            self.log.debug("Keyspaces with tablets enabled %s", keyspaces)
+
+        return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
+                                       filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
+                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=keyspaces,
+                                       filter_func=filter_func)
+
     def get_non_system_ks_cf_list(self, db_node,
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                                   filter_by_keyspace: list = None,
