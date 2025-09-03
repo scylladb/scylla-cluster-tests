@@ -397,12 +397,6 @@ class ArtifactsTest(ClusterTester):
             assert node_info_service.cpu_load_5
             assert node_info_service.get_node_boot_time_seconds()
 
-        if self.params.get("run_scylla_doctor"):
-            with self.logged_subtest("check scylla_doctor results"):
-                self.run_scylla_doctor()
-        else:
-            self.log.info("Running scylla-doctor is disabled")
-
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
         if backend != "docker":
@@ -495,18 +489,17 @@ class ArtifactsTest(ClusterTester):
             with self.logged_subtest("Check docker latest tags"):
                 self.verify_docker_latest_match_release()
 
+        if self.params.get("run_scylla_doctor"):
+            with self.logged_subtest("Run scylla-doctor on the installation"):
+                self.run_scylla_doctor()
+        else:
+            self.log.info("Running scylla-doctor is disabled")
+
     def run_scylla_doctor(self):
         if self.params.get('client_encrypt') and SkipPerIssues("https://github.com/scylladb/field-engineering/issues/2280", self.params):
             self.log.info("Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
             self.actions_log.info(
                 "Scylla Doctor test is skipped for encrypted environment due to issue field-engineering#2280")
-            return
-
-        if self.db_cluster.nodes[0].is_nonroot_install and \
-                SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/10540", self.params):
-            self.log.info("Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254. ")
-            self.actions_log.info(
-                "Scylla Doctor test is skipped for non-root test due to issue field-engineering#2254.")
             return
 
         if self.node.parent_cluster.cluster_backend == "docker":
