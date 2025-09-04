@@ -28,7 +28,7 @@ class TombstoneGcVerificationThread:
         self._sstable_utils = SstableUtils(db_node=node, **kwargs)
         self.log = logging.getLogger(self.__class__.__name__)
 
-    def _wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
+    def _wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 40):
         text = f'Waiting until {table_name} user table exists'
         if table_name.lower() == 'random':
             wait.wait_for(func=lambda: len(self.db_cluster.get_non_system_ks_cf_list(db_node)) > 0, step=60,
