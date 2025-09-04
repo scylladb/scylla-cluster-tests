@@ -1,7 +1,15 @@
 #!groovy
 import groovy.json.JsonSlurper
 
-def call(String backend, String region=null, String datacenter=null, String location=null) {
+def call(String backend, String region=null, String datacenter=null, String location=null, Map overrides=null) {
+    if (!(params instanceof Map)) {
+        params = params.collectEntries()
+    }
+    if (overrides == null){
+        overrides = [:]
+    }
+    params += overrides // merge, overrides take precedence
+
     if (!backend) {
         backend = 'aws'
         println("Backend is null or empty, defaulting to 'aws'")
