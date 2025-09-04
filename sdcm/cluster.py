@@ -87,6 +87,9 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.azure_utils import AzureService
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -4809,6 +4812,31 @@ class BaseScyllaCluster:
             },
             daemon=True)
         kms_key_rotation_thread.start()
+        return None
+
+    def start_azure_kms_key_rotation_thread(self) -> None:
+        if self.params.get("cluster_backend") != 'azure':
+            return None
+        if not self.params.get("enable_kms_key_rotation"):
+            return None
+
+        test_id = str(self.test_config.test_id())
+        region = self.params.get('azure_region_name')[0]
+
+        def _rotate():
+            azure_service = AzureService()
+
+            while True:
+                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
+                try:
+                    key_uri = AzureKmsProvider.get_key_uri_for_test(region, test_id)
+                    rotated_key_id = azure_service.rotate_vault_key(key_uri)
+                    self.log.info(f"Azure KMS key rotated for test {test_id}: {rotated_key_id}")
+                except AzureResourceNotFoundError as e:
+                    self.log.error(f"Azure KMS key not found for rotation: {e}")
+
+        threading.Thread(target=_rotate, daemon=True, name='AzureKmsRotationThread').start()
+        self.log.info("Started Azure KMS rotation thread for test: %s", test_id)
         return None
 
     def scylla_configure_non_root_installation(self, node, devname):
