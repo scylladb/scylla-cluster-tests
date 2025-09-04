@@ -551,13 +551,14 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         return params_list
 
+    @staticmethod
+    def is_target_reached(current: list[int], target: list[int]) -> bool:
+        return all([x >= y for x, y in zip(current, target)])
+
     def test_scale_empty_cluster(self):
         cluster_target_size = self.params.get('cluster_target_size')
         InfoEvent(f"Start grow cluster up to {cluster_target_size}").publish()
         if cluster_target_size:
-            def is_target_reached(current: list[int], target: list[int]) -> bool:
-                return all([x >= y for x, y in zip(current, target)])
-
             cluster_target_size = list(map(int, cluster_target_size.split())) if isinstance(
                 cluster_target_size, str) else [cluster_target_size]
 
@@ -569,49 +570,46 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(
                 message=f"Starting to grow cluster from {self.params.get('n_db_nodes')} to {cluster_target_size}").publish()
 
-            while not is_target_reached(current_cluster_size, cluster_target_size):
-                added_nodes = []
-
+            while not self.is_target_reached(current_cluster_size, cluster_target_size):
                 for dcx, target in enumerate(cluster_target_size):
+                    added_nodes = []
                     if current_cluster_size[dcx] < target:
                         add_nodes_num = add_node_cnt if (
                             target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
                         InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
                         added_nodes.extend(self.db_cluster.add_nodes(
                             count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx))
-
-                self.monitors.reconfigure_scylla_monitoring()
-                up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
-                with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
-                    self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
-                self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
-                InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
-                # nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
-                # current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
-                # if current_cluster_size[0] % 10 == 0 and current_cluster_size[0] < 199:
-                #     InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
-                #     InfoEvent("----------------Truncate cdc tables---------------").publish()
-                #     with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
-                #         session.execute("TRUNCATE system_distributed.cdc_generation_timestamps;")
-                #         session.execute("TRUNCATE system_distributed.cdc_streams_descriptions_v2;")
+                    self.monitors.reconfigure_scylla_monitoring()
+                    up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+                    with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
+                        self.db_cluster.wait_for_init(
+                            node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+                    self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+                    InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
+                nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+                current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
 
             InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
             InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
 
     def test_decommission_nodes_after_bootstrap_failed(self):
+        nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+        init_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
         try:
             self.test_scale_empty_cluster()
         except Exception as exc:  # noqa: BLE001
             self.log.info("Bootstrap failed with error: %s", exc)
+        finally:
             self.log.info("Start decommission operations")
             nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
             current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
             try:
-                for dcx, dc_nodes_num in enumerate(current_cluster_size):
-                    decommissioned = 0
-                    while dc_nodes_num - decommissioned > 2:
+                while not self.is_target_reached(init_cluster_size, current_cluster_size):
+                    for dcx, _ in enumerate(current_cluster_size):
                         self.db_cluster.decommission(node=nodes_by_dcx[dcx][-1], timeout=7200)
-                        decommissioned += 1
+
+                    nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
+                    current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
             finally:
                 nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                 current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
