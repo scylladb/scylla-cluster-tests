@@ -4574,8 +4574,10 @@ class BaseScyllaCluster:
             # Don't run health check in case parallel nemesis.
             # TODO: find how to recognize, that nemesis on the node is running
             if self.nemesis_count == 1:
-                for node in self.nodes:
-                    node.check_node_health()
+                with adaptive_timeout(Operations.HEALTHCHECK, node=self.nodes[0],
+                                      timeout=len(self.nodes) * 30):
+                    for node in self.nodes:
+                        node.check_node_health()
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return

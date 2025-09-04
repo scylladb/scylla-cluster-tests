@@ -100,6 +100,7 @@ class Operations(Enum):
     SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
                                  ("timeout", "service_level_for_test_step"))
     TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
 
 
 class TestInfoServices:
