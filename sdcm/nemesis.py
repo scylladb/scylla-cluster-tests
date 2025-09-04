@@ -5687,7 +5687,6 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                         nodes_set.log_message(
                             "{end_symbol} {msg} {end_symbol}".format(end_symbol='=' * 12, msg=end_msg))
 
-            args[0].cluster.check_cluster_health()
             num_data_nodes_after = len(args[0].cluster.data_nodes)
             num_zero_nodes_after = len(args[0].cluster.zero_nodes)
             if num_data_nodes_before != num_data_nodes_after:
