@@ -1,2 +1,2 @@
 harry:
-  image: scylladb/hydra-loaders:cassandra-harry-jdk11-20220816
+  image: scylladb/hydra-loaders:cassandra-harry-jdk21-20250904
