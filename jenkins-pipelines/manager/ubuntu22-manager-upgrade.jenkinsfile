@@ -7,6 +7,8 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+    scylla_version: '2025.2',
+
     // Upgrade from the previous minor release (the last one)
     manager_version: '3.5',
     target_manager_version: 'master_latest',
