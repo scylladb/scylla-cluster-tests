@@ -5272,12 +5272,16 @@ class BaseScyllaCluster:
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
+        if not hasattr(self, "decommission_node"):
+            setattr(self, "decommission_node", {})
         if not node._is_zero_token_node:
             if tablets_enabled := is_tablets_feature_enabled(node):
                 dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
                 dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+            st = time.time_ns()
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
+            getattr(self, "decommission_node")[node.name] = time.time_ns() - st
         self.verify_decommission(node)
         if node._is_zero_token_node:
             return None

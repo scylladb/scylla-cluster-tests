@@ -572,20 +572,24 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
             while not self.is_target_reached(current_cluster_size, cluster_target_size):
                 for dcx, target in enumerate(cluster_target_size):
-                    added_nodes = []
                     if current_cluster_size[dcx] < target:
                         add_nodes_num = add_node_cnt if (
                             target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
-                        InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
+                    for rack in range(self.db_cluster.racks_count):
+                        added_nodes = []
+                        InfoEvent(
+                            message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx} and rack {rack}").publish()
                         added_nodes.extend(self.db_cluster.add_nodes(
-                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx))
-                    self.monitors.reconfigure_scylla_monitoring()
-                    up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
-                    with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
-                        self.db_cluster.wait_for_init(
-                            node_list=added_nodes, timeout=up_timeout, check_node_health=False)
-                    self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
-                    InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
+                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx, rack=rack))
+                        self.monitors.reconfigure_scylla_monitoring()
+                        InfoEvent(
+                            f"New node {added_nodes[0].name} has dc {added_nodes[0].dc_idx} and rack {added_nodes[0].rack}").publish()
+                        up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+                        with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
+                            self.db_cluster.wait_for_init(
+                                node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+                        self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+                        InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
                 nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                 current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
 
@@ -595,6 +599,15 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def test_decommission_nodes_after_bootstrap_failed(self):
         nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
         init_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
+        setattr(self.db_cluster, "decommission_node", {})
+        region_dcs = self.db_cluster.get_datacenter_name_per_region(self.db_cluster.nodes)
+
+        InfoEvent("Create keyspaces and 100 empty tables").publish()
+        self.create_keyspace(keyspace_name="base_keyspace", replication_factor={
+            dc_name: 3 for dc_name in region_dcs.values()})
+        for i in range(1, 101):
+            self.create_table(name=f"table_{i}", keyspace_name="base_keyspace")
+        InfoEvent("Keyspaces and tables were created").publish()
         try:
             self.test_scale_empty_cluster()
         except Exception as exc:  # noqa: BLE001
@@ -606,11 +619,44 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             try:
                 while not self.is_target_reached(init_cluster_size, current_cluster_size):
                     for dcx, _ in enumerate(current_cluster_size):
-                        self.db_cluster.decommission(node=nodes_by_dcx[dcx][-1], timeout=7200)
-
+                        nodes_by_racks = self.db_cluster.get_nodes_per_datacenter_and_rack_idx(nodes_by_dcx[dcx])
+                        for nodes in nodes_by_racks.values():
+                            self.db_cluster.decommission(node=nodes[-1], timeout=7200)
                     nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                     current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
             finally:
                 nodes_by_dcx = group_nodes_by_dc_idx(self.db_cluster.data_nodes)
                 current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
                 self.log.info("Cluster size after decommission %s", current_cluster_size)
+            InfoEvent(f"Nodes decommission stats: {getattr(self.db_cluster, 'decommission_node', {})}").publish()
+
+    def test_bootstrap_decommission_random_nodes(self):
+        import time
+        import random
+        setattr(self.db_cluster, "decommission_node", {})
+        region_dcs = self.db_cluster.get_datacenter_name_per_region(self.db_cluster.nodes)
+
+        InfoEvent("Create keyspaces and 100 empty tables").publish()
+        self.create_keyspace(keyspace_name="base_keyspace", replication_factor={
+            dc_name: 3 for dc_name in region_dcs.values()})
+        for i in range(1, 101):
+            self.create_table(name=f"table_{i}", keyspace_name="base_keyspace")
+        InfoEvent("Keyspaces and tables were created").publish()
+        start_time = time.time_ns()
+        while time.time_ns() - start_time < 3 * 3600:
+            decommissioning_node = random.choice(self.db_cluster.nodes)
+            self.db_cluster.decommission(node=decommissioning_node, timeout=7200)
+            added_nodes = []
+            InfoEvent(
+                message=f"Adding to dc_idx {decommissioning_node.dc_idx}{decommissioning_node.region} and rack {decommissioning_node.rack}").publish()
+            added_nodes.extend(self.db_cluster.add_nodes(
+                count=1, enable_auto_bootstrap=True, dc_idx=decommissioning_node.dc_idx, rack=decommissioning_node.rack))
+            self.monitors.reconfigure_scylla_monitoring()
+            InfoEvent(
+                f"New node {added_nodes[0].name} has dc {added_nodes[0].dc_idx} and rack {added_nodes[0].rack}").publish()
+            up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+            with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
+                self.db_cluster.wait_for_init(
+                    node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+            InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
