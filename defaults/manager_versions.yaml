@@ -14,8 +14,8 @@ manager_repos_by_version:
 
 scylla_backend_repo_by_version:
   "2025":
-    rhel: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.2.repo'
-    debian: 'https://downloads.scylladb.com/deb/debian/scylla-2025.2.list'
+    rhel: 'https://downloads.scylladb.com/rpm/centos/scylla-2025.3.repo'
+    debian: 'https://downloads.scylladb.com/deb/debian/scylla-2025.3.list'
   "2024":
     rhel: 'https://downloads.scylladb.com/rpm/centos/scylla-2024.2.repo'
     debian: 'https://downloads.scylladb.com/deb/debian/scylla-2024.2.list'
