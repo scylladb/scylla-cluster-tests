@@ -1112,13 +1112,20 @@ class BaseNode(AutoSshContainerMixin):
         return f' ({", ".join(dc_info)})' if dc_info else ""
 
     def __str__(self):
-        # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
-        #  to here
-        return 'Node %s [%s | %s%s]%s' % (
+        # If multiple network interface is defined on the node (AWS), private address in the `nodetool status`
+        # is IP that defined in broadcast_address. Keep this output in correlation with `nodetool status`
+        if (self.scylla_network_configuration and
+                self.scylla_network_configuration.broadcast_address_ip_type == "private"):
+            node_private_ip = self.scylla_network_configuration.broadcast_address
+        else:
+            node_private_ip = self.private_ip_address
+
+        return 'Node %s [%s | %s%s] (Type: %s)%s' % (
             self.name,
             self.public_ip_address,
-            self.private_ip_address,
+            node_private_ip,
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self._instance_type,
             self._dc_info_str())
 
     def restart(self):
@@ -4891,9 +4898,9 @@ class BaseScyllaCluster:
         if install_scylla:
             self._scylla_install(node)
         else:
-            self.log.info("Waiting for preinstalled Scylla")
+            node.log.info("Waiting for preinstalled Scylla")
             self._wait_for_preinstalled_scylla(node)
-            self.log.info("Done waiting for preinstalled Scylla")
+            node.log.info("Done waiting for preinstalled Scylla")
         if self.params.get('print_kernel_callstack'):
             save_kallsyms_map(node=node)
         if node.is_nonroot_install:
@@ -4970,7 +4977,7 @@ class BaseScyllaCluster:
         if self.is_additional_data_volume_used():
             result = node.remoter.sudo(cmd="scylla_io_setup")
             if result.ok:
-                self.log.info("Scylla_io_setup result: %s", result.stdout)
+                node.log.info("Scylla_io_setup result: %s", result.stdout)
 
         if self.params.get('force_run_iotune'):
             node.remoter.sudo(
@@ -5014,12 +5021,12 @@ class BaseScyllaCluster:
 
     def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
         if not self.test_config.REUSE_CLUSTER:
-            self.log.debug('io.conf before reboot: %s', node.remoter.sudo(
+            node.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             node.start_scylla_server(verify_up=False)
             if self.params.get("jmx_heap_memory"):
                 node.restart_scylla_jmx()
-            self.log.debug(
+            node.log.debug(
                 'io.conf right after reboot: %s', node.remoter.sudo(f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             if self.params.get('use_mgmt') and self.node_type == "scylla-db":
                 node.remoter.sudo(shell_script_cmd("""\
@@ -5443,7 +5450,7 @@ class BaseLoaderSet():
 
     def node_setup(self, node, verbose=False, **kwargs):
 
-        self.log.info('Setup in BaseLoaderSet')
+        node.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
 
         if node.distro.is_rhel_like:
@@ -5461,7 +5468,7 @@ class BaseLoaderSet():
         node_exporter_setup.install(node)
 
         if self.params.get("bare_loaders"):
-            self.log.info("Don't install anything because bare loaders requested")
+            node.log.info("Don't install anything because bare loaders requested")
             return
 
         if self.params.get('client_encrypt'):
@@ -5480,7 +5487,7 @@ class BaseLoaderSet():
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
-            self.log.debug('Skip loader setup for using a prepared AMI')
+            node.log.debug('Skip loader setup for using a prepared AMI')
         else:
             node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
@@ -5673,7 +5680,7 @@ class BaseMonitorSet:
             json.dump(json.loads(json_data), file, indent=2)
 
     def node_setup(self, node, **kwargs):
-        self.log.info('TestConfig in BaseMonitorSet')
+        node.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
 
         if node.distro.is_rhel_like:

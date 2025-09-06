@@ -140,8 +140,8 @@ class CloudNode(cluster.BaseNode):
             rack=rack
         )
 
-    def __str__(self):
-        return f'CloudNode {self.name} [{self.public_ip_address} | {self.private_ip_address}]{self._dc_info_str()}'
+        instance_info = cloud_instance_data.get('instance', {})
+        self._instance_type = instance_info.get('externalId', 'CloudManaged')
 
     @cached_property
     def network_interfaces(self):
