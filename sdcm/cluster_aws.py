@@ -117,9 +117,8 @@ class AWSCluster(cluster.BaseCluster):
                          )
 
     def __str__(self):
-        return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
-                                                  self._ec2_ami_id,
-                                                  self._ec2_instance_type)
+        return 'Cluster %s (AMI: %s)' % (self.name,
+                                         self._ec2_ami_id)
 
     @property
     def instance_profile_name(self) -> str | None:
@@ -468,21 +467,6 @@ class AWSNode(cluster.BaseNode):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
                          dc_idx=dc_idx, rack=rack)
-
-    def __str__(self):
-        # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
-        # broadcast_address. Keep this output in correlation with `nodetool status`
-        if self.scylla_network_configuration.broadcast_address_ip_type == "private":
-            node_private_ip = self.scylla_network_configuration.broadcast_address
-        else:
-            node_private_ip = self.private_ip_address
-
-        return 'Node %s [%s | %s%s]%s' % (
-            self.name,
-            self.public_ip_address,
-            node_private_ip,
-            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
-            self._dc_info_str())
 
     @cached_property
     def network_configuration(self):
