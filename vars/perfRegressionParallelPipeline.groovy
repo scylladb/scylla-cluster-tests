@@ -365,6 +365,8 @@ def call(Map pipelineParams) {
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                        # SCT_SIMULATED_RACKS forces GossipingPropertyFileSnitch to simulate racks (default=3). Setting to 0 disables simulation for performance tests.
+                                                        export SCT_SIMULATED_RACKS=0
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER="${params.gce_datacenter}"
