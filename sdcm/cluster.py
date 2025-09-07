@@ -5203,48 +5203,44 @@ class BaseScyllaCluster:
                 return None
 
         target_node_ip = node.ip_address
-        undecommission_nodes = [n for n in self.nodes if n != node]
-
-        verification_node = random.choice(undecommission_nodes)
-        node_ip_list = get_node_ip_list(verification_node)
-        while verification_node == node or node_ip_list is None:
-            verification_node = random.choice(undecommission_nodes)
+        node_allocator = self.test_config.tester_obj().nemesis_allocator
+        with node_allocator.run_nemesis(nemesis_label="verify decommission",
+                                        node_list=self.data_nodes) as verification_node:
             node_ip_list = get_node_ip_list(verification_node)
+            missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
 
-        missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
+            decommission_done = list(node.follow_system_log(
+                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
 
-        decommission_done = list(node.follow_system_log(
-            patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
+            if target_node_ip in node_ip_list and not missing_host_ids and not decommission_done:
+                # Decommission was interrupted during streaming data.
+                cluster_status = self.get_nodetool_status(verification_node)
+                error_msg = ('Node that was decommissioned %s still in the cluster. '
+                             'Cluster status info: %s' % (node,
+                                                          cluster_status))
 
-        if target_node_ip in node_ip_list and not missing_host_ids and not decommission_done:
-            # Decommission was interrupted during streaming data.
-            cluster_status = self.get_nodetool_status(verification_node)
-            error_msg = ('Node that was decommissioned %s still in the cluster. '
-                         'Cluster status info: %s' % (node,
-                                                      cluster_status))
-
-            LOGGER.error('Decommission %s FAIL', node)
-            LOGGER.error(error_msg)
-            raise NodeStayInClusterAfterDecommission(error_msg)
-
-        self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
-        if missing_host_ids and not decommission_done:
-            # decommission was aborted after all data was streamed and node removed from
-            # token ring but left in group0. we can safely removenode and terminate it
-            # terminate node to be sure that it want return back to cluster,
-            # because node was just rebooted and could cause unpredictable cluster state.
-            if verification_node.raft.is_cluster_topology_consistent():
-                error_msg = f"Decommissioned Node {node.name} was bootstrapped again"
-                LOGGER.warning(error_msg)
+                LOGGER.error('Decommission %s FAIL', node)
+                LOGGER.error(error_msg)
                 raise NodeStayInClusterAfterDecommission(error_msg)
-            node.stop_scylla(verify_down=False)
-            LOGGER.debug("Terminate node %s", node.name)
-            self.terminate_node(node)
-            self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
-            self.log.debug("Node %s was terminated", node.name)
-            verification_node.raft.clean_group0_garbage(raise_exception=True)
-            LOGGER.error("Decommission for node %s was aborted", node)
-            raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
+
+            self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
+            if missing_host_ids and not decommission_done:
+                # decommission was aborted after all data was streamed and node removed from
+                # token ring but left in group0. we can safely removenode and terminate it
+                # terminate node to be sure that it want return back to cluster,
+                # because node was just rebooted and could cause unpredictable cluster state.
+                if verification_node.raft.is_cluster_topology_consistent():
+                    error_msg = f"Decommissioned Node {node.name} was bootstrapped again"
+                    LOGGER.warning(error_msg)
+                    raise NodeStayInClusterAfterDecommission(error_msg)
+                node.stop_scylla(verify_down=False)
+                LOGGER.debug("Terminate node %s", node.name)
+                self.terminate_node(node)
+                self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
+                self.log.debug("Node %s was terminated", node.name)
+                verification_node.raft.clean_group0_garbage(raise_exception=True)
+                LOGGER.error("Decommission for node %s was aborted", node)
+                raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
 
         LOGGER.info('Decommission %s PASS', node)
         self.terminate_node(node)
