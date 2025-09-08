@@ -40,7 +40,7 @@ def pause_scylla_with_sigstop(target_node: BaseNode):
 
 @contextlib.contextmanager
 def block_loaders_payload_for_scylla_node(scylla_node: BaseNode, loader_nodes: list[BaseNode]):
-    """ Block connections from loaders to cql ports on scylla node
+    """Block connections from loaders to cql ports on scylla node
 
     Make the Scylla node inaccessible to loaders by blocking
     any subsequent connections to the Scylla node.
@@ -55,24 +55,29 @@ def block_loaders_payload_for_scylla_node(scylla_node: BaseNode, loader_nodes: l
     scylla_node.log.debug("Block connections on %s from loader nodes %s", scylla_node.name, loader_nodes_names)
     for port in ports:
         scylla_node.remoter.sudo(
-            f"iptables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True)
+            f"iptables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
+        )
         scylla_node.remoter.sudo(
-            f"ip6tables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True)
+            f"ip6tables -A INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
+        )
     yield
     # if scylla_node is alive, then delete the iptables rules
     if scylla_node.remoter.is_up():
         for port in ports:
             scylla_node.remoter.sudo(
-                f"iptables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True)
+                f"iptables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
+            )
             scylla_node.remoter.sudo(
-                f"ip6tables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True)
+                f"ip6tables -D INPUT -s {','.join(blocking_ips)} -p tcp --dport {port} -j DROP", ignore_status=True
+            )
         scylla_node.stop_service("iptables", ignore_status=True)
 
 
 def is_node_removed_from_cluster(removed_node: BaseNode, verification_node: BaseNode) -> bool:
     LOGGER.debug("Verification node %s", verification_node.name)
     cluster_status: Optional[dict] = removed_node.parent_cluster.get_nodetool_status(
-        verification_node=verification_node)
+        verification_node=verification_node
+    )
     if not cluster_status:
         return False
     result = []
@@ -85,4 +90,4 @@ def is_node_seen_as_down(down_node: BaseNode, verification_node: BaseNode) -> bo
     LOGGER.debug("Verification node %s", verification_node.name)
     nodes_status = verification_node.parent_cluster.get_nodetool_status(verification_node, dc_aware=False)
     down_node_status = nodes_status.get(down_node.ip_address)
-    return (not down_node_status or down_node_status["state"] == "DN")
+    return not down_node_status or down_node_status["state"] == "DN"

@@ -41,32 +41,32 @@ def filter_kafka_options(**options: dict) -> dict:
     :return: dict, the known Kafka options.
     """
     known_options = {
-        'broker-list',
-        'bootstrap-server',
-        'topic',
-        'property',
-        'key-schema',
-        'value-schema',
-        'schema-registry',
-        'producer-property',
-        'consumer-property',
-        'compression-codec',
-        'batch-size',
-        'linger-ms',
-        'acks',
-        'key-separator',
-        'parse.key',
+        "broker-list",
+        "bootstrap-server",
+        "topic",
+        "property",
+        "key-schema",
+        "value-schema",
+        "schema-registry",
+        "producer-property",
+        "consumer-property",
+        "compression-codec",
+        "batch-size",
+        "linger-ms",
+        "acks",
+        "key-separator",
+        "parse.key",
     }
 
     filtered_options = {}
     for option, value in options.items():
         if option in known_options:
             # Handle nested options
-            if option in ['property', 'producer-property', 'consumer-property']:
+            if option in ["property", "producer-property", "consumer-property"]:
                 if isinstance(value, dict):
                     filtered_options[option] = value
-                elif isinstance(value, str) and '=' in value:
-                    sub_option, sub_value = value.split('=', 1)
+                elif isinstance(value, str) and "=" in value:
+                    sub_option, sub_value = value.split("=", 1)
                     filtered_options.setdefault(option, {})[sub_option] = sub_value
                 else:
                     LOGGER.error("Invalid format or type for %s: %s", option, value)
@@ -84,50 +84,62 @@ class KafkaThreadBase(Thread):
         self.params = params
         self.timeout = timeout
         self.termination_event = Event()
-        self.record_format = kwargs.get('record-format')
-        self.num_records = int(kwargs.get('num-records'))
+        self.record_format = kwargs.get("record-format")
+        self.num_records = int(kwargs.get("num-records"))
 
         self.kafka_options = filter_kafka_options(**kwargs)
 
         self.kafka_addresses = None
-        if 'broker-list' in self.kafka_options:
-            self.kafka_addresses = self.kafka_options['broker-list'].split(',')
-        elif 'bootstrap-server' in self.kafka_options:
-            self.kafka_addresses = self.kafka_options['bootstrap-server'].split(',')
-        elif self.params.get('kafka_backend') == 'localstack':
-            self.kafka_addresses = ['localhost:9092']
+        if "broker-list" in self.kafka_options:
+            self.kafka_addresses = self.kafka_options["broker-list"].split(",")
+        elif "bootstrap-server" in self.kafka_options:
+            self.kafka_addresses = self.kafka_options["bootstrap-server"].split(",")
+        elif self.params.get("kafka_backend") == "localstack":
+            self.kafka_addresses = ["localhost:9092"]
 
         self.schema_registry_url = None
-        if 'schema-registry' in self.kafka_options:
-            self.schema_registry_url = self.kafka_options['schema-registry']
-        elif self.params.get('kafka_backend') == 'localstack':
-            self.schema_registry_url = 'http://localhost:8081'
+        if "schema-registry" in self.kafka_options:
+            self.schema_registry_url = self.kafka_options["schema-registry"]
+        elif self.params.get("kafka_backend") == "localstack":
+            self.schema_registry_url = "http://localhost:8081"
 
-        self.topic = self.kafka_options.get('topic')
-        self.key_schema = self.kafka_options.get('key-schema')
-        self.value_schema = self.kafka_options.get('value-schema')
-        self.key_schema_dict = json.loads(self.kafka_options.get('key-schema', '{}'))
-        self.value_schema_dict = json.loads(self.kafka_options.get('value-schema', '{}'))
+        self.topic = self.kafka_options.get("topic")
+        self.key_schema = self.kafka_options.get("key-schema")
+        self.value_schema = self.kafka_options.get("value-schema")
+        self.key_schema_dict = json.loads(self.kafka_options.get("key-schema", "{}"))
+        self.value_schema_dict = json.loads(self.kafka_options.get("value-schema", "{}"))
 
-        if self.record_format == 'avro':
+        if self.record_format == "avro":
             if not self.schema_registry_url:
                 raise ValueError("schema_registry_url is required for Avro record format.")
-            self.schema_registry_client = SchemaRegistryClient({'url': self.schema_registry_url})
+            self.schema_registry_client = SchemaRegistryClient({"url": self.schema_registry_url})
 
-            self.key_serializer = AvroSerializer(
-                self.schema_registry_client, self.key_schema, lambda obj, ctx: obj,
-            ) if self.key_schema else None
-            self.value_serializer = AvroSerializer(
-                self.schema_registry_client, self.value_schema, lambda obj, ctx: obj,
-            ) if self.value_schema else None
+            self.key_serializer = (
+                AvroSerializer(
+                    self.schema_registry_client,
+                    self.key_schema,
+                    lambda obj, ctx: obj,
+                )
+                if self.key_schema
+                else None
+            )
+            self.value_serializer = (
+                AvroSerializer(
+                    self.schema_registry_client,
+                    self.value_schema,
+                    lambda obj, ctx: obj,
+                )
+                if self.value_schema
+                else None
+            )
 
             self.key_deserializer = AvroDeserializer(self.schema_registry_client)
             self.value_deserializer = AvroDeserializer(self.schema_registry_client)
         else:
-            self.key_serializer = StringSerializer('utf_8')
-            self.value_serializer = StringSerializer('utf_8')
-            self.key_deserializer = StringDeserializer('utf_8')
-            self.value_deserializer = StringDeserializer('utf_8')
+            self.key_serializer = StringSerializer("utf_8")
+            self.value_serializer = StringSerializer("utf_8")
+            self.key_deserializer = StringDeserializer("utf_8")
+            self.value_deserializer = StringDeserializer("utf_8")
 
     def _check_thread_options(self, **kwargs) -> None:
         missed_options = set(self.MANDATORY_OPTIONS) - set(kwargs.keys())
@@ -135,23 +147,23 @@ class KafkaThreadBase(Thread):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 message=f"Mandatory options are missed {missed_options} for python_thread {self.__class__.__name__}.",
-                severity=Severity.CRITICAL
+                severity=Severity.CRITICAL,
             ).publish()
 
     def generate_data_from_schema(self, schema: dict, seed: int) -> dict | int | float | str | bool | bytes | None:
         rand_gen = random.Random(seed)
-        if schema['type'] in ('record', 'struct'):  # 'record' type of schema for AVRO record format, 'struct' for JSON
+        if schema["type"] in ("record", "struct"):  # 'record' type of schema for AVRO record format, 'struct' for JSON
             data = {}
-            for field in schema['fields']:
+            for field in schema["fields"]:
                 # 'name' is used in AVRO type records, 'field' in JSON ones
-                field_name = field.get('name') or field.get('field')
-                if field_name == 'id':
+                field_name = field.get("name") or field.get("field")
+                if field_name == "id":
                     data[field_name] = seed
                 else:
-                    data[field_name] = self.generate_field_value(field['type'], rand_gen)
+                    data[field_name] = self.generate_field_value(field["type"], rand_gen)
             return data
         else:
-            return self.generate_field_value(schema['type'], rand_gen)
+            return self.generate_field_value(schema["type"], rand_gen)
 
     def generate_field_value(self, field_type: str, rand_gen: random.Random) -> int | float | str | bool | bytes | None:
         def generate_int():
@@ -167,19 +179,19 @@ class KafkaThreadBase(Thread):
             return rand_gen.uniform(0, 10000000000)
 
         type_mapping = {
-            'int8': generate_int,
-            'int16': generate_int,
-            'int32': generate_int,
-            'int64': generate_long,
-            'int': generate_int,
-            'long': generate_long,
-            'float32': generate_float,
-            'float64': generate_double,
-            'float': generate_float,
-            'double': generate_double,
-            'boolean': lambda: rand_gen.choice([True, False]),
-            'string': lambda: ''.join(rand_gen.choices(ascii_letters, k=10)),
-            'bytes': lambda: ''.join(rand_gen.choices(ascii_letters, k=10)).encode('utf-8'),
+            "int8": generate_int,
+            "int16": generate_int,
+            "int32": generate_int,
+            "int64": generate_long,
+            "int": generate_int,
+            "long": generate_long,
+            "float32": generate_float,
+            "float64": generate_double,
+            "float": generate_float,
+            "double": generate_double,
+            "boolean": lambda: rand_gen.choice([True, False]),
+            "string": lambda: "".join(rand_gen.choices(ascii_letters, k=10)),
+            "bytes": lambda: "".join(rand_gen.choices(ascii_letters, k=10)).encode("utf-8"),
         }
 
         value = None
@@ -189,7 +201,7 @@ class KafkaThreadBase(Thread):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 message=f"Field type '{field_type}' for Kafka record is not supported.",
-                severity=Severity.ERROR
+                severity=Severity.ERROR,
             ).publish()
 
         return value
@@ -200,7 +212,8 @@ class KafkaProducerThread(KafkaThreadBase):
     Thread that produces records to a Kafka topic.
     Supports 'avro' and 'json-with-schema' record formats.
     """
-    MANDATORY_OPTIONS = ('record-format', 'topic', 'num-records', 'key-schema', 'value-schema')
+
+    MANDATORY_OPTIONS = ("record-format", "topic", "num-records", "key-schema", "value-schema")
 
     def __init__(self, tester, params: SCTConfiguration, timeout: int, **kwargs):
         """
@@ -232,24 +245,24 @@ class KafkaProducerThread(KafkaThreadBase):
         self.undelivered_count = 0
         self.current_key = 1
 
-        self.record_size = int(self.kafka_options.get('record-size', 1024))
+        self.record_size = int(self.kafka_options.get("record-size", 1024))
 
         producer_properties = {}
-        if 'producer-property' in self.kafka_options:
-            if isinstance(self.kafka_options['producer-property'], dict):
-                producer_properties.update(self.kafka_options['producer-property'])
-            elif isinstance(self.kafka_options['producer-property'], list):
-                for prop in self.kafka_options['producer-property']:
+        if "producer-property" in self.kafka_options:
+            if isinstance(self.kafka_options["producer-property"], dict):
+                producer_properties.update(self.kafka_options["producer-property"])
+            elif isinstance(self.kafka_options["producer-property"], list):
+                for prop in self.kafka_options["producer-property"]:
                     producer_properties.update(prop)
-        if 'property' in self.kafka_options:
-            if isinstance(self.kafka_options['property'], dict):
-                producer_properties.update(self.kafka_options['property'])
-            elif isinstance(self.kafka_options['property'], list):
-                for prop in self.kafka_options['property']:
+        if "property" in self.kafka_options:
+            if isinstance(self.kafka_options["property"], dict):
+                producer_properties.update(self.kafka_options["property"])
+            elif isinstance(self.kafka_options["property"], list):
+                for prop in self.kafka_options["property"]:
                     producer_properties.update(prop)
 
         producer_config = {
-            'bootstrap.servers': ','.join(self.kafka_addresses),
+            "bootstrap.servers": ",".join(self.kafka_addresses),
         }
         # The following parameters can be used to tune/optimize performance and reliability of the producer
         # producer_config['linger.ms'] = int(producer_properties.get('linger.ms', kwargs.get('linger_ms', 5)))
@@ -265,7 +278,7 @@ class KafkaProducerThread(KafkaThreadBase):
         self.wait_for_topic(self.topic, timeout=60)
 
     def get_topics(self) -> list[str]:
-        admin_client = Producer({'bootstrap.servers': ','.join(self.kafka_addresses)})
+        admin_client = Producer({"bootstrap.servers": ",".join(self.kafka_addresses)})
         topics = admin_client.list_topics(timeout=10).topics.keys()
         LOGGER.debug("Available topics: %s", topics)
         return topics
@@ -280,7 +293,8 @@ class KafkaProducerThread(KafkaThreadBase):
         else:
             self.delivered_count += 1
             LOGGER.debug(
-                "Kafka record delivered to %s [%s] at offset %s", record.topic(), record.partition(), record.offset())
+                "Kafka record delivered to %s [%s] at offset %s", record.topic(), record.partition(), record.offset()
+            )
 
     def run(self) -> None:
         start_time = time.time()
@@ -290,18 +304,20 @@ class KafkaProducerThread(KafkaThreadBase):
                 self.stop()
                 break
 
-            if self.record_format == 'avro':
+            if self.record_format == "avro":
                 key = self.generate_avro_key(self.current_key)
                 value = self.generate_avro_value(self.current_key)
                 key_serialized = (
-                    self.key_serializer(
-                        key, SerializationContext(self.topic, MessageField.KEY)
-                    ) if self.key_serializer else None)
+                    self.key_serializer(key, SerializationContext(self.topic, MessageField.KEY))
+                    if self.key_serializer
+                    else None
+                )
                 value_serialized = (
-                    self.value_serializer(
-                        value, SerializationContext(self.topic, MessageField.VALUE)
-                    ) if self.value_serializer else None)
-            elif self.record_format == 'json-with-schema':
+                    self.value_serializer(value, SerializationContext(self.topic, MessageField.VALUE))
+                    if self.value_serializer
+                    else None
+                )
+            elif self.record_format == "json-with-schema":
                 if self.key_schema:
                     key = self.generate_json_with_schema_key(self.current_key)
                     key_serialized = self.key_serializer(key, SerializationContext(self.topic, MessageField.KEY))
@@ -335,10 +351,7 @@ class KafkaProducerThread(KafkaThreadBase):
         schema = self.value_schema_dict
         payload = self.generate_data_from_schema(schema, seed)
 
-        value_record = {
-            "schema": schema,
-            "payload": payload
-        }
+        value_record = {"schema": schema, "payload": payload}
         value_str = json.dumps(value_record)
         return value_str
 
@@ -346,10 +359,7 @@ class KafkaProducerThread(KafkaThreadBase):
         schema = self.key_schema_dict
         payload = self.generate_data_from_schema(schema, seed)
 
-        key_record = {
-            "schema": schema,
-            "payload": payload
-        }
+        key_record = {"schema": schema, "payload": payload}
         key_str = json.dumps(key_record)
         return key_str
 
@@ -366,14 +376,15 @@ class KafkaProducerThread(KafkaThreadBase):
             msg = f"{self.undelivered_count} records failed to be delivered."
             TestFrameworkEvent(source=self.__class__.__name__, message=msg, severity=Severity.ERROR).publish()
             errors.append(msg)
-        return [{'delivered_count': self.delivered_count}], errors
+        return [{"delivered_count": self.delivered_count}], errors
 
 
 class KafkaValidatorThread(KafkaThreadBase):
     """
     Thread to validate that records added to Kafka are correctly written to ScyllaDB.
     """
-    MANDATORY_OPTIONS = ('keyspace', 'table', 'num-records', 'batch-size', 'value-schema')
+
+    MANDATORY_OPTIONS = ("keyspace", "table", "num-records", "batch-size", "value-schema")
 
     def __init__(self, tester, params: SCTConfiguration, timeout: int, **kwargs):
         """
@@ -406,9 +417,9 @@ class KafkaValidatorThread(KafkaThreadBase):
         """
         super().__init__(tester, params, timeout, **kwargs)
         self.mismatches = []
-        self.batch_size = int(kwargs.get('batch-size'))
-        self.keyspace = kwargs.get('keyspace')
-        self.table = kwargs.get('table')
+        self.batch_size = int(kwargs.get("batch-size"))
+        self.keyspace = kwargs.get("keyspace")
+        self.table = kwargs.get("table")
         self.current_key = 1
         self.batch_wait_time = 10
         self.batch_poll_interval = 2
@@ -423,13 +434,17 @@ class KafkaValidatorThread(KafkaThreadBase):
                 rows = self.read_rows_from_scylla(self.current_key, batch_end)
                 if len(rows) < batch_size:
                     if time.time() - batch_start_time > self.batch_wait_time:
-                        error_msg = (f"Timeout waiting for records from {self.current_key} to {batch_end} "
-                                     f"to be in ScyllaDB. Expected {batch_size}, found {len(rows)}")
+                        error_msg = f"Timeout waiting for records from {self.current_key} to {batch_end} to be in ScyllaDB. Expected {batch_size}, found {len(rows)}"
                         LOGGER.error(error_msg)
                         self.mismatches.append(error_msg)
                         break  # move to next batch
-                    LOGGER.debug("Only %s out of %s records found in ScyllaDB for keys %s to %s. "
-                                 "Waiting...", len(rows), batch_size, self.current_key, batch_end)
+                    LOGGER.debug(
+                        "Only %s out of %s records found in ScyllaDB for keys %s to %s. Waiting...",
+                        len(rows),
+                        batch_size,
+                        self.current_key,
+                        batch_end,
+                    )
                     time.sleep(self.batch_poll_interval)
                     continue
                 self.compare_rows(rows)
@@ -453,7 +468,7 @@ class KafkaValidatorThread(KafkaThreadBase):
         for row in rows:
             id_value = row.id
             expected_row = self.generate_data_from_schema(self.value_schema_dict, seed=id_value)
-            expected_row['id'] = id_value
+            expected_row["id"] = id_value
 
             row_dict = dict(row._asdict())
             if row_dict != expected_row:
@@ -471,6 +486,7 @@ class KafkaValidatorThread(KafkaThreadBase):
             TestFrameworkEvent(
                 source=self.__class__.__name__,
                 message=f"Kafka records do not match ScyllaDB rows. Mismatches: {self.mismatches}",
-                severity=Severity.ERROR).publish()
+                severity=Severity.ERROR,
+            ).publish()
             errors.extend(self.mismatches)
-        return [{'mismatches': self.mismatches}], errors
+        return [{"mismatches": self.mismatches}], errors

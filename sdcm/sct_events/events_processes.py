@@ -52,10 +52,9 @@ OutboundEventsGenerator = Generator[T_outbound_event, None, None]
 
 
 class OutboundEventsProtocol(Protocol[T_outbound_events_protocol]):
-    def outbound_events(self,
-                        stop_event: StopEvent,
-                        events_counter: multiprocessing.Value) -> Generator[T_outbound_events_protocol, None, None]:
-        ...
+    def outbound_events(
+        self, stop_event: StopEvent, events_counter: multiprocessing.Value
+    ) -> Generator[T_outbound_events_protocol, None, None]: ...
 
 
 class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
@@ -80,12 +79,12 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
         return self._events_counter.value
 
     def inbound_events(self) -> InboundEventsGenerator:
-        yield from cast(OutboundEventsProtocol[T_inbound_event],
-                        get_events_process(name=self.inbound_events_process, _registry=self._registry)) \
-            .outbound_events(stop_event=self.stop_event, events_counter=self._events_counter)
+        yield from cast(
+            OutboundEventsProtocol[T_inbound_event],
+            get_events_process(name=self.inbound_events_process, _registry=self._registry),
+        ).outbound_events(stop_event=self.stop_event, events_counter=self._events_counter)
 
-    def outbound_events(self, stop_event: StopEvent,
-                        events_counter: multiprocessing.Value) -> OutboundEventsGenerator:
+    def outbound_events(self, stop_event: StopEvent, events_counter: multiprocessing.Value) -> OutboundEventsGenerator:
         yield from []
 
     def terminate(self) -> None:
@@ -124,12 +123,10 @@ class EventsProcessPipe(BaseEventsProcess[T_inbound_event, T_outbound_event], th
                 pass
 
 
-class EventsProcessProcess(BaseEventsProcess[T_inbound_event, T_outbound_event], multiprocessing.Process):
-    ...
+class EventsProcessProcess(BaseEventsProcess[T_inbound_event, T_outbound_event], multiprocessing.Process): ...
 
 
-class EventsProcessThread(BaseEventsProcess[T_inbound_event, T_outbound_event], threading.Thread):
-    ...
+class EventsProcessThread(BaseEventsProcess[T_inbound_event, T_outbound_event], threading.Thread): ...
 
 
 EventsProcess = Union[EventsProcessProcess, EventsProcessThread]
@@ -207,8 +204,21 @@ def suppress_interrupt():
         LOGGER.debug("Process %s was halted by %s", multiprocessing.current_process().name, type(exc).__name__)
 
 
-__all__ = ("EVENTS_MAIN_DEVICE_ID", "EVENTS_FILE_LOGGER_ID", "EVENTS_GRAFANA_ANNOTATOR_ID",
-           "EVENTS_GRAFANA_AGGREGATOR_ID", "EVENTS_GRAFANA_POSTMAN_ID", "EVENTS_ANALYZER_ID", "EVENTS_HANDLER_ID",
-           "StopEvent", "BaseEventsProcess", "EventsProcessPipe", "EventsProcessesRegistry",
-           "create_default_events_process_registry", "start_events_process", "get_events_process",
-           "verbose_suppress", "suppress_interrupt",)
+__all__ = (
+    "EVENTS_MAIN_DEVICE_ID",
+    "EVENTS_FILE_LOGGER_ID",
+    "EVENTS_GRAFANA_ANNOTATOR_ID",
+    "EVENTS_GRAFANA_AGGREGATOR_ID",
+    "EVENTS_GRAFANA_POSTMAN_ID",
+    "EVENTS_ANALYZER_ID",
+    "EVENTS_HANDLER_ID",
+    "StopEvent",
+    "BaseEventsProcess",
+    "EventsProcessPipe",
+    "EventsProcessesRegistry",
+    "create_default_events_process_registry",
+    "start_events_process",
+    "get_events_process",
+    "verbose_suppress",
+    "suppress_interrupt",
+)

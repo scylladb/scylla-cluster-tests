@@ -19,15 +19,15 @@ DEFAULT_KEEP_HOURS = 14
 
 
 def is_running(instance):
-    return instance.state['Name'] == 'running'
+    return instance.state["Name"] == "running"
 
 
 def is_stopped(instance):
-    return instance.state['Name'] == 'stopped'
+    return instance.state["Name"] == "stopped"
 
 
 def is_terminated(instance):
-    return instance.state['Name'] == 'terminated'
+    return instance.state["Name"] == "terminated"
 
 
 def debug(msg):
@@ -52,18 +52,18 @@ def keep_alive_instance_duration(instance, duration):
 
 
 def keep_alive_tag_val(instance):
-    return get_tag_value(instance, 'keep')
+    return get_tag_value(instance, "keep")
 
 
 def keep_alive_action_tag_val(instance):
-    return get_tag_value(instance, 'keep_action')
+    return get_tag_value(instance, "keep_action")
 
 
 def get_tag_value(instance, key):
     if instance.tags is not None:
         for tag in instance.tags:
-            if tag['Key'].lower() == key.lower():
-                return tag['Value']
+            if tag["Key"].lower() == key.lower():
+                return tag["Value"]
     return ""
 
 
@@ -76,13 +76,14 @@ def keep_alive_tag_int(instance):
 
 def should_terminate(instance):
     action = keep_alive_action_tag_val(instance)
-    return TERMINATE if action == '' else action == 'terminate'
+    return TERMINATE if action == "" else action == "terminate"
+
 
 # check tags for keep:alive
 
 
 def keep_alive_instance(instance):
-    return keep_alive_tag_val(instance).lower() == 'alive'
+    return keep_alive_tag_val(instance).lower() == "alive"
 
 
 # check tags for keep:num hours since instance creation
@@ -93,29 +94,20 @@ def keep_alive_instance_launch_time(instance):
 
 def stop_instance(instance):
     try:
-        test_id = get_tag_value(instance, 'TestId')
-        name = get_tag_value(instance, 'Name')
+        test_id = get_tag_value(instance, "TestId")
+        name = get_tag_value(instance, "Name")
         if not DRY_RUN:
-            instance.create_tags(Tags=[
-                {
-                    'Key': 'keep_alive_action',
-                    'Value': 'stop'
-                }
-            ])
+            instance.create_tags(Tags=[{"Key": "keep_alive_action", "Value": "stop"}])
             instance.stop()
-            update_argus_resource_status(test_id, name, 'terminate')
+            update_argus_resource_status(test_id, name, "terminate")
     except Exception as exc:  # noqa: BLE001
         eprint("stop instance %s error: %s" % (instance.id, str(exc)))
 
 
 def remove_protection(instance):
     try:
-
         if not DRY_RUN:
-            instance.modify_attribute(
-                DisableApiTermination={
-                    'Value': False
-                })
+            instance.modify_attribute(DisableApiTermination={"Value": False})
             print_instance(instance, "Disabling API Termination protection")
     except Exception as exc:  # noqa: BLE001
         eprint("DisableApiTermination protection %s error: %s" % (instance.id, str(exc)))
@@ -123,26 +115,21 @@ def remove_protection(instance):
 
 def terminate_instance(instance):
     try:
-        test_id = get_tag_value(instance, 'TestId')
-        name = get_tag_value(instance, 'Name')
+        test_id = get_tag_value(instance, "TestId")
+        name = get_tag_value(instance, "Name")
         if not DRY_RUN:
-            instance.create_tags(Tags=[
-                {
-                    'Key': 'keep_alive_action',
-                    'Value': 'terminate'
-                }
-            ])
+            instance.create_tags(Tags=[{"Key": "keep_alive_action", "Value": "terminate"}])
             instance.terminate()
-            update_argus_resource_status(test_id, name, 'terminate')
+            update_argus_resource_status(test_id, name, "terminate")
     except Exception as exc:  # noqa: BLE001
         eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 
 
 def print_instance(instance, msg):
-    print("instance %s type %s launched at %s keys %s %s" % (
-        instance.id, instance.instance_type,
-        instance.launch_time, instance.key_name,
-        msg))
+    print(
+        "instance %s type %s launched at %s keys %s %s"
+        % (instance.id, instance.instance_type, instance.launch_time, instance.key_name, msg)
+    )
 
 
 def regions_names():
@@ -150,22 +137,21 @@ def regions_names():
     default_region = session.region_name
     if not default_region:
         default_region = "eu-central-1"
-    client = session.client('ec2', region_name=default_region)
-    return [region['RegionName'] for region in client.describe_regions()['Regions']]
+    client = session.client("ec2", region_name=default_region)
+    return [region["RegionName"] for region in client.describe_regions()["Regions"]]
 
 
 def scan_region_instances(region_name, duration):
-    ec2 = boto3.resource('ec2', region_name=region_name)
-    instances = ec2.instances.filter(Filters=[{
-        'Name': 'instance-state-name',
-        'Values': ['running']
-    }])
+    ec2 = boto3.resource("ec2", region_name=region_name)
+    instances = ec2.instances.filter(Filters=[{"Name": "instance-state-name", "Values": ["running"]}])
 
     running, keep_alive, expiring, expired = 0, 0, 0, []
 
     for instance in instances:
-        debug("checking instance %s, type %s, tags %s, placement %s, launch_time %s" % (
-            instance.id, instance.instance_type, instance.tags, instance.placement, instance.launch_time))
+        debug(
+            "checking instance %s, type %s, tags %s, placement %s, launch_time %s"
+            % (instance.id, instance.instance_type, instance.tags, instance.placement, instance.launch_time)
+        )
 
         kalive = keep_alive_instance(instance)  # keep:alive
         ka_lt = keep_alive_instance_launch_time(instance)  # keep:X_HOURS
@@ -215,8 +201,10 @@ def clean_instances(region_name, duration):
             print_instance(instance, "terminating...")
             terminate_instance(instance)
 
-    print("region %s: stopped %d, terminated %d, kept alive %d and expiring %d, running %d instances" % (
-        region_name, len(expired) - terminated, terminated, keep_alive, expiring, running))
+    print(
+        "region %s: stopped %d, terminated %d, kept alive %d and expiring %d, running %d instances"
+        % (region_name, len(expired) - terminated, terminated, keep_alive, expiring, running)
+    )
 
 
 def keep_alive_volume(volume):
@@ -227,7 +215,7 @@ def keep_alive_volume(volume):
     if volume.tags is None:
         return False
     for tag in volume.tags:
-        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+        if tag["Key"] == "keep" and tag["Value"] == "alive":
             return True
     return False
 
@@ -247,15 +235,17 @@ def print_volume(volume, msg):
 
 def clean_volumes(region_name):
     print("cleaning region %s volumes" % region_name)
-    ec2 = boto3.resource('ec2', region_name=region_name)
+    ec2 = boto3.resource("ec2", region_name=region_name)
 
     volumes = ec2.volumes.all()
 
     count_kept_volume = 0
     count_deleted_volume = 0
     for volume in volumes:
-        debug("checking volume %s %s %s %s %s" %
-              (volume.id, volume.volume_id, volume.state, volume.tags, volume.create_time))
+        debug(
+            "checking volume %s %s %s %s %s"
+            % (volume.id, volume.volume_id, volume.state, volume.tags, volume.create_time)
+        )
         keep_alive = keep_alive_volume(volume)
         if keep_alive or volume.state == "in-use":
             count_kept_volume = count_kept_volume + 1
@@ -275,7 +265,7 @@ def keep_alive_address(eip_dict):
     if "Tags" not in eip_dict:
         return False
     for tag in eip_dict["Tags"]:
-        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+        if tag["Key"] == "keep" and tag["Value"] == "alive":
             return True
     return False
 
@@ -285,9 +275,9 @@ def release_address(eip_dict, client):
         print_adress(eip_dict, "deleting")
         if not DRY_RUN:
             if "AllocationId" in eip_dict:
-                client.release_address(AllocationId=eip_dict['AllocationId'])
+                client.release_address(AllocationId=eip_dict["AllocationId"])
             elif "PublicIp" in eip_dict:
-                client.release_address(PublicIp=eip_dict['PublicIp'])
+                client.release_address(PublicIp=eip_dict["PublicIp"])
     except Exception as exc:  # noqa: BLE001
         print(exc)
 
@@ -301,11 +291,11 @@ def print_adress(eip_dict, msg):
 
 def clean_ips(region_name):
     print("cleaning region %s IP's" % region_name)
-    client = boto3.client('ec2', region_name=region_name)
+    client = boto3.client("ec2", region_name=region_name)
     addresses_dict = client.describe_addresses()
     deleted_addresses = 0
     kept_addresses = 0
-    for eip_dict in addresses_dict['Addresses']:
+    for eip_dict in addresses_dict["Addresses"]:
         debug(eip_dict)
         if "NetworkInterfaceId" not in eip_dict and not keep_alive_address(eip_dict):
             deleted_addresses = deleted_addresses + 1
@@ -317,24 +307,26 @@ def clean_ips(region_name):
 
 def clean_capacity_reservations(region_name):
     print("Cleaning region %s capacity reservations" % region_name)
-    client = boto3.client('ec2', region_name=region_name)
-    response = client.describe_capacity_reservations(
-        Filters=[
-            {
-                'Name': 'state',
-                'Values': ['active']
-            }]
-    )
+    client = boto3.client("ec2", region_name=region_name)
+    response = client.describe_capacity_reservations(Filters=[{"Name": "state", "Values": ["active"]}])
     now = datetime.datetime.now(datetime.timezone.utc)
 
     for cr in response["CapacityReservations"]:
-        test_id = next((tag['Value'] for tag in cr.get('Tags', []) if tag['Key'] == 'test_id'), 'N/A')
-        print("found capacity reservation %s started at %s. instance type: %s, count: %s, available: %s, test_id: %s" %
-              (cr["CapacityReservationId"], cr["StartDate"], cr["InstanceType"], cr["TotalInstanceCount"], cr["AvailableInstanceCount"],
-               test_id))
+        test_id = next((tag["Value"] for tag in cr.get("Tags", []) if tag["Key"] == "test_id"), "N/A")
+        print(
+            "found capacity reservation %s started at %s. instance type: %s, count: %s, available: %s, test_id: %s"
+            % (
+                cr["CapacityReservationId"],
+                cr["StartDate"],
+                cr["InstanceType"],
+                cr["TotalInstanceCount"],
+                cr["AvailableInstanceCount"],
+                test_id,
+            )
+        )
         if (
-                cr["TotalInstanceCount"] == cr["AvailableInstanceCount"]  # no instances running
-                and (now - cr["StartDate"]) > datetime.timedelta(minutes=15)  # don't clean too fresh reservations
+            cr["TotalInstanceCount"] == cr["AvailableInstanceCount"]  # no instances running
+            and (now - cr["StartDate"]) > datetime.timedelta(minutes=15)  # don't clean too fresh reservations
         ):
             if DRY_RUN:
                 print("DRY RUN: would clean capacity reservation %s" % cr["CapacityReservationId"])
@@ -344,55 +336,52 @@ def clean_capacity_reservations(region_name):
 
 
 def print_dedicate_host(host: dict, msg: str):
-    print("dedicate host %s %s" % (host.get('HostId'), msg))
+    print("dedicate host %s %s" % (host.get("HostId"), msg))
 
 
 def keep_alive_host(host: dict):
-    if datetime.datetime.now(tz=pytz.utc) - host.get('AllocationTime') < datetime.timedelta(hours=1):
+    if datetime.datetime.now(tz=pytz.utc) - host.get("AllocationTime") < datetime.timedelta(hours=1):
         # skipping if created recently and might miss tags yet
         return True
     # checking tags
-    if host.get('Tags') is None:
+    if host.get("Tags") is None:
         return False
-    for tag in host.get('Tags'):
-        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+    for tag in host.get("Tags"):
+        if tag["Key"] == "keep" and tag["Value"] == "alive":
             return True
     return False
 
 
 def clean_dedicate_hosts(region_name):
     print("cleaning region %s dedicate_hosts" % region_name)
-    ec2 = boto3.client('ec2', region_name=region_name)
+    ec2 = boto3.client("ec2", region_name=region_name)
 
     def delete_host(_host: dict):
         try:
             print_dedicate_host(_host, "deleting")
             if not DRY_RUN:
-                ec2.release_hosts(HostIds=[_host.get['HostId'], ])
+                ec2.release_hosts(
+                    HostIds=[
+                        _host.get["HostId"],
+                    ]
+                )
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
     count_kept_hosts = 0
     count_deleted_hosts = 0
-    response = ec2.describe_hosts(Filters=[
-        {
-            'Name': 'state',
-            'Values': ['available']
-        }
-    ]
-    )
+    response = ec2.describe_hosts(Filters=[{"Name": "state", "Values": ["available"]}])
 
-    for host in response['Hosts']:
-        debug("checking host %s %s %s" %
-              (host.get('HostId'), host.get('Instances'), host.get('AllocationTime')))
+    for host in response["Hosts"]:
+        debug("checking host %s %s %s" % (host.get("HostId"), host.get("Instances"), host.get("AllocationTime")))
         keep_alive = keep_alive_host(host)
 
-        if keep_alive or host.get('Instances'):
+        if keep_alive or host.get("Instances"):
             count_kept_hosts += 1
             if VERBOSE:
                 print_dedicate_host(host, "kept")
         else:
-            count_deleted_hosts += + 1
+            count_deleted_hosts += +1
             delete_host(host)
             if VERBOSE:
                 print_dedicate_host(host, "deleted")
@@ -409,39 +398,42 @@ def clean_unattached_security_groups(region_name: str):
     if VERBOSE:
         print(f"Checking region: {region_name} for unattached security groups")
     session = boto3.Session()
-    ec2 = session.client('ec2', region_name=region_name)
+    ec2 = session.client("ec2", region_name=region_name)
 
     # Use paginators for security groups
-    sg_paginator = ec2.get_paginator('describe_security_groups')
+    sg_paginator = ec2.get_paginator("describe_security_groups")
     groups = []
     for page in sg_paginator.paginate():
-        groups.extend(page['SecurityGroups'])
+        groups.extend(page["SecurityGroups"])
 
     # Use paginators for network interfaces
-    ni_paginator = ec2.get_paginator('describe_network_interfaces')
+    ni_paginator = ec2.get_paginator("describe_network_interfaces")
     interfaces = []
     for page in ni_paginator.paginate():
-        interfaces.extend(page['NetworkInterfaces'])
+        interfaces.extend(page["NetworkInterfaces"])
 
     attached_group_ids = set()
     for iface in interfaces:
-        for sg in iface.get('Groups', []):
-            attached_group_ids.add(sg['GroupId'])
+        for sg in iface.get("Groups", []):
+            attached_group_ids.add(sg["GroupId"])
 
     for group in groups:
-        tags = group.get('Tags', [])
+        tags = group.get("Tags", [])
         # Skip default and specific security groups, and one tagged with 'keep:alive'
-        if (group['GroupName'] in ('default', 'SCT-2-sg', 'SCT-builder-ssh-sg')
-                or {'Key': 'keep', 'Value': 'alive'} in tags):
+        if (
+            group["GroupName"] in ("default", "SCT-2-sg", "SCT-builder-ssh-sg")
+            or {"Key": "keep", "Value": "alive"} in tags
+        ):
             continue
-        if group['GroupId'] not in attached_group_ids:
+        if group["GroupId"] not in attached_group_ids:
             deleted += 1
             if VERBOSE:
                 print(
-                    f"Found unattached security group: {group['GroupId']} ({group['GroupName']}) in {region_name}\ntags: {tags}")
+                    f"Found unattached security group: {group['GroupId']} ({group['GroupName']}) in {region_name}\ntags: {tags}"
+                )
             if not DRY_RUN:
                 try:
-                    ec2.delete_security_group(GroupId=group['GroupId'])
+                    ec2.delete_security_group(GroupId=group["GroupId"])
                     if VERBOSE:
                         print(f"Deleted security group: {group['GroupId']}")
                 except Exception as e:  # noqa: BLE001
@@ -453,25 +445,30 @@ def clean_unattached_security_groups(region_name: str):
 
 
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser('ec2_stop')
-    arg_parser.add_argument("--duration", type=int,
-                            help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
-    arg_parser.add_argument("--verbose", action="store_true",
-                            help="print processing instances details",
-                            default=os.environ.get('VERBOSE'))
-    arg_parser.add_argument("--trace", action="store_true",
-                            help="trace every AWS call",
-                            default=os.environ.get('TRACE'))
-    arg_parser.add_argument("--wait", type=int,
-                            help="blind wait for instances to stop timeout",
-                            default=os.environ.get('WAIT', '60'))
-    arg_parser.add_argument("--dry-run", action="store_true",
-                            help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN'))
-    arg_parser.add_argument("--default-action",
-                            help="The default action when stopping an image (stop/terminate)",
-                            default=os.environ.get('DEFAULT_ACTION', "terminate"))
+    arg_parser = argparse.ArgumentParser("ec2_stop")
+    arg_parser.add_argument(
+        "--duration",
+        type=int,
+        help="duration to keep non-tagged instances running in hours",
+        default=os.environ.get("DURATION", DEFAULT_KEEP_HOURS),
+    )
+    arg_parser.add_argument(
+        "--verbose", action="store_true", help="print processing instances details", default=os.environ.get("VERBOSE")
+    )
+    arg_parser.add_argument(
+        "--trace", action="store_true", help="trace every AWS call", default=os.environ.get("TRACE")
+    )
+    arg_parser.add_argument(
+        "--wait", type=int, help="blind wait for instances to stop timeout", default=os.environ.get("WAIT", "60")
+    )
+    arg_parser.add_argument(
+        "--dry-run", action="store_true", help="do not stop or terminate anything", default=os.environ.get("DRY_RUN")
+    )
+    arg_parser.add_argument(
+        "--default-action",
+        help="The default action when stopping an image (stop/terminate)",
+        default=os.environ.get("DEFAULT_ACTION", "terminate"),
+    )
 
     arguments = arg_parser.parse_args()
 
@@ -479,14 +476,14 @@ if __name__ == "__main__":
     WAIT = int(arguments.wait)
     DRY_RUN = bool(arguments.dry_run)
     TRACE = bool(arguments.trace)
-    TERMINATE = arguments.default_action == 'terminate'
+    TERMINATE = arguments.default_action == "terminate"
 
     if DRY_RUN:
         print("dry mode on")
 
     if TRACE:
-        boto3.set_stream_logger(name='botocore')
-        logging.getLogger('botocore').setLevel(logging.DEBUG)
+        boto3.set_stream_logger(name="botocore")
+        logging.getLogger("botocore").setLevel(logging.DEBUG)
 
     for region in regions_names():
         clean_instances(region, arguments.duration)

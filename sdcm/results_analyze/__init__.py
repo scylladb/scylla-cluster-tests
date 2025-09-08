@@ -31,8 +31,14 @@ from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.common import format_timestamp
-from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
-    PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
+from sdcm.utils.es_queries import (
+    QueryFilter,
+    PerformanceFilterYCSB,
+    PerformanceFilterScyllaBench,
+    PerformanceFilterCS,
+    CDCQueryFilterCS,
+    LatencyWithNemesisQueryFilter,
+)
 from test_lib.utils import MagicList, get_data_by_path
 from .test import TestResultClass
 
@@ -44,8 +50,7 @@ PP = pprint.PrettyPrinter(indent=2)
 class BaseResultsAnalyzer:
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
-                 events=None):
+    def __init__(self, es_index, email_recipients=(), email_template_fp="", query_limit=1000, logger=None, events=None):
         self._es = ES()
         self._conf = self._es.conf
         self._es_index = es_index
@@ -68,15 +73,15 @@ class BaseResultsAnalyzer:
         :return: test results in json format
         """
         if not self._es.exists(index=self._es_index, id=test_id):
-            self.log.error('Test results not found: {}'.format(test_id))
+            self.log.error("Test results not found: {}".format(test_id))
             return None
         return self._es.get(index=self._es_index, id=test_id)
 
     @staticmethod
     def _get_grafana_screenshot(test_doc):
-        grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshot')
+        grafana_screenshots = test_doc["_source"]["test_details"].get("grafana_screenshot")
         if not grafana_screenshots:
-            grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshots')
+            grafana_screenshots = test_doc["_source"]["test_details"].get("grafana_screenshots")
 
         if grafana_screenshots and isinstance(grafana_screenshots, list):
             return grafana_screenshots
@@ -87,13 +92,14 @@ class BaseResultsAnalyzer:
 
     @staticmethod
     def _get_setup_details(test_doc, is_gce):
-        setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
-        if setup_details['cluster_backend'] == "aws":
-            setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
-            setup_details['region_name'] = test_doc['_source']['setup_details']['region_name']
+        setup_details = {"cluster_backend": test_doc["_source"]["setup_details"].get("cluster_backend")}
+        if setup_details["cluster_backend"] == "aws":
+            setup_details["ami_id_db_scylla"] = test_doc["_source"]["setup_details"]["ami_id_db_scylla"]
+            setup_details["region_name"] = test_doc["_source"]["setup_details"]["region_name"]
         for setup_param in QueryFilter(test_doc, is_gce).setup_instance_parameters():
             setup_details.update(
-                [(setup_param.replace('gce_', ''), test_doc['_source']['setup_details'].get(setup_param))])
+                [(setup_param.replace("gce_", ""), test_doc["_source"]["setup_details"].get(setup_param))]
+            )
         return setup_details
 
     @staticmethod
@@ -102,30 +108,31 @@ class BaseResultsAnalyzer:
         return f"[{setup_details['cluster_backend']}][{setup_details['instance_type_db']}]"
 
     def _test_version(self, test_doc):
-        if test_doc['_source'].get('base_target_versions'):
-            base_version = test_doc['_source']['base_target_versions'][0]['base_version']
-            base_build_id = test_doc['_source']['base_target_versions'][0]['base_build_id']
-            target_version = test_doc['_source']['base_target_versions'][0]['target_version']
-            target_build_id = test_doc['_source']['base_target_versions'][0]['target_build_id']
-            return {'base_version': base_version,
-                    'base_build_id': base_build_id,
-                    'target_version': target_version,
-                    'target_build_id': target_build_id
-                    }
-        if test_doc['_source'].get('versions'):
-            for value in ('scylla-server', 'scylla-enterprise-server'):
-                key = test_doc['_source']['versions'].get(value)
+        if test_doc["_source"].get("base_target_versions"):
+            base_version = test_doc["_source"]["base_target_versions"][0]["base_version"]
+            base_build_id = test_doc["_source"]["base_target_versions"][0]["base_build_id"]
+            target_version = test_doc["_source"]["base_target_versions"][0]["target_version"]
+            target_build_id = test_doc["_source"]["base_target_versions"][0]["target_build_id"]
+            return {
+                "base_version": base_version,
+                "base_build_id": base_build_id,
+                "target_version": target_version,
+                "target_build_id": target_build_id,
+            }
+        if test_doc["_source"].get("versions"):
+            for value in ("scylla-server", "scylla-enterprise-server"):
+                key = test_doc["_source"]["versions"].get(value)
                 if key:
                     return key
         else:
-            self.log.error('Scylla version is not found for test %s', test_doc['_id'])
-            return ''
+            self.log.error("Scylla version is not found for test %s", test_doc["_id"])
+            return ""
 
         res = {
-            'version': test_doc['_source']['versions'].get('version', ''),
-            'date': test_doc['_source']['versions'].get('date', ''),
-            'commit_id': test_doc['_source']['versions'].get('commit_id', ''),
-            'build_id': test_doc['_source']['versions'].get('build_id', '')
+            "version": test_doc["_source"]["versions"].get("version", ""),
+            "date": test_doc["_source"]["versions"].get("date", ""),
+            "commit_id": test_doc["_source"]["versions"].get("commit_id", ""),
+            "build_id": test_doc["_source"]["versions"].get("build_id", ""),
         }
         return res
 
@@ -151,11 +158,13 @@ class BaseResultsAnalyzer:
         """
         email_template_fp = template if template else self._email_template_fp
         self.log.info("Rendering results to html using '%s' template...", email_template_fp)
-        loader = jinja2.FileSystemLoader(os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), '../report_templates'))
+        loader = jinja2.FileSystemLoader(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "../report_templates")
+        )
         print(os.path.dirname(os.path.abspath(__file__)))
-        env = jinja2.Environment(loader=loader, autoescape=True, extensions=[
-                                 'jinja2.ext.loopcontrols', 'jinja2.ext.do'])
+        env = jinja2.Environment(
+            loader=loader, autoescape=True, extensions=["jinja2.ext.loopcontrols", "jinja2.ext.do"]
+        )
         env.filters["format_timestamp"] = format_timestamp
         template = env.get_template(email_template_fp)
         html = template.render(results)
@@ -168,7 +177,7 @@ class BaseResultsAnalyzer:
 
     def send_email(self, subject, content, html=True, files=()):
         if self._email_recipients:
-            self.log.debug('Send email to {}'.format(self._email_recipients))
+            self.log.debug("Send email to {}".format(self._email_recipients))
             email = Email()
             email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
@@ -177,33 +186,33 @@ class BaseResultsAnalyzer:
     def save_html_to_file(self, results, file_name, template_file):
         email = BaseEmailReporter()
         report_file = os.path.join(email.logdir, file_name)
-        self.log.debug('report_file = %s', report_file)
+        self.log.debug("report_file = %s", report_file)
         email.save_html_to_file(results, report_file, template_file=template_file)
-        self.log.debug('HTML successfully saved to local file')
+        self.log.debug("HTML successfully saved to local file")
         return report_file
 
     def gen_kibana_dashboard_url(self, dashboard_path=""):
-        return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
+        return "%s/%s" % (self._conf.get("kibana_url"), dashboard_path)
 
-    def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
+    def save_email_data_file(self, subject, email_data, file_path="email_data.json"):
         file_path = os.path.join(TestConfig.logdir(), file_path)
         if os.path.exists(file_path):
             try:
                 with open(file_path, encoding="utf-8") as file:
                     data = file.read().strip()
-                    file_content = json.loads(data or '{}')
+                    file_content = json.loads(data or "{}")
             except EnvironmentError as err:
-                self.log.error('Failed to read file %s with error %s', file_path, err)
+                self.log.error("Failed to read file %s with error %s", file_path, err)
         else:
             file_content = {}
         file_content[subject] = email_data.copy()
         try:
-            with open(file_path, 'w', encoding="utf-8") as file:
+            with open(file_path, "w", encoding="utf-8") as file:
                 json.dump(file_content, file)
         except EnvironmentError as err:
-            self.log.error('Failed to write %s to file %s with error %s', file_content, file_path, err)
+            self.log.error("Failed to write %s to file %s with error %s", file_content, file_path, err)
         else:
-            self.log.debug('Successfully wrote %s to file %s', file_content, file_path)
+            self.log.debug("Successfully wrote %s to file %s", file_content, file_path)
 
     def _get_best_value(self, key, val1, val2, params=PARAMS):
         if key == params[0]:  # op rate
@@ -221,14 +230,14 @@ class BaseResultsAnalyzer:
         """
         cmp_res = {"version_dst": version_dst, "res": {}}
         for param in self.PARAMS:
-            param_key_name = param.replace(' ', '_')
-            status = 'Progress'
+            param_key_name = param.replace(" ", "_")
+            status = "Progress"
             try:
                 delta = src[param] - dst[param]
                 change_perc = int(math.fabs(delta) * 100 / dst[param])
                 best_id = best_test_id[param]
-                if (param.startswith('latency') and delta > 0) or (param == 'op rate' and delta < 0):
-                    status = 'Regression'
+                if (param.startswith("latency") and delta > 0) or (param == "op rate" and delta < 0):
+                    status = "Regression"
                 if change_perc == 0:
                     status = "Difference"
                 cmp_res["res"][param_key_name] = {
@@ -239,8 +248,11 @@ class BaseResultsAnalyzer:
                     "status": status,
                 }
             except TypeError:
-                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
-                    param, src[param], dst[param], version_dst))
+                self.log.exception(
+                    "Failed to compare {} results: {} vs {}, version {}".format(
+                        param, src[param], dst[param], version_dst
+                    )
+                )
         return cmp_res
 
 
@@ -250,9 +262,14 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
-        super().__init__(es_index=es_index, email_recipients=email_recipients,
-                         email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
-        self.percentiles = ['percentile_90', 'percentile_99']
+        super().__init__(
+            es_index=es_index,
+            email_recipients=email_recipients,
+            email_template_fp="results_latency_during_ops_short.html",
+            logger=logger,
+            events=events,
+        )
+        self.percentiles = ["percentile_90", "percentile_99"]
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -261,30 +278,28 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         debug_events, _ = self.get_debug_events()
         events_list = []
         if debug_events:
-            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=REACTOR_STALLED' in stall]
+            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if "type=REACTOR_STALLED" in stall]
         return events_list
 
     def get_kernel_callstack_events(self):
         debug_events, _ = self.get_debug_events()
         events_list = []
         if debug_events:
-            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
+            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if "type=KERNEL_CALLSTACK" in stall]
         return events_list
 
     def _get_previous_results(self, test_doc, is_gce=False):
-        filter_path = ['hits.hits._id',
-                       'hits.hits._source.results',
-                       'hits.hits._source.versions',
-                       'hits.hits._source.test_details',
-                       'hits.hits._source.latency_during_ops']
+        filter_path = [
+            "hits.hits._id",
+            "hits.hits._source.results",
+            "hits.hits._source.versions",
+            "hits.hits._source.test_details",
+            "hits.hits._source.latency_during_ops",
+        ]
         query = LatencyWithNemesisQueryFilter(test_doc, is_gce, use_wide_query=True, lastyear=True)()
 
         LOGGER.debug("ES QUERY: %s", query)
-        test_results = self._es.search(
-            index=self._es_index,
-            q=query,
-            filter_path=filter_path,
-            size=self._limit)
+        test_results = self._es.search(index=self._es_index, q=query, filter_path=filter_path, size=self._limit)
         if not test_results:
             self.log.warning("No results found for query: %s", query)
             return []
@@ -292,7 +307,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
     @staticmethod
     def _get_nemesis_data(stat):
-        return stat.get('cycles', [])
+        return stat.get("cycles", [])
 
     def _calculate_cycles_average(self, stat):
         nemesis_cycles = self._get_nemesis_data(stat)
@@ -300,14 +315,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         operation_time_summary = []
         operation_time_average = 0
         for cycle in nemesis_cycles:
-            hdr_cycle_summary = cycle.get('hdr_summary', {})
+            hdr_cycle_summary = cycle.get("hdr_summary", {})
             for workload in hdr_cycle_summary:
-                nemesis_average_by_workloads.setdefault(
-                    workload, {perc: [] for perc in self.percentiles})
+                nemesis_average_by_workloads.setdefault(workload, {perc: [] for perc in self.percentiles})
                 for perc in self.percentiles:
-                    nemesis_average_by_workloads[workload][perc].append(
-                        hdr_cycle_summary[workload].get(perc, 0))
-            operation_time_summary.append(cycle.get('duration_in_sec', 0))
+                    nemesis_average_by_workloads[workload][perc].append(hdr_cycle_summary[workload].get(perc, 0))
+            operation_time_summary.append(cycle.get("duration_in_sec", 0))
 
         for _, cycles_stats in nemesis_average_by_workloads.items():
             for perc, values in cycles_stats.items():
@@ -316,23 +329,27 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         if operation_time_summary and sum(operation_time_summary):
             operation_time_average = sum(operation_time_summary) / len(operation_time_summary)
 
-        stat.update({"hdr_summary_average": nemesis_average_by_workloads,
-                     "average_time_operation": f"{timedelta(seconds=int(operation_time_average))}",
-                     "average_time_operation_in_sec": int(operation_time_average)
-                     })
+        stat.update(
+            {
+                "hdr_summary_average": nemesis_average_by_workloads,
+                "average_time_operation": f"{timedelta(seconds=int(operation_time_average))}",
+                "average_time_operation_in_sec": int(operation_time_average),
+            }
+        )
 
     def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):
         try:
             if not test_doc["_source"].get("latency_during_ops"):
-                LOGGER.error("Document with id=%s doesn't have 'latency_during_ops' statistics", test_doc['_id'])
+                LOGGER.error("Document with id=%s doesn't have 'latency_during_ops' statistics", test_doc["_id"])
                 return {}
 
-            results_per_nemesis_by_version = {nemesis: {}
-                                              for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
+            results_per_nemesis_by_version = {
+                nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()
+            }
             best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
 
             def sort_results_by_versions(results: list[Any]):
-                """ filter not relevant results and build dict for sorting
+                """filter not relevant results and build dict for sorting
 
                 Filter out from search results any document, which doesn't have
                 relevant data: version info, statistics for steady state,
@@ -345,20 +362,21 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                 for doc in results:
                     full_version_info = self._test_version(doc)
                     latency_during_ops_stats = doc["_source"].get("latency_during_ops")
-                    if doc["_id"] == test_doc["_id"] \
-                            or not latency_during_ops_stats \
-                            or not full_version_info \
-                            or not latency_during_ops_stats.get("Steady State") \
-                            or not all(nemesis in latency_during_ops_stats for nemesis in results_per_nemesis_by_version):
+                    if (
+                        doc["_id"] == test_doc["_id"]
+                        or not latency_during_ops_stats
+                        or not full_version_info
+                        or not latency_during_ops_stats.get("Steady State")
+                        or not all(nemesis in latency_during_ops_stats for nemesis in results_per_nemesis_by_version)
+                    ):
                         continue
-                    scylla_version = full_version_info.get('version')
+                    scylla_version = full_version_info.get("version")
                     for nemesis_key, nemesis_results in results_per_nemesis_by_version.items():
                         nemesis_stat = latency_during_ops_stats.get(nemesis_key)
                         nemesis_results.setdefault(scylla_version, [])
                         self._calculate_cycles_average(nemesis_stat)
                         # if calculated average stat for nemesis is empty or 0, don't add it to version results
-                        if not nemesis_stat["hdr_summary_average"] \
-                           or not nemesis_stat["average_time_operation_in_sec"]:
+                        if not nemesis_stat["hdr_summary_average"] or not nemesis_stat["average_time_operation_in_sec"]:
                             continue
                         nemesis_stat.update({"version": full_version_info})
                         nemesis_stat.update({"Steady State": latency_during_ops_stats["Steady State"]})
@@ -371,15 +389,18 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             for nemesis_key, nemesis_results in results_per_nemesis_by_version.items():
                 for version_key, version_result in nemesis_results.items():
                     try:
-                        best_results[nemesis_key][version_key] = sorted(version_result,
-                                                                        key=lambda obj: obj.get("average_time_operation_in_sec"))[0]
+                        best_results[nemesis_key][version_key] = sorted(
+                            version_result, key=lambda obj: obj.get("average_time_operation_in_sec")
+                        )[0]
                     except IndexError:
                         best_results[nemesis_key][version_key] = {}
 
-                best_results[nemesis_key] = {per_version: best_results[nemesis_key][per_version]
-                                             for per_version in sorted(best_results[nemesis_key].keys(),
-                                                                       key=lambda version: version,
-                                                                       reverse=True)}
+                best_results[nemesis_key] = {
+                    per_version: best_results[nemesis_key][per_version]
+                    for per_version in sorted(
+                        best_results[nemesis_key].keys(), key=lambda version: version, reverse=True
+                    )
+                }
             return best_results
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)
@@ -410,11 +431,13 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                         }}}
 
         """
+
         def _calculate_relative_change_magnitude(current_value, best_value):
             if not best_value:
                 return "N/A"
             else:
                 return round(((current_value - best_value) / best_value) * 100, 2)
+
         try:
             for nemesis in current_result:
                 if nemesis in ["Steady State", "summary"]:
@@ -422,55 +445,68 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                 nemesis_stat = current_result.get(nemesis)
                 self._calculate_cycles_average(nemesis_stat)
             for nemesis in best_result:
-                if nemesis in ['Steady State', 'summary']:
+                if nemesis in ["Steady State", "summary"]:
                     continue
                 for _, best in best_result[nemesis].items():
-                    for workload in best['hdr_summary_average']:
-                        diff = best.setdefault('hdr_summary_diff', {})
+                    for workload in best["hdr_summary_average"]:
+                        diff = best.setdefault("hdr_summary_diff", {})
                         diff.update({workload: {perc: 0 for perc in self.percentiles}})
                         for perc in self.percentiles:
                             diff[workload][perc] = _calculate_relative_change_magnitude(
-                                current_result[nemesis]['hdr_summary_average'][workload][perc],
-                                best['hdr_summary_average'][workload][perc])
-                    best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
-                        current_result[nemesis]['average_time_operation_in_sec'],
-                        best['average_time_operation_in_sec'])
+                                current_result[nemesis]["hdr_summary_average"][workload][perc],
+                                best["hdr_summary_average"][workload][perc],
+                            )
+                    best["average_time_operation_in_sec_diff"] = _calculate_relative_change_magnitude(
+                        current_result[nemesis]["average_time_operation_in_sec"], best["average_time_operation_in_sec"]
+                    )
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
     def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # noqa: PLR0914
         doc = self.get_test_by_id(test_id)
         if not doc:
-            raise ValueError(f'Cannot find test by id: {test_id}!')
+            raise ValueError(f"Cannot find test by id: {test_id}!")
 
         full_test_name = doc["_source"]["test_details"]["test_name"]
-        test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
+        test_name = full_test_name.split(".")[-1]  # Example: longevity_test.LongevityTest.test_custom_time
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
         test_version_info = self._test_version(doc)
         if test_version_info:
-            if 'base_version' in test_version_info:
-                base_version = test_version_info['base_version']
-                base_build_id = test_version_info['base_build_id']
-                test_version = test_version_info['target_version']
-                build_id = test_version_info['target_build_id']
+            if "base_version" in test_version_info:
+                base_version = test_version_info["base_version"]
+                base_build_id = test_version_info["base_build_id"]
+                test_version = test_version_info["target_version"]
+                build_id = test_version_info["target_build_id"]
             else:
-                base_version = ''
-                base_build_id = ''
-                test_version = f"{test_version_info['version']}.{test_version_info['date']}.{test_version_info['commit_id']}"
-                build_id = test_version_info.get('build_id', '')
+                base_version = ""
+                base_build_id = ""
+                test_version = (
+                    f"{test_version_info['version']}.{test_version_info['date']}.{test_version_info['commit_id']}"
+                )
+                build_id = test_version_info.get("build_id", "")
         else:
-            base_version = ''
-            base_build_id = ''
-            test_version = ''
-            build_id = ''
+            base_version = ""
+            base_build_id = ""
+            test_version = ""
+            build_id = ""
 
         last_error_events, error_events_summary = self.get_events(event_severity=[Severity.ERROR.name])
         last_critical_events, critical_events_summary = self.get_events(event_severity=[Severity.CRITICAL.name])
-        last_events = {Severity.ERROR.name: last_error_events[Severity.ERROR.name][:100] if Severity.ERROR.name in last_error_events else [],
-                       Severity.CRITICAL.name: last_critical_events[Severity.CRITICAL.name][:100] if Severity.CRITICAL.name in last_critical_events else []}
+        last_events = {
+            Severity.ERROR.name: last_error_events[Severity.ERROR.name][:100]
+            if Severity.ERROR.name in last_error_events
+            else [],
+            Severity.CRITICAL.name: last_critical_events[Severity.CRITICAL.name][:100]
+            if Severity.CRITICAL.name in last_critical_events
+            else [],
+        }
         events_summary = {
-            Severity.ERROR.name: error_events_summary[Severity.ERROR.name] if Severity.ERROR.name in error_events_summary else 0,
-            Severity.CRITICAL.name: critical_events_summary[Severity.CRITICAL.name] if Severity.CRITICAL.name in critical_events_summary else 0
+            Severity.ERROR.name: error_events_summary[Severity.ERROR.name]
+            if Severity.ERROR.name in error_events_summary
+            else 0,
+            Severity.CRITICAL.name: critical_events_summary[Severity.CRITICAL.name]
+            if Severity.CRITICAL.name in critical_events_summary
+            else 0,
         }
 
         reactor_stall_events = self.get_reactor_stall_events()
@@ -478,13 +514,15 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         kernel_callstack_events = self.get_kernel_callstack_events()
         kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
 
-        config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
-        search_size = re.search(r'(\d.*(?#t|g)b)', config_files)
-        dataset_size = search_size.group() if search_size else 'unknown size'
+        config_files = " ".join(doc["_source"]["setup_details"]["config_files"])
+        search_size = re.search(r"(\d.*(?#t|g)b)", config_files)
+        dataset_size = search_size.group() if search_size else "unknown size"
 
-        subject = (f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results '
-                   f'({email_subject_postfix} {dataset_size}) -'
-                   f' {test_name} - {test_version} - {str(test_start_time)}')
+        subject = (
+            f"{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results "
+            f"({email_subject_postfix} {dataset_size}) -"
+            f" {test_name} - {test_version} - {str(test_start_time)}"
+        )
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
 
@@ -499,38 +537,40 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             stats=data,
             test_name=full_test_name,
             test_start_time=str(test_start_time),
-            test_id=doc['_source']['test_details'].get('test_id', doc["_id"]),
+            test_id=doc["_source"]["test_details"].get("test_id", doc["_id"]),
             base_version=base_version,
             base_build_id=base_build_id,
             test_version=test_version,
             build_id=build_id,
             setup_details=self._get_setup_details(doc, is_gce),
             grafana_screenshots=self._get_grafana_screenshot(doc),
-            job_url=doc['_source']['test_details'].get('job_url', ""),
+            job_url=doc["_source"]["test_details"].get("job_url", ""),
             node_benchmarks=node_benchmarks,
             best_stat_per_version=best_results_per_nemesis,
         )
         attachment_file = self.prepare_attachment_files_for_email(results)
 
-        email_data = {'email_body': results,
-                      'attachments': attachment_file,
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        email_data = {"email_body": results, "attachments": attachment_file, "template": self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path="email_data.json")
 
         return True
 
     def prepare_attachment_files_for_email(self, results):
         self.log.debug("prepare_attachment_files_for_email results: %s", results)
         return [
-            self.save_html_to_file(results,
-                                   file_name='reactor_stall_events_list.html',
-                                   template_file='results_reactor_stall_events_list.html'),
-            self.save_html_to_file(results,
-                                   file_name='full_email_report.html',
-                                   template_file='results_latency_during_ops.html'),
-            self.save_html_to_file(results,
-                                   file_name='hdr_details_report.html',
-                                   template_file='results_latency_during_ops_details_hdr_report.html')
+            self.save_html_to_file(
+                results,
+                file_name="reactor_stall_events_list.html",
+                template_file="results_reactor_stall_events_list.html",
+            ),
+            self.save_html_to_file(
+                results, file_name="full_email_report.html", template_file="results_latency_during_ops.html"
+            ),
+            self.save_html_to_file(
+                results,
+                file_name="hdr_details_report.html",
+                template_file="results_latency_during_ops_details_hdr_report.html",
+            ),
         ]
 
 
@@ -540,15 +580,16 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
-        super().__init__(es_index=es_index, email_recipients=email_recipients,
-                         email_template_fp="", logger=logger, events=events)
+        super().__init__(
+            es_index=es_index, email_recipients=email_recipients, email_template_fp="", logger=logger, events=events
+        )
 
     def _test_stats(self, test_doc):
         # check if stats exists
-        if 'results' not in test_doc['_source']:
-            self.log.error('Cannot find the field: results for test id: {}!'.format(test_doc['_id']))
+        if "results" not in test_doc["_source"]:
+            self.log.error("Cannot find the field: results for test id: {}!".format(test_doc["_id"]))
             return None
-        return test_doc['_source']['results']
+        return test_doc["_source"]["results"]
 
     def check_regression(self, test_id, stats):  # noqa: PLR0914
         """
@@ -561,21 +602,23 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error("Cannot find test by id: {}!".format(test_id))
             return False
 
         test_stats = self._test_stats(doc)
         if not test_stats:
             self.log.debug("Could not find test statistics, regression check is skipped")
             return False
-        es_base_path = 'hits.hits'
-        es_source_path = es_base_path + '._source'
-        filter_path = ['.'.join([es_base_path, '_id']),
-                       '.'.join([es_source_path, 'results', 'throughput']),
-                       '.'.join([es_source_path, 'versions'])]
+        es_base_path = "hits.hits"
+        es_source_path = es_base_path + "._source"
+        filter_path = [
+            ".".join([es_base_path, "_id"]),
+            ".".join([es_source_path, "results", "throughput"]),
+            ".".join([es_source_path, "versions"]),
+        ]
 
         for stat in stats.keys():  # Add all requested specific-stats to be retrieved from ES DB.
-            stat_path = '.'.join([es_source_path, stat])
+            stat_path = ".".join([es_source_path, stat])
             filter_path.append(stat_path)
 
         tests_filtered = self._es.search(
@@ -586,7 +629,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         self.log.debug("Filtered tests found are: {}".format(tests_filtered))
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info("Cannot find tests with the same parameters as {}".format(test_id))
             return False
         cur_test_version = None
         tested_params = stats.keys()
@@ -604,17 +647,17 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         #                             'throughput': { }},
         #
         # # Find the average results for each version per tested param (stats)
-        for tag_row in tests_filtered['hits']['hits']:
-            if '_source' not in tag_row:  # non-valid record?
-                self.log.error('Skip non-valid test: %s', tag_row['_id'])
+        for tag_row in tests_filtered["hits"]["hits"]:
+            if "_source" not in tag_row:  # non-valid record?
+                self.log.error("Skip non-valid test: %s", tag_row["_id"])
                 continue
-            if not tag_row['_source']['versions'] or 'scylla-server' not in tag_row['_source']['versions']:
+            if not tag_row["_source"]["versions"] or "scylla-server" not in tag_row["_source"]["versions"]:
                 continue
-            version_info = tag_row['_source']['versions']['scylla-server']
-            version = version_info['version']
+            version_info = tag_row["_source"]["versions"]["scylla-server"]
+            version = version_info["version"]
             self.log.debug("version_info={} version={}".format(version_info, version))
 
-            if tag_row['_id'] == test_id:  # save the current test values
+            if tag_row["_id"] == test_id:  # save the current test values
                 cur_test_version = version
                 continue
 
@@ -629,15 +672,15 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             if version not in group_by_version:
                 group_by_version[version] = {}
                 for param in tested_params:
-                    if param in tag_row['_source']:
-                        group_by_version[version][param] = [tag_row['_source'][param]]
+                    if param in tag_row["_source"]:
+                        group_by_version[version][param] = [tag_row["_source"][param]]
             else:
                 for param in tested_params:
-                    if param in tag_row['_source']:
+                    if param in tag_row["_source"]:
                         if param not in group_by_version[version]:
-                            group_by_version[version][param] = [tag_row['_source'][param]]
+                            group_by_version[version][param] = [tag_row["_source"][param]]
                         else:
-                            group_by_version[version][param].append(tag_row['_source'][param])
+                            group_by_version[version][param].append(tag_row["_source"][param])
 
             self.log.debug("group_by_version={}".format(group_by_version))
 
@@ -650,18 +693,22 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 param_avg = sum(list_param_stats) / float(len(list_param_stats))
                 deviation_limit = param_avg * allowed_deviation
                 self.log.info(
-                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(param,
-                                                                                                           cur_test_param_result,
-                                                                                                           deviation_limit))
+                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(
+                        param, cur_test_param_result, deviation_limit
+                    )
+                )
                 for version, group in group_by_version.items():
                     if param in group:
                         list_param_results = group[param]
                         version_avg = sum(list_param_results) / float(len(list_param_results))
-                        self.log.info("Performance average of {} results for: {} on version: {} is: {}".format(
-                            len(list_param_results), param, version, version_avg))
-                assert float(
-                    cur_test_param_result) < deviation_limit, "Current test performance for: {} exceeds allowed deviation ({})".format(
-                    param, deviation_limit)
+                        self.log.info(
+                            "Performance average of {} results for: {} on version: {} is: {}".format(
+                                len(list_param_results), param, version, version_avg
+                            )
+                        )
+                assert float(cur_test_param_result) < deviation_limit, (
+                    "Current test performance for: {} exceeds allowed deviation ({})".format(param, deviation_limit)
+                )
         return True
 
 
@@ -673,30 +720,40 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     PARAMS = TestStatsMixin.STRESS_STATS
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
-        super().__init__(es_index=es_index, email_recipients=email_recipients,
-                         email_template_fp="results_performance.html", logger=logger, events=events)
+        super().__init__(
+            es_index=es_index,
+            email_recipients=email_recipients,
+            email_template_fp="results_performance.html",
+            logger=logger,
+            events=events,
+        )
 
     @staticmethod
     def _remove_non_stat_keys(stats):
-        for non_stat_key in ['loader_idx', 'cpu_idx', 'keyspace_idx']:
+        for non_stat_key in ["loader_idx", "cpu_idx", "keyspace_idx"]:
             if non_stat_key in stats:
                 del stats[non_stat_key]
         return stats
 
     def _test_stats(self, test_doc):
         # check if stats exists
-        if 'results' not in test_doc['_source'] or 'stats_average' not in test_doc['_source']['results'] or \
-                'stats_total' not in test_doc['_source']['results']:
-            self.log.error('Cannot find one of the fields: results, results.stats_average, '
-                           'results.stats_total for test id: {}!'.format(test_doc['_id']))
+        if (
+            "results" not in test_doc["_source"]
+            or "stats_average" not in test_doc["_source"]["results"]
+            or "stats_total" not in test_doc["_source"]["results"]
+        ):
+            self.log.error(
+                "Cannot find one of the fields: results, results.stats_average, "
+                "results.stats_total for test id: {}!".format(test_doc["_id"])
+            )
             return None
-        stats_average = self._remove_non_stat_keys(test_doc['_source']['results']['stats_average'])
-        stats_total = test_doc['_source']['results']['stats_total']
-        if not stats_average or not stats_total or any(stats_average[k] == '' for k in self.PARAMS):
-            self.log.error('Cannot find average/total results for test: {}!'.format(test_doc['_id']))
+        stats_average = self._remove_non_stat_keys(test_doc["_source"]["results"]["stats_average"])
+        stats_total = test_doc["_source"]["results"]["stats_total"]
+        if not stats_average or not stats_total or any(stats_average[k] == "" for k in self.PARAMS):
+            self.log.error("Cannot find average/total results for test: {}!".format(test_doc["_id"]))
             return None
         # replace average by total value for op rate
-        stats_average['op rate'] = stats_total['op rate']
+        stats_average["op rate"] = stats_total["op rate"]
         return stats_average
 
     def _get_best_value(self, key, val1, val2):
@@ -705,19 +762,23 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
 
     @staticmethod
-    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
-        if test_doc['_source']['test_details'].get('scylla-bench'):
-            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear,
-                                                extra_jobs_to_compare=extra_jobs_to_compare)()
-        elif test_doc['_source']['test_details'].get('ycsb'):
-            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear,
-                                         extra_jobs_to_compare=extra_jobs_to_compare)()
-        elif "cdc" in test_doc['_source']['test_details'].get('sub_type', ''):
-            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear,
-                                    extra_jobs_to_compare=extra_jobs_to_compare)()
+    def _query_filter(test_doc, is_gce, use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
+        if test_doc["_source"]["test_details"].get("scylla-bench"):
+            return PerformanceFilterScyllaBench(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
+        elif test_doc["_source"]["test_details"].get("ycsb"):
+            return PerformanceFilterYCSB(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
+        elif "cdc" in test_doc["_source"]["test_details"].get("sub_type", ""):
+            return CDCQueryFilterCS(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
         else:
-            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear,
-                                       extra_jobs_to_compare=extra_jobs_to_compare)()
+            return PerformanceFilterCS(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -730,14 +791,14 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         """
         cmp_res = {"version_dst": version_dst, "res": {}}
         for param in self.PARAMS:
-            param_key_name = param.replace(' ', '_')
-            status = 'Progress'
+            param_key_name = param.replace(" ", "_")
+            status = "Progress"
             try:
                 delta = src[param] - dst[param]
                 change_perc = int(math.fabs(delta) * 100 / dst[param])
                 best_id = best_test_id[param]
-                if (param.startswith('latency') and delta > 0) or (param == 'op rate' and delta < 0):
-                    status = 'Regression'
+                if (param.startswith("latency") and delta > 0) or (param == "op rate" and delta < 0):
+                    status = "Regression"
                 if change_perc == 0:
                     status = "Difference"
                 cmp_res["res"][param_key_name] = {
@@ -748,13 +809,23 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     "status": status,
                 }
             except TypeError:
-                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
-                    param, src[param], dst[param], version_dst))
+                self.log.exception(
+                    "Failed to compare {} results: {} vs {}, version {}".format(
+                        param, src[param], dst[param], version_dst
+                    )
+                )
         return cmp_res
 
-    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,  # noqa: PLR0914
-                         use_wide_query=False, lastyear=False,
-                         node_benchmarks=None, extra_jobs_to_compare=None) -> None:
+    def check_regression(  # noqa: PLR0914
+        self,
+        test_id,
+        is_gce=False,
+        email_subject_postfix=None,  # noqa: PLR0914
+        use_wide_query=False,
+        lastyear=False,
+        node_benchmarks=None,
+        extra_jobs_to_compare=None,
+    ) -> None:
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -767,29 +838,32 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            raise ValueError(f'Cannot find test by id: {test_id}')
+            raise ValueError(f"Cannot find test by id: {test_id}")
         self.log.debug(PP.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
-            raise ValueError(f'Cannot find test by id: {doc.get("_id", "unknown test")}')
+            raise ValueError(f"Cannot find test by id: {doc.get('_id', 'unknown test')}")
 
         # filter tests
         query = self._query_filter(doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare)
         if not query:
-            raise ValueError(f'Cannot find query for {doc.get("_id", "unknown test")}')
+            raise ValueError(f"Cannot find query for {doc.get('_id', 'unknown test')}")
 
         self.log.debug("Query to ES: %s", query)
-        filter_path = ['hits.hits._id',
-                       'hits.hits._source.results.stats_average',
-                       'hits.hits._source.results.stats_total',
-                       'hits.hits._source.results.throughput',
-                       'hits.hits._source.versions']
-        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,
-                                         size=self._limit, request_timeout=30)
+        filter_path = [
+            "hits.hits._id",
+            "hits.hits._source.results.stats_average",
+            "hits.hits._source.results.stats_total",
+            "hits.hits._source.results.throughput",
+            "hits.hits._source.versions",
+        ]
+        tests_filtered = self._es.search(
+            index=self._es_index, q=query, filter_path=filter_path, size=self._limit, request_timeout=30
+        )
 
         if not tests_filtered:
-            raise ValueError(f'Cannot find tests with the same parameters as {test_id}')
+            raise ValueError(f"Cannot find tests with the same parameters as {test_id}")
 
         # get the best res for all versions of this job
         group_by_version = {}
@@ -816,69 +890,73 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         #     }
         # }
         # Find best results for each version
-        for row in tests_filtered['hits']['hits']:
-            if row['_id'] == test_id:  # filter the current test
+        for row in tests_filtered["hits"]["hits"]:
+            if row["_id"] == test_id:  # filter the current test
                 continue
-            if '_source' not in row:  # non-valid record?
-                self.log.error('Skip non-valid test: %s', row['_id'])
+            if "_source" not in row:  # non-valid record?
+                self.log.error("Skip non-valid test: %s", row["_id"])
                 continue
             version_info = self._test_version(row)
             if not version_info:
                 continue
-            version = version_info['version']
+            version = version_info["version"]
             curr_test_stats = self._test_stats(row)
             if not curr_test_stats:
                 continue
 
-            formated_version_date = datetime.strptime(version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
-            version_info_data = {"commit": version_info['commit_id'], "date": formated_version_date}
+            formated_version_date = datetime.strptime(version_info["date"], "%Y%m%d").strftime("%Y-%m-%d")
+            version_info_data = {"commit": version_info["commit_id"], "date": formated_version_date}
 
             if version not in group_by_version:
                 group_by_version[version] = {"tests": SortedDict(), "stats_best": {}, "best_test_id": {}}
-                group_by_version[version]['stats_best'] = {k: 0 for k in self.PARAMS}
-                group_by_version[version]['best_test_id'] = {
-                    k: version_info_data for k in self.PARAMS}
-            group_by_version[version]['tests'][version_info['date']] = {
+                group_by_version[version]["stats_best"] = {k: 0 for k in self.PARAMS}
+                group_by_version[version]["best_test_id"] = {k: version_info_data for k in self.PARAMS}
+            group_by_version[version]["tests"][version_info["date"]] = {
                 "test_stats": curr_test_stats,
-                "version": {k: version_info_data for k in self.PARAMS}
+                "version": {k: version_info_data for k in self.PARAMS},
             }
-            old_best = group_by_version[version]['stats_best']
-            group_by_version[version]['stats_best'] =\
-                {k: self._get_best_value(k, curr_test_stats[k], old_best[k])
-                 for k in self.PARAMS if k in curr_test_stats and k in old_best}
+            old_best = group_by_version[version]["stats_best"]
+            group_by_version[version]["stats_best"] = {
+                k: self._get_best_value(k, curr_test_stats[k], old_best[k])
+                for k in self.PARAMS
+                if k in curr_test_stats and k in old_best
+            }
             # replace best test id if best value changed
             for k in self.PARAMS:
-                if k in curr_test_stats and k in old_best and\
-                        group_by_version[version]['stats_best'][k] == curr_test_stats[k]:
-                    group_by_version[version]['best_test_id'][k] = version_info_data
+                if (
+                    k in curr_test_stats
+                    and k in old_best
+                    and group_by_version[version]["stats_best"][k] == curr_test_stats[k]
+                ):
+                    group_by_version[version]["best_test_id"][k] = version_info_data
         res_list = []
         # compare with the best in the test version and all the previous versions
         test_version_info = self._test_version(doc)
-        test_version = test_version_info['version']
+        test_version = test_version_info["version"]
 
         for version, group in group_by_version.items():
-            if version == test_version and not group_by_version[test_version]['tests']:
-                self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+            if version == test_version and not group_by_version[test_version]["tests"]:
+                self.log.info("No previous tests in the current version {} to compare".format(test_version))
                 continue
-            cmp_res = self.cmp(test_stats, group['stats_best'], version, group['best_test_id'])
+            cmp_res = self.cmp(test_stats, group["stats_best"], version, group["best_test_id"])
             latest_version_test = group["tests"].peekitem(index=-1)[1]
-            latest_res = self.cmp(test_stats,
-                                  latest_version_test["test_stats"],
-                                  version,
-                                  latest_version_test["version"])
+            latest_res = self.cmp(
+                test_stats, latest_version_test["test_stats"], version, latest_version_test["version"]
+            )
             res_list.append({"best": cmp_res, "last": latest_res})
         if not res_list:
-            raise ValueError('No test results to compare with')
+            raise ValueError("No test results to compare with")
 
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
-        cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
-        ycsb = doc['_source']['test_details'].get('ycsb')
+        cassandra_stress = doc["_source"]["test_details"].get("cassandra-stress")
+        ycsb = doc["_source"]["test_details"].get("ycsb")
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
 
-        last_events, events_summary = self.get_events(event_severity=[
-            Severity.CRITICAL.name, Severity.ERROR.name, Severity.DEBUG.name])
+        last_events, events_summary = self.get_events(
+            event_severity=[Severity.CRITICAL.name, Severity.ERROR.name, Severity.DEBUG.name]
+        )
 
         ebs = doc["_source"]["setup_details"].get("data_device")
         ebs_type = doc["_source"]["setup_details"].get("data_volume_disk_type") if ebs == "attached" else None
@@ -889,47 +967,53 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "test_id": doc["_source"]["test_details"].get("test_id", ""),
             "res_list": res_list,
             "setup_details": self._get_setup_details(doc, is_gce),
-            "prometheus_stats": {stat: doc["_source"]["results"].get(stat, {})
-                                 for stat in TestStatsMixin.PROMETHEUS_STATS},
+            "prometheus_stats": {
+                stat: doc["_source"]["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS
+            },
             "prometheus_stats_units": TestStatsMixin.PROMETHEUS_STATS_UNITS,
             "grafana_screenshots": self._get_grafana_screenshot(doc),
-            "cs_raw_cmd": cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
-            "ycsb_raw_cmd": ycsb.get('raw_cmd', "") if ycsb else "",
+            "cs_raw_cmd": cassandra_stress.get("raw_cmd", "") if cassandra_stress else "",
+            "ycsb_raw_cmd": ycsb.get("raw_cmd", "") if ycsb else "",
             "job_url": doc["_source"]["test_details"].get("job_url", ""),
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
             "events_summary": events_summary,
             "last_events": last_events,
             "node_benchmarks": node_benchmarks,
         }
-        self.log.debug('Regression analysis:')
+        self.log.debug("Regression analysis:")
         self.log.debug(PP.pformat(results))
         try:
-            test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
+            test_name = full_test_name.split(".", 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         except IndexError:
             test_name = full_test_name
-        subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name} - {test_version}'
+        subject = (
+            f"{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name} - {test_version}"
+        )
         if email_subject_postfix:
-            subject += f' - {email_subject_postfix}'
-        subject += f' - {str(test_start_time)}'
+            subject += f" - {email_subject_postfix}"
+        subject += f" - {str(test_start_time)}"
 
         if ycsb:
-            if ycsb_engine := ycsb.get('raw_cmd', "").split():
+            if ycsb_engine := ycsb.get("raw_cmd", "").split():
                 if len(ycsb_engine) > 3:
-                    index = (ycsb_engine.index("run") if "run" in ycsb_engine else None) or \
-                            (ycsb_engine.index("load") if "load" in ycsb_engine else None)
-                    ycsb_engine = ycsb_engine[index+1]
+                    index = (ycsb_engine.index("run") if "run" in ycsb_engine else None) or (
+                        ycsb_engine.index("load") if "load" in ycsb_engine else None
+                    )
+                    ycsb_engine = ycsb_engine[index + 1]
                 else:
-                    ycsb_engine = 'N/A'
-            subject = f'YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
+                    ycsb_engine = "N/A"
+            subject = (
+                f"YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}"
+            )
         if ebs:
-            subject = f'{subject} (ebs volume type {ebs_type})'
+            subject = f"{subject} (ebs volume type {ebs_type})"
 
-        email_data = {'email_body': results,
-                      'attachments': (),
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        email_data = {"email_body": results, "attachments": (), "template": self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path="email_data.json")
 
-    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False, extra_jobs_to_compare=None) -> None:  # noqa: PLR0914
+    def check_regression_with_subtest_baseline(  # noqa: PLR0914
+        self, test_id, base_test_id, subtest_baseline, is_gce=False, extra_jobs_to_compare=None
+    ) -> None:
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -943,27 +1027,29 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         doc = self.get_test_by_id(test_id)
         if not doc:
-            raise ValueError(f'Cannot find test by id: {test_id}')
+            raise ValueError(f"Cannot find test by id: {test_id}")
 
         self.log.debug(PP.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
-            raise ValueError(f'Cannot find test stats for: {doc.get("_id", "unknown test")}')
+            raise ValueError(f"Cannot find test stats for: {doc.get('_id', 'unknown test')}")
 
         # filter tests
         query = self._query_filter(doc, is_gce, use_wide_query=True, extra_jobs_to_compare=extra_jobs_to_compare)
         self.log.debug(query)
         if not query:
-            raise ValueError(f'Cannot find query for {doc.get("_id", "unknown test")}')
+            raise ValueError(f"Cannot find query for {doc.get('_id', 'unknown test')}")
         self.log.debug("Query to ES: %s", query)
-        filter_path = ['hits.hits._id',
-                       'hits.hits._source.results.stats_average',
-                       'hits.hits._source.results.stats_total',
-                       'hits.hits._source.results.throughput',
-                       'hits.hits._source.results',
-                       'hits.hits._source.versions',
-                       'hits.hits._source.test_details']
+        filter_path = [
+            "hits.hits._id",
+            "hits.hits._source.results.stats_average",
+            "hits.hits._source.results.stats_total",
+            "hits.hits._source.results.throughput",
+            "hits.hits._source.results",
+            "hits.hits._source.versions",
+            "hits.hits._source.test_details",
+        ]
         tests_filtered = self._es.search(
             index=self._es_index,
             q=query,
@@ -972,7 +1058,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         )
 
         if not tests_filtered:
-            raise ValueError(f'Cannot find tests with the same parameters as {test_id}')
+            raise ValueError(f"Cannot find tests with the same parameters as {test_id}")
 
         # get the best res for all versions of this job
         group_by_version_sub_type = SortedDict()
@@ -1005,34 +1091,35 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         current_tests = {}
         grafana_snapshots = {}
         grafana_screenshots = {}
-        for row in tests_filtered['hits']['hits']:
-            if '_source' not in row:  # non-valid record?
-                self.log.error('Skip non-valid test: %s', row['_id'])
+        for row in tests_filtered["hits"]["hits"]:
+            if "_source" not in row:  # non-valid record?
+                self.log.error("Skip non-valid test: %s", row["_id"])
                 continue
             version_info = self._test_version(row)
-            version = version_info['version']
-            version_info['date'] = datetime.strptime(version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
+            version = version_info["version"]
+            version_info["date"] = datetime.strptime(version_info["date"], "%Y%m%d").strftime("%Y-%m-%d")
             if not version:
-                self.log.error('Skip with wrong version %s', row['_id'])
+                self.log.error("Skip with wrong version %s", row["_id"])
                 continue
             if "results" not in row["_source"]:
-                self.log.error('Skip with no results %s', row['_id'])
+                self.log.error("Skip with no results %s", row["_id"])
                 continue
-            sub_type = row["_source"]['test_details'].get('sub_type')
+            sub_type = row["_source"]["test_details"].get("sub_type")
             curr_test_stats = self._test_stats(row)
             if not curr_test_stats or not sub_type:
-                self.log.error('Skip with no test stats %s', row['_id'])
+                self.log.error("Skip with no test stats %s", row["_id"])
                 continue
             if base_test_id in row["_id"] and sub_type not in current_tests:
                 current_tests[sub_type] = {}
-                current_tests[sub_type]['stats'] = curr_test_stats
-                current_tests[sub_type]['version'] = version_info
-                current_tests[sub_type]['best_test_id'] = {
-                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS}
-                current_tests[sub_type]['results'] = row['_source']['results']
+                current_tests[sub_type]["stats"] = curr_test_stats
+                current_tests[sub_type]["version"] = version_info
+                current_tests[sub_type]["best_test_id"] = {
+                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS
+                }
+                current_tests[sub_type]["results"] = row["_source"]["results"]
                 grafana_screenshots[sub_type] = self._get_grafana_screenshot(row)
 
-                self.log.info('Added current test results %s. Check next', row['_id'])
+                self.log.info("Added current test results %s. Check next", row["_id"])
                 continue
             if version not in group_by_version_sub_type:
                 group_by_version_sub_type[version] = {}
@@ -1043,63 +1130,70 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     "stats_best": {},
                     "best_test_id": {},
                 }
-                group_by_version_sub_type[version][sub_type]['stats_best'] = {k: 0 for k in self.PARAMS}
-                group_by_version_sub_type[version][sub_type]['best_test_id'] = {
-                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS}
+                group_by_version_sub_type[version][sub_type]["stats_best"] = {k: 0 for k in self.PARAMS}
+                group_by_version_sub_type[version][sub_type]["best_test_id"] = {
+                    k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS
+                }
 
-            group_by_version_sub_type[version][sub_type]['tests'][version_info['date']] = curr_test_stats
-            old_best = group_by_version_sub_type[version][sub_type]['stats_best']
-            group_by_version_sub_type[version][sub_type]['stats_best'] = \
-                {k: self._get_best_value(k, curr_test_stats[k], old_best[k])
-                 for k in self.PARAMS if k in curr_test_stats and k in old_best}
+            group_by_version_sub_type[version][sub_type]["tests"][version_info["date"]] = curr_test_stats
+            old_best = group_by_version_sub_type[version][sub_type]["stats_best"]
+            group_by_version_sub_type[version][sub_type]["stats_best"] = {
+                k: self._get_best_value(k, curr_test_stats[k], old_best[k])
+                for k in self.PARAMS
+                if k in curr_test_stats and k in old_best
+            }
             # replace best test id if best value changed
             for k in self.PARAMS:
-                if k in curr_test_stats and k in old_best and \
-                        group_by_version_sub_type[version][sub_type]['stats_best'][k] == curr_test_stats[k]:
-                    group_by_version_sub_type[version][sub_type]['best_test_id'][
-                        k] = f"#{version_info['commit_id']}, {version_info['date']}"
+                if (
+                    k in curr_test_stats
+                    and k in old_best
+                    and group_by_version_sub_type[version][sub_type]["stats_best"][k] == curr_test_stats[k]
+                ):
+                    group_by_version_sub_type[version][sub_type]["best_test_id"][k] = (
+                        f"#{version_info['commit_id']}, {version_info['date']}"
+                    )
 
         current_res_list = []
         versions_res_list = []
 
         test_version_info = self._test_version(doc)
-        test_version_info['date'] = datetime.strptime(test_version_info['date'], "%Y%m%d").strftime("%Y-%m-%d")
-        test_version = test_version_info['version']
+        test_version_info["date"] = datetime.strptime(test_version_info["date"], "%Y%m%d").strftime("%Y-%m-%d")
+        test_version = test_version_info["version"]
         base_line = current_tests.get(subtest_baseline)
         for sub_type, tests in current_tests.items():
             if not tests or sub_type == subtest_baseline:
-                self.log.info('No tests with %s in the current run %s to compare', subtest_baseline, test_version)
+                self.log.info("No tests with %s in the current run %s to compare", subtest_baseline, test_version)
                 continue
-            cmp_res = self.cmp(tests['stats'], base_line['stats'], sub_type, tests['best_test_id'])
+            cmp_res = self.cmp(tests["stats"], base_line["stats"], sub_type, tests["best_test_id"])
             current_res_list.append(cmp_res)
 
         if not current_res_list:
-            raise ValueError('No test results to compare with')
+            raise ValueError("No test results to compare with")
 
         current_prometheus_stats = SortedDict()
         for sub_type, tests in current_tests.items():
-            current_prometheus_stats[sub_type] = {stat: tests["results"].get(stat, {})
-                                                  for stat in TestStatsMixin.PROMETHEUS_STATS}
+            current_prometheus_stats[sub_type] = {
+                stat: tests["results"].get(stat, {}) for stat in TestStatsMixin.PROMETHEUS_STATS
+            }
 
         for version, group in group_by_version_sub_type.items():
             cmp_res = {}
             for sub_type, tests in group.items():
-                if not tests['tests']:
-                    self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                if not tests["tests"]:
+                    self.log.info("No previous tests in the current version {} to compare".format(test_version))
                     continue
                 if sub_type not in current_tests:
                     continue
-                cmp_res[sub_type] = self.cmp(tests['stats_best'],
-                                             current_tests[sub_type]['stats'],
-                                             version,
-                                             tests['best_test_id'])
+                cmp_res[sub_type] = self.cmp(
+                    tests["stats_best"], current_tests[sub_type]["stats"], version, tests["best_test_id"]
+                )
             versions_res_list.append({version: cmp_res})
 
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
-        cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
-        ycsb = doc['_source']['test_details'].get('ycsb')
+        cassandra_stress = doc["_source"]["test_details"].get("cassandra-stress")
+        ycsb = doc["_source"]["test_details"].get("ycsb")
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
         last_events, events_summary = self.get_events()
         results = {
@@ -1123,28 +1217,30 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "events_summary": events_summary,
             "last_events": last_events,
         }
-        self.log.debug('Regression analysis:')
+        self.log.debug("Regression analysis:")
         self.log.debug(PP.pformat(results))
-        test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
+        test_name = full_test_name.split(".", 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         if ycsb:
-            subject = f'{self._get_email_tags(doc, is_gce)} (Alternator) Performance Regression - {test_name} - {test_version} - ' \
-                f'{str(test_start_time)}'
+            subject = (
+                f"{self._get_email_tags(doc, is_gce)} (Alternator) Performance Regression - {test_name} - {test_version} - "
+                f"{str(test_start_time)}"
+            )
         else:
-            subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name}' \
-                f' - {test_version} - {str(test_start_time)}'
+            subject = (
+                f"{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name}"
+                f" - {test_version} - {str(test_start_time)}"
+            )
 
-        template = 'results_performance_baseline.html'
-        email_data = {'email_body': results,
-                      'attachments': (),
-                      'template': template}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        template = "results_performance_baseline.html"
+        email_data = {"email_body": results, "attachments": (), "template": template}
+        self.save_email_data_file(subject, email_data, file_path="email_data.json")
 
     def get_test_instance_by_id(self, test_id):
         rp_main_test = TestResultClass.get_by_test_id(test_id, self._es_index)
         if rp_main_test:
             rp_main_test = rp_main_test[0]
         if not rp_main_test or not rp_main_test.is_valid():
-            self.log.error('Cannot find main_test by id: {}!'.format(test_id))
+            self.log.error("Cannot find main_test by id: {}!".format(test_id))
             return None
         return rp_main_test
 
@@ -1153,51 +1249,50 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if isinstance(remarks, str):
             remarks = [remarks]
         if test not in tests_info:
-            tests_info[test] = {'remarks': remarks}
-        elif 'remarks' not in tests_info[test]:
-            tests_info[test]['remarks'] = remarks
+            tests_info[test] = {"remarks": remarks}
+        elif "remarks" not in tests_info[test]:
+            tests_info[test]["remarks"] = remarks
         else:
-            tests_info[test]['remarks'].extend(remarks)
+            tests_info[test]["remarks"].extend(remarks)
 
     @staticmethod
     def _add_best_for_info(test, subtest, metric_path, tests_info):
         subtest_name = subtest.subtest_name
         if test not in tests_info:
-            tests_info[test] = {'best_for': {subtest_name: {metric_path: True}}}
-        elif 'best_for' not in tests_info[test]:
-            tests_info[test]['best_for'] = {subtest_name: {metric_path: True}}
-        elif subtest_name not in tests_info[test]['best_for']:
-            tests_info[test]['best_for'][subtest_name] = {metric_path: True}
+            tests_info[test] = {"best_for": {subtest_name: {metric_path: True}}}
+        elif "best_for" not in tests_info[test]:
+            tests_info[test]["best_for"] = {subtest_name: {metric_path: True}}
+        elif subtest_name not in tests_info[test]["best_for"]:
+            tests_info[test]["best_for"][subtest_name] = {metric_path: True}
         else:
-            tests_info[test]['best_for'][subtest_name][metric_path] = True
+            tests_info[test]["best_for"][subtest_name][metric_path] = True
 
     def _mark_best_tests(self, prior_subtests, metrics, tests_info, main_test_id):
-        main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
+        main_tests_by_id = MagicList(tests_info.keys()).group_by("test_id")
         for _, _prior_tests in prior_subtests.items():
             prior_tests = MagicList(
-                [prior_test for prior_test in _prior_tests if prior_test.main_test_id != main_test_id])
+                [prior_test for prior_test in _prior_tests if prior_test.main_test_id != main_test_id]
+            )
             if not prior_tests:
                 continue
             for metric_path in metrics:
                 # Getting main test of the subtest that showed best score in this metric
-                sorted_subtests = prior_tests.sort_by(f'{metric_path}.betterness')
+                sorted_subtests = prior_tests.sort_by(f"{metric_path}.betterness")
                 if not sorted_subtests:
                     continue
                 best_subtest = sorted_subtests[-1]
                 # Find subtests from any other tests
                 self._add_best_for_info(
-                    main_tests_by_id[best_subtest.main_test_id][0],
-                    best_subtest,
-                    metric_path,
-                    tests_info
+                    main_tests_by_id[best_subtest.main_test_id][0], best_subtest, metric_path, tests_info
                 )
 
     @staticmethod
     def _clean_up_not_marked_runs(prior_subtests, tests_info):
-        main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
+        main_tests_by_id = MagicList(tests_info.keys()).group_by("test_id")
         for _, prior_tests in prior_subtests.items():
-            for prior_test in [prior_test for prior_test in prior_tests
-                               if not main_tests_by_id.get(prior_test.main_test_id, False)]:
+            for prior_test in [
+                prior_test for prior_test in prior_tests if not main_tests_by_id.get(prior_test.main_test_id, False)
+            ]:
                 prior_tests.remove(prior_test)
 
     def _find_versions_to_compare_with(self, test, prior_main_tests, tests_info):
@@ -1205,12 +1300,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         current_test_version_major_int = test.software.scylla_server_any.version.major_as_int
 
         grouped_by_version = prior_main_tests.group_by(
-            data_path='software.scylla_server_any.version.major_as_int',
+            data_path="software.scylla_server_any.version.major_as_int",
             sort_keys=-1,
-            group_values={
-                'data_path': 'software.scylla_server_any.version.as_int',
-                'sort_keys': -1
-            }
+            group_values={"data_path": "software.scylla_server_any.version.as_int", "sort_keys": -1},
         )
 
         for version_major_int, prior_tests_grouped in grouped_by_version.items():
@@ -1218,7 +1310,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 for version_int, prior_tests_grouped2 in prior_tests_grouped.items():
                     if version_int == current_test_version_int:
                         if prior_tests_grouped2:
-                            self._add_remarks_to_test(prior_tests_grouped2[0], 'Latest<br>(same version)', tests_info)
+                            self._add_remarks_to_test(prior_tests_grouped2[0], "Latest<br>(same version)", tests_info)
                     elif version_int < current_test_version_int:
                         if prior_tests_grouped2:
                             self._add_remarks_to_test(prior_tests_grouped2[0], [], tests_info)
@@ -1236,9 +1328,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         output = collections.OrderedDict()
         for subtest in subtests:
             prior_tests = MagicList(
-                [prior_sub_test for prior_sub_test in subtest.get_prior_tests()
-                 if prior_sub_test.metrics and prior_sub_test.metrics.is_valid()
-                 ])
+                [
+                    prior_sub_test
+                    for prior_sub_test in subtest.get_prior_tests()
+                    if prior_sub_test.metrics and prior_sub_test.metrics.is_valid()
+                ]
+            )
             output[subtest] = prior_tests
         return output
 
@@ -1246,7 +1341,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):
         is_test_complete = {}
         for subtest, prior_tests in prior_subtests.items():
-            for prior_test_id, _ in prior_tests.group_by('main_test_id').items():
+            for prior_test_id, _ in prior_tests.group_by("main_test_id").items():
                 if prior_test_id not in is_test_complete:
                     is_test_complete[prior_test_id] = [subtest.subtest_name]
                 else:
@@ -1271,11 +1366,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     prior_tests.pop(num)
 
     def check_regression_multi_baseline(  # noqa: PLR0912, PLR0914, PLR0915
-            self,
-            test_id,
-            subtests_info: list = None,
-            metrics: list = None,
-            subject: str = None,
+        self,
+        test_id,
+        subtests_info: list = None,
+        metrics: list = None,
+        subject: str = None,
     ) -> None:
         """
         Build regression report for subtests.
@@ -1305,62 +1400,71 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         Look at sdcm/utils/es_test.py:TestDataClass for more details
         """
         if metrics is None:
-            metrics = [
-                'metrics.cs_metrics.latency_mean',
-                'metrics.cs_metrics.throughput'
-            ]
+            metrics = ["metrics.cs_metrics.latency_mean", "metrics.cs_metrics.throughput"]
         rp_main_test = self.get_test_instance_by_id(test_id)
 
         if not rp_main_test:
-            raise ValueError(f'Cannot find test with id: {test_id}!')
+            raise ValueError(f"Cannot find test with id: {test_id}!")
 
         if subject is None:
-            subject = 'Performance Regression Compare Results - {test.test_name} - ' \
-                '{test.software.scylla_server_any.version.as_string}'.format(test=rp_main_test)
+            subject = (
+                "Performance Regression Compare Results - {test.test_name} - "
+                "{test.software.scylla_server_any.version.as_string}".format(test=rp_main_test)
+            )
         else:
             subject = subject.format(test=rp_main_test)
 
         rp_main_tests_to_compare = collections.OrderedDict()
         rp_metric_info = {}
 
-        self._add_remarks_to_test(rp_main_test, 'Current', rp_main_tests_to_compare)
+        self._add_remarks_to_test(rp_main_test, "Current", rp_main_tests_to_compare)
 
         # Get prior main tests and clean it up from tests that has bad start_time or
         # ran on scylla version newer than this test
-        prior_main_tests = MagicList([
-            prior_test for prior_test in rp_main_test.get_prior_tests() if
-            prior_test.is_valid() and prior_test.start_time and prior_test.start_time.is_valid() and
-            prior_test.test_id != rp_main_test.test_id
-        ])
+        prior_main_tests = MagicList(
+            [
+                prior_test
+                for prior_test in rp_main_test.get_prior_tests()
+                if prior_test.is_valid()
+                and prior_test.start_time
+                and prior_test.start_time.is_valid()
+                and prior_test.test_id != rp_main_test.test_id
+            ]
+        )
 
         if not prior_main_tests:
-            raise ValueError(f'Cannot find prior runs for test with id: {test_id}')
+            raise ValueError(f"Cannot find prior runs for test with id: {test_id}")
 
         # Get all subtests of the current main test and sort them by subtest name
-        rp_subtests_of_current_test = MagicList([
-            subtest for subtest in rp_main_test.get_subtests() if
-            subtest.is_valid() and subtest.complete_time and subtest.complete_time.is_valid()
-        ]).sort_by('subtest_name')
+        rp_subtests_of_current_test = MagicList(
+            [
+                subtest
+                for subtest in rp_main_test.get_subtests()
+                if subtest.is_valid() and subtest.complete_time and subtest.complete_time.is_valid()
+            ]
+        ).sort_by("subtest_name")
 
         if not rp_subtests_of_current_test:
-            raise ValueError(f'Cannot find subtests for test id: {test_id}')
+            raise ValueError(f"Cannot find subtests for test id: {test_id}")
 
         if not subtests_info:
             subtests_info = [
                 {
-                    'name': test.subtest_name,
-                    'subtest_name': test.subtest_name,
-                } for test in rp_subtests_of_current_test]
+                    "name": test.subtest_name,
+                    "subtest_name": test.subtest_name,
+                }
+                for test in rp_subtests_of_current_test
+            ]
         else:
             new_subtests_info = []
             for subtest_info in subtests_info:
                 for subtest in rp_subtests_of_current_test:
-                    if subtest_info['subtest_name'] == subtest.subtest_name:
+                    if subtest_info["subtest_name"] == subtest.subtest_name:
                         new_subtests_info.append(subtest_info)
                         break
             subtests_info = new_subtests_info
             del new_subtests_info
-        rp_subtests_info = {subtest_info['subtest_name']: subtest_info for subtest_info in subtests_info}
+        rp_subtests_info = {subtest_info["subtest_name"]: subtest_info for subtest_info in subtests_info}
         rp_subtests_of_current_test = MagicList(
             [test for test in rp_subtests_of_current_test if test.subtest_name in rp_subtests_info]
         )
@@ -1375,65 +1479,71 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             rp_metric_info[metric_path] = rp_main_test.get_metric_class(metric_path)
 
         rp_metrics_table = collections.OrderedDict()
-        prior_tests_by_main_test_id = {subtest.subtest_name: prior_tests.group_by(
-            'main_test_id') for subtest, prior_tests in prior_subtests.items()}
+        prior_tests_by_main_test_id = {
+            subtest.subtest_name: prior_tests.group_by("main_test_id")
+            for subtest, prior_tests in prior_subtests.items()
+        }
 
         subtests_groups = {}
 
         for subtest_info in rp_subtests_info.values():
-            groups = subtest_info.get('groups', [''])
+            groups = subtest_info.get("groups", [""])
             for group in groups:
                 if group not in subtests_groups:
                     subtests_groups[group] = MagicList()
                 subtests_groups[group].append(subtest_info)
 
-        tmp_subtest_by_name = rp_subtests_of_current_test.group_by('subtest_name')
+        tmp_subtest_by_name = rp_subtests_of_current_test.group_by("subtest_name")
 
         for group_name, group_substest_infos in subtests_groups.items():
             rp_metrics_table[group_name] = rp_metrics_table_l1 = collections.OrderedDict()
             grouped_subtests = []
-            subtest_info_grouped_by_baseline = group_substest_infos.group_by('baseline', '', sort_keys=1)
-            no_baselines = subtest_info_grouped_by_baseline.get('', None)
+            subtest_info_grouped_by_baseline = group_substest_infos.group_by("baseline", "", sort_keys=1)
+            no_baselines = subtest_info_grouped_by_baseline.get("", None)
             if no_baselines is None:
                 no_baselines = MagicList()
             else:
-                no_baselines = subtest_info_grouped_by_baseline.pop('')
+                no_baselines = subtest_info_grouped_by_baseline.pop("")
             for baseline_subtest_name, subtest_infos in subtest_info_grouped_by_baseline.items():
-                no_baselines.remove_where('subtest_name', baseline_subtest_name)
+                no_baselines.remove_where("subtest_name", baseline_subtest_name)
                 if baseline_subtest_name in tmp_subtest_by_name and tmp_subtest_by_name[baseline_subtest_name]:
                     grouped_subtests.append(tmp_subtest_by_name[baseline_subtest_name][0])
-                for subtest_info in MagicList(subtest_infos).sort_by('name'):
-                    if subtest_info['subtest_name'] in tmp_subtest_by_name \
-                            and tmp_subtest_by_name[subtest_info['subtest_name']]:
-                        grouped_subtests.append(tmp_subtest_by_name[subtest_info['subtest_name']][0])
+                for subtest_info in MagicList(subtest_infos).sort_by("name"):
+                    if (
+                        subtest_info["subtest_name"] in tmp_subtest_by_name
+                        and tmp_subtest_by_name[subtest_info["subtest_name"]]
+                    ):
+                        grouped_subtests.append(tmp_subtest_by_name[subtest_info["subtest_name"]][0])
             for subtest_info in no_baselines:
-                if subtest_info['subtest_name'] in tmp_subtest_by_name \
-                        and tmp_subtest_by_name[subtest_info['subtest_name']]:
-                    grouped_subtests.append(tmp_subtest_by_name[subtest_info['subtest_name']][0])
+                if (
+                    subtest_info["subtest_name"] in tmp_subtest_by_name
+                    and tmp_subtest_by_name[subtest_info["subtest_name"]]
+                ):
+                    grouped_subtests.append(tmp_subtest_by_name[subtest_info["subtest_name"]][0])
             del subtest_info_grouped_by_baseline
 
             for subtest in grouped_subtests:
                 prior_tests = prior_subtests.get(subtest)
-                baseline_subtest_name = rp_subtests_info.get(subtest.subtest_name, {}).get('baseline', None)
+                baseline_subtest_name = rp_subtests_info.get(subtest.subtest_name, {}).get("baseline", None)
                 baseline_prior_tests = None
                 if baseline_subtest_name:
                     baseline_prior_tests = prior_tests_by_main_test_id.get(baseline_subtest_name, None)
 
-                grouped_by_main_test_id = prior_tests.group_by('main_test_id')
+                grouped_by_main_test_id = prior_tests.group_by("main_test_id")
                 rp_metrics_table_l1[subtest.subtest_name] = rp_metrics_table_l2 = {
-                    'total_metrics': 0,
-                    'data': collections.OrderedDict()
+                    "total_metrics": 0,
+                    "data": collections.OrderedDict(),
                 }
                 for metric_path in metrics:
-                    rp_metrics_table_l2['data'][metric_path] = rp_metrics_table_l3 = {
-                        'relative': collections.OrderedDict(),
-                        'absolute': collections.OrderedDict()
+                    rp_metrics_table_l2["data"][metric_path] = rp_metrics_table_l3 = {
+                        "relative": collections.OrderedDict(),
+                        "absolute": collections.OrderedDict(),
                     }
-                    metric_bucket_main = rp_metrics_table_l3['absolute']
-                    metric_bucket_baseline = rp_metrics_table_l3['relative']
+                    metric_bucket_main = rp_metrics_table_l3["absolute"]
+                    metric_bucket_baseline = rp_metrics_table_l3["relative"]
                     number_of_metrics = 0
                     if not baseline_prior_tests:
-                        del rp_metrics_table_l3['relative']
+                        del rp_metrics_table_l3["relative"]
                     else:
                         holds_any_value = False
                         for main_test, _ in rp_main_tests_to_compare.items():
@@ -1451,12 +1561,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                 metric_bucket_baseline[main_test] = None
                                 continue
                             metric_bucket_baseline[main_test] = baseline_metric.rate(
-                                metric_instance,
-                                name=f'{metric_instance.name}<br>baseline diff'
+                                metric_instance, name=f"{metric_instance.name}<br>baseline diff"
                             )
                             holds_any_value = True
                         if not holds_any_value:
-                            del rp_metrics_table_l3['relative']
+                            del rp_metrics_table_l3["relative"]
                         else:
                             number_of_metrics += 1
 
@@ -1473,11 +1582,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                         metric_bucket_main[main_test] = metric_instance
                         holds_any_value = True
                     if not holds_any_value:
-                        del rp_metrics_table_l2['data'][metric_path]
+                        del rp_metrics_table_l2["data"][metric_path]
                         number_of_metrics = 0
                     else:
                         number_of_metrics += 1
-                    rp_metrics_table_l2['total_metrics'] += number_of_metrics
+                    rp_metrics_table_l2["total_metrics"] += number_of_metrics
 
         last_events, events_summary = self.get_events()
         results = {
@@ -1492,14 +1601,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "last_events": last_events,
         }
         if len(rp_metric_info) == 1:
-            template = 'results_performance_multi_baseline_single_metric.html'
+            template = "results_performance_multi_baseline_single_metric.html"
         else:
-            template = 'results_performance_multi_baseline.html'
+            template = "results_performance_multi_baseline.html"
 
-        email_data = {'email_body': results,
-                      'attachments': (),
-                      'template': template}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        email_data = {"email_body": results, "attachments": (), "template": template}
+        self.save_email_data_file(subject, email_data, file_path="email_data.json")
 
 
 class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
@@ -1508,19 +1615,18 @@ class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceA
     """
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
-        super().__init__(es_index=es_index, email_recipients=email_recipients,
-                         logger=logger, events=events)
+        super().__init__(es_index=es_index, email_recipients=email_recipients, logger=logger, events=events)
         self._email_template_fp = "results_performance_predefined_steps.html"
-        self.percentiles = ['percentile_95', 'percentile_99']
+        self.percentiles = ["percentile_95", "percentile_99"]
 
     def _test_stats(self, test_doc):
         # check if stats exists
-        if 'perf_gradual_stats' not in test_doc['_source']:
-            self.log.error('Cannot find the field: results for test id: {}!'.format(test_doc['_id']))
+        if "perf_gradual_stats" not in test_doc["_source"]:
+            self.log.error("Cannot find the field: results for test id: {}!".format(test_doc["_id"]))
             return None
         test_stats = {}
-        for step, stats in test_doc['_source']['perf_gradual_stats'].items():
-            test_stats[step] = {'sub_type': stats['sub_type']}
+        for step, stats in test_doc["_source"]["perf_gradual_stats"].items():
+            test_stats[step] = {"sub_type": stats["sub_type"]}
             for param, agg in self.PARAMS.items():
                 if param in stats:
                     current_step_result = stats[param]
@@ -1530,32 +1636,38 @@ class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceA
         return test_stats
 
     @staticmethod
-    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
-        if test_doc['_source']['test_details'].get('scylla-bench'):
-            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear,
-                                                extra_jobs_to_compare=extra_jobs_to_compare)()
-        elif test_doc['_source']['test_details'].get('ycsb'):
-            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear,
-                                         extra_jobs_to_compare=extra_jobs_to_compare)()
-        elif "cdc" in test_doc['_source']['test_details'].get('sub_type', ''):
-            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear,
-                                    extra_jobs_to_compare=extra_jobs_to_compare)()
+    def _query_filter(test_doc, is_gce, use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
+        if test_doc["_source"]["test_details"].get("scylla-bench"):
+            return PerformanceFilterScyllaBench(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
+        elif test_doc["_source"]["test_details"].get("ycsb"):
+            return PerformanceFilterYCSB(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
+        elif "cdc" in test_doc["_source"]["test_details"].get("sub_type", ""):
+            return CDCQueryFilterCS(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
         else:
-            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear,
-                                       extra_jobs_to_compare=extra_jobs_to_compare)()
+            return PerformanceFilterCS(
+                test_doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare
+            )()
 
     @staticmethod
     def _get_nemesis_data(stat):
-        return stat.get('run_step', []).get('cycles', [])
+        return stat.get("run_step", []).get("cycles", [])
 
     def prepare_attachment_files_for_email(self, results):
         return [
-            self.save_html_to_file(results,
-                                   file_name='reactor_stall_events_list.html',
-                                   template_file='results_reactor_stall_events_list.html'),
-            self.save_html_to_file(results,
-                                   file_name='full_email_report.html',
-                                   template_file='results_performance_predefined_steps.html'),
+            self.save_html_to_file(
+                results,
+                file_name="reactor_stall_events_list.html",
+                template_file="results_reactor_stall_events_list.html",
+            ),
+            self.save_html_to_file(
+                results, file_name="full_email_report.html", template_file="results_performance_predefined_steps.html"
+            ),
         ]
 
 
@@ -1565,18 +1677,23 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     """
 
     def __init__(self, es_index, email_recipients=(), logger=None, events=None):
-        super().__init__(es_index=es_index, email_recipients=email_recipients,
-                         email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
+        super().__init__(
+            es_index=es_index,
+            email_recipients=email_recipients,
+            email_template_fp="results_search_best_throughput_config.html",
+            logger=logger,
+            events=events,
+        )
 
     def check_regression(self, test_name, setup_details, test_results) -> None:
-        subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
+        subject = (
+            f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
+        )
         results = {
             "test_id": setup_details.get("test_id", ""),
             "test_name": test_name,
             "setup_details": setup_details,
-            "test_results": test_results
+            "test_results": test_results,
         }
-        email_data = {'email_body': results,
-
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        email_data = {"email_body": results, "template": self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path="email_data.json")

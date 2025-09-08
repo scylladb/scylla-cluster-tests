@@ -43,7 +43,9 @@ class IpAddressProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, instance_definitions: List[InstanceDefinition], version: str = "IPV4") -> List[PublicIPAddress]:
+    def get_or_create(
+        self, instance_definitions: List[InstanceDefinition], version: str = "IPV4"
+    ) -> List[PublicIPAddress]:
         addresses = []
         pollers = []
         for definition in instance_definitions:
@@ -57,7 +59,7 @@ class IpAddressProvider:
                 self._cache[ip_name] = address
                 addresses.append(address)
                 continue
-            LOGGER.info("Creating public_ip %s in resource group %s...",  ip_name, self._resource_group_name)
+            LOGGER.info("Creating public_ip %s in resource group %s...", ip_name, self._resource_group_name)
             poller = self._azure_service.network.public_ip_addresses.begin_create_or_update(
                 resource_group_name=self._resource_group_name,
                 public_ip_address_name=ip_name,
@@ -76,8 +78,12 @@ class IpAddressProvider:
             poller.wait()
             # need to get it separately as seems not always it gets created even if result() returns proper ip_address.
             address = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip_name)
-            LOGGER.info("Provisioned public ip %s (%s) in the %s resource group", address.name,
-                        address.ip_address, self._resource_group_name)
+            LOGGER.info(
+                "Provisioned public ip %s (%s) in the %s resource group",
+                address.name,
+                address.ip_address,
+                self._resource_group_name,
+            )
             self._cache[ip_name] = address
             addresses.append(address)
         return addresses

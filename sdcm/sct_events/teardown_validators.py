@@ -13,12 +13,10 @@ class ValidatorEvent(InformationalEvent):
 
 
 class ScrubValidationErrorEvent(InformationalEvent):
-
     def __init__(self, node_name: str, sstables_link: str, severity: Severity = Severity.ERROR):
         super().__init__(severity=severity)
 
-        self.message = (f"Nodetool scrub in validation mode found invalid sstables on node {node_name}."
-                        f"See more details in db logs and quarantined sstables link: {sstables_link}")
+        self.message = f"Nodetool scrub in validation mode found invalid sstables on node {node_name}.See more details in db logs and quarantined sstables link: {sstables_link}"
 
     @property
     def msgfmt(self) -> str:
