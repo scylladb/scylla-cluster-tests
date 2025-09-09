@@ -643,7 +643,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.create_table(name=f"table_{i}", keyspace_name="base_keyspace")
         InfoEvent("Keyspaces and tables were created").publish()
         start_time = time.time_ns()
-        while time.time_ns() - start_time < 3 * 3600:
+        while (time.time_ns() - start_time) // 1_000_000_000 < 3 * 3600:
             decommissioning_node = random.choice(self.db_cluster.nodes)
             self.db_cluster.decommission(node=decommissioning_node, timeout=7200)
             added_nodes = []
@@ -660,3 +660,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                     node_list=added_nodes, timeout=up_timeout, check_node_health=False)
             self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
             InfoEvent(f"New nodes up and normal {[node.name for node in added_nodes]}").publish()
+
+        InfoEvent(f"Nodes decommission stats: {getattr(self.db_cluster, 'decommission_node', {})}").publish()
+        InfoEvent(f"Nodes startup stats: {getattr(self.db_cluster, 'nodeup_stats', {})}").publish()
