@@ -5281,7 +5281,7 @@ class BaseScyllaCluster:
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             st = time.time_ns()
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
-            getattr(self, "decommission_node")[node.name] = time.time_ns() - st
+            getattr(self, "decommission_node")[node.name] = {"decommission": (time.time_ns() - st) // 1_000_000_000}
         self.verify_decommission(node)
         if node._is_zero_token_node:
             return None
