@@ -17,6 +17,8 @@ import time
 import uuid
 import tempfile
 import logging
+import glob
+from functools import cached_property
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
@@ -27,6 +29,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import generate_random_string
 from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LOGGER = logging.getLogger(__name__)
 
@@ -114,6 +117,34 @@ class YcsbStatsPublisher(FileFollowerThread):
 class YcsbStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
+    WORK_TYPES = {
+        'READ': 'read',
+        'SCAN': 'read',
+        'UPDATE': 'write',
+        'INSERT': 'write',
+        'DELETE': 'write',
+        'WRITE': 'write',
+    }
+
+    def __init__(self, *args, cluster_tester, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._uuid_val = uuid.uuid4()
+        self.directory_for_hdr_files = os.path.join(self.loader_set.logdir, f'hdrh-{self._uuid_val}')
+        LOGGER.debug('HDR files directory: %s', self.directory_for_hdr_files)
+        os.makedirs(self.directory_for_hdr_files, exist_ok=True)
+        self.cluster_tester = cluster_tester
+
+    def _hdr_files_directory_inside_ycsb_container(self, loader_idx, cpu_idx):
+        return f'/tmp/hdr-output-directory/{self._uuid_val}/{loader_idx}/{cpu_idx}'
+
+    def _hdr_files_directory_on_master_node(self):
+        return self.directory_for_hdr_files
+
+    def _hdr_main_dir_on_loaders_node(self):
+        return f'/tmp/hdr-output-directory/{self._uuid_val}'
+
+    def _hdr_files_directory_on_loaders_node(self, loader_idx, cpu_idx):
+        return f'{self._hdr_main_dir_on_loaders_node()}/{loader_idx}/{cpu_idx}'
 
     def copy_template(self, cmd_runner, loader_name, memo={}):  # noqa: B006
         if loader_name in memo:
@@ -136,7 +167,7 @@ class YcsbStressThread(DockerBasedStressThread):
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_dummy_credentials_file
                 dynamodb.endpoint = {0}://{1}:{2}
-                dynamodb.connectMax = 200
+                dynamodb.connectMax = 2500
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
             '''.format(web_protocol, target_address, self.params.get('alternator_port')))
@@ -191,20 +222,21 @@ class YcsbStressThread(DockerBasedStressThread):
                 memo[loader_name] = "done"
         return None
 
-    def build_stress_cmd(self):
+    def build_stress_cmd(self, loader_idx, cpu_idx):
         hosts = ",".join([i.cql_address for i in self.node_list])
 
         stress_cmd = f'{self.stress_cmd} -s '
         if 'dynamodb' in self.stress_cmd:
             stress_cmd += ' -P /tmp/dynamodb.properties'
-        if 'cassandra-cql' in self.stress_cmd:
-
-            stress_cmd += f' -p hosts={hosts} -p cassandra.readconsistencylevel=QUORUM -p cassandra.writeconsistencylevel=QUORUM'
+        if 'scylla' in self.stress_cmd:
+            stress_cmd += f' -p hosts={hosts} -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=QUORUM'
         if "scylla" in self.stress_cmd:
             stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
-
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd += " -p measurement.interval=intended -p measurementtype=hdrhistogram -p hdrhistogram.fileoutput=true -p status.interval=1"
+            stress_cmd += f" -p hdrhistogram.tag=true -p hdrhistogram.output.path={self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}/hdrh-"
         return stress_cmd
 
     @staticmethod
@@ -242,7 +274,61 @@ class YcsbStressThread(DockerBasedStressThread):
         output = {k: str(v) for k, v in output.items()}
         return output
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
+    def _initialize_hdr_logger(self, loader, loader_idx, cpu_idx):
+        class HDRHistogramFileLoggerCheckForExistingFile(HDRHistogramFileLogger):
+            @cached_property
+            def _logger_cmd_template(self) -> str:
+                return f"test -f {self._remote_log_file} && tail -f {self._remote_log_file} -c +0"
+
+            def stop(self):
+                LOGGER.debug(f'Stopping HDR logger {self._remote_log_file} -> {self.target_log_file}')
+                super().stop()
+                try:
+                    if os.path.isfile(self.target_log_file) and os.path.getsize(self.target_log_file) == 0:
+                        LOGGER.debug(f'Removing empty hdr file {self.target_log_file}')
+                        os.remove(self.target_log_file)
+                except Exception as e:
+                    LOGGER.exception(f'Error removing empty hdr file {self.target_log_file}, error is ignored: {e}')
+
+        contextes = []
+        for work_type in self.WORK_TYPES:
+            loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
+            master_node_path = self._hdr_files_directory_on_master_node()
+            LOGGER.debug(f'Creating masters node HDR files directory: {master_node_path}')
+            os.makedirs(master_node_path, exist_ok=True)
+            LOGGER.debug(
+                f'Initializing HDR logger with remote={loaders_node_path}/hdrh-{work_type}.hdr and target={master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr')
+            hdrh_logger = HDRHistogramFileLoggerCheckForExistingFile(
+                node=loader,
+                remote_log_file=f'{loaders_node_path}/hdrh-{work_type}.hdr',
+                target_log_file=f'{master_node_path}/hdrh-{loader_idx}-{work_type}-{cpu_idx}.hdr',
+            )
+            contextes.append(hdrh_logger)
+            hdrh_logger.remove_remote_log_file()
+            hdrh_logger.start()
+        return contextes
+
+    def _terminate_hdr_loggers(self, contextes, loader_idx, cpu_idx):
+        LOGGER.debug('Terminating HDR loggers')
+        for hdrh_logger in contextes:
+            hdrh_logger.stop()
+
+    def _prepare_directory_for_hdr_files_on_loader_node(self, loader_idx, cpu_idx):
+        loaders_node_path = self._hdr_files_directory_on_loaders_node(loader_idx, cpu_idx)
+        LOGGER.debug(f'Preparing HDR files directory: {loaders_node_path}')
+        os.makedirs(loaders_node_path, exist_ok=True)
+        files = glob.glob(f'{loaders_node_path}/*.hdr')
+        for f in files:
+            LOGGER.debug(f'removing old hdr file: {f}')
+            os.remove(f)
+        try:
+            os.chmod(self._hdr_main_dir_on_loaders_node(), 0o777)
+        except Exception:
+            LOGGER.exception(f'chmod failed for {self._hdr_main_dir_on_loaders_node()}')
+        return loaders_node_path
+
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # noqa: PLR0914
+        LOGGER.debug(f"running stress command with loader {loader.name} loader_idx {loader_idx} cpu_idx {cpu_idx}")
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.name
@@ -263,15 +349,20 @@ class YcsbStressThread(DockerBasedStressThread):
                                    extra_docker_opts=f'--label shell_marker={self.shell_marker}',
                                    docker_network=self.params.get('docker_network'))
                 dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+            extra_docker_opts = f'{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}'
+            if self.params["use_hdrhistogram"]:
+                hdr_files_directory = self._prepare_directory_for_hdr_files_on_loader_node(loader_idx, cpu_idx)
+                extra_docker_opts += f' -v {hdr_files_directory}:{self._hdr_files_directory_inside_ycsb_container(loader_idx, cpu_idx)}:z'
+
             cmd_runner = RemoteDocker(
                 loader, self.docker_image_name,
                 command_line="-c 'tail -f /dev/null'",
-                extra_docker_opts=f'{dns_options} {cpu_options} --entrypoint /bin/bash --label shell_marker={self.shell_marker}',
+                extra_docker_opts=extra_docker_opts,
                 docker_network=self.params.get('docker_network'))
             cmd_runner_name = str(loader)
 
         self.copy_template(cmd_runner, loader.name)
-        stress_cmd = self.build_stress_cmd()
+        stress_cmd = self.build_stress_cmd(loader_idx, cpu_idx)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -291,8 +382,12 @@ class YcsbStressThread(DockerBasedStressThread):
 
         result = {}
         ycsb_failure_event = ycsb_finish_event = None
+        LOGGER.debug(f'starting YCSB stress command: {node_cmd}')
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
+                if self.params["use_hdrhistogram"]:
+                    contextes = self._initialize_hdr_logger(loader, loader_idx, cpu_idx)
+                LOGGER.debug(f'running YCSB stress command: {node_cmd}')
                 result = cmd_runner.run(
                     cmd=node_cmd,
                     timeout=self.timeout + self.shutdown_timeout,
@@ -307,7 +402,9 @@ class YcsbStressThread(DockerBasedStressThread):
                     retry=0,
                 )
                 result = self.parse_final_output(result)
+                LOGGER.debug(f'YCSB stress command finished: {result}')
             except Exception as exc:
+                LOGGER.exception(f'YCSB stress command failed: {exc}')
                 errors_str = format_stress_cmd_error(exc)
                 ycsb_failure_event = YcsbStressEvent.failure(
                     node=cmd_runner_name,
@@ -318,8 +415,11 @@ class YcsbStressThread(DockerBasedStressThread):
                 ycsb_failure_event.publish()
                 raise
             finally:
+                LOGGER.debug('YCSB stress command finished, cleaning up')
                 ycsb_finish_event = YcsbStressEvent.finish(
                     node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name)
                 ycsb_finish_event.publish()
-
+                if self.params["use_hdrhistogram"]:
+                    self._terminate_hdr_loggers(contextes, loader_idx, cpu_idx)
+        LOGGER.debug('YCSB stress command done')
         return loader, result, ycsb_failure_event or ycsb_finish_event

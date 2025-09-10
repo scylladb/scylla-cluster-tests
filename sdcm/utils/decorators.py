@@ -186,7 +186,7 @@ def _find_hdr_tags(*args):
 
 
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
-                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None):
+                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None, row_name: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -308,7 +308,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         workload=workload,
                         name="Steady State",
                         description="Latencies without any operation running",
-                        cycle=0,
+                        cycle=row_name or 0,
                         result=result,
                         start_time=start,
                         error_thresholds=error_thresholds,
@@ -322,7 +322,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     workload=workload,
                     name=f"{func_name}",
                     description=legend or "",
-                    cycle=len(latency_results[func_name]['cycles']),
+                    cycle=row_name or len(latency_results[func_name]['cycles']),
                     result=result,
                     start_time=start,
                     error_thresholds=error_thresholds,
