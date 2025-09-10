@@ -313,7 +313,6 @@ class GCECluster(cluster.BaseCluster):
             for disk_type, disk_size in self._add_disks.items():
                 if int(disk_size):
                     identifier += '%s: %s | ' % (disk_type, disk_size)
-        identifier += 'Type: %s' % self._gce_instance_type
         return identifier
 
     def _get_disk_url(self, disk_type='pd-standard', dc_idx=0):
