@@ -418,7 +418,7 @@ class _HdrRangeHistogramBuilder:
         # 2) 'latte' may have arbitrary tag names, they are based on the user-defined rune function names.
         #    Examples: 'fn--write', 'fn--write-batch', 'fn--get', 'fn--get-many', 'fn--read'.
         # 3) 'scylla-bench' has identical tag names for reads and writes - 'co-fixed' and 'raw'.
-        #    It doesn't have 'mixed' workload type, so it's mode should be used for detecting the tag data type.
+        #    for 'mixed' workload type - 'co-fixed-write' and 'co-fixed-read'.
         # 4) 'ycsb', it supports HDR histograms. YCSB has been upgraded with patch to enable tagging.
         #    It uses SCAN READ SCAN UPDATE INSERT DELETE WRITE tags - each tag will create a different hdr file.
         #    First two ifs will handle all ycsb tags and return correct workload type.

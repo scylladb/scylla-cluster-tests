@@ -20,7 +20,7 @@ import contextlib
 from enum import Enum
 from itertools import chain
 
-from sdcm.loader import ScyllaBenchStressExporter
+from sdcm.loader import ScyllaBenchStressExporter, ScyllaBenchHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
@@ -33,6 +33,7 @@ from sdcm.sct_events.loaders import (
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 from sdcm.wait import wait_for
 
 
@@ -42,6 +43,7 @@ LOGGER = logging.getLogger(__name__)
 class ScyllaBenchModes(str, Enum):
     WRITE = "write"
     READ = "read"
+    MIXED = "mixed"
     COUNTER_UPDATE = "counter_update"
     COUNTER_READ = "counter_read"
     SCAN = "scan"
@@ -166,11 +168,18 @@ class ScyllaBenchThread(DockerBasedStressThread):
         self.sb_workload: ScyllaBenchWorkloads = ScyllaBenchWorkloads(
             re.search(r"-workload=(.+?) ", stress_cmd).group(1)
         )
-        # NOTE: scylla-bench doesn't have 'mixed' workload. Its hdr tag names are the same in all cases.
-        #       Another "raw" tag/metric is ignored because it is coordinated omission affected
-        #       and not really needed having 'coordinated omission fixed' latency one.
-        self.hdr_tags = ["co-fixed"]
+        self.hdr_tags = self.set_hdr_tags()
         self.stop_test_on_failure = stop_test_on_failure
+
+    def set_hdr_tags(self) -> list:
+        if self.sb_mode.lower() == "write":
+            return ["co-fixed"]
+        elif self.sb_mode.lower() == "mixed":
+            return ["co-fixed-write", "co-fixed-read"]
+        elif self.sb_mode.lower() == "read":
+            return ["co-fixed"]
+        else:
+            raise ValueError(f"Unknown scylla-bench mode: {self.sb_mode}")
 
     def get_datacenter_name_for_loader(self, loader):
         datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
@@ -252,20 +261,40 @@ class ScyllaBenchThread(DockerBasedStressThread):
 
         return stress_cmd
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
-        cmd_runner = None
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # noqa: PLR0914
+        if not os.path.exists(loader.logdir):
+            os.makedirs(loader.logdir, exist_ok=True)
+
+        log_id = self._build_log_file_id(loader_idx, cpu_idx, None)
+        log_file_name = os.path.join(loader.logdir, f"scylla-bench-{self.sb_mode.value}-{log_id}.log")
+        hdrh_logger_context = contextlib.nullcontext()
+        log_id = self._build_log_file_id(loader_idx, cpu_idx, None)
+        remote_hdr_file_name = f"hdrh-scyllabench-{self.sb_mode.value}-{log_id}.hdr"
+        local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
+        loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
+        remote_hdr_file_name_full_path = loader.remoter.run(
+            f"realpath $HOME/{remote_hdr_file_name}",
+            ignore_status=False,
+            verbose=False,
+        ).stdout.strip()
+
+        cpu_options = ""
+        if self.stress_num > 1:
+            cpu_options = f'--cpuset-cpus="{cpu_idx}"'
+
+        extra_docker_opts = (
+            f"{cpu_options} --label shell_marker={self.shell_marker} "
+            '--network=host --entrypoint="" --security-opt seccomp=unconfined '
+            f"-v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+        )
+
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.remoter.pod_name
             cleanup_context = contextlib.nullcontext()
         else:
-            cpu_options = ""
-            if self.stress_num > 1:
-                cpu_options = f'--cpuset-cpus="{cpu_idx}"'
             cmd_runner = cleanup_context = RemoteDocker(
-                loader,
-                self.params.get("stress_image.scylla-bench"),
-                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined ',
+                loader, self.params.get("stress_image.scylla-bench"), extra_docker_opts=extra_docker_opts
             )
             cmd_runner_name = loader.ip_address
 
@@ -289,11 +318,6 @@ class ScyllaBenchThread(DockerBasedStressThread):
             stress_cmd = self.stress_cmd
             LOGGER.debug("Scylla bench command: %s", self.stress_cmd)
 
-        if not os.path.exists(loader.logdir):
-            os.makedirs(loader.logdir, exist_ok=True)
-
-        log_id = self._build_log_file_id(loader_idx, cpu_idx, None)
-        log_file_name = os.path.join(loader.logdir, f"scylla-bench-{self.sb_mode.value}-{log_id}.log")
         stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
         try:
             prefix, *_ = stress_cmd.split("scylla-bench", maxsplit=1)
@@ -302,7 +326,24 @@ class ScyllaBenchThread(DockerBasedStressThread):
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd += f" --hdr-latency-file={remote_hdr_file_name}"
+            hdrh_logger_context = HDRHistogramFileLogger(
+                node=loader,
+                remote_log_file=remote_hdr_file_name_full_path,
+                target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
+            )
+            # NOTE: running dozens of commands in parallel on a single SCT runner
+            #       it is easy to get stress command to run earlier than the HDRH file
+            #       starts being read.
+            #       So, to avoid data loss by time mismatch we start reading earlier
+            #       to make sure we do not race with stress threads start time.
+            hdrh_logger_context.start()
+        else:
+            hdrh_logger_context = contextlib.nullcontext()
+
         with (
+            cleanup_context,
             ScyllaBenchStressExporter(
                 instance_name=cmd_runner_name,
                 metrics=nemesis_metrics_obj(),
@@ -310,11 +351,18 @@ class ScyllaBenchThread(DockerBasedStressThread):
                 stress_log_filename=log_file_name,
                 loader_idx=loader_idx,
             ),
-            cleanup_context,
-            ScyllaBenchStressEventsPublisher(
-                node=loader, sb_log_filename=log_file_name, stop_test_on_failure=self.stop_test_on_failure
-            ) as publisher,
+            ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher,
             ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as scylla_bench_event,
+            ScyllaBenchHDRExporter(
+                instance_name=cmd_runner_name,
+                hdr_tags=self.hdr_tags,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=str(self.sb_mode.value),
+                stress_log_filename=local_hdr_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            hdrh_logger_context,
         ):
             publisher.event_id = scylla_bench_event.event_id
             result = None
