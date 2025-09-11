@@ -170,12 +170,15 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             while not is_target_reached(current_cluster_size, cluster_target_size):
                 added_nodes = []
                 for dcx, target in enumerate(cluster_target_size):
-                    if current_cluster_size[dcx] < target:
-                        add_nodes_num = add_node_cnt if (
-                            target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
-                        InfoEvent(message=f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx}").publish()
-                        added_nodes.extend(self.db_cluster.add_nodes(
-                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx))
+                    if current_cluster_size[dcx] >= target:
+                        continue
+                    rack = current_cluster_size[dcx] % self.db_cluster.racks_count
+                    add_nodes_num = add_node_cnt if (
+                        target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
+                    InfoEvent(message=(
+                        f"Adding next number of nodes {add_nodes_num} to dc_idx {dcx} , rack {rack}")).publish()
+                    added_nodes.extend(self.db_cluster.add_nodes(
+                        count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx, rack=rack))
 
                 self.monitors.reconfigure_scylla_monitoring()
                 up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
