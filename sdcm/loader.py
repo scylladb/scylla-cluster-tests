@@ -344,6 +344,18 @@ class CqlStressHDRExporter(CassandraStressHDRExporter):
         return gauge_name
 
 
+class ScyllaBenchHDRExporter(CassandraStressHDRExporter):
+    def create_metrix_gauge(self):
+        gauge_name = f"collectd_scylla_bench_hdr_{self.stress_operation}_gauge"
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                "Gauge for scylla-bench hdr percentiles",
+                [f"scylla_bench_hdr_{self.stress_operation}", "instance", "loader_idx", "cpu_idx", "type", "keyspace"],
+            )
+        return gauge_name
+
+
 class CqlStressCassandraStressExporter(StressExporter):
     # Lines containing any of these should be skipped. These are the logs emitted by the `tracing` crate.
     TRACING_LOGS = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
