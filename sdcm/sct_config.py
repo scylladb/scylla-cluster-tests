@@ -3091,7 +3091,6 @@ class SCTConfiguration(dict):
         # validate if selected Scylla version is supported
         supported_versions = [
             v['version'] for v in cloud_api_client.get_scylla_versions()['scyllaVersions']
-            if v['newCluster'] == 'ENABLED'
         ]
         if (selected_version := self.get('scylla_version')) not in supported_versions:
             raise ValueError(f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
