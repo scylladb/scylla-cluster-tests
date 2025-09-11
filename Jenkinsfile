@@ -44,15 +44,13 @@ def createRunConfiguration(String backend) {
         configuration.backend = 'xcloud'
         configuration.xcloud_env = 'staging'
 
-        // TODO: remove once xcloud connectivity is enabled by default
-        configuration.ip_ssh_connections =  "public"
         if (backend == 'xcloud-gce') {
             configuration.xcloud_provider = 'gce'
             configuration.gce_datacenter = "us-east1"
         }
         if (backend == 'xcloud-aws') {
             configuration.xcloud_provider = 'aws'
-            configuration.test_config = '["test-cases/PR-provision-test.yaml","configurations/network_config/test_communication_public.yaml"]'
+            configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
         }
     }
     return configuration

@@ -3091,7 +3091,6 @@ class SCTConfiguration(dict):
         # validate if selected Scylla version is supported
         supported_versions = [
             v['version'] for v in cloud_api_client.get_scylla_versions()['scyllaVersions']
-            if v['newCluster'] == 'ENABLED'
         ]
         if (selected_version := self.get('scylla_version')) not in supported_versions:
             raise ValueError(f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
@@ -3128,10 +3127,6 @@ class SCTConfiguration(dict):
             self['xcloud_replication_factor'] = n_nodes
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
-
-        if self.get('n_monitor_nodes') > 0:
-            self.log.warning("Cloud provides built-in monitoring. Setting n_monitor_nodes to 0.")
-            self['n_monitor_nodes'] = 0
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
