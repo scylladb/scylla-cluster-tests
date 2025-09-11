@@ -627,6 +627,14 @@ class FakeAzureService:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.mkdir(exist_ok=True)
+        self.azure_credentials = {"tenant_id": "fake-tenant-id"}
+        self.subscription_id = "fake-subscription-id"
+
+    def get_vault_key(self, vault_uri, key_name):
+        return None
+
+    def create_vault_key(self, vault_uri, key_name):
+        return f"{vault_uri}{key_name}"
 
     @property
     def resource(self) -> FakeResourceManagementClient:
@@ -639,3 +647,24 @@ class FakeAzureService:
     @property
     def compute(self) -> Compute:
         return Compute(self.path)
+
+    @property
+    def keyvault(self):
+        return FakeKeyVaultClient()
+
+
+class FakeKeyVaultClient:
+    class vaults:
+        @staticmethod
+        def begin_create_or_update(*args, **kwargs):
+            return FakeVaultOperation()
+
+
+class FakeVaultOperation:
+    def result(self):
+        class MockVault:
+            def __init__(self):
+                class Properties:
+                    vault_uri = "https://fake-vault.vault.azure.net/"
+                self.properties = Properties()
+        return MockVault()
