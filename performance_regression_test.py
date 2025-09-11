@@ -16,6 +16,7 @@
 
 import os
 import time
+from typing import Optional
 
 import yaml
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -486,6 +487,15 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  
                     AND speculative_retry = 'NONE';
             """)
 
+    @optional_stage('perf_steady_state_calc')
+    @latency_calculator_decorator
+    def steady_state_latency(self, hdr_tags: list[str], sleep_time: Optional[int] = None):
+        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+        sleep_time = sleep_time or self.db_cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
+        time.sleep(sleep_time)
+        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
+
     # Base Tests
     def test_write(self):
         """
@@ -850,6 +860,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
 
+<<<<<<< HEAD
     @latency_calculator_decorator
     def steady_state_latency(self, hdr_tags: list[str]):
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
@@ -858,6 +869,18 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
         time.sleep(sleep_time)
         InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
 
+||||||| parent of 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
+    @optional_stage('perf_steady_state_calc')
+    @latency_calculator_decorator
+    def steady_state_latency(self, hdr_tags: list[str]):
+        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
+        time.sleep(sleep_time)
+        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
+
+=======
+>>>>>>> 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
     @latency_calculator_decorator
     def post_upgrades_steady_state(self, hdr_tags: list[str]):
         # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator

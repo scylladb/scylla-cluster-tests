@@ -31,6 +31,8 @@
 - HardRebootNodeMonkey
 - LoadAndStreamMonkey
 - MajorCompactionMonkey
+- ManagerNativeBackup
+- ManagerRcloneBackup
 - MemoryStressMonkey
 - MgmtBackup
 - MgmtBackupSpecificKeyspaces

@@ -346,7 +346,22 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     tablets_mode_for_new_keyspaces: Literal['disabled', 'enabled', 'enforced'] = None  # enabled
     force_gossip_topology_changes: bool = None  # False
 
+<<<<<<< HEAD
     def dict(  # pylint: disable=arguments-differ
+||||||| parent of 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
+    reader_concurrency_semaphore_cpu_concurrency: int = None
+
+    vector_store_uri: str = None
+
+    def model_dump(
+=======
+    reader_concurrency_semaphore_cpu_concurrency: int = None
+    object_storage_endpoints: list[dict] = None
+
+    vector_store_uri: str = None
+
+    def model_dump(
+>>>>>>> 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
         self,
         *,
         include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,

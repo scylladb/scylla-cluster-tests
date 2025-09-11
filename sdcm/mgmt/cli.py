@@ -558,7 +558,15 @@ class ManagerCluster(ScyllaManagerBase):
     def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches  # noqa: PLR0913
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
+<<<<<<< HEAD
                            snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, legacy_args=None):
+||||||| parent of 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
+                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, transfers=None,
+                           legacy_args=None):
+=======
+                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, transfers=None,
+                           object_storage_upload_mode=None, legacy_args=None):
+>>>>>>> 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
         cmd = "backup -c {}".format(self.id)
 
         if dc_list is not None:
@@ -596,6 +604,8 @@ class ManagerCluster(ScyllaManagerBase):
         if upload_parallel_list is not None:
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
+        if object_storage_upload_mode is not None:
+            cmd += " --method {} ".format(object_storage_upload_mode.value)
         if legacy_args:
             cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)

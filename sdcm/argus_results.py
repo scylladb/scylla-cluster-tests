@@ -101,6 +101,141 @@ class ReactorStallStatsResult(StaticGenericResultTable):
         ]
 
 
+<<<<<<< HEAD
+||||||| parent of 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
+class ManagerRestoreBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "Regular L&S restore benchmark"
+        description = "Regular L&S restore benchmark"
+        Columns = [
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="download bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="l&s bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+        ValidationRules = {
+            "restore time": ValidationRule(best_pct=10),
+            "download bandwidth": ValidationRule(best_pct=10),
+            "l&s bandwidth": ValidationRule(best_pct=10),
+            "repair time": ValidationRule(best_pct=10),
+            "total": ValidationRule(best_pct=10),
+        }
+
+
+class ManagerOneOneRestoreBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "1-1 restore benchmark"
+        description = "1-1 restore benchmark"
+        Columns = [
+            ColumnMetadata(name="bootstrap time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION),
+        ]
+
+
+class ManagerBackupBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "Backup benchmark"
+        description = "Backup benchmark"
+        Columns = [
+            ColumnMetadata(name="backup time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+
+class ManagerBackupReadResult(StaticGenericResultTable):
+    class Meta:
+        name = "Read timing"
+        description = "Read timing"
+        Columns = [
+            ColumnMetadata(name="read time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+
+class ManagerSnapshotDetails(StaticGenericResultTable):
+    class Meta:
+        name = "Snapshot details"
+        description = "Manager snapshots (pre-created for next utilization in restore tests) details"
+        Columns = [
+            ColumnMetadata(name="tag", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER),
+            ColumnMetadata(name="locations", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ks_name", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="scylla_version", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ear_key_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="manager_cluster_id", unit="", type=ResultType.TEXT),
+        ]
+
+
+=======
+class ManagerRestoreBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "Regular L&S restore benchmark"
+        description = "Regular L&S restore benchmark"
+        Columns = [
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="download bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="l&s bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+        ValidationRules = {
+            "restore time": ValidationRule(best_pct=10),
+            "download bandwidth": ValidationRule(best_pct=10),
+            "l&s bandwidth": ValidationRule(best_pct=10),
+            "repair time": ValidationRule(best_pct=10),
+            "total": ValidationRule(best_pct=10),
+        }
+
+
+class ManagerOneOneRestoreBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "1-1 restore benchmark"
+        description = "1-1 restore benchmark"
+        Columns = [
+            ColumnMetadata(name="bootstrap time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION),
+        ]
+
+
+class ManagerBackupBenchmarkResult(StaticGenericResultTable):
+    class Meta:
+        name = "Backup benchmark"
+        description = "Backup benchmark"
+        Columns = [
+            ColumnMetadata(name="Size", unit="bytes", type=ResultType.TEXT, higher_is_better=False),
+            ColumnMetadata(name="Time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+
+class ManagerBackupReadResult(StaticGenericResultTable):
+    class Meta:
+        name = "Read timing"
+        description = "Read timing"
+        Columns = [
+            ColumnMetadata(name="read time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+
+class ManagerSnapshotDetails(StaticGenericResultTable):
+    class Meta:
+        name = "Snapshot details"
+        description = "Manager snapshots (pre-created for next utilization in restore tests) details"
+        Columns = [
+            ColumnMetadata(name="tag", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER),
+            ColumnMetadata(name="locations", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ks_name", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="scylla_version", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ear_key_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="manager_cluster_id", unit="", type=ResultType.TEXT),
+        ]
+
+
+>>>>>>> 79044cefe (test(backup): add native/rclone backup benchmarking under read/write stress)
 class PerfSimpleQueryResult(StaticGenericResultTable):
     def __init__(self, workload: str, parameters: dict):
         super().__init__(name=f"{workload} - Perf Simple Query", description=json.dumps(parameters))
