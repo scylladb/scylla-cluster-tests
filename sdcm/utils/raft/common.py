@@ -109,13 +109,13 @@ class NodeBootstrapAbortManager:
     @raise_event_on_failure
     def _start_bootstrap(self):
         try:
-            self.actions_log.info("Node bootstrap start", target=self.bootstrap_node.name)
+            self.actions_log.info(f"{self.bootstrap_node.name} node bootstrap start")
             self.bootstrap_node.parent_cluster.node_setup(self.bootstrap_node, verbose=True)
             self.bootstrap_node.parent_cluster.node_startup(self.bootstrap_node, verbose=True)
-            self.actions_log.info("Node bootstrap finished", target=self.bootstrap_node.name)
+            self.actions_log.info(f"{self.bootstrap_node.name} node bootstrap finished")
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Setup failed for node %s with err %s", self.bootstrap_node.name, exc)
-            self.actions_log.error("Node bootstrap failed", target=self.bootstrap_node.name)
+            self.actions_log.error(f"{self.bootstrap_node.name} node bootstrap failed")
         finally:
             self._set_wait_stop_event()
 
@@ -131,14 +131,13 @@ class NodeBootstrapAbortManager:
             if self.bootstrap_node.db_up():
                 LOGGER.info("Node %s is bootstrapped. Cancel abort action", self.bootstrap_node.name)
                 return
-            self.actions_log.info("Aborting bootstrap", target=self.bootstrap_node.name,
-                                  metadata={"action": abort_action.__name__})
+            self.actions_log.info(f"Aborting bootstrap on {self.bootstrap_node.name} node ({abort_action.__name__})")
             abort_action()
             LOGGER.info("Scylla was stopped successfully on node %s", self.bootstrap_node.name)
-            self.actions_log.info("Bootstrap abort finished", target=self.bootstrap_node.name)
+            self.actions_log.info(f"Bootstrap abort on {self.bootstrap_node.name} node finished")
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Abort was failed on node %s with error %s", self.bootstrap_node.name, exc)
-            self.actions_log.warning("Bootstrap abort failed", target=self.bootstrap_node.name)
+            self.actions_log.warning(f"Bootstrap abort on {self.bootstrap_node.name} node failed")
         finally:
             self._set_wait_stop_event()
 
@@ -226,25 +225,25 @@ class NodeBootstrapAbortManager:
             LOGGER.debug("Node %s was bootstrapped")
             return
         # stop scylla if it was started by scylla-manager-client during setup
-        with self.actions_log.action_scope("Stop Scylla server", target=self.bootstrap_node.name):
+        with self.actions_log.action_scope(f"Stop Scylla server on {self.bootstrap_node.name} node"):
             self.bootstrap_node.stop_scylla_server(ignore_status=True, timeout=600)
         # Clean garbage from group 0 and scylla data and restart setup
         if self.verification_node.raft.search_inconsistent_host_ids():
-            with self.actions_log.action_scope("Clean group0 garbage", target=self.verification_node.name):
+            with self.actions_log.action_scope(f"Clean group0 garbage on {self.verification_node.name} node"):
                 self.verification_node.raft.clean_group0_garbage(raise_exception=True)
         if not self.is_bootstrapped_successfully():
             LOGGER.debug("Clean old scylla data and restart scylla service")
-            with self.actions_log.action_scope("Clean Scylla data", target=self.bootstrap_node.name):
+            with self.actions_log.action_scope(f"Clean Scylla data {self.bootstrap_node.name} node"):
                 self.bootstrap_node.clean_scylla_data()
         watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
         try:
             LOGGER.debug("Start rebootstrap as new node")
-            self.actions_log.info("Rebootstrap node start", target=self.bootstrap_node.name)
+            self.actions_log.info(f"Rebootstrap {self.bootstrap_node.name} node start")
             ParallelObject(objects=[self._rebootstrap_node, watcher_startup_failed], timeout=3800).call_objects()
             LOGGER.debug("Node is up")
         except NodeSetupFailed as exc:
             LOGGER.error("Scylla service restart failed: %s", exc)
-            self.actions_log.error("Rebootstrap node failed", target=self.bootstrap_node.name)
+            self.actions_log.error(f"Rebootstrap {self.bootstrap_node.name} node failed")
             self.clean_unbootstrapped_node()
             raise BootstrapStreamErrorFailure(f"Rebootstrap failed with error: {exc}") from exc
         except ExitByEventError as exc:
