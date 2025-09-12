@@ -2734,7 +2734,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             if tablets_config:
                 cmd += ' AND TABLETS = %s' % tablets_config
             execution_result = session.execute(cmd)
-            self.actions_log.info("Keyspace created", metadata={"keyspace": keyspace_name, "statement": cmd})
+            self.actions_log.info(f"Keyspace {keyspace_name} created with statement: {cmd}")
 
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
@@ -2793,7 +2793,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.debug('CQL query to execute: {}'.format(query))
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
-        self.actions_log.info("Created table", metadata={"table_name": name, "query": query})
+        self.actions_log.info(f"Created {name} table with statement: {query}")
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
