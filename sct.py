@@ -856,7 +856,8 @@ def list_repos(dist_type, dist_version):
 @click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
-def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):
+@click.option('--base_version_all_sts_versions', is_flag=True, default=False, help='Whether to include all supported STS versions as base versions')
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend, base_version_all_sts_versions):
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
@@ -870,7 +871,7 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
     if not linux_distro or linux_distro == "null":
         linux_distro = test_defaults.get("scylla_linux_distro")
 
-    version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
+    version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version, base_version_all_sts_versions)
 
     if not version_detector.dist_type == 'centos' and version_detector.dist_version is None:
         click.secho("when passing --dist-type=debian/ubuntu need to pass --dist-version as well", fg='red')
