@@ -40,23 +40,6 @@ def createRunConfiguration(String backend) {
         configuration.test_name = "functional_tests/scylla_operator"
         configuration.functional_tests = true
         configuration.availability_zone = 'a,b'
-<<<<<<< HEAD
-||||||| parent of b3ea59845 (fix(provision-test-xcloud): stop working with public addresses)
-    } else if (backend in  ['xcloud-aws', 'xcloud-gce']) {
-        configuration.backend = 'xcloud'
-        configuration.xcloud_env = 'staging'
-
-        // TODO: remove once xcloud connectivity is enabled by default
-        configuration.ip_ssh_connections =  "public"
-        if (backend == 'xcloud-gce') {
-            configuration.xcloud_provider = 'gce'
-            configuration.gce_datacenter = "us-east1"
-        }
-        if (backend == 'xcloud-aws') {
-            configuration.xcloud_provider = 'aws'
-            configuration.test_config = '["test-cases/PR-provision-test.yaml","configurations/network_config/test_communication_public.yaml"]'
-        }
-=======
     } else if (backend in  ['xcloud-aws', 'xcloud-gce']) {
         configuration.backend = 'xcloud'
         configuration.xcloud_env = 'staging'
@@ -69,7 +52,6 @@ def createRunConfiguration(String backend) {
             configuration.xcloud_provider = 'aws'
             configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
         }
->>>>>>> b3ea59845 (fix(provision-test-xcloud): stop working with public addresses)
     }
     return configuration
 }
