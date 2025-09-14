@@ -8,7 +8,7 @@ rollingUpgradePipeline(
     base_versions: '',  // auto mode
     linux_distro: 'centos-9',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9',
-
+    base_version_all_sts_versions: true,
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
     test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/n2-highmem-16.yaml"]''',
 )
