@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import re
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -116,7 +117,9 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 "
         "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
-    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
+    ycsb_thread = YcsbStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params, cluster_tester=MagicMock()
+    )
 
     def cleanup_thread():
         ycsb_thread.kill()
@@ -154,6 +157,9 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     cmd = (
         "bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=50 -p fieldcount=1 -p fieldlength=100"
     )
+    ycsb_thread1 = YcsbStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock()
+    )
     ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
 
     def cleanup_thread1():
@@ -170,7 +176,9 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 "
         "-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=30000"
     )
-    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
+    ycsb_thread2 = YcsbStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock()
+    )
 
     def cleanup_thread2():
         ycsb_thread2.kill()
@@ -211,7 +219,14 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         "bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 "
         f"-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s"
     )
-    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
+    ycsb_thread = YcsbStressThread(
+        loader_set,
+        cmd,
+        node_list=[docker_scylla],
+        timeout=30,
+        params=params,
+        cluster_tester=MagicMock(),
+    )
 
     def cleanup_thread():
         ycsb_thread.kill()
