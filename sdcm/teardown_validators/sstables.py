@@ -10,7 +10,8 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.teardown_validators import ValidatorEvent, ScrubValidationErrorEvent
 from sdcm.teardown_validators.base import TeardownValidator
-from sdcm.utils.common import S3Storage, ParallelObject
+from sdcm.utils.common import S3Storage
+from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 
 LOGGER = logging.getLogger(__name__)
