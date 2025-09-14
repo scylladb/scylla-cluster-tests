@@ -10,5 +10,6 @@ rollingUpgradePipeline(
     use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
-    internode_compression: 'all'
+    internode_compression: 'all',
+    base_version_all_sts_versions: true
 )
