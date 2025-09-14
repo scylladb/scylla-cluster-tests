@@ -97,6 +97,7 @@ class LocalLoaderSetDummy(BaseCluster):
         self.params = params or {}
         self.added_password_suffix = False
         self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
+        self.logdir = os.path.dirname(__file__)
 
     def add_nodes(self, *args, **kwargs):
         raise NotImplementedError
