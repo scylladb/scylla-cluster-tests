@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import re
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -117,7 +118,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
         "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
     ycsb_thread = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
+        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params, cluster_tester=MagicMock()
     )
 
     def cleanup_thread():
@@ -160,7 +161,7 @@ def test_02_dynamodb_api_dataintegrity(
         "-p recordcount=50 -p fieldcount=1 -p fieldlength=100"
     )
     ycsb_thread1 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock()
     )
 
     def cleanup_thread1():
@@ -178,7 +179,7 @@ def test_02_dynamodb_api_dataintegrity(
         "-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=30000"
     )
     ycsb_thread2 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock()
     )
 
     def cleanup_thread2():
@@ -222,7 +223,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
     ycsb_thread = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock(),
     )
 
     def cleanup_thread():
