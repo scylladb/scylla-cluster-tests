@@ -1654,6 +1654,13 @@ class Collector:
                                                   global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
 
+    def get_xcloud_instances_by_testid(self):
+        xcloud_provider = self.params.get('xcloud_provider')
+        if xcloud_provider == 'aws':
+            self.get_aws_instances_by_testid()
+        elif xcloud_provider == 'gce':
+            self.get_gce_instances_by_testid()
+
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
             self.get_aws_instances_by_testid()
@@ -1661,6 +1668,8 @@ class Collector:
             self.get_gce_instances_by_testid()
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
+        elif backend == 'xcloud':
+            self.get_xcloud_instances_by_testid()
         else:
             self.create_collecting_nodes()
 
