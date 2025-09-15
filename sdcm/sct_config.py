@@ -257,6 +257,8 @@ class SCTConfiguration(dict):
                   Test duration (min). Parameter used to keep instances produced by tests
                   and for jenkins pipeline timeout and TimoutThread.
              """),
+        dict(name="idle_duration", env="SCT_IDLE_DURATION", type=int,
+             help="""Idle duration (min). Parameter used to run test without any workload"""),
         dict(name="prepare_stress_duration", env="SCT_PREPARE_STRESS_DURATION", type=int,
              help="""
                   Time in minutes, which is required to run prepare stress commands
