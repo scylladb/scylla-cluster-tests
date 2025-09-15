@@ -42,6 +42,15 @@ Test duration (min). Parameter used to keep instances produced by tests<br>and f
 **type:** int
 
 
+## **idle_duration** / SCT_IDLE_DURATION
+
+Idle duration (min). Parameter used to run test without any workload
+
+**default:** N/A
+
+**type:** int
+
+
 ## **prepare_stress_duration** / SCT_PREPARE_STRESS_DURATION
 
 Time in minutes, which is required to run prepare stress commands<br>defined in prepare_*_cmd for dataset generation, and is used in<br>test duration calculation
