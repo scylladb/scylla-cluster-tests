@@ -75,7 +75,7 @@ class ScyllaDoctor:
         if not self.node.is_nonroot_install:
             result = self.node.remoter.sudo(sd_command, verbose=False)
         else:
-            result = self.node.remoter.run(f"{self.python3_path} {sd_command}", verbose=False)
+            result = self.node.remoter.run(f"bash -lce '{self.python3_path} {sd_command}'", verbose=False)
         return result.stdout.strip()
 
     @cached_property
