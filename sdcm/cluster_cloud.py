@@ -11,12 +11,16 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import os
 import ipaddress
 import logging
 from functools import cached_property
 from types import SimpleNamespace
 from typing import Any
 import functools
+from pathlib import Path
+
+import requests
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
@@ -24,8 +28,9 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
 from sdcm.utils.gce_region import GceRegion
 from sdcm.test_config import TestConfig
-from sdcm.remote import RemoteCmdRunner
+from sdcm.remote import RemoteCmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.common.utils import configure_vector_target_script
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +55,45 @@ def xcloud_super_if_supported(method):
         self.log.debug(f"Skip {method.__name__} on scylla-cloud, no ssh connectivity available")
         return None
     return wrapper
+
+
+def download_file(url, dest, chunk_size=16384):
+    """Download a file from url to dest using requests, atomically."""
+    if os.path.exists(dest):
+        LOGGER.debug(f"✔ Already downloaded: {dest}")
+        return dest
+    tmp_dest = dest + ".tmp"
+    try:
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(tmp_dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    f.write(chunk)
+        os.replace(tmp_dest, dest)
+        LOGGER.debug(f"✔ Downloaded: {dest}")
+        return dest
+    except Exception as e:
+        if os.path.exists(tmp_dest):
+            os.remove(tmp_dest)
+        LOGGER.error(f"Failed to download {url} to {dest}: {e}")
+        raise
+
+
+VECTOR_BASE_URL = "https://packages.timber.io/vector/latest"
+
+
+def download_vector_locally(arch="amd64", dest_dir="downloads"):
+    """
+    Download the latest vector.dev installer .deb for a given architecture.
+    """
+    os.makedirs(dest_dir, exist_ok=True)
+    url = f"{VECTOR_BASE_URL}/vector_latest-1_{arch}.deb"
+    dest = Path(dest_dir) / f"vector_latest-1_{arch}.deb"
+
+    LOGGER.debug(f"➡ Downloading {url} -> {dest}")
+    download_file(url=url, dest=str(dest))
+    LOGGER.debug(f"✔ Downloaded: {dest}")
+    return dest
 
 
 class ScyllaCloudError(Exception):
@@ -230,9 +274,26 @@ class CloudNode(cluster.BaseNode):
             return super().db_up()
 
     def configure_remote_logging(self):
-        # TODO: Implement remote logging configuration for Scylla Cloud
-        self.log.debug(
-            "Skip configuring remote logging on scylla-cloud, pending until API/approach to collect logs is developed")
+        if self.xcloud_connect_supported and self.parent_cluster.params.get('logs_transport') == 'vector':
+            ret = self.remoter.run("dpkg --print-architecture", retry=0)
+            arch = ret.stdout.strip() if ret.return_code == 0 else "amd64"
+
+            package_path = download_vector_locally(arch=arch)
+
+            remote_path = f"/tmp/{os.path.basename(package_path)}"
+
+            LOGGER.debug(f"➡ Copying {package_path}")
+            self.remoter.send_files(str(package_path), remote_path)
+
+            LOGGER.debug("➡ Installing Vector")
+            ssh_cmd = f"dpkg -i {remote_path} && apt-get update && apt-get install -y vector && systemctl enable vector && systemctl start vector"
+            self.remoter.sudo(shell_script_cmd(ssh_cmd), retry=0, verbose=True)
+            host, port = TestConfig().get_logging_service_host_port()
+            ssh_cmd = configure_vector_target_script(host=host, port=port)
+            self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
+        else:
+            self.log.debug(
+                "Skip configuring remote logging on scylla-cloud, for anything but vector transport")
 
     @xcloud_super_if_supported
     def start_coredump_thread(self):
