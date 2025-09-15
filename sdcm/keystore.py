@@ -79,6 +79,9 @@ class KeyStore:
     def get_qa_users(self):
         return self.get_json("qa_users.json")
 
+    def get_acl_grantees(self):
+        return self.get_json("bucket-users.json")
+
     def get_ssh_key_pair(self, name):
         return SSHKey(name=name,
                       public_key=self.get_file_contents(file_name=f"{name}.pub"),
