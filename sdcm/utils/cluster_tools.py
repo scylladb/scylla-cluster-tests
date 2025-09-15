@@ -15,6 +15,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 from collections import defaultdict
+from functools import partial
+
+from sdcm.utils.parallel_object import ParallelObject
 
 
 if TYPE_CHECKING:
@@ -66,3 +69,26 @@ def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
     else:
         raise ValueError(f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
                          "Supported modes are: 'per-initial_config', 'disabled'.")
+
+
+# TODO: For the following functions, consider adding a "num_workers=len(cluster.data_nodes)" parameter to ParallelObject
+# to align the number of concurrent operations to cluster nodes number, since it can be higher that default workers number.
+def flush_nodes(cluster, keyspace: str):
+    LOGGER.debug("Run a flush on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {keyspace}", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+
+
+def major_compaction_nodes(cluster, keyspace: str, table: str):
+    LOGGER.debug("Run a major compaction on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="compact", args=f"{keyspace} {table}", ) for
+                node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=3000).call_objects()
+
+
+def clear_snapshot_nodes(cluster):
+    LOGGER.debug("Run a clear-snapshot command on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="clearsnapshot", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
