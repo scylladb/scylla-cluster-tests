@@ -287,11 +287,25 @@ class S3Storage():
                                      Key=s3_obj,
                                      Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
+<<<<<<< HEAD
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
+||||||| parent of d1b55f463 (improvement(s3_remote_uploader): Add support for additional ACLs)
+            if public:
+                LOGGER.info("Set public read access")
+                self.set_public_access(key=s3_obj)
+=======
+
+            for user, canonical_id in KeyStore().get_acl_grantees().items():
+                LOGGER.info("Setting ACL for user %s", user)
+                boto3.client("s3").put_object_acl(Bucket=self.bucket_name, Key=s3_obj, GrantRead=f"id={canonical_id}")
+            if public:
+                LOGGER.info("Set public read access")
+                self.set_public_access(key=s3_obj)
+>>>>>>> d1b55f463 (improvement(s3_remote_uploader): Add support for additional ACLs)
             return s3_url
         except Exception as details:  # noqa: BLE001
-            LOGGER.debug("Unable to upload to S3: %s", details)
+            LOGGER.warning("Unable to upload to S3: %s", details, exc_info=True)
             return ""
 
     def set_public_access(self, key):
