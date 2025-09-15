@@ -64,14 +64,10 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
-<<<<<<< HEAD
-from sdcm.utils.aws_ssm_runner import SSMCommandRunner
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
-||||||| parent of dd0efc8d5 (feature(xcloud): support log collect from db nodes)
-=======
 from sdcm.localhost import LocalHost
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
->>>>>>> dd0efc8d5 (feature(xcloud): support log collect from db nodes)
+from sdcm.utils.aws_ssm_runner import SSMCommandRunner
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
 

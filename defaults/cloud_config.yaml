@@ -17,4 +17,4 @@ xcloud_vpc_peering:
   cidr_subnet_size: 24
 
 # TODO: remove this when vector.dev logging is enabled by default
-logs_transport: 'ssh'
+logs_transport: 'vector'
