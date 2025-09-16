@@ -19,6 +19,8 @@ jobs:
     outputs:
       isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
     steps:
+      # Skip team membership check for bots since GitHub API cannot resolve bot users
+      # This prevents GraphQL errors like "Could not resolve to a User with the login of 'Copilot'"
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
         if: github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'Copilot' && !endsWith(github.event.pull_request.user.login, '[bot]')
