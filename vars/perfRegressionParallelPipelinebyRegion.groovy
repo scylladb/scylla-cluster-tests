@@ -129,7 +129,7 @@ def call(Map pipelineParams) {
                                 region: '',
                                 versions: [],
                                 sub_tests: [],
-                                labels: ['master-weekly']
+                                labels: ['master-daily']
                             ],
                             // Tablets
                             [
