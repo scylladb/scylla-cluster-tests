@@ -21,6 +21,15 @@ pytestmark = [
 ]
 
 
+def assert_cassandra_stress_results(output):
+    """Helper function to assert cassandra stress results with proper error handling."""
+    assert output, "Cassandra stress failed to produce results"
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+    assert "latency 99th percentile" in output[0]
+    assert float(output[0]["latency 99th percentile"]) > 0
+
+
 def test_01_cassandra_stress(request, docker_scylla, params):
     params['cs_debug'] = True
     params['use_hdrhistogram'] = True
@@ -45,11 +54,7 @@ def test_01_cassandra_stress(request, docker_scylla, params):
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
@@ -72,11 +77,7 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 @pytest.mark.docker_scylla_args(ssl=True)
@@ -107,11 +108,7 @@ def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 def test_04_cassandra_stress_multi_region(request, docker_scylla, params):
@@ -136,11 +133,7 @@ def test_04_cassandra_stress_multi_region(request, docker_scylla, params):
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 @pytest.mark.parametrize("compressor, cql_compression", [
@@ -166,8 +159,4 @@ def test_05_cassandra_stress_compression(request, docker_scylla, params, compres
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
