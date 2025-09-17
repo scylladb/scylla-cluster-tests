@@ -1018,6 +1018,8 @@ class BaseSCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='junit.xml',
                 search_locally=True),
+        FileLog(name='master-table', search_locally=True),
+        FileLog(name='replica-table', search_locally=True),
     ]
     cluster_log_type = 'sct-runner-events'
     cluster_dir_prefix = 'sct-runner-events'
