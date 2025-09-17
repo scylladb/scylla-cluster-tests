@@ -45,21 +45,21 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade',
                                 region: 'eu-west-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-weekly'],
                                 rolling_upgrade_test: true
@@ -67,7 +67,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis',
                                 region: 'eu-west-2',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4',],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
                             ],
@@ -81,14 +81,14 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled',
                                 region: 'eu-west-3',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
                                 microbenchmark: true
@@ -96,7 +96,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64-write',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
                                 microbenchmark: true
@@ -104,7 +104,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
                                 microbenchmark: true
@@ -112,7 +112,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-write',
                                 region: 'us-east-1',
-                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', 'master'],
+                                versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['microbenchmark'],
                                 labels: ['master-weekly'],
                                 microbenchmark: true
@@ -135,14 +135,14 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets',
                                 region: 'us-east-1',
-                                versions: ['2025.1', '2025.2', 'master'],
+                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets',
                                 region: 'us-east-1',
-                                versions: ['2025.1', '2025.2', 'master'],
+                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_write_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
@@ -150,7 +150,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade-tablets',
                                 region: 'eu-west-2',
-                                versions: ['2025.1', '2025.2', 'master'],
+                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 sub_tests: ['"test_latency_mixed_with_upgrade"'],
                                 labels: ['master-3weeks'],
                                 rolling_upgrade_test: true
@@ -158,7 +158,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-tablets',
                                 region: 'eu-west-3',
-                                versions: ['2025.1', '2025.2'],
+                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', ],
                                 sub_tests: ['"test_latency_read_with_nemesis"', '"test_latency_mixed_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
@@ -172,7 +172,7 @@ def call(Map pipelineParams) {
                             [
                                 job_name: 'scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity',
                                 region: 'eu-north-1',
-                                versions: ['2025.1', '2025.2'],
+                                versions: ['2025.1', '2025.2', '2025.3', '2025.4', ],
                                 sub_tests: ['"test_latency_mixed_with_nemesis"', '"test_latency_write_with_nemesis"'],
                                 labels: ['master-3weeks']
                             ],
