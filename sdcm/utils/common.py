@@ -1177,16 +1177,7 @@ class ScyllaCQLSession:
         self.verbose = verbose
 
     def __enter__(self):
-        execute_orig = self.session.execute
         execute_async_orig = self.session.execute_async
-
-        def execute_verbose(*args, **kwargs):
-            if args:
-                query = args[0]
-            else:
-                query = kwargs.get("query")
-            LOGGER.debug("Executing CQL '%s' ...", query)
-            return execute_orig(*args, **kwargs)
 
         def execute_async_verbose(*args, **kwargs):
             if args:
@@ -1197,7 +1188,6 @@ class ScyllaCQLSession:
             return execute_async_orig(*args, **kwargs)
 
         if self.verbose:
-            self.session.execute = execute_verbose
             self.session.execute_async = execute_async_verbose
         return self.session
 
