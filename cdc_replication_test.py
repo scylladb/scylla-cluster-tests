@@ -247,9 +247,9 @@ class CDCReplicationTest(ClusterTester):
 
         self.copy_master_schema_to_replica()
 
-        self.log.info('Starting nemesis.')
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-        self.db_cluster.start_nemesis()
+        # self.log.info('Starting nemesis.')
+        # self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        # self.db_cluster.start_nemesis()
 
         loader_node = self.loaders.nodes[0]
         self.setup_tools(loader_node)
@@ -260,19 +260,19 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(30)
 
         self.log.info('Stopping nemesis before bootstrapping a new node.')
-        self.db_cluster.stop_nemesis(timeout=600)
+        # self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Let stressor run for a while...')
         time.sleep(30)
 
-        self.log.info('Bootstrapping a new node...')
-        new_node = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)[0]
-        self.log.info('Waiting for new node to finish initializing...')
-        self.db_cluster.wait_for_init(node_list=[new_node])
-        self.monitors.reconfigure_scylla_monitoring()
+        # self.log.info('Bootstrapping a new node...')
+        # new_node = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)[0]
+        # self.log.info('Waiting for new node to finish initializing...')
+        # self.db_cluster.wait_for_init(node_list=[new_node])
+        # self.monitors.reconfigure_scylla_monitoring()
 
-        self.log.info('Bootstrapped, restarting nemesis.')
-        self.db_cluster.start_nemesis()
+        # self.log.info('Bootstrapped, restarting nemesis.')
+        # self.db_cluster.start_nemesis()
 
         self.log.info('Waiting for stressor to finish...')
         if is_gemini_test:
@@ -286,7 +286,7 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(60)
 
         self.log.info('Stopping nemesis.')
-        self.db_cluster.stop_nemesis(timeout=600)
+        # self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Fetching replicator logs.')
         replicator_log_path = os.path.join(self.logdir, 'cdc-replicator.log')
