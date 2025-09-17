@@ -19,6 +19,7 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     """
     A class that builds instance initialization script from parameters
     """
+
     aws_additional_interface: bool = False
     aws_ipv6_workaround: bool = False
 

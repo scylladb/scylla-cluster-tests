@@ -1,7 +1,7 @@
 from sdcm.remote import shell_script_cmd
 
 
-NODE_EXPORTER_VERSION = '1.7.0'
+NODE_EXPORTER_VERSION = "1.7.0"
 
 
 class NodeExporterSetup:  # pylint: disable=too-few-public-methods
@@ -9,9 +9,10 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
     def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
-            node.install_package('wget')
+            node.install_package("wget")
             remoter = node.remoter
-        remoter.sudo(shell_script_cmd(f"""
+        remoter.sudo(
+            shell_script_cmd(f"""
             if ! id node_exporter > /dev/null 2>&1; then
                 useradd -rs /bin/false node_exporter
             fi
@@ -41,7 +42,8 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
             systemctl daemon-reload
             systemctl enable node_exporter.service
             systemctl start node_exporter.service
-        """))
+        """)
+        )
 
 
 class SyslogNgExporterSetup:  # pylint: disable=too-few-public-methods
@@ -49,9 +51,10 @@ class SyslogNgExporterSetup:  # pylint: disable=too-few-public-methods
     def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
-            node.install_package('wget')
+            node.install_package("wget")
             remoter = node.remoter
-        remoter.sudo(shell_script_cmd("""
+        remoter.sudo(
+            shell_script_cmd("""
             wget https://github.com/brandond/syslog_ng_exporter/releases/download/0.1.0/syslog_ng_exporter
             chmod +x syslog_ng_exporter
             mv syslog_ng_exporter /usr/local/bin
@@ -80,4 +83,5 @@ class SyslogNgExporterSetup:  # pylint: disable=too-few-public-methods
             systemctl daemon-reload
             systemctl enable syslog_ng_exporter.service
             systemctl start syslog_ng_exporter.service
-        """))
+        """)
+        )

@@ -27,7 +27,6 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
-
     def copy_scylla_debug_info(self, node_name, build_id):  # pylint: disable=unused-argument,no-self-use
         return "scylla_debug_info_file"
 
@@ -50,10 +49,10 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     @cached_property
     def node(self):
         dummy_node = DecodeDummyNode(
-            name='test_node',
+            name="test_node",
             parent_cluster=None,
             base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
         )
         dummy_node.remoter = DummyRemote()
         return dummy_node
@@ -61,10 +60,10 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     @cached_property
     def monitor_node(self):
         dummy_monitor = DecodeDummyNode(
-            name='test_monitor_node',
+            name="test_monitor_node",
             parent_cluster=None,
             base_logdir=self.temp_dir,
-            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+            ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
         )
         dummy_monitor.remoter = DummyRemote()
         return dummy_monitor
@@ -98,7 +97,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self._db_log_reader_no_decoding._read_and_publish_events()  # pylint: disable=protected-access
 
     def setUp(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system.log")
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
         self.monitor_node.start_decode_on_monitor_node_thread()
@@ -112,10 +111,10 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
-        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
+        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
-            if event.get('raw_backtrace'):
-                self.assertIsNone(event['backtrace'])
+            if event.get("raw_backtrace"):
+                self.assertIsNone(event["backtrace"])
 
     def test_02_reactor_stalls_is_decoded_if_enabled(self):
         self.test_config.BACKTRACE_DECODING = True
@@ -133,19 +132,20 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
-        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
+        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
-            if event.get('backtrace') and event.get('raw_backtrace'):
-                self.assertEqual(event['backtrace'].strip(),
-                                 "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
+            if event.get("backtrace") and event.get("raw_backtrace"):
+                self.assertEqual(
+                    event["backtrace"].strip(),
+                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                )
 
     def test_03_decode_interlace_reactor_stall(self):  # pylint: disable=invalid-name
-
         self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_interlace_stall.log")
 
         self._read_and_publish_events()  # pylint: disable=protected-access
 
@@ -158,19 +158,20 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
-        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
+        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
-            if event.get('backtrace') and event.get('raw_backtrace'):
-                self.assertEqual(event['backtrace'].strip(),
-                                 "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
+            if event.get("backtrace") and event.get("raw_backtrace"):
+                self.assertEqual(
+                    event["backtrace"].strip(),
+                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                )
 
     def test_04_decode_backtraces_core(self):
-
         self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')
+        self.node.system_log = os.path.join(os.path.dirname(__file__), "test_data", "system_core.log")
 
         self._read_and_publish_events()
 
@@ -183,8 +184,10 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
-        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
+        assert any(event.get("raw_backtrace") for event in events), "should have at least one backtrace"
         for event in events:
-            if event.get('backtrace') and event.get('raw_backtrace'):
-                self.assertEqual(event['backtrace'].strip(),
-                                 "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
+            if event.get("backtrace") and event.get("raw_backtrace"):
+                self.assertEqual(
+                    event["backtrace"].strip(),
+                    "addr2line -Cpife scylla_debug_info_file {}".format(" ".join(event["raw_backtrace"].split("\n"))),
+                )

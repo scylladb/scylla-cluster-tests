@@ -11,8 +11,8 @@ PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 @dataclass
 class Node:
     running_nemesis = None
-    public_ip_address: str = '127.0.0.1'
-    name: str = 'Node1'
+    public_ip_address: str = "127.0.0.1"
+    name: str = "Node1"
 
     @property
     def scylla_shards(self):
@@ -65,23 +65,24 @@ class FakeNemesis(Nemesis):
 def test_list_all_available_nemesis(generate_file=True):
     tester = FakeTester()
 
-    tester.params["nemesis_seed"] = '1'
+    tester.params["nemesis_seed"] = "1"
     sisyphus = SisyphusMonkey(tester, None)
 
     subclasses = sisyphus._get_subclasses()  # pylint: disable=protected-access
     disruption_list, disruptions_dict, disruption_classes = sisyphus.get_list_of_disrupt_methods(
-        subclasses_list=subclasses, export_properties=True)
+        subclasses_list=subclasses, export_properties=True
+    )
 
     assert len(disruption_list) == 87
 
     if generate_file:
-        with open(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
+        with open(sct_abs_path("data_dir/nemesis.yml"), "w", encoding="utf-8") as outfile1:
             yaml.dump(disruptions_dict, outfile1, default_flow_style=False)
 
-        with open(sct_abs_path('data_dir/nemesis_classes.yml'), 'w', encoding="utf-8") as outfile2:
+        with open(sct_abs_path("data_dir/nemesis_classes.yml"), "w", encoding="utf-8") as outfile2:
             yaml.dump(disruption_classes, outfile2, default_flow_style=False)
 
-    with open(sct_abs_path('data_dir/nemesis.yml'), 'r', encoding="utf-8") as nemesis_file:
+    with open(sct_abs_path("data_dir/nemesis.yml"), "r", encoding="utf-8") as nemesis_file:
         static_nemesis_list = yaml.safe_load(nemesis_file)
 
     assert static_nemesis_list == disruptions_dict

@@ -46,7 +46,9 @@ class DummyRemote:
 
 class LocalNode(BaseNode):
     # pylint: disable=too-many-arguments
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1):
+    def __init__(
+        self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1
+    ):
         super().__init__(name, parent_cluster)
         self.node_index = node_index
         self.remoter = LocalCmdRunner()

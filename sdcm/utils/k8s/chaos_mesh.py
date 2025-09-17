@@ -37,7 +37,6 @@ class ChaosMeshException(Exception):
 
 
 class ChaosMeshExperimentException(ChaosMeshException):
-
     def __init__(self, msg: str, experiment: "ChaosMeshExperiment"):
         super().__init__(msg)
         self.message = f"{msg}. Search debug log about {experiment.name}"
@@ -54,15 +53,12 @@ class ChaosMeshTimeout(ChaosMeshExperimentException):
 class ChaosMesh:  # pylint: disable=too-few-public-methods
     NAMESPACE = "chaos-mesh"
     VERSION = "2.5.0"
-    HELM_SETTINGS = {
-        'dashboard': {"create": False},
-        'dnsServer': {"create": True}
-    }
+    HELM_SETTINGS = {"dashboard": {"create": False}, "dnsServer": {"create": True}}
     ADDITIONAL_CONFIGS = sct_abs_path("sdcm/k8s_configs/chaos-mesh/gke-auth-workaround.yaml")
 
     def __init__(self, k8s_cluster: "sdcm.cluster_k8s.KubernetesCluster"):
         self._k8s_cluster = k8s_cluster
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_cluster.region_name})
+        self.log = SDCMAdapter(LOGGER, extra={"prefix": k8s_cluster.region_name})
         self.initialized = False
 
     def initialize(self) -> None:
@@ -71,21 +67,27 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             self.initialized = True
             self.log.info("Chaos Mesh is already installed. Skipping installation.")
             return
-        self.log.info(
-            "Installing chaos-mesh on %s k8s cluster...", self._k8s_cluster.k8s_scylla_cluster_name)
+        self.log.info("Installing chaos-mesh on %s k8s cluster...", self._k8s_cluster.k8s_scylla_cluster_name)
         self._k8s_cluster.helm("repo add chaos-mesh https://charts.chaos-mesh.org")
-        self._k8s_cluster.helm('repo update')
+        self._k8s_cluster.helm("repo update")
         self._k8s_cluster.create_namespace(self.NAMESPACE)
         aux_node_pool_affinity = get_helm_pool_affinity_values(
-            self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.AUXILIARY_POOL_NAME)
+            self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.AUXILIARY_POOL_NAME
+        )
         scylla_node_pool_affinity = get_helm_pool_affinity_values(
-            self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.SCYLLA_POOL_NAME)
+            self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.SCYLLA_POOL_NAME
+        )
         runtime = self._k8s_cluster.kubectl(
-            "get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}'").stdout
-        runtime_settings = {
-            "runtime": "containerd", "socketPath": "/run/containerd/containerd.sock"} if runtime.startswith("containerd") else {}
-        tolerations = {'tolerations': [{'key': 'role', 'operator': 'Equal',
-                                        'value': 'scylla-clusters', 'effect': 'NoSchedule'}]}
+            "get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}'"
+        ).stdout
+        runtime_settings = (
+            {"runtime": "containerd", "socketPath": "/run/containerd/containerd.sock"}
+            if runtime.startswith("containerd")
+            else {}
+        )
+        tolerations = {
+            "tolerations": [{"key": "role", "operator": "Equal", "value": "scylla-clusters", "effect": "NoSchedule"}]
+        }
         chaos_daemon_settings = scylla_node_pool_affinity | runtime_settings | tolerations
         self._k8s_cluster.helm_install(
             target_chart_name="chaos-mesh",
@@ -93,17 +95,18 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             version=self.VERSION,
             use_devel=False,
             namespace=self.NAMESPACE,
-            values=HelmValues(self.HELM_SETTINGS | {
-                "chaosDaemon": chaos_daemon_settings,
-                "controllerManager": aux_node_pool_affinity,
-                "dnsServer": aux_node_pool_affinity
-            }),
+            values=HelmValues(
+                self.HELM_SETTINGS
+                | {
+                    "chaosDaemon": chaos_daemon_settings,
+                    "controllerManager": aux_node_pool_affinity,
+                    "dnsServer": aux_node_pool_affinity,
+                }
+            ),
             atomic=True,
-            timeout="30m"
+            timeout="30m",
         )
-        self.log.info(
-            "chaos-mesh installed successfully on %s k8s cluster.",
-            self._k8s_cluster.k8s_scylla_cluster_name)
+        self.log.info("chaos-mesh installed successfully on %s k8s cluster.", self._k8s_cluster.k8s_scylla_cluster_name)
         self.initialized = True
 
         # NOTE: following is needed to pass through the GKE's admission controller
@@ -122,6 +125,7 @@ class ExperimentStatus(Enum):
 
 class ChaosMeshExperiment:
     """Base class for all chaos-mesh experiments."""
+
     API_VERSION = "chaos-mesh.org/v1alpha1"
     CHAOS_KIND = ""  # need to override it in child classes
 
@@ -132,22 +136,12 @@ class ChaosMeshExperiment:
         self._experiment = {
             "apiVersion": self.API_VERSION,
             "kind": self.CHAOS_KIND,
-            "metadata": {
-                "name": self._name,
-                "namespace": self._namespace
-            },
-            "spec": {
-                "mode": "one",
-                "selector": {
-                    "labelSelectors": {
-                        "statefulset.kubernetes.io/pod-name": pod.name
-                    }
-                }
-            }
+            "metadata": {"name": self._name, "namespace": self._namespace},
+            "spec": {"mode": "one", "selector": {"labelSelectors": {"statefulset.kubernetes.io/pod-name": pod.name}}},
         }
         self._timeout: int = timeout
         self._end_time: int = 0
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': self._k8s_cluster.region_name})
+        self.log = SDCMAdapter(LOGGER, extra={"prefix": self._k8s_cluster.region_name})
 
     @property
     def name(self):
@@ -168,7 +162,9 @@ class ChaosMeshExperiment:
     def get_status(self) -> ExperimentStatus:
         """Gets status of chaos-mesh experiment."""
         result = self._k8s_cluster.kubectl(
-            f"get {self.CHAOS_KIND} {self._name} -n {self._namespace} -o jsonpath='{{.status.conditions}}'", verbose=False)
+            f"get {self.CHAOS_KIND} {self._name} -n {self._namespace} -o jsonpath='{{.status.conditions}}'",
+            verbose=False,
+        )
         try:
             condition = {cond["type"]: ast.literal_eval(cond["status"]) for cond in json.loads(result.stdout)}
         except JSONDecodeError:
@@ -176,11 +172,21 @@ class ChaosMeshExperiment:
             return ExperimentStatus.UNKNOWN
         if not condition["Selected"] and condition["Paused"]:
             return ExperimentStatus.ERROR
-        if not condition["Selected"] and not condition["Paused"] and condition["AllRecovered"] and not condition["AllInjected"]:
+        if (
+            not condition["Selected"]
+            and not condition["Paused"]
+            and condition["AllRecovered"]
+            and not condition["AllInjected"]
+        ):
             return ExperimentStatus.ERROR
         if not condition["Selected"] and not condition["Paused"]:
             return ExperimentStatus.STARTING
-        if condition["Selected"] and not condition["Paused"] and not condition["AllRecovered"] and condition["AllInjected"]:
+        if (
+            condition["Selected"]
+            and not condition["Paused"]
+            and not condition["AllRecovered"]
+            and condition["AllInjected"]
+        ):
             return ExperimentStatus.RUNNING
         if condition["AllRecovered"] and condition["Paused"]:
             return ExperimentStatus.PAUSED
@@ -215,58 +221,75 @@ class PodFailureExperiment(ChaosMeshExperiment):
     This experiment works by replacing container image with dummy image.
     Then it waits for specified duration and rolls back image config.
     """
+
     CHAOS_KIND = "PodChaos"
 
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str):
         """Injects fault into a specified Pod to make the Pod unavailable for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long pod will be unavailable. str type in k8s notation. E.g. 10s, 5m
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long pod will be unavailable. str type in k8s notation. E.g. 10s, 5m
         """
         # timeout based on duration + 10 seconds margin
         timeout = time_period_str_to_seconds(duration) + 10
         super().__init__(
-            pod=pod, name=f"pod-failure-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "pod-failure",
-                "duration": duration,
-            }
-        })
+            pod=pod, name=f"pod-failure-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "pod-failure",
+                    "duration": duration,
+                }
+            },
+        )
 
 
 class MemoryStressExperiment(ChaosMeshExperiment):
     """
     This experiment uses memStress https://github.com/chaos-mesh/memStress for stressing memory in provided scylla pod.
     """
+
     CHAOS_KIND = "StressChaos"
 
     # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, workers: int, size: str, time_to_reach: str | None = None):
+    def __init__(
+        self,
+        pod: "sdcm.cluster_k8s.BasePodContainer",
+        duration: str,
+        workers: int,
+        size: str,
+        time_to_reach: str | None = None,
+    ):
         """Stresses memory on scylla pod using https://github.com/chaos-mesh/memStress
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long stress will be applied. str type in k8s notation. E.g. 10s, 5m
-            :param int workers: Specifies the number of threads that apply memory stress E.g. 4
-            :param str size: Specifies the memory size to be occupied or a percentage of the total memory size per worker. E.g.: 256MB / 25%
-            :param str time_to_reach: time to reach the size of allocated memory (default "0s")
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long stress will be applied. str type in k8s notation. E.g. 10s, 5m
+        :param int workers: Specifies the number of threads that apply memory stress E.g. 4
+        :param str size: Specifies the memory size to be occupied or a percentage of the total memory size per worker. E.g.: 256MB / 25%
+        :param str time_to_reach: time to reach the size of allocated memory (default "0s")
         """
         # timeout based on duration + 30 seconds margin
         timeout = time_period_str_to_seconds(duration) + 30
         super().__init__(
-            pod=pod, name=f"memory-stress-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "duration": duration,
-                "containerNames": ["scylla"],
-                "stressors": {
-                    "memory": {
-                        "workers": workers,
-                        "size": size,
-                    }
+            pod=pod, name=f"memory-stress-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "duration": duration,
+                    "containerNames": ["scylla"],
+                    "stressors": {
+                        "memory": {
+                            "workers": workers,
+                            "size": size,
+                        }
+                    },
                 }
-            }
-        })
+            },
+        )
         if time_to_reach:
             self._experiment["spec"]["stressors"]["memory"]["options"] = ["-time", time_to_reach]
 
@@ -276,6 +299,7 @@ class DiskError(Enum):
     Common disk error numbers, for more see:
     https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/asm-generic/errno-base.h
     """
+
     OPERATION_NOT_PERMITTED = 1
     NO_SUCH_FILE_OR_DIRECTORY = 2
     IO_ERROR = 5
@@ -291,10 +315,38 @@ class DiskError(Enum):
 
 # for more disk methods refer to https://docs.rs/fuser/0.7.0/fuser/trait.Filesystem.html
 DiskMethod = Literal[
-    "lookup", "forget", "getattr", "setattr", "readlink", "mknod", "mkdir", "unlink", "rmdir", "symlink", "rename",
-    "link", "open", "read", "write", "flush", "release", "fsync", "opendir", "readdir", "releasedir", "fsyncdir",
-    "statfs", "setxattr",
-    "getxattr", "listxattr", "removexatr", "access", "create", "getlk", "setlk", "bmap"
+    "lookup",
+    "forget",
+    "getattr",
+    "setattr",
+    "readlink",
+    "mknod",
+    "mkdir",
+    "unlink",
+    "rmdir",
+    "symlink",
+    "rename",
+    "link",
+    "open",
+    "read",
+    "write",
+    "flush",
+    "release",
+    "fsync",
+    "opendir",
+    "readdir",
+    "releasedir",
+    "fsyncdir",
+    "statfs",
+    "setxattr",
+    "getxattr",
+    "listxattr",
+    "removexatr",
+    "access",
+    "create",
+    "getlk",
+    "setlk",
+    "bmap",
 ]
 
 
@@ -303,36 +355,47 @@ class IOFaultChaosExperiment(ChaosMeshExperiment):
     This experiment uses IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
     To simulate disk fault.
     """
+
     CHAOS_KIND = "IOChaos"
 
     # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, error: DiskError, error_probability: int,
-                 methods: list[DiskMethod], volume_path: str, path: str | None = None):
+    def __init__(
+        self,
+        pod: "sdcm.cluster_k8s.BasePodContainer",
+        duration: str,
+        error: DiskError,
+        error_probability: int,
+        methods: list[DiskMethod],
+        volume_path: str,
+        path: str | None = None,
+    ):
         """Induces disk fault (programatically) using IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long fault will be applied. str type in k8s notation. E.g. 10s, 5m
-            :param DiskError error: disk returned error number
-            :param int error_probability: Probability of failure per operation, in %
-            :param list[DiskMethod] methods: Type of the file system call that requires injecting fault
-            :param str volume_path: The mount point of volume in the target container. Must be the root directory of the mount.
-            :param str path: The valid range of fault injections, either a wildcard or a single file. By Default all files.
-             E.g. /var/lib/scylla/*/
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long fault will be applied. str type in k8s notation. E.g. 10s, 5m
+        :param DiskError error: disk returned error number
+        :param int error_probability: Probability of failure per operation, in %
+        :param list[DiskMethod] methods: Type of the file system call that requires injecting fault
+        :param str volume_path: The mount point of volume in the target container. Must be the root directory of the mount.
+        :param str path: The valid range of fault injections, either a wildcard or a single file. By Default all files.
+         E.g. /var/lib/scylla/*/
         """
         # timeout based on duration + 30 seconds margin
         timeout = time_period_str_to_seconds(duration) + 30
-        super().__init__(
-            pod=pod, name=f"io-fault-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "fault",
-                "containerNames": ["scylla"],
-                "duration": duration,
-                "volumePath": volume_path,
-                "errno": error.value,
-                "percent": error_probability
-            }
-        })
+        super().__init__(pod=pod, name=f"io-fault-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "fault",
+                    "containerNames": ["scylla"],
+                    "duration": duration,
+                    "volumePath": volume_path,
+                    "errno": error.value,
+                    "percent": error_probability,
+                }
+            },
+        )
         if path:
             self._experiment["spec"]["path"] = path
         if methods:
@@ -343,135 +406,156 @@ class NetworkPacketLossExperiment(ChaosMeshExperiment):
     """
     Simulates packet loss in the network by randomly dropping a specified percentage of packets.
     """
+
     CHAOS_KIND = "NetworkChaos"
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
-                 probability: int = 0, correlation: int = 0):
+    def __init__(
+        self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, probability: int = 0, correlation: int = 0
+    ):
         """Simulate packet loss fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
-            :param probability: Indicates the probability of packet loss. Range of value: [0, 100]
-            :param correlation: Indicates the correlation between the probability of current packet loss
-                                and the previous time's packet loss. Range of value: [0, 100]
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+        :param probability: Indicates the probability of packet loss. Range of value: [0, 100]
+        :param correlation: Indicates the correlation between the probability of current packet loss
+                            and the previous time's packet loss. Range of value: [0, 100]
         """
         # timeout based on duration + 10 seconds margin
         timeout = time_period_str_to_seconds(duration) + 10
         super().__init__(
-            pod=pod, name=f"network-packet-loss-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "loss",
-                "duration": duration,
-                "loss": {
-                    "loss": str(probability),
-                    "correlation": str(correlation)
+            pod=pod, name=f"network-packet-loss-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "loss",
+                    "duration": duration,
+                    "loss": {"loss": str(probability), "correlation": str(correlation)},
                 }
-            }
-        })
+            },
+        )
 
 
 class NetworkCorruptExperiment(ChaosMeshExperiment):
     """
     Simulates network packet corruption by altering a specified percentage of packets.
     """
+
     CHAOS_KIND = "NetworkChaos"
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
-                 probability: int = 0, correlation: int = 0):
+    def __init__(
+        self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, probability: int = 0, correlation: int = 0
+    ):
         """Simulate network corrupt fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
-            :param probability: Indicates the probability of packet corruption. Range of value: [0, 100]
-            :param correlation: Indicates the correlation between the probability of current packet corruption
-                                and the previous time's packet corruption. Range of value: [0, 100]
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+        :param probability: Indicates the probability of packet corruption. Range of value: [0, 100]
+        :param correlation: Indicates the correlation between the probability of current packet corruption
+                            and the previous time's packet corruption. Range of value: [0, 100]
         """
         # timeout based on duration + 10 seconds margin
         timeout = time_period_str_to_seconds(duration) + 10
         super().__init__(
-            pod=pod, name=f"network-corrupt-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "corrupt",
-                "duration": duration,
-                "corrupt": {
-                    "corrupt": str(probability),
-                    "correlation": str(correlation)
+            pod=pod, name=f"network-corrupt-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "corrupt",
+                    "duration": duration,
+                    "corrupt": {"corrupt": str(probability), "correlation": str(correlation)},
                 }
-            }
-        })
+            },
+        )
 
 
 class NetworkDelayExperiment(ChaosMeshExperiment):
     """
     Introduces latency in network communication by adding a specified delay to packet transmission.
     """
+
     CHAOS_KIND = "NetworkChaos"
 
     # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, latency: str,
-                 correlation: int = 0, jitter: str = "0"):
+    def __init__(
+        self,
+        pod: "sdcm.cluster_k8s.BasePodContainer",
+        duration: str,
+        latency: str,
+        correlation: int = 0,
+        jitter: str = "0",
+    ):
         """Simulate network delay fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
-            :param latency: Indicates the network latency (example: 10ms)
-            :param correlation: Indicates the correlation between the current latency and the previous one. Range of value: [0, 100]
-            :param jitter: Indicates the range of the network latency (example: 5ms)
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+        :param latency: Indicates the network latency (example: 10ms)
+        :param correlation: Indicates the correlation between the current latency and the previous one. Range of value: [0, 100]
+        :param jitter: Indicates the range of the network latency (example: 5ms)
         """
         # timeout based on duration + 10 seconds margin
         timeout = time_period_str_to_seconds(duration) + 10
         super().__init__(
-            pod=pod, name=f"network-delay-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "delay",
-                "duration": duration,
-                "delay": {
-                    "latency": latency,
-                    "correlation": str(correlation),
-                    "jitter": jitter,
+            pod=pod, name=f"network-delay-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "delay",
+                    "duration": duration,
+                    "delay": {
+                        "latency": latency,
+                        "correlation": str(correlation),
+                        "jitter": jitter,
+                    },
                 }
-            }
-        })
+            },
+        )
 
 
 class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
     """
     Limits the network bandwidth by throttling the data transfer rate to a specified value.
     """
+
     CHAOS_KIND = "NetworkChaos"
 
     # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
-                 rate: str, limit: int, buffer: int):
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, rate: str, limit: int, buffer: int):
         """Simulate network bandwidth limit fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
-            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
-            :param rate: Indicates the rate of bandwidth limit (example: 1mbps)
-            :param limit: Indicates the number of bytes waiting in queue (example: 20971520)
-            :param buffer: Indicates the maximum number of bytes that can be sent instantaneously (example: 10000)
+        :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+        :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+        :param rate: Indicates the rate of bandwidth limit (example: 1mbps)
+        :param limit: Indicates the number of bytes waiting in queue (example: 20971520)
+        :param buffer: Indicates the maximum number of bytes that can be sent instantaneously (example: 10000)
 
-            for more details refer to https://man7.org/linux/man-pages/man8/tc-tbf.8.html
-            The limit is suggested to set to at least 2 * rate * latency,
-            where the latency is the estimated latency between source and target,
-            and it can be estimated through ping command.
-            Too small limit can cause high loss rate and impact the throughput of the tcp connection.
+        for more details refer to https://man7.org/linux/man-pages/man8/tc-tbf.8.html
+        The limit is suggested to set to at least 2 * rate * latency,
+        where the latency is the estimated latency between source and target,
+        and it can be estimated through ping command.
+        Too small limit can cause high loss rate and impact the throughput of the tcp connection.
         """
         # timeout based on duration + 10 seconds margin
         timeout = time_period_str_to_seconds(duration) + 10
         super().__init__(
-            pod=pod, name=f"network-limit-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
-        deep_merge(self._experiment, {
-            "spec": {
-                "action": "bandwidth",
-                "duration": duration,
-                "bandwidth": {
-                    "rate": rate,
-                    "limit": limit,
-                    "buffer": buffer,
+            pod=pod, name=f"network-limit-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout
+        )
+        deep_merge(
+            self._experiment,
+            {
+                "spec": {
+                    "action": "bandwidth",
+                    "duration": duration,
+                    "bandwidth": {
+                        "rate": rate,
+                        "limit": limit,
+                        "buffer": buffer,
+                    },
                 }
-            }
-        })
+            },
+        )
