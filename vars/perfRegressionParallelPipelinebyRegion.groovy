@@ -21,6 +21,7 @@ def call(Map pipelineParams) {
         triggers {
             parameterizedCron (
                 '''
+                    0 8 * * * %scylla_version=master:latest;labels_selector=alternator-daily
                     00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly
                     0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks
                 '''
@@ -126,10 +127,10 @@ def call(Map pipelineParams) {
                             ],
                             [
                                 job_name: 'scylla-master/perf-regression/scylla-release-perf-regression-alternator',
-                                region: '',
-                                versions: [],
-                                sub_tests: [],
-                                labels: ['master-daily']
+                                region: 'eu-north-1',
+                                versions: ['master'],
+                                sub_tests: ['test_full'],
+                                labels: ['alternator-daily']
                             ],
                             // Tablets
                             [
