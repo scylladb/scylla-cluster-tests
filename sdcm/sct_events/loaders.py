@@ -28,11 +28,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GeminiStressEvent(BaseStressEvent):
-    def __init__(self, node: Any,
-                 cmd: str,
-                 log_file_name: Optional[str] = None,
-                 severity: Severity = Severity.NORMAL,
-                 publish_event: bool = True):
+    def __init__(
+        self,
+        node: Any,
+        cmd: str,
+        log_file_name: Optional[str] = None,
+        severity: Severity = Severity.NORMAL,
+        publish_event: bool = True,
+    ):
         self.node = str(node)
         self.cmd = cmd
         self.log_file_name = log_file_name
@@ -72,20 +75,16 @@ class HDRFileMissed(SctEvent):
         self.message = message
 
 
-class CassandraStressEvent(StressEvent):
-    ...
+class CassandraStressEvent(StressEvent): ...
 
 
-class ScyllaBenchEvent(StressEvent):
-    ...
+class ScyllaBenchEvent(StressEvent): ...
 
 
-class LatteStressEvent(StressEvent):
-    ...
+class LatteStressEvent(StressEvent): ...
 
 
-class CqlStressCassandraStressEvent(StressEvent):
-    ...
+class CqlStressCassandraStressEvent(StressEvent): ...
 
 
 class CassandraHarryEvent(StressEvent, abstract=True):
@@ -137,10 +136,9 @@ class NdBenchStressEvent(StressEvent, abstract=True):
     finish: Type[StressEventProtocol]
 
 
-NdBenchStressEvent.add_stress_subevents(start=Severity.NORMAL,
-                                        finish=Severity.NORMAL,
-                                        error=Severity.ERROR,
-                                        failure=Severity.CRITICAL)
+NdBenchStressEvent.add_stress_subevents(
+    start=Severity.NORMAL, finish=Severity.NORMAL, error=Severity.ERROR, failure=Severity.CRITICAL
+)
 
 
 class NdBenchErrorEvent(LogEvent, abstract=True):
@@ -152,10 +150,7 @@ NdBenchErrorEvent.add_subevent_type("Error", severity=Severity.ERROR, regex=r"ER
 NdBenchErrorEvent.add_subevent_type("Failure", severity=Severity.CRITICAL, regex=r"FAILURE|FAILED")
 
 
-NDBENCH_ERROR_EVENTS = (
-    NdBenchErrorEvent.Failure(),
-    NdBenchErrorEvent.Error()
-)
+NDBENCH_ERROR_EVENTS = (NdBenchErrorEvent.Failure(), NdBenchErrorEvent.Error())
 
 NDBENCH_ERROR_EVENTS_PATTERNS = [(re.compile(event.regex), event) for event in NDBENCH_ERROR_EVENTS]
 
@@ -169,8 +164,7 @@ class KclStressEvent(StressEvent, abstract=True):
 KclStressEvent.add_stress_subevents(failure=Severity.ERROR)
 
 
-class NoSQLBenchStressEvent(StressEvent):
-    ...
+class NoSQLBenchStressEvent(StressEvent): ...
 
 
 class CassandraStressLogEvent(LogEvent, abstract=True):
@@ -184,7 +178,7 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
 
 
 class SchemaDisagreementErrorEvent(SctEvent):
-    """Thrown when schema mismatch is detected with collected data for bug report. """
+    """Thrown when schema mismatch is detected with collected data for bug report."""
 
     def __init__(self, severity: Severity = Severity.UNKNOWN):
         super().__init__(severity=severity)
@@ -215,23 +209,24 @@ class SchemaDisagreementErrorEvent(SctEvent):
 
 
 # Task: https://trello.com/c/kGply3WI/2718-stress-failure-should-stop-the-test-immediately
-CassandraStressLogEvent.add_subevent_type("OperationOnKey", severity=Severity.CRITICAL,
-                                          regex=r"Operation x10 on key\(s\) \[")
+CassandraStressLogEvent.add_subevent_type(
+    "OperationOnKey", severity=Severity.CRITICAL, regex=r"Operation x10 on key\(s\) \["
+)
 # TODO: change TooManyHintsInFlight severity to CRITICAL, when we have more stable hinted handoff
 # TODO: backpressure mechanism.
-CassandraStressLogEvent.add_subevent_type("TooManyHintsInFlight", severity=Severity.ERROR,
-                                          regex=r"Too many hints in flight|Too many in flight hints")
+CassandraStressLogEvent.add_subevent_type(
+    "TooManyHintsInFlight", severity=Severity.ERROR, regex=r"Too many hints in flight|Too many in flight hints"
+)
 
-CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR,
-                                          regex=r"java\.io\.IOException")
-CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR,
-                                          regex="Cannot achieve consistency level")
-CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.NORMAL,
-                                          regex="Using optimized driver")
-CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING,
-                                          regex="No schema agreement")
-CassandraStressLogEvent.add_subevent_type("RackAwarePolicy", severity=Severity.NORMAL,
-                                          regex=r"Using provided rack name '.+' for RackAwareRoundRobinPolicy")
+CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR, regex=r"java\.io\.IOException")
+CassandraStressLogEvent.add_subevent_type(
+    "ConsistencyError", severity=Severity.ERROR, regex="Cannot achieve consistency level"
+)
+CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.NORMAL, regex="Using optimized driver")
+CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING, regex="No schema agreement")
+CassandraStressLogEvent.add_subevent_type(
+    "RackAwarePolicy", severity=Severity.NORMAL, regex=r"Using provided rack name '.+' for RackAwareRoundRobinPolicy"
+)
 
 
 CS_ERROR_EVENTS = (
@@ -241,13 +236,18 @@ CS_ERROR_EVENTS = (
     CassandraStressLogEvent.ConsistencyError(),
     CassandraStressLogEvent.SchemaDisagreement(),
 )
-CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), CassandraStressLogEvent.RackAwarePolicy(), )
+CS_NORMAL_EVENTS = (
+    CassandraStressLogEvent.ShardAwareDriver(),
+    CassandraStressLogEvent.RackAwarePolicy(),
+)
 
-CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
+CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex), event) for event in CS_ERROR_EVENTS
+]
 
-CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex), event) for event in CS_NORMAL_EVENTS]
+CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex), event) for event in CS_NORMAL_EVENTS
+]
 
 
 class CqlStressCassandraStressLogEvent(LogEvent, abstract=True):
@@ -255,14 +255,14 @@ class CqlStressCassandraStressLogEvent(LogEvent, abstract=True):
 
 
 CqlStressCassandraStressLogEvent.add_subevent_type(
-    "ReadValidationError", severity=Severity.CRITICAL, regex=r"read validation error")
-
-
-CQL_STRESS_CS_ERROR_EVENTS = (
-    CqlStressCassandraStressLogEvent.ReadValidationError(),
+    "ReadValidationError", severity=Severity.CRITICAL, regex=r"read validation error"
 )
-CQL_STRESS_CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex), event) for event in CQL_STRESS_CS_ERROR_EVENTS]
+
+
+CQL_STRESS_CS_ERROR_EVENTS = (CqlStressCassandraStressLogEvent.ReadValidationError(),)
+CQL_STRESS_CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex), event) for event in CQL_STRESS_CS_ERROR_EVENTS
+]
 
 
 class ScyllaBenchLogEvent(LogEvent, abstract=True):
@@ -273,14 +273,18 @@ class ScyllaBenchLogEvent(LogEvent, abstract=True):
 
 ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
 # Scylla-bench data validation was added by https://github.com/scylladb/scylla-bench/commit/3eb53d8ce11e5ad26062bcc662edb31dda521ccf
-ScyllaBenchLogEvent.add_subevent_type("DataValidationError", severity=Severity.CRITICAL,
-                                      regex=r"doesn't match |failed to validate data|failed to verify checksum|corrupt checksum or data|"
-                                            r"data corruption")
+ScyllaBenchLogEvent.add_subevent_type(
+    "DataValidationError",
+    severity=Severity.CRITICAL,
+    regex=r"doesn't match |failed to validate data|failed to verify checksum|corrupt checksum or data|"
+    r"data corruption",
+)
 ScyllaBenchLogEvent.add_subevent_type(
     "ParseDistributionError",
     severity=Severity.CRITICAL,
     regex=r"missing parameter|unexpected parameter|unsupported"
-          r"|invalid input value|distribution is invalid|distribution has invalid format")
+    r"|invalid input value|distribution is invalid|distribution has invalid format",
+)
 
 
 SCYLLA_BENCH_ERROR_EVENTS = (
@@ -288,13 +292,14 @@ SCYLLA_BENCH_ERROR_EVENTS = (
     ScyllaBenchLogEvent.DataValidationError(),
     ScyllaBenchLogEvent.ParseDistributionError(),
 )
-SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
+SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS
+]
 
-CASSANDRA_HARRY_ERROR_EVENTS = (
-)
-CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex), event) for event in CASSANDRA_HARRY_ERROR_EVENTS]
+CASSANDRA_HARRY_ERROR_EVENTS = ()
+CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex), event) for event in CASSANDRA_HARRY_ERROR_EVENTS
+]
 
 
 class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):
@@ -364,26 +369,26 @@ class NoSQLBenchStressLogEvents(LogEvent, abstract=True):
 NoSQLBenchStressLogEvents.add_subevent_type(
     "ProgressIndicatorStoppedEvent",
     severity=Severity.CRITICAL,
-    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Stopped.*'
+    regex=r"\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Stopped.*",
 )
 
 NoSQLBenchStressLogEvents.add_subevent_type(
     "ProgressIndicatorRunningEvent",
     severity=Severity.DEBUG,
-    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Running.*'
+    regex=r"\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Running.*",
 )
 
 NoSQLBenchStressLogEvents.add_subevent_type(
     "ProgressIndicatorFinishedEvent",
     severity=Severity.NORMAL,
-    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+100.0%/Stopped\s+.*'
+    regex=r"\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+100.0%/Stopped\s+.*",
 )
 
 
 NOSQLBENCH_LOG_EVENTS = (
     NoSQLBenchStressLogEvents.ProgressIndicatorStoppedEvent(),
     NoSQLBenchStressLogEvents.ProgressIndicatorFinishedEvent(),
-    NoSQLBenchStressLogEvents.ProgressIndicatorRunningEvent()
+    NoSQLBenchStressLogEvents.ProgressIndicatorRunningEvent(),
 )
 
 NOSQLBENCH_EVENT_PATTERNS = [(re.compile(event.regex), event) for event in NOSQLBENCH_LOG_EVENTS]

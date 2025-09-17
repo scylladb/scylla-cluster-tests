@@ -25,7 +25,7 @@ class TWCSLongevityTest(LongevityTest):
                     'compaction_window_unit': 'MINUTES'}}""")
 
     def run_prepare_write_cmd(self):
-        if not skip_optional_stage('prepare_write'):
+        if not skip_optional_stage("prepare_write"):
             self.create_tables_for_scylla_bench()
             if self.params.get("prepare_write_cmd"):
                 # run_prepare_write_cmd executes run_post_prepare_cql_cmds
@@ -36,7 +36,7 @@ class TWCSLongevityTest(LongevityTest):
                 self.run_post_prepare_cql_cmds()
 
         # Run nemesis during stress as it was stopped before copy expected data
-        if self.params.get('nemesis_during_prepare'):
+        if self.params.get("nemesis_during_prepare"):
             self.db_cluster.start_nemesis()
 
     def test_twcs_longevity(self):
