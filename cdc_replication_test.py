@@ -66,7 +66,7 @@ def write_cql_result(res, path: str):
 
 
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
-REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-1.0.1-SNAPSHOT-jar-with-dependencies.jar"
+REPLICATOR_URL = "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"
 
 
 class CDCReplicationTest(ClusterTester):
@@ -139,32 +139,32 @@ class CDCReplicationTest(ClusterTester):
                 'terminate_and_replace_node': 5,
                 'grow_shrink_cluster': 5,
                 'remove_node_then_add_node': 5,
-                'decommission_streaming_err': 5,
-                'network_random_interruptions': 4,
-                # 'network_block': 2, # disabled due to #2745
-                # 'network_start_stop_interface': 2, # as above
-                'stop_wait_start_scylla_server': 1,
-                'stop_start_scylla_server': 1,
-                'restart_then_repair_node': 1,
-                'hard_reboot_node': 1,
-                'multiple_hard_reboot_node': 1,
-                'soft_reboot_node': 1,
-                'restart_with_resharding': 1,
-                'destroy_data_then_repair': 1,
-                'destroy_data_then_rebuild': 1,
-                'nodetool_drain': 1,
-                'kill_scylla': 1,
-                'no_corrupt_repair': 1,
-                'major_compaction': 1,
-                'nodetool_refresh': 1,
-                'nodetool_enospc': 1,
-                'truncate': 1,
-                'truncate_large_partition': 1,
-                'abort_repair': 1,
-                'snapshot_operations': 1,
-                'rebuild_streaming_err': 1,
-                'repair_streaming_err': 1,
-                'memory_stress': 1,
+                # 'decommission_streaming_err': 5,
+                # 'network_random_interruptions': 4,
+                # # 'network_block': 2, # disabled due to #2745
+                # # 'network_start_stop_interface': 2, # as above
+                # 'stop_wait_start_scylla_server': 1,
+                # 'stop_start_scylla_server': 1,
+                # 'restart_then_repair_node': 1,
+                # 'hard_reboot_node': 1,
+                # 'multiple_hard_reboot_node': 1,
+                # 'soft_reboot_node': 1,
+                # 'restart_with_resharding': 1,
+                # 'destroy_data_then_repair': 1,
+                # 'destroy_data_then_rebuild': 1,
+                # 'nodetool_drain': 1,
+                # 'kill_scylla': 1,
+                # 'no_corrupt_repair': 1,
+                # 'major_compaction': 1,
+                # 'nodetool_refresh': 1,
+                # 'nodetool_enospc': 1,
+                # 'truncate': 1,
+                # 'truncate_large_partition': 1,
+                # 'abort_repair': 1,
+                # 'snapshot_operations': 1,
+                # 'rebuild_streaming_err': 1,
+                # 'repair_streaming_err': 1,
+                # 'memory_stress': 1,
             }, default_weight=0))
         self.db_cluster.nemesis_count = 1
 

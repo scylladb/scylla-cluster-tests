@@ -11,7 +11,7 @@ instance_type_db_oracle: 'i4i.2xlarge'
 oracle_scylla_version: 2025.2.0
 
 n_loaders: 1
-instance_type_loader: 'c5.large'
+instance_type_loader: 'c7i.8xlarge'
 
 n_monitor_nodes: 1
 
