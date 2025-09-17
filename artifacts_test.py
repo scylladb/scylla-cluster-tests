@@ -16,7 +16,7 @@ import re
 from contextlib import contextmanager
 from functools import cached_property
 import json
-from typing import Iterator, Any
+from typing import Iterator
 from unittest import SkipTest
 
 import yaml
@@ -65,9 +65,8 @@ class ArtifactsTest(ClusterTester):
         super().tearDown()
 
     @contextmanager
-    def logged_subtest(self, action: str,
-                       trace_id:  str | None = None, metadata: dict[str, Any] | None = None) -> Iterator[None]:
-        with self.actions_log.action_scope(action, self.node.name, trace_id, metadata):
+    def logged_subtest(self, action: str) -> Iterator[None]:
+        with self.actions_log.action_scope(action):
             with self.subTest(msg=action):
                 yield
 
@@ -80,7 +79,7 @@ class ArtifactsTest(ClusterTester):
         Validate reported version
         prev_id: check if new version is created
         """
-        self.actions_log.info("Validating scylla version in housekeepingdb", target=self.node.name)
+        self.actions_log.info("Validating scylla version in housekeepingdb")
         assert self.node.uuid, "Node UUID wasn't created"
 
         row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
@@ -114,7 +113,7 @@ class ArtifactsTest(ClusterTester):
                 assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
             else:
                 assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
-        self.actions_log.info("Scylla version in housekeepingdb is validated", target=self.node.name)
+        self.actions_log.info("Scylla version in housekeepingdb is validated")
         return row[0] if row else 0
 
     @property
@@ -144,7 +143,7 @@ class ArtifactsTest(ClusterTester):
             transport_str = c_s_transport_str(
                 self.params.get('peer_verification'), self.params.get('client_encrypt_mtls'))
             stress_cmd += f" -transport '{transport_str}'"
-        with self.actions_log.action_scope("running cassandra-stress", target=self.node.name, metadata={"stress_cmd": stress_cmd}):
+        with self.actions_log.action_scope("running cassandra-stress"):
             result = self.node.remoter.run(stress_cmd)
             assert "java.io.IOException" not in result.stdout
             assert "java.io.IOException" not in result.stderr
@@ -234,7 +233,7 @@ class ArtifactsTest(ClusterTester):
         if not self.params.get("use_preinstalled_scylla"):
             self.log.info("Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
             self.actions_log.info(
-                "Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False", target=self.node.name)
+                "Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
             return
 
         describecluster_snitch = self.get_describecluster_info().snitch
@@ -275,7 +274,7 @@ class ArtifactsTest(ClusterTester):
 
     def verify_nvme_write_cache(self) -> None:
         if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
-            self.actions_log.info("Skipped verifying NVMe write cache", target=self.node.name)
+            self.actions_log.info("Skipped verifying NVMe write cache")
             return
         expected_write_cache_value = "write back" if self.write_back_cache else "write through"
 
@@ -355,7 +354,7 @@ class ArtifactsTest(ClusterTester):
                     )
                 except SkipTest as exc:
                     self.log.info("Skipping IOTuneValidation due to %s", exc.args)
-                    self.actions_log.info("Skipped IOTuneValidation", target=self.node.name)
+                    self.actions_log.info("Skipped IOTuneValidation")
                 except Exception:  # noqa: BLE001
                     self.log.error("IOTuneValidator failed", exc_info=True)
                     TestFrameworkEvent(source={self.__class__.__name__},
@@ -515,7 +514,7 @@ class ArtifactsTest(ClusterTester):
             return
 
         for node in self.db_cluster.nodes:
-            with self.actions_log.action_scope("installing and running Scylla Doctor", target=node.name):
+            with self.actions_log.action_scope("installing and running Scylla Doctor"):
                 scylla_doctor = ScyllaDoctor(node, self.test_config, bool(self.params.get('unified_package')))
                 scylla_doctor.install_scylla_doctor()
                 scylla_doctor.argus_collect_sd_package()
