@@ -19,9 +19,11 @@ jobs:
     outputs:
       isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
     steps:
+      # Skip team membership check for bots since GitHub API cannot resolve bot users
+      # This prevents GraphQL errors like "Could not resolve to a User with the login of 'Copilot'"
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
-        if: github.event.pull_request.user.login != 'renovate[bot]'
+        if: github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'Copilot'
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
@@ -30,7 +32,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
+    if: ( github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'Copilot' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
