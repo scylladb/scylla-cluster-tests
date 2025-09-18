@@ -207,14 +207,3 @@ the available configuration options are listed in [configuration_options](./docs
 ### Manager Tests (TODO: write explanation for them)
 ### [K8S Functional Tests](./docs/k8s-functional-test.md)
 ### [Microbenchmarking Tests](./docs/microbenchmarking.md)
-
-# Local developer setup
-
-* Requires [uv](https://github.com/astral-sh/uv#installation)
-
-```bash
-uv python install
-uv venv
-export UV_PROJECT_ENVIRONMENT=.venv
-uv sync
-```
