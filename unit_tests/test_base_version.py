@@ -10,10 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from unittest.mock import patch
 
+import pytest
 
 from sdcm.utils.version_utils import ComparableScyllaVersion
-
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 
 """
@@ -117,3 +118,104 @@ def test_2025_1_release_centos():
     linux_distro = 'centos-9'
     version_list = general_test(scylla_repo, linux_distro)
     assert {'6.2', '2024.1', '2024.2'}.issubset(set(version_list))
+
+
+def test_2025_3_release_ubuntu():
+    """ Test that 2025.3 release on ubuntu is returned correct versions """
+    scylla_repo = url_base + '/branch-2025.3/deb/unified/2026-02-16T22:46:42Z/scylladb-2025.3/scylla.list'
+    linux_distro = 'ubuntu-focal'
+    version_list = general_test(scylla_repo, linux_distro)
+    assert {'2025.1', '2025.2', '2025.3'}.issubset(set(version_list))
+
+
+def test_2025_3_release_centos():
+    """ Test that 2025.3 release on centos is returned correct versions """
+    scylla_repo = url_base + '/branch-2025.3/rpm/centos/2025-02-23T16:19:08Z/scylla.repo'
+    linux_distro = 'centos-9'
+    version_list = general_test(scylla_repo, linux_distro)
+    assert {'2025.1', '2025.2', '2025.3'}.issubset(set(version_list))
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        {
+            "target_branch": "2025.1",
+            "target_rc_only": False,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4"],
+            "expected_version_set": {"2024.1", "2024.2", "2025.1"}
+        },
+        {
+            "target_branch": "2025.2",
+            "target_rc_only": False,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4"],
+            "expected_version_set": {"2025.1", "2025.2"}
+        },
+        {
+            "target_branch": "2025.3",
+            "target_rc_only": False,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4"],
+            "expected_version_set": {"2025.1", "2025.2", "2025.3"}
+        },
+        {
+            "target_branch": "2025.4",
+            "target_rc_only": True,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4"],
+            "expected_version_set": {"2025.1", "2025.2", "2025.3"}
+        },
+        {
+            "target_branch": "2025.4",
+            "target_rc_only": False,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4"],
+            "expected_version_set": {"2025.1", "2025.2", "2025.3", "2025.4"}
+        },
+        {
+            "target_branch": "2026.1",
+            "target_rc_only": True,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4", "2026.1"],
+            "expected_version_set": {"2025.1", "2025.2", "2025.3", "2025.4"}
+        },
+        {
+            "target_branch": "2026.1",
+            "target_rc_only": False,
+            "supported_versions": ["2024.1", "2024.2", "2025.1", "2025.2", "2025.3", "2025.4", "2026.1"],
+            "expected_version_set": {"2025.1", "2025.2", "2025.3", "2025.4", "2026.1"}
+        },
+    ],
+)
+def test_upgrade_matrix_stages(test_case):
+    """
+    Test that target branch release on ubuntu returns correct versions while mocking available versions.
+
+    This test validates the upgrade matrix logic by testing different scenarios:
+
+    Args:
+        test_case (dict): A dictionary containing:
+            - target_branch (str): The target Scylla version branch being tested (e.g., "2025.1")
+            - target_rc_only (bool): Whether only RC (release candidate) versions are available for the target branch
+            - supported_versions (list): List of all Scylla versions that are mocked to be available in the system
+            - expected_version_set (set): Expected set of versions that should be returned as valid upgrade paths
+
+    The test logic:
+    - When target_rc_only is True, it simulates that only RC versions exist for the target branch
+    - When target_rc_only is False, it simulates that stable releases exist for the target branch
+    - The upgrade matrix should return appropriate versions based on upgrade compatibility rules
+    """
+    target_branch = test_case["target_branch"]
+    target_rc_only = test_case["target_rc_only"]
+    supported_versions = test_case["supported_versions"]
+    expected_version_set = test_case["expected_version_set"]
+
+    scylla_repo = url_base + \
+        f"/branch-{target_branch}/deb/unified/2026-02-16T22:46:42Z/scylladb-{target_branch}/scylla.list"
+    linux_distro = 'ubuntu-focal'
+    # Mock get_all_versions and get_s3_scylla_repos_mapping to simulate available versions
+
+    mock_versions = supported_versions
+    mock_repo_map = {v: f"mock_url/{v}" for v in mock_versions}
+    if target_rc_only:
+        mock_versions = [f"{target_branch}.0~rc1", ]
+    with patch('utils.get_supported_scylla_base_versions.get_all_versions', return_value=mock_versions), \
+            patch('utils.get_supported_scylla_base_versions.get_s3_scylla_repos_mapping', return_value=mock_repo_map):
+        version_list = general_test(scylla_repo, linux_distro)
+    assert set(version_list) == expected_version_set
