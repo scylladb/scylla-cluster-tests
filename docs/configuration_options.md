@@ -1248,6 +1248,24 @@ AMS AMI id to use for oracle node
 **type:** str (appendable)
 
 
+## **ami_id_vector_store** / SCT_AMI_ID_VECTOR_STORE
+
+AMI ID for Vector Store nodes
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **instance_type_vector_store** / SCT_INSTANCE_TYPE_VECTOR_STORE
+
+EC2 instance type for Vector Store nodes
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **root_disk_size_db** / SCT_ROOT_DISK_SIZE_DB
 
 
@@ -1312,6 +1330,15 @@ root disk size in Gb for sct-runner
 
 
 ## **ami_db_cassandra_user** / SCT_AMI_DB_CASSANDRA_USER
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **ami_vector_store_user** / SCT_AMI_VECTOR_STORE_USER
 
 
 
@@ -2076,7 +2103,7 @@ local docker network to use, if there's need to have db cluster connect to other
 **type:** str (appendable)
 
 
-## **vs_docker_image** / SCT_VS_DOCKER_IMAGE
+## **vector_store_docker_image** / SCT_VECTOR_STORE_DOCKER_IMAGE
 
 Vector Store docker image repo
 
@@ -2085,11 +2112,11 @@ Vector Store docker image repo
 **type:** str (appendable)
 
 
-## **vs_version** / SCT_VS_VERSION
+## **vector_store_version** / SCT_VECTOR_STORE_VERSION
 
 Vector Store version / docker image tag
 
-**default:** latest
+**default:** N/A
 
 **type:** str (appendable)
 
@@ -3714,7 +3741,7 @@ Dictionary of VPC peering parameters for private connectivity between<br>SCT inf
 **type:** dict_or_str
 
 
-## **n_vs_nodes** / SCT_N_VS_NODES
+## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
 
 Number of vector store nodes (0 = VS is disabled)
 
@@ -3723,7 +3750,7 @@ Number of vector store nodes (0 = VS is disabled)
 **type:** int
 
 
-## **vs_port** / SCT_VS_PORT
+## **vector_store_port** / SCT_VECTOR_STORE_PORT
 
 Vector Store API port
 
@@ -3732,7 +3759,7 @@ Vector Store API port
 **type:** int
 
 
-## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+## **vector_store_scylla_port** / SCT_VECTOR_STORE_SCYLLA_PORT
 
 ScyllaDB connection port for Vector Store
 
@@ -3741,10 +3768,10 @@ ScyllaDB connection port for Vector Store
 **type:** int
 
 
-## **vs_threads** / SCT_VS_THREADS
+## **vector_store_threads** / SCT_VECTOR_STORE_THREADS
 
-Vector indexing threads (default: number of CPU cores)
+Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)
 
-**default:** 2
+**default:** N/A
 
 **type:** int

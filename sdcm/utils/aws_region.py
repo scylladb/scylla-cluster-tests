@@ -554,6 +554,13 @@ class AwsRegion:
                                       'Description': 'Allow Scylla Manager pprof Debug For ALL'}],
                         "Ipv6Ranges": [{'CidrIpv6': '::/0',
                                         'Description': 'Allow Scylla Manager pprof Debug For ALL'}]
+                    },
+                    {
+                        "FromPort": 6080,
+                        "ToPort": 6080,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Vector Store REST API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Vector Store REST API for ALL'}]
                     }
                 ]
             )

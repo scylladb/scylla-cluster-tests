@@ -220,14 +220,14 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         else (vs_docker_image_version, 'latest'))
 
     params.update({
-        'n_vs_nodes': 1,
-        'vs_port': 6080,
-        'vs_scylla_port': 9042,
-        'vs_threads': 2,
+        'n_vector_store_nodes': 1,
+        'vector_store_port': 6080,
+        'vector_store_scylla_port': 9042,
+        'vector_store_threads': 2,
         'docker_network': docker_scylla_args.get('docker_network') or 'bridge',
         'user_prefix': 'test-vector',
-        'vs_docker_image': vs_docker_image,
-        'vs_version': vs_version})
+        'vector_store_docker_image': vs_docker_image,
+        'vector_store_version': vs_version})
 
     def destroy_vector_store_cluster(vs_cluster):
         if vs_cluster:
@@ -240,8 +240,8 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
     try:
         vector_store_cluster = VectorStoreSetDocker(
             params=params,
-            vs_docker_image=params.get('vs_docker_image'),
-            vs_docker_image_tag=params.get('vs_version'),
+            vs_docker_image=params.get('vector_store_docker_image'),
+            vs_docker_image_tag=params.get('vector_store_version'),
             cluster_prefix='test-vector-store',
             n_nodes=1)
 

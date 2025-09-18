@@ -51,6 +51,7 @@ from sdcm.utils.common import (
     get_branched_gce_images,
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
+    get_vector_store_ami_versions,
     convert_name_to_ami_if_needed,
     get_sct_root_path,
 )
@@ -780,6 +781,12 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_oracle", env="SCT_AMI_ID_DB_ORACLE", type=str,
              help="AMS AMI id to use for oracle node"),
 
+        dict(name="ami_id_vector_store", env="SCT_AMI_ID_VECTOR_STORE", type=str,
+             help="AMI ID for Vector Store nodes"),
+
+        dict(name="instance_type_vector_store", env="SCT_INSTANCE_TYPE_VECTOR_STORE", type=str,
+             help="EC2 instance type for Vector Store nodes"),
+
         dict(name="root_disk_size_db", env="SCT_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
@@ -802,6 +809,9 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
+             help=""),
+
+        dict(name="ami_vector_store_user", env="SCT_AMI_VECTOR_STORE_USER", type=str,
              help=""),
 
         dict(name="extra_network_interface", env="SCT_EXTRA_NETWORK_INTERFACE", type=boolean,
@@ -1091,10 +1101,10 @@ class SCTConfiguration(dict):
         dict(name="docker_network", env="SCT_DOCKER_NETWORK", type=str,
              help="local docker network to use, if there's need to have db cluster connect to other services running in docker"),
 
-        dict(name="vs_docker_image", env="SCT_VS_DOCKER_IMAGE", type=str,
+        dict(name="vector_store_docker_image", env="SCT_VECTOR_STORE_DOCKER_IMAGE", type=str,
              help="Vector Store docker image repo"),
 
-        dict(name="vs_version", env="SCT_VS_VERSION", type=str,
+        dict(name="vector_store_version", env="SCT_VECTOR_STORE_VERSION", type=str,
              help="Vector Store version / docker image tag"),
 
         # baremetal config options
@@ -1835,17 +1845,17 @@ class SCTConfiguration(dict):
                 cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
                 cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)"""),
 
-        dict(name="n_vs_nodes", env="SCT_N_VS_NODES", type=int,
+        dict(name="n_vector_store_nodes", env="SCT_N_VECTOR_STORE_NODES", type=int,
              help="Number of vector store nodes (0 = VS is disabled)"),
 
-        dict(name="vs_port", env="SCT_VS_PORT", type=int,
+        dict(name="vector_store_port", env="SCT_VECTOR_STORE_PORT", type=int,
              help="Vector Store API port"),
 
-        dict(name="vs_scylla_port", env="SCT_VS_SCYLLA_PORT", type=int,
+        dict(name="vector_store_scylla_port", env="SCT_VECTOR_STORE_SCYLLA_PORT", type=int,
              help="ScyllaDB connection port for Vector Store"),
 
-        dict(name="vs_threads", env="SCT_VS_THREADS", type=int,
-             help="Vector indexing threads (default: number of CPU cores)"),
+        dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
+             help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
 
     ]
 
@@ -1962,7 +1972,8 @@ class SCTConfiguration(dict):
         'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
         'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i'
     ]
-    ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
+    ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor',
+                     'ami_id_db_cassandra', 'ami_id_db_oracle', 'ami_id_vector_store']
     aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2',
                              'us-east-1', 'eu-north-1', 'eu-central-1', 'eu-west-3', 'ca-central-1']
 
@@ -2137,6 +2148,24 @@ class SCTConfiguration(dict):
                 self["ami_id_db_oracle"] = " ".join(ami.image_id for ami in ami_list)
             else:
                 raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
+
+        # 6.2) handle vector_store_version if exists
+        if vs_version := self.get('vector_store_version'):
+            if self.get('ami_id_vector_store'):
+                raise ValueError("'vector_store_version' can't be used together with 'ami_id_vector_store'")
+            if self.get('cluster_backend') == 'aws':
+                ami_list = []
+                for region in region_names:
+                    aws_arch = get_arch_from_instance_type(self.get('instance_type_vector_store'), region_name=region)
+                    try:
+                        ami = get_vector_store_ami_versions(version=vs_version, region_name=region, arch=aws_arch)[0]
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(f"AMIs for vs_version='{vs_version}' not found in {region} "
+                                         f"arch={aws_arch}") from ex
+                    self.log.debug("Found AMI %s(%s) for vs_version='%s' in %s",
+                                   ami.name, ami.image_id, vs_version, region)
+                    ami_list.append(ami)
+                self['ami_id_vector_store'] = " ".join(ami.image_id for ami in ami_list)
 
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
@@ -2716,6 +2745,9 @@ class SCTConfiguration(dict):
             if backend == 'xcloud':
                 self.backend_required_params[backend] += self.xcloud_per_provider_required_params[self.get(
                     'xcloud_provider')]
+            if backend == 'aws' and self.get('n_vector_store_nodes') > 0:
+                self.backend_required_params['aws'].extend(
+                    ['ami_id_vector_store', 'instance_type_vector_store', 'ami_vector_store_user'])
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
             raise ValueError("Unsupported backend [{}]".format(backend))
