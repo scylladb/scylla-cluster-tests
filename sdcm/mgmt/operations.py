@@ -24,6 +24,7 @@ from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
+from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 class ClusterOperations(ClusterTester):
@@ -767,8 +768,11 @@ class ManagerTestFunctionsMixIn(
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
                   f'Restore run time: {restore_task.duration}.').publish()
-        if restore_schema:
-            self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+
+        should_restart = restore_schema and ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) <= "2024.1"
+        if should_restart:
+            self.db_cluster.restart_scylla()
+
         return restore_task
 
     def create_repair_and_alter_it_with_repair_control(self):
