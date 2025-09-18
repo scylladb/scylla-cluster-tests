@@ -2136,6 +2136,8 @@ class BaseNode(AutoSshContainerMixin):
             else:
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
+                    echo 'export PATH="$HOME/scylladb/share/cassandra/bin:$HOME/scylladb/bin:$PATH"' >> ~/.bashrc
+                    echo 'export PATH="$HOME/scylladb/share/cassandra/bin:$HOME/scylladb/bin:$PATH"' >> ~/.bash_profile
                     cd ./scylla-*
                     ./install.sh --nonroot
                     cd -
