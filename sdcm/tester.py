@@ -60,6 +60,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
+from sdcm.cluster_aws import VectorStoreSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
@@ -1672,6 +1673,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
+        if self.params.get('n_vector_store_nodes') > 0:
+            self.db_cluster.vector_store_cluster = VectorStoreSetAWS(
+                ec2_ami_id=self.params.get('ami_id_vector_store').split(),
+                ec2_ami_username=self.params.get('ami_vector_store_user'),
+                ec2_instance_type=self.params.get('instance_type_vector_store'),
+                n_nodes=[self.params.get('n_vector_store_nodes')],
+                **common_params)
+
     def get_cluster_docker(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
@@ -1684,13 +1693,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
                                                              **container_node_params, **common_params)
 
-        if self.params.get('n_vs_nodes') > 0:
+        if self.params.get('n_vector_store_nodes') > 0:
             self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
                 params=self.params,
-                vs_docker_image=self.params.get('vs_docker_image'),
-                vs_docker_image_tag=self.params.get('vs_version'),
+                vs_docker_image=self.params.get('vector_store_docker_image'),
+                vs_docker_image_tag=self.params.get('vector_store_version'),
                 cluster_prefix=self.params.get('user_prefix'),
-                n_nodes=self.params.get('n_vs_nodes'),
+                n_nodes=self.params.get('n_vector_store_nodes'),
                 node_key_file=self.credentials[0].key_file)
 
         self.loaders = cluster_docker.LoaderSetDocker(n_nodes=self.params.get("n_loaders"),
