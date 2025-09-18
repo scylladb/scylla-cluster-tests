@@ -32,7 +32,7 @@ import itertools
 import json
 import shlex
 from decimal import Decimal, ROUND_UP
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
+from typing import List, Literal, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable, Literal
 from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
@@ -185,6 +185,16 @@ MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SE
 MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 
 LOGGER = logging.getLogger(__name__)
+
+
+@contextmanager
+def timeit_and_log(logger: logging.Logger, message: str):
+
+    logger.info(">>>>>>>>>>>>>>>>>>>>> %s starting", message)
+    st = time.perf_counter()
+    yield
+    ft = time.perf_counter()
+    logger.info(">>>>>>>>>>>>>>>>>>>> %s done for %s seconds", message, ft - st)
 
 
 class NodeError(Exception):
@@ -4050,6 +4060,8 @@ def wait_for_init_wrap(method):
     @wraps(method)
     def wrapper(*args, **kwargs):
         cl_inst = args[0]
+        if not hasattr(cl_inst, 'nodeup_stats'):
+            setattr(cl_inst, 'nodeup_stats', {})
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
 
@@ -4093,16 +4105,21 @@ def wait_for_init_wrap(method):
             task_queue.put((_node, exception_details))
             task_queue.task_done()
 
-        def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
+        def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list, operation: Literal['setup', 'startup'] = 'setup'):
             time_elapsed = time.perf_counter() - start_time
             try:
                 node, setup_exception = task_queue.get(block=True, timeout=5)
+
                 if setup_exception:
                     raise NodeSetupFailed(
                         node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
+                time_elapsed = time.perf_counter() - start_time
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
+                cl_inst.nodeup_stats[node.name] = {
+                    f'{operation}_time': int(time_elapsed),
+                }
             except queue.Empty:
                 pass
             if timeout and time_elapsed / 60 > timeout:
@@ -4158,17 +4175,18 @@ def wait_for_init_wrap(method):
                 else:
                     node_startup(node, startup_queue)
             while len(startup_results) != len(node_list):
-                verify_node_setup_or_startup(start_time, startup_queue, startup_results)
+                verify_node_setup_or_startup(start_time, startup_queue, startup_results, operation='startup')
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
-                cl_inst.wait_for_nodes_up_and_normal(
-                    nodes=node_list, verification_node=node_list[0], timeout=timeout)
-            for node in node_list:
-                try:
-                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
-                except Exception:  # noqa: BLE001
-                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
-                    LOGGER.debug("Exception details:\n", exc_info=True)
+                with timeit_and_log(cl_inst.log, "wait up and normal in cluster wrap init"):
+                    cl_inst.wait_for_nodes_up_and_normal(
+                        nodes=node_list, verification_node=node_list[0], timeout=timeout)
+            # for node in node_list:
+            #     try:
+            #         node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+            #     except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            #         LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
+            #         LOGGER.debug("Exception details:\n", exc_info=True)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
@@ -5019,7 +5037,7 @@ class BaseScyllaCluster:
         if self.params.get('use_mgmt') and self.node_type == "scylla-db":
             self.install_scylla_manager(node)
 
-    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
+    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 28800):
         if not self.test_config.REUSE_CLUSTER:
             node.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
@@ -5036,10 +5054,13 @@ class BaseScyllaCluster:
                 node.wait_manager_agent_up()
                 manager_agent_version = node.remoter.run("scylla-manager-agent --version").stdout
                 node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
+        with timeit_and_log(node.log, "DB UP"):
+            node.wait_db_up(verbose=verbose, timeout=timeout)
+        # with timeit_and_log(node.log, f"{node.name} get status with nodetool in cl.node_startup"):
+        #     nodes_status = node.get_nodes_status()
+        # with timeit_and_log(node.log, f"{node.name} check_check_node_status in cl.node_startup"):
+        #     check_nodes_status(nodes_status=nodes_status, current_node=node)
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
-        nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node)
         self.clean_replacement_node_options(node)
 
     def install_scylla_manager(self, node):
@@ -5285,12 +5306,16 @@ class BaseScyllaCluster:
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
+        if not hasattr(self, "decommission_node"):
+            setattr(self, "decommission_node", {})
         if not node._is_zero_token_node:
             if tablets_enabled := is_tablets_feature_enabled(node):
                 dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
                 dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+            st = time.time_ns()
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
+            getattr(self, "decommission_node")[node.name] = {"decommission": (time.time_ns() - st) // 1_000_000_000}
         self.verify_decommission(node)
         if node._is_zero_token_node:
             return None
