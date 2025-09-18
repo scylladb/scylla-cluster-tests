@@ -10,6 +10,14 @@ instance_type_db: 'i4i.xlarge'
 instance_type_loader: 'c6i.xlarge'
 
 region_name: us-east-1
+append_scylla_yaml:
+  auto_snapshot: false
+  object_storage_endpoints:
+    - name: s3.us-east-1.amazonaws.com
+      port: 443
+      https: true
+      aws_region: us-east-1
+
 n_db_nodes: 3
 n_loaders: 4
 
