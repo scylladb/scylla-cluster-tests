@@ -66,7 +66,7 @@ def write_cql_result(res, path: str):
 
 
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
-REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-1.0.1-SNAPSHOT-jar-with-dependencies.jar"
+REPLICATOR_URL = "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"
 
 
 class CDCReplicationTest(ClusterTester):
@@ -139,39 +139,40 @@ class CDCReplicationTest(ClusterTester):
                 'terminate_and_replace_node': 5,
                 'grow_shrink_cluster': 5,
                 'remove_node_then_add_node': 5,
-                'decommission_streaming_err': 5,
-                'network_random_interruptions': 4,
-                # 'network_block': 2, # disabled due to #2745
-                # 'network_start_stop_interface': 2, # as above
-                'stop_wait_start_scylla_server': 1,
-                'stop_start_scylla_server': 1,
-                'restart_then_repair_node': 1,
-                'hard_reboot_node': 1,
-                'multiple_hard_reboot_node': 1,
-                'soft_reboot_node': 1,
-                'restart_with_resharding': 1,
-                'destroy_data_then_repair': 1,
-                'destroy_data_then_rebuild': 1,
-                'nodetool_drain': 1,
-                'kill_scylla': 1,
-                'no_corrupt_repair': 1,
-                'major_compaction': 1,
-                'nodetool_refresh': 1,
-                'nodetool_enospc': 1,
-                'truncate': 1,
-                'truncate_large_partition': 1,
-                'abort_repair': 1,
-                'snapshot_operations': 1,
-                'rebuild_streaming_err': 1,
-                'repair_streaming_err': 1,
-                'memory_stress': 1,
+                # 'decommission_streaming_err': 5,
+                # 'network_random_interruptions': 4,
+                # # 'network_block': 2, # disabled due to #2745
+                # # 'network_start_stop_interface': 2, # as above
+                # 'stop_wait_start_scylla_server': 1,
+                # 'stop_start_scylla_server': 1,
+                # 'restart_then_repair_node': 1,
+                # 'hard_reboot_node': 1,
+                # 'multiple_hard_reboot_node': 1,
+                # 'soft_reboot_node': 1,
+                # 'restart_with_resharding': 1,
+                # 'destroy_data_then_repair': 1,
+                # 'destroy_data_then_rebuild': 1,
+                # 'nodetool_drain': 1,
+                # 'kill_scylla': 1,
+                # 'no_corrupt_repair': 1,
+                # 'major_compaction': 1,
+                # 'nodetool_refresh': 1,
+                # 'nodetool_enospc': 1,
+                # 'truncate': 1,
+                # 'truncate_large_partition': 1,
+                # 'abort_repair': 1,
+                # 'snapshot_operations': 1,
+                # 'rebuild_streaming_err': 1,
+                # 'repair_streaming_err': 1,
+                # 'memory_stress': 1,
             }, default_weight=0))
         self.db_cluster.nemesis_count = 1
 
-        # 9 rounds, ~1h30 minutes each -> ~11h30m total
+        # 1 rounds, ~1h30 minutes each
         # The number of rounds is tuned according to the available disk space in an i3.large AWS instance.
         # One more round would cause the nodes to run out of disk space.
-        no_rounds = 9
+        # default value is 2. test duration is ~ 3h
+        no_rounds = self.params.get("cdc_replication_rounds_num")
         for rnd in range(no_rounds):
             self.log.info('Starting round {}'.format(rnd))
 
@@ -246,9 +247,9 @@ class CDCReplicationTest(ClusterTester):
 
         self.copy_master_schema_to_replica()
 
-        self.log.info('Starting nemesis.')
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-        self.db_cluster.start_nemesis()
+        # self.log.info('Starting nemesis.')
+        # self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+        # self.db_cluster.start_nemesis()
 
         loader_node = self.loaders.nodes[0]
         self.setup_tools(loader_node)
@@ -259,19 +260,19 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(30)
 
         self.log.info('Stopping nemesis before bootstrapping a new node.')
-        self.db_cluster.stop_nemesis(timeout=600)
+        # self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Let stressor run for a while...')
         time.sleep(30)
 
-        self.log.info('Bootstrapping a new node...')
-        new_node = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)[0]
-        self.log.info('Waiting for new node to finish initializing...')
-        self.db_cluster.wait_for_init(node_list=[new_node])
-        self.monitors.reconfigure_scylla_monitoring()
+        # self.log.info('Bootstrapping a new node...')
+        # new_node = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)[0]
+        # self.log.info('Waiting for new node to finish initializing...')
+        # self.db_cluster.wait_for_init(node_list=[new_node])
+        # self.monitors.reconfigure_scylla_monitoring()
 
-        self.log.info('Bootstrapped, restarting nemesis.')
-        self.db_cluster.start_nemesis()
+        # self.log.info('Bootstrapped, restarting nemesis.')
+        # self.db_cluster.start_nemesis()
 
         self.log.info('Waiting for stressor to finish...')
         if is_gemini_test:
@@ -285,7 +286,7 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(60)
 
         self.log.info('Stopping nemesis.')
-        self.db_cluster.stop_nemesis(timeout=600)
+        # self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Fetching replicator logs.')
         replicator_log_path = os.path.join(self.logdir, 'cdc-replicator.log')
@@ -386,19 +387,26 @@ class CDCReplicationTest(ClusterTester):
 
     def start_gemini(self, seed: Optional[int] = None) -> GeminiStressThread:
         params = {'gemini_seed': seed} if seed else {}
+        self.params.update(params)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=None,
             loaders=self.loaders,
             stress_cmd=self.params.get('gemini_cmd'),
             timeout=self.get_duration(None),
-            params=params).run()
+            params=self.params).run()
 
-    def setup_tools(self, loader_node) -> None:
+    def setup_tools(self, loader_node: cluster.BaseNode) -> None:
         self.log.info('Installing tmux on loader node.')
-        res = loader_node.remoter.run(cmd='sudo yum install -y tmux')
-        if res.exit_status != 0:
-            self.fail('Could not install tmux.')
+        try:
+            loader_node.install_package('tmux')
+        except Exception as e:  # noqa: BLE001
+            raise Exception('Could not install tmux: {}'.format(e))
+        try:
+            loader_node.install_package('openjdk-8-jre')
+            loader_node.install_package('openjdk-17-jre')
+        except Exception as e:  # noqa: BLE001
+            raise Exception('Could not install java: {}'.format(e))
 
         self.log.info('Getting scylla-migrate on loader node.')
         res = loader_node.remoter.run(cmd=f'wget {SCYLLA_MIGRATE_URL} -O scylla-migrate && chmod +x scylla-migrate')

@@ -4,10 +4,11 @@ user_prefix: 'cdc-replication-cs'
 db_type: mixed_scylla
 
 n_db_nodes: 3
-instance_type_db: 'i4i.large'
+instance_type_db: 'i4i.2xlarge'
 
-n_test_oracle_db_nodes: 1
-instance_type_db_oracle: 'i3.large'
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: 2025.2.0
 
 n_loaders: 1
 instance_type_loader: 'c6i.large'
@@ -15,7 +16,8 @@ instance_type_loader: 'c6i.large'
 n_monitor_nodes: 0
 # instance_type_monitor: 't3.small'
 
-nemesis_class_name: 'RandomInterruptionNetworkMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'not disruptive'
 nemesis_interval: 1
 # Required by the nemesis:
 extra_network_interface: true

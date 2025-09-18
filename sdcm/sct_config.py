@@ -1846,6 +1846,8 @@ class SCTConfiguration(dict):
 
         dict(name="vs_threads", env="SCT_VS_THREADS", type=int,
              help="Vector indexing threads (default: number of CPU cores)"),
+        dict(name="cdc_replication_rounds_num", env="SCT_CDC_REPLICATION_ROUNDS_NUM", type=int,
+             help="""Number of rounds for cdc replication longevity tests""")
 
     ]
 

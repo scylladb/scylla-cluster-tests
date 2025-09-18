@@ -319,3 +319,4 @@ vs_scylla_port: 9042
 vs_threads: 2
 vs_docker_image: 'scylladb/vector-store'
 vs_version: 'latest'
+cdc_replication_rounds_num: 2
