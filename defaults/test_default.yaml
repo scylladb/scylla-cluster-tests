@@ -313,9 +313,9 @@ mgmt_snapshots_preparer_params:
 adaptive_timeout_store_metrics: true
 
 # Vector Search defaults
-n_vs_nodes: 0
-vs_port: 6080
-vs_scylla_port: 9042
-vs_threads: 2
-vs_docker_image: 'scylladb/vector-store'
-vs_version: 'latest'
+n_vector_store_nodes: 0
+vector_store_port: 6080
+vector_store_scylla_port: 9042
+vector_store_threads: 0  # 0 = defaults to number of cores on a node
+vector_store_docker_image: 'scylladb/vector-store'
+vector_store_version: ''

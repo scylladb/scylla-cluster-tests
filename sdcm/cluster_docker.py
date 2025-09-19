@@ -27,7 +27,7 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, Contai
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip
-from sdcm.utils.vector_store_client import VectorStoreClient
+from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"
@@ -264,7 +264,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         self.log.info("Scylla configuration have been reloaded")
 
 
-class VectorStoreDockerNode(DockerNode):
+class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
     """Docker node running Vector Store service"""
 
     def __init__(self,
@@ -280,24 +280,19 @@ class VectorStoreDockerNode(DockerNode):
                          base_logdir=base_logdir,
                          ssh_login_info=ssh_login_info,
                          node_index=node_index)
-        self._vector_store_client = None
 
     def node_container_run_args(self, seed_ip=None):
         return self.vector_container_run_args(seed_ip)
 
     def vector_container_run_args(self, seed_ip=None):
-        scylla_uri = "127.0.0.1:9042"
-        if self.parent_cluster.scylla_cluster:
-            scylla_uri = ",".join(
-                f"{node.ip_address}:{self.parent_cluster.params.get('vs_scylla_port')}"
-                for node in self.parent_cluster.scylla_cluster.nodes)
-
         environment = {
-            'VECTOR_STORE_URI': f"0.0.0.0:{self.parent_cluster.params.get('vs_port')}",
-            'VECTOR_STORE_SCYLLADB_URI': scylla_uri,
-            'VECTOR_STORE_THREADS': str(self.parent_cluster.params.get('vs_threads'))
+            'VECTOR_STORE_URI': f"0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}",
+            'VECTOR_STORE_SCYLLADB_URI': self.scylla_uri,
         }
-        ports = {f"{self.parent_cluster.params.get('vs_port')}/tcp": None}
+
+        if (threads := self.parent_cluster.params.get('vector_store_threads')) > 0:
+            environment['VECTOR_STORE_THREADS'] = str(threads)
+        ports = {f"{self.parent_cluster.params.get('vector_store_port')}/tcp": None}
 
         return dict(
             name=self.name,
@@ -305,23 +300,6 @@ class VectorStoreDockerNode(DockerNode):
             environment=environment,
             ports=ports,
             network=self.parent_cluster.params.get('docker_network'))
-
-    def wait_for_vector_store_ready(self, timeout: int = 300) -> bool:
-        try:
-            return self.get_vector_store_api_client().wait_for_ready(timeout=timeout)
-        except Exception as e:  # noqa: BLE001
-            self.log.error("Failed to wait for Vector Store ready: %s", e)
-            return False
-
-    def get_vector_store_api_client(self):
-        if self._vector_store_client is None:
-            base_url = f"http://{self.ip_address}:{self.parent_cluster.params.get('vs_port')}"
-            self._vector_store_client = VectorStoreClient(base_url)
-        return self._vector_store_client
-
-    @property
-    def vector_store_uri(self) -> str:
-        return f"http://{self.ip_address}:{self.parent_cluster.params.get('vs_port')}"
 
 
 class DockerCluster(cluster.BaseCluster):
@@ -475,7 +453,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         super().destroy()
 
 
-class VectorStoreSetDocker(DockerCluster):
+class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
     """Set of Vector Store nodes"""
 
     def __init__(self,
@@ -489,25 +467,14 @@ class VectorStoreSetDocker(DockerCluster):
         kwargs.setdefault('node_prefix', 'vs-node')
         kwargs.setdefault('node_type', 'vs')
 
+        if not vs_docker_image_tag:
+            vs_docker_image_tag = 'latest'
+
         super().__init__(docker_image=vs_docker_image,
                          docker_image_tag=vs_docker_image_tag,
                          params=params, **kwargs)
 
-    def configure_with_scylla_cluster(self, scylla_cluster) -> None:
-        """
-        Configure Vector Store cluster to work with the given Scylla cluster.
-
-        This should be called after both clusters are created.
-        """
-        if not scylla_cluster or not scylla_cluster.nodes:
-            self.log.warning("No Scylla cluster nodes provided for Vector Store configuration")
-            return
-
-        self.scylla_cluster = scylla_cluster
-        self._reconfigure_vs_nodes()
-        self._configure_scylla_nodes_with_vs()
-
-    def _reconfigure_vs_nodes(self):
+    def _reconfigure_vector_store_nodes(self):
         """Update Vector Store nodes with Scylla info"""
         if not self.nodes:
             return
@@ -525,19 +492,6 @@ class VectorStoreSetDocker(DockerCluster):
             except Exception as e:  # noqa: BLE001
                 self.log.error("Failed to reconfigure container %s: %s", node.name, e)
                 raise
-
-    def _configure_scylla_nodes_with_vs(self):
-        """Configure Scylla nodes with Vector Store URI"""
-        if not (self.scylla_cluster and (vector_uris := self.get_vector_store_uris())):
-            return
-
-        vector_store_uri = vector_uris[0]
-        self.log.debug("Configuring Scylla nodes with vector_store_uri: %s", vector_store_uri)
-        for node in self.scylla_cluster.nodes:
-            with node.remote_scylla_yaml() as scylla_yml:
-                scylla_yml.vector_store_uri = vector_store_uri
-            # TODO: change to config reload once live update is implemented for VS store parameter (in https://github.com/scylladb/scylladb/pull/25208)
-            node.restart()
 
     def _create_node(self, node_index, container=None):
         node = VectorStoreDockerNode(
@@ -563,16 +517,6 @@ class VectorStoreSetDocker(DockerCluster):
         reuse_cluster = getattr(self.test_config, 'REUSE_CLUSTER', 'UNDEFINED')
         result = self._get_nodes() if reuse_cluster else self._create_nodes(count)
         return result
-
-    def get_vector_store_uris(self) -> list[str]:
-        return [node.vector_store_uri for node in self.nodes]
-
-    def wait_for_init(self, *args, **kwargs):
-        for node in self.nodes:
-            self.log.info("Waiting for Vector Store service on %s to be ready...", node.name)
-            if not node.wait_for_vector_store_ready():
-                raise RuntimeError(f"Vector Store service on {node.name} failed to start")
-            self.log.info("Vector Store service on %s is ready", node.name)
 
 
 class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
