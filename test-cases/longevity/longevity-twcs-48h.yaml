@@ -23,7 +23,6 @@ space_node_threshold: 64424
 
 user_prefix: 'longevity-twcs-48h'
 
-post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 12000 and default_time_to_live = 10800 and compaction = {'class':'TimeWindowCompactionStrategy', 'compaction_window_size': 60, 'compaction_window_unit': 'MINUTES'};"
-
+post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test WITH default_time_to_live = 10800 AND compaction = {'class':'TimeWindowCompactionStrategy', 'compaction_window_size': 60, 'compaction_window_unit': 'MINUTES'} AND tombstone_gc = {'mode':'immediate'};"
 
 round_robin: true
