@@ -1914,13 +1914,27 @@ class Nemesis(NemesisFlags):
                     self.action_log_scope("Start nodetool cluster repair", target=target_node.name):
                 target_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
 
-    @latency_calculator_decorator(legend="Run repair process with manager repair")
-    def run_repair_manager(self, ignore_down_hosts=False, timeout=HOUR_IN_SEC * 3):
+    @latency_calculator_decorator(legend="Run repair process through Scylla manager")
+    def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
         """
         Execute a repair using Scylla Manager, which repairs entire cluster.
         ignore_down_hosts: If True, consider only nodes that are up and normal.
         """
-        self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts, timeout=timeout)
+        self.log.debug("Manager repair started")
+        mgr_cluster = self.cluster.get_cluster_manager()
+        self.actions_log.info("Starting Scylla Manager repair task")
+        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
+        task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
+        self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
+        if task_final_status != TaskStatus.DONE:
+            progress_full_string = mgr_task.progress_string(
+                parse_table_res=False, is_verify_errorless_result=True).stdout
+            if task_final_status != TaskStatus.ERROR_FINAL:
+                mgr_task.stop()
+            raise ScyllaManagerError(
+                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
+                f'{progress_full_string}')
+        self.log.info('Task: {} is done.'.format(mgr_task.id))
 
     def run_repair(self, ignore_down_hosts=False):
         """
@@ -3217,32 +3231,14 @@ class Nemesis(NemesisFlags):
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
-        self._mgmt_repair_cli()
+        self.run_repair_manager()
 
     @target_data_nodes
     def disrupt_mgmt_corrupt_then_repair(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         self._destroy_data_and_restart_scylla()
-        self._mgmt_repair_cli()
-
-    @latency_calculator_decorator(legend="Scylla-Manger repair")
-    def _mgmt_repair_cli(self, ignore_down_hosts=None, timeout=86400):   # timeout is 24 hours
-        self.log.debug("Manager repair started")
-        mgr_cluster = self.cluster.get_cluster_manager()
-        self.actions_log.info("Starting Scylla Manager repair task")
-        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
-        task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
-        self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
-        if task_final_status != TaskStatus.DONE:
-            progress_full_string = mgr_task.progress_string(
-                parse_table_res=False, is_verify_errorless_result=True).stdout
-            if task_final_status != TaskStatus.ERROR_FINAL:
-                mgr_task.stop()
-            raise ScyllaManagerError(
-                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
-                f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(mgr_task.id))
+        self.run_repair_manager()
 
     def disrupt_abort_repair(self):
         """
@@ -4669,7 +4665,7 @@ class Nemesis(NemesisFlags):
             self.has_steady_run = True
         InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
         if self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager'):
-            self._mgmt_repair_cli()
+            self.run_repair_manager()
             InfoEvent(message='FinishEvent - Manager repair has finished').publish()
         else:
             InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
