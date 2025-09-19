@@ -23,4 +23,4 @@ space_node_threshold: 64424
 
 user_prefix: 'longevity-twcs-3h'
 
-post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 300;"
+post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test WITH tombstone_gc = {'mode':'immediate'};"
