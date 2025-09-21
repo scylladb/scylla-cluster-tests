@@ -52,7 +52,8 @@ UPDATE 02/02/2023: Removed rolling-upgrade-multi-dc-ami-test and rolling-upgrade
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>new_scylla_repo=http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/latest/scylla.repo
 provision_type=on_demand
-gce_project=gcp-sct-project-1</properties>
+gce_project=gcp-sct-project-1
+requested_by_user=fruch</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
@@ -66,7 +67,8 @@ gce_project=gcp-sct-project-1</properties>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>new_scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand
-gce_project=gcp-sct-project-1</properties>
+gce_project=gcp-sct-project-1
+requested_by_user=fruch</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
