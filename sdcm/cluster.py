@@ -1993,7 +1993,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not nonroot:
             self.install_package(package_name='xfsprogs mdadm')
 
-        if not any((self.distro.is_rocky9, self.distro.is_ubuntu24, self.distro.is_amazon2, self.distro.is_centos9, self.distro.is_debian12)):
+        if not any((self.distro.is_rocky9, self.distro.is_ubuntu24, self.distro.is_oel9, self.distro.is_amazon2, self.distro.is_centos9, self.distro.is_debian12)):
             # centos/rocky9/ubuntu24.04/amazon2023/debian12 and above don't have python2 anymore
             self.install_package(package_name='python2')
         # Offline install does't provide openjdk-11, it has to be installed in advance
