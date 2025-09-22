@@ -22,9 +22,10 @@ extra_network_interface: True
 
 gemini_cmd: |
   --duration 1h
-  --warmup 30m
-  --concurrency 50
+  --warmup 0m
+  --concurrency 5
   --mode mixed
+  --use-server-timestamps
 
 gemini_table_options:
   - "cdc={'enabled': true}"
