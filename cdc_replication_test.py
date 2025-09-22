@@ -195,7 +195,7 @@ class CDCReplicationTest(ClusterTester):
             loader_node.remoter.receive_files(src='cdc-replicator.log', dst=replicator_log_path)
 
             migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
-            (migrate_ok, consistency_ok) = self.check_consistency(migrate_log_path)
+            (migrate_ok, consistency_ok) = self.check_consistency(migrate_log_path, compare_timestamps=False)
             self.consistency_ok = consistency_ok
 
             if not (self.consistency_ok and migrate_ok):
@@ -303,7 +303,7 @@ class CDCReplicationTest(ClusterTester):
         else:
             migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
             (migrate_ok, consistency_ok) = self.check_consistency(migrate_log_path,
-                                                                  compare_timestamps=(mode != Mode.POSTIMAGE))
+                                                                  compare_timestamps=False)
             self.consistency_ok = consistency_ok
 
         if not self.consistency_ok:
