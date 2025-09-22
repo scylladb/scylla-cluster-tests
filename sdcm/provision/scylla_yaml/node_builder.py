@@ -25,11 +25,12 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster
     """
+
     node: Any = Field(as_dict=False)
 
     @property
     def _seed_address(self) -> str:
-        return ','.join(self.node.parent_cluster.seed_nodes_addresses)
+        return ",".join(self.node.parent_cluster.seed_nodes_addresses)
 
     @property
     def _private_ip_address(self) -> str:
@@ -49,40 +50,39 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return None
         return [
             SeedProvider(
-                class_name='org.apache.cassandra.locator.SimpleSeedProvider',
-                parameters=[{'seeds': self._seed_address}]
+                class_name="org.apache.cassandra.locator.SimpleSeedProvider", parameters=[{"seeds": self._seed_address}]
             )
         ]
 
     @property
     def listen_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
+        if self.params.get("use_dns_names"):
             return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
-            return '0.0.0.0'
+            return "0.0.0.0"
         return self._private_ip_address
 
     @property
     def rpc_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
+        if self.params.get("use_dns_names"):
             return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
-            return '0.0.0.0'
+            return "0.0.0.0"
         return self._private_ip_address
 
     @property
     def broadcast_rpc_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
+        if self.params.get("use_dns_names"):
             return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
             return self._private_ip_address
         if self._intra_node_comm_public:
@@ -93,7 +93,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     def broadcast_address(self) -> Optional[str]:
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
             return self._private_ip_address
         if self._intra_node_comm_public:

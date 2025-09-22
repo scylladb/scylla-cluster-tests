@@ -38,8 +38,11 @@ class BaseClass:
 
     @staticmethod
     def _map_dict(data: dict, mapping: dict) -> dict:
-        return {mapping[key]: value for key, value in data.items()
-                if value is not None and mapping.get(key, None) is not None}
+        return {
+            mapping[key]: value
+            for key, value in data.items()
+            if value is not None and mapping.get(key, None) is not None
+        }
 
     def to_dict(self, remove_defaults=True) -> dict:
         result = asdict(self)
@@ -55,7 +58,7 @@ class BaseClass:
 
 @dataclass
 class ScyllaOperatorTaskBaseClass(BaseClass):
-    name: 'str'
+    name: "str"
     # StartDate specifies the task start date expressed in the RFC3339 format or now[+duration],
     # e.g. now+3d2h10m, valid units are d, h, m, s (default "now").
     start_date: str = None
@@ -95,11 +98,11 @@ class ScyllaOperatorRepairTaskStatus(ScyllaOperatorRepairTask):
     # These statuses are not available at scylla-operator 1.0
     # You have to relay on task status in manager
 
-    STARTED = 'STARTED'
-    COMPLETED = 'COMPLETED'
-    SCHEDULED = 'SCHEDULED'
-    ERROR = 'ERROR'
-    IN_PROGRESS = 'IN PROGRESS'
+    STARTED = "STARTED"
+    COMPLETED = "COMPLETED"
+    SCHEDULED = "SCHEDULED"
+    ERROR = "ERROR"
+    IN_PROGRESS = "IN PROGRESS"
 
     error: str = None
     status: str = None
@@ -152,11 +155,11 @@ class ScyllaOperatorBackupTaskStatus(ScyllaOperatorBackupTask):
     # These statuses are not available at scylla-operator 1.0
     # You have to relay on task status in manager
 
-    STARTED = 'STARTED'
-    COMPLETED = 'COMPLETED'
-    SCHEDULED = 'SCHEDULED'
-    ERROR = 'ERROR'
-    IN_PROGRESS = 'IN PROGRESS'
+    STARTED = "STARTED"
+    COMPLETED = "COMPLETED"
+    SCHEDULED = "SCHEDULED"
+    ERROR = "ERROR"
+    IN_PROGRESS = "IN PROGRESS"
 
     error: str = None
     status: str = None
@@ -168,19 +171,19 @@ class OperatorManagerCluster(ManagerCluster):
     scylla_cluster = None
     _id = None
 
-    def __init__(self, manager_node, cluster_id=None, client_encrypt=False,
-                 cluster_name: str = None, scylla_cluster=None):
+    def __init__(
+        self, manager_node, cluster_id=None, client_encrypt=False, cluster_name: str = None, scylla_cluster=None
+    ):
         self.cluster_name = cluster_name
         self.scylla_cluster = scylla_cluster
-        super().__init__(manager_node=manager_node, cluster_id=cluster_id,
-                         client_encrypt=client_encrypt)
+        super().__init__(manager_node=manager_node, cluster_id=cluster_id, client_encrypt=client_encrypt)
 
     @staticmethod
     def _pick_original_name(basic_name, names):
         current_name = basic_name
         idx = 1
         while current_name in names:
-            current_name = f'{basic_name}-{idx}'
+            current_name = f"{basic_name}-{idx}"
             idx += 1
         return current_name
 
@@ -188,8 +191,12 @@ class OperatorManagerCluster(ManagerCluster):
     def id(self):
         if self._id is None:
             self._id = wait_for(
-                self.get_cluster_id_by_name, cluster_name=self.cluster_name, timeout=120,
-                text='Waiting manager cluster to appear', throw_exc=True)
+                self.get_cluster_id_by_name,
+                cluster_name=self.cluster_name,
+                timeout=120,
+                text="Waiting manager cluster to appear",
+                throw_exc=True,
+            )
         return self._id
 
     @id.setter
@@ -223,14 +230,25 @@ class OperatorManagerCluster(ManagerCluster):
             throw_exc=True,
         )
 
-    def _create_operator_backup_task(self, dc_list=None, interval=None, keyspace_list=None, location_list=None,
-                                     num_retries=None, rate_limit_list=None, retention=None, cron=None,
-                                     snapshot_parallel_list=None, start_date=None, upload_parallel_list=None,
-                                     name=None) -> ScyllaOperatorBackupTask:
-
+    def _create_operator_backup_task(
+        self,
+        dc_list=None,
+        interval=None,
+        keyspace_list=None,
+        location_list=None,
+        num_retries=None,
+        rate_limit_list=None,
+        retention=None,
+        cron=None,
+        snapshot_parallel_list=None,
+        start_date=None,
+        upload_parallel_list=None,
+        name=None,
+    ) -> ScyllaOperatorBackupTask:
         if name is None:
             name = self._pick_original_name(
-                'default-backup-task-name', [so_task.name for so_task in self.operator_backup_tasks])
+                "default-backup-task-name", [so_task.name for so_task in self.operator_backup_tasks]
+            )
 
         so_backup_task = ScyllaOperatorBackupTask(
             name=name,
@@ -244,33 +262,33 @@ class OperatorManagerCluster(ManagerCluster):
             retention=retention,
             snapshot_parallel=snapshot_parallel_list,
             start_date=start_date,
-            upload_parallel=upload_parallel_list
+            upload_parallel=upload_parallel_list,
         )
         try:
-            self.scylla_cluster.add_scylla_cluster_value('/spec/backups', so_backup_task.to_dict())
+            self.scylla_cluster.add_scylla_cluster_value("/spec/backups", so_backup_task.to_dict())
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.error('Failed to submit repair task:\n%s\ndue to the %s', so_backup_task.to_dict(), exc)
+            LOGGER.error("Failed to submit repair task:\n%s\ndue to the %s", so_backup_task.to_dict(), exc)
             raise
         return so_backup_task
 
     # pylint: disable=too-many-locals
     def create_backup_task(
-            self,
-            dc_list=None,
-            dry_run=None,
-            interval=None,
-            keyspace_list=None,
-            cron=None,
-            location_list=None,
-            num_retries=None,
-            rate_limit_list=None,
-            retention=None,
-            show_tables=None,
-            snapshot_parallel_list=None,
-            start_date=None,
-            upload_parallel_list=None,
-            legacy_args=None) -> BackupTask:
-
+        self,
+        dc_list=None,
+        dry_run=None,
+        interval=None,
+        keyspace_list=None,
+        cron=None,
+        location_list=None,
+        num_retries=None,
+        rate_limit_list=None,
+        retention=None,
+        show_tables=None,
+        snapshot_parallel_list=None,
+        start_date=None,
+        upload_parallel_list=None,
+        legacy_args=None,
+    ) -> BackupTask:
         # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the backup one.
         self.wait_for_healthchecks()
 
@@ -289,12 +307,21 @@ class OperatorManagerCluster(ManagerCluster):
         )
         return wait_for(lambda: self.get_mgr_backup_task(so_task), step=2, timeout=300)
 
-    def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
-                                            fail_fast=None, intensity=None, parallel=None,
-                                            name=None) -> ScyllaOperatorRepairTask:
+    def _create_scylla_operator_repair_task(
+        self,
+        dc_list=None,
+        keyspace=None,
+        interval=None,
+        num_retries=None,
+        fail_fast=None,
+        intensity=None,
+        parallel=None,
+        name=None,
+    ) -> ScyllaOperatorRepairTask:
         if name is None:
             name = self._pick_original_name(
-                'default-repair-task-name', [so_task.name for so_task in self.operator_repair_tasks])
+                "default-repair-task-name", [so_task.name for so_task in self.operator_repair_tasks]
+            )
         so_repair_task = ScyllaOperatorRepairTask(
             name=name,
             dc=dc_list,
@@ -306,23 +333,38 @@ class OperatorManagerCluster(ManagerCluster):
             num_retries=num_retries,
         )
         try:
-            self.scylla_cluster.add_scylla_cluster_value('/spec/repairs', so_repair_task.to_dict())
+            self.scylla_cluster.add_scylla_cluster_value("/spec/repairs", so_repair_task.to_dict())
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.error('Failed to submit repair task:\n%s\ndue to the %s', so_repair_task.to_dict(), exc)
+            LOGGER.error("Failed to submit repair task:\n%s\ndue to the %s", so_repair_task.to_dict(), exc)
             raise
         return so_repair_task
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments,arguments-differ
-                           keyspace=None, interval=None, num_retries=None, fail_fast=None,
-                           intensity=None, parallel=None, name=None) -> RepairTask:
+    def create_repair_task(  # pylint: disable=too-many-arguments,arguments-differ
+        self,
+        dc_list=None,
+        keyspace=None,
+        interval=None,
+        num_retries=None,
+        fail_fast=None,
+        intensity=None,
+        parallel=None,
+        name=None,
+    ) -> RepairTask:
         # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the repair one.
         self.wait_for_healthchecks()
 
         # TBD: After https://github.com/scylladb/scylla-operator/issues/272 is solved,
         #   replace RepairTask with ScyllaOperatorRepairTask and move relate logic there
-        so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
-                                                           num_retries=num_retries, fail_fast=fail_fast,
-                                                           intensity=intensity, parallel=parallel, name=name)
+        so_task = self._create_scylla_operator_repair_task(
+            dc_list=dc_list,
+            keyspace=keyspace,
+            interval=interval,
+            num_retries=num_retries,
+            fail_fast=fail_fast,
+            intensity=intensity,
+            parallel=parallel,
+            name=name,
+        )
         return wait_for(lambda: self.get_mgr_repair_task(so_task), step=2, timeout=300)
 
     def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> Optional[RepairTask]:
@@ -332,7 +374,8 @@ class OperatorManagerCluster(ManagerCluster):
             step=2,
             timeout=300,
             task_name=so_repair_task.name,
-            throw_exc=True)
+            throw_exc=True,
+        )
         for mgr_task in self.repair_task_list:
             if mgr_task.id.split("/", 1)[-1] in (so_repair_task_status.name, so_repair_task_status.id):
                 return mgr_task
@@ -345,7 +388,8 @@ class OperatorManagerCluster(ManagerCluster):
             step=2,
             timeout=300,
             task_name=so_backup_task.name,
-            throw_exc=True)
+            throw_exc=True,
+        )
         for mgr_task in self.backup_task_list:
             if mgr_task.id.split("/", 1)[-1] in (so_backup_task_status.name, so_backup_task_status.id):
                 return mgr_task
@@ -371,30 +415,30 @@ class OperatorManagerCluster(ManagerCluster):
 
     @property
     def operator_repair_task_statuses(self) -> List[ScyllaOperatorRepairTaskStatus]:
-        return self._get_list_of_entities_from_operator('/status/repairs', ScyllaOperatorRepairTaskStatus)
+        return self._get_list_of_entities_from_operator("/status/repairs", ScyllaOperatorRepairTaskStatus)
 
     @property
     def operator_backup_task_statuses(self) -> List[ScyllaOperatorBackupTaskStatus]:
-        return self._get_list_of_entities_from_operator('/status/backups', ScyllaOperatorBackupTaskStatus)
+        return self._get_list_of_entities_from_operator("/status/backups", ScyllaOperatorBackupTaskStatus)
 
     @property
     def operator_repair_tasks(self) -> List[ScyllaOperatorRepairTask]:
-        return self._get_list_of_entities_from_operator('/spec/repairs', ScyllaOperatorRepairTask)
+        return self._get_list_of_entities_from_operator("/spec/repairs", ScyllaOperatorRepairTask)
 
     @property
     def operator_backup_tasks(self) -> List[ScyllaOperatorBackupTask]:
-        return self._get_list_of_entities_from_operator('/spec/backups', ScyllaOperatorBackupTask)
+        return self._get_list_of_entities_from_operator("/spec/backups", ScyllaOperatorBackupTask)
 
     def update(self, name=None, host=None, client_encrypt=None):
         raise NotImplementedError()
 
     def delete_task(self, task: ManagerTask) -> None:
         LOGGER.debug("deleting task [%s - %s]", task.__class__.__name__, task.id)
-        name = task.id.split('/')[-1]
+        name = task.id.split("/")[-1]
         if isinstance(task, RepairTask):
-            self.scylla_cluster.remove_scylla_cluster_value('/spec/repairs', element_name=name)
+            self.scylla_cluster.remove_scylla_cluster_value("/spec/repairs", element_name=name)
         if isinstance(task, BackupTask):
-            self.scylla_cluster.remove_scylla_cluster_value('/spec/backups', element_name=name)
+            self.scylla_cluster.remove_scylla_cluster_value("/spec/backups", element_name=name)
 
 
 class ScyllaManagerToolOperator(ScyllaManagerTool):
@@ -407,7 +451,8 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
         cluster = super().get_cluster(cluster_name)
         if cluster is None:
             cluster = self.clusterClass(
-                manager_node=self.manager_node, cluster_name=cluster_name, scylla_cluster=self.scylla_cluster)
+                manager_node=self.manager_node, cluster_name=cluster_name, scylla_cluster=self.scylla_cluster
+            )
         else:
             cluster.set_scylla_cluster(self.scylla_cluster)  # pylint: disable=no-member
             cluster.set_cluster_name(cluster_name)  # pylint: disable=no-member
@@ -420,8 +465,17 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
     def rollback_upgrade(self, scylla_mgmt_address):
         raise NotImplementedError()
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,
-                    auth_token=None, credentials=None, force_non_ssl_session_port=False):
+    def add_cluster(
+        self,
+        name,
+        host=None,
+        db_cluster=None,
+        client_encrypt=None,
+        disable_automatic_repair=True,
+        auth_token=None,
+        credentials=None,
+        force_non_ssl_session_port=False,
+    ):
         raise NotImplementedError()
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):

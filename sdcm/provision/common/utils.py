@@ -19,7 +19,7 @@ from textwrap import dedent
 
 def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
     # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
-    return dedent(fr"""
+    return dedent(rf"""
     if ! grep imjournalRatelimitInterval /etc/rsyslog.conf; then
         cat <<EOF >> /etc/rsyslog.conf
         #
@@ -34,12 +34,15 @@ def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
 
 
 def configure_rsyslog_target_script(host: str, port: int) -> str:
-    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\" ' \
-           f'TCP_Framing=\\"octet-counted\\" Template=\\"RSYSLOG_SyslogProtocol23Format\\")" >> /etc/rsyslog.conf\n'
+    return (
+        f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\" '
+        f'TCP_Framing=\\"octet-counted\\" Template=\\"RSYSLOG_SyslogProtocol23Format\\")" >> /etc/rsyslog.conf\n'
+    )
 
 
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
-    return dedent("""
+    return dedent(
+        """
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
         s/source /\\nsource /g" | grep -P "^source.*system\\(\\)" | cut -d" " -f2`
         disk_buffer_option=""
@@ -91,7 +94,8 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
                 sed -i -r "s/destination\\(remote_sct\\);[ \\t]*\\}};/destination\\(remote_sct\\); rewrite\\(r_host\\); \\}};/" /etc/syslog-ng/syslog-ng.conf
             fi
         fi
-        """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
+        """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second)
+    )
 
 
 def configure_rsyslog_set_hostname_script(hostname: str) -> str:
@@ -106,8 +110,10 @@ def configure_rsyslog_set_hostname_script(hostname: str) -> str:
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:
-    return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
-           f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
+    return (
+        f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+'
+        f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
+    )
 
 
 def configure_sshd_script():

@@ -33,22 +33,32 @@ def read_to_stringio(fobj):
 
 # pylint: disable=too-many-locals,too-many-arguments
 @contextlib.contextmanager
-def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
-                preserve_ownership=True, preserve_permissions=True, log_change=True):
+def remote_file(
+    remoter,
+    remote_path: str | Path,
+    serializer=StringIO.getvalue,
+    deserializer=read_to_stringio,
+    sudo=False,
+    preserve_ownership=True,
+    preserve_permissions=True,
+    log_change=True,
+):
     filename = os.path.basename(remote_path)
-    local_tempfile = os.path.join(tempfile.mkdtemp(prefix='sct'), filename)
+    local_tempfile = os.path.join(tempfile.mkdtemp(prefix="sct"), filename)
     if preserve_ownership and sudo:
         ownership = remoter.sudo(cmd=f'stat -c "%U:%G" {remote_path}').stdout.strip()
     if preserve_permissions and sudo:
         permissions = remoter.sudo(cmd=f'stat -c "%a" {remote_path}').stdout.strip()
 
-    wait.wait_for(remoter.receive_files,
-                  step=10,
-                  text=f"Waiting for copying `{remote_path}' from {remoter.hostname}",
-                  timeout=300,
-                  throw_exc=True,
-                  src=str(remote_path),
-                  dst=local_tempfile)
+    wait.wait_for(
+        remoter.receive_files,
+        step=10,
+        text=f"Waiting for copying `{remote_path}' from {remoter.hostname}",
+        timeout=300,
+        throw_exc=True,
+        src=str(remote_path),
+        dst=local_tempfile,
+    )
     with open(local_tempfile, encoding="utf-8") as fobj:
         parsed_data = deserializer(fobj)
         original_content = serializer(parsed_data)
@@ -70,13 +80,15 @@ def remote_file(remoter, remote_path: str | Path, serializer=StringIO.getvalue, 
             cat '{remote_tempfile}' > '{remote_path}'
             rm '{remote_tempfile}'
             """)
-        wait.wait_for(remoter.send_files,
-                      step=10,
-                      text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
-                      timeout=300,
-                      throw_exc=True,
-                      src=local_tempfile,
-                      dst=remote_tempfile)
+        wait.wait_for(
+            remoter.send_files,
+            step=10,
+            text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
+            timeout=300,
+            throw_exc=True,
+            src=local_tempfile,
+            dst=remote_tempfile,
+        )
         if sudo:
             remoter.sudo(remote_tempfile_move_cmd)
         else:

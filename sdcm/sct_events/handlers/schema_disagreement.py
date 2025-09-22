@@ -46,7 +46,7 @@ class SchemaDisagreementHandler(EventHandler):
                 gossip_info = gossip_info or node.get_gossip_info()
                 peers_info = peers_info or node.get_peers_info()
                 try:
-                    link = upload_sstables_to_s3(node, keyspace='system_schema', test_id=tester_obj.test_id)
+                    link = upload_sstables_to_s3(node, keyspace="system_schema", test_id=tester_obj.test_id)
                     event.add_sstable_link(link)
                 except Exception as exc:  # pylint: disable=broad-except
                     LOGGER.error("failed to upload system_schema sstables for node %s: %s", node.name, exc)

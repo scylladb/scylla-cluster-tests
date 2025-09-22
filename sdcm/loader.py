@@ -47,11 +47,18 @@ class HDRPositions(NamedTuple):
 # pylint: disable=too-many-instance-attributes
 class StressExporter(FileFollowerThread, metaclass=ABCMeta):
     METRICS_GAUGES = {}
-    METRIC_NAMES = ['lat_mean', 'lat_med', 'lat_perc_95', 'lat_perc_99', 'lat_perc_999', 'lat_max']
+    METRIC_NAMES = ["lat_mean", "lat_med", "lat_perc_95", "lat_perc_99", "lat_perc_999", "lat_max"]
 
     # pylint: disable=too-many-arguments
-    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):
+    def __init__(
+        self,
+        instance_name: str,
+        metrics: NemesisMetrics,
+        stress_operation: str,
+        stress_log_filename: str,
+        loader_idx: int,
+        cpu_idx: int = 1,
+    ):
         super().__init__()
         self.metrics = metrics
         self.stress_operation = stress_operation
@@ -62,15 +69,13 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
         self.loader_idx = loader_idx
         self.cpu_idx = cpu_idx
         self.metrics_positions = self.merics_position_in_log()
-        self.keyspace = ''
+        self.keyspace = ""
 
     @abstractmethod
-    def merics_position_in_log(self) -> MetricsPosition:
-        ...
+    def merics_position_in_log(self) -> MetricsPosition: ...
 
     @abstractmethod
-    def create_metrix_gauge(self) -> str:
-        ...
+    def create_metrix_gauge(self) -> str: ...
 
     def set_metric(self, name: str, value: float) -> None:
         self.stress_metric.labels(0, self.instance_name, self.loader_idx, self.cpu_idx, name, self.keyspace).set(value)
@@ -82,21 +87,19 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
     @staticmethod
     @abstractmethod
-    def skip_line(line: str) -> bool:
-        ...
+    def skip_line(line: str) -> bool: ...
 
     @staticmethod
     @abstractmethod
-    def split_line(line: str) -> list:
-        ...
+    def split_line(line: str) -> list: ...
 
     def get_metric_value(self, columns: list, metric_name: str) -> str:
         try:
             value = columns[getattr(self.metrics_positions, metric_name)]
         except AttributeError:
-            value = ''
+            value = ""
         except (ValueError, IndexError) as exc:
-            value = ''
+            value = ""
             LOGGER.warning("Failed to get %s metric value. Error: %s", metric_name, str(exc))
 
         return value
@@ -121,70 +124,91 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
                     if metric_value := self.get_metric_value(columns=cols, metric_name=metric):
                         self.set_metric(metric, convert_metric_to_ms(str(metric_value)))
 
-                if ops := self.get_metric_value(columns=cols, metric_name='ops'):
-                    self.set_metric('ops', float(ops))
+                if ops := self.get_metric_value(columns=cols, metric_name="ops"):
+                    self.set_metric("ops", float(ops))
 
-                if errors := self.get_metric_value(columns=cols, metric_name='errors'):
-                    self.set_metric('errors', int(errors))
+                if errors := self.get_metric_value(columns=cols, metric_name="errors"):
+                    self.set_metric("errors", int(errors))
 
 
 class CassandraStressExporter(StressExporter):
     # pylint: disable=too-many-arguments
 
-    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):
-
-        self.keyspace_regex = re.compile(r'.*Keyspace:\s(.*?)$')
-        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx,
-                         cpu_idx)
+    def __init__(
+        self,
+        instance_name: str,
+        metrics: NemesisMetrics,
+        stress_operation: str,
+        stress_log_filename: str,
+        loader_idx: int,
+        cpu_idx: int = 1,
+    ):
+        self.keyspace_regex = re.compile(r".*Keyspace:\s(.*?)$")
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx, cpu_idx)
 
     def create_metrix_gauge(self):
-        gauge_name = f'sct_cassandra_stress_{self.stress_operation}_gauge'
+        gauge_name = f"sct_cassandra_stress_{self.stress_operation}_gauge"
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
-                'Gauge for cassandra stress metrics',
-                [f'cassandra_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+                "Gauge for cassandra stress metrics",
+                [f"cassandra_stress_{self.stress_operation}", "instance", "loader_idx", "cpu_idx", "type", "keyspace"],
+            )
         return gauge_name
 
     def merics_position_in_log(self) -> MetricsPosition:
-        return MetricsPosition(ops=2, lat_mean=5, lat_med=6, lat_perc_95=7, lat_perc_99=8, lat_perc_999=9,
-                               lat_max=10, errors=13)
+        return MetricsPosition(
+            ops=2, lat_mean=5, lat_med=6, lat_perc_95=7, lat_perc_99=8, lat_perc_999=9, lat_max=10, errors=13
+        )
 
     def skip_line(self, line: str) -> bool:
         if not self.keyspace:
-            if 'Keyspace:' in line:
+            if "Keyspace:" in line:
                 self.keyspace = self.keyspace_regex.match(line).groups()[0]
         # If line starts with 'total,' - skip this line
-        return not 'total,' in line
+        return not "total," in line
 
     @staticmethod
     def split_line(line: str) -> list:
-        return [element.strip() for element in line.split(',')]
+        return [element.strip() for element in line.split(",")]
 
 
 class CassandraStressHDRExporter(StressExporter):
     # pylint: disable=too-many-arguments
-    METRIC_NAMES = ['lat_perc_50', 'lat_perc_90', 'lat_perc_99', 'lat_perc_999', "lat_perc_9999"]
+    METRIC_NAMES = ["lat_perc_50", "lat_perc_90", "lat_perc_99", "lat_perc_999", "lat_perc_9999"]
 
-    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str,
-                 stress_log_filename: str, loader_idx: int, cpu_idx: int = 1):
+    def __init__(
+        self,
+        instance_name: str,
+        metrics: NemesisMetrics,
+        stress_operation: str,
+        stress_log_filename: str,
+        loader_idx: int,
+        cpu_idx: int = 1,
+    ):
         super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx, cpu_idx)
         self.log_start_time = 0
-        self.hdr_tag = ''
+        self.hdr_tag = ""
 
     def create_metrix_gauge(self):
-        gauge_name = f'collectd_cassandra_stress_hdr_{self.stress_operation}_gauge'
+        gauge_name = f"collectd_cassandra_stress_hdr_{self.stress_operation}_gauge"
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
-                'Gauge for cassandra stress hdr percentiles',
-                [f'cassandra_stress_hdr_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', "keyspace"])
+                "Gauge for cassandra stress hdr percentiles",
+                [
+                    f"cassandra_stress_hdr_{self.stress_operation}",
+                    "instance",
+                    "loader_idx",
+                    "cpu_idx",
+                    "type",
+                    "keyspace",
+                ],
+            )
         return gauge_name
 
     def merics_position_in_log(self) -> HDRPositions:
-        return HDRPositions(lat_perc_50=3, lat_perc_90=4,
-                            lat_perc_99=6, lat_perc_999=7, lat_perc_9999=8)
+        return HDRPositions(lat_perc_50=3, lat_perc_90=4, lat_perc_99=6, lat_perc_999=7, lat_perc_9999=8)
 
     def skip_line(self, line: str) -> bool:
         if match := re.match(r"^#\[StartTime:\s(\d+)", line):
@@ -192,25 +216,34 @@ class CassandraStressHDRExporter(StressExporter):
         return not (CSHistogramTags.WRITE.value in line or CSHistogramTags.READ.value in line)
 
     def set_metric(self, name: str, value: float) -> None:
-        self.stress_metric.labels(self.hdr_tag, self.instance_name, self.loader_idx,
-                                  self.cpu_idx, name, self.keyspace).set(value)
+        self.stress_metric.labels(
+            self.hdr_tag, self.instance_name, self.loader_idx, self.cpu_idx, name, self.keyspace
+        ).set(value)
 
     def split_line(self, line: str) -> list:
         summary_data = make_cs_range_histogram_summary_from_log_line(
-            workload=CSWorkloadTypes(self.stress_operation), log_line=line, hst_log_start_time=self.log_start_time)
+            workload=CSWorkloadTypes(self.stress_operation), log_line=line, hst_log_start_time=self.log_start_time
+        )
         self.hdr_tag, percentiles = summary_data.popitem()
         return list(percentiles.values())
 
 
 class ScyllaBenchStressExporter(StressExporter):
-
     def create_metrix_gauge(self) -> str:
-        gauge_name = f'sct_scylla_bench_stress_{self.stress_operation}_gauge'
+        gauge_name = f"sct_scylla_bench_stress_{self.stress_operation}_gauge"
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
-                'Gauge for scylla-bench stress metrics',
-                [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+                "Gauge for scylla-bench stress metrics",
+                [
+                    f"scylla_bench_stress_{self.stress_operation}",
+                    "instance",
+                    "loader_idx",
+                    "cpu_idx",
+                    "type",
+                    "keyspace",
+                ],
+            )
         return gauge_name
 
     # pylint: disable=line-too-long
@@ -219,8 +252,9 @@ class ScyllaBenchStressExporter(StressExporter):
         # time  operations/s    rows/s   errors  max   99.9th   99th      95th     90th       median        mean
         # 1.033603151s    3439    34390    0  71.434239ms   70.713343ms   62.685183ms    2.818047ms  1.867775ms 1.048575ms  2.947276ms
 
-        return MetricsPosition(ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5,
-                               lat_max=4, errors=3)
+        return MetricsPosition(
+            ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5, lat_max=4, errors=3
+        )
 
     # pylint: disable=line-too-long
     def skip_line(self, line) -> bool:
@@ -229,8 +263,8 @@ class ScyllaBenchStressExporter(StressExporter):
         #    Client compression:  true
         #    1.004777157s       2891    28910     0  67.829759ms   64.290815ms    58.327039ms    4.653055ms   3.244031µs   1.376255µs
 
-        line_splitted = (line or '').split()
-        if not line_splitted or not line_splitted[0].endswith('s'):
+        line_splitted = (line or "").split()
+        if not line_splitted or not line_splitted[0].endswith("s"):
             return True  # skip the line
 
         try:
@@ -245,28 +279,40 @@ class ScyllaBenchStressExporter(StressExporter):
 
 
 class CassandraHarryStressExporter(StressExporter):
-
     # pylint: disable=too-many-arguments,useless-super-delegation
-    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):
-
-        super().__init__(instance_name, metrics, stress_operation, stress_log_filename,
-                         loader_idx, cpu_idx)
+    def __init__(
+        self,
+        instance_name: str,
+        metrics: NemesisMetrics,
+        stress_operation: str,
+        stress_log_filename: str,
+        loader_idx: int,
+        cpu_idx: int = 1,
+    ):
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx, cpu_idx)
 
     def create_metrix_gauge(self) -> str:
-        gauge_name = f'sct_cassandra_harry_stress_{self.stress_operation}_gauge'
+        gauge_name = f"sct_cassandra_harry_stress_{self.stress_operation}_gauge"
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
-                'Gauge for scylla-bench stress metrics',
-                [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+                "Gauge for scylla-bench stress metrics",
+                [
+                    f"scylla_bench_stress_{self.stress_operation}",
+                    "instance",
+                    "loader_idx",
+                    "cpu_idx",
+                    "type",
+                    "keyspace",
+                ],
+            )
         return gauge_name
 
     def merics_position_in_log(self) -> MetricsPosition:
         pass
 
     def skip_line(self, line) -> bool:
-        return not 'Reorder buffer size has grown up to' in line
+        return not "Reorder buffer size has grown up to" in line
 
     @staticmethod
     def split_line(line: str) -> list:

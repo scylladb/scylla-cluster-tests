@@ -63,7 +63,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         self._per_loader_count_lock = threading.Semaphore()
 
     def build_stress_cmd(self, loader_idx: int):
-        if hasattr(self.node_list[0], 'parent_cluster'):
+        if hasattr(self.node_list[0], "parent_cluster"):
             target_address = self.node_list[0].parent_cluster.get_node().cql_address
         else:
             target_address = self.node_list[0].cql_address
@@ -71,8 +71,8 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
             threads_on_loader = self._per_loader_count.get(loader_idx, 0)
             threads_on_loader += 1
             self._per_loader_count[threads_on_loader] = threads_on_loader
-        stress_cmd = self.stress_cmd.replace('nosqlbench', '') + f" hosts={target_address}"
-        stress_cmd += ' table=nosqlbench_table_' + str(loader_idx + 1) + '_' + str(threads_on_loader)
+        stress_cmd = self.stress_cmd.replace("nosqlbench", "") + f" hosts={target_address}"
+        stress_cmd += " table=nosqlbench_table_" + str(loader_idx + 1) + "_" + str(threads_on_loader)
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
@@ -80,38 +80,48 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'nosql-bench-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('nosql-bench-stress local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, "nosql-bench-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
+        LOGGER.debug("nosql-bench-stress local log: %s", log_file_name)
         LOGGER.debug("'running: %s", stress_cmd)
         result = {}
-        with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event, \
-                NoSQLBenchEventsPublisher(node=loader, log_filename=log_file_name):
+        with (
+            NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event,
+            NoSQLBenchEventsPublisher(node=loader, log_filename=log_file_name),
+        ):
             try:
                 # copy graphite-exporter config file to loader
-                loader.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
-                                          dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
-                                          verbose=False)
+                loader.remoter.send_files(
+                    src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
+                    dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
+                    verbose=False,
+                )
 
                 # create shared network for the containers
                 create_network_cmd = "docker network create --driver bridge nosql"
-                graphite_run_cmd = "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp " \
-                                   "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf " \
-                                   "--name=graphite-exporter " \
-                                   "--network=nosql " \
-                                   "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"
+                graphite_run_cmd = (
+                    "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp "
+                    "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf "
+                    "--name=graphite-exporter "
+                    "--network=nosql "
+                    "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"
+                )
                 loader.remoter.run(cmd=create_network_cmd)
-                loader.remoter.run(cmd=graphite_run_cmd,
-                                   timeout=self.timeout + self.shutdown_timeout,
-                                   log_file=log_file_name,
-                                   ignore_status=True)
+                loader.remoter.run(
+                    cmd=graphite_run_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name,
+                    ignore_status=True,
+                )
 
-                result = loader.remoter.run(cmd=f'docker run '
-                                            '--name=nb '
-                                            '--network=nosql '
-                                            f'{self.docker_image_name} '
-                                            f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
-                                            timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
+                result = loader.remoter.run(
+                    cmd=f"docker run "
+                    "--name=nb "
+                    "--network=nosql "
+                    f"{self.docker_image_name} "
+                    f"{stress_cmd} --report-graphite-to graphite-exporter:9109",
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name,
+                )
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
 

@@ -32,7 +32,6 @@ class PerfResult:
 
 
 class ThroughputLimitFunctionalTest(ClusterTester):
-
     def test_per_partition_limit(self):
         """
         assumptions:
@@ -58,10 +57,12 @@ class ThroughputLimitFunctionalTest(ClusterTester):
         self._truncate_table(table=table)
         self.run_stress_thread(stress_cmd=stress_write_partition_cmd)
         stressed_base_write_result = self._measure_latency_and_ops(
-            stress_cmd=stress_write_cmd, conditions="base write stressed")
+            stress_cmd=stress_write_cmd, conditions="base write stressed"
+        )
         self.run_stress_thread(stress_cmd=stress_read_partition_cmd)
         stressed_base_read_result = self._measure_latency_and_ops(
-            stress_cmd=stress_read_cmd, conditions="base read stressed")
+            stress_cmd=stress_read_cmd, conditions="base read stressed"
+        )
 
         LOGGER.info("measure latency and ops/s - with setting limits: should not affect base results much")
         self._set_per_partition_limits(table=table, reads_limit=100, writes_limit=100)
@@ -73,36 +74,46 @@ class ThroughputLimitFunctionalTest(ClusterTester):
         self._truncate_table(table=table)
         self.run_stress_thread(stress_cmd=stress_write_partition_cmd)
         stressed_limited_write_result = self._measure_latency_and_ops(
-            stress_cmd=stress_write_cmd, conditions="limited write stressed")
+            stress_cmd=stress_write_cmd, conditions="limited write stressed"
+        )
         self.run_stress_thread(stress_cmd=stress_read_partition_cmd)
         stressed_limited_read_result = self._measure_latency_and_ops(
-            stress_cmd=stress_read_cmd, conditions="limited read stressed")
+            stress_cmd=stress_read_cmd, conditions="limited read stressed"
+        )
 
-        assert limited_write_result.latency_99 < base_write_result.latency_99 * 1.05, \
-            f"Per partition limit caused more than 5% write latency degradation " \
+        assert limited_write_result.latency_99 < base_write_result.latency_99 * 1.05, (
+            f"Per partition limit caused more than 5% write latency degradation "
             f"{limited_write_result.latency_99}<{base_write_result.latency_99 * 1.05}"
-        assert limited_read_result.latency_99 < base_read_result.latency_99 * 1.05, \
-            f"Per partition limit caused more than 5% read latency degradation" \
+        )
+        assert limited_read_result.latency_99 < base_read_result.latency_99 * 1.05, (
+            f"Per partition limit caused more than 5% read latency degradation"
             f"{limited_read_result.latency_99}<{base_read_result.latency_99 * 1.05}"
-        assert limited_write_result.ops > base_write_result.ops * 0.95, \
-            f"Per partition limit caused more than 5% write op/s degradation" \
+        )
+        assert limited_write_result.ops > base_write_result.ops * 0.95, (
+            f"Per partition limit caused more than 5% write op/s degradation"
             f"{limited_write_result.ops}>{base_write_result.ops * 0.95}"
-        assert limited_read_result.ops > base_read_result.ops * 0.95, \
-            f"Per partition limit caused more than 5% read op/s degradation" \
+        )
+        assert limited_read_result.ops > base_read_result.ops * 0.95, (
+            f"Per partition limit caused more than 5% read op/s degradation"
             f"{limited_read_result.ops}>{base_read_result.ops * 0.95}"
+        )
 
-        assert stressed_limited_write_result.latency_99 < stressed_base_write_result.latency_99 * 0.95, \
-            f"Per partition limit didn't bring write latency improvement when several partitions were additionally stressed" \
+        assert stressed_limited_write_result.latency_99 < stressed_base_write_result.latency_99 * 0.95, (
+            f"Per partition limit didn't bring write latency improvement when several partitions were additionally stressed"
             f"{stressed_limited_write_result.latency_99} < {stressed_base_write_result.latency_99 * 0.95}"
-        assert stressed_limited_read_result.latency_99 < stressed_base_read_result.latency_99 * 0.95, \
-            "Per partition limit didn't bring read latency improvement when several partitions were additionally stressed" \
+        )
+        assert stressed_limited_read_result.latency_99 < stressed_base_read_result.latency_99 * 0.95, (
+            "Per partition limit didn't bring read latency improvement when several partitions were additionally stressed"
             f"{stressed_limited_read_result.latency_99} < {stressed_base_read_result.latency_99 * 0.95}"
-        assert stressed_limited_write_result.ops > stressed_base_write_result.ops * 1.05, \
-            "Per partition limit didn't bring write op/s improvement when several partitions were additionally stressed" \
+        )
+        assert stressed_limited_write_result.ops > stressed_base_write_result.ops * 1.05, (
+            "Per partition limit didn't bring write op/s improvement when several partitions were additionally stressed"
             f"{stressed_limited_write_result.ops} > {stressed_base_write_result.ops * 1.05}"
-        assert stressed_limited_read_result.ops > stressed_base_read_result.ops * 1.05, \
-            "Per partition limit didn't bring read op/s improvement when several partitions were additionally stressed" \
+        )
+        assert stressed_limited_read_result.ops > stressed_base_read_result.ops * 1.05, (
+            "Per partition limit didn't bring read op/s improvement when several partitions were additionally stressed"
             f"{stressed_limited_read_result.ops} > {stressed_base_read_result.ops * 1.05}"
+        )
 
     def test_compaction_throughput_limit(self):
         """
@@ -121,31 +132,39 @@ class ThroughputLimitFunctionalTest(ClusterTester):
         LOGGER.info("measure base latency and ops/s - without setting limits")
         base_write_result = self._measure_latency_and_ops(stress_cmd=stress_write_cmd, conditions="base write")
         for limit in [0.45, 0.2, 0.01]:
-            LOGGER.info("measure latency and ops/s - with setting compaction limit to %s of disk write bandwidth", limit)
+            LOGGER.info(
+                "measure latency and ops/s - with setting compaction limit to %s of disk write bandwidth", limit
+            )
             self._truncate_table(table=table)
             time.sleep(60)  # to make scylla complete truncate and make clear gap between load
             self._set_compaction_limit(limit_mb=round(disk_write_throughput * limit))
 
             limited_write_result = self._measure_latency_and_ops(
-                stress_cmd=stress_write_cmd, conditions=f"limited {str(limit)} write")
+                stress_cmd=stress_write_cmd, conditions=f"limited {str(limit)} write"
+            )
             if limited_write_result.latency_99 > base_write_result.latency_99:
-                InfoEvent(f"Compaction throughput limit didn't bring write latency improvements when "
-                          f"limiting compaction to {limit} of disk write bandwidth "
-                          f"{limited_write_result.latency_99}<{base_write_result.latency_99}",
-                          severity=Severity.ERROR).publish()
+                InfoEvent(
+                    f"Compaction throughput limit didn't bring write latency improvements when "
+                    f"limiting compaction to {limit} of disk write bandwidth "
+                    f"{limited_write_result.latency_99}<{base_write_result.latency_99}",
+                    severity=Severity.ERROR,
+                ).publish()
             if limited_write_result.ops < base_write_result.ops:
-                InfoEvent(f"Compaction throughput limit didn't bring write op/s improvements when "
-                          f"limiting compaction to {limit} of disk write bandwidth "
-                          f"{limited_write_result.ops}>{base_write_result.ops}",
-                          severity=Severity.ERROR).publish()
+                InfoEvent(
+                    f"Compaction throughput limit didn't bring write op/s improvements when "
+                    f"limiting compaction to {limit} of disk write bandwidth "
+                    f"{limited_write_result.ops}>{base_write_result.ops}",
+                    severity=Severity.ERROR,
+                ).publish()
 
     def _measure_latency_and_ops(self, stress_cmd: str, conditions: str = ""):
         # investigate if we shouldn't aggregate results param or round robin when more loaders is added
         stress_thread: CassandraStressThread = self.run_stress_thread(stress_cmd=stress_cmd)
         cs_summary, errors = stress_thread.verify_results()
         LOGGER.debug(cs_summary)
-        result = PerfResult(latency_99=float(cs_summary[0]["latency 99th percentile"]),
-                            ops=float(cs_summary[0]["op rate"]))
+        result = PerfResult(
+            latency_99=float(cs_summary[0]["latency 99th percentile"]), ops=float(cs_summary[0]["op rate"])
+        )
         LOGGER.info("%s: %s", conditions, result)
         assert not errors, f"Errors during running stress_cmd: {stress_cmd}: {errors}"
         return result

@@ -13,7 +13,6 @@ class CSPopulateDistribution(Enum):
 
 
 class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # all parameters were taken from scylla-stress-orch repo
@@ -25,15 +24,22 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self.DATASET_SIZE = 3000 * 1024 * 1024 * 1024  # pylint: disable=invalid-name
         # expected row size (was calculated by dev team ~313 bytes)
         self.ROW_SIZE_BYTES = 210 * 1024 * 1024 * 1024 / 720_000_000  # pylint: disable=invalid-name
-        self.ROW_COUNT = int(self.DATASET_SIZE / self.ROW_SIZE_BYTES /  # pylint: disable=invalid-name
-                             self.REPLICATION_FACTOR)
+        self.ROW_COUNT = int(  # pylint: disable=invalid-name
+            self.DATASET_SIZE / self.ROW_SIZE_BYTES / self.REPLICATION_FACTOR
+        )
         # How many standard deviations should span the cluster's memory
         self.CONFIDENCE = 6  # pylint: disable=invalid-name
         # intance i3.4xlarge
         self.INSTANCE_MEMORY_GB = 122  # pylint: disable=invalid-name
         self.GAUSS_CENTER = self.ROW_COUNT // 2  # pylint: disable=invalid-name
-        self.GAUSS_SIGMA = int(self.INSTANCE_MEMORY_GB * self.CLUSTER_SIZE * 1024 * 1024 *  # pylint: disable=invalid-name
-                               1024 // (self.CONFIDENCE * self.ROW_SIZE_BYTES * self.REPLICATION_FACTOR))
+        self.GAUSS_SIGMA = int(  # pylint: disable=invalid-name
+            self.INSTANCE_MEMORY_GB
+            * self.CLUSTER_SIZE
+            * 1024
+            * 1024
+            * 1024
+            // (self.CONFIDENCE * self.ROW_SIZE_BYTES * self.REPLICATION_FACTOR)
+        )
 
         self.MAX_95TH_LATENCY = 20.0  # pylint: disable=invalid-name
         self.MAX_99TH_LATENCY = 400.0  # pylint: disable=invalid-name
@@ -45,8 +51,9 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         1. Run a write workload as a preparation
         2. Run a mixed workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_m'),
-                                 test_name="Test 'mixed: read:50%,write:50%'")
+        self._base_test_workflow(
+            cs_cmd_tmpl=self.params.get("stress_cmd_m"), test_name="Test 'mixed: read:50%,write:50%'"
+        )
 
     def test_write_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -55,8 +62,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         1. Run a write workload as a preparation
         2. Run a write workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_w'),
-                                 test_name="Test 'write 100%'")
+        self._base_test_workflow(cs_cmd_tmpl=self.params.get("stress_cmd_w"), test_name="Test 'write 100%'")
 
     def test_read_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -65,28 +71,29 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         1. Run a write workload as a preparation
         2. Run a read workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_r'),
-                                 test_name="Test 'read 100%'")
+        self._base_test_workflow(cs_cmd_tmpl=self.params.get("stress_cmd_r"), test_name="Test 'read 100%'")
 
     def _base_test_workflow(self, cs_cmd_tmpl, test_name):
         stress_num = 1
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
-        compaction_strategy = self.params.get('compaction_strategy')
+        compaction_strategy = self.params.get("compaction_strategy")
         self.preload_data(compaction_strategy=compaction_strategy)
         self.wait_no_compactions_running(n=400, sleep_time=120)
 
         self.run_fstrim_on_all_db_nodes()
         # self.disable_autocompaction_on_all_nodes()
-        self.run_gradual_increase_load(stress_cmd_templ=cs_cmd_tmpl,
-                                       start_ops=self.start_ops,
-                                       throttle_step=self.throttle_step,
-                                       max_ops=self.max_ops,
-                                       stress_num=stress_num,
-                                       num_loaders=num_loaders,
-                                       compaction_strategy=compaction_strategy,
-                                       test_name=test_name)
+        self.run_gradual_increase_load(
+            stress_cmd_templ=cs_cmd_tmpl,
+            start_ops=self.start_ops,
+            throttle_step=self.throttle_step,
+            max_ops=self.max_ops,
+            stress_num=stress_num,
+            num_loaders=num_loaders,
+            compaction_strategy=compaction_strategy,
+            test_name=test_name,
+        )
 
     def preload_data(self, compaction_strategy=None):
         prepare_write_tmpl: str = self.params.get("prepare_write_cmd")
@@ -100,27 +107,27 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
 
         population_commands = []
         for i in range(len(range_points) - 1):
-            cmd = prepare_write_tmpl.replace(
-                "$ROW_NUMBER", f"{range_points[i + 1] - range_points[i] + 1}").replace(
-                "$SEQUENCE", f"{range_points[i]}..{range_points[i + 1]}")
+            cmd = prepare_write_tmpl.replace("$ROW_NUMBER", f"{range_points[i + 1] - range_points[i] + 1}").replace(
+                "$SEQUENCE", f"{range_points[i]}..{range_points[i + 1]}"
+            )
             population_commands.append(cmd)
 
         self.log.info("Population c-s commands: %s", population_commands)
         # Check if it should be round_robin across loaders
         params = {}
         stress_queue = []
-        if self.params.get('round_robin'):
-            self.log.debug('Populating data using round_robin')
-            params.update({'stress_num': 1, 'round_robin': True})
+        if self.params.get("round_robin"):
+            self.log.debug("Populating data using round_robin")
+            params.update({"stress_num": 1, "round_robin": True})
         if compaction_strategy:
-            self.log.debug('Next compaction strategy will be used %s', compaction_strategy)
-            params['compaction_strategy'] = compaction_strategy
+            self.log.debug("Next compaction strategy will be used %s", compaction_strategy)
+            params["compaction_strategy"] = compaction_strategy
 
         for stress_cmd in population_commands:
-            params.update({'stress_cmd': stress_cmd})
+            params.update({"stress_cmd": stress_cmd})
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+            self.log.debug("RUNNING stress cmd: {}".format(stress_cmd))
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:
@@ -129,9 +136,17 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self.log.info("Dataset has been populated")
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def run_gradual_increase_load(self, stress_cmd_templ,
-                                  start_ops, max_ops, throttle_step,
-                                  stress_num, num_loaders, compaction_strategy, test_name):
+    def run_gradual_increase_load(
+        self,
+        stress_cmd_templ,
+        start_ops,
+        max_ops,
+        throttle_step,
+        stress_num,
+        num_loaders,
+        compaction_strategy,
+        test_name,
+    ):
         self.warmup_cache(compaction_strategy)
         total_summary = []
         cs_popuplation_distribution = self.get_cs_distribution()
@@ -141,19 +156,25 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
             self.log.info("Run cs command with rate: %s Kops", current_ops)
             current_throttle = current_ops // (num_loaders * stress_num)
             stress_cmd = base_stress_cmd.replace("$threads", f"{self.NUM_THREADS}").replace(
-                "$throttle", f"{current_throttle}")
+                "$throttle", f"{current_throttle}"
+            )
 
-            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num,
-                                                  compaction_strategy=compaction_strategy, stats_aggregate_cmds=False)
+            stress_queue = self.run_stress_thread(
+                stress_cmd=stress_cmd,
+                stress_num=stress_num,
+                compaction_strategy=compaction_strategy,
+                stats_aggregate_cmds=False,
+            )
             results = self.get_stress_results(queue=stress_queue, store_results=False)
             self.log.debug("All c-s results: %s", results)
             summary_result = self._calculate_average_latency(results)
             summary_result["ops"] = current_ops
             self.log.debug("C-S results for ops: %s. \n Results: \n %s", current_ops, summary_result)
             total_summary.append(summary_result)
-            if (summary_result["latency 95th percentile"] > self.MAX_95TH_LATENCY or
-                    summary_result["latency 99th percentile"] > self.MAX_99TH_LATENCY):
-
+            if (
+                summary_result["latency 95th percentile"] > self.MAX_95TH_LATENCY
+                or summary_result["latency 99th percentile"] > self.MAX_99TH_LATENCY
+            ):
                 self.log.warning("Latency 95th percentile is large that %d", self.MAX_95TH_LATENCY)
                 break
 
@@ -186,7 +207,8 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         perf_analyzer = ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(
             es_index=self._test_index,
             es_doc_type=self._es_doc_type,
-            email_recipients=self.params.get('email_recipients'))
+            email_recipients=self.params.get("email_recipients"),
+        )
         perf_analyzer.check_regression(test_name=test_name, test_results=total_summary, test_details=setup_details)
 
     def get_cs_distribution(self):
@@ -221,6 +243,6 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
             stress_num=1,
             compaction_strategy=compaction_strategy,
             stats_aggregate_cmds=False,
-            round_robin=True
+            round_robin=True,
         )
         self.get_stress_results(stress_queue, store_results=False)
