@@ -912,6 +912,8 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='*latte*',
                 search_locally=True),
+        FileLog(name='cdc-replicator.log',
+                search_locally=True),
         FileLog(name='test.crt',
                 command="test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}".format('test.crt'))
     ]

@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'tablet_split_merge_test.TabletSplitMergeTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-lwt-basic-24h.yaml'
+    test_config: 'test-cases/longevity/longevity-cdc-basic-24h.yaml'
 )
