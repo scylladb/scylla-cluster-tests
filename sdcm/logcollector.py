@@ -1002,6 +1002,13 @@ class LoaderLogCollector(LogCollector):
         ),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+<<<<<<< HEAD
+||||||| parent of 38a235665 (feature(test): LWT/MV/CDC longevity test with tablet split/merge)
+        FileLog(name="console_output.log", search_locally=True),
+=======
+        FileLog(name="console_output.log", search_locally=True),
+        FileLog(name="cdc-replicator.log", search_locally=True),
+>>>>>>> 38a235665 (feature(test): LWT/MV/CDC longevity test with tablet split/merge)
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
