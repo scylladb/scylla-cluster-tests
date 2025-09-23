@@ -1,11 +1,12 @@
 test_duration: 420
 
 latte_schema_parameters:
-  lwt: 'true'
+  lwt: 'false'
   cdc: 'false'
-  mv: 'false'
-  ks_name: 'lwt_keyspace'
-  table_name: 'lwt_table'
+  mv: 'true'
+  ks_name: 'mv_keyspace'
+  table_name: 'mv_table'
+  mv_name: 'mv_mv'
 
 prepare_write_cmd:
   - >-
@@ -18,15 +19,11 @@ prepare_write_cmd:
 
 stress_cmd:
   - >-
-    latte run -f update_first_part_of_table --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update-first-part
+    latte run -f update_table --consistency=QUORUM --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f update_second_part_of_table --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update-second-part
-    data_dir/latte/tablet_split_merge_load.rn
-
-  - >-
-    latte run -f read_from_table --consistency=LOCAL_SERIAL --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-table
+    latte run -f read_from_mv --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-mv
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
@@ -43,13 +40,19 @@ gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
+nemesis_selector: ["schema_changes and not disruptive"]
 nemesis_seed: '021'
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
-user_prefix: 'longevity-lwt-24h'
+user_prefix: 'longevity-mv-24h'
 
 use_preinstalled_scylla: true
+
+experimental_features:
+  - views-with-tablets
+
+append_scylla_yaml:
+  rf_rack_valid_keyspaces: true
 
 append_scylla_args: '--logger-log-level table=debug'
