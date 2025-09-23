@@ -12,6 +12,10 @@ table_definition: |
     pk int,
     ck int,
     v text,
+    v1 text,
+    v2 text,
+    very_very_very_long_column_name text,
+    very_very_very_long_column_namevery_very_very_long_column_name blob,
     primary key (pk, ck)) WITH cdc = {'enabled': true}
 
 columnspec:
@@ -22,9 +26,29 @@ columnspec:
     population: uniform(1..1k)
 
   - name: v
+    size: exp(10..50)
+    population: uniform(1..1k)
+
+  - name: v1
+    size: exp(100..500)
+    population: uniform(1..1k)
+
+  - name: v2
     size: exp(1..5)
+    population: uniform(1..1k)
+
+  - name: very_very_very_long_column_name
+    size: exp(5..15)
+    population: uniform(1..1k)
+
+  - name: very_very_very_long_column_namevery_very_very_long_column_name
+    size: exp(50..500)
+    population: uniform(1..1k)
 
 queries:
-  update:
-    cql: update ks1.table1 set v = ? where pk = ? and ck = ?
+  update1:
+    cql: update ks1.table1 set v = ?, v1 = ?, v2 = ? where pk = ? and ck = ?
+    fields: samerow
+  update2:
+    cql: update ks1.table1 set v = ?, very_very_very_long_column_name = ?, very_very_very_long_column_namevery_very_very_long_column_name = ? where pk = ? and ck = ?
     fields: samerow
