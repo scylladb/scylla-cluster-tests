@@ -1002,6 +1002,7 @@ class LoaderLogCollector(LogCollector):
         ),
         CommandLog(name="cloud-init-output.log", command="cat /var/log/cloud-init-output.log"),
         CommandLog(name="cloud-init.log", command="cat /var/log/cloud-init.log"),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
