@@ -1000,6 +1000,7 @@ class LoaderLogCollector(LogCollector):
             name="test.crt",
             command="test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}".format("test.crt"),
         ),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
