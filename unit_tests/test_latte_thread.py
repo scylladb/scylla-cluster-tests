@@ -120,6 +120,11 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
 
     loader_set = LocalLoaderSetDummy(params=params)
 
+    # dedicated SSL certs directory for the test, to avoid conflicts during parallel tests execution
+    if hasattr(docker_scylla, 'test_ssl_dir'):
+        for loader_node in loader_set.nodes:
+            loader_node.__class__.ssl_conf_dir = property(lambda self: docker_scylla.test_ssl_dir)
+
     cmd = ("latte run -d 10s docker/latte/workloads/workload.rn --generate-report")
 
     latte_thread = LatteStressThread(
