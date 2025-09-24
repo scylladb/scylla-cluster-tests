@@ -104,6 +104,18 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
+<<<<<<< HEAD
+||||||| parent of b514c3938 (fix(manager): make 3.6.0 a default version of Manager)
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
+            string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
+                   description: 'master_latest|3.5|3.4',
+                   name: 'manager_version')
+=======
+            separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
+            string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
+                   description: 'master_latest|3.6|3.5',
+                   name: 'manager_version')
+>>>>>>> b514c3938 (fix(manager): make 3.6.0 a default version of Manager)
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
                    description: 'If empty - the default manager version will be taken',
@@ -121,6 +133,26 @@ def call(Map pipelineParams) {
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_address')
 
+<<<<<<< HEAD
+||||||| parent of b514c3938 (fix(manager): make 3.6.0 a default version of Manager)
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
+                   description: 'Url to the scylla manager packages',
+                   name: 'scylla_mgmt_pkg')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+                   description: 'master_latest|3.5|3.4. Only for upgrade test',
+                   name: 'target_manager_version')
+
+=======
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
+                   description: 'Url to the scylla manager packages',
+                   name: 'scylla_mgmt_pkg')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+                   description: 'master_latest|3.6|3.5. Only for upgrade test',
+                   name: 'target_manager_version')
+
+>>>>>>> b514c3938 (fix(manager): make 3.6.0 a default version of Manager)
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
                    name: 'target_scylla_mgmt_server_address')
