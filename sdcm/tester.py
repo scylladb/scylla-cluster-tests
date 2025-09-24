@@ -1070,7 +1070,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
-        self.prepare_azure_kms()
+        # self.prepare_azure_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
