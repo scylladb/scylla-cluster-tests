@@ -834,22 +834,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             'kmip_hosts' in append_scylla_yaml
         )
 
-    def prepare_kms_host(self) -> None:
-        version_supports_kms = (self.params.is_enterprise and
-                                ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3')
-        backend_support_kms = self.params.get('cluster_backend') in ('aws',)
-        kms_configured_in_sct = self.params.get('scylla_encryption_options')
-        test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
-        should_enable_kms = (version_supports_kms and
-                             backend_support_kms and
-                             not kms_configured_in_sct and
-                             not test_uses_oracle and
-                             not self.params.get('enterprise_disable_kms'))
-
-        if should_enable_kms:
+    def prepare_kms_host(self) -> None:  # noqa: PLR0911
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring AWS KMS, test uses Oracle DB")
+            return
+        try:
+            scylla_version = ComparableScyllaVersion(self.params.scylla_version)
+            if not (self.params.is_enterprise and scylla_version >= '2023.1.3'):
+                logging.debug(f"Skip configuring AWS KMS, Scylla version {scylla_version} does not support KMS")
+                return
+        except ValueError as e:
+            InfoEvent(message=f"Wanted to enable AWS KMS, but version check raised an error: {e}", severity=Severity.ERROR).publish()
+            return
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("`scylla_encryption_options` is not set in the config, using default values")
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"
-        if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
-            return None
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
         kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
         if 'auto' not in kms_host:
             return None
@@ -888,24 +892,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return None
 
-    def prepare_azure_kms(self) -> None:
-        scylla_version = self.params.scylla_version
-        if not scylla_version:
-            return None
-        version_supports_kms = ComparableScyllaVersion(scylla_version) >= '2025.4.0~dev'
-        backend_support_kms = self.params.get('cluster_backend') in ('azure',)
-        kms_configured_in_sct = self.params.get('scylla_encryption_options')
-        test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
-        should_enable_kms = (version_supports_kms and
-                             backend_support_kms and
-                             not kms_configured_in_sct and
-                             not test_uses_oracle and
-                             not self.params.get('enterprise_disable_kms'))
-
-        if should_enable_kms:
+    def prepare_azure_kms(self) -> None:  # noqa: PLR0911
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring Azure KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring Azure KMS, test uses Oracle DB")
+            return
+        try:
+            scylla_version = ComparableScyllaVersion(self.params.scylla_version)
+            if not (scylla_version >= '2025.4.0~dev'):
+                logging.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
+                return
+        except ValueError as e:
+            InfoEvent(message=f"Wanted to enable Azure KMS, but version check raised an error: {e}", severity=Severity.ERROR).publish()
+            return
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("`scylla_encryption_options` is not set in the config, using default values")
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'AzureKeyProviderFactory', 'azure_host': 'scylla-azure-kms'}"
-        if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
-            return None
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
         azure_host = (yaml.safe_load(scylla_encryption_options) or {}).get("azure_host") or ''
         if not azure_host:
             return None
@@ -1069,8 +1075,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.download_db_packages()
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
-        self.prepare_kms_host()
-        self.prepare_azure_kms()
+        if self.params.get('cluster_backend') in ('aws',):
+            self.prepare_kms_host()
+        elif self.params.get('cluster_backend') in ('azure',):
+            self.prepare_azure_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
