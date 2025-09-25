@@ -3312,6 +3312,7 @@ class BaseCluster:
         key = self.node_type if "db" not in self.node_type else "db"
         action = self.params.get(f"post_behavior_{key}_nodes")
         return {**self.test_config.common_tags(),
+                "Name": self.name,
                 "NodeType": str(self.node_type),
                 "keep_action": "terminate" if action == "destroy" else "", }
 
