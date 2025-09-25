@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__file__)
 PROCESS_LIMIT = multiprocessing.cpu_count()
 TIME_INTERVAL = 600
 PERCENTILES = [50, 90, 95, 99, 99.9, 99.99, 99.999]
+FUTURE_RESULT_TIMEOUT = 10  # seconds
 
 
 def make_hdrhistogram_summary(
@@ -188,20 +189,30 @@ class _HdrRangeHistogramBuilder:
                     interval_num += 1
                 results = {}
                 for e, future in enumerate(futures):
-                    res = future.result()
+                    res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 10 seconds
                     LOGGER.debug(
                         f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
                     if res:
+                        LOGGER.debug("Got result for future: interval_num=%s, result_keys=%s", res.get("interval_num"),
+                                     list(res.get("result", {}).keys()))
                         if res["interval_num"] not in results:
                             results[res["interval_num"]] = {}
                         results[res["interval_num"]].update(res["result"])
+                        LOGGER.debug("Updated results for future: interval_num=%s", res.get("interval_num"))
 
+            LOGGER.debug("Finalised results for path %s", path)
             keys = list(results.keys())
+            LOGGER.debug("Finalised results keys for path %s: %s", path, keys)
             keys.sort()
             summary = []
             for key in keys:
+                LOGGER.debug("Adding results for key %s", key)
                 summary.append(results[key])
+                LOGGER.debug("Added results for key %s", key)
             return summary
+        except TimeoutError:
+            LOGGER.error(f"TimeoutError getting future result for {path} with tags {self.hdr_tags}")
+            raise
         except Exception as e:
             LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
             raise
