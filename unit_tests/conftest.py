@@ -132,16 +132,9 @@ def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            # Get the Docker container's hostname for SSL certificate
-            container_hostname = scylla.remoter.run("hostname", ignore_status=True).stdout.strip()
-            dns_names = [scylla.public_dns_name]
-            # Add container hostname to DNS names if it's different from public_dns_name
-            if container_hostname and container_hostname != scylla.public_dns_name:
-                dns_names.append(container_hostname)
-
             create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
                                ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
-                               ip_addresses=[scylla.ip_address], dns_names=dns_names)
+                               ip_addresses=[scylla.ip_address], dns_names=[scylla.public_dns_name])
             create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
                                ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
         finally:
@@ -150,6 +143,25 @@ def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
     cluster.nodes = [scylla]
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
+
+    # After remoter is set up, update SSL certificate with container hostname if needed
+    if ssl:
+        curr_dir = os.getcwd()
+        try:
+            os.chdir(Path(__file__).parent.parent)
+            # Get the Docker container's hostname for SSL certificate
+            container_hostname = scylla.remoter.run("hostname", ignore_status=True).stdout.strip()
+            dns_names = [scylla.public_dns_name]
+            # Add container hostname to DNS names if it's different from public_dns_name
+            if container_hostname and container_hostname != scylla.public_dns_name:
+                dns_names.append(container_hostname)
+
+            # Recreate the client-facing certificate with updated DNS names
+            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
+                               ip_addresses=[scylla.ip_address], dns_names=dns_names)
+        finally:
+            os.chdir(curr_dir)
 
     scylla.is_running = lambda: bool(getattr(scylla, 'docker_id', None))
     scylla.remote_scylla_yaml = lambda: mock_remote_scylla_yaml(scylla)
