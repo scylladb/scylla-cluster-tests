@@ -3133,7 +3133,10 @@ class FillDatabaseData(ClusterTester):
                         if 'CREATE INDEX' in create_table.upper():
                             time.sleep(15)
                         self.log.debug("create table: %s", create_table)
-                        session.execute(create_table)
+                        try:
+                            session.execute(create_table)
+                        except Exception as e:
+                            self.log.error("Failed to create table: %s", create_table)
                         # sleep for 15 seconds to wait creating cdc tables
                         self.db_cluster.wait_for_schema_agreement()
                         if 'CREATE TYPE' in create_table.upper():
@@ -3380,7 +3383,10 @@ class FillDatabaseData(ClusterTester):
             session.set_keyspace(self.base_ks)
 
             # Create all tables according the above list
-            self.cql_create_tables(session)
+            try:
+                self.cql_create_tables(session)
+            except Exception as ex:
+                LOGGER.debug("Error during executing the query '%s': '%s'", session)
 
     def verify_db_data(self):
         # Prepare connection
