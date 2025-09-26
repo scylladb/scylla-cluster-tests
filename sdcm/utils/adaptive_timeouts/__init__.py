@@ -12,8 +12,8 @@ from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)
 
-TABLETS_SOFT_TIMEOUT = 1 * 60 * 60
-TABLETS_HARD_TIMEOUT = 3 * 60 * 60
+TABLETS_SOFT_TIMEOUT = 2 * 60 * 60
+TABLETS_HARD_TIMEOUT = 6 * 60 * 60
 
 
 def _get_decommission_timeout(node_info_service: NodeLoadInfoService,
