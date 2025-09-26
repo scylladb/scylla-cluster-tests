@@ -1,0 +1,54 @@
+test_duration: 420
+
+prepare_write_cmd:
+  - >-
+    latte run -f lwt_insert -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 0 --tag lwt-insert-1
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+  - >-
+    latte run -f lwt_insert -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 5000001 --tag lwt-insert-2
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+stress_cmd:
+  - >-
+    latte run -f upd_first_part --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag upd-first-part
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+  - >-
+    latte run -f upd_second_part --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag upd-second-part
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+  - >-
+    latte run -f lwt_read --consistency=LOCAL_SERIAL --threads=1 --rate=800 --concurrency=900 --duration=360m --tag lwt-read
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+  - >-
+    latte run -f lwt_delete_partitions -P delete_pct=50 --rate 20  --concurrency=10 --duration=360m --tag lwt-delete-partitions
+    data_dir/latte/lwt_mv_cdc_load.rn
+
+db_type: 'mixed_scylla'
+
+n_db_nodes: 6
+simulated_racks: 3
+n_loaders: 2
+round_robin: true
+
+instance_type_db: 'i4i.large'
+
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.large'
+oracle_scylla_version: ''
+ami_id_db_oracle: 'ami-0c14b7ebb55b4ce15'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
+nemesis_seed: '021'
+nemesis_during_prepare: false
+space_node_threshold: 64424
+
+user_prefix: 'longevity-lwt-mv-cdc-replicator-24h'
+
+use_preinstalled_scylla: true
+
+experimental_features:
+  - views-with-tablets
