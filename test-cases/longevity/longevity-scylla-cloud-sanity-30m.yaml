@@ -1,0 +1,13 @@
+test_duration: 60
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..5048570 -log interval=5"
+             ]
+
+n_db_nodes: 3
+n_loaders: 1
+
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.large'
+gce_instance_type_db: 'n2-highmem-2'
+gce_instance_type_loader: 'e2-standard-2'
+
+user_prefix: 'longevity-scylla-cloud-sanity-30m'
