@@ -89,7 +89,7 @@ class CDCReplicationTest(ClusterTester):
 
     def test_replication_cs(self) -> None:
         self.log.info('Using cassandra-stress to generate workload.')
-        self.test_replication(False, Mode.DELTA)
+        self.test_replication(False, Mode.PREIMAGE)
 
     def test_replication_gemini(self, mode: Mode) -> None:
         self.log.info('Using gemini to generate workload. Mode: {}'.format(mode.name))
@@ -232,7 +232,7 @@ class CDCReplicationTest(ClusterTester):
             self.fail('Consistency check failed.')
 
     def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
-        assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
+        # assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
         master_node = self.db_cluster.nodes[0]
         replica_node = self.cs_db_cluster.nodes[0]
         master_node.running_nemesis = "replcation_check"
