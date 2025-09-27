@@ -1,3 +1,4 @@
+from contextlib import ExitStack, contextmanager
 import logging
 import re
 from functools import partial
@@ -15,6 +16,21 @@ from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 
 LOGGER = logging.getLogger(__name__)
+
+
+@contextmanager
+def severity_change_context():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.ERROR,  # killing stress creates Critical error
+            event_class=DatabaseLogEvent.CORRUPTED_SSTABLE,
+            extra_time_to_expiration=60))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.NORMAL,  # if a node is shutting down, errors are logged
+            event_class=DatabaseLogEvent.DATABASE_ERROR,
+            regex=r"api - scrub .* failed: seastar::abort_requested_exception \(abort requested\)",
+            extra_time_to_expiration=60))
+        yield
 
 
 class SstablesValidator(TeardownValidator):
@@ -78,9 +94,7 @@ class SstablesValidator(TeardownValidator):
             try:
                 LOGGER.info("Running nodetool scrub on all nodes in validation mode")
                 parallel_obj = ParallelObject(objects=cluster.nodes, timeout=timeout)
-                with EventsSeverityChangerFilter(new_severity=Severity.ERROR,  # killing stress creates Critical error
-                                                 event_class=DatabaseLogEvent.CORRUPTED_SSTABLE,
-                                                 extra_time_to_expiration=60):
+                with severity_change_context():
                     parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
                 LOGGER.info("Nodetool scrub validation finished")
             except Exception as exc:  # noqa: BLE001
