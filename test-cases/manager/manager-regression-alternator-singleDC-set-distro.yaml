@@ -1,0 +1,64 @@
+# Enable (also in stress_cmds) when support for features is added:
+alternator_test_table:
+    # https://github.com/scylladb/scylla-manager/issues/4513
+    name: '.0-Usertable_Backup'
+    # https://github.com/scylladb/scylla-manager/issues/4514
+    lsi_name: '1-.Lsi_'
+    # https://github.com/scylladb/scylla-manager/issues/4515
+    gsi_name: '-Gsi_.0'
+    tags:
+        key1: value1
+    items: 1000
+
+test_duration: 240
+
+round_robin: true
+
+stress_cmd:
+    "bin/ycsb load dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup' -p dynamodb.ttlKey=TTL -p dynamodb.ttlDuration=86400
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\""
+
+stress_read_cmd: [
+    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup' -p dynamodb.ttlKey=TTL -p dynamodb.ttlDuration=86400
+    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+# 1. no scylla API allowing for waiting for all view updates to finish - at the end of restore procedure LSIs might still be incomplete
+# 2. requires: https://github.com/scylladb/YCSB/pull/20
+#    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup:-Gsi_.0'
+#    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+#    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+#    "bin/ycsb run dynamodb -P workloads/workloadc -p table='.0-Usertable_Backup:1-.Lsi_'
+#    -p requestdistribution=sequential -p insertorder=ordered -p insertstart=0 -p dataintegrity=true -p recordcount=1000
+#    -p fieldlengthdistribution=constant -p fieldnameprefix=\"#:1.-/[0]field\"",
+]
+
+alternator_port: '8080'
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+# https://github.com/scylladb/scylla-manager/issues/4510
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c6i.large'
+
+region_name: 'us-east-1'
+n_db_nodes: '3'
+n_loaders: 1
+
+client_encrypt: true
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-regression
+space_node_threshold: 6442
+
+aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'

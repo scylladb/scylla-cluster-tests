@@ -92,6 +92,22 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_restore_backup_with_task')
 
+    def test_restore_alternator_backup_with_task(self, delete_tables: list = None):
+        self.log.info('starting test_restore_alternator_backup_with_task')
+        mgr_cluster = self.db_cluster.get_cluster_manager(
+            alternator_credentials=self.alternator.get_credentials(node=self.db_cluster.nodes[0]))
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        soft_timeout = 36 * 60
+        hard_timeout = 50 * 60
+        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.data_nodes[0], timeout=soft_timeout):
+            self.verify_alternator_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, delete_tables=delete_tables,
+                                                  timeout=hard_timeout)
+        mgr_cluster.delete()  # remove cluster at the end of the test
+        self.log.info('finishing test_restore_alternator_backup_with_task')
+
 
 class ManagerBackupTests(ManagerRestoreTests):
 
@@ -249,6 +265,20 @@ class ManagerBackupTests(ManagerRestoreTests):
             self.test_enospc_during_backup()
         with self.subTest('Test Restore end of space'):
             self.test_enospc_before_restore()
+
+    def test_alternator_backup_feature(self):
+        test_table_config = self.params.get('alternator_test_table') or {}
+        features = {"lsi": test_table_config.get("lsi_name", None),
+                    "gsi": test_table_config.get("gsi_name", None),
+                    "tags": test_table_config.get("tags", None)}
+        with self.alternator_backuped_tables(**features) as tables:
+            self.verify_alternator_tables_features(tables, **features)
+            self.generate_load_and_wait_for_results()
+            with self.subTest('Test restore alternator backup with restore task'):
+                self.test_restore_alternator_backup_with_task(delete_tables=tables.keys())
+                self.verify_alternator_tables_features(
+                    tables, wait_for_item_count=test_table_config.get("items", None), **features)
+                self.run_verification_read_stress()
 
     def test_no_delta_backup_at_disabled_compaction(self):
         """The purpose of test is to check that delta backup (no changes to DB between backups) takes time -> 0.
