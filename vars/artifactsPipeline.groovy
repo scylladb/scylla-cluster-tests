@@ -16,7 +16,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                    description: 'aws|gce|azure|docker',
                    name: 'backend')
-            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
                name: 'availability_zone')
             string(defaultValue: '',
@@ -242,7 +242,9 @@ def call(Map pipelineParams) {
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
                                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                    fi
 
                                                     echo "start test ......."
                                                     ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
