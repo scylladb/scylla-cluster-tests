@@ -248,16 +248,13 @@ class SctEvent:
             return
         get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
         if self.severity.value > Severity.WARNING.value:
-            metadata = {"base": self.base}
+            event_type = self.base
             if self.type:
-                metadata["type"] = self.type
+                event_type += f".{self.type}"
             if self.subtype:
-                metadata["subtype"] = self.subtype
+                event_type += f".{self.subtype}"
             ACTION_LOGGER.error(
-                f"{self.severity.name} Event",
-                trace_id=self.event_id,
-                target=getattr(self, 'node', None),
-                metadata=metadata
+                f"{event_type} {self.severity.name} Event (id={self.event_id}) on node: {getattr(self, 'node', None)}"
             )
         self._ready_to_publish = False
 
