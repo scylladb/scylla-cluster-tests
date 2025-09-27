@@ -1406,6 +1406,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 raise ImportError(f"cluster_cloud isn't installed. {CLUSTER_CLOUD_IMPORT_ERROR}")
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
+            nodes_smp = self.params.get('smp_per_db_node_mapping') or []
             self.db_cluster = ScyllaGCECluster(gce_image=self.params.get('gce_image_db').strip(),
                                                gce_image_type=db_info['disk_type'],
                                                gce_image_size=db_info['disk_size'],
@@ -1415,6 +1416,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                                n_nodes=db_info['n_nodes'],
                                                add_disks=cluster_additional_disks,
                                                service_accounts=service_accounts,
+                                               nodes_smp=nodes_smp,
                                                **common_params)
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
@@ -1479,12 +1481,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             params=self.params,
             region_names=regions,
         )
+        nodes_smp = self.params.get('smp_per_db_node_mapping') or []
         self.db_cluster = ScyllaAzureCluster(image_id=azure_image,
                                              root_disk_size=db_info['disk_size'],
                                              instance_type=db_info['type'],
                                              provisioners=provisioners,
                                              n_nodes=db_info['n_nodes'],
                                              user_name=self.params.get('azure_image_username'),
+                                             nodes_smp=nodes_smp,
                                              **common_params)
         self.loaders = LoaderSetAzure(
             image_id=self.params.get('azure_image_loader'),
@@ -1576,10 +1580,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             for cl_zone_params in _get_all_zones_common_params():
                 cl_zone_params.update(_get_instance_params())
                 try:
+                    nodes_smp = self.params.get('smp_per_db_node_mapping') or []
                     return ScyllaAWSCluster(
                         ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
                         ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                        **cl_zone_params)
+                        **cl_zone_params, nodes_smp=nodes_smp)
                 except botocore.exceptions.ClientError as error:
                     capacity_error_keywards = ['Unsupported', 'InsufficientInstanceCapacity']
                     if any(capacity_error in str(error) for capacity_error in capacity_error_keywards):
@@ -1599,13 +1604,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         def create_cluster(db_type='scylla'):
             cl_params = _get_instance_params()
             cl_params.update(common_params)
+            nodes_smp = self.params.get('smp_per_db_node_mapping') or []
             if db_type == 'scylla':
                 if self.params.get('aws_fallback_to_next_availability_zone'):
                     return _create_auto_zone_scylla_aws_cluster()
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                    **cl_params)
+                    **cl_params,
+                    nodes_smp=nodes_smp)
             elif db_type == 'cassandra':
                 return CassandraAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
@@ -1621,6 +1628,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     n_nodes=[self.params.get('n_test_oracle_db_nodes')],
                     node_type='oracle-db',
                     **(common_params | {'user_prefix': user_prefix + '-oracle'}),
+                    nodes_smp=nodes_smp,
                 )
             elif db_type == 'cloud_scylla':
                 cloud_credentials = self.params.get('cloud_credentials_path')
@@ -1690,7 +1698,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         common_params = dict(user_prefix=self.params.get('user_prefix'),
                              params=self.params)
 
-        self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
+        nodes_smp = self.params.get('smp_per_db_node_mapping') or []
+        self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ], nodes_smp=nodes_smp,
                                                              **container_node_params, **common_params)
 
         if self.params.get('n_vector_store_nodes') > 0:
@@ -1723,6 +1732,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             credentials=self.credentials,
             ssh_username=baremetal_info['db_nodes']['username'],
             params=self.params,
+            nodes_smp=self.params.get('smp_per_db_node_mapping') or []
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
@@ -1799,6 +1809,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=True)
             k8s_cluster.deploy_prometheus_operator()
 
+        nodes_smp = self.params.get('smp_per_db_node_mapping') or []
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_clusters=[k8s_cluster],
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
@@ -1807,6 +1818,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             params=self.params,
             node_pool_name=scylla_pool.name,
             add_nodes=False,
+            nodes_smp=nodes_smp,
         )
 
         if self.params.get("n_loaders"):
@@ -1885,6 +1897,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             func=gke.deploy_k8s_gke_cluster, unpack_objects=True, ignore_exceptions=False)
 
         for i in range(self.k8s_clusters[0].tenants_number):
+            nodes_smp = self.params.get('smp_per_db_node_mapping') or []
             self.db_clusters_multitenant.append(gke.GkeScyllaPodCluster(
                 k8s_clusters=self.k8s_clusters,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
@@ -1893,6 +1906,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 params=deepcopy(self.params),
                 node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
+                nodes_smp=nodes_smp,
             ))
         self.db_cluster = self.db_clusters_multitenant[0]
 
@@ -1978,6 +1992,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             func=eks.deploy_k8s_eks_cluster, unpack_objects=True, ignore_exceptions=False)
 
         for i in range(self.k8s_clusters[0].tenants_number):
+            nodes_smp = self.params.get('smp_per_db_node_mapping') or []
             self.db_clusters_multitenant.append(eks.EksScyllaPodCluster(
                 k8s_clusters=self.k8s_clusters,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
@@ -1986,6 +2001,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 params=deepcopy(self.params),
                 node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
+                nodes_smp=nodes_smp,
             ))
             if self.params.get('use_mgmt'):
                 for k8s_cluster in self.k8s_clusters:

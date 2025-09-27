@@ -84,7 +84,7 @@ class AWSCluster(cluster.BaseCluster):
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None, node_type=None,
-                 extra_network_interface=False, add_nodes=True):
+                 extra_network_interface=False, add_nodes=True, nodes_smp=None):
         region_names = params.region_names
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
@@ -115,6 +115,7 @@ class AWSCluster(cluster.BaseCluster):
                          node_type=node_type,
                          extra_network_interface=extra_network_interface,
                          add_nodes=add_nodes,
+                         nodes_smp=nodes_smp or []
                          )
 
     def __str__(self):
@@ -436,7 +437,7 @@ class AWSCluster(cluster.BaseCluster):
         node = AWSNode(ec2_instance=instance, ec2_service=ec2_service,
                        credentials=credentials, parent_cluster=self, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, dc_idx=dc_idx, rack=rack)
+                       base_logdir=base_logdir, dc_idx=dc_idx, rack=rack, shard_num=self.get_node_shard_num(node_index))
         node.init()
         return node
 
@@ -452,7 +453,7 @@ class AWSNode(cluster.BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, dc_idx=0, rack=0):
+                 base_logdir=None, dc_idx=0, rack=0, shard_num=None):
         self.node_index = node_index
         self._instance = ec2_instance
         self._instance_type = ec2_instance.instance_type
@@ -467,7 +468,7 @@ class AWSNode(cluster.BaseNode):
                          ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
-                         dc_idx=dc_idx, rack=rack)
+                         dc_idx=dc_idx, rack=rack, shard_num=shard_num)
 
     @cached_property
     def network_configuration(self):
@@ -896,6 +897,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  n_nodes=3,
                  params=None,
                  node_type: str = 'scylla-db',
+                 nodes_smp=None
                  ):
 
         # We have to pass the cluster name in advance in user_data
@@ -918,7 +920,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             n_nodes=n_nodes,
             params=params,
             node_type=node_type,
-            extra_network_interface=network_interfaces_count(params) > 1)
+            extra_network_interface=network_interfaces_count(params) > 1,
+            nodes_smp=nodes_smp or [])
         self.version = '2.1'
 
     def add_nodes(self,
