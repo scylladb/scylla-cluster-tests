@@ -14,7 +14,9 @@
 import os
 import logging
 import collections
+import shutil
 import subprocess
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,12 +30,12 @@ from sdcm.cluster_docker import VectorStoreSetDocker
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.certificate import (
-    create_ca, create_certificate, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
-    CLIENT_FACING_KEYFILE, CA_CERT_FILE, CA_KEY_FILE, CLIENT_CERT_FILE, CLIENT_KEY_FILE)
+    create_ca, create_certificate, SCYLLA_SSL_CONF_DIR, CA_CERT_FILE, CA_KEY_FILE, TLSAssets)
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
+from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.subtest_utils import SUBTESTS_FAILURES
 
@@ -95,29 +97,50 @@ def prom_address():
 
 def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
     ssl = docker_scylla_args.get('ssl')
-    docker_network = docker_scylla_args.get('docker_network')
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
+    docker_network = docker_scylla_args.get('docker_network') or params.get('docker_network')
+    test_uuid = None
+    if not docker_network:
+        test_uuid = str(uuid.uuid4())[:8]
+        docker_network = f"sct_test_network_{test_uuid}"
+
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
 
     default_image = "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269"
     docker_version = docker_scylla_args.get('scylla_docker_image') or docker_scylla_args.get('image', default_image)
+
+    if not params.get('user_prefix'):
+        params['user_prefix'] = f'unit-test-{test_uuid or str(uuid.uuid4())[:8]}'
+
     cluster = LocalScyllaClusterDummy(params=params)
 
-    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+    # unique SSL directory for each test to avoid conflicts during parallel execution
+    ssl_dir_name = f'ssl_conf_{test_uuid}' if test_uuid else 'ssl_conf'
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / ssl_dir_name).absolute()
 
     if ssl:
+        ssl_dir.mkdir(parents=True, exist_ok=True)
         localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
         create_ca(localhost)
 
+        ca_source = Path(get_data_dir_path('ssl_conf'))
+        for file_path in ca_source.glob('*'):
+            if file_path.is_file():
+                shutil.copy2(file_path, ssl_dir)
+
     env_vars = '-e VECTOR_SEARCH_TEST=true' if docker_scylla_args.get('scylla_docker_image') else ''
-    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+    extra_docker_opts = (f'--cpus="1" -v {entryfile_path}:/entry.sh:z'
                          f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
                          f' --user root {env_vars} --entrypoint /entry.sh')
+
+    # network alias for alternator DNS routing
+    if docker_network:
+        extra_docker_opts += ' --network-alias alternator'
 
     if seeds := docker_scylla_args.get("seeds"):
         seeds = f" --seeds={seeds}"
@@ -127,18 +150,17 @@ def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 {alternator_flags}{seeds}",
                           extra_docker_opts=extra_docker_opts, docker_network=docker_network)
-
+    scylla.test_docker_network = docker_network
     if ssl:
-        curr_dir = os.getcwd()
-        try:
-            os.chdir(Path(__file__).parent.parent)
-            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
-                               ip_addresses=[scylla.ip_address], dns_names=[scylla.public_dns_name])
-            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
-        finally:
-            os.chdir(curr_dir)
+        create_certificate(ssl_dir / TLSAssets.DB_CLIENT_FACING_CERT, ssl_dir / TLSAssets.DB_CLIENT_FACING_KEY,
+                           cname="scylladb", ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
+                           ip_addresses=[scylla.internal_ip_address], dns_names=[scylla.public_dns_name])
+        create_certificate(ssl_dir / TLSAssets.CLIENT_CERT, ssl_dir / TLSAssets.CLIENT_KEY,
+                           cname="scylladb", ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
+        if test_uuid:
+            scylla.test_ssl_dir = ssl_dir
+
+        scylla.__class__.ssl_conf_dir = property(lambda self: ssl_dir)
 
     cluster.nodes = [scylla]
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
@@ -178,6 +200,12 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0
 
     scylla.kill()
 
+    if hasattr(scylla, 'test_docker_network'):
+        subprocess.run(['docker', 'network', 'rm', scylla.test_docker_network], capture_output=True, check=False)
+
+    if hasattr(scylla, 'test_ssl_dir'):
+        shutil.rmtree(scylla.test_ssl_dir, ignore_errors=True)
+
 
 @pytest.fixture(name='docker_scylla_2', scope='function')
 def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params):  # noqa: PLR0914
@@ -185,6 +213,7 @@ def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, param
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
     docker_scylla_args['seeds'] = docker_scylla.ip_address
+    docker_scylla_args['docker_network'] = getattr(docker_scylla, 'test_docker_network', None)
     scylla = configure_scylla_node(docker_scylla_args, params)
     yield scylla
 
@@ -222,10 +251,10 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
     params.update({
         'n_vector_store_nodes': 1,
         'vector_store_port': 6080,
-        'vector_store_scylla_port': 9042,
+        'vector_store_scylla_port': BaseNode.CQL_PORT,
         'vector_store_threads': 2,
-        'docker_network': docker_scylla_args.get('docker_network') or 'bridge',
-        'user_prefix': 'test-vector',
+        'docker_network': getattr(cluster.nodes[0], 'test_docker_network', 'bridge'),
+        'user_prefix': params.get('user_prefix') or 'test-vector',
         'vector_store_docker_image': vs_docker_image,
         'vector_store_version': vs_version})
 

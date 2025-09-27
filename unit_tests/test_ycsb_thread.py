@@ -33,7 +33,8 @@ pytestmark = [
 
 
 @pytest.fixture(scope="function", name="alternator_api")
-def fixture_alternator_api(params):
+def fixture_alternator_api(params, docker_scylla):
+    docker_network = getattr(docker_scylla, 'test_docker_network')
     params.update(dict(
         dynamodb_primarykey_type="HASH_AND_RANGE",
         alternator_use_dns_routing=True,
@@ -41,11 +42,11 @@ def fixture_alternator_api(params):
         alternator_enforce_authorization=True,
         alternator_access_key_id='alternator',
         alternator_secret_access_key='password',
-        docker_network='ycsb_net',
+        docker_network=docker_network,
     ))
 
     def create_endpoint_url(node):
-        if running_in_docker():
+        if running_in_docker() or hasattr(node, 'docker_network'):
             endpoint_url = f"http://{node.internal_ip_address}:{ALTERNATOR_PORT}"
         else:
             address = node.get_port(f"{ALTERNATOR_PORT}")
@@ -63,7 +64,7 @@ def fixture_alternator_api(params):
 
 @pytest.fixture(scope="function", name="cql_driver")
 def fixture_cql_driver(docker_scylla):
-    if running_in_docker():
+    if running_in_docker() or hasattr(docker_scylla, 'docker_network'):
         address = f"{docker_scylla.internal_ip_address}:9042"
     else:
         address = docker_scylla.get_port("9042")
@@ -109,7 +110,6 @@ def create_cql_ks_and_table(cql_driver):
 
 
 @pytest.mark.usefixtures("create_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -149,7 +149,6 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
 
 @pytest.mark.usefixtures("create_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_02_dynamodb_api_dataintegrity(
     request, docker_scylla, prom_address, events, params
 ):
@@ -213,9 +212,8 @@ def test_02_dynamodb_api_dataintegrity(
 
 
 @pytest.mark.usefixtures("create_cql_ks_and_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_03_cql(request, docker_scylla, prom_address, params):
-    params['docker_network'] = "ycsb_net"
+    params['docker_network'] = getattr(docker_scylla, 'test_docker_network')
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
