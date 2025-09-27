@@ -1,0 +1,3 @@
+# Disable simulated racks for the vnodes operations performance tests
+# https://github.com/scylladb/scylladb/issues/25924#issuecomment-3308731799
+simulated_racks: 0
