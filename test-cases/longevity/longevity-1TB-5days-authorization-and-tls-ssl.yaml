@@ -15,7 +15,6 @@ round_robin: true
 n_db_nodes: 6
 n_loaders: 4
 seeds_num: 2
-simulated_racks: 3
 
 instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-8'

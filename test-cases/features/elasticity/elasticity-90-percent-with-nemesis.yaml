@@ -13,7 +13,6 @@ stress_cmd:
 pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 64};"
 
 n_db_nodes: 3
-simulated_racks: 3
 n_loaders: 4
 nemesis_grow_shrink_instance_type: 'i4i.large'
 
