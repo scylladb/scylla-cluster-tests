@@ -142,7 +142,7 @@ class CDCReplicationTest(ClusterTester):
                 'nodetool_decommission': 5,
                 'terminate_and_replace_node': 5,
                 'grow_shrink_cluster': 5,
-                'remove_node_then_add_node': 5,
+                # 'remove_node_then_add_node': 5,
                 # 'decommission_streaming_err': 5,
                 # 'network_random_interruptions': 4,
                 # # 'network_block': 2, # disabled due to #2745
@@ -156,7 +156,7 @@ class CDCReplicationTest(ClusterTester):
                 # 'restart_with_resharding': 1,
                 # 'destroy_data_then_repair': 1,
                 # 'destroy_data_then_rebuild': 1,
-                # 'nodetool_drain': 1,
+                'nodetool_drain': 1,
                 # 'kill_scylla': 1,
                 # 'no_corrupt_repair': 1,
                 # 'major_compaction': 1,
@@ -181,7 +181,7 @@ class CDCReplicationTest(ClusterTester):
             self.log.info('Starting round {}'.format(rnd))
 
             self.log.info('Starting nemesis')
-            # self.db_cluster.start_nemesis()
+            self.db_cluster.start_nemesis()
 
             self.log.info('Waiting for workload generation to finish (~30 minutes)...')
             stress_results = self.verify_gemini_results(queue=stress_thread)
@@ -191,7 +191,7 @@ class CDCReplicationTest(ClusterTester):
             time.sleep(180)
 
             self.log.info('Stopping nemesis...')
-            # self.db_cluster.stop_nemesis(timeout=1800)
+            self.db_cluster.stop_nemesis(timeout=1800)
             self.log.info('Nemesis stopped.')
 
             self.log.info('Fetching replicator logs...')
