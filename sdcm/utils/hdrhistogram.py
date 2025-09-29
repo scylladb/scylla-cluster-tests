@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__file__)
 PROCESS_LIMIT = multiprocessing.cpu_count()
 TIME_INTERVAL = 600
 PERCENTILES = [50, 90, 95, 99, 99.9, 99.99, 99.999]
-FUTURE_RESULT_TIMEOUT = 10  # seconds
+FUTURE_RESULT_TIMEOUT = 60  # seconds
 
 
 def make_hdrhistogram_summary(
@@ -189,7 +189,7 @@ class _HdrRangeHistogramBuilder:
                     interval_num += 1
                 results = {}
                 for e, future in enumerate(futures):
-                    res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 10 seconds
+                    res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 60 seconds
                     LOGGER.debug(
                         f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
                     if res:
