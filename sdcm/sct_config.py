@@ -2118,6 +2118,8 @@ class SCTConfiguration(dict):
                     scylla_azure_images.append(azure_image)
                 self["azure_image_db"] = " ".join(getattr(image, 'id', None) or getattr(
                     image, 'unique_id', None) for image in scylla_azure_images)
+            elif self.get("cluster_backend") == 'xcloud' and ':' in scylla_version:
+                self._resolve_xcloud_version_tag(self.get('scylla_version'))
             elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
@@ -2651,6 +2653,27 @@ class SCTConfiguration(dict):
                     "scylla-operator expects semver-like tags for Scylla docker images. "
                     "'latest' should not be used.")
             self['scylla_version'] = result
+
+    def _resolve_xcloud_version_tag(self, version_tag: str) -> None:
+        """
+        Resolve version tags for xcloud backend.
+
+        Resolves version tag given in the format <tag_type>:<tag_value> to actual Scylla Cloud release.
+        For example: 'release:latest', is to be resolved into latest Scylla release supported by Scylla Cloud.
+        """
+        tag_type, tag_value = version_tag.split(':', 1)
+        if tag_type == 'release':
+            if tag_value == 'latest':
+                cloud_api_client = ScyllaCloudAPIClient(
+                    api_url=self.cloud_env_credentials['base_url'],
+                    auth_token=self.cloud_env_credentials['api_token'],
+                    raise_for_status=True)
+
+                self['scylla_version'] = cloud_api_client.current_scylla_version['version']
+                self.log.debug("Resolved xcloud version tag '%s' to '%s'", version_tag, self['scylla_version'])
+        else:
+            # TODO: support for non-release tag type will be added after Scylla Cloud supports deploying dev versions
+            pass
 
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
