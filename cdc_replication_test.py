@@ -111,8 +111,8 @@ class CDCReplicationTest(ClusterTester):
         self.setup_tools(loader_node)
         master_node = self.db_cluster.nodes[0]
         replica_node = self.cs_db_cluster.nodes[0]
-        master_node.running_nemesis = "replcation_check"
-        replica_node.running_nemesis = "replcation_check"
+        for node in (master_node, replica_node):
+            self.nemesis_allocator.set_running_nemesis(node, "replication_check")
 
         self.log.info('Waiting for the latest CDC generation to start...')
         # 2 * ring_delay (ring_delay = 30s) + leeway
@@ -235,8 +235,8 @@ class CDCReplicationTest(ClusterTester):
         # assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
         master_node = self.db_cluster.nodes[0]
         replica_node = self.cs_db_cluster.nodes[0]
-        master_node.running_nemesis = "replcation_check"
-        replica_node.running_nemesis = "replcation_check"
+        for node in (master_node, replica_node):
+            self.nemesis_allocator.set_running_nemesis(node, "replication_check")
 
         self.consistency_ok = False
 
