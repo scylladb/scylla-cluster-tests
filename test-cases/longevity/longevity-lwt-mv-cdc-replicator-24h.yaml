@@ -19,7 +19,7 @@ stress_cmd:
     data_dir/latte/lwt_mv_cdc_load.rn
 
   - >-
-    latte run -f lwt_read --consistency=LOCAL_SERIAL --threads=1 --rate=800 --concurrency=900 --duration=360m --tag lwt-read
+    latte run -f lwt_read --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=360m --tag lwt-read --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
     data_dir/latte/lwt_mv_cdc_load.rn
 
   - >-
