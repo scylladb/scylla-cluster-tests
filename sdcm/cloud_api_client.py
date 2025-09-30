@@ -136,7 +136,7 @@ class ScyllaCloudAPIClient:
     @cached_property
     def current_scylla_version(self) -> dict:
         """Get the latest ScyllaDB Cloud version that can be used to create a new cluster"""
-        return next(v for v in reversed(self.get_scylla_versions()) if v["newCluster"] == "ENABLED")
+        return next(v for v in reversed(self.get_scylla_versions()['scyllaVersions']) if v["newCluster"] == "ENABLED")
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
