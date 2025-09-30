@@ -4312,6 +4312,8 @@ class Nemesis(NemesisFlags):
     def _decommission_nodes(self, nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
                             dc_idx: Optional[int] = None, exact_nodes: list[BaseNode] | None = None):
         nodes_to_decommission = []
+
+        self.log.info("Exact nodes to decommission: %s", exact_nodes)
         if exact_nodes:
             nodes_to_decommission = exact_nodes
             for node in exact_nodes:
