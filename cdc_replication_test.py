@@ -296,7 +296,7 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(60)
 
         self.log.info('Stopping nemesis.')
-        # self.db_cluster.stop_nemesis(timeout=600)
+        self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Fetching replicator logs.')
         replicator_log_path = os.path.join(self.logdir, 'cdc-replicator.log')
@@ -304,14 +304,14 @@ class CDCReplicationTest(ClusterTester):
 
         migrate_log_path = None
         migrate_ok = True
-        if mode == Mode.PREIMAGE:
-            with open(replicator_log_path, encoding="utf-8") as file:
-                self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
-        else:
-            migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
-            (migrate_ok, consistency_ok) = self.check_consistency(master_node, replica_node, migrate_log_path,
-                                                                  compare_timestamps=False)
-            self.consistency_ok = consistency_ok
+        # if mode == Mode.PREIMAGE:
+        with open(replicator_log_path, encoding="utf-8") as file:
+            self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
+        # else:
+        migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
+        (migrate_ok, consistency_ok) = self.check_consistency(master_node, replica_node, migrate_log_path,
+                                                              compare_timestamps=False)
+        self.consistency_ok = self.consistency_ok and consistency_ok
 
         if not self.consistency_ok:
             self.log.error('Inconsistency detected.')
