@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce']
-def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
+def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure', 'xcloud-aws', 'xcloud-gce', 'vs-docker', 'vs-aws']
 
 def createRunConfiguration(String backend) {
 	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
@@ -22,7 +22,7 @@ def createRunConfiguration(String backend) {
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
         configuration.availability_zone = ''
-    } else if (backend == 'docker') {
+    } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
         configuration.docker_image = 'scylladb/scylla-nightly'
@@ -53,6 +53,16 @@ def createRunConfiguration(String backend) {
             configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
         }
     }
+
+    if (backend in ['vs-docker', 'vs-aws']) {
+        configuration.test_config = '["' + configuration.test_config + '", "configurations/vector_store_provision_test.yaml"]'
+        if (backend == 'vs-docker') {
+            configuration.backend = 'docker'
+        } else if (backend == 'vs-aws') {
+            configuration.backend = 'aws'
+        }
+    }
+
     return configuration
 }
 
@@ -245,6 +255,8 @@ pipeline {
                         "test-provision-k8s-eks", "test-provision-k8s-eks-reuse",
                         "test-provision-xcloud-aws", "test-provision-xcloud-aws-reuse",
                         "test-provision-xcloud-gce", "test-provision-xcloud-gce-reuse",
+                        "test-provision-vs-docker",
+                        "test-provision-vs-aws", "test-provision-vs-aws-reuse",
                     ].join(",")
                     return pullRequestContainsLabels(labels)
                 }
