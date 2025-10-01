@@ -1,6 +1,21 @@
 from typing import TypedDict
 
 
+class RawEventPayload(TypedDict):
+    run_id: str
+    severity: str
+    ts: float
+    message: str
+    event_type: str
+    received_timestamp: str | None
+    nemesis_name: str | None
+    duration: float | None
+    node: str | None
+    target_node: str | None
+    known_issue: str | None
+    nemesis_status: str | None
+
+
 class RawHDRHistogram(TypedDict):
     start_time: int
     percentile_90: float
