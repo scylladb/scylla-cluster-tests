@@ -633,6 +633,13 @@ class SCTConfiguration(dict):
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
         dict(name="alternator_use_dns_routing", env="SCT_ALTERNATOR_USE_DNS_ROUTING", type=boolean,
              help="If true, spawn a docker with a dns server for the ycsb loader to point to"),
+        dict(name="alternator_test_table", env="SCT_ALTERNATOR_TEST_TABLE", type=dict,
+             help="""Dictionary of a test alternator table features:
+                    name: str - the name of the table
+                    lsi_name: str - the name of the local secondary index to create with a table
+                    gsi_name: str - the name of the global secondary index to create with a table
+                    tags: dict - the tags to apply to the created table
+                    items: int - expected number of items in the table after prepare"""),
         dict(name="alternator_enforce_authorization", env="SCT_ALTERNATOR_ENFORCE_AUTHORIZATION", type=boolean,
              help="If true, enable the authorization check in dynamodb api (alternator)"),
         dict(name="alternator_access_key_id", env="SCT_ALTERNATOR_ACCESS_KEY_ID", type=str,
