@@ -25,7 +25,6 @@ gemini_cmd: |
   --cql-features basic
   --max-mutation-retries 100
   --max-mutation-retries-backoff 100ms
-  --use-server-timestamps
 
 gemini_table_options:
   - "cdc = {'enabled': true, 'ttl': 0}"
