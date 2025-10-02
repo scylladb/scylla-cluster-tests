@@ -1,0 +1,42 @@
+test_duration: 4000
+idle_duration: 180
+
+# cs_user_profiles:
+    # - data_dir/templated_100_table.yaml
+user_profile_table_count: 100
+add_cs_user_profiles_extra_tables: true
+keyspace_num: 1
+
+n_loaders: 0
+n_db_nodes: "60 60"
+add_node_cnt: 1
+round_robin: true
+
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c7i.4xlarge'
+instance_type_monitor: 'm6i.xlarge'
+root_disk_size_monitor: 2000
+
+
+# decommission 'add_node_cnt' number of nodes and add the same number of nodes
+nemesis_class_name: 'DecommissionMonkey'
+# as fast as possible including health checks
+nemesis_interval: 1
+
+# This is in order to start the basic cluster faster
+use_legacy_cluster_init: false
+parallel_node_operations: true
+seeds_num: 5
+# Takes too long on big clusters
+cluster_health_check: false
+
+backtrace_decoding: false
+
+append_scylla_yaml:
+  enable_repair_based_node_ops: true
+
+run_fullscan: []
+
+simulated_racks: 0
+instance_type_runner: 'c7i.8xlarge'
+root_disk_size_runner: 3000
