@@ -32,3 +32,5 @@ gemini_table_options:
 
 # Required by SCT, although not used:
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
+
+cdc_replication_rounds_num: 9

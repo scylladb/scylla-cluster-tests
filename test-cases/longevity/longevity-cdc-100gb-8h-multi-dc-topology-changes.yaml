@@ -18,8 +18,16 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: 'topology_changes'
 nemesis_seed: '032'
 nemesis_add_node_cnt: 2
+nemesis_interval: 10
+nemesis_during_prepare: false
+nemesis_multiply_factor: 18
+
 
 round_robin: true
 
 user_prefix: 'longevity-cdc-100gb-8h-multi-dc-tpch'
 space_node_threshold: 64424
+
+server_encrypt: true
+internode_encryption: 'dc'
+logs_transport: 'vector'
