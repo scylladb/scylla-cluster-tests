@@ -25,6 +25,7 @@ from typing import Optional, Tuple
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
+from sdcm.remote.local_cmd_runner import LocalCmdRunner
 from sdcm.cluster import BaseNode
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
@@ -232,7 +233,7 @@ class CDCReplicationTest(ClusterTester):
             self.fail('Consistency check failed.')
 
     def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
-        # assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
+        assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
         master_node = self.db_cluster.nodes[0]
         replica_node = self.cs_db_cluster.nodes[0]
         for node in (master_node, replica_node):
@@ -304,14 +305,14 @@ class CDCReplicationTest(ClusterTester):
 
         migrate_log_path = None
         migrate_ok = True
-        # if mode == Mode.PREIMAGE:
-        with open(replicator_log_path, encoding="utf-8") as file:
-            self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
-        # else:
-        migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
-        (migrate_ok, consistency_ok) = self.check_consistency(master_node, replica_node, migrate_log_path,
-                                                              compare_timestamps=False)
-        self.consistency_ok = self.consistency_ok and consistency_ok
+        if mode == Mode.PREIMAGE:
+            with open(replicator_log_path, encoding="utf-8") as file:
+                self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
+        else:
+            migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
+            (migrate_ok, consistency_ok) = self.check_consistency(master_node, replica_node, migrate_log_path,
+                                                                  compare_timestamps=False)
+            self.consistency_ok = consistency_ok
 
         if not self.consistency_ok:
             self.log.error('Inconsistency detected.')
@@ -338,8 +339,12 @@ class CDCReplicationTest(ClusterTester):
             self.log.error('scylla-migrate command returned status {}'.format(res.exit_status))
         with open(migrate_log_dst_path, encoding="utf-8") as file:
             consistency_ok = 'Consistency check OK.\n' in (line for line in file)
+        self.collect_data_for_analysis(master_node, replica_node)
+        runner = LocalCmdRunner()
 
-        return (migrate_ok, consistency_ok)
+        result = runner.run(
+            f"diff {os.path.join(self.logdir, 'master-table')} {os.path.join(self.logdir, 'replica-table')}")
+        return (migrate_ok, consistency_ok and result.ok)
 
     def copy_master_schema_to_replica(self) -> None:
         self.log.info('Fetching schema definitions from master cluster.')

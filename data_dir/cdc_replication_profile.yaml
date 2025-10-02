@@ -16,7 +16,7 @@ table_definition: |
     v2 text,
     very_very_very_long_column_name text,
     very_very_very_long_column_namevery_very_very_long_column_name blob,
-    primary key (pk, ck)) WITH cdc = {'enabled': true, 'preimage': 'full', 'postimage': true}
+    primary key (pk, ck)) WITH cdc = {'enabled': true}
 
 columnspec:
   - name: pk
