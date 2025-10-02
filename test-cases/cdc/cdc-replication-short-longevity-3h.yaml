@@ -23,7 +23,7 @@ extra_network_interface: True
 gemini_cmd: |
   --duration 30m
   --warmup 0m
-  --concurrency 5
+  --concurrency 1
   --mode write
   --cql-features basic
   --use-server-timestamps
