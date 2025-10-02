@@ -194,7 +194,7 @@ class BaseMonitoringEntity(BaseLogEntity):
             return None, None, None
 
         try:
-            monitor_version, scylla_version = result.stdout.strip().split(':')
+            monitor_version, scylla_version = result.stdout.strip().split(':')[:2]
         except ValueError:
             monitor_version = None
             scylla_version = None
