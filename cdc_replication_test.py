@@ -90,7 +90,7 @@ class CDCReplicationTest(ClusterTester):
 
     def test_replication_cs(self) -> None:
         self.log.info('Using cassandra-stress to generate workload.')
-        self.test_replication(False, Mode.PREIMAGE)
+        self.test_replication(False, Mode.DELTA)
 
     def test_replication_gemini(self, mode: Mode) -> None:
         self.log.info('Using gemini to generate workload. Mode: {}'.format(mode.name))
