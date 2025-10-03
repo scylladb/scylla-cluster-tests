@@ -96,6 +96,7 @@ class SctEvent:
 
     _ready_to_publish: bool = False  # set it to True in __init__() and to False in publish() to prevent double-publish
     publish_to_grafana: bool = True
+    publish_to_argus: bool = True
     save_to_files: bool = True
 
     def __init_subclass__(cls, abstract: bool = False):

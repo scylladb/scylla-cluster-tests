@@ -2,7 +2,7 @@ import base64
 from typing import Any
 from uuid import UUID
 from dataclasses import asdict
-from argus.common.sct_types import GeminiResultsRequest, PerformanceResultsRequest
+from argus.common.sct_types import GeminiResultsRequest, PerformanceResultsRequest, RawEventPayload
 from argus.common.enums import ResourceState, TestStatus
 from argus.client.base import ArgusClient
 from argus.client.sct.types import EventsInfo, LogLink, Package
@@ -25,6 +25,7 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_PERFORMANCE_RESULTS = "/sct/$id/performance/submit"
         FINALIZE_NEMESIS = "/sct/$id/nemesis/finalize"
         SUBMIT_EVENTS = "/sct/$id/events/submit"
+        SUBMIT_EVENT = "/sct/$id/event/submit"
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
 
     def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
@@ -79,6 +80,17 @@ class ArgusSCTClient(ArgusClient):
             Updates scylla server version used for filtering test results by version.
         """
         response = super().update_product_version(run_type=self.test_type, run_id=self.run_id, product_version=version)
+        self.check_response(response)
+
+    def submit_event(self, event_data: RawEventPayload | list[RawEventPayload]):
+        response = self.post(
+            endpoint=self.Routes.SUBMIT_EVENT,
+            location_params={"id": str(self.run_id)},
+            body={
+                **self.generic_body,
+                "data": event_data,
+            }
+        )
         self.check_response(response)
 
     def submit_sct_logs(self, logs: list[LogLink]) -> None:
