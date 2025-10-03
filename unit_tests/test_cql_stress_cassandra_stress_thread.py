@@ -23,6 +23,7 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 pytestmark = [
     pytest.mark.usefixtures("events"),
     pytest.mark.integration,
+    pytest.mark.xdist_group("docker_heavy"),
 ]
 
 

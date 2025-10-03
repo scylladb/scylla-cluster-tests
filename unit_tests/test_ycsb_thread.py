@@ -29,6 +29,7 @@ from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 pytestmark = [
     pytest.mark.usefixtures("events"),
     pytest.mark.integration,
+    pytest.mark.xdist_group("docker_heavy"),
 ]
 
 

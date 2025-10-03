@@ -1217,7 +1217,7 @@ def integration_tests(test, n):
         )
         local_cluster.setup_prerequisites()
 
-    sys.exit(pytest.main(['-v', '-m', 'integration',
+    sys.exit(pytest.main(['-v', '-m', 'integration', '--dist', 'loadgroup',
              f'-n{n}', *(f'unit_tests/{t}' for t in test)]))
 
 
@@ -1340,7 +1340,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     add_file_logger()
 
-    from sdcm.logcollector import Collector
+    from sdcm.logcollector import Collector  # noqa: PLC0415
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1819,7 +1819,7 @@ def get_nemesis_list(backend, config):
 
     # NOTE: this import messes up logging for the test, since it's importing tester.py
     # directly down the line
-    from unit_tests.nemesis.fake_cluster import FakeTester
+    from unit_tests.nemesis.fake_cluster import FakeTester  # noqa: PLC0415
 
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)

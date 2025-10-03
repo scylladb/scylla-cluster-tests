@@ -24,6 +24,7 @@ pytestmark = [
         scylla_docker_image="scylladb/scylla-nightly:2025.4.0-dev-0.20250811.e14c5e3890de",
         vs_docker_image="scylladb/vector-store:latest"
     ),
+    pytest.mark.xdist_group("docker_heavy"),
 ]
 
 LOGGER = logging.getLogger(__name__)
