@@ -19,6 +19,7 @@ from pathlib import Path
 
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
+from sdcm.sct_events.argus import start_argus_pipeline
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.grafana import start_grafana_pipeline
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
@@ -29,7 +30,7 @@ from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_analyzer import start_events_analyzer
 from sdcm.sct_events.event_counter import start_events_counter
 from sdcm.sct_events.events_processes import \
-    EVENTS_MAIN_DEVICE_ID, EVENTS_FILE_LOGGER_ID, EVENTS_ANALYZER_ID, \
+    EVENTS_ARGUS_AGGREGATOR_ID, EVENTS_ARGUS_ANNOTATOR_ID, EVENTS_ARGUS_POSTMAN_ID, EVENTS_MAIN_DEVICE_ID, EVENTS_FILE_LOGGER_ID, EVENTS_ANALYZER_ID, \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
     EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
 from sdcm.utils.issues import SkipPerIssues
@@ -55,6 +56,7 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
 
     start_events_logger(_registry=_registry)
     start_grafana_pipeline(_registry=_registry)
+    start_argus_pipeline(_registry=_registry)
     start_events_analyzer(_registry=_registry)
     start_events_handler(_registry=_registry)
     start_events_counter(_registry=_registry)
@@ -69,6 +71,9 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
         EVENTS_GRAFANA_ANNOTATOR_ID,
         EVENTS_GRAFANA_AGGREGATOR_ID,
         EVENTS_GRAFANA_POSTMAN_ID,
+        EVENTS_ARGUS_ANNOTATOR_ID,
+        EVENTS_ARGUS_AGGREGATOR_ID,
+        EVENTS_ARGUS_POSTMAN_ID,
         EVENTS_COUNTER_ID,
         EVENTS_HANDLER_ID,
         EVENTS_ANALYZER_ID,
