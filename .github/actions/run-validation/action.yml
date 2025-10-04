@@ -32,7 +32,7 @@ runs:
 
     - name: Post comment on PR
       if: steps.run_script.outputs.success == 'false'
-      uses: peter-evans/create-or-update-comment@v4
+      uses: peter-evans/create-or-update-comment@v5
       with:
         token: ${{ inputs.github_token }}
         repository: ${{ github.event.pull_request.base.repo.full_name }}
