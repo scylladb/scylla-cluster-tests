@@ -3,7 +3,7 @@ cluster_backend: aws
 user_prefix: 'cdc-replication-longevity'
 db_type: mixed_scylla
 
-n_db_nodes: 3
+n_db_nodes: 6
 instance_type_db: 'i4i.2xlarge'
 
 n_test_oracle_db_nodes: 3
