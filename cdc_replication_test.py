@@ -142,9 +142,9 @@ class CDCReplicationTest(ClusterTester):
             dist={
                 'nodetool_decommission': 5,
                 'terminate_and_replace_node': 5,
-                'grow_shrink_cluster': 5,
-                # 'remove_node_then_add_node': 5,
-                # 'decommission_streaming_err': 5,
+                # 'grow_shrink_cluster': 5,
+                'remove_node_then_add_node': 5,
+                'decommission_streaming_err': 5,
                 # 'network_random_interruptions': 4,
                 # # 'network_block': 2, # disabled due to #2745
                 # # 'network_start_stop_interface': 2, # as above
@@ -157,7 +157,7 @@ class CDCReplicationTest(ClusterTester):
                 # 'restart_with_resharding': 1,
                 # 'destroy_data_then_repair': 1,
                 # 'destroy_data_then_rebuild': 1,
-                'nodetool_drain': 1,
+                'nodetool_drain': 5,
                 # 'kill_scylla': 1,
                 # 'no_corrupt_repair': 1,
                 # 'major_compaction': 1,
