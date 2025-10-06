@@ -1902,9 +1902,11 @@ class Nemesis(NemesisFlags):
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
+        use_incremental_repair = self.cluster.params.get('use_incremental_repair') or False
+        repair_cmd = "cluster repair" if use_incremental_repair else "repair"
         with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48), \
                 self.action_log_scope(f"Start nodetool repair on {node.name} node"):
-            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+            node.run_nodetool(sub_cmd=repair_cmd, publish_event=publish_event)
 
     def run_repair_on_nodes(self, nodes: list,  ignore_down_hosts=False, publish_event=True):
         """
@@ -1912,11 +1914,13 @@ class Nemesis(NemesisFlags):
         arise from failed or unavailable nodes during the process.
         """
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
+            use_incremental_repair = self.cluster.params.get('use_incremental_repair') or False
+            repair_cmd = "cluster repair" if use_incremental_repair else "repair -pr"
             for node in nodes:
                 try:
                     with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 3), \
                             self.action_log_scope(f"nodetool repair -pr on {node.name} node"):
-                        node.run_nodetool(sub_cmd="repair -pr", publish_event=publish_event)
+                        node.run_nodetool(sub_cmd=repair_cmd, publish_event=publish_event)
                 except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.warning(f"Repair failed to complete on node: {node}, with error: {str(err)}")
         else:
@@ -3237,8 +3241,10 @@ class Nemesis(NemesisFlags):
         @raise_event_on_failure
         def silenced_nodetool_repair_to_fail():
             try:
+                use_incremental_repair = self.cluster.params.get('use_incremental_repair') or False
+                repair_cmd = "cluster repair" if use_incremental_repair else "repair"
                 self.actions_log.info(f"Starting nodetool repair on {self.target_node.name} expected to be aborted")
-                self.target_node.run_nodetool("repair", verbose=True,
+                self.target_node.run_nodetool(repair_cmd, verbose=True,
                                               warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
                                               error_message="Repair failed as expected. ",
                                               publish_event=False,
@@ -4174,8 +4180,10 @@ class Nemesis(NemesisFlags):
         4. Trigger a rebuild on the target node after the reboot.
         """
         self._destroy_data_and_restart_scylla()
+        use_incremental_repair = self.cluster.params.get('use_incremental_repair') or False
+        repair_cmd = "cluster repair" if use_incremental_repair else "repair"
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), long_running=True, retry=0, timeout=600,
+            self.target_node.run_nodetool, sub_cmd=repair_cmd, warning_event_on_exception=(Exception,), long_running=True, retry=0, timeout=600,
         )
         log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
         timeout = 1200
@@ -5253,8 +5261,10 @@ class Nemesis(NemesisFlags):
                     self.log.info("Starting Scylla on node %s", self.target_node.name)
                     self.actions_log.info(f"Start Scylla on {self.target_node.name} node")
                     self.target_node.start_scylla()
+                    use_incremental_repair = self.cluster.params.get('use_incremental_repair') or False
+                    repair_cmd = "cluster repair" if use_incremental_repair else "repair -pr"
                     with self.action_log_scope(f"Run repair on {self.target_node.name} node"):
-                        self.target_node.run_nodetool(sub_cmd="repair -pr")
+                        self.target_node.run_nodetool(sub_cmd=repair_cmd)
                     with adaptive_timeout(operation=Operations.CREATE_MV, node=self.target_node, timeout=14400) as timeout, \
                             self.action_log_scope(f"Wait for {ks_name}.{view_name} materialized view to be built on "
                                                   f"{self.target_node.name} node"):

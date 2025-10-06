@@ -490,6 +490,9 @@ class SCTConfiguration(dict):
         dict(name="parallel_node_operations", env="SCT_PARALLEL_NODE_OPERATIONS", type=boolean,
              help="When defined true, will run node operations in parallel. Supported operations: startup"),
 
+        dict(name="use_incremental_repair", env="SCT_USE_INCREMENTAL_REPAIR", type=boolean,
+             help="When defined true, will use 'nodetool cluster repair' (incremental repair) instead of 'nodetool repair'"),
+
         dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
              help="Port to be used by the manager to contact Prometheus"),
 

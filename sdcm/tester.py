@@ -889,6 +889,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return None
 
     def prepare_azure_kms(self) -> None:
+        if self.params.get('cluster_backend') != 'azure':
+            return
         scylla_version = self.params.scylla_version
         if not scylla_version:
             return None
