@@ -134,6 +134,7 @@ def _remote_get_file(remoter, src, dst, user_agent=None):
     cmd = 'curl -L {} -o {}'.format(src, dst)
     if user_agent:
         cmd += ' --user-agent %s' % user_agent
+    cmd += f' && chmod 644 {dst}'
     return remoter.run(cmd, ignore_status=True)
 
 
