@@ -322,46 +322,54 @@ class LongevityMVBuildingCoordinator(LongevityTest):
     def test_all_topology_operations_during_building_mvs(self):
         InfoEvent("Prepare Base table").publish()
         self.run_prepare_write_cmd()
-        mv_names: list[str] = []
+        mv_names: list[str | tuple[str, str]] = []
         coordinator_node: BaseNode = get_topology_coordinator_node(node=self.db_cluster.nodes[0])
         ks_cf_list = self.db_cluster.get_non_system_ks_cf_with_tablets_list(
             coordinator_node, filter_empty_tables=True, filter_out_mv=True, filter_out_table_with_counter=True)
         ks_name, base_table_name = random.choice(ks_cf_list).split('.')
         for _ in range(10):
             view_name = f'{base_table_name}_view_{str(uuid4())[:8]}'
+            si_name = f'{base_table_name}_si_{str(uuid4())[:8]}'
 
             with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
-                # create_mv_for_table(session, keyspace_name=ks_name,
-                #                     base_table_name=base_table_name, view_name=view_name)
+
                 try:
+                    create_materialized_view_for_random_column(session, keyspace_name=ks_name,
+                                                               base_table_name=base_table_name, view_name=view_name)
                     create_index_for_table(session, keyspace_name=ks_name,
-                                           base_table_name=base_table_name, index_name=view_name)
-                    mv_names.append(view_name)
+                                           base_table_name=base_table_name, index_name=si_name)
+                    mv_names.append((view_name, si_name))
                 except Exception as exc:  # noqa:  BLE001
                     self.log.warning("Index % was not created due to : %s", view_name, exc)
                 # wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
-
+        busy_nodes: list[BaseNode] = [coordinator_node]
         new_node: BaseNode = add_cluster_node(
             self.db_cluster, dc_idx=coordinator_node.dc_idx, rack=coordinator_node.rack, monitoring=self.monitors)
-
+        busy_nodes.append(new_node)
         replacing_node: BaseNode = random.choice(
             [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node)])
         replacing_node_hostid = replacing_node.host_id
         replacing_node.stop_scylla()
+        busy_nodes.append(replacing_node)
         replaced_node = replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
                                              replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
+        busy_nodes.append(replaced_node)
         decommission_node: BaseNode = random.choice(
-            [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node, replaced_node)])
+            [node for node in self.db_cluster.nodes if node not in busy_nodes])
         self.db_cluster.decommission(decommission_node)
+        busy_nodes.append(decommission_node)
         removing_node: BaseNode = random.choice([node for node in self.db_cluster.nodes
-                                                 if node not in (coordinator_node, decommission_node, replacing_node, new_node)])
+                                                 if node not in busy_nodes])
         removing_node_hostid = removing_node.host_id
         removing_node.stop_scylla()
         remove_cluster_node(self.db_cluster, coordinator_node, node_to_remove=removing_node, removing_node_host_id=removing_node_hostid,
                             monitoring=self.monitors)
 
-        for view_name in mv_names:
-            wait_for_view_to_be_built(coordinator_node, ks=ks_name, view_name=view_name, timeout=2000)
+        for i, (view_name, si_name) in enumerate(mv_names):
+            self.log.info("Waiting mv to be built %d, %s", i, view_name)
+            wait_for_view_to_be_built(coordinator_node, ks=ks_name, view_name=view_name, timeout=7200)
+            self.log.info("Waiting mv to be built %d, %s", i, si_name)
+            wait_for_index_to_be_built(coordinator_node, ks=ks_name, index_name=si_name, timeout=7200)
         status = coordinator_node.run_nodetool("status", ignore_status=True)
         InfoEvent("Node tool status %s", status.stdout)
 
