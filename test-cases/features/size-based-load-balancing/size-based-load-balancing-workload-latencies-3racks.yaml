@@ -1,0 +1,54 @@
+# TODO: Describe what this test does
+test_duration: 2880  # maximum test duration in minutes, after which the test will timeout
+prepare_stress_duration: 1440  # maximum duration for the initial data loading phase in minutes, after which the test will timeout
+# fill to 90%
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..729000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=729000001..1458000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1458000001..2187000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=2187000001..2916000000",
+]
+
+# base workload, will run for the entire test duration, after prepare
+stress_cmd: [
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+]
+
+# bigger workload, should be (16/6-1)x base, so total load scales with the number of CPUs
+stress_cmd_m: [
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=15000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=15000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=15000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+  "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=15000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2916000000,291600000,2916000)'",
+]
+
+# initial nodes
+n_db_nodes: 9
+simulated_racks: 3
+instance_type_db: 'i3en.large' # 2 CPUs, 1250GB
+# nodes to scale out/in with
+nemesis_add_node_cnt: 12
+nemesis_grow_shrink_instance_type: 'i4i.xlarge' # 4 CPUs, 937GB
+
+# loaders
+n_loaders: 4
+instance_type_loader: 'c6i.2xlarge'
+
+# how nodes are named
+user_prefix: 'balancer-test'
+
+# needed for latency calculator
+workload_name: 'mixed'
+use_hdrhistogram: true
+nemesis_interval: 20 # time, in minutes, for calculating latencies
+nemesis_sequence_sleep_between_ops: 5 # time, in minutes, to sleep between starting a workload and calculating latencies
+
+append_scylla_args: '++ --logger-log-level load_balancer=debug'
+
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
+  rf_rack_valid_keyspaces: true
