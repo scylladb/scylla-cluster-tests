@@ -227,6 +227,10 @@ class SCTCapacityReservation:
                                 'Value': get_username()
                             },
                             {
+                                'Key': 'Owner',
+                                'Value': get_username()
+                            },
+                            {
                                 'Key': 'JenkinsJobTag',
                                 'Value': os.environ.get('BUILD_TAG')
                             }

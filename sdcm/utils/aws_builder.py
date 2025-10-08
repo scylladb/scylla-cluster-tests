@@ -24,6 +24,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import wait_ami_available
+from sdcm.utils.get_username import get_username
 
 LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +191,10 @@ class AwsBuilder:
                                 'Key': 'RunByUser',
                                 'Value': 'QA'
                             },
+                            {
+                                'Key': 'Owner',
+                                'Value': get_username()
+                            },
                         ]
                     },
                 ],
@@ -231,6 +236,7 @@ class AwsBuilder:
                     {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
                     {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
                     {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
+                    {"Key": "Owner", "Value": get_username(), "PropagateAtLaunch": True},
                     {"Key": "keep", "Value": "alive", "PropagateAtLaunch": True},
                     {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
                 ],
