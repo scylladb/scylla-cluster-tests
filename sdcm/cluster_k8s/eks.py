@@ -498,6 +498,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                  text='Waiting till aws-ebs-csi-driver become operational')
         LOCALRUNNER.run(
             f'eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve')
+        LOCALRUNNER.run(f'aws sts get-caller-identity')
         LOCALRUNNER.run(f'eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system '
                         f'--cluster {self.short_cluster_name} '
                         f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
