@@ -5655,7 +5655,9 @@ class BaseMonitorSet:
     @property
     def monitoring_version(self):
         if scylla_version := self.params.get('scylla_version'):
-            return scylla_version
+            # scylla version can be branch-version:latest, or master:latest
+            # only version is needed
+            return scylla_version.lstrip('branch-').split(':')[0]
         scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
