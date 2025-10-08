@@ -21,6 +21,7 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.utils.git import clone_repo
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.remote_logger import DockerComposeLogger
+from sdcm.utils.decorators import retrying
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 
 # TODO: write/think more about the consumers
@@ -137,8 +138,9 @@ class LocalKafkaCluster(cluster.BaseCluster):
 
         self.install_connector(connector_config.source)
 
+        @retrying(n=5, sleep_time=2, allowed_exceptions=(requests.exceptions.ConnectionError, requests.exceptions.Timeout))
         def kafka_connect_api_available():
-            res = requests.head(url=self.kafka_connect_url)
+            res = requests.head(url=self.kafka_connect_url, timeout=10)
             res.raise_for_status()
             return True
 
@@ -150,12 +152,20 @@ class LocalKafkaCluster(cluster.BaseCluster):
             throw_exc=True,
         )
         LOGGER.debug(connector_data)
-        res = requests.post(
-            url=f"{self.kafka_connect_url}/connectors", json=connector_data
-        )
-        LOGGER.debug(res)
-        LOGGER.debug(res.text)
-        res.raise_for_status()
+        
+        @retrying(n=3, sleep_time=2, allowed_exceptions=(requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+        def create_connector_with_retry():
+            res = requests.post(
+                url=f"{self.kafka_connect_url}/connectors", 
+                json=connector_data,
+                timeout=30
+            )
+            LOGGER.debug(res)
+            LOGGER.debug(res.text)
+            res.raise_for_status()
+            return res
+        
+        create_connector_with_retry()
 
     @property
     def kafka_log(self) -> Path:
