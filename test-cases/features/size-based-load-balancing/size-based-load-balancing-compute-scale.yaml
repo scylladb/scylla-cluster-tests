@@ -1,0 +1,37 @@
+test_duration: 720
+# fill to 90%
+prepare_write_cmd:  [
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..960000000",
+]
+
+# base workload
+stress_cmd: [
+  "cassandra-stress mixed no-warmup cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate 'threads=300 fixed=30000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..960000000,96000000,960000)'"
+]
+
+# bigger workload, should be 2.6x base
+stress_cmd_w: [
+  "cassandra-stress mixed no-warmup cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate 'threads=300 fixed=78000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..960000000,96000000,960000)'"
+]
+
+n_db_nodes: 3
+simulated_racks: 1
+instance_type_db: 'i8ge.large'
+
+n_loaders: 1
+instance_type_loader: 'c6i.2xlarge'
+
+# the test should run on a heterogeneous cluster, so it adds different instance types
+# reuses the nemesis_ variables for simplicity
+nemesis_add_node_cnt: 4
+nemesis_grow_shrink_instance_type: 'i8g.xlarge'
+
+user_prefix: 'balancer-test'
+
+round_robin: true
+append_scylla_args: '--logger-log-level load_balancer=debug --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+append_scylla_yaml:
+  enable_tablets: true
+  tablets_mode_for_new_keyspaces: 'enabled'
+  rf_rack_valid_keyspaces: true

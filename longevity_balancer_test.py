@@ -16,6 +16,7 @@
 
 from collections import defaultdict
 from contextlib import ExitStack
+import contextlib
 from longevity_test import LongevityTest
 from sdcm.argus_results import PeriodicDiskUsageToArgus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
@@ -29,6 +30,7 @@ from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 BALANCE_THRESHOLD = 5
 
 
+@contextlib.contextmanager
 def ignore_decommission_timeout():
     # Due to the test writing a lot of data and the recent `stream_io_throughput_mb_per_sec` changes
     # decommission can take a long time and hit the soft/hard timeout.
@@ -81,10 +83,10 @@ class LongevityBalancerTest(LongevityTest):
                                    message=f"Storage utilization is not balanced in rack {rack}. Min: {min_utilization:.2f}%, Max: {max_utilization:.2f}%",
                                    severity=Severity.CRITICAL).publish()
 
-    def scale_out(self):
+    def scale_out(self, instance_type_param='nemesis_grow_shrink_instance_type') -> list[BaseNode]:
         added_nodes = self.db_cluster.add_nodes(
             count=self.db_cluster.racks_count,
-            instance_type=self.params.get("nemesis_grow_shrink_instance_type"),
+            instance_type=self.params.get(instance_type_param),
             enable_auto_bootstrap=True,
             rack=None)
         self.monitors.reconfigure_scylla_monitoring()
@@ -106,10 +108,10 @@ class LongevityBalancerTest(LongevityTest):
         InfoEvent(f'Finished decommissioning {[node for node in nodes]}').publish()
         self.monitors.reconfigure_scylla_monitoring()
 
-    def run_stress_command(self):
+    def run_stress_command(self, cmd_param='stress_cmd'):
         stress_queue = []
         self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get(
-            'stress_cmd'), self.params.get('keyspace_num'))
+            cmd_param), self.params.get('keyspace_num'))
         for stress in stress_queue:
             self.verify_stress_thread(stress)
 
@@ -137,3 +139,19 @@ class LongevityBalancerTest(LongevityTest):
             self.scale_in(new_nodes)
             self.wait_for_balance()
             self.check_final_balance()
+
+    def test_compute_capacity_scale(self):
+        self.run_prepare_write_cmd()
+        # base load
+        self.run_stress_command('stress_cmd')
+        # scale out with 2.6 CPUs
+        original_nodes = list(self.db_cluster.data_nodes)
+        new_nodes = self.scale_out('nemesis_grow_shrink_instance_type')
+        self.scale_in(original_nodes)
+        # increased load
+        self.run_stress_command('stress_cmd_w')
+        # scale back to original capacity
+        self.scale_out('instance_type_db')
+        self.scale_in(new_nodes)
+        # base load again
+        self.run_stress_command('stress_cmd')
