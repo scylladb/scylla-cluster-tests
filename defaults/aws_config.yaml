@@ -21,6 +21,10 @@ aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 ami_id_db_scylla: ''
 ami_id_db_oracle: ''
 
+ami_id_vector_store: ''
+ami_vector_store_user: 'ubuntu'
+instance_type_vector_store: 'c6i.xlarge'
+
 use_preinstalled_scylla: true
 
 backup_bucket_backend: 's3'

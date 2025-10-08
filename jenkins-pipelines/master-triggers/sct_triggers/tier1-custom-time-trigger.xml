@@ -25,7 +25,8 @@ availability_zone=c
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
-stress_duration=1440</properties>
+stress_duration=1440
+requested_by_user=timtimb0t</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
@@ -40,7 +41,8 @@ stress_duration=1440</properties>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 post_behavior_db_nodes=destroy
-post_behavior_monitor_nodes=destroy</properties>
+post_behavior_monitor_nodes=destroy
+requested_by_user=timtimb0t</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>

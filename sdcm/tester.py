@@ -49,6 +49,7 @@ from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -59,6 +60,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
+from sdcm.cluster_aws import VectorStoreSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cluster_cloud import ScyllaCloudCluster
@@ -94,7 +96,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, \
     make_threads_be_daemonic_by_default, change_default_password, \
     parse_python_thread_command, get_data_dir_path
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
+from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
@@ -125,8 +127,8 @@ from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.utils.version_utils import (
-    get_relocatable_pkg_url,
     ComparableScyllaVersion,
+    get_relocatable_pkg_url,
 )
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
@@ -275,6 +277,7 @@ class silence:
                 self.log.debug("Finished '%s'. No errors were silenced.", name)
             except Exception as exc:  # noqa: BLE001
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
+                self.log.debug("Stacktrace is %s", traceback.format_exc())
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
             return result
 
@@ -831,25 +834,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             'kmip_hosts' in append_scylla_yaml
         )
 
-    def prepare_kms_host(self) -> None:
-        version_supports_kms = (self.params.is_enterprise and
-                                ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3')
-        backend_support_kms = self.params.get('cluster_backend') in ('aws',)
-        kms_configured_in_sct = self.params.get('scylla_encryption_options')
-        test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
-        should_enable_kms = (version_supports_kms and
-                             backend_support_kms and
-                             not kms_configured_in_sct and
-                             not test_uses_oracle and
-                             not self.params.get('enterprise_disable_kms'))
+    def prepare_kms_host(self) -> None:  # noqa: PLR0911
+        if self.params.get('cluster_backend') != 'aws':
+            logging.debug("Skip configuring AWS KMS, test is not running on AWS")
+            return
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring AWS KMS, test uses mixed scylla versions")
+            return
 
-        if should_enable_kms:
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("Configuring AWS KMS: `scylla_encryption_options` is not set in the config, using default values")
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"
-        if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
-            return None
-        kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
-        if 'auto' not in kms_host:
-            return None
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
+        if 'auto' not in (kms_host := yaml.safe_load(scylla_encryption_options).get("kms_host")):
+            return
         # Create a KMS key alias in each of the regions used by the current test run
         aws_kms = AwsKms(region_names=self.params.region_names)
         alias_name = f"alias/testid-{self.test_config.test_id()}"
@@ -883,7 +885,62 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.warning("`user_info_encryption` and `system_info_encryption` are configured to use KMS by default")
         self.params["append_scylla_yaml"] = append_scylla_yaml
-        return None
+        return
+
+    def prepare_azure_kms(self) -> None:  # noqa: PLR0911
+        if self.params.get('cluster_backend') != 'azure':
+            logging.debug("Skip configuring Azure KMS, test is not running on Azure")
+            return
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring Azure KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring Azure KMS, test uses mixed scylla versions")
+            return
+        try:
+            scylla_version = ComparableScyllaVersion(self.params.scylla_version)
+            if not (scylla_version >= '2025.4.0~dev'):
+                logging.debug(f"Skip configuring Azure KMS, Scylla version {scylla_version} does not support KMS")
+                return
+        except ValueError as e:
+            InfoEvent(
+                message=f"When checking if should enable Azure KMS, version check raised an error: {e}. Trying to enable it anyway.", severity=Severity.ERROR).publish()
+
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("Configuring Azure KMS:`scylla_encryption_options` is not set in the config, using default values")
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'AzureKeyProviderFactory', 'azure_host': 'scylla-azure-kms'}"
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
+        if not (azure_host := yaml.safe_load(scylla_encryption_options).get("azure_host")):
+            return
+
+        test_id = str(self.test_config.test_id())
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        if "azure_hosts" not in append_scylla_yaml:
+            append_scylla_yaml["azure_hosts"] = {}
+
+        regions = self.params.get('azure_region_name')
+        if len(regions) > 1:
+            raise NotImplementedError("Azure KMS multi-dc support is not yet implemented")
+        key_uri = AzureKmsProvider.get_key_uri_for_test(regions[0], test_id)
+
+        append_scylla_yaml["azure_hosts"][azure_host] = {
+            'master_key': key_uri
+        }
+
+        append_scylla_yaml['user_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'AzureKeyProviderFactory',
+            'azure_host': azure_host,
+        }
+        append_scylla_yaml['system_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'AzureKeyProviderFactory',
+            'azure_host': azure_host,
+        }
+
+        self.params["append_scylla_yaml"] = append_scylla_yaml
+        return
 
     def kafka_configure(self):
         if self.kafka_cluster:
@@ -966,6 +1023,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.test_config.configure_syslogng(self.localhost)
         if self.params.get("logs_transport") == 'vector':
             self.test_config.configure_vector(self.localhost)
+        if self.params.get("cluster_backend") == 'xcloud':
+            self.test_config.configure_xcloud_connectivity(self.localhost, self.params)
+
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
 
@@ -1014,6 +1074,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
         self.prepare_kms_host()
+        self.prepare_azure_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -1112,6 +1173,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             for db_cluster in self.db_clusters_multitenant:
                 if db_cluster:
                     db_cluster.start_kms_key_rotation_thread()
+                    db_cluster.start_azure_kms_key_rotation_thread()
 
             for future in as_completed(futures):
                 future.result()
@@ -1615,6 +1677,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             self.monitors = NoMonitorSet()
 
+        if self.params.get('n_vector_store_nodes') > 0:
+            self.db_cluster.vector_store_cluster = VectorStoreSetAWS(
+                ec2_ami_id=self.params.get('ami_id_vector_store').split(),
+                ec2_ami_username=self.params.get('ami_vector_store_user'),
+                ec2_instance_type=self.params.get('instance_type_vector_store'),
+                n_nodes=[self.params.get('n_vector_store_nodes')],
+                **common_params)
+
     def get_cluster_docker(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
@@ -1627,13 +1697,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
                                                              **container_node_params, **common_params)
 
-        if self.params.get('n_vs_nodes') > 0:
+        if self.params.get('n_vector_store_nodes') > 0:
             self.db_cluster.vector_store_cluster = cluster_docker.VectorStoreSetDocker(
                 params=self.params,
-                vs_docker_image=self.params.get('vs_docker_image'),
-                vs_docker_image_tag=self.params.get('vs_version'),
+                vs_docker_image=self.params.get('vector_store_docker_image'),
+                vs_docker_image_tag=self.params.get('vector_store_version'),
                 cluster_prefix=self.params.get('user_prefix'),
-                n_nodes=self.params.get('n_vs_nodes'),
+                n_nodes=self.params.get('n_vector_store_nodes'),
                 node_key_file=self.credentials[0].key_file)
 
         self.loaders = cluster_docker.LoaderSetDocker(n_nodes=self.params.get("n_loaders"),
@@ -1991,7 +2061,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_cloud(self, loader_info, db_info):
+    def get_cluster_cloud(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
         cloud_api_client = ScyllaCloudAPIClient(
             api_url=self.params.cloud_env_credentials['base_url'],
             auth_token=self.params.cloud_env_credentials['api_token'],
@@ -2027,7 +2097,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         self.log.info("Creating LoaderSet for Scylla Cloud cluster on '%s' cloud provider", cloud_provider)
         if cloud_provider == 'aws':
-            regions = [self.params.cloud_provider_params.get('region'), ]
+            regions = [self.params.cloud_provider_params.get("region"),]
+            init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
             services = get_ec2_services(regions)
 
             user_credentials = self.params.get('user_credentials_path')
@@ -2057,6 +2128,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 ec2_block_device_mappings=loader_info['device_mappings'],
                 n_nodes=loader_info['n_nodes'],
                 **common_params)
+
+            if monitor_info["n_nodes"] > 0:
+                self.monitors = MonitorSetAWS(
+                    ec2_ami_id=self.params.get("ami_id_monitor").split(),
+                    ec2_ami_username=self.params.get("ami_monitor_user"),
+                    ec2_instance_type=monitor_info["type"],
+                    ec2_block_device_mappings=monitor_info["device_mappings"],
+                    n_nodes=monitor_info["n_nodes"],
+                    targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                    **common_params,
+                )
+            else:
+                self.monitors = NoMonitorSet()
+
         elif cloud_provider == 'gce':
             gce_datacenter = self.params.cloud_provider_params.get('region')
             loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
@@ -2067,21 +2152,51 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             if loader_info['disk_type'] is None:
                 loader_info['disk_type'] = self.params.cloud_provider_params.get('root_disk_type_loader')
 
+            if monitor_info["n_nodes"] is None:
+                monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
+            if monitor_info["type"] is None:
+                monitor_info["type"] = self.params.get("gce_instance_type_monitor")
+            if monitor_info["disk_type"] is None:
+                monitor_info["disk_type"] = self.params.get("gce_root_disk_type_monitor")
+            if monitor_info["disk_size"] is None:
+                monitor_info["disk_size"] = self.params.get("root_disk_size_monitor")
+            if monitor_info["n_local_ssd"] is None:
+                monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
+
+            common_params = dict(
+                gce_image_username=self.params.get("gce_image_username"),
+                gce_network=self.params.get("gce_network"),
+                credentials=self.credentials,
+                user_prefix=user_prefix,
+                params=self.params,
+                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter],
+                gce_service=get_gce_compute_instances_client(),
+            )
+
             self.loaders = LoaderSetGCE(
                 gce_image=self.params.get('gce_image_loader'),
                 gce_image_type=loader_info.get('disk_type'),
                 gce_image_size=loader_info.get('disk_size'),
                 gce_n_local_ssd=loader_info.get('n_local_ssd'),
                 gce_instance_type=loader_info['type'],
-                gce_network=self.params.get('gce_network'),
-                gce_service=get_gce_compute_instances_client(),
-                gce_image_username=self.params.get('gce_image_username'),
-                credentials=self.credentials,
-                user_prefix=user_prefix,
                 n_nodes=loader_info['n_nodes'],
                 add_disks=loader_additional_disks,
-                params=self.params,
-                gce_datacenter=gce_datacenter.split() if isinstance(gce_datacenter, str) else [gce_datacenter])
+                **common_params)
+
+            if monitor_info['n_nodes'] > 0:
+                monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
+                self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image_monitor').strip(),
+                                              gce_image_type=monitor_info['disk_type'],
+                                              gce_image_size=monitor_info['disk_size'],
+                                              gce_n_local_ssd=monitor_info['n_local_ssd'],
+                                              gce_instance_type=monitor_info['type'],
+                                              n_nodes=monitor_info['n_nodes'],
+                                              add_disks=monitor_additional_disks,
+                                              targets=dict(db_cluster=self.db_cluster,
+                                                           loaders=self.loaders),
+                                              **common_params)
+            else:
+                self.monitors = NoMonitorSet()
         else:
             self.log.warning("Unsupported cloud provider '%s' for loaders, skipping loader provisioning", cloud_provider)
             self.loaders = None
@@ -2099,8 +2214,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             add_nodes=True,
             allowed_ips=loader_ips)
 
-        # TODO: implement routing of monitoring data to SCT monitor instance
-        self.monitors = NoMonitorSet()
+        if monitor_info['n_nodes'] > 0:
+            self.monitors.targets['db_cluster'] = self.db_cluster
+            self.monitors.promproxy_config = self.db_cluster.get_promproxy_config()
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
@@ -2142,7 +2258,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
         elif cluster_backend == 'xcloud':
-            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info)
+            self.get_cluster_cloud(loader_info=loader_info, db_info=db_info,
+                                   monitor_info=monitor_info)
 
         # NOTE: following starts processing of the monitoring inbound events which will be posted
         #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
@@ -2337,7 +2454,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                                 timeout=timeout,
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
-                                round_robin=round_robin, params=self.params).run()
+                                round_robin=round_robin, params=self.params,
+                                cluster_tester=self).run()
 
     def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
@@ -2629,7 +2747,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             if tablets_config:
                 cmd += ' AND TABLETS = %s' % tablets_config
             execution_result = session.execute(cmd)
-            self.actions_log.info("Keyspace created", metadata={"keyspace": keyspace_name, "statement": cmd})
+            self.actions_log.info(f"Keyspace {keyspace_name} created with statement: {cmd}")
 
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
@@ -2688,7 +2806,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.debug('CQL query to execute: {}'.format(query))
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
-        self.actions_log.info("Created table", metadata={"table_name": name, "query": query})
+        self.actions_log.info(f"Created {name} table with statement: {query}")
         time.sleep(0.2)
 
     def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
@@ -2697,46 +2815,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             session.execute('TRUNCATE TABLE {0}.{1}{2}'.format(ks_name, table_name, timeout))
         except Exception as ex:  # noqa: BLE001
             self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
-
-    def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # noqa: PLR0913
-                                 mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
-                                 gc_grace=None, compact_storage=False):
-
-        # Fix quotes for column names, only use quotes where needed
-        if mv_columns != '*':
-            mv_columns = [
-                cql_quote_if_needed(cql_unquote_if_needed(col))
-                for col in (mv_columns if isinstance(mv_columns, list) else list(mv_columns))
-            ]
-        mv_partition_key = [
-            cql_quote_if_needed(cql_unquote_if_needed(pk))
-            for pk in (mv_partition_key if isinstance(mv_partition_key, list) else list(mv_partition_key))
-        ]
-        mv_clustering_key = [
-            cql_quote_if_needed(cql_unquote_if_needed(cl))
-            for cl in (mv_clustering_key if isinstance(mv_clustering_key, list) else list(mv_clustering_key))
-        ]
-
-        where_clause = ' and '.join([f'{kc} is not null' for kc in mv_partition_key + mv_clustering_key])
-        select_clause = ', '.join(mv_columns)
-        pk_clause = ', '.join(mv_partition_key)
-        cl_clause = ', '.join(mv_clustering_key)
-
-        query = f"CREATE MATERIALIZED VIEW {ks_name}.{mv_name} AS SELECT {select_clause} FROM {ks_name}.{base_table_name} " \
-            f"WHERE {where_clause} PRIMARY KEY ({pk_clause}, {cl_clause}) WITH comment='test MV'"
-        if compression is not None:
-            query += f" AND compression = {{ 'sstable_compression': '{compression}Compressor' }}"
-        if read_repair is not None:
-            query += f" AND read_repair_chance={read_repair}"
-        if gc_grace is not None:
-            query += f" AND gc_grace_seconds={gc_grace}"
-        if speculative_retry is not None:
-            query += f" AND speculative_retry='{speculative_retry}'"
-        if compact_storage:
-            query += ' AND COMPACT STORAGE'
-
-        self.log.debug(f'MV create statement: {query}')
-        session.execute(query, timeout=600)
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):
         self.log.debug("Waiting for view {}.{} to finish building...".format(key_space, view))
@@ -3950,12 +4028,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        if email_data:
+        if email_data is not None:
             email_data['grafana_screenshots'] = grafana_screenshots
             email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)
+        else:
+            self.log.info('failed to get email data, email will not be sent.')
 
     def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
         if grafana_screenshots:
@@ -4149,9 +4229,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.log.info(
             "Build HDR histogram (tags: %s) with start time: %s, end time: %s, time interval: %s for operation: %s",
             hdr_tags, start_time, end_time, time_interval, stress_operation)
-        return make_hdrhistogram_summary_by_interval(
+        histogram_data = make_hdrhistogram_summary_by_interval(
             hdr_tags=hdr_tags, stress_operation=stress_operation,
             path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)
+        self.log.info("HDR histogram summary result: %s", histogram_data)
+        return histogram_data
 
     @property
     def all_db_nodes(self) -> list[BaseNode]:

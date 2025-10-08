@@ -19,6 +19,8 @@ import boto3
 from botocore.response import StreamingBody
 from ssh2.session import Session
 
+from sdcm.keystore import KeyStore
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -82,6 +84,9 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
     chan_response = SshOutAsFile(chan)
     s3 = boto3.client("s3")
     s3.upload_fileobj(chan_response, s3_bucket, s3_key, ExtraArgs=extra_args)
+    for user, canonical_id in KeyStore().get_acl_grantees().items():
+        LOGGER.info("Setting ACL for user %s", user)
+        s3.put_object_acl(Bucket=s3_bucket, Key=s3_key, GrantRead=f"id={canonical_id}")
     link = f"https://{s3_bucket}.s3.amazonaws.com/{s3_key}"
     LOGGER.info("Uploaded successfully to %s", link)
     return link

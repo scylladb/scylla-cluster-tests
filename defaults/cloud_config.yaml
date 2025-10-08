@@ -1,7 +1,20 @@
 n_db_nodes: 3
 n_loaders: 1
-n_monitor_nodes: 0
+n_monitor_nodes: 1
 
 use_mgmt: false
 
 use_cloud_manager: true
+
+# disable it since it need ssh access to db nodes
+# TODO: remove it once we have such access by default
+run_commit_log_check_thread: false
+
+# VPC peering configuration
+xcloud_vpc_peering:
+  enabled: true
+  cidr_pool_base: '172.31.0.0/16'
+  cidr_subnet_size: 24
+
+# TODO: remove this when vector.dev logging is enabled by default
+logs_transport: 'vector'

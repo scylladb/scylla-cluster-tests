@@ -51,6 +51,7 @@ from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import to_inet_ntop_format
+from sdcm.utils.vector_store_utils import VectorStoreClusterMixin, VectorStoreNodeMixin
 from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
@@ -117,9 +118,8 @@ class AWSCluster(cluster.BaseCluster):
                          )
 
     def __str__(self):
-        return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
-                                                  self._ec2_ami_id,
-                                                  self._ec2_instance_type)
+        return 'Cluster %s (AMI: %s)' % (self.name,
+                                         self._ec2_ami_id)
 
     @property
     def instance_profile_name(self) -> str | None:
@@ -469,21 +469,6 @@ class AWSNode(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx, rack=rack)
 
-    def __str__(self):
-        # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
-        # broadcast_address. Keep this output in correlation with `nodetool status`
-        if self.scylla_network_configuration.broadcast_address_ip_type == "private":
-            node_private_ip = self.scylla_network_configuration.broadcast_address
-        else:
-            node_private_ip = self.private_ip_address
-
-        return 'Node %s [%s | %s%s]%s' % (
-            self.name,
-            self.public_ip_address,
-            node_private_ip,
-            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
-            self._dc_info_str())
-
     @cached_property
     def network_configuration(self):
         # Output example:
@@ -829,7 +814,15 @@ class AWSNode(cluster.BaseNode):
         self._instance.wait_until_terminated()
 
         client: EC2Client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
-        client.release_address(AllocationId=self.eip_allocation_id)
+        try:
+            client.release_address(AllocationId=self.eip_allocation_id)
+        except botocore.exceptions.ClientError as exc:
+            if exc.response['Error']['Code'] == 'InvalidAllocationID.NotFound':
+                self.log.warning("Ignoring InvalidAllocationID.NotFound error when releasing address: %s. "
+                                 "The allocation ID '%s' does not exist, likely already released.",
+                                 exc, self.eip_allocation_id)
+            else:
+                raise
 
     def destroy(self):
         self.stop_task_threads()
@@ -1146,3 +1139,100 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                             params=params,
                             node_type=node_type,
                             add_nodes=add_nodes)
+
+
+class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
+    """AWS EC2 node running Vector Store service"""
+
+    def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,
+                 node_prefix='vs-node', node_index=1, ami_username='ubuntu',
+                 base_logdir=None, dc_idx=0, rack=0):
+        super().__init__(ec2_instance=ec2_instance,
+                         ec2_service=ec2_service,
+                         credentials=credentials,
+                         parent_cluster=parent_cluster,
+                         node_prefix=node_prefix,
+                         node_index=node_index,
+                         ami_username=ami_username,
+                         base_logdir=base_logdir,
+                         dc_idx=dc_idx,
+                         rack=rack)
+
+    def init(self):
+        super().init()
+
+    def configure_vector_store_service(self):
+        """Configure Vector Store service"""
+        # Vector Store service can read configuration from .env files
+        env_content = (
+            f"VECTOR_STORE_URI=0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}\n"
+            f"VECTOR_STORE_SCYLLADB_URI={self.scylla_uri}")
+
+        if (threads := self.parent_cluster.params.get('vector_store_threads')) > 0:
+            env_content += f"\nVECTOR_STORE_THREADS={threads}"
+
+        self.remoter.run(f"echo '{env_content}' | sudo tee /home/ubuntu/vector-store/.env > /dev/null", verbose=True)
+        self.remoter.run(
+            f"sudo chown {self.parent_cluster.params.get('ami_vector_store_user')}: /home/ubuntu/vector-store/.env", verbose=True)
+
+
+class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
+    """Set of Vector Store nodes on AWS"""
+
+    def __init__(self,
+                 ec2_ami_id,
+                 ec2_subnet_id=None,
+                 ec2_security_group_ids=(),
+                 services=None,
+                 credentials=None,
+                 ec2_instance_type='c6i.xlarge',
+                 ec2_block_device_mappings=None,
+                 ec2_ami_username='ubuntu',
+                 user_prefix=None, n_nodes=1, params=None, **kwargs):
+
+        self.scylla_cluster = None
+
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'vs-node')
+        node_type = 'vs'
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'vs-set')
+
+        super().__init__(ec2_ami_id=ec2_ami_id,
+                         ec2_subnet_id=ec2_subnet_id,
+                         ec2_security_group_ids=ec2_security_group_ids,
+                         services=services,
+                         ec2_instance_type=ec2_instance_type,
+                         ec2_ami_username=ec2_ami_username,
+                         ec2_block_device_mappings=ec2_block_device_mappings,
+                         credentials=credentials,
+                         cluster_prefix=cluster_prefix,
+                         node_prefix=node_prefix,
+                         n_nodes=n_nodes,
+                         params=params,
+                         node_type=node_type,
+                         **kwargs)
+
+    def _reconfigure_vector_store_nodes(self):
+        """Reconfigure Vector Store nodes with Scylla cluster information"""
+        if not self.nodes:
+            return
+
+        self.log.info("Reconfiguring Vector Store nodes with Scylla cluster information")
+        for node in self.nodes:
+            try:
+                node.remoter.run("sudo systemctl stop vector-store", ignore_status=True, verbose=True)
+                node.configure_vector_store_service()
+                node.remoter.run("sudo systemctl start vector-store", verbose=True)
+            except Exception as e:
+                self.log.error("Failed to reconfigure Vector Store node %s: %s", node.name, e)
+                raise
+
+    def _create_node(self, instance, ami_username, node_prefix, node_index,
+                     base_logdir, dc_idx, rack):
+        ec2_service = self._ec2_services[0 if self.params.get("simulated_regions") else dc_idx]
+        credentials = self._credentials[0 if self.params.get("simulated_regions") else dc_idx]
+        node = VectorStoreAWSNode(ec2_instance=instance, ec2_service=ec2_service,
+                                  credentials=credentials, parent_cluster=self, ami_username=ami_username,
+                                  node_prefix=node_prefix, node_index=node_index,
+                                  base_logdir=base_logdir, dc_idx=dc_idx, rack=rack)
+        node.init()
+        return node

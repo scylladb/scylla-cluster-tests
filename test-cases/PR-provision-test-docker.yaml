@@ -1,6 +1,5 @@
 test_duration: 60
 stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
-             "cassandra-stress counter_write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=TimeWindowCompactionStrategy)' -mode cql3 native -rate threads=5 -pop seq=1..10000000"
              ]
 
 n_loaders: 1
@@ -15,7 +14,3 @@ nemesis_interval: 1
 user_prefix: 'PR-provision-docker'
 
 use_mgmt: false
-
-append_scylla_yaml:
-  enable_tablets: false  # counters are not supported with tablets
-  tablets_mode_for_new_keyspaces: 'disabled'  # counters are not supported with tablets

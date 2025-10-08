@@ -1,5 +1,5 @@
 test_duration: 900
-n_db_nodes: 8
+n_db_nodes: 9
 n_loaders: 2
 
 

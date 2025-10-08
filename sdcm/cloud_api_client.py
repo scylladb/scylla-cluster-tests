@@ -14,14 +14,15 @@
 import json
 import logging
 import ipaddress
-import requests
 from enum import Enum
 from functools import cached_property
 from pprint import pformat
-from requests.adapters import HTTPAdapter
 from urllib.parse import urljoin
 from typing import Any, Literal
 
+import yaml
+import requests
+from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
@@ -258,6 +259,7 @@ class ScyllaCloudAPIClient:
         encryption_at_rest: dict | None,
         maintenance_windows: list[dict],
         scaling: dict[str, str],
+        prom_proxy: bool,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -282,6 +284,7 @@ class ScyllaCloudAPIClient:
         :param encryption_at_rest: encryption at rest configuration
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
+        :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
 
         :return: created cluster details
         """
@@ -305,7 +308,9 @@ class ScyllaCloudAPIClient:
             jumpStart=jump_start,
             encryptionAtRest=encryption_at_rest,
             maintenanceWindows=maintenance_windows,
-            scaling=scaling,)
+            scaling=scaling,
+            promProxy=prom_proxy,
+        )
         return self._parse_response_data(response)
 
     def get_clusters(self, *, account_id: int, metrics: str = '', enriched: bool = False) -> list[dict[str, Any]]:
@@ -342,6 +347,29 @@ class ScyllaCloudAPIClient:
         if enriched:
             params['enriched'] = 'true'
         return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dcs', params=params)['dataCenters']
+
+    def get_cluster_promproxy_config(self, *, account_id: int, cluster_id: int) -> str:
+        """
+        Get the Prometheus proxy configuration for a cluster.
+        """
+
+        url = f'/account/{account_id}/cluster/{cluster_id}/promproxy/config'
+        url = urljoin(self.api_url, url.lstrip('/'))
+
+        LOGGER.debug("Making get request to %s", url)
+        response = self.session.get(url)
+        response.raise_for_status()
+
+        # quick sanity check to ensure the response is valid YAML
+        try:
+            yaml.safe_load(response.text)
+        except Exception:
+            LOGGER.exception("Failed to parse Prometheus proxy config as YAML")
+            LOGGER.exception(response.text)
+            raise
+
+        LOGGER.info("Got Prometheus proxy config for cluster %d: %s", cluster_id, response.text)
+        return response.text
 
     def delete_cluster(self, *, account_id: int,  cluster_id: int, cluster_name: str) -> dict[str, Any]:
         """Delete a cluster"""

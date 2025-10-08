@@ -87,6 +87,9 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout, AdaptiveTimeoutStore
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.azure_utils import AzureService
+from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -1109,13 +1112,20 @@ class BaseNode(AutoSshContainerMixin):
         return f' ({", ".join(dc_info)})' if dc_info else ""
 
     def __str__(self):
-        # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
-        #  to here
-        return 'Node %s [%s | %s%s]%s' % (
+        # If multiple network interface is defined on the node (AWS), private address in the `nodetool status`
+        # is IP that defined in broadcast_address. Keep this output in correlation with `nodetool status`
+        if (self.scylla_network_configuration and
+                self.scylla_network_configuration.broadcast_address_ip_type == "private"):
+            node_private_ip = self.scylla_network_configuration.broadcast_address
+        else:
+            node_private_ip = self.private_ip_address
+
+        return 'Node %s [%s | %s%s] (Type: %s)%s' % (
             self.name,
             self.public_ip_address,
-            self.private_ip_address,
+            node_private_ip,
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self._instance_type,
             self._dc_info_str())
 
     def restart(self):
@@ -2158,6 +2168,8 @@ class BaseNode(AutoSshContainerMixin):
             else:
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
+                    echo 'export PATH="$HOME/scylladb/share/cassandra/bin:$HOME/scylladb/bin:$PATH"' >> ~/.bashrc
+                    echo 'export PATH="$HOME/scylladb/share/cassandra/bin:$HOME/scylladb/bin:$PATH"' >> ~/.bash_profile
                     cd ./scylla-*
                     ./install.sh --nonroot
                     cd -
@@ -2923,7 +2935,7 @@ class BaseNode(AutoSshContainerMixin):
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
         # cqlsh uses rpc_address/broadcast_rps_address.
-        host = '' if self.is_docker() else self.cql_address
+        host = '' if self.is_docker() or self.is_cloud() else self.cql_address
         # escape double quotes, that might be on keyspace/tables names
         command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
@@ -3223,7 +3235,7 @@ class BaseNode(AutoSshContainerMixin):
         try:
             self.remoter.run(
                 f'logger -p {level} -t scylla-cluster-tests {shlex.quote(message)}',
-                ignore_status=True, verbose=False, retry=0, timeout=10)
+                ignore_status=True, verbose=False, retry=0, timeout=10, suppress_errors=True)
         except Exception:  # noqa: BLE001
             pass
 
@@ -3401,6 +3413,7 @@ class BaseCluster:
         key = self.node_type if "db" not in self.node_type else "db"
         action = self.params.get(f"post_behavior_{key}_nodes")
         return {**self.test_config.common_tags(),
+                "Name": self.name,
                 "NodeType": str(self.node_type),
                 "keep_action": "terminate" if action == "destroy" else "", }
 
@@ -3832,6 +3845,20 @@ class BaseCluster:
     @staticmethod
     def is_table_has_no_sstables(keyspace_name: str, node: BaseNode, table_name: str, **kwarg) -> bool:
         return not bool(node.sstable_folder_exists(keyspace_name, table_name, verbose=False))
+
+    def get_non_system_ks_cf_with_tablets_list(self, db_node,
+                                               filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
+                                               filter_func: Callable[..., bool] = None) -> List[str]:
+        with self.cql_connection_patient(db_node, connect_timeout=600) as session:
+            session.default_timeout = 60.0 * 5
+            keyspaces = [row.keyspace_name for row in session.execute(
+                "select keyspace_name from system_schema.scylla_keyspaces")]
+            self.log.debug("Keyspaces with tablets enabled %s", keyspaces)
+
+        return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
+                                       filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
+                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=keyspaces,
+                                       filter_func=filter_func)
 
     def get_non_system_ks_cf_list(self, db_node,
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
@@ -4574,8 +4601,11 @@ class BaseScyllaCluster:
             # Don't run health check in case parallel nemesis.
             # TODO: find how to recognize, that nemesis on the node is running
             if self.nemesis_count == 1:
-                for node in self.nodes:
-                    node.check_node_health()
+                node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
+                with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout,
+                                      timeout=len(self.nodes) * 30):
+                    for node in self.nodes:
+                        node.check_node_health()
             else:
                 chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
                 return
@@ -4811,6 +4841,31 @@ class BaseScyllaCluster:
         kms_key_rotation_thread.start()
         return None
 
+    def start_azure_kms_key_rotation_thread(self) -> None:
+        if self.params.get("cluster_backend") != 'azure':
+            return None
+        if not self.params.get("enable_kms_key_rotation"):
+            return None
+
+        test_id = str(self.test_config.test_id())
+        region = self.params.get('azure_region_name')[0]
+
+        def _rotate():
+            azure_service = AzureService()
+
+            while True:
+                time.sleep(self.params.get("kms_key_rotation_interval") * 60)
+                try:
+                    key_uri = AzureKmsProvider.get_key_uri_for_test(region, test_id)
+                    rotated_key_id = azure_service.rotate_vault_key(key_uri)
+                    self.log.info(f"Azure KMS key rotated for test {test_id}: {rotated_key_id}")
+                except AzureResourceNotFoundError as e:
+                    self.log.error(f"Azure KMS key not found for rotation: {e}")
+
+        threading.Thread(target=_rotate, daemon=True, name='AzureKmsRotationThread').start()
+        self.log.info("Started Azure KMS rotation thread for test: %s", test_id)
+        return None
+
     def scylla_configure_non_root_installation(self, node, devname):
         node.stop_scylla_server(verify_down=False)
         node.remoter.run(f'{node.offline_install_dir}/sbin/scylla_setup --nic {devname} --no-raid-setup',
@@ -4860,9 +4915,9 @@ class BaseScyllaCluster:
         if install_scylla:
             self._scylla_install(node)
         else:
-            self.log.info("Waiting for preinstalled Scylla")
+            node.log.info("Waiting for preinstalled Scylla")
             self._wait_for_preinstalled_scylla(node)
-            self.log.info("Done waiting for preinstalled Scylla")
+            node.log.info("Done waiting for preinstalled Scylla")
         if self.params.get('print_kernel_callstack'):
             save_kallsyms_map(node=node)
         if node.is_nonroot_install:
@@ -4939,7 +4994,7 @@ class BaseScyllaCluster:
         if self.is_additional_data_volume_used():
             result = node.remoter.sudo(cmd="scylla_io_setup")
             if result.ok:
-                self.log.info("Scylla_io_setup result: %s", result.stdout)
+                node.log.info("Scylla_io_setup result: %s", result.stdout)
 
         if self.params.get('force_run_iotune'):
             node.remoter.sudo(
@@ -4983,12 +5038,12 @@ class BaseScyllaCluster:
 
     def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
         if not self.test_config.REUSE_CLUSTER:
-            self.log.debug('io.conf before reboot: %s', node.remoter.sudo(
+            node.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             node.start_scylla_server(verify_up=False)
             if self.params.get("jmx_heap_memory"):
                 node.restart_scylla_jmx()
-            self.log.debug(
+            node.log.debug(
                 'io.conf right after reboot: %s', node.remoter.sudo(f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             if self.params.get('use_mgmt') and self.node_type == "scylla-db":
                 node.remoter.sudo(shell_script_cmd("""\
@@ -5203,48 +5258,44 @@ class BaseScyllaCluster:
                 return None
 
         target_node_ip = node.ip_address
-        undecommission_nodes = [n for n in self.nodes if n != node]
-
-        verification_node = random.choice(undecommission_nodes)
-        node_ip_list = get_node_ip_list(verification_node)
-        while verification_node == node or node_ip_list is None:
-            verification_node = random.choice(undecommission_nodes)
+        node_allocator = self.test_config.tester_obj().nemesis_allocator
+        with node_allocator.run_nemesis(nemesis_label="verify decommission",
+                                        node_list=self.data_nodes) as verification_node:
             node_ip_list = get_node_ip_list(verification_node)
+            missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
 
-        missing_host_ids = verification_node.raft.search_inconsistent_host_ids()
+            decommission_done = list(node.follow_system_log(
+                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
 
-        decommission_done = list(node.follow_system_log(
-            patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
+            if target_node_ip in node_ip_list and not missing_host_ids and not decommission_done:
+                # Decommission was interrupted during streaming data.
+                cluster_status = self.get_nodetool_status(verification_node)
+                error_msg = ('Node that was decommissioned %s still in the cluster. '
+                             'Cluster status info: %s' % (node,
+                                                          cluster_status))
 
-        if target_node_ip in node_ip_list and not missing_host_ids and not decommission_done:
-            # Decommission was interrupted during streaming data.
-            cluster_status = self.get_nodetool_status(verification_node)
-            error_msg = ('Node that was decommissioned %s still in the cluster. '
-                         'Cluster status info: %s' % (node,
-                                                      cluster_status))
-
-            LOGGER.error('Decommission %s FAIL', node)
-            LOGGER.error(error_msg)
-            raise NodeStayInClusterAfterDecommission(error_msg)
-
-        self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
-        if missing_host_ids and not decommission_done:
-            # decommission was aborted after all data was streamed and node removed from
-            # token ring but left in group0. we can safely removenode and terminate it
-            # terminate node to be sure that it want return back to cluster,
-            # because node was just rebooted and could cause unpredictable cluster state.
-            if verification_node.raft.is_cluster_topology_consistent():
-                error_msg = f"Decommissioned Node {node.name} was bootstrapped again"
-                LOGGER.warning(error_msg)
+                LOGGER.error('Decommission %s FAIL', node)
+                LOGGER.error(error_msg)
                 raise NodeStayInClusterAfterDecommission(error_msg)
-            node.stop_scylla(verify_down=False)
-            LOGGER.debug("Terminate node %s", node.name)
-            self.terminate_node(node)
-            self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
-            self.log.debug("Node %s was terminated", node.name)
-            verification_node.raft.clean_group0_garbage(raise_exception=True)
-            LOGGER.error("Decommission for node %s was aborted", node)
-            raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
+
+            self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
+            if missing_host_ids and not decommission_done:
+                # decommission was aborted after all data was streamed and node removed from
+                # token ring but left in group0. we can safely removenode and terminate it
+                # terminate node to be sure that it want return back to cluster,
+                # because node was just rebooted and could cause unpredictable cluster state.
+                if verification_node.raft.is_cluster_topology_consistent():
+                    error_msg = f"Decommissioned Node {node.name} was bootstrapped again"
+                    LOGGER.warning(error_msg)
+                    raise NodeStayInClusterAfterDecommission(error_msg)
+                node.stop_scylla(verify_down=False)
+                LOGGER.debug("Terminate node %s", node.name)
+                self.terminate_node(node)
+                self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
+                self.log.debug("Node %s was terminated", node.name)
+                verification_node.raft.clean_group0_garbage(raise_exception=True)
+                LOGGER.error("Decommission for node %s was aborted", node)
+                raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
 
         LOGGER.info('Decommission %s PASS', node)
         self.terminate_node(node)
@@ -5416,7 +5467,7 @@ class BaseLoaderSet():
 
     def node_setup(self, node, verbose=False, **kwargs):
 
-        self.log.info('Setup in BaseLoaderSet')
+        node.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
 
         if node.distro.is_rhel_like:
@@ -5434,7 +5485,7 @@ class BaseLoaderSet():
         node_exporter_setup.install(node)
 
         if self.params.get("bare_loaders"):
-            self.log.info("Don't install anything because bare loaders requested")
+            node.log.info("Don't install anything because bare loaders requested")
             return
 
         if self.params.get('client_encrypt'):
@@ -5453,7 +5504,7 @@ class BaseLoaderSet():
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
-            self.log.debug('Skip loader setup for using a prepared AMI')
+            node.log.debug('Skip loader setup for using a prepared AMI')
         else:
             node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
@@ -5551,6 +5602,7 @@ class BaseMonitorSet:
         self._sct_dashboard_json_file = None
         self.test_config = TestConfig()
         self.monitor_id = monitor_id or self.test_config.test_id()
+        self.promproxy_config = None
 
     @property
     def parallel_startup(self):
@@ -5602,6 +5654,8 @@ class BaseMonitorSet:
 
     @property
     def monitoring_version(self):
+        if scylla_version := self.params.get('scylla_version'):
+            return scylla_version
         scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
@@ -5643,7 +5697,7 @@ class BaseMonitorSet:
             json.dump(json.loads(json_data), file, indent=2)
 
     def node_setup(self, node, **kwargs):
-        self.log.info('TestConfig in BaseMonitorSet')
+        node.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
 
         if node.distro.is_rhel_like:
@@ -5931,6 +5985,11 @@ class BaseMonitorSet:
                                            bearer_token=cloud_prom_bearer_token,
                                            static_configs=[dict(targets=[cloud_prom_host])]))
 
+            if self.params.get('cluster_backend') == 'xcloud' and self.promproxy_config:
+                yaml_from_xcloud = yaml.safe_load(self.promproxy_config)
+                xcloud_config = next(iter(yaml_from_xcloud.get("scrape_configs", [])), None)
+                scrape_configs.append(xcloud_config)
+
             if self.params.get('gemini_cmd'):
                 gemini_loader_targets_list = ["%s:2112" % getattr(node, self.DB_NODES_IP_ADDRESS)
                                               for node in self.targets["loaders"].nodes]
@@ -6013,11 +6072,10 @@ class BaseMonitorSet:
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         scylla_targets_per_dc = {}
-        node_export_targets_per_dc = {}
         node_export_targets_per_dc = {"sct-runner": {
             "labels": {"dc": "sct-runner"}, "targets": [f'{normalize_ipv6_url(get_my_ip())}:9100'],
         }}
-        for db_node in self.targets["db_cluster"].nodes:
+        for db_node in getattr(self.targets.get("db_cluster"), 'nodes', []):
             if db_node.region not in scylla_targets_per_dc:
                 scylla_targets_per_dc[db_node.region] = []
             if db_node.region not in node_export_targets_per_dc:
@@ -6056,7 +6114,7 @@ class BaseMonitorSet:
                 for dc_data in node_export_targets_per_dc.values():
                     exporter_yaml.append(dc_data)
 
-            if self.params.get("cloud_prom_bearer_token"):
+            if self.params.get("cloud_prom_bearer_token") or (self.params.get("cluster_backend") == "xcloud" and self.promproxy_config):
                 node.remoter.run(shell_script_cmd(f"""\
                     echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
                     echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml

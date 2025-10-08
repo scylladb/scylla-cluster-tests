@@ -1,8 +1,10 @@
+import concurrent
 import glob
 import os.path
 import time
 import logging
 import multiprocessing
+import traceback
 from typing import Any
 from dataclasses import asdict, dataclass, make_dataclass
 from concurrent.futures.process import ProcessPoolExecutor
@@ -15,6 +17,7 @@ LOGGER = logging.getLogger(__file__)
 PROCESS_LIMIT = multiprocessing.cpu_count()
 TIME_INTERVAL = 600
 PERCENTILES = [50, 90, 95, 99, 99.9, 99.99, 99.999]
+FUTURE_RESULT_TIMEOUT = 60  # seconds
 
 
 def make_hdrhistogram_summary(
@@ -132,54 +135,89 @@ class _HdrRangeHistogramBuilder:
         """
         Build Range Histogram Summary from provided hdr logs files path
         """
-        with ProcessPoolExecutor(max_workers=len(self.hdr_tags)) as executor:
-            futures = [
-                executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
-        scan_results = {}
-        for future in futures:
-            if result := future.result():
-                scan_results.update(result)
-        return [scan_results]
+
+        LOGGER.debug(f'Building histogram summary for {path} with tags {self.hdr_tags}')
+        try:
+            with ProcessPoolExecutor(max_workers=len(self.hdr_tags)) as executor:
+                futures = [
+                    executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
+                scan_results = {}
+                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
+                    result = future.result()
+                    LOGGER.debug(f"Got result for {e} future for tag {self.hdr_tags[e]}")
+                    if result:
+                        scan_results.update(result)
+            return [scan_results]
+        except Exception as e:
+            LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
+            raise
+        finally:
+            LOGGER.debug(f'Finished building histogram summary for {path} with tags {self.hdr_tags}')
 
     def build_histograms_summary_with_interval(self, path: str,
                                                interval=TIME_INTERVAL) -> list[dict[str, dict[str, int]]]:
         """
         Build Several Range Histogram Summaries from provided hdr logs files path splitted by interval
         """
-        start_ts = int(self.start_time)
-        end_ts = int(self.end_time)
-        if end_ts - start_ts < TIME_INTERVAL:
-            window_step = int(end_ts - start_ts)
-        else:
-            window_step = interval or TIME_INTERVAL
 
-        futures = []
-        interval_num = 0
-        start_intervals = range(start_ts, end_ts, window_step)
+        LOGGER.debug(f'Building histogram summary for {path} with tags {self.hdr_tags}')
+        try:
+            start_ts = int(self.start_time)
+            end_ts = int(self.end_time)
+            if end_ts - start_ts < TIME_INTERVAL:
+                window_step = int(end_ts - start_ts)
+            else:
+                window_step = interval or TIME_INTERVAL
 
-        max_workers = len(start_intervals)*len(self.hdr_tags)
-        max_workers = PROCESS_LIMIT if max_workers > PROCESS_LIMIT else max_workers
+            futures = []
+            interval_num = 0
+            start_intervals = range(start_ts, end_ts, window_step)
+            LOGGER.debug(
+                f'Building histogram summary for {path} with tags {self.hdr_tags} and intervals {len(start_intervals)}')
 
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for start_interval in start_intervals:
-                end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
-                for hdr_tag in self.hdr_tags:
-                    futures.append(executor.submit(self._build_histograms_summary_with_interval_by_tag,
-                                                   path, hdr_tag, start_interval, end_interval, interval_num))
-                interval_num += 1
-            results = {}
-            for future in futures:
-                if res := future.result():
-                    if res["interval_num"] not in results:
-                        results[res["interval_num"]] = {}
-                    results[res["interval_num"]].update(res["result"])
+            max_workers = len(start_intervals)*len(self.hdr_tags)
+            max_workers = PROCESS_LIMIT if max_workers > PROCESS_LIMIT else max_workers
 
-        keys = list(results.keys())
-        keys.sort()
-        summary = []
-        for key in keys:
-            summary.append(results[key])
-        return summary
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                for start_interval in start_intervals:
+                    end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
+                    for hdr_tag in self.hdr_tags:
+                        futures.append(executor.submit(self._build_histograms_summary_with_interval_by_tag,
+                                                       path, hdr_tag, start_interval, end_interval, interval_num))
+                    LOGGER.debug(
+                        f"Submitted future for tags {self.hdr_tags} and interval {interval_num} out of {len(start_intervals)}")
+                    interval_num += 1
+                results = {}
+                for e, future in enumerate(futures):
+                    res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 60 seconds
+                    LOGGER.debug(
+                        f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
+                    if res:
+                        LOGGER.debug("Got result for future: interval_num=%s, result_keys=%s", res.get("interval_num"),
+                                     list(res.get("result", {}).keys()))
+                        if res["interval_num"] not in results:
+                            results[res["interval_num"]] = {}
+                        results[res["interval_num"]].update(res["result"])
+                        LOGGER.debug("Updated results for future: interval_num=%s", res.get("interval_num"))
+
+            LOGGER.debug("Finalised results for path %s", path)
+            keys = list(results.keys())
+            LOGGER.debug("Finalised results keys for path %s: %s", path, keys)
+            keys.sort()
+            summary = []
+            for key in keys:
+                LOGGER.debug("Adding results for key %s", key)
+                summary.append(results[key])
+                LOGGER.debug("Added results for key %s", key)
+            return summary
+        except TimeoutError:
+            LOGGER.error(f"TimeoutError getting future result for {path} with tags {self.hdr_tags}")
+            raise
+        except Exception as e:
+            LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
+            raise
+        finally:
+            LOGGER.debug(f'Finished building histogram summary for {path} with tags {self.hdr_tags}')
 
     def build_from_log_line(self, log_line: str, hst_log_start_time: float) -> dict[str, dict[str, int]] | None:
         """
@@ -213,37 +251,63 @@ class _HdrRangeHistogramBuilder:
             if not (next_hist := hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
                                                                         range_end_time_sec=self.end_time,
                                                                         absolute=self.absolute_time)):
+                LOGGER.debug(
+                    f'no histogram entry found in file {hdr_file} starting from {self.start_time} ending at {self.end_time} absolute_time={self.absolute_time}')
                 return True, False
 
             tag_not_found = True
             file_with_correct_time_interval = True
+            index_errors = 0
+            line_index = 5
             while next_hist:
                 tag = next_hist.get_tag()
                 if tag == hdr_tag:
+                    if tag_not_found:
+                        LOGGER.debug(f'found histogram entry with tag {hdr_tag} in file {hdr_file}')
                     if histogram.get_start_time_stamp() == 0:
                         histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
                     histogram.add(next_hist)
                     tag_not_found = False
 
-                next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
-                                                                   range_end_time_sec=self.end_time,
-                                                                   absolute=self.absolute_time)
+                while next_hist:
+                    line_index += 1
+                    try:
+                        next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
+                                                                           range_end_time_sec=self.end_time,
+                                                                           absolute=self.absolute_time)
+                    except IndexError:
+                        LOGGER.warning(f'IndexError in file {hdr_file} near line {line_index}, skipping this line')
+                        index_errors += 1
+                        continue
+                    break
+            if index_errors > 0:
+                LOGGER.warning(f'{index_errors} lines were ignored in file {hdr_file} due to IndexError')
+            LOGGER.debug(
+                f'Finished reading file {hdr_file} with tag {hdr_tag}, tag_not_found={tag_not_found} file_with_correct_time_interval={file_with_correct_time_interval}')
             return tag_not_found, file_with_correct_time_interval
 
         if not os.path.exists(hdr_file):
             LOGGER.error("File doesn't exists: %s", hdr_file)
             return _HdrRangeHistogram(start_time=0, end_time=0, histogram=None, hdr_tag=None)
 
+        LOGGER.debug("Parsing file: %s tag %s", hdr_file, hdr_tag)
         histogram = _HdrHistogram()
         histogram.set_tag(hdr_tag)
-        _, file_with_correct_time_interval = analyze_hdr_file()
-
+        try:
+            _, file_with_correct_time_interval = analyze_hdr_file()
+        except Exception as e:
+            LOGGER.error("Failed to parse file %s with tag %s: %s", hdr_file, hdr_tag, e)
+            LOGGER.error(traceback.format_exc())
+            raise
         if not file_with_correct_time_interval:
+            LOGGER.debug(
+                f'The file {hdr_file} does not include the time interval from `{self.start_time}` to `{self.end_time}`')
             # Keep this message for future debug
             LOGGER.debug("The file '%s' does not include the time interval from `%s` to `%s`",
                          hdr_file, self.start_time, self.end_time)
             return None
 
+        LOGGER.debug(f'Collected histogram from file {hdr_file} with tag {hdr_tag}: {histogram}')
         # Keep this message for future debug
         LOGGER.debug("Collect data from the file '%s' (time interval from `%s` to `%s`)",
                      hdr_file, self.start_time, self.end_time)
@@ -260,8 +324,14 @@ class _HdrRangeHistogramBuilder:
         """
         if not base_path:
             base_path = os.path.abspath(os.path.curdir)
+        LOGGER.debug(f'Looking for hdr files in {base_path} with pattern {self.hdrh_files_pattern}')
         hdr_files = []
         for hdr_file in glob.glob(self.hdrh_files_pattern, root_dir=base_path, recursive=True):
+            try:
+                size = os.stat(os.path.join(base_path, hdr_file)).st_size
+            except:
+                size = -1
+            LOGGER.debug(f'Found hdr file {os.path.join(base_path, hdr_file)} in {base_path}, size {size}')
             hdr_files.append(os.path.join(base_path, hdr_file))
         return hdr_files
 
@@ -280,6 +350,7 @@ class _HdrRangeHistogramBuilder:
 
             final_hst.start_time = min(final_hst.start_time, hst.start_time)
             final_hst.end_time = max(final_hst.end_time, hst.end_time)
+        LOGGER.debug(f'Merged histograms with tag {final_hst.hdr_tag} result {final_hst}')
         return final_hst
 
     def _build_histogram_from_dir(self, base_path: str, hdr_tag: str, ) -> _HdrRangeHistogram:
@@ -297,6 +368,7 @@ class _HdrRangeHistogramBuilder:
                 continue
 
             file_range_histogram = self._build_histogram_from_file(hdr_file, hdr_tag)
+            LOGGER.debug(f'Collected histogram from file {hdr_file} with tag {hdr_tag}: {file_range_histogram}')
             if file_range_histogram:
                 collected_histograms.append(file_range_histogram)
         return self._merge_range_histograms(collected_histograms)
@@ -312,12 +384,15 @@ class _HdrRangeHistogramBuilder:
         #    Examples: 'fn--write', 'fn--write-batch', 'fn--get', 'fn--get-many', 'fn--read'.
         # 3) 'scylla-bench' has identical tag names for reads and writes - 'co-fixed' and 'raw'.
         #    It doesn't have 'mixed' workload type, so it's mode should be used for detecting the tag data type.
-        # 4) NOT_SUPPORTED: 'ycsb', it supports HDR histograms, but doesn't use tags in it.
-        #    So, the 'ycsb' case should be handled separately.
+        # 4) 'ycsb', it supports HDR histograms. YCSB has been upgraded with patch to enable tagging.
+        #    It uses SCAN READ SCAN UPDATE INSERT DELETE WRITE tags - each tag will create a different hdr file.
+        #    First two ifs will handle all ycsb tags and return correct workload type.
+
         hdr_tag = hdr_tag.lower().strip()
+        LOGGER.debug(f'Checking hdr_tag {hdr_tag} for workload type detection')
         if any(w_word in hdr_tag for w_word in ("write", "insert", "update", "delete")):
             return "WRITE"
-        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count")):
+        elif any(r_word in hdr_tag for r_word in ("read", "select", "get", "count", "scan")):
             return "READ"
         elif self.stress_operation in ("WRITE", "READ"):
             # branch for the scylla-bench case with its 'co-fixed' and 'raw' tags
@@ -350,16 +425,21 @@ class _HdrRangeHistogramBuilder:
         return None
 
     def build_histogram_summary_by_tag(self, path: str, hdr_tag: str) -> dict[str, dict[str, int]] | None:
+        LOGGER.debug(f'Running build_histogram_summary_by_tag for tag {hdr_tag} in path {path}')
         if os.path.exists(path) and os.path.isfile(path):
             histogram = self._build_histogram_from_file(hdr_file=path, hdr_tag=hdr_tag)
             if not histogram:
+                LOGGER.info(f"File {path} didn't generate histogram for tag {hdr_tag}")
                 return None
         elif os.path.exists(path) and os.path.isdir(path):
             histogram = self._build_histogram_from_dir(base_path=path, hdr_tag=hdr_tag)
         else:
+            LOGGER.info(f"No histogram for path {path}  - not a file or directory")
             return None
 
-        return self._get_summary_for_operation_by_hdr_tag(histogram)
+        val = self._get_summary_for_operation_by_hdr_tag(histogram)
+        LOGGER.debug(f'Path {path} generated histogram for tag {hdr_tag}: {val}')
+        return val
 
     def _build_histograms_summary_with_interval_by_tag(
             self, path: str, hdr_tag: str,

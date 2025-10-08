@@ -16,6 +16,7 @@
 
 import os
 import time
+from typing import Optional
 
 import yaml
 from cassandra.query import SimpleStatement
@@ -29,7 +30,8 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
-from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
+from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built, create_materialized_view
+
 
 KB = 1024
 
@@ -354,8 +356,8 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # Create materialized view
             view_name = base_table_name + '_mv'
             self.log.debug('Create materialized view: {0}.{1}'.format(ks_name, view_name))
-            self.create_materialized_view(ks_name, base_table_name, view_name, ['C0'], ['key'], session,
-                                          mv_columns=['C0', 'key'])
+            create_materialized_view(session, ks_name, base_table_name, view_name,
+                                     ['C0'], ['key'], mv_columns=['C0', 'key'])
 
             # Wait for the materialized view is built
             self._wait_for_view(self.db_cluster, session, ks_name, view_name)
@@ -499,6 +501,15 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                     AND read_repair_chance = 0.0
                     AND speculative_retry = 'NONE';
             """)
+
+    @optional_stage('perf_steady_state_calc')
+    @latency_calculator_decorator
+    def steady_state_latency(self, hdr_tags: list[str], sleep_time: Optional[int] = None):
+        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
+        sleep_time = sleep_time or self.db_cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
+        time.sleep(sleep_time)
+        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
 
     # Base Tests
     def test_write(self):
@@ -830,6 +841,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if not self.params["use_hdrhistogram"]:
             return
 
+        self.log.debug(f'building histograms for tags {hdr_tags}')
         start_time = self.get_test_start_time() or self.start_time
         end_time = time.time()
 
@@ -845,6 +857,7 @@ class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
                                   histogram_data=histogram_data_by_interval)
+        self.log.debug(f'building histograms for tags {hdr_tags} completed')
 
 
 class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
@@ -861,15 +874,6 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
-
-    @optional_stage('perf_steady_state_calc')
-    @latency_calculator_decorator
-    def steady_state_latency(self, hdr_tags: list[str]):
-        # NOTE: 'hdr_tags' will be used by the 'latency_calculator_decorator' decorator
-        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
-        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
-        time.sleep(sleep_time)
-        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
 
     @latency_calculator_decorator
     def post_upgrades_steady_state(self, hdr_tags: list[str]):

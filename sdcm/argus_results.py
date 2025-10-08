@@ -138,7 +138,8 @@ class ManagerBackupBenchmarkResult(StaticGenericResultTable):
         name = "Backup benchmark"
         description = "Backup benchmark"
         Columns = [
-            ColumnMetadata(name="backup time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="Size", unit="bytes", type=ResultType.TEXT, higher_is_better=False),
+            ColumnMetadata(name="Time", unit="s", type=ResultType.DURATION, higher_is_better=False),
         ]
 
 
@@ -229,7 +230,8 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
-    "read": LatencyCalculatorReadResult
+    "read": LatencyCalculatorReadResult,
+    "throughput": LatencyCalculatorMixedResult,
 }
 
 
@@ -245,7 +247,7 @@ def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResu
 
 
 def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str,  # noqa: PLR0914
-                         cycle: int, result: dict, start_time: float = 0, error_thresholds: dict = None):
+                         cycle: int | str, result: dict, start_time: float = 0, error_thresholds: dict = None):
     """Sends results to Argus service.
 
     This function creates following data tables in Argus:
@@ -262,6 +264,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
       during the measured time range.
     """
     result_table, result_table_summary = workload_to_table[workload](), workload_to_table[workload]()
+    if type(cycle) is int:
+        cycle = f"Cycle #{cycle}"
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
     result_table_summary.name = f"{workload} - {name} - Summary latencies"
@@ -276,7 +280,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         start_time = "N/A"
 
     summary_throughput, summary_worst_lat = 0, {}
-    summary_row_name = f"Cycle #{cycle} (Summary of all HDR tags)"
+    summary_row_name = f"{cycle} (Summary of all HDR tags)"
     overview_screenshot = [s for s in result["screenshots"] if "overview" in s]
     qa_screenshot = [s for s in result["screenshots"] if "scylla-per-server-metrics-nemesis" in s]
     hdr_summary = result.get("hdr_summary", {})
@@ -284,7 +288,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
     skip_hdr_tag = hdr_summary_len == 1 or (workload == "mixed" and hdr_summary_len == 2)
     for i, (workload_type_and_hdr_tag, hdr_data) in enumerate(hdr_summary.items()):
         (workload_type, hdr_tag) = workload_type_and_hdr_tag.split("--", maxsplit=1)
-        row_name = f"Cycle #{cycle}" + "" if skip_hdr_tag else f" (HDR tag: {hdr_tag})"
+        row_name = f"{cycle}" + "" if skip_hdr_tag else f" (HDR tag: {hdr_tag})"
         for percentile in ("90", "99"):
             if (workload_type, percentile) not in summary_worst_lat:
                 summary_worst_lat[(workload_type, percentile)] = 0.0
@@ -346,10 +350,10 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table = ReactorStallStatsResult()
         result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
-        result_table.add_result(column="total", row=f"Cycle #{cycle}",
+        result_table.add_result(column="total", row=cycle,
                                 value=stall_stats["counter"], status=Status.UNSET)
         for interval, value in stall_stats["ms"].items():
-            result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
+            result_table.add_result(column=f"{interval}ms", row=cycle,
                                     value=value, status=Status.UNSET)
         submit_results_to_argus(argus_client, result_table)
 

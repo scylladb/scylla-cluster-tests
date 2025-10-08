@@ -1,0 +1,11 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    test_name: "performance_regression_manager_backup_test.PerformanceRegressionManagerBackupTest.test_manager_backup",
+    test_config: """["test-cases/performance/perf-regression-latency-backup-nemesis.yaml", "configurations/kms-ear.yaml", "configurations/performance/latency-decorator-error-thresholds-backup-nemesis-ent.yaml", "configurations/manager/manager_rclone_backup_nemesis.yaml"]""",
+)

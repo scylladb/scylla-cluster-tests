@@ -38,7 +38,8 @@ k8s_scylla_operator_chart_version=latest</properties>
               <properties>docker_image=scylladb/scylla-nightly
 scylla_version=latest
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
-k8s_scylla_operator_chart_version=latest</properties>
+k8s_scylla_operator_chart_version=latest
+requested_by_user=mflendrich</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>

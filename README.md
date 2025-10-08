@@ -43,6 +43,14 @@ short-name-mode="permissive"
 ```
 
 ### Run a test
+#### Disable Argus (if not needed for testing)
+To disable Argus reporting during testing, set the following environment variable:
+```bash
+export SCT_ENABLE_ARGUS=false
+```
+### Logs Location
+
+All logs generated during test runs can be found in the `~/sct-results` directory.
 
 Example running test using Hydra using `test-cases/PR-provision-test.yaml` configuration file
 
@@ -83,6 +91,16 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend azure --c
 ```
 
 #### Run test locally with docker backend:
+If you wish to run the tests on a local machine, ensure you have Docker installed and running.
+If necessary, set a higher value for asynchronous I/O by:
+```bash
+sudo nano /etc/sysctl.conf
+# Edit or add the following line:
+# fs.aio-max-nr=3000000
+# Save and exit the file, then apply the changes:
+sudo sysctl -p
+```
+For the purpose of debugging a simple logic of a nemesis, for example, it would be recommended to use Docker backend.
 ```bash
 # **NOTE:** user should be part of sudo group, and setup with passwordless access,
 # see https://unix.stackexchange.com/a/468417 for example on how to setup
@@ -92,6 +110,30 @@ export SCT_SCYLLA_VERSION=5.2.1
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
 ```
 
+You can specify a specific scylla version by:
+```bash
+export SCT_SCYLLA_VERSION=2025.1
+```
+
+For debugging a standard nemesis setup you can simply use a default nemesis setup.
+Use the yaml files as in https://github.com/scylladb/scylla-cluster-tests/blob/master/jenkins-pipelines/oss/nemesis/longevity-5gb-1h-AbortRepairMonkey-docker.jenkinsfile:
+```bash
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker \
+-c configurations/nemesis/longevity-5gb-1h-nemesis.yaml \
+-c configurations/nemesis/AbortRepairMonkey.yaml \
+-c configurations/nemesis/additional_configs/docker_backend.yaml
+```
+For debugging a specific nemesis setup you can edit a nemesis class name to run.
+Change the relevant parameters and nemesis class name to the one you want to debug in test-cases/PR-provision-test-docker.yaml like below:
+```
+test_duration: 60
+stress_cmd: "cassandra-stress write cl=QUORUM duration=5m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=10 -pop seq=1..100000 -log interval=5"
+n_db_nodes: 4
+nemesis_class_name: 'DecommissionMonkey'
+nemesis_interval: 5
+```
+For more details on docker backend supported nemesis, please check [docker backend specifics](./docs/docker-backend-overview.md)
+```bash
 #### You can also enter the containerized SCT environment using:
 ```bash
 hydra bash
@@ -165,14 +207,3 @@ the available configuration options are listed in [configuration_options](./docs
 ### Manager Tests (TODO: write explanation for them)
 ### [K8S Functional Tests](./docs/k8s-functional-test.md)
 ### [Microbenchmarking Tests](./docs/microbenchmarking.md)
-
-# Local developer setup
-
-* Requires [uv](https://github.com/astral-sh/uv#installation)
-
-```bash
-uv python install
-uv venv
-export UV_PROJECT_ENVIRONMENT=.venv
-uv sync
-```

@@ -36,7 +36,7 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
     errors_found = False
     remoter.is_up(60 * 5)
     # examples: 24.1.3-0ubuntu3.3, 19.3-46.amzn2.0.2
-    cloud_init_version = Version(remoter.sudo("cloud-init --version 2>&1").stdout.split()[1].split('-')[0])
+    cloud_init_version = Version(remoter.run("cloud-init --version 2>&1").stdout.split()[1].split('-')[0])
     # cloud-init supports json output from version 23.4, see:
     # https://cloudinit.readthedocs.io/en/latest/explanation/return_codes.html#id1
     if cloud_init_version >= Version("23.4"):

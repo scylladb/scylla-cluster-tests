@@ -37,7 +37,7 @@ import io
 import tempfile
 import ctypes
 import shlex
-from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type
+from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable
 from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
@@ -206,7 +206,7 @@ def get_data_dir_path(*args):
 
 
 def get_sct_root_path():
-    import sdcm
+    import sdcm  # noqa: PLC0415
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     sct_root_dir = os.path.join(sdcm_path, "..")
     return os.path.abspath(sct_root_dir)
@@ -291,12 +291,16 @@ class S3Storage():
                                      Key=s3_obj,
                                      Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
+
+            for user, canonical_id in KeyStore().get_acl_grantees().items():
+                LOGGER.info("Setting ACL for user %s", user)
+                boto3.client("s3").put_object_acl(Bucket=self.bucket_name, Key=s3_obj, GrantRead=f"id={canonical_id}")
             if public:
                 LOGGER.info("Set public read access")
                 self.set_public_access(key=s3_obj)
             return s3_url
         except Exception as details:  # noqa: BLE001
-            LOGGER.debug("Unable to upload to S3: %s", details)
+            LOGGER.warning("Unable to upload to S3: %s", details, exc_info=True)
             return ""
 
     def set_public_access(self, key):
@@ -974,36 +978,61 @@ def filter_k8s_clusters_by_tags(tags_dict: dict, clusters: list[
                               instances=clusters)
 
 
-@lru_cache
-def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
-    """Get the list of all the formal scylla ami from specific region."""
-    scylla_version_filter = "*"
-
+def _get_ami_versions(
+        region_name: str,
+        arch: AwsArchType, version: str,
+        version_tag_name: str,
+        extra_filters: list | None = None,
+        version_processor_fn: Callable | None = None) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    version_filter = "*"
     if version and version != "all":
-        scylla_version_filter = f"*{version.replace('enterprise-', '')}-*"
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
 
-        if len(version.split('.')) < 3:
-            # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
-            scylla_version_filter = f"*{version.replace('enterprise-', '')}*"
+    version_filter = version_filter.replace('-', '?').replace('~', '?').replace('.rc', '?rc')
 
-    scylla_version_filter = scylla_version_filter.replace('-', '?').replace('~', '?').replace('.rc', '?rc')
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
     for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
-        images += client.images.filter(
-            Owners=[owner],
-            Filters=[
-                {"Name": "tag:scylla_version", "Values": [scylla_version_filter, ], },
-                {'Name': 'architecture', 'Values': [arch]},
-                {'Name': 'tag:environment', 'Values': ['production']},
-            ],
-        )
+        filters = [
+            {"Name": f"tag:{version_tag_name}", "Values": [version_filter]},
+            {'Name': 'architecture', 'Values': [arch]},
+        ]
+        if extra_filters:
+            filters.extend(extra_filters)
+
+        images += client.images.filter(Owners=[owner], Filters=filters)
+
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
     images = [image for image in images if image.tags and 'debug' not in {
         i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
-
     return images
+
+
+@lru_cache
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
+    """Get the list of all the formal scylla ami from specific region."""
+
+    def _process_enterprise_scylla_version(version: str) -> str:
+        base_version = version.replace('enterprise-', '')
+        return f"*{base_version}*" if len(version.split('.')) < 3 else f"*{base_version}-*"
+
+    extra_filters = [{'Name': 'tag:environment', 'Values': ['production']}]
+    return _get_ami_versions(
+        region_name=region_name,
+        arch=arch,
+        version=version,
+        version_tag_name='scylla_version',
+        extra_filters=extra_filters,
+        version_processor_fn=_process_enterprise_scylla_version)
+
+
+@lru_cache
+def get_vector_store_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
+    """Get the list of Vector Store AMIs from specific region."""
+    return _get_ami_versions(
+        region_name=region_name, arch=arch, version=version, version_tag_name='vector-store-version')
 
 
 @lru_cache
@@ -1152,16 +1181,7 @@ class ScyllaCQLSession:
         self.verbose = verbose
 
     def __enter__(self):
-        execute_orig = self.session.execute
         execute_async_orig = self.session.execute_async
-
-        def execute_verbose(*args, **kwargs):
-            if args:
-                query = args[0]
-            else:
-                query = kwargs.get("query")
-            LOGGER.debug("Executing CQL '%s' ...", query)
-            return execute_orig(*args, **kwargs)
 
         def execute_async_verbose(*args, **kwargs):
             if args:
@@ -1172,7 +1192,6 @@ class ScyllaCQLSession:
             return execute_async_orig(*args, **kwargs)
 
         if self.verbose:
-            self.session.execute = execute_verbose
             self.session.execute_async = execute_async_verbose
         return self.session
 
@@ -2519,7 +2538,7 @@ def skip_optional_stage(stage_names: str | list[str]) -> bool:
     :return: bool
     """
     # making import here, to work around circular import issue
-    from sdcm.cluster import TestConfig
+    from sdcm.cluster import TestConfig  # noqa: PLC0415
     stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
     skip_test_stages = TestConfig().tester_obj().skip_test_stages
     skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
@@ -2571,3 +2590,10 @@ def parse_python_thread_command(cmd: str) -> dict:
                         tokens_iter = iter([next_token] + list(tokens_iter))
 
     return options
+
+
+def format_size(size_in_bytes):
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if size_in_bytes < 1024:
+            return f"{size_in_bytes:.2f} {unit}"
+        size_in_bytes /= 1024
