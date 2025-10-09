@@ -107,6 +107,7 @@ from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJE
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
+from sdcm.utils.nemesis_utils.indexes import create_materialized_view
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
     LatencyDuringOperationsPerformanceAnalyzer
