@@ -85,7 +85,7 @@ class LongevityBalancerTest(LongevityTest):
 
     def scale_out(self, instance_type_param='nemesis_grow_shrink_instance_type') -> list[BaseNode]:
         added_nodes = self.db_cluster.add_nodes(
-            count=self.db_cluster.racks_count,
+            count=self.params.get("nemesis_add_node_cnt"),
             instance_type=self.params.get(instance_type_param),
             enable_auto_bootstrap=True,
             rack=None)
