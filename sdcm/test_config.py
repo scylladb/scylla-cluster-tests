@@ -182,6 +182,7 @@ class TestConfig(metaclass=Singleton):
     def common_tags(cls) -> Dict[str, str]:
         job_name = os.environ.get('JOB_NAME')
         tags = dict(RunByUser=get_username(),
+                    owner = get_username(),
                     TestName=str(cls.test_name()),
                     TestId=str(cls.test_id()),
                     version=job_name.split('/', 1)[0] if job_name else "unknown",
