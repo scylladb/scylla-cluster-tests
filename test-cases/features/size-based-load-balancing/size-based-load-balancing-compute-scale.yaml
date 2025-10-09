@@ -1,9 +1,9 @@
 test_duration: 1440
 # fill to 90%
 prepare_write_cmd: [
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..960000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1920000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1920000001..2880000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..960000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1920000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1920000001..2880000000",
 ]
 
 # base workload
