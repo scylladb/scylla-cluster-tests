@@ -35,12 +35,10 @@ import dateutil.parser
 from sdcm import sct_abs_path
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
-from sdcm.utils.action_logger import get_action_logger
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
 FILTER_EVENT_DECAY_TIME = 600.0
 LOGGER = logging.getLogger(__name__)
-ACTION_LOGGER = get_action_logger("event")
 
 
 class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
@@ -247,6 +245,7 @@ class SctEvent:
                 LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
         get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
+<<<<<<< HEAD
         if self.severity.value > Severity.WARNING.value:
             metadata = {"base": self.base}
             if self.type:
@@ -259,6 +258,18 @@ class SctEvent:
                 target=getattr(self, 'node', None),
                 metadata=metadata
             )
+||||||| parent of 6da9e9d92 (fix(actions_log): log only after filter stage)
+        if self.severity.value > Severity.WARNING.value:
+            event_type = self.base
+            if self.type:
+                event_type += f".{self.type}"
+            if self.subtype:
+                event_type += f".{self.subtype}"
+            ACTION_LOGGER.error(
+                f"{event_type} {self.severity.name} Event (id={self.event_id}) on node: {getattr(self, 'node', None)}"
+            )
+=======
+>>>>>>> 6da9e9d92 (fix(actions_log): log only after filter stage)
         self._ready_to_publish = False
 
     def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
