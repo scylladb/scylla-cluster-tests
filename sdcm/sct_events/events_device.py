@@ -22,6 +22,9 @@ from pathlib import Path
 from functools import cached_property, partial
 from uuid import UUID
 
+from sdcm.utils.action_logger import get_action_logger
+from sdcm.sct_events import Severity
+
 import zmq
 
 from sdcm.sct_events.events_processes import \
@@ -41,6 +44,7 @@ EVENTS_LOG_DIR: str = "events_log"
 RAW_EVENTS_LOG: str = "raw_events.log"
 
 LOGGER = logging.getLogger(__name__)
+ACTION_LOGGER = get_action_logger("event")
 
 
 class EventsDevice(multiprocessing.Process):
@@ -180,6 +184,17 @@ class EventsDevice(multiprocessing.Process):
                 if (obj_max_severity := max_severity(obj)).value < obj.severity.value:
                     LOGGER.warning("Limit %s severity to %s as configured", obj, obj_max_severity)
                     obj.severity = obj_max_severity
+
+                # Log to actions.log (only non-filtered Error/Critical events)
+                if obj.severity.value > Severity.WARNING.value:
+                    event_type = obj.base
+                    if getattr(obj, 'type', None):
+                        event_type += f".{obj.type}"
+                    if getattr(obj, 'subtype', None):
+                        event_type += f".{obj.subtype}"
+                    ACTION_LOGGER.error(
+                        f"{event_type} {obj.severity.name} Event (id={obj.event_id}) on node: {getattr(obj, 'node', None)}"
+                    )
 
                 yield obj.base, obj
 
