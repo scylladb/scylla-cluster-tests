@@ -1,9 +1,8 @@
 test_duration: 1440
+prepare_stress_duration: 720
 # fill to 90%
 prepare_write_cmd: [
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..960000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=960000001..1920000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=960000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1920000001..2880000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=2880000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..2880000000",
 ]
 
 # base workload
@@ -20,11 +19,9 @@ n_db_nodes: 3
 simulated_racks: 1
 instance_type_db: 'i3en.large'
 
-n_loaders: 3
+n_loaders: 1
 instance_type_loader: 'c6i.2xlarge'
 
-# the test should run on a heterogeneous cluster, so it adds different instance types
-# reuses the nemesis_ variables for simplicity
 nemesis_add_node_cnt: 4
 nemesis_grow_shrink_instance_type: 'i4i.xlarge'
 
