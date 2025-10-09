@@ -51,12 +51,12 @@ aws:
             number_of_nodes: 3
             cluster_id: "947e78ed-e988-41d6-92b5-faaf8ad7bbc0"
         eu-west-1:
-          sm_20241203091417UTC:
-            keyspace_name: "10gb_sizetiered_2024_2"
-            scylla_version: "2024.2.0"
+          sm_20250910103721UTC:
+            keyspace_name: "10gb_sizetiered_2025_3"
+            scylla_version: "2025.3"
             scylla_product: "enterprise"
-            number_of_nodes: 3
-            cluster_id: "5c17bec0-ee5c-4fc3-93cd-1e5916a8da57"
+            number_of_nodes: 6
+            cluster_id: "31f826ae-ac9a-4215-87e5-87bfa9576bcd"
           sm_20241203091651UTC:
             keyspace_name: "10gb_sizetiered_6_1"
             scylla_version: "6.1.4"
