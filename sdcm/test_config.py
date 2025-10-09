@@ -12,6 +12,7 @@ from argus.client.sct.client import ArgusSCTClient
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.sct_events import Severity
+from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_events
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.argus import ArgusError, get_argus_client
 from sdcm.utils.ci_tools import get_job_name
@@ -294,9 +295,15 @@ class TestConfig(metaclass=Singleton):
             LOGGER.info("Initializing Argus connection...")
             try:
                 cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
+                enable_argus_posting()
+                start_posting_argus_events()
                 return
             except ArgusError as exc:
                 LOGGER.warning("Failed to initialize argus client: %s", exc.message)
+            except RuntimeError as exc:
+                LOGGER.warning("Skipping setting up argus events: %s", exc)
+                return
+
         TestFrameworkEvent(
             source=cls.__name__,
             source_method='init_argus_client',
