@@ -9,7 +9,7 @@ rollingOperatorUpgradePipeline(
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_operator_upgrade',
     test_config: 'test-cases/scylla-operator/kubernetes-operator-upgrade.yaml',
     base_versions: '["2024.1.19"]',
-    skip_data_load: 'true',
+    skip_data_load: true,
     k8s_version: '1.30',
     k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable',
     k8s_scylla_operator_chart_version: '1.17.1',

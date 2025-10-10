@@ -1004,7 +1004,7 @@ class SCTConfiguration(dict):
                   "Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA"),
         dict(name="skip_data_load",
              env="SKIP_DATA_LOAD",
-             type=bool,
+             type=boolean,
              help="Define whether SCT should load/assert test data into the Scylla cluster"),
 
         dict(name="k8s_scylla_cpu_limit", env="SCT_K8S_SCYLLA_CPU_LIMIT",
