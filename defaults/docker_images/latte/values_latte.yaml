@@ -1,2 +1,2 @@
 latte:
-  image: scylladb/latte:0.40.0-scylladb
+  image: scylladb/latte:0.40.1-scylladb
