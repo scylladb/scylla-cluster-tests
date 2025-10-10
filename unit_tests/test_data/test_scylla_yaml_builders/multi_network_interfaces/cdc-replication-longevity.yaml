@@ -23,7 +23,6 @@ gemini_cmd: |
   --cql-features basic
   --max-mutation-retries 100
   --max-mutation-retries-backoff 100ms
-  --use-server-timestamps
   --test-host-selection-policy token-aware
 
 gemini_table_options:
