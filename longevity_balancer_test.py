@@ -17,14 +17,17 @@
 from collections import defaultdict
 from contextlib import ExitStack
 import contextlib
+from time import sleep
 from longevity_test import LongevityTest
 from sdcm.argus_results import PeriodicDiskUsageToArgus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HardTimeoutEvent, InfoEvent, SoftTimeoutEvent, TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject, get_node_disk_usage
+from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 
 BALANCE_THRESHOLD = 5
@@ -108,12 +111,13 @@ class LongevityBalancerTest(LongevityTest):
         InfoEvent(f'Finished decommissioning {[node for node in nodes]}').publish()
         self.monitors.reconfigure_scylla_monitoring()
 
-    def run_stress_command(self, cmd_param='stress_cmd'):
+    def run_stress_command(self, cmd_param='stress_cmd', wait_for_completion=True):
         stress_queue = []
         self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get(
             cmd_param), self.params.get('keyspace_num'))
-        for stress in stress_queue:
-            self.verify_stress_thread(stress)
+        if wait_for_completion:
+            for stress in stress_queue:
+                self.verify_stress_thread(stress)
 
     def test_load_balance(self):
         """
@@ -155,3 +159,45 @@ class LongevityBalancerTest(LongevityTest):
         self.scale_in(new_nodes)
         # base load again
         self.run_stress_command('stress_cmd')
+
+    def test_balancer_latencies(self):
+        self.run_prepare_write_cmd()
+
+        # base load in background
+        self.run_stress_command('stress_cmd', wait_for_completion=False)
+
+        # let base load run for 10 minutes before scaling
+        @latency_calculator_decorator(legend='base_workload_with_initial_cluster')
+        def base_workload_with_initial_cluster():  # latency calculator needs a function to decorate
+            sleep(600)
+        base_workload_with_initial_cluster()
+
+        # scale out
+        original_nodes = list(self.db_cluster.data_nodes)
+        new_nodes = self.scale_out('nemesis_grow_shrink_instance_type')
+        self.scale_in(original_nodes)
+
+        # increased load for 10 minutes (duration defined in stress_cmd_w)
+        @latency_calculator_decorator(legend='increased_workload_with_new_cluster')
+        def increased_workload_with_new_cluster():
+            self.run_stress_command('stress_cmd_w', wait_for_completion=True)
+        increased_workload_with_new_cluster()
+
+        # run for 10 minutes with the original background load and the new cluster configuration
+        @latency_calculator_decorator(legend='base_workload_with_new_cluster')
+        def base_workload_with_new_cluster():  # latency calculator needs a function to decorate
+            sleep(600)
+        base_workload_with_new_cluster()
+        # scale back to original capacity
+        self.scale_out('instance_type_db')
+        self.scale_in(new_nodes)
+
+        # base load again
+        @latency_calculator_decorator(legend='base_workload_with_restored_cluster')
+        def base_workload_with_restored_cluster():  # latency calculator needs a function to decorate
+            sleep(600)
+        base_workload_with_restored_cluster()
+
+        # kill the background load to end the test
+        with EventsSeverityChangerFilter(new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60):
+            self.loaders.kill_stress_thread()
