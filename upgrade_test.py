@@ -1170,21 +1170,21 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step1 - Populate DB with data').publish()
-        if self.params.get('skip_data'):
+        if self.params.get('skip_data_load'):
             InfoEvent(message='Step1 - Data loading flag is on, skipping...').publish()
         else:
             self.prepare_keyspaces_and_tables()
             self.fill_and_verify_db_data('', pre_fill=True)
 
         InfoEvent(message='Step2 - Run c-s write workload').publish()
-        if self.params.get('skip_data'):
+        if self.params.get('skip_data_load'):
             InfoEvent(message='Step2 - Data loading flag is on, skipping...').publish()
         else:
             self.verify_stress_thread(self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))))
 
         InfoEvent(message='Step3 - Run c-s read workload').publish()
-        if self.params.get('skip_data'):
+        if self.params.get('skip_data_load'):
             InfoEvent(message='Step3 - Data loading flag is on, skipping...').publish()
         else:
             self.verify_stress_thread(self.run_stress_thread(
@@ -1292,13 +1292,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step8 - Verify data in the Scylla cluster').publish()
-        if self.params.get('skip_data'):
+        if self.params.get('skip_data_load'):
             InfoEvent(message='Step8 - Data loading flag is on, skipping...').publish()
         else:
             self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
 
         InfoEvent(message='Step9 - Run c-s read workload').publish()
-        if self.params.get('skip_data'):
+        if self.params.get('skip_data_load'):
             InfoEvent(message='Step9 - Data loading flag is on, skipping...').publish()
         else:
             self.verify_stress_thread(self.run_stress_thread(
