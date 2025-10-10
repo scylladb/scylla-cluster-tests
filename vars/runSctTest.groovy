@@ -204,7 +204,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     fi
 
     if [[ -n "${params.skip_data_load}" ]] ; then
-        export SKIP_DATA="${params.skip_data_load}"
+        export SKIP_DATA_LOAD="${params.skip_data_load}"
     fi
 
     echo "start test ......."

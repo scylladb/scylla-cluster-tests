@@ -1002,6 +1002,10 @@ class SCTConfiguration(dict):
              help="Defines whether dataset uses for pre-fill cluster in functional test. "
                   "Defined in sdcm.utils.sstable.load_inventory. "
                   "Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA"),
+        dict(name="skip_data_load",
+             env="SKIP_DATA_LOAD",
+             type=bool,
+             help="Define whether SCT should load/assert test data into the Scylla cluster"),
 
         dict(name="k8s_scylla_cpu_limit", env="SCT_K8S_SCYLLA_CPU_LIMIT",
              type=str, k8s_multitenancy_supported=True,
