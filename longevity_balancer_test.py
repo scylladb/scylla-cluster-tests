@@ -167,10 +167,7 @@ class LongevityBalancerTest(LongevityTest):
         self.run_stress_command('stress_cmd', wait_for_completion=False)
 
         # let base load run for 10 minutes before scaling
-        @latency_calculator_decorator(legend='base_workload_with_initial_cluster')
-        def base_workload_with_initial_cluster():  # latency calculator needs a function to decorate
-            sleep(600)
-        base_workload_with_initial_cluster()
+        latency_calculator_decorator(legend='base_workload_with_initial_cluster')(lambda _: sleep(600))(self)
 
         # scale out
         original_nodes = list(self.db_cluster.data_nodes)
@@ -178,25 +175,18 @@ class LongevityBalancerTest(LongevityTest):
         self.scale_in(original_nodes)
 
         # increased load for 10 minutes (duration defined in stress_cmd_w)
-        @latency_calculator_decorator(legend='increased_workload_with_new_cluster')
-        def increased_workload_with_new_cluster():
-            self.run_stress_command('stress_cmd_w', wait_for_completion=True)
-        increased_workload_with_new_cluster()
+        latency_calculator_decorator(legend='increased_workload_with_new_cluster')(
+            lambda _: self.run_stress_command('stress_cmd_w', wait_for_completion=True))(self)
 
         # run for 10 minutes with the original background load and the new cluster configuration
-        @latency_calculator_decorator(legend='base_workload_with_new_cluster')
-        def base_workload_with_new_cluster():  # latency calculator needs a function to decorate
-            sleep(600)
-        base_workload_with_new_cluster()
+        latency_calculator_decorator(legend='base_workload_with_new_cluster')(lambda _: sleep(600))(self)
+
         # scale back to original capacity
         self.scale_out('instance_type_db')
         self.scale_in(new_nodes)
 
         # base load again
-        @latency_calculator_decorator(legend='base_workload_with_restored_cluster')
-        def base_workload_with_restored_cluster():  # latency calculator needs a function to decorate
-            sleep(600)
-        base_workload_with_restored_cluster()
+        latency_calculator_decorator(legend='base_workload_with_restored_cluster')(lambda _: sleep(600))(self)
 
         # kill the background load to end the test
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60):
