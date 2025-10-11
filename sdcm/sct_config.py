@@ -1813,7 +1813,7 @@ class SCTConfiguration(dict):
              help="Cloud provider for Scylla Cloud deployment (aws, gce)"),
 
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
-             help="Replication factor for Scylla Cloud cluster (default: 3)"),
+             help="Replication factor for Scylla Cloud cluster"),
 
         dict(name="xcloud_vpc_peering", env="SCT_XCLOUD_VPC_PEERING", type=dict_or_str,
              help="""Dictionary of VPC peering parameters for private connectivity between
@@ -3128,9 +3128,9 @@ class SCTConfiguration(dict):
                 f"Supported instance types: {', '.join(supported_instances)}")
 
         rf = self.get('xcloud_replication_factor')
-        n_nodes = self.get('n_db_nodes')
+        n_nodes = int(self.get('n_db_nodes'))
         if rf is None:
-            self['xcloud_replication_factor'] = n_nodes
+            self['xcloud_replication_factor'] = min(n_nodes, 3)
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 
