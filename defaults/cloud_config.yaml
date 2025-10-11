@@ -18,3 +18,5 @@ xcloud_vpc_peering:
 
 # TODO: remove this when vector.dev logging is enabled by default
 logs_transport: 'vector'
+
+scaling: {}

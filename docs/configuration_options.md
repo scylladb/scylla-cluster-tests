@@ -3775,3 +3775,11 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **default:** N/A
 
 **type:** int
+
+## **scaling** / SCT_CLUSTER_SCALING
+
+Scaling policy configuration
+
+**default:** {}
+
+**type:** dict

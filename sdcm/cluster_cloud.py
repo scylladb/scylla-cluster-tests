@@ -341,6 +341,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._aws_region = None
         self._gce_region = None
 
+        self.scaling =  params.get('scaling')
+
         if self.vpc_peering_enabled:
             region_name = params.cloud_provider_params.get('region')
             if self._cloud_provider == 'aws':
@@ -517,7 +519,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'encryption_at_rest': None,
             'maintenance_windows': [],
             'prom_proxy': True,
-            'scaling': {}
+            'scaling': self.scaling
         }
 
     def _wait_for_cluster_ready(self, timeout: int = 600) -> None:

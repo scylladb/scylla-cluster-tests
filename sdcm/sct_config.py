@@ -1857,6 +1857,35 @@ class SCTConfiguration(dict):
         dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
              help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
 
+        dict(name="scaling", env="SCT_CLUSTER_SCALING", type=dict,
+             help="""Scaling policy configuration. The payload should follow this structure:
+
+            "Scaling": {
+                "InstanceFamilies": [
+                    "i4i"
+                ],
+                "Mode": "xcloud",
+                "Policies": {
+                    "Storage": {
+                        "Min": 0,
+                        "TargetUtilization": 0.8
+                    },
+                    "VCPU": {
+                        "Min": 0
+                    }
+                }
+            }
+
+        - InstanceFamilies: list of instance families to use for scaling (e.g., ["i4i", "i3en"]).
+        - Mode: str - scaling mode, always "xcloud".
+        - Policies: dict - scaling policies with the following keys:
+            - Storage: dict with:
+                - Min: int - minimum storage in TB to maintain.
+                - TargetUtilization: float - target storage utilization from 0.7 to 0.9 with 0.05 step (e.g., 0.85 for 85%).
+            - VCPU: dict with:
+                - Min: int - minimum number of virtual CPUs to maintain.
+         """),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

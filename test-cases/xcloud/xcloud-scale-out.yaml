@@ -1,0 +1,29 @@
+test_duration: 360
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..10000000 -log interval=5"]
+
+n_db_nodes: 3
+n_loaders: 1
+
+instance_type_db: 'i4i.large'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 1
+
+user_prefix: 'xcloud-scale-out-test'
+space_node_threshold: 6442
+
+scaling: {
+    "InstanceFamilies": [
+      "i4i"
+    ],
+    "Mode": "xcloud",
+    "Policies": {
+      "Storage": {
+        "Min": 0,
+        "TargetUtilization": 0.8
+      },
+      "VCPU": {
+        "Min": 0
+      }
+    }
+}
