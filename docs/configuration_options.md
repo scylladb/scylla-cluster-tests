@@ -3671,7 +3671,7 @@ Cloud provider for Scylla Cloud deployment (aws, gce)
 
 ## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
 
-Replication factor for Scylla Cloud cluster (default: 3)
+Replication factor for Scylla Cloud cluster
 
 **default:** N/A
 
