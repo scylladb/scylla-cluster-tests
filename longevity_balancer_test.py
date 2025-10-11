@@ -27,7 +27,6 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HardTimeoutEvent, InfoEvent, SoftTimeoutEvent, TestFrameworkEvent
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject, get_node_disk_usage
-from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 
 BALANCE_THRESHOLD = 5
@@ -52,8 +51,6 @@ def ignore_decommission_timeout():
 
 
 class LongevityBalancerTest(LongevityTest):
-    hdr_tags = []
-
     def expand_cluster_heterogenous(self):
         new_nodes = self.db_cluster.add_nodes(
             count=self.params.get("nemesis_add_node_cnt"),
@@ -117,7 +114,6 @@ class LongevityBalancerTest(LongevityTest):
         stress_queue = []
         self.assemble_and_run_all_stress_cmd(stress_queue, self.params.get(
             cmd_param), self.params.get('keyspace_num'))
-        self.hdr_tags.extend(s.hdr_tags for s in stress_queue)
         if wait_for_completion:
             for stress in stress_queue:
                 self.verify_stress_thread(stress)
@@ -170,7 +166,7 @@ class LongevityBalancerTest(LongevityTest):
         self.run_stress_command('stress_cmd', wait_for_completion=False)
 
         # let base load run for 10 minutes before scaling
-        latency_calculator_decorator(cycle_name='base_workload_with_initial_cluster')(lambda _: sleep(600))(self)
+        sleep(600)
 
         # scale out
         original_nodes = list(self.db_cluster.data_nodes)
@@ -178,18 +174,17 @@ class LongevityBalancerTest(LongevityTest):
         self.scale_in(original_nodes)
 
         # increased load for 10 minutes (duration defined in stress_cmd_m)
-        latency_calculator_decorator(cycle_name='increased_workload_with_new_cluster')(
-            lambda _: self.run_stress_command('stress_cmd_m', wait_for_completion=True))(self)
+        self.run_stress_command('stress_cmd_m', wait_for_completion=True)
 
         # run for 10 minutes with the original background load and the new cluster configuration
-        latency_calculator_decorator(cycle_name='base_workload_with_new_cluster')(lambda _: sleep(600))(self)
+        sleep(600)
 
         # scale back to original capacity
         self.scale_out('instance_type_db', 'n_db_nodes')
         self.scale_in(new_nodes)
 
         # base load again
-        latency_calculator_decorator(cycle_name='base_workload_with_restored_cluster')(lambda _: sleep(600))(self)
+        sleep(600)
 
         # kill the background load to end the test
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60):
