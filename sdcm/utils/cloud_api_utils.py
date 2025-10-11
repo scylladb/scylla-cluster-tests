@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
     """Retrieve Scylla Cloud REST credentials from a file"""
-    path = Path(file_path).expanduser()
+    path = Path(file_path).expanduser().resolve()
     if not path.exists():
         raise ValueError(f"Scylla Cloud REST credentials file not found: {file_path}")
 
