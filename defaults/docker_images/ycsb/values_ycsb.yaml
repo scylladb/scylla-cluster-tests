@@ -1,2 +1,2 @@
 ycsb:
-  image: docker.io/scylladb/ycsb:0.2.0
+  image: docker.io/scylladb/ycsb:1.0.0
