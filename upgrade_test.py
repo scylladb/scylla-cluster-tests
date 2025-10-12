@@ -50,7 +50,7 @@ from sdcm.sct_events.database import (
     IndexSpecialColumnErrorEvent,
     DatabaseLogEvent,
 )
-from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_abort_requested_errors,
@@ -146,13 +146,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def setUp(self):
         super().setUp()
         self.do_truncates = self.params.get("enable_truncate_checks_on_node_upgrade") or False
-        self.stack = contextlib.ExitStack()
-        # ignoring those unsuppressed exceptions, till both ends of the upgrade would have https://github.com/scylladb/scylladb/pull/14681
-        # see https://github.com/scylladb/scylladb/issues/14882 for details
-        self.stack.enter_context(EventsSeverityChangerFilter(
-            new_severity=Severity.WARNING,
-            event_class=DatabaseLogEvent,
-            regex=r".*std::runtime_error \(unknown exception\).*",
+        self.stacks = {}
+        for node in self.db_cluster.nodes:
+            self.configure_event_filtering(node)
+
+    def configure_event_filtering(self, node):
+        self.stacks[node] = contextlib.ExitStack()
+        # ignoring those oversized allocation errors, till both ends of the upgrade would have
+        # fixes for https://github.com/scylladb/scylladb/issues/24660
+        self.stacks[node].enter_context(DbEventsFilter(
+            node=node,
+            db_event=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+            line=r"seastar::rpc::client::wait_for_reply",
             extra_time_to_expiration=30,
         ))
 
@@ -331,6 +336,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
         node.forget_scylla_version()
         node.drop_raft_property()
+
+        # remove filters on new release, as error should be fixed
+        self.stacks[node].close()
+
         with self.actions_log.action_scope("start_scylla_server", target=node.name):
             node.start_scylla_server(verify_up_timeout=500)
         self.db_cluster.get_db_nodes_cpu_mode()
@@ -419,6 +428,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
 
         node.drop_raft_property()
+
+        # enable the filter since we are moving to older version that might have still unfixed issues
+        self.stacks[node].close()
+        self.configure_event_filtering(node)
+
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
