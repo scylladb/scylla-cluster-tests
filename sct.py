@@ -1553,7 +1553,7 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
              help="Create pipeline jobs for performance")
 @click.argument('username', envvar='JENKINS_USERNAME', type=str, required=False)
 @click.argument('password', envvar='JENKINS_PASSWORD', type=str, required=False)
-@click.option('--sct_branch', default='branch-perf-v15', type=str)
+@click.option('--sct_branch', default='branch-perf-v17', type=str)
 @click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
 @click.option('--triggers/--no-triggers', default=False)
 def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
