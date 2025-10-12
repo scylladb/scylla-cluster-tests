@@ -20,6 +20,7 @@ import os
 import logging
 import random
 import socket
+import subprocess
 import time
 import datetime
 import errno
@@ -2597,3 +2598,92 @@ def format_size(size_in_bytes):
         if size_in_bytes < 1024:
             return f"{size_in_bytes:.2f} {unit}"
         size_in_bytes /= 1024
+
+
+def unpack_tar_archive(archive_path: str, extract_to: str) -> str:
+    os.makedirs(extract_to, exist_ok=True)
+    logs_path = ""
+    if archive_path.endswith('.tar.gz'):
+        import tarfile
+        logs_path = archive_path.replace(".tar.gz", "")
+        with tarfile.open(archive_path, 'r:gz') as tar:
+            tar.extractall(path=extract_to)
+
+    elif archive_path.endswith('.tar.zst'):
+        logs_path = archive_path.replace(".tar.zst", "")
+        try:
+            subprocess.run(["tar", "--zstd", "-xvf", archive_path, "-C", extract_to], check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to unpack {archive_path}: {e}")
+
+    LOGGER.debug("Unpacked %s to %s", archive_path, extract_to)
+    return logs_path
+
+
+def download_log_file_from_url(url: str, download_to: str) -> str:
+    if not os.path.exists(download_to):
+        os.makedirs(download_to)
+    filename = os.path.join(download_to, url.split("/")[-1])
+    if not os.path.exists(filename):
+        try:
+            subprocess.run(['wget', '-q', url, '-O', filename], check=True)
+            LOGGER.debug("Successfully downloaded %s", url)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError("Error downloading %s: %s", url, e)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "wget command not found. Please ensure wget is installed and in your system's PATH.")
+    return filename
+
+
+def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) -> list:
+    match stress_tool:
+        case "cassandra-stress":
+            if throttled_load:
+                if stress_operation == "MIXED":
+                    hdr_tags = ["WRITE-rt", "READ-rt"]
+                elif stress_operation == "READ":
+                    hdr_tags = ["READ-rt"]
+                elif stress_operation == "WRITE":
+                    hdr_tags = ["WRITE-rt"]
+                else:
+                    raise ValueError(f"Unsupported stress_operation: {stress_operation}")
+            elif stress_operation == "MIXED":
+                hdr_tags = ["WRITE-st", "READ-st"]
+            elif stress_operation == "READ":
+                hdr_tags = ["READ-st"]
+            elif stress_operation == "WRITE":
+                hdr_tags = ["WRITE-st"]
+            else:
+                raise ValueError(f"Unsupported stress_operation: {stress_operation}")
+        case "scylla-bench":
+            # TODO: will be defined later
+            hdr_tags = [""]
+        case "latte":
+            # TODO: will be defined later
+            hdr_tags = [""]
+        case _:
+            hdr_tags = []
+
+    return hdr_tags
+
+
+def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = None) -> str:
+    logs_links = list_logs_by_test_id(test_id)
+    tmp_dir = download_to or os.path.join('/tmp/', test_id)
+    logs_file = ""
+    for log in logs_links:
+        if log["type"] == log_type:
+            logs_file = download_log_file_from_url(url=log["link"], download_to=tmp_dir)
+            LOGGER.debug("Downloaded %slog to %s", log_type, logs_file)
+
+    if not logs_file:
+        raise ValueError("%s not found in argus logs", log_type)
+
+    LOGGER.debug("Unpacking loader logs...")
+    hdr_folder = unpack_tar_archive(logs_file, extract_to=tmp_dir)
+    LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder)
+    if not hdr_folder:
+        raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
+
+    return hdr_folder

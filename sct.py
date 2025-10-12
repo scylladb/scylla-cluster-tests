@@ -13,7 +13,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 import os
 import re
 import sys
@@ -51,6 +51,7 @@ from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_conf
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
     update_sct_runner_tags, list_sct_runners
+
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
@@ -83,7 +84,8 @@ from sdcm.utils.common import (
     list_resources_docker,
     list_parallel_timelines_report_urls,
     search_test_id_in_latest,
-    get_latest_scylla_release, images_dict_in_json_format,
+    get_latest_scylla_release, images_dict_in_json_format, get_hdr_tags,
+    download_and_unpack_logs,
 )
 from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -1949,6 +1951,123 @@ def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: 
     else:
         LOGGER.error("File %s does not exist", file.absolute())
         return
+
+
+@cli.command("hdr-investigate", help="Analyze HDR file for latency spikes")
+@click.option("--test-id", type=str, required=False, help="If hdr_folder is not provided, logs will be downloaded from argus "
+                                                          "using this test_id")
+@click.option("--stress-tool", type=str, default="cassandra-stress", required=False,
+              help="stress tool name. Supported tools: cassandra-stress|scylla-bench|latte")
+@click.option("--stress-operation", type=str, required=True, help="Supported stress operations: READ|WRITE")
+@click.option("--throttled-load", type=bool, required=True, help="Is the load throttled or not")
+@click.option("--start-time", type=str, required=True, help="Start time in format 'YYYY-MM-DD\\ HH:MM:SS'")
+@click.option("--time-period-min", type=int, required=True,
+              help="Time period in minutes in HDR file to investigate, started from start-time ")
+@click.option("--threshold-ms", type=int, default=10, required=False,
+              help="Error threshold in ms for P99 to consider it as a spike")
+@click.option("--coarse-interval", type=int, default=600, required=False, help="Interval in seconds for coarse scan")
+@click.option("--fine-interval", type=int, default=10, required=False, help="Interval in seconds for fine scan")
+@click.option("--top-coarse", type=int, default=3, required=False,
+              help="Number of top coarse intervals to rescan with fine interval. For all spike intervals set it to 0")
+@click.option("--hdr-folder", type=str, default=None, required=False, help="Path to folder with hdr files. ")
+def hdr_investigate(test_id: str, stress_tool: str, stress_operation: str, throttled_load: bool,
+                    start_time: str, time_period_min: int,
+                    threshold_ms: int, coarse_interval: int, fine_interval: int,
+                    top_coarse: int, hdr_folder: str) -> None:
+    """
+    Analyze HDR file for latency spikes.
+
+    This function scans HDR files to identify intervals with high latency spikes.
+    It performs a coarse-grained scan to find top intervals with the highest P99 latency,
+    then performs a fine-grained scan on those intervals to pinpoint spike time points.
+
+    Args:
+        test_id (str): Test ID used to locate logs if hdr_folder is not provided.
+        stress_tool (str): Name of the stress tool (e.g., cassandra-stress, scylla-bench, latte).
+        stress_operation (str): Stress operation to analyze (e.g., READ, WRITE).
+        throttled_load (bool): Indicates if the load is throttled.
+        start_time (str): Start time in 'YYYY-MM-DD HH:MM:SS' format.
+        time_period_min (int): Time period in minutes to investigate from start_time.
+        threshold_ms (int): Error threshold in ms for P99 to consider as a spike.
+        coarse_interval (int): Interval in seconds for coarse scan (default: 600).
+        fine_interval (int): Interval in seconds for fine scan (default: 10).
+        top_coarse (int): Number of top coarse intervals to rescan with fine interval (default: 3). . For all spike intervals set it to 0
+        hdr_folder (str): Path to folder with HDR files. If not provided, logs are downloaded using test_id.
+
+    Returns:
+        None
+    """
+    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+
+    if stress_operation not in ['READ', 'WRITE']:
+        raise ValueError("stress_operation must be either READ or WRITE")
+
+    try:
+        start_time_ms = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC).timestamp()
+    except ValueError:
+        raise ValueError("start_time must be in 'YYYY-MM-DD HH:MM:SS' format")
+
+    if not hdr_folder:
+        if not test_id:
+            raise ValueError("Either test_id or hdr_folder must be provided")
+
+        hdr_folder = download_and_unpack_logs(test_id, log_type='loader-set')
+
+    hdr_tags = get_hdr_tags(stress_tool, stress_operation, throttled_load)
+
+    # Step 1: Coarse scan
+    end_time_ms = start_time_ms + time_period_min * 60
+    coarse_summaries = make_hdrhistogram_summary_by_interval(
+        hdr_tags, stress_operation, hdr_folder, start_time_ms, end_time_ms, interval=coarse_interval
+    )
+
+    spike_intervals = []
+    for tag in hdr_tags:
+        # Find intervals with highest percentile_99 for this tag
+        tag_summaries = [
+            (i, summary.get(f"{stress_operation.upper()}--{tag}", {}))
+            for i, summary in enumerate(coarse_summaries)
+        ]
+        # Filter intervals where percentile_99 > error threshold. Meaning it is a spike
+        tag_summaries = [
+            (i, s) for i, s in tag_summaries if s and "percentile_99" in s and s["percentile_99"] > threshold_ms
+        ]
+        # Sort by percentile_99 descending
+        tag_summaries.sort(key=lambda x: x[1]["percentile_99"], reverse=True)
+        # Take top_coarse intervals
+        summaries_for_analyze = tag_summaries if top_coarse == 0 else tag_summaries[:top_coarse]
+        for i, s in summaries_for_analyze:
+            interval_start = start_time_ms + i * coarse_interval
+            interval_end = min(interval_start + coarse_interval, end_time_ms)
+            spike_intervals.append((tag, interval_start, interval_end))
+
+    # For each spike interval, rescan with fine interval
+    fine_summaries = []
+    for tag, interval_start, interval_end in spike_intervals:
+        fine = make_hdrhistogram_summary_by_interval(
+            [tag], stress_operation, hdr_folder, interval_start, interval_end, interval=fine_interval
+        )
+        p99 = {}
+        dt_start = datetime.fromtimestamp(interval_start, UTC).strftime('%Y-%m-%d %H:%M:%S')
+        for num, operation in enumerate(fine, start=1):
+            dt_end = datetime.fromtimestamp(interval_start + num * fine_interval, UTC).strftime('%Y-%m-%d %H:%M:%S')
+            if operation[f"{stress_operation.upper()}--{tag}"]['percentile_99'] > threshold_ms:
+                p99[f"{dt_start} - {dt_end}"] = operation[f"{stress_operation.upper()}--{tag}"]['percentile_99']
+            dt_start = datetime.fromtimestamp(interval_start + 1 + num * fine_interval,
+                                              UTC).strftime('%Y-%m-%d %H:%M:%S')
+        fine_summaries.append(p99)
+
+    hdr_table = PrettyTable(["Timeframe", "P99"])
+    hdr_table.align = "l"
+    hdr_table.sortby = 'Timeframe'
+    for group in fine_summaries:
+        for time_frame, p99 in group.items():
+            hdr_table.add_row([time_frame, p99])
+    click.echo("")
+    click.echo(
+        f"Found P99 spikes higher than {threshold_ms} ms for tags {hdr_tags} with fine interval {fine_interval} seconds")
+    click.echo("")
+    click.echo(hdr_table.get_string(title="HDR Latency Spikes"))
 
 
 cli.add_command(sct_ssh.ssh)
