@@ -80,7 +80,6 @@ def call() {
                                                         ./docker/env/hydra.sh create-qa-tools-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
-                                                fi
 
                                                 if [[ "${params.sct_branch}" == "branch-perf-v17" ]] ; then
                                                     echo "start create perf for ${params.sct_branch}  ......."
