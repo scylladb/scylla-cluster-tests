@@ -4863,6 +4863,26 @@ class Nemesis:
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
         Then verify it can be used in a query. Finally, drop the index.
         """
+<<<<<<< HEAD
+||||||| parent of cdedf0d5f (fix(nemesis): properly disable MV nemesis for 2025.3 Scylla versions)
+        if self.cluster.nemesis_count > 1 and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/21695", params=self.tester.params):
+            raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
+
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+                raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
+
+=======
+        if self.cluster.nemesis_count > 1 and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/21695", params=self.tester.params):
+            raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
+
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
+                raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
+
+>>>>>>> cdedf0d5f (fix(nemesis): properly disable MV nemesis for 2025.3 Scylla versions)
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
 
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
@@ -4895,7 +4915,23 @@ class Nemesis:
         Finally, drop the MV.
         """
 
+<<<<<<< HEAD
         free_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+||||||| parent of cdedf0d5f (fix(nemesis): properly disable MV nemesis for 2025.3 Scylla versions)
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
+
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
+=======
+        # Disable MV tests with tablets.
+        if is_tablets_feature_enabled(self.target_node):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
+                raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
+
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
+>>>>>>> cdedf0d5f (fix(nemesis): properly disable MV nemesis for 2025.3 Scylla versions)
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
         cql_query_executor_node = random.choice(free_nodes)
