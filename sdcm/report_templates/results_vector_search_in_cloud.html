@@ -1,0 +1,25 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }}</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    </div>
+    <h3>
+        <span>Vector Search validation metrics</span>
+    </h3>
+    <div>
+        <div>
+            <ul>
+                <li>Average recall: {{ average_recall }}</li>
+            </ul>
+        </div>
+    </div>
+{% endblock %}
