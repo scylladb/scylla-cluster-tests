@@ -414,6 +414,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'reader_concurrency_semaphore_cpu_concurrency': None,
                 'vector_store_uri': None,
                 'object_storage_endpoints': None,
+                'rf_rack_valid_keyspaces': None,
             }
         )
 
