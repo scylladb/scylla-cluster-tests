@@ -1740,6 +1740,8 @@ class SCTConfiguration(dict):
         dict(name="simulated_racks", env="SCT_SIMULATED_RACKS", type=int,
              help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
              Provide number of racks to simulate."""),
+        dict(name="rf_rack_valid_keyspaces", env="SCT_RF_RACK_VALID_KEYSPACES", type=boolean,
+             help="""Enables rf_rack_valid_keyspaces."""),
         dict(name="rack_aware_loader", env="SCT_RACK_AWARE_LOADER", type=boolean,
              help="When enabled, loaders will look for nodes on the same rack."),
 
