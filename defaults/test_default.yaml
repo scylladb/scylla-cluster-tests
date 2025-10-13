@@ -17,6 +17,8 @@ round_robin: false
 append_scylla_args: '--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 append_scylla_setup_args: ''
 append_scylla_node_exporter_args: ''
+append_scylla_yaml:
+  rf_rack_valid_keyspaces: true
 experimental_features: []
 
 db_nodes_shards_selection: 'default'

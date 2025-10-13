@@ -964,7 +964,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** N/A
+**default:** {'rf_rack_valid_keyspaces': True}
 
 **type:** dict_or_str
 
