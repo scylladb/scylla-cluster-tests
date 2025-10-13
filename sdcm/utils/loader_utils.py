@@ -258,7 +258,7 @@ class LoaderUtilsMixin:
                 if keyspace_num > 1 and self.params.get('round_robin'):
                     self.log.debug("Using round_robin for multiple Keyspaces...")
                     for i in range(1, keyspace_num + 1):
-                        keyspace_name = self._get_keyspace_name(i)
+                        keyspace_name = "10gb_sizetiered_2025_3"
                         self._run_all_stress_cmds(
                             write_queue,
                             params={
