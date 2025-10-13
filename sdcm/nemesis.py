@@ -5179,7 +5179,7 @@ class Nemesis(NemesisFlags):
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
-            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
                 raise UnsupportedNemesis("MV/SI for tablets are not supported for Scylla 2025.3 and older versions")
 
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
@@ -5225,7 +5225,7 @@ class Nemesis(NemesisFlags):
 
         # Disable MV tests with tablets.
         if is_tablets_feature_enabled(self.target_node):
-            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3"):
+            if ComparableScyllaVersion(self.target_node.scylla_version) <= ComparableScyllaVersion("2025.3.99"):
                 raise UnsupportedNemesis("MV for tablets are not supported for Scylla 2025.3 and older versions")
 
         free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
