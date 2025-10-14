@@ -4921,7 +4921,7 @@ class Nemesis(NemesisFlags):
                 # in case of test end/killed, leave the cleanup alone
                 if exc_type is not KillNemesis:
                     with self.cluster.cql_connection_patient(node) as session:
-                        session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
+                        session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc', timeout=300)
                     if node_added:
                         self.cluster.decommission(new_node)
             context_manager.push(finalizer)
