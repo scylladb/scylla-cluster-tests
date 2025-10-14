@@ -343,6 +343,7 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                     self.log.warning("Index % was not created due to : %s", view_name, exc)
                 # wait_mv_building_tasks_started(session, ks_name, view_name, timeout=600)
         busy_nodes: list[BaseNode] = [coordinator_node]
+        self.nemesis_allocator.set_running_nemesis(coordinator_node, "Coordinator node")
         new_node: BaseNode = add_cluster_node(
             self.db_cluster, dc_idx=coordinator_node.dc_idx, rack=coordinator_node.rack, monitoring=self.monitors)
         busy_nodes.append(new_node)
@@ -350,16 +351,20 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             [node for node in self.db_cluster.nodes if node not in (coordinator_node, new_node)])
         replacing_node_hostid = replacing_node.host_id
         replacing_node.stop_scylla()
+        self.nemesis_allocator.set_running_nemesis(replacing_node, "Replacing node")
         busy_nodes.append(replacing_node)
         replaced_node = replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
                                              replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
         busy_nodes.append(replaced_node)
+        self.nemesis_allocator.set_running_nemesis(replaced_node, "Replaced node")
         decommission_node: BaseNode = random.choice(
             [node for node in self.db_cluster.nodes if node not in busy_nodes])
+        self.nemesis_allocator.set_running_nemesis(decommission_node, "Decommission node")
         self.db_cluster.decommission(decommission_node)
         busy_nodes.append(decommission_node)
         removing_node: BaseNode = random.choice([node for node in self.db_cluster.nodes
                                                  if node not in busy_nodes])
+        self.nemesis_allocator.set_running_nemesis(removing_node, "Removing node")
         removing_node_hostid = removing_node.host_id
         removing_node.stop_scylla()
         remove_cluster_node(self.db_cluster, coordinator_node, node_to_remove=removing_node, removing_node_host_id=removing_node_hostid,
