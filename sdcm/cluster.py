@@ -55,7 +55,7 @@ from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
 from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy, RackAwareRoundRobinPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy, RackAwareRoundRobinPolicy, LoadBalancingPolicy
 from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
@@ -3704,7 +3704,32 @@ class BaseCluster:
 
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
-    def get_load_balancing_policy(self, whitelist_nodes=None):
+    def get_load_balancing_policy(self, whitelist_nodes: Optional[list[BaseNode]] = None) -> tuple[LoadBalancingPolicy, list[str | None]]:
+        """
+        Determines and returns the appropriate load balancing policy along with the list of node IPs.
+
+        This method selects a load balancing policy based on the cluster configuration and the provided
+        whitelist of nodes. By default, it uses the `WhiteListRoundRobinPolicy` with the IPs of the nodes
+        in the cluster. If the cluster is configured with multiple racks/availability zones and the
+        "rack_aware_loader" parameter is enabled, it switches to the `RackAwareRoundRobinPolicy`.
+
+        Args:
+            whitelist_nodes (list[BaseNode], optional): A list of nodes to be included in the load balancing
+                policy. If not provided, all nodes in the cluster are used.
+
+        Returns:
+            tuple[LoadBalancingPolicy, list[str | None]]: A tuple containing:
+                - The selected load balancing policy (`WhiteListRoundRobinPolicy` or `RackAwareRoundRobinPolicy`).
+                - A list of node IPs used in the policy.
+
+        Notes:
+            - The `RackAwareRoundRobinPolicy` is used only if:
+                1. The "rack_aware_loader" parameter is enabled.
+                2. The cluster has more than one rack/availability zone.
+            - The `RackAwareRoundRobinPolicy` is configured based on the rack and datacenter of the first
+              loader node in the cluster.
+            - The `whitelist_nodes` parameter is typically used by nemeses that pass a list of alive nodes.
+        """
         node_ips = self.get_node_cql_ips(nodes=whitelist_nodes if whitelist_nodes else self.nodes)
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         if self.params.get("rack_aware_loader") and self.racks_count > 1:
@@ -3716,7 +3741,9 @@ class BaseCluster:
             loader = self.nodes[0].test_config.tester_obj().loaders.nodes[0]
             loader_rack = loader.node_rack
             loader_dc = loader.datacenter
-            wlrr = RackAwareRoundRobinPolicy(local_dc=loader_dc, local_rack=loader_rack)
+            datacenter_name_per_region = self.get_datacenter_name_per_region(db_nodes=self.nodes)
+            datacenter_name = datacenter_name_per_region.get(loader_dc) if datacenter_name_per_region else loader_dc
+            wlrr = RackAwareRoundRobinPolicy(local_dc=datacenter_name, local_rack=loader_rack)
             LOGGER.debug("Using RackAwareRoundRobinPolicy. Loader rack: %s. Loader datacenter: %s. Node IPs: %s",
                          loader_rack, loader_dc, node_ips)
         return wlrr, node_ips
