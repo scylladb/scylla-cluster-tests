@@ -30,7 +30,7 @@ gemini_cmd: |
   --dataset-size large
 
 gemini_table_options:
-  - "cdc={'enabled': true}"
+  - "cdc={'enabled': true, 'postimage': true}"
 cdc_replication_rounds_num: 1
 
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
