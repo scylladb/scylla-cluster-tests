@@ -156,12 +156,14 @@ class LatteStressThread(DockerBasedStressThread):
                     if v not in ('true', 'false'):
                         processed_v = r"\"%s\"" % v
                 custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
-        cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} {auth_config}{custom_schema_params} -- {hosts}',
-            timeout=self.timeout,
-            retry=0,
-        )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q '
+        # NOTE: use superuser creds for the 'latte schema' cmd because test users will only be created with it.
+        schema_cmd = f'latte schema {script_name} {ssl_config}{auth_config}{custom_schema_params} -- {hosts}'
+        cmd_runner.run(cmd=schema_cmd, timeout=self.timeout, retry=0)
+
+        # NOTE: set '--user' and '--password' params only if not defined explicitly
+        if " --user" in self.stress_cmd and " --password" in self.stress_cmd:
+            auth_config = ""
+        stress_cmd = f'{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}-q '
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
