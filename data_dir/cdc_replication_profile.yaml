@@ -12,7 +12,20 @@ table_definition: |
     pk int,
     ck int,
     v text,
-    primary key (pk, ck)) WITH cdc = {'enabled': true}
+    v1 bigint,
+    v2 blob,
+    v3 int,
+    primary key (pk, ck)) WITH cdc = {'enabled': true, 'preimage': 'full', 'postimage': true, 'ttl': 600};
+
+
+extra_definitions:
+  - CREATE INDEX IF NOT EXISTS  v1_ind ON ks1.table1 (v1)
+  - CREATE INDEX IF NOT EXISTS  v2_ind ON ks1.table1 (v2)
+  - CREATE MATERIALIZED VIEW ks1.v_mv AS SELECT v, v3 FROM ks1.table1 WHERE v IS NOT NULL and pk IS NOT NULL and ck IS NOT NULL PRIMARY KEY (v, pk, ck);
+  - CREATE MATERIALIZED VIEW ks1.v3_mv AS SELECT * FROM ks1.table1 WHERE v3 IS NOT NULL and pk IS NOT NULL and ck IS NOT NULL PRIMARY KEY (v3, pk, ck);
+
+
+
 
 columnspec:
   - name: pk
@@ -22,9 +35,22 @@ columnspec:
     population: uniform(1..1k)
 
   - name: v
-    size: exp(1..5)
+    size: exp(1..500)
+
+  - name: v1
+    population: uniform(1..1M)
+
+  - name: v2
+    size: exp(100..5000)
+
+  - name: v3
+    population: uniform(1..1M)
+
 
 queries:
   update:
-    cql: update ks1.table1 set v = ? where pk = ? and ck = ?
+    cql: update ks1.table1 set v = ?, v1 =?, v2 =?, v3 =? where pk = ? and ck = ?
+    fields: samerow
+  read:
+    cql: select * from ks1.table1 where pk = ? and ck = ?
     fields: samerow
