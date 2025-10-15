@@ -80,7 +80,3 @@ use_preinstalled_scylla: true
 
 # Run a verification every 10 minutes:
 run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'
-
-# enable vector.dev logging for all tier1
-# TODO: remove this when vector.dev logging is enabled by default
-logs_transport: 'vector'
