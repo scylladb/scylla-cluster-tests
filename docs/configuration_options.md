@@ -2935,7 +2935,7 @@ An escape hatch to disable KMS for enterprise run, when needed, we enable kms by
 
 How to transport logs: syslog-ng, ssh or docker
 
-**default:** syslog-ng
+**default:** vector
 
 **type:** str (appendable)
 

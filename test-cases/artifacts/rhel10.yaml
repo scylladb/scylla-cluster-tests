@@ -6,7 +6,6 @@ instance_type_db: 'i4i.large'
 root_disk_size_db: 50
 instance_provision: 'spot'
 instance_provision_fallback_on_demand: true
-logs_transport: 'vector'
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
