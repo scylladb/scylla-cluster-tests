@@ -62,7 +62,7 @@ print_kernel_callstack: true
 
 update_db_packages: ''
 
-logs_transport: "syslog-ng"
+logs_transport: "vector"
 
 store_perf_results: false
 email_recipients: ['qa@scylladb.com']
