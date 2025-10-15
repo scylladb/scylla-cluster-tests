@@ -343,7 +343,7 @@ class CDCReplicationTest(ClusterTester):
         runner = LocalCmdRunner()
 
         result = runner.run(
-            f"diff {os.path.join(self.logdir, 'master-table')} {os.path.join(self.logdir, 'replica-table')}")
+            f"diff -sqd --speed-large-files {os.path.join(self.logdir, 'master-table')} {os.path.join(self.logdir, 'replica-table')}")
         return (migrate_ok, consistency_ok and result.ok)
 
     def copy_master_schema_to_replica(self) -> None:

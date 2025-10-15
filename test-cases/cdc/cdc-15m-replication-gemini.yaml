@@ -25,7 +25,7 @@ extra_network_interface: true
 gemini_cmd: |
   --duration 15m
   --warmup 0s
-  --concurrency 5
+  --concurrency 1
   --mode write
   --cql-features basic
   --max-mutation-retries 100
