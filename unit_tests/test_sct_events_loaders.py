@@ -406,8 +406,12 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(CassandraStressLogEvent.RackAwarePolicy, CassandraStressLogEvent))
 
     def test_cs_all_events_list(self):
-        self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
-                            {ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)})
+        """ Check that all events are listed in CS_ERROR_EVENTS and CS_NORMAL_EVENTS
+            since python3.14 also __annotate_func__ need to be excluded from the dir() output
+        """
+
+        assert set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)) - {'__annotate_func__'} == \
+            {ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)}
 
     def test_cs_hint_in_flight_error(self):
         self.get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
@@ -471,9 +475,13 @@ class TestScyllaBenchLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(ScyllaBenchLogEvent.ParseDistributionError, ScyllaBenchLogEvent))
         self.assertTrue(issubclass(ScyllaBenchLogEvent.RackAwarePolicy, ScyllaBenchLogEvent))
 
-    def test_scylla_bench_all_events_list(self):
-        self.assertSetEqual(set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)),
-                            {ev.type for ev in chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)})
+    def test_scylla_bench_error_events_list(self):
+        """
+        Check that all events are listed in SCYLLA_BENCH_ERROR_EVENTS
+        since python3.14 also __annotate_func__ need to be excluded from the dir() output
+        """
+        assert set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)) - \
+            {'__annotate_func__'} == {ev.type for ev in chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)}
 
 
 class TestGeminiLogEvent(unittest.TestCase):
