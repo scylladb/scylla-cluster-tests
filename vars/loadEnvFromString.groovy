@@ -1,11 +1,11 @@
 #!groovy
 
 def call(String parameter) {
-    if (parameter == null || parameter.isEmpty()) {
-        return
-    }
-    def props = readProperties text: parameter
-    props.each { key, value ->
-        env[key] = value
+    if (!parameter) return
+
+    readProperties(text: parameter).each { key, value ->
+        // Remove surrounding quotes from value if present
+        def cleanValue = (value instanceof String) ? value.replaceAll(/^(['"])(.*)\1$/, '$2') : value
+        env[key] = cleanValue
     }
 }
