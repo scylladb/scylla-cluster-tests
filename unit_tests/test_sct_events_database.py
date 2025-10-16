@@ -91,8 +91,12 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(event2.line_number, 2)
 
     def test_system_error_events_list(self):
-        self.assertSetEqual(set(dir(DatabaseLogEvent)) - set(dir(LogEvent)),
-                            {ev.type for ev in SYSTEM_ERROR_EVENTS})
+        """
+        Make sure all known system error events are listed in SYSTEM_ERROR_EVENTS.
+        since python3.14 also __annotate_func__ need to be excluded from the dir() output
+        """
+        assert set(dir(DatabaseLogEvent)) - set(dir(LogEvent)) - \
+            {'__annotate_func__'} == {ev.type for ev in SYSTEM_ERROR_EVENTS}
 
     def test_disk_error_event(self):
 
