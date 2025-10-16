@@ -14,6 +14,10 @@
 import platform
 from textwrap import dedent
 
+from sdcm.utils.mp_start import ensure_start_method
+
+ensure_start_method()
+
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta, UTC
 import os
