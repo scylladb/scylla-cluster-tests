@@ -204,7 +204,7 @@ def get_backup_size(mgr_cluster, task_id):
         raise ValueError(f"Backup size not found in the output in {res.stdout}")
 
 
-class ObjectStorageUploadMode(str, Enum):
+class ObjectStorageTransferMethod(str, Enum):
     AUTO = "auto"
     RCLONE = "rclone"
     NATIVE = "native"
