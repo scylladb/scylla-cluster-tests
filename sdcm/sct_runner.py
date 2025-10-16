@@ -356,6 +356,7 @@ class SctRunner(ABC):
                 instance_type=self.IMAGE_BUILDER_INSTANCE_TYPE,
                 base_image=self.BASE_IMAGE,
                 tags={
+                    "RunByUser": "qa",
                     "keep": "1",
                     "keep_action": "terminate",
                     "Version": self.VERSION,
