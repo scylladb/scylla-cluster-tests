@@ -72,7 +72,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "false",
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
-            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
+            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests', ''))}",
                    description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
                    name: 'sub_tests')
 
