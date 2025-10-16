@@ -850,7 +850,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"
             scylla_encryption_options = self.params.get('scylla_encryption_options')
 
-        if 'auto' not in (kms_host := yaml.safe_load(scylla_encryption_options or {}).get("kms_host") or ''):
+        if 'auto' not in (kms_host := (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''):
             return
         # Create a KMS key alias in each of the regions used by the current test run
         aws_kms = AwsKms(region_names=self.params.region_names)
@@ -911,7 +911,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'AzureKeyProviderFactory', 'azure_host': 'scylla-azure-kms'}"
             scylla_encryption_options = self.params.get('scylla_encryption_options')
 
-        if not (azure_host := yaml.safe_load(scylla_encryption_options or {}).get("azure_host") or ''):
+        if not (azure_host := (yaml.safe_load(scylla_encryption_options) or {}).get("azure_host") or ''):
             return
 
         test_id = str(self.test_config.test_id())
