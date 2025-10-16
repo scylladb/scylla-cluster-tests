@@ -463,7 +463,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
 
     def test_cs_all_events_list(self):
         self.assertSetEqual(
-            set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
+            set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"},
             {ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)},
         )
 
@@ -531,7 +531,8 @@ class TestScyllaBenchLogEvent(unittest.TestCase):
 
     def test_scylla_bench_error_events_list(self):
         self.assertSetEqual(
-            set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)), {ev.type for ev in SCYLLA_BENCH_ERROR_EVENTS}
+            set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)) - {"__annotate_func__"},
+            {ev.type for ev in SCYLLA_BENCH_ERROR_EVENTS},
         )
 
 
