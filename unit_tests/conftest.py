@@ -21,6 +21,9 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
+from sdcm.utils.mp_start import ensure_start_method
+ensure_start_method()
+
 import pytest
 
 from sdcm import wait, sct_config
