@@ -142,7 +142,7 @@ class EventsProcessesRegistry:
     def __init__(self, log_dir: Union[str, Path], _default: bool = False):
         self.log_dir = Path(log_dir)
         self.default = _default
-        self._registry_dict_lock = threading.RLock()
+        self._registry_dict_lock = multiprocessing.RLock()  # restored multiprocessing.RLock
         self._registry_dict = {}
         LOGGER.debug("New events processes registry created: %s", self)
 
