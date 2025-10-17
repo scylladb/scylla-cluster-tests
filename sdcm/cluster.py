@@ -3979,7 +3979,7 @@ class BaseCluster:
         """
         all_ks_cf = self.get_any_ks_cf_list(db_node,
                                             filter_out_system=True,
-                                            filter_out_mv=True)
+                                            filter_out_mv=True, filter_empty_tables=False)
         self.log.debug(all_ks_cf)
         ks_tables_with_cdc = [ks_cf_cdc[:-len(cdc.options.CDC_LOGTABLE_SUFFIX)]
                               for ks_cf_cdc in all_ks_cf if ks_cf_cdc.endswith(cdc.options.CDC_LOGTABLE_SUFFIX)]
