@@ -15,7 +15,7 @@ instance_type_loader: 'c7i.8xlarge'
 
 n_monitor_nodes: 1
 
-nemesis_class_name: 'CategoricalMonkey'
+nemesis_class_name: 'ToggleCDCMonkey'
 nemesis_interval: 5
 
 extra_network_interface: True

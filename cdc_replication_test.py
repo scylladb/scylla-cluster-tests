@@ -140,11 +140,11 @@ class CDCReplicationTest(ClusterTester):
         self.db_cluster.nemesis.append(CategoricalMonkey(
             tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event,
             dist={
-                'nodetool_decommission': 5,
-                'terminate_and_replace_node': 5,
+                # 'nodetool_decommission': 5,
+                # 'terminate_and_replace_node': 5,
                 # 'grow_shrink_cluster': 5,
-                'remove_node_then_add_node': 5,
-                'decommission_streaming_err': 5,
+                # 'remove_node_then_add_node': 5,
+                # 'decommission_streaming_err': 5,
                 # 'network_random_interruptions': 4,
                 # # 'network_block': 2, # disabled due to #2745
                 # # 'network_start_stop_interface': 2, # as above
@@ -157,7 +157,7 @@ class CDCReplicationTest(ClusterTester):
                 # 'restart_with_resharding': 1,
                 # 'destroy_data_then_repair': 1,
                 # 'destroy_data_then_rebuild': 1,
-                'nodetool_drain': 5,
+                # 'nodetool_drain': 5,
                 # 'kill_scylla': 1,
                 # 'no_corrupt_repair': 1,
                 # 'major_compaction': 1,
@@ -170,6 +170,7 @@ class CDCReplicationTest(ClusterTester):
                 # 'rebuild_streaming_err': 1,
                 # 'repair_streaming_err': 1,
                 # 'memory_stress': 1,
+                'disrupt_toggle_cdc_feature_properties_on_table': 100
             }, default_weight=0))
         self.db_cluster.nemesis_count = 1
 
