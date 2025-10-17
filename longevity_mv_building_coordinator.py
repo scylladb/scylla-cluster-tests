@@ -147,7 +147,8 @@ class LongevityMVBuildingCoordinator(LongevityTest):
         view_name_value1_not_null_data = f'{base_table_name}_value1_not_null_data_view'
         view_name_value2_not_null_data = f'{base_table_name}_value2_not_null_data_view'
         view_name_value44_all_data = f'{base_table_name}_value44_not_null_data_view'
-
+        si_name_value1 = f'{base_table_name}_value1_si'
+        si_list = [si_name_value1]
         with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
 
             create_materialized_view(session, ks_name, base_table_name, view_name_all_data, ["ckey"],
@@ -166,9 +167,20 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                                      ["ckey", "key"],
                                      mv_columns=["value1", "value2", "value3", "value33", "value44"])
             session.execute(f"ALTER TABLE {ks_name}.{base_table_name} WITH tablets = {{'min_tablet_count': 2}}")
+            create_index(session, ks_name, base_table_name, "value1", si_name_value1)
+            si_list.append(create_index(session, ks_name, base_table_name, "value2"))
+
+            replacing_node: BaseNode = random.choice(
+                [node for node in self.db_cluster.nodes if node != coordinator_node])
+            replacing_node_hostid = replacing_node.host_id
+            replacing_node.stop_scylla()
+            replace_cluster_node(self.db_cluster, coordinator_node, replacing_node_hostid,
+                                 replacing_node.dc_idx, replacing_node.rack, monitoring=self.monitors)
 
             for view_name in [view_name_all_data, view_name_value1_not_null_data, view_name_value2_not_null_data, view_name_value44_all_data]:
                 wait_for_view_to_be_built(coordinator_node, ks_name, view_name, timeout=3600)
+            for indx in si_list:
+                wait_for_index_to_be_built(coordinator_node, ks_name, indx, timeout=3600)
 
             result_for_base_table = list(session.execute(f"select count(*) from {ks_name}.{base_table_name}"))
             self.log.debug("Result for base table %s", list(result_for_base_table))
@@ -184,6 +196,11 @@ class LongevityMVBuildingCoordinator(LongevityTest):
             self.log.debug("Result for mv table %s", list(result_for_mv_table))
             assert result_for_mv_table[0].count == 3_450_000, f"len {len(result_for_mv_table)}"
 
+            for indx in si_list:
+                result_for_si = list(session.execute(f"select count(*) from {ks_name}.{indx}_index"))
+                self.log.debug("Result for secondary index %s", list(result_for_si))
+                assert 3_450_000 == result_for_si[0].count
+
         with self.db_cluster.cql_connection_patient(node=coordinator_node) as session:
             validate_data(session, dataset_with_all_data + datasets_with_null_value2_column, view_name_value1_not_null_data,
                           select_colums=["value1", "value2"],
@@ -196,6 +213,10 @@ class LongevityMVBuildingCoordinator(LongevityTest):
                           select_colums=["value1", "value2", "value3", "value33", "value44"],
                           where_columns=["value44", "ckey", "key"]
                           )
+            validate_data(session, dataset_with_all_data + datasets_with_null_value1_column + datasets_with_null_value2_column + datasets_with_all_nulls,
+                          base_table_name,
+                          select_colums=["value1"],
+                          where_columns=["value1"])
 
     def test_stop_node_during_building_mv(self):
         InfoEvent("Prepare Base table").publish()
