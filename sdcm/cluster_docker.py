@@ -231,6 +231,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
     def do_default_installations(self):
         self.install_sudo()
         self.install_package("tar")
+        procps_package = "procps" if self.distro.is_debian_like else "procps-ng"
+        self.install_package(procps_package)
         super().do_default_installations()
 
     def install_sudo(self, user: str = 'scylla', verbose=False):
@@ -404,7 +406,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
-        node.install_package("procps-ng")
         node.config_setup(append_scylla_args=self.get_scylla_args())
         node.restart_scylla(verify_up_before=True)
 
