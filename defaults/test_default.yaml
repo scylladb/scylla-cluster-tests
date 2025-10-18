@@ -258,6 +258,7 @@ run_scylla_doctor: true
 nemesis_double_load_during_grow_shrink_duration: 0
 
 enterprise_disable_kms: false
+rf_rack_valid_keyspaces: true
 
 assert_linux_distro_features: []
 

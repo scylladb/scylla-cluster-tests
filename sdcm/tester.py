@@ -942,6 +942,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return
 
+    def prepare_rf_rack_valid_keyspaces(self) -> None:
+        if not self.params.get('rf_rack_valid_keyspaces'):
+            logging.debug("Skip configuring rf_rack_valid_keyspaces")
+            return
+
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        append_scylla_yaml['rf_rack_valid_keyspaces'] = self.params.get('rf_rack_valid_keyspaces')
+        self.params["append_scylla_yaml"] = append_scylla_yaml
+
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get('kafka_connectors'):
@@ -1075,6 +1084,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.download_encrypt_keys()
         self.prepare_kms_host()
         self.prepare_azure_kms()
+        self.prepare_rf_rack_valid_keyspaces()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 

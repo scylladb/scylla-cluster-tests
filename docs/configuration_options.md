@@ -3489,6 +3489,15 @@ Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate ra
 **type:** int
 
 
+## **rf_rack_valid_keyspaces** / SCT_RF_RACK_VALID_KEYSPACES
+
+Enables rf_rack_valid_keyspaces.
+
+**default:** True
+
+**type:** boolean
+
+
 ## **rack_aware_loader** / SCT_RACK_AWARE_LOADER
 
 When enabled, loaders will look for nodes on the same rack.
