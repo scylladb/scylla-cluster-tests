@@ -170,6 +170,7 @@ class LongevityBalancerTest(LongevityTest):
 
         # base load in background
         self.run_background_load()
+        sleep(600)
 
         # get steady latency for base load with original cluster configuration
         self.calculate_latencies(row_name='base_load_base_cluster')
