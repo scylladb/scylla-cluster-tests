@@ -11,8 +11,10 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import json
+import os
 
 from sdcm.argus_results import send_perf_simple_query_result_to_argus
+from sdcm.send_email import read_email_data_from_file
 from sdcm.tester import ClusterTester
 from sdcm.utils.microbenchmarking.perf_simple_query_reporter import PerfSimpleQueryAnalyzer
 
@@ -37,6 +39,23 @@ class PerfSimpleQueryTest(ClusterTester):
 
             error_thresholds = self.params.get("latency_decorator_error_thresholds")
             send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results, error_thresholds)
+
+    def get_email_data(self):
+        """Read email data from the file created by check_regression()"""
+        self.log.info("Prepare data for email")
+        
+        # Try to read the email_data.json file created by check_regression()
+        email_data_file = os.path.join(self.logdir, "email_data.json")
+        email_data = read_email_data_from_file(email_data_file)
+        
+        if email_data:
+            self.log.info("Email data loaded from file: %s", email_data_file)
+            return email_data
+        else:
+            # If no email data was created (e.g., check_regression failed),
+            # return empty dict so the base class can add grafana_screenshots
+            self.log.warning("No email data found in %s, email will contain minimal information", email_data_file)
+            return {}
 
     def update_test_with_errors(self):
         self.log.info("update_test_with_errors: Suppress writing errors to ES")
