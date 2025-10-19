@@ -164,7 +164,7 @@ class _HdrRangeHistogramBuilder:
         try:
             start_ts = int(self.start_time)
             end_ts = int(self.end_time)
-            if end_ts - start_ts < TIME_INTERVAL:
+            if end_ts - start_ts < interval:
                 window_step = int(end_ts - start_ts)
             else:
                 window_step = interval or TIME_INTERVAL
