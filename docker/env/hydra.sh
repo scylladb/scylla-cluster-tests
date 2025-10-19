@@ -251,7 +251,7 @@ function run_in_docker () {
     echo "Going to run '${CMD_TO_RUN}'..."
     $([[ -n "$HYDRA_DRY_RUN" ]] && echo echo) \
     $tool ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-        -h ${HOST_NAME} \
+        -h "${HOST_NAME:0:64}" \
         -v "${SCT_DIR}:${SCT_DIR}" \
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
