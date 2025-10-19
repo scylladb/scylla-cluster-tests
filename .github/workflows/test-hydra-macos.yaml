@@ -11,7 +11,7 @@ on:
 
 jobs:
     test:
-        runs-on: macos-13
+        runs-on: macos-15-intel
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
@@ -19,6 +19,6 @@ jobs:
         - name: Checkout repository
           uses: actions/checkout@v5
         - name: Setup Docker
-          uses: douglascamata/setup-docker-macos-action@v1-alpha
+          uses: douglascamata/setup-docker-macos-action@v1.0.1
         - name: Run Hydra
           run: bash -x ./docker/env/hydra.sh list-images
