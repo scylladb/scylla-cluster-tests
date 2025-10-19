@@ -4028,7 +4028,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        if email_data is not None:
+        if email_data:
             email_data['grafana_screenshots'] = grafana_screenshots
             if self.email_reporter is not None:
                 email_data["reporter"] = self.email_reporter.__class__.__name__
