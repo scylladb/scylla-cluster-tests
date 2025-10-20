@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 // This scenario can only be triggered with a scylla repo, not an ami
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml", "configurations/longevity-fips-and-encryptions.yaml", "configurations/local-ear.yaml"]'''
 )
