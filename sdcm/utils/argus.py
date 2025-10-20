@@ -2,6 +2,8 @@ import logging
 import re
 import os
 from pathlib import Path
+import threading
+from typing import Optional
 from uuid import UUID
 
 from argus.client.sct.client import ArgusSCTClient
@@ -13,6 +15,31 @@ from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.file_logger import get_logger_event_summary, start_events_logger, get_events_grouped_by_category
 
 LOGGER = logging.getLogger(__name__)
+
+
+class Argus:
+    INSTANCE: Optional[ArgusSCTClient] = None
+    INIT_DONE = threading.Event()
+
+    def __init__(self, client: ArgusSCTClient):
+        self._client = client
+
+    @classmethod
+    def init_global(cls, client: ArgusSCTClient):
+        if cls.INIT_DONE.is_set():
+            return
+        cls.INSTANCE = cls(client)
+        cls.INIT_DONE.set()
+
+    @classmethod
+    def get(cls, init_default=False) -> 'Argus':
+        if init_default and not cls.INIT_DONE.is_set():
+            cls.init_global(get_argus_client(run_id=os.environ.get("SCT_TEST_ID"), init_global=False))
+        return cls.INSTANCE
+
+    @property
+    def client(self) -> ArgusSCTClient:
+        return self._client
 
 
 class ArgusError(Exception):
@@ -37,12 +64,15 @@ def is_uuid(uuid) -> bool:
         return False
 
 
-def get_argus_client(run_id: UUID | str) -> ArgusSCTClient:
+def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
     creds = KeyStore().get_argus_rest_credentials()
     argus_client = ArgusSCTClient(
         run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
+
+    if init_global:
+        Argus.init_global(argus_client)
 
     return argus_client
 
