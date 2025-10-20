@@ -336,3 +336,11 @@ download_from_s3: []
 # The object-storage method options in Scylla-Manager are: native/rclone/auto.
 # An empty value here, means Scylla-Manager will use its default value.
 manager_backup_restore_method: ''
+
+# SCT agent defaults
+agent:
+  enabled: false
+  port: 16000
+  binary_url: ""
+  max_concurrent_jobs: 10
+  log_level: "info"

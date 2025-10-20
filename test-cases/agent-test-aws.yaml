@@ -1,0 +1,21 @@
+# Sanity test for sct-agent: verifies basic agent functionality with a minimal cluster configuration
+# and no nemesis disruptions. Used to validate agent communication and command execution.
+test_duration: 10
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=100000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10"
+
+n_db_nodes: 3
+n_loaders: 1
+
+instance_type_db: 'i4i.large'
+
+agent:
+  enabled: true
+  port: 16000
+  binary_url: "https://dimakr.s3.eu-north-1.amazonaws.com/sct-agent"
+  max_concurrent_jobs: 10
+  log_level: "info"
+
+user_prefix: agent-test
+nemesis_class_name: NoOpMonkey
+
+use_preinstalled_scylla: true
