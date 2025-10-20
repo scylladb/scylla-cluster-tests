@@ -6,6 +6,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
-    test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
-    test_config: 'test-cases/manager/manager-regression-singleDC-set-distro.yaml'
+    test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity_vnodes_tablets_cluster',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml"]'''
 )
