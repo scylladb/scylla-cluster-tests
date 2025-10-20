@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
-    aws_region: "us-east-1",
+    region: "us-east-1",
     test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionGradualGrowThroughutTest",
     test_config: '''["test-cases/performance/perf-regression-gradual-throughput-grow.yaml", "configurations/cs-uniform-distribution.yaml"]''',
     sub_tests: ["test_write_gradual_increase_load","test_read_gradual_increase_load", "test_mixed_gradual_increase_load"],
