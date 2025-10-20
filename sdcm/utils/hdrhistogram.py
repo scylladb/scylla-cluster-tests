@@ -188,7 +188,7 @@ class _HdrRangeHistogramBuilder:
                         f"Submitted future for tags {self.hdr_tags} and interval {interval_num} out of {len(start_intervals)}")
                     interval_num += 1
                 results = {}
-                for e, future in enumerate(futures):
+                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
                     res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 60 seconds
                     LOGGER.debug(
                         f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
