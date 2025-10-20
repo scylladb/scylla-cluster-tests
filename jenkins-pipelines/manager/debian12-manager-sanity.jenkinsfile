@@ -11,9 +11,5 @@ managerPipeline(
 
     scylla_version: '2025.1',
 
-    post_behavior_db_nodes: 'destroy',
-    post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy',
-
-    downstream_jobs_to_run: 'debian11-upgrade-test'
+    downstream_jobs_to_run: 'debian12-upgrade-test'
 )
