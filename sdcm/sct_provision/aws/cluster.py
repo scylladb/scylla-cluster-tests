@@ -257,12 +257,14 @@ class DBCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
+        agent_config = self.params.get("agent")
         return ScyllaUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
             user_data_format_version=self.params.get("user_data_format_version"),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             test_config=self._test_config,
+            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
         ).to_string()
 
     def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
@@ -393,12 +395,14 @@ class LoaderCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
+        agent_config = self.params.get("agent")
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             aws_additional_interface=network_interfaces_count(self.params) > 1,
             test_config=self._test_config,
             install_docker=True,
+            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
         ).to_string()
 
 
@@ -414,10 +418,12 @@ class MonitoringCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
+        agent_config = self.params.get("agent")
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
             test_config=self._test_config,
+            install_agent=bool(agent_config.get("enabled") and agent_config.get("binary_url")),
         ).to_string()
 
 

@@ -33,6 +33,7 @@ def prepare_fake_region(test_id: str, region: str, n_db_nodes: int = 3, n_loader
         "root_disk_size_monitor": 15,
         "fake_region_name": ["eastus"],
         "cluster_backend": "fake",
+        "agent": {"enabled": False, "port": 16000, "binary_url": "", "max_concurrent_jobs": 10, "log_level": "info"},
     }
     test_config = TestConfig()
     test_config.set_test_id_only(test_id)

@@ -1193,6 +1193,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.params.get("cluster_backend") == "xcloud":
             self.test_config.configure_xcloud_connectivity(self.localhost, self.params)
 
+        self.test_config.ensure_agent_api_key()
+
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
 

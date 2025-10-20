@@ -290,6 +290,11 @@ def provision_resources(backend, test_name: str, config: str):
     else:
         click.echo("No need provision logging service")
 
+    agent_config = params.get("agent")
+    if agent_config.get("enabled") and agent_config.get("binary_url"):
+        click.echo("Generate SCT agent API key")
+        test_config.generate_and_save_agent_api_key()
+
     click.echo(f"Provision {backend} cloud resources")
     try:
         if backend == "aws":
