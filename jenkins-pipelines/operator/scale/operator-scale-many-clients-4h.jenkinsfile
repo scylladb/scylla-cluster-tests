@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'k8s-eks',
-    aws_region: 'eu-north-1',
+    region: 'eu-north-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/scylla-operator/longevity-scylla-operator-many-clients-4h.yaml',
     availability_zone: 'a,b',
