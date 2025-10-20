@@ -12,9 +12,5 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
 
-    post_behavior_db_nodes: 'destroy',
-    post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy',
-
     downstream_jobs_to_run: 'older-enterprise-ami-upgrade-test'
 )

@@ -9,9 +9,5 @@ managerPipeline(
     test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_data_without_manager',
     test_config: 'test-cases/manager/manager-restore-outside.yaml',
 
-    backup_bucket_location: 'manager-backup-tests-permanent-snapshots-us-east-1',
-
-    post_behavior_db_nodes: 'destroy',
-    post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy'
+    backup_bucket_location: 'manager-backup-tests-permanent-snapshots-us-east-1'
 )

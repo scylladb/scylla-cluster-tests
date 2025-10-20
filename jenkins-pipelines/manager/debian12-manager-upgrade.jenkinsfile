@@ -15,9 +15,5 @@ managerPipeline(
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
-    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian12.yaml"]''',
-
-    post_behavior_db_nodes: 'destroy',
-    post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy'
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian12.yaml"]'''
 )
