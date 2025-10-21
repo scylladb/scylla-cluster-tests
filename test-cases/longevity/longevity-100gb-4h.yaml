@@ -1,19 +1,20 @@
 test_duration: 330
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+stress_cmd: ["cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999",
+             "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(read=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=50 -log interval=5 -errors retries=999"
              ]
 
 n_db_nodes: 6
 n_loaders: 2
 seeds_num: 3
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'TerminateAndRemoveNodeMonkey'
 nemesis_seed: '032'
+nemesis_interval: 5
 
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
