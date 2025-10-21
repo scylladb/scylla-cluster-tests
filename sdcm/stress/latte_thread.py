@@ -188,7 +188,7 @@ class LatteStressThread(DockerBasedStressThread):
         # NOTE: set '--user' and '--password' params only if not defined explicitly
         if " --user" in self.stress_cmd and " --password" in self.stress_cmd:
             auth_config = ""
-        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}-q "
+        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config}{custom_schema_params} {datacenter}{rack}-q "
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
