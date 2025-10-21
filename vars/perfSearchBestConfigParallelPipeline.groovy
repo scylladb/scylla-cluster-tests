@@ -171,15 +171,15 @@ def call(Map pipelineParams) {
                         if (params.sub_tests) {
                             sub_tests = new JsonSlurper().parseText(params.sub_tests)
                         } else {
-                            sub_tests = [pipelineParams.test_name]
+                            sub_tests = [params.test_name]
                         }
                         for (t in sub_tests) {
                             def perf_test
                             def sub_test = t
-                            if (sub_test == pipelineParams.test_name) {
+                            if (sub_test == params.test_name) {
                                 perf_test = sub_test
                             } else {
-                                perf_test = "${pipelineParams.test_name}.${sub_test}"
+                                perf_test = "${params.test_name}.${sub_test}"
                             }
 
                             tasks["sub_test=${sub_test}"] = {
