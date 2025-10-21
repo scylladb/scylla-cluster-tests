@@ -5,6 +5,7 @@
     <span>Testrun id:</span>
     <span class="blue">{{ testrun_id }}</span>
 </h3>
+{% if test_version != "N/A" and test_version is mapping %}
 <h3>
     <span>Test start time: </span>
     <span class="blue">{{ test_version.run_date_time }}</span>
@@ -19,8 +20,10 @@
     <span> , Commit Id: </span>
     <span class="blue"> {{ test_version.commit_id }}</span>
 </div>
+{% endif %}
 <h2> Test results </h2>
 
+{% if test_stats != "N/A" and test_stats is mapping %}
 <table id="results_table">
     <tr>
         {% for key, result in test_stats.items() %}
@@ -45,6 +48,10 @@
         {% endif %}
         {% endfor %}
 </table>
+{% else %}
+<p>Test statistics are not available. The test may have failed to collect performance metrics or the regression check could not be performed.</p>
+{% endif %}
+{% if test_stats != "N/A" and test_stats is mapping %}
 <h3> Median absolute deviation percentage:
     {% if is_deviation_within_limits %}
     {{ deviation_diff }}%
@@ -52,7 +59,9 @@
     <span class="red fbold">{{ deviation_diff }}%</span>
     {% endif %}
 </h3>
+{% endif %}
 
+{% if scylla_date_results_table != "N/A" and scylla_date_results_table is iterable and scylla_date_results_table|length > 0 %}
 <h2> {{ collect_last_scylla_date_count }} </h2>
 <table id="results_table">
     <tr>
@@ -94,6 +103,7 @@
     </tr>
     {% endfor %}
 </table>
+{% endif %}
 
 
 {% endblock %}
