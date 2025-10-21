@@ -24,11 +24,12 @@ extra_network_interface: true
 # Note: for preimage and postimage we use 1 thread because there is no sensible way
 # to test pre/post-images with concurrent writes happening to a single row.
 gemini_cmd: |
-  --duration 15m
+  --duration 60m
   --warmup 0s
   --concurrency 100
   --mode write
-  --cql-features basic
+  --request-timeout 1m
+  --cql-features normal
   --max-mutation-retries 100
   --max-mutation-retries-backoff 100ms
 
