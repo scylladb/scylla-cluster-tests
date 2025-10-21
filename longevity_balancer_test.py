@@ -167,12 +167,12 @@ class LongevityBalancerTest(LongevityTest):
         7. Let the background workload run for a while
         """
         self.run_prepare_write_cmd()
+        
+        # wait for compactions to finish
+        self.wait_no_compactions_running(n=720)
 
         # base load in background
         self.run_background_load()
-
-        # wait for compactions to finish before measuring latencies
-        self.wait_no_compactions_running(n=360)
 
         # get steady latency for base load with original cluster configuration
         self.calculate_latencies(row_name='steady_base_load_base_cluster')
