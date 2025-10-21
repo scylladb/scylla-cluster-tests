@@ -68,11 +68,11 @@ def registry():
 @pytest.mark.parametrize(
     "logical_phrase, expected_classes",
     [
-        ("flag_a", {CustomNemesisA, CustomNemesisD}),
-        ("flag_b", {CustomNemesisB}),
+        ("flag_a", {CustomNemesisA, CustomNemesisC, CustomNemesisD}),  # A and D have flag_a True and C inherits from A
+        ("flag_b", {CustomNemesisB, CustomNemesisD}),
         ("flag_c", {CustomNemesisC}),
         ("flag_d", {CustomNemesisD}),
-        ("flag_common", {CustomNemesisA, CustomNemesisB, CustomNemesisD}),
+        ("flag_common", {CustomNemesisA, CustomNemesisB, CustomNemesisC, CustomNemesisD}),
     ],
 )
 def test_filter_subclasses_by_single_flag(registry, logical_phrase, expected_classes):
@@ -134,9 +134,9 @@ def test_gather_properties(registry):
 @pytest.mark.parametrize(
     "logical_phrase, expected_methods",
     [
-        ("flag_a", {CustomNemesisA.disrupt_method_a, CustomNemesisD.disrupt_method_d}),
-        ("flag_b", {CustomNemesisB.disrupt_method_b}),
-        ("flag_common and not flag_b", {CustomNemesisA.disrupt_method_a, CustomNemesisD.disrupt_method_d}),
+        ("flag_a", {CustomNemesisA.disrupt_method_a, CustomNemesisC.disrupt_method_c, CustomNemesisD.disrupt_method_d}),
+        ("flag_b", {CustomNemesisB.disrupt_method_b, CustomNemesisD.disrupt_method_d}),
+        ("flag_common and not flag_b", {CustomNemesisA.disrupt_method_a, CustomNemesisC.disrupt_method_c}),
         ("flag_c", {CustomNemesisC.disrupt_method_c}),
         ("flag_d", {CustomNemesisD.disrupt_method_d}),
     ],
@@ -154,4 +154,4 @@ def test_get_disrupt_method_execution(registry, capsys):
 
     captured = capsys.readouterr()
     assert "called test function a" in captured.out
-    assert "called test function d" in captured.out
+    assert "called test function c" in captured.out
