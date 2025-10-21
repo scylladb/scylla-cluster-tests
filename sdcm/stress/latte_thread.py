@@ -202,7 +202,7 @@ class LatteStressThread(DockerBasedStressThread):
             auth_config = ""
         # NOTE: 'latte schema' doesn't support '-q', but other subcommands (e.g. 'latte run') do.
         quiet_flag = "" if "latte schema" in self.stress_cmd else "-q "
-        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}{quiet_flag}"
+        stress_cmd = f"{self.stress_cmd} {ssl_config}{auth_config}{custom_schema_params} {datacenter}{rack}{quiet_flag}"
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
