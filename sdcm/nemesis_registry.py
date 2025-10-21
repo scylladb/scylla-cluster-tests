@@ -47,7 +47,8 @@ class NemesisRegistry:
         for nemesis in list_of_nemesis:
             if nemesis in self.excluded_list:
                 continue
-            evaluator.context = dict(**nemesis.__dict__, **{nemesis.__name__: True})
+            evaluator.context = dict(nemesis.__bases__[0].__dict__)
+            evaluator.context.update(dict(**nemesis.__dict__, **{nemesis.__name__: True}))
             if logical_phrase and "disrupt_" in logical_phrase and (method_name := get_disrupt_method_from_class(nemesis)):
                 # if the `logical_phrase` has a method name of any disrupt method
                 # we look it up for the specific class and add it to the context
