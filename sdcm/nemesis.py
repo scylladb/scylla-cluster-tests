@@ -213,8 +213,7 @@ def target_all_nodes(func: Callable) -> Callable:
     return func
 
 
-class Nemesis:
-
+class NemesisFlags:
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
     # i.e. adding/removing nodes/data centers
@@ -233,10 +232,24 @@ class Nemesis:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
 
+<<<<<<< HEAD
+||||||| parent of 4e28398d3 (improvement(nemesis): Filter also according to default values)
+    additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
+    additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
+
+=======
+
+class Nemesis(NemesisFlags):
+
+    additional_configs: list[str] = None  # Configs required for running nemesis, used in job generation
+    additional_params: dict[str, str] = None  # Parameters required for jenkins pipelines, used in job generation
+
+>>>>>>> 4e28398d3 (improvement(nemesis): Filter also according to default values)
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
         self.nemesis_registry = NemesisRegistry(base_class=Nemesis,
+                                                flag_class=NemesisFlags,
                                                 excluded_list=COMPLEX_NEMESIS)
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
