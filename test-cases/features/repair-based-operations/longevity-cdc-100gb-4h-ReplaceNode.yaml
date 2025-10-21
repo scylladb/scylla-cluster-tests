@@ -1,5 +1,0 @@
-nemesis_class_name: 'NodeTerminateAndReplace'
-nemesis_during_prepare: false
-seeds_num: 3
-
-user_prefix: 'longevity-rbno-cdc-100gb-4h-replace-node'
