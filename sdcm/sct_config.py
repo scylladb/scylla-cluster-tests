@@ -1596,6 +1596,10 @@ class SCTConfiguration(dict):
              type=boolean,
              help="Whether to upgrade sstables as part of upgrade_node or not"),
 
+        dict(name="enable_truncate_checks_on_node_upgrade", env="SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE",
+             type=boolean,
+             help="Enables or disables truncate checks on each node upgrade and rollback"),
+
         dict(name="stress_before_upgrade", env="SCT_STRESS_BEFORE_UPGRADE",
              type=str,
              help="Stress command to be run before upgrade (preapre stage)"),
