@@ -73,28 +73,31 @@ NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 def truncate_entries(func):
     @wraps(func)
     def inner(self, *args, **kwargs):
-        node = args[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
-            self.actions_log.info("Start truncate simple tables")
-            session.default_timeout = 60.0 * 5
-            session.default_consistency_level = ConsistencyLevel.QUORUM
-            try:
-                self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
-                self.actions_log.info("Finish truncate simple tables")
-            except cassandra.DriverException as details:
-                InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
-                          severity=Severity.ERROR).publish()
-            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+        if self.do_truncates:
+            node = args[0]
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
+                self.actions_log.info("Start truncate simple tables")
+                session.default_timeout = 60.0 * 5
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                try:
+                    self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+                    self.actions_log.info("Finish truncate simple tables")
+                except cassandra.DriverException as details:
+                    InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                              severity=Severity.ERROR).publish()
+                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
 
         func_result = func(self, *args, **kwargs)
 
-        # re-new connection
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
-            session.default_timeout = 60.0 * 5
-            session.default_consistency_level = ConsistencyLevel.QUORUM
-            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
-            self.read_data_from_truncated_tables(session=session)
-            self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # re-new connection
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
+                session.default_timeout = 60.0 * 5
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+                self.read_data_from_truncated_tables(session=session)
+                self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+
         return func_result
     return inner
 
@@ -142,7 +145,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     def setUp(self):
         super().setUp()
-
+        self.do_truncates = self.params.get("enable_truncate_checks_on_node_upgrade") or False
         self.stack = contextlib.ExitStack()
         # ignoring those unsuppressed exceptions, till both ends of the upgrade would have https://github.com/scylladb/scylladb/pull/14681
         # see https://github.com/scylladb/scylladb/issues/14882 for details
@@ -611,8 +614,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}'
                          'or sct_cql_stress_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -943,8 +947,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         """
         self.upgrade_os(self.db_cluster.nodes)
 
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
                                                                          'stress_after_cluster_upgrade'])
@@ -1003,8 +1008,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.upgrade_os(self.db_cluster.nodes)
 
         InfoEvent(message="Step1 - Populate DB data").publish()
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
         self.run_prepare_write_cmd()
 
         InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
