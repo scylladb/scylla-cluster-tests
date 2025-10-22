@@ -1034,6 +1034,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         InfoEvent(message="Step4 - Run raft topology upgrade procedure").publish()
         self.run_raft_topology_upgrade_procedure()
+        self.validate_limited_voters_feature_enabled()
 
         InfoEvent(message="Step5 - Wait for stress_during_entire_upgrade to finish").publish()
         for stress_during_entire_upgrade_thread_pool in stress_during_entire_upgrade_thread_pools:
