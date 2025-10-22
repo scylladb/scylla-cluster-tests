@@ -5406,6 +5406,7 @@ class Nemesis(NemesisFlags):
         self.actions_log.info(f"Added new node : {new_node.name}")
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
                                                                          seed=self.nemesis_seed)
+        InfoEvent(f"Bootstrap will be aborted after {terminate_pattern} log line").publish()
         bootstrapabortmanager = NodeBootstrapAbortManager(bootstrap_node=new_node, verification_node=self.target_node,
                                                           actions_log=self.actions_log)
 
