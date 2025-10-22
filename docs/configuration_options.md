@@ -1268,7 +1268,7 @@ AMI ID for Vector Store nodes
 
 ## **instance_type_vector_store** / SCT_INSTANCE_TYPE_VECTOR_STORE
 
-EC2 instance type for Vector Store nodes
+AWS/GCP cloud provider instance type for Vector Store nodes
 
 **default:** N/A
 

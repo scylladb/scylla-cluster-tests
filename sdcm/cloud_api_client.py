@@ -260,6 +260,7 @@ class ScyllaCloudAPIClient:
         maintenance_windows: list[dict],
         scaling: dict[str, str],
         prom_proxy: bool,
+        vector_search: dict | None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -285,6 +286,7 @@ class ScyllaCloudAPIClient:
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
+        :param vector_search: Vector Search configuration
 
         :return: created cluster details
         """
@@ -310,6 +312,7 @@ class ScyllaCloudAPIClient:
             maintenanceWindows=maintenance_windows,
             scaling=scaling,
             promProxy=prom_proxy,
+            vectorSearch=vector_search
         )
         return self._parse_response_data(response)
 
@@ -407,6 +410,10 @@ class ScyllaCloudAPIClient:
     def get_cluster_connection(self, *, account_id: int, cluster_id: int) -> dict[str, Any]:
         """Get cluster connection details including credentials and endpoints"""
         return self.request('GET', f'/account/{account_id}/cluster/connect', params={'clusterId': cluster_id})
+
+    def get_vector_search_nodes(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Get Vector Search nodes information"""
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
 
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
