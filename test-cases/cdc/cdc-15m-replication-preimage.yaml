@@ -6,16 +6,17 @@ db_type: mixed_scylla
 n_db_nodes: 3
 instance_type_db: 'i4i.large'
 
-n_test_oracle_db_nodes: 1
-instance_type_db_oracle: 'i3.large'
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: 2025.2.0
 
 n_loaders: 1
-instance_type_loader: 'c6i.large'
+instance_type_loader: 'c7i.8xlarge'
 
-n_monitor_nodes: 0
+n_monitor_nodes: 1
 # instance_type_monitor: 't3.small'
 
-nemesis_class_name: 'RandomInterruptionNetworkMonkey'
+nemesis_class_name: 'ToggleCDCMonkey'
 nemesis_interval: 1
 # Required by the nemesis:
 extra_network_interface: true
@@ -23,11 +24,12 @@ extra_network_interface: true
 # Note: for preimage and postimage we use 1 thread because there is no sensible way
 # to test pre/post-images with concurrent writes happening to a single row.
 gemini_cmd: |
-  --duration 15m
+  --duration 60m
   --warmup 0s
-  --concurrency 1
+  --concurrency 100
   --mode write
-  --cql-features basic
+  --request-timeout 1m
+  --cql-features normal
   --max-mutation-retries 100
   --max-mutation-retries-backoff 100ms
 
