@@ -26,6 +26,7 @@ from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
+from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES
 from sdcm.utils.gce_region import GceRegion
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteCmdRunner, shell_script_cmd
@@ -315,6 +316,30 @@ class CloudNode(cluster.BaseNode):
             is_ready=lambda: True)
 
 
+class CloudVSNode(CloudNode):
+    """A Vector Search node running on Scylla Cloud"""
+
+    def __init__(
+        self,
+        cloud_instance_data: dict[str, Any],
+        parent_cluster: cluster.BaseScyllaCluster,
+        node_prefix: str = 'vs-node',
+        node_index: int = 1,
+        base_logdir: str | None = None,
+        dc_idx: int = 0,
+        rack: int = 0
+    ):
+        super().__init__(
+            cloud_instance_data=cloud_instance_data,
+            parent_cluster=parent_cluster,
+            node_prefix=node_prefix,
+            node_index=node_index,
+            base_logdir=base_logdir,
+            dc_idx=dc_idx,
+            rack=rack
+        )
+
+
 class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
     """Scylla DB cluster running on Scylla Cloud"""
 
@@ -350,6 +375,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self._cluster_created = False
         self._pending_node_configs = []
+        self._deploy_vs_nodes = int(params.get('n_vector_store_nodes')) > 0
+        self.vs_nodes = []
         if self.test_config.REUSE_CLUSTER and self._cluster_id:
             self._cluster_created = True
 
@@ -388,12 +415,13 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         return self._api_client.get_cluster_details(
             account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)['dc']['id']
 
-    def _create_node(self, cloud_instance_data: dict[str, Any], node_index: int, dc_idx: int, rack: int) -> CloudNode:
+    def _create_node(self, cloud_instance_data: dict[str, Any], node_index: int, dc_idx: int, rack: int,
+                     node_class: type[CloudNode] = CloudNode, node_prefix: str | None = None) -> CloudNode:
         try:
-            node = CloudNode(
+            node = node_class(
                 cloud_instance_data=cloud_instance_data,
                 parent_cluster=self,
-                node_prefix=self.node_prefix,
+                node_prefix=node_prefix or self.node_prefix,
                 node_index=node_index,
                 base_logdir=self.logdir,
                 dc_idx=dc_idx,
@@ -437,6 +465,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
+        if self._deploy_vs_nodes:
+            self._wait_for_vs_nodes_ready()
 
         if self.vpc_peering_enabled:
             self.setup_vpc_peering(self.dc_id)
@@ -444,10 +474,39 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._get_cluster_credentials()
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
+        vs_nodes = self._init_vs_nodes_from_cluster() if self._deploy_vs_nodes else []
+
         self._cluster_created = True
-        self.log.info("Successfully created cluster %s with %s nodes", self._cluster_id, len(nodes))
+        self.log.info(
+            "Successfully created cluster %s with %s DB nodes%s",
+            self._cluster_id, len(nodes), " and {} VS nodes".format(len(vs_nodes)) if vs_nodes else "")
 
         return nodes
+
+    def _init_nodes_from_data(
+        self,
+        nodes_data: list[dict[str, Any]],
+        node_class: type[CloudNode] = CloudNode,
+        node_prefix: str | None = None,
+        dc_idx: int = 0,
+        rack: int = 0
+    ) -> list[CloudNode]:
+        """Create cloud node objects from API data"""
+        if not nodes_data:
+            return []
+
+        self.log.info("Initializing %s %s objects", len(nodes_data), node_class.__name__)
+
+        return [
+            self._create_node(
+                cloud_instance_data=node_data,
+                node_index=i,
+                dc_idx=dc_idx,
+                rack=rack,
+                node_class=node_class,
+                node_prefix=node_prefix)
+            for i, node_data in enumerate(nodes_data, start=1)
+        ]
 
     def _init_nodes_from_cluster(self, count: int, dc_idx: int, rack: int) -> list[CloudNode]:
         """Decompose the created cluster into individual CloudNode objects"""
@@ -458,22 +517,21 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         if len(cluster_nodes) < count:
             self.log.warning("Expected %s nodes, but found %s", count, len(cluster_nodes))
 
-        self.log.info("Initializing %s individual CloudNode node objects", count)
-        created_nodes = []
-        for i, node_data in enumerate(cluster_nodes[:count]):
-            self._node_index += 1
-            node_rack = self._node_index % self.racks_count if rack is None else rack
-
-            node = self._create_node(
-                cloud_instance_data=node_data,
-                node_index=self._node_index,
-                dc_idx=dc_idx,
-                rack=node_rack)
-            self.nodes.append(node)
-            created_nodes.append(node)
-
-            self.log.info("Created node %s with public IP: %s", node.name, node.public_ip_address)
+        created_nodes = self._init_nodes_from_data(
+            nodes_data=cluster_nodes[:count], node_class=CloudNode, dc_idx=dc_idx, rack=rack)
+        self.nodes.extend(created_nodes)
         return created_nodes
+
+    def _init_vs_nodes_from_cluster(self) -> list[CloudVSNode]:
+        """Decompose the created cluster VS nodes info into individual CloudVSNode objects"""
+        vs_info = self._api_client.get_vector_search_nodes(
+            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id)
+
+        vs_nodes_data = [node for az in vs_info.get('availabilityZones', []) for node in az.get('nodes', [])]
+
+        self.vs_nodes = self._init_nodes_from_data(
+            nodes_data=vs_nodes_data, node_class=CloudVSNode, node_prefix='vs-node', dc_idx=0, rack=0)
+        return self.vs_nodes
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
         instance_type_name = instance_type or self.params.cloud_provider_params.get('instance_type_db')
@@ -497,6 +555,11 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             except CidrAllocationError as e:
                 raise ScyllaCloudError(f"CIDR allocation failed: {e}") from e
 
+        vs_config = {
+            'defaultNodes': int(self.params.get('n_vector_store_nodes')),
+            'defaultInstanceTypeId': XCLOUD_VS_INSTANCE_TYPES[self._cloud_provider][self.params.get('instance_type_vector_store')]
+        } if self._deploy_vs_nodes else None
+
         return {
             'account_id': self._account_id,
             'cluster_name': self.name,
@@ -517,7 +580,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'encryption_at_rest': None,
             'maintenance_windows': [],
             'prom_proxy': True,
-            'scaling': {}
+            'scaling': {},
+            'vector_search': vs_config
         }
 
     def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
@@ -542,6 +606,34 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             timeout=timeout,
             throw_exc=True)
         self.log.info("Scylla Cloud cluster is ready")
+
+    def _wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
+        self.log.info("Waiting for Vector Search nodes to be ready")
+
+        def check_vs_nodes_status():
+            try:
+                vs_info = self._api_client.get_vector_search_nodes(
+                    account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id)
+
+                # flatten all nodes from all AZs
+                all_nodes = [node for az in vs_info.get('availabilityZones', []) for node in az.get('nodes', [])]
+                if not all_nodes:
+                    return False
+
+                active_count = sum(node.get('status', '').upper() == 'ACTIVE' for node in all_nodes)
+                self.log.debug("VS nodes status: %d/%d active", active_count, len(all_nodes))
+                return active_count == len(all_nodes)
+            except Exception as e:  # noqa: BLE001
+                self.log.debug("Error checking Vector Search nodes status: %s", e)
+                return False
+
+        wait.wait_for(
+            func=check_vs_nodes_status,
+            step=15,
+            text="Waiting for Vector Search nodes to be ready",
+            timeout=timeout,
+            throw_exc=True)
+        self.log.info("Vector Search nodes are ready")
 
     def get_promproxy_config(self):
         """Retrieve Prometheus proxy configuration for Scylla Cloud cluster"""
