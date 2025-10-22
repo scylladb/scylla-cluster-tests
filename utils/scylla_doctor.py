@@ -198,6 +198,11 @@ class ScyllaDoctor:
                 collector in ["StorageConfigurationCollector", "PerftuneSystemConfigurationCollector"]):
             return True
 
+        if (self.node.distro.is_debian and self.offline_install and
+                collector in ["RAIDSetupCollector", "SysctlCollector"]):
+            # Debian does not have mdstat by default and sysctl is not found
+            return True
+
         # https://github.com/scylladb/scylladb/issues/18631
         # if self.node.distro.is_amazon2 and collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
         #    return True
