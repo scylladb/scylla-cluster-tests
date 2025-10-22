@@ -3075,6 +3075,15 @@ Whether to upgrade sstables as part of upgrade_node or not
 **type:** boolean
 
 
+## **enable_truncate_checks_on_node_upgrade** / SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE
+
+Enables or disables truncate checks on each node upgrade and rollback
+
+**default:** True
+
+**type:** boolean
+
+
 ## **stress_before_upgrade** / SCT_STRESS_BEFORE_UPGRADE
 
 Stress command to be run before upgrade (preapre stage)
