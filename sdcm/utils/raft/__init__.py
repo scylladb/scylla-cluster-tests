@@ -1,11 +1,13 @@
 import contextlib
 import logging
-import random
+# import random
 
 from enum import Enum
 from abc import ABC, abstractmethod
 from typing import NamedTuple, Mapping, Iterable, Any, Generator
+from itertools import cycle
 
+# import log
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -24,6 +26,11 @@ RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
 
 class Group0MembersNotConsistentWithTokenRingMembersException(Exception):
     pass
+
+
+class Group0Member(NamedTuple):
+    host_id: str
+    voter: bool
 
 
 class LogPosition(Enum):
@@ -107,11 +114,11 @@ class RaftFeatureOperations(ABC):
         ...
 
     @abstractmethod
-    def get_group0_members(self) -> list[str]:
+    def get_group0_members(self) -> list[Group0Member]:
         ...
 
     @abstractmethod
-    def get_group0_non_voters(self) -> list[dict[str, str]]:
+    def get_group0_non_voters(self) -> list[str]:
         ...
 
     @abstractmethod
@@ -119,8 +126,8 @@ class RaftFeatureOperations(ABC):
         ...
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> [HealthEventsGenerator | None]:
+            self, group0_members: list[Group0Member],
+            tokenring_members: list['TokenRingMember']) -> [HealthEventsGenerator | None]:  # noqa: F821
         ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
@@ -131,9 +138,12 @@ class RaftFeatureOperations(ABC):
                               BACKEND_TIMEOUTS[backend][message_position.position])
 
     def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
-        random.seed(seed)
-        log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
-        log_pattern = random.choice(log_patterns)
+        # random.seed(seed)
+        if not self.message_iter:
+            self.message_iter = cycle(self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation))
+        # log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
+        # log_pattern = random.choice(log_patterns)
+        log_pattern = next(self.message_iter)
         return self.get_message_waiting_timeout(log_pattern)
 
     def get_all_messages_timeouts(self, operation: TopologyOperations):
@@ -190,7 +200,7 @@ class RaftFeature(RaftFeatureOperations):
             LOGGER.error(err_msg)
             return ""
 
-    def get_group0_members(self) -> list[dict[str, str]]:
+    def get_group0_members(self) -> list[Group0Member]:
         LOGGER.debug("Get group0 members")
         group0_members = []
         try:
@@ -200,8 +210,8 @@ class RaftFeature(RaftFeatureOperations):
                 rows = session.execute(f"select server_id, can_vote from system.raft_state  \
                                         where group_id = {raft_group0_id} and disposition = 'CURRENT'").all()
                 for row in rows:
-                    group0_members.append({"host_id": str(row.server_id),
-                                           "voter": row.can_vote})
+                    group0_members.append(Group0Member(host_id=str(row.server_id),
+                                                       voter=row.can_vote))
         except Exception as exc:  # noqa: BLE001
             err_msg = f"Get group0 members failed with error: {exc}"
             LOGGER.error(err_msg)
@@ -212,14 +222,14 @@ class RaftFeature(RaftFeatureOperations):
     def get_group0_non_voters(self) -> list[str]:
         LOGGER.debug("Get group0 members in status non-voter")
         # Add host id which cann't vote after decommission was aborted because it is fast rebooted / terminated")
-        return [member['host_id'] for member in self.get_group0_members() if not member['voter']]
+        return [member.host_id for member in self.get_group0_members() if not member.voter]
 
     def get_diff_group0_token_ring_members(self) -> list[str]:
         LOGGER.debug("Get diff group0 from token ring")
         group0_members = self.get_group0_members()
-        group0_members_ids = {member["host_id"] for member in group0_members}
+        group0_members_ids = {member.host_id for member in group0_members}
         token_ring_members = self._node.get_token_ring_members()
-        token_ring_member_ids = {member["host_id"] for member in token_ring_members}
+        token_ring_member_ids = {member.host_id for member in token_ring_members}
         LOGGER.debug("Token rings members ids: %s", token_ring_member_ids)
         LOGGER.debug("Group0 members ids: %s", group0_members_ids)
 
@@ -245,7 +255,7 @@ class RaftFeature(RaftFeatureOperations):
             removing_host_id = host_ids.pop(0)
             wait_for(func=is_node_down, step=5, timeout=60, throw_exc=False,
                      text=f"Waiting node with {removing_host_id} marked down", removing_host_id=removing_host_id)
-            wait_for(func=lambda: not is_node_in_bootstrapping_status(), step=5, timeout=120, throw_exc=False,
+            wait_for(func=lambda: not is_node_in_bootstrapping_status(removing_host_id), step=5, timeout=120, throw_exc=False,
                      text=f"Waiting node with {removing_host_id} doesn't have status BOOTSTRAPPING", removing_host_id=removing_host_id)
 
             ignore_dead_nodes_opt = f"--ignore-dead-nodes {','.join(host_ids)}" if host_ids else ""
@@ -327,9 +337,9 @@ class RaftFeature(RaftFeatureOperations):
         )
 
     def is_cluster_topology_consistent(self) -> bool:
-        group0_ids = [member["host_id"] for member in self.get_group0_members()]
+        group0_ids = [member.host_id for member in self.get_group0_members()]
         LOGGER.debug("Group0 member ids %s", group0_ids)
-        token_ring_ids = [member["host_id"] for member in self._node.get_token_ring_members()]
+        token_ring_ids = [member.host_id for member in self._node.get_token_ring_members()]
         LOGGER.debug("Token ring member ids: %s", token_ring_ids)
         diff = set(group0_ids) - set(token_ring_ids) or set(token_ring_ids) - set(group0_ids)
         LOGGER.debug("Difference between group0 and token ring: %s", diff)
@@ -340,18 +350,18 @@ class RaftFeature(RaftFeatureOperations):
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> HealthEventsGenerator:
+            self, group0_members: list[Group0Member],
+            tokenring_members: list['TokenRingMember']) -> HealthEventsGenerator:  # noqa: F821
         LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
                      self._node.name, self._node.host_id)
-        token_ring_node_ids = [member["host_id"] for member in tokenring_members]
+        token_ring_node_ids = [member.host_id for member in tokenring_members]
         broken_hosts = self.search_inconsistent_host_ids()
         for member in group0_members:
-            if member["host_id"] in token_ring_node_ids and member["host_id"] not in broken_hosts:
+            if member.host_id in token_ring_node_ids and member.host_id not in broken_hosts:
                 continue
-            error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
-                f"can_vote {member['voter']} and " \
-                f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
+            error_message = f"Node {self._node.name} has group0 member with host_id {member.host_id} with " \
+                f"can_vote {member.voter} and " \
+                f"presents in token ring {member.host_id in token_ring_node_ids}. " \
                 f"Inconsistency between group0: {group0_members} " \
                 f"and tokenring: {tokenring_members}"
             LOGGER.error(error_message)
@@ -431,7 +441,7 @@ class NoRaft(RaftFeatureOperations):
     def is_ready(self) -> bool:
         return False
 
-    def get_group0_members(self) -> list[dict[str, str]]:
+    def get_group0_members(self) -> list[Group0Member]:
         return []
 
     def get_group0_non_voters(self) -> list[str]:
@@ -448,7 +458,7 @@ class NoRaft(RaftFeatureOperations):
         return (contextlib.nullcontext(),)
 
     def is_cluster_topology_consistent(self) -> bool:
-        token_ring_ids = [member["host_id"] for member in self._node.get_token_ring_members()]
+        token_ring_ids = [member.host_id for member in self._node.get_token_ring_members()]
         LOGGER.debug("Token ring member ids: %s", token_ring_ids)
         num_of_nodes = len(self._node.parent_cluster.nodes)
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
@@ -456,8 +466,8 @@ class NoRaft(RaftFeatureOperations):
         return len(token_ring_ids) == num_of_nodes
 
     def check_group0_tokenring_consistency(
-            self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> Generator[None, None, None]:
+            self, group0_members: list[Group0Member],
+            tokenring_members: list['TokenRingMember']) -> Generator[None, None, None]:  # noqa: F821
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
         yield None
