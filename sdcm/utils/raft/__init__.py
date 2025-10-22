@@ -1,11 +1,13 @@
 import contextlib
 import logging
-import random
+# import random
 
 from enum import Enum
 from abc import ABC, abstractmethod
 from typing import NamedTuple, Mapping, Iterable, Any, Generator
+from itertools import cycle
 
+# import log
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -136,9 +138,12 @@ class RaftFeatureOperations(ABC):
                               BACKEND_TIMEOUTS[backend][message_position.position])
 
     def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
-        random.seed(seed)
-        log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
-        log_pattern = random.choice(log_patterns)
+        # random.seed(seed)
+        if not self.message_iter:
+            self.message_iter = cycle(self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation))
+        # log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
+        # log_pattern = random.choice(log_patterns)
+        log_pattern = next(self.message_iter)
         return self.get_message_waiting_timeout(log_pattern)
 
     def get_all_messages_timeouts(self, operation: TopologyOperations):
