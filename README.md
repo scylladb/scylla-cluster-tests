@@ -207,3 +207,4 @@ the available configuration options are listed in [configuration_options](./docs
 ### Manager Tests (TODO: write explanation for them)
 ### [K8S Functional Tests](./docs/k8s-functional-test.md)
 ### [Microbenchmarking Tests](./docs/microbenchmarking.md)
+### [Performance Tests](./docs/performance-tests.md)
