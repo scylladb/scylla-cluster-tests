@@ -1,0 +1,11 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'aws',
+    base_versions: '',
+    test_name: 'upgrade_test.UpgradeTest.test_cluster_upgrade_latency_regression',
+    test_config: '''["test-cases/upgrades/rolling-upgrade-latency-regression-aws-custom-d2-workload1-5dcs-expensive.yaml", "configurations/tablets_disabled.yaml"]''',
+)

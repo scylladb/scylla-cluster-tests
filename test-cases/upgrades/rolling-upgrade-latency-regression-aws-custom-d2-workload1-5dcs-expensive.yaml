@@ -1,0 +1,715 @@
+test_duration: 1440
+
+n_db_nodes: '3 3 3 3 3'
+n_loaders: '5 1 1 1 1'
+instance_type_db: 'i4i.24xlarge'
+instance_type_loader: 'c6i.16xlarge'
+instance_type_monitor: 't3.2xlarge'
+
+user_prefix: 'upgrd-ltncy-rgrssn-custom-d2w1-5dc'
+enterprise_disable_kms: true
+use_preinstalled_scylla: true
+
+# NOTE: we should use regions in the alphabetical order.
+#       As of now it is limited by the rune script 'custom-d2/workload1' where:
+#       - Latte uses rust driver's autodiscovered actual regions info.
+#       - Each particular loader in each region, using the same logic (alphabet),
+#         will do it's work consistently.
+# region_name: 'ca-central-1, eu-central-1, eu-north-1, eu-west-3, us-west-2'
+
+# NOTE: when we use simulated racks (default) we should use 'GossipingPropertyFileSnitch'
+endpoint_snitch: GossipingPropertyFileSnitch
+# endpoint_snitch: Ec2MultiRegionSnitch
+region_aware_loader: true
+# NOTE: enable rack awareness when following issue gets fixed:
+# - https://github.com/scylladb/scylla-rust-driver/issues/1425
+rack_aware_loader: false
+
+prepare_wait_no_compactions_timeout: 60 # (minutes)
+num_nodes_to_rollback: 2   # max is n_db_nodes -1
+upgrade_sstables: true
+enable_truncate_checks_on_node_upgrade: false
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_during_prepare: false
+use_mgmt: false
+
+client_encrypt: true
+internode_compression: 'all'
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+# NOTE: the 'authenticator_user' and 'authenticator_password' values will be used in following cases:
+#       - 'schema creation' commands
+#       - 'run' commands which do not have explicit values for '--user' and '--password' parameters.
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
+append_scylla_yaml:
+  # consistent_cluster_management: false
+  compaction_static_shares: 100
+  compaction_enforce_min_threshold: true
+  compaction_throughput_mb_per_sec: 0
+  # NOTE: workaround for the https://github.com/scylladb/scylladb/issues/19131
+  # Uncomment below line running Scylla version equal to or older than 2024.2 and 6.2
+  # allowed_repair_based_node_ops: "replace,removenode,rebuild,decommission"
+  enable_repair_based_node_ops: true
+  # NOTE: the 'enable_small_table_optimization_for_rbno' config option
+  # is supported only on Scylla versions newer than '2024.2' and '6.2'.
+  # See: https://github.com/scylladb/scylladb/pull/21207
+  enable_small_table_optimization_for_rbno: true
+
+round_robin: true
+
+############################
+### PHASE: POPULATE DATA ###
+############################
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+
+  # NOTE: [region-1, loaders 1-5] first group of loaders from a single/first region write to all per-region main tables
+  - >-
+    latte run --tag prepare-01 --duration 1001001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 250000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F1\"" --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-02 --duration 1001001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 250000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F1\"" --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-03 --duration 1001001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 250000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F1\"" --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-04 --duration 1001001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 250000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F1\"" --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-05 --duration 1001001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 250000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F1\"" --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2-5, loaders 1] other loaders write multi-region tables, first half
+  - >-
+    latte run --tag prepare-06 --duration 5000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 600 --rate 15000 -P offset=0
+    --function custom -P row_count=5000500 -P codes="\"T1F1\"" --consistency=QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-07 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=11000500 -P codes="\"T2F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-08 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=11000500 -P codes="\"T3F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-09 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=11000500 -P codes="\"T4F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1-5] first group of loaders from a single/first region write to all per-region secondary tables
+  - >-
+    latte run --tag prepare-10 --duration 22001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=22001000 -P codes="\"T6F1\"" --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-11 --duration 22001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=22001000 -P codes="\"T7F1\"" --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-12 --duration 22001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=22001000 -P codes="\"T8F1\"" --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-13 --duration 22001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=22001000 -P codes="\"T9F1\"" --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-14 --duration 22001000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=0
+    --function custom -P row_count=22001000 -P codes="\"T10F1\"" --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2-5, loaders 1] other loaders write multi-region tables, second half
+  - >-
+    latte run --tag prepare-15 --duration 5000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 600 --rate 15000 -P offset=5000500
+    --function custom -P row_count=5000500 -P codes="\"T1F1\"" --consistency=QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-16 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=11000500
+    --function custom -P row_count=11000500 -P codes="\"T2F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-17 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=11000500
+    --function custom -P row_count=11000500 -P codes="\"T3F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag prepare-18 --duration 11000500 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 5000 -P offset=11000500
+    --function custom -P row_count=11000500 -P codes="\"T4F1\"" --consistency=LOCAL_QUORUM
+    --user writer --password writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+#############################
+### PHASE: BEFORE UPGRADE ###
+#############################
+stress_before_upgrade:
+  # NOTE: [region-1, loaders 1-5] write to main per-dc tables from loaders of dc-1
+  - >-
+    latte run --tag before-01 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F1\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-02 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-03 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-04 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-05 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 main table from dc-2 loader
+  - >-
+    latte run --tag before-06 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc2_reader --password dc2_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 main table from dc-3 loader
+  - >-
+    latte run --tag before-07 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc3_reader --password dc3_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 main table from dc-4 loader
+  - >-
+    latte run --tag before-08 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc4_reader --password dc4_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 main table from dc-5 loader
+  - >-
+    latte run --tag before-09 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc5_reader --password dc5_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1] read dc-1 main table from dc-1 loader
+  - >-
+    latte run --tag before-10 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_reader --password dc1_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 2] read from special table with replication everywhere
+  - >-
+    latte run --tag before-11 --duration 4001000 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0
+    --function custom -P row_count=5000500 -P codes="\"T1F3\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user reader --password reader
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 3-4] run per-dc main table specific scenario functions with insertions and deletions for regions 1-2
+  - >-
+    latte run --tag before-12 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T12F7\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-13 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T13F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 5] read dc-1 secondary table from dc-1 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag before-14 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T6F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 secondary table from dc-2 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag before-15 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T7F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 secondary table from dc-3 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag before-16 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T8F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 secondary table from dc-4 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag before-17 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T9F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 secondary table from dc-5 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag before-18 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T10F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1-3] run per-dc main table specific scenario functions with insertions and deletions for regions 3-5
+  - >-
+    latte run --tag before-19 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T14F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-20 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T15F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag before-21 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T16F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+#############################
+### PHASE: DURING UPGRADE ###
+#############################
+
+stress_during_entire_upgrade:
+  # NOTE: [region-1, loaders 1-5] write to main per-dc tables from loaders of dc-1
+  - >-
+    latte run --tag during-01 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 5000 --rate 120000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F1\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-02 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 5000 --rate 120000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-03 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 5000 --rate 120000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-04 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 5000 --rate 120000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-05 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 5000 --rate 120000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 main table from dc-2 loader
+  - >-
+    latte run --tag during-06 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 2000 --rate 48000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc2_reader --password dc2_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 main table from dc-3 loader
+  - >-
+    latte run --tag during-07 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 2000 --rate 48000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc3_reader --password dc3_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 main table from dc-4 loader
+  - >-
+    latte run --tag during-08 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 2000 --rate 48000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc4_reader --password dc4_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 main table from dc-5 loader
+  - >-
+    latte run --tag during-09 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 2000 --rate 48000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc5_reader --password dc5_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1] read dc-1 main table from dc-1 loader
+  - >-
+    latte run --tag during-10 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 2000 --rate 48000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_reader --password dc1_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 2] read from special table with replication everywhere
+  - >-
+    latte run --tag during-11 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0
+    --function custom -P row_count=5000500 -P codes="\"T1F3\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user reader --password reader
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 3-4] run per-dc main table specific scenario functions with insertions and deletions for regions 1-2
+  - >-
+    latte run --tag during-12 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 4500 -P offset=1001001000
+    --function custom -P row_count=22001000 -P codes="\"T12F7\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-13 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 4500 -P offset=1001001000
+    --function custom -P row_count=22001000 -P codes="\"T13F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 5] read dc-1 secondary table from dc-1 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag during-14 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=22001000 -P codes="\"T6F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 secondary table from dc-2 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag during-15 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=22001000 -P codes="\"T7F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 secondary table from dc-3 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag during-16 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=22001000 -P codes="\"T8F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 secondary table from dc-4 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag during-17 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=22001000 -P codes="\"T9F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 secondary table from dc-5 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag during-18 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 2000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=22001000 -P codes="\"T10F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1-3] run per-dc main table specific scenario functions with insertions and deletions for regions 3-5
+  - >-
+    latte run --tag during-19 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4500 -P offset=1001001000
+    --function custom -P row_count=22001000 -P codes="\"T14F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-20 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4500 -P offset=1001001000
+    --function custom -P row_count=22001000 -P codes="\"T15F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag during-21 --duration 120m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4500 -P offset=1001001000
+    --function custom -P row_count=22001000 -P codes="\"T16F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+############################
+### PHASE: AFTER UPGRADE ###
+############################
+stress_after_cluster_upgrade:
+  # NOTE: [region-1, loaders 1-5] write to main per-dc tables from loaders of dc-1
+  - >-
+    latte run --tag after-01 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F1\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-02 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-03 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-04 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-05 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 10000 --rate 190000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 main table from dc-2 loader
+  - >-
+    latte run --tag after-06 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T13F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc2_reader --password dc2_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 main table from dc-3 loader
+  - >-
+    latte run --tag after-07 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T14F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc3_reader --password dc3_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 main table from dc-4 loader
+  - >-
+    latte run --tag after-08 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T15F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc4_reader --password dc4_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 main table from dc-5 loader
+  - >-
+    latte run --tag after-09 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 7 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T16F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc5_reader --password dc5_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1] read dc-1 main table from dc-1 loader
+  - >-
+    latte run --tag after-10 --duration 100100100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 4000 --rate 78000 -P offset=0
+    --function custom -P row_count=1001001000 -P codes="\"T12F3\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_reader --password dc1_reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800,0.001:1600,0.0005:3200\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 2] read from special table with replication everywhere
+  - >-
+    latte run --tag after-11 --duration 4001000 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0
+    --function custom -P row_count=5000500 -P codes="\"T1F3\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user reader --password reader
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 3-4] run per-dc main table specific scenario functions with insertions and deletions for regions 1-2
+  - >-
+    latte run --tag after-12 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T12F7\"" -P print_applied_func_names=2 --consistency=LOCAL_QUORUM
+    --user dc1_writer --password dc1_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-13 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T13F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc2_writer --password dc2_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 5] read dc-1 secondary table from dc-1 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag after-14 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T6F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-2, loaders 1] read dc-2 secondary table from dc-2 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag after-15 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T7F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-3, loaders 1] read dc-3 secondary table from dc-3 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag after-16 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T8F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-4, loaders 1] read dc-4 secondary table from dc-4 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag after-17 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T9F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-5, loaders 1] read dc-5 secondary table from dc-5 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag after-18 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 200 --rate 4000 -P offset=0 --consistency=LOCAL_QUORUM
+    --function custom -P row_count=2200100 -P codes="\"T10F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    --user reader --password reader
+    -P rows_per_partition=1 -P partition_sizes="\"5:2,20:6,50:12,20:15,3:30,1.989:90,0.01:800\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: [region-1, loaders 1-3] run per-dc main table specific scenario functions with insertions and deletions for regions 3-5
+  - >-
+    latte run --tag after-19 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T14F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc3_writer --password dc3_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-20 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T15F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc4_writer --password dc4_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag after-21 --duration 2200100 --request-timeout 60 --retry-interval '2s,10s' --generate-report
+    --sampling 5s --threads 42 --connections 1 --concurrency 400 --rate 9000 -P offset=1001001000
+    --function custom -P row_count=2200100 -P codes="\"T16F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    --user dc5_writer --password dc5_writer
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
