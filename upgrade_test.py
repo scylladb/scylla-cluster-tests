@@ -29,6 +29,7 @@ from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
+from sdcm import argus_results
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.utils.issues import SkipPerIssues
@@ -983,16 +984,17 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         Number of 'before' and 'after' commands must match. Their latency values will be compaired.
 
-        - Write initial latte data (prepare_write_cmd?)
+        - Write initial latte data (prepare_write_cmd)
         - Wait for end of compactions
         - Read latte data generating report file (stress_before_upgrade)
+        - Write latency results from the 'stress_before_upgrade' to Argus
         - Run a read latte stress (stress_during_entire_upgrade) not waiting for it's end
         - Upgrade the DB cluster
         * self.run_raft_topology_upgrade_procedure()
         - Wait for the end of the stress command (stress_during_entire_upgrade)
         - Wait for end of compactions
         - Read latte data (stress_after_cluster_upgrade) generating report file
-        - Compare latte report files and raise SCT ERROR event if latencies are worse for more than 10%
+        - Write latency results from the 'stress_after_cluster_upgrade' to Argus
         """
         self.upgrade_os(self.db_cluster.nodes)
 
@@ -1008,6 +1010,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         stress_before_upgrade_results = []
         for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
             stress_before_upgrade_results.append(self.get_stress_results(stress_before_upgrade_thread_pool))
+        self.log.info("Stress results before upgrade: %s", stress_before_upgrade_results)
+
+        result_table = argus_results.LatteStressLatencyComparison()
+        # NOTE: write 'before' results to Argus
+        for i in range(len(stress_before_upgrade_results)):
+            row = f"#{i + 1}"
+            result_table.add_result(
+                column="before_ops", row=row, status=argus_results.Status.UNSET,
+                value=int(stress_before_upgrade_results[i][0]["op rate"]))
+            result_table.add_result(
+                column="before_mean", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_before_upgrade_results[i][0]["latency mean"]))
+            result_table.add_result(
+                column="before_p99", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_before_upgrade_results[i][0]["latency 99th percentile"]))
+        argus_results.submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=result_table)
+
         stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
             "stress_during_entire_upgrade", wait_for_finish=False, round_robin=True)
 
@@ -1048,10 +1067,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         stress_after_upgrade_results = []
         for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
             stress_after_upgrade_results.append(self.get_stress_results(stress_after_upgrade_thread_pool))
+        self.log.info("Stress results after upgrade: %s", stress_after_upgrade_results)
 
-        self.log.info(
-            "Going to compare following READ stress results:\nbefore upgrade: %s\nafter upgrade: %s",
-            stress_before_upgrade_results, stress_after_upgrade_results)
+        # NOTE: write 'after' results to Argus
+        for i in range(len(stress_after_upgrade_results)):
+            row = f"#{i + 1}"
+            result_table.add_result(
+                column="after_p99", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_after_upgrade_results[i][0]["latency 99th percentile"]))
+            result_table.add_result(
+                column="after_mean", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_after_upgrade_results[i][0]["latency mean"]))
+            result_table.add_result(
+                column="after_ops", row=row, status=argus_results.Status.UNSET,
+                value=int(stress_after_upgrade_results[i][0]["op rate"]))
+        argus_results.submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=result_table)
+
         assert len(stress_before_upgrade_results) > 0
         for stress_before_upgrade_result in stress_before_upgrade_results:
             assert len(stress_before_upgrade_result) > 0
@@ -1066,7 +1097,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 assert 'latency 99th percentile' in stress_after_upgrade_results[i][j]
                 current_latency_after = float(stress_after_upgrade_results[i][j]['latency 99th percentile'])
                 assert current_latency_after > 0
-                assert current_latency_after / current_latency_before < 1.2
 
     def test_kubernetes_scylla_upgrade(self):
         """
