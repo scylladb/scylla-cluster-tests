@@ -1,10 +1,11 @@
 [project]
 name = 'scylla-cluster-tests'
 version = '0.1'
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.10, <3.15"
 dependencies = [
     "aexpect==1.6.2",
     "anyconfig==0.14.0",
+    "anyio>=4.11.0",
     "awscli==1.40.34",
     "azure-identity==1.16.1",
     "azure-keyvault-keys==4.11.0",
@@ -27,7 +28,7 @@ dependencies = [
     "fastavro==1.11.1",
     "gimme-aws-creds==2.8.2",
     "google-api-python-client==2.93.0",
-    "google-cloud-compute==1.13.0",
+    "google-cloud-compute==1.39.0",
     "google-cloud-storage==2.10.0",
     "hdrhistogram==0.9.2",
     "invoke==2.2.0",
@@ -43,11 +44,12 @@ dependencies = [
     "pre-commit==4.0.1",
     "prettytable==3.10.2",
     "prometheus_client==0.11.0",
+    "protobuf==6.32.1",
     "pycryptodome==3.19.1",
-    "pydantic==2.10.5",
+    "pydantic==2.12.0",
     "PyGithub==2.1.1",
     "pytest==8.3.4",
-    "pytest-random-order==1.0.4",
+    "pytest-random-order==1.2.0",
     "pytest-subtests==0.14.2",
     "pytest-xdist==3.8.0",
     "python-jenkins==1.8.2",
