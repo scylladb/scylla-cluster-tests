@@ -17,6 +17,7 @@
   "broadcast_rpc_address": "__NODE_IPV6_ADDRESS__",
   "experimental_features": [],
   "prometheus_address": "__NODE_IPV6_ADDRESS__",
+  "rf_rack_valid_keyspaces": true,
   "enable_ipv6_dns_lookup": true,
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
