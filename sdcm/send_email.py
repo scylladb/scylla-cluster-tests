@@ -583,6 +583,13 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
     email_template_file = "results_perf_simple_query.html"
 
 
+class VectorSearchInCloudEmailReporter(BaseEmailReporter):
+    _fields = (
+        "average_recall",
+    )
+    email_template_file = "results_vector_search_in_cloud.html"
+
+
 def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -619,6 +626,8 @@ def build_reporter(name: str,  # noqa: PLR0911
         return ScaleUpEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PerformanceRegressionAlternatorTest" in name:
         return PerformanceRegressionAlternatorTestEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "VectorSearchInCloud" in name:
+        return VectorSearchInCloudEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

@@ -2499,6 +2499,24 @@ Time in seconds it took Siren to bootstrap 1-1-restore cluster
 **type:** int
 
 
+## **vector_search_node_ids** / SCT_VECTOR_SEARCH_NODE_IDS
+
+Vector Search node ids
+
+**default:** N/A
+
+**type:** list
+
+
+## **vector_search_node_type_id** / SCT_VECTOR_SEARCH_TYPE_IDS
+
+Vector Search nodes type id
+
+**default:** N/A
+
+**type:** int
+
+
 ## **stress_cmd_w** / SCT_STRESS_CMD_W
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
