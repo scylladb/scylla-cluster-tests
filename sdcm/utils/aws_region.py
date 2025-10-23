@@ -37,6 +37,7 @@ class AwsRegion:
     SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
+    SCT_NODES_ROLE_ARN = "qa-scylla-manager-backup-role"
 
     def __init__(self, region_name):
         self.region_name = region_name
@@ -651,6 +652,34 @@ class AwsRegion:
         LOGGER.debug("Discovered %s VPC peering routes in %s", peering_routes, self.region_name)
         return peering_routes
 
+    @cached_property
+    def ssm(self):
+        return boto3.client("ssm", region_name=self.region_name)
+
+    @cached_property
+    def sts(self):
+        return boto3.client("sts", region_name=self.region_name)
+
+    def configure_ssm(self, role_name=SCT_NODES_ROLE_ARN):
+        """Ensure that SSM agent can work in the region by adding necessary IAM role and instance profile"""
+
+        # Replace with the actual ARN of your IAM role created in step 1
+        # Example: service-role/AWSSystemsManagerDefaultEC2InstanceManagementRole
+        # Note: The 'service-role/' prefix is crucial when setting the value.
+        iam_role_for_dhmc = f"service-role/{role_name}"
+
+        account_id = self.sts.get_caller_identity()["Account"]
+        region = self.ssm.meta.region_name
+
+        setting_id = f"arn:aws:ssm:{region}:{account_id}:servicesetting/ssm/managed-instance/default-ec2-instance-management-role"
+
+        try:
+            response = self.ssm.update_service_setting(SettingId=setting_id, SettingValue=iam_role_for_dhmc)
+            LOGGER.info("Default Host Management Configuration updated successfully.")
+            LOGGER.debug(response)
+        except botocore.exceptions.ClientError as e:
+            LOGGER.error(f"Error updating Default Host Management Configuration: {e}")
+
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.create_sct_vpc()
@@ -660,4 +689,5 @@ class AwsRegion:
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
         self.create_sct_key_pair()
+        self.configure_ssm()
         LOGGER.info("Region configured successfully.")
