@@ -166,6 +166,7 @@ def measure_time(func):
 
 def _find_hdr_tags(*args):
     for input_arg in args:
+        LOGGER.info("_searching for 'hdr_tags' in: %s", input_arg)
         if isinstance(input_arg, dict) and "hdr_tags" in input_arg:
             # NOTE: case when some method has 'hdr_tags' kwarg
             return input_arg["hdr_tags"]
@@ -266,12 +267,14 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     latency_results[func_name]['cycles'] = []
 
             result = latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
+            LOGGER.info("Latency result for '%s': %s", func_name, result)
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
             result["duration_in_sec"] = int(end - start)
 
             try:
                 hdr_tags = _find_hdr_tags(kwargs, res, _self)
+                LOGGER.info("Found 'hdr_tags': %s", hdr_tags)
             except Exception as err:  # noqa: BLE001
                 LOGGER.error("Failed to find 'hdr_tags': %s", err)
                 hdr_tags = []
