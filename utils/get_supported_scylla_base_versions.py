@@ -29,7 +29,10 @@ extra_supported_versions = {
 }
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
 start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'},
-                          'centos-9': {'scylla': '5.4', 'enterprise': '2024.1'}}
+                          'centos-9': {'scylla': '5.4', 'enterprise': '2024.1'},
+                          # oss isn't really supported on rocky10, but we add it here sinc code can't get None value
+                          'rocky-10': {'scylla': None, 'enterprise': '2025.3'},
+                          }
 start_support_backend = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
 
 # list of version that are available, but aren't supported, and we should test upgrades from

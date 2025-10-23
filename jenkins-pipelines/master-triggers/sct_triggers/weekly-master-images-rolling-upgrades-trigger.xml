@@ -57,7 +57,7 @@ requested_by_user=fruch</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../rolling-upgrade/rolling-upgrade-centos9-test</projects>
+          <projects>../rolling-upgrade/rolling-upgrade-rocky10-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
