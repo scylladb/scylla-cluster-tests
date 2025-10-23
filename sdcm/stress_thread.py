@@ -107,19 +107,26 @@ class CassandraStressThread(DockerBasedStressThread):
     def set_hdr_tags(self, stress_cmd):
         # TODO: add support for the "counter_write", "counter_read" and "user" modes?
         params = get_stress_cmd_params(stress_cmd)
-        if "fixed threads" in params:
-            if " mixed " in stress_cmd:
-                self.hdr_tags = ["WRITE-rt", "READ-rt"]
-            elif " read " in stress_cmd:
-                self.hdr_tags = ["READ-rt"]
+        tag_suffix = "rt" if "fixed threads" in params else "st"
+        if "user profile=" in stress_cmd:
+            # Examples:
+            # Write: ops(insert=1)
+            # Read: ops(read=2)
+            # Mixed: ops(insert=1,read=2)
+            # Only standard operations (read and insert) are supported per user profile stress command in this implementation
+            if "insert=" in stress_cmd:
+                self.hdr_tags.append(f"WRITE-{tag_suffix}")
+            elif "read=" in stress_cmd:
+                self.hdr_tags.append(f"READ-{tag_suffix}")
             else:
-                self.hdr_tags = ["WRITE-rt"]
+                raise ValueError(
+                    "Cannot detect supported stress operation type from the stress command with user profile: %s", stress_cmd)
         elif " mixed " in stress_cmd:
-            self.hdr_tags = ["WRITE-st", "READ-st"]
+            self.hdr_tags = [f"WRITE-{tag_suffix}", f"READ-{tag_suffix}"]
         elif " read " in stress_cmd:
-            self.hdr_tags = ["READ-st"]
+            self.hdr_tags = [f"READ-{tag_suffix}"]
         else:
-            self.hdr_tags = ["WRITE-st"]
+            self.hdr_tags = [f"WRITE-{tag_suffix}"]
 
     @staticmethod
     def append_no_warmup_to_cmd(stress_cmd):
