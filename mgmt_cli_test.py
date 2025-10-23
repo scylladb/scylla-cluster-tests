@@ -24,7 +24,7 @@ from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_ma
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.argus_report import report_to_argus, ManagerReportType
 from sdcm.mgmt.cli import RestoreTask
-from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots, get_backup_size
+from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots, get_backup_size, ObjectStorageUploadMode
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -1003,7 +1003,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                     resource_to_add=f"arn:aws:s3:::{location.split(':')[-1]}",
                 )
 
-    def test_backup_and_restore_only_data(self):
+    def test_backup_and_restore_only_data(self, object_storage_method: ObjectStorageUploadMode):
         """The test is extensively used for restore benchmarking purposes and consists of the following steps:
         1. Populate the cluster with data (currently operates with datasets of 500GB, 1TB, 2TB, 5TB);
         2. Run the backup task and wait for its completion;
@@ -1031,7 +1031,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         extra_params = self.get_restore_extra_parameters()
         task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                             timeout=110000, restore_data=True, extra_params=extra_params)
+                                             timeout=110000, restore_data=True, extra_params=extra_params, object_storage_method=object_storage_method)
         self.manager_test_metrics.restore_time = task.duration
 
         manager_version_timestamp = manager_tool.sctool.client_version_timestamp
@@ -1039,7 +1039,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         self.run_verification_read_stress()
 
-    def test_restore_from_precreated_backup(self, snapshot_name: str, restore_outside_manager: bool = False):
+    def test_restore_from_precreated_backup(self, snapshot_name: str, object_storage_method: ObjectStorageUploadMode = None, restore_outside_manager: bool = False):
         """The test restores the schema and data from a pre-created backup and runs the verification read stress.
         1. Define the backup to restore from
         2. Run restore schema to empty cluster
@@ -1086,11 +1086,13 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                 )
             restore_time = timer.duration
         else:
-            self.log.info("Restoring the data with standard L&S approach")
+            self.log.info("Restoring the data")
             extra_params = self.get_restore_extra_parameters()
             task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
-                                                 timeout=snapshot_data.exp_timeout, restore_data=True,
-                                                 location_list=locations, extra_params=extra_params)
+                                                 restore_data=True,
+                                                 timeout=snapshot_data.exp_timeout,
+                                                 location_list=locations, extra_params=extra_params,
+                                                 object_storage_method=object_storage_method)
             restore_time = task.duration
             manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
             self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
@@ -1104,18 +1106,33 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         else:
             self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
-    def test_restore_benchmark(self):
-        """Benchmark restore operation.
+    def test_restore_native_benchmark(self):
+        """Benchmark restore operation using Native method.
 
         The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
         restore from a pre-created backup.
         """
         if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
-            self.log.info("Executing test_restore_from_precreated_backup...")
-            self.test_restore_from_precreated_backup(reuse_snapshot_name)
+            self.log.info("Executing test_restore_from_precreated_backup with method Native...")
+            self.test_restore_from_precreated_backup(
+                reuse_snapshot_name, object_storage_method=ObjectStorageUploadMode.NATIVE)
         else:
-            self.log.info("Executing test_backup_and_restore_only_data...")
-            self.test_backup_and_restore_only_data()
+            self.log.info("Executing test_backup_and_restore_only_data with method Native...")
+            self.test_backup_and_restore_only_data(object_storage_method=ObjectStorageUploadMode.NATIVE)
+
+    def test_restore_rclone_benchmark(self):
+        """Benchmark restore operation using rClone method.
+
+        The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
+        restore from a pre-created backup.
+        """
+        if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
+            self.log.info("Executing test_restore_from_precreated_backup with method rClone...")
+            self.test_restore_from_precreated_backup(
+                reuse_snapshot_name, object_storage_method=ObjectStorageUploadMode.RCLONE)
+        else:
+            self.log.info("Executing test_backup_and_restore_only_data with method rClone...")
+            self.test_backup_and_restore_only_data(object_storage_method=ObjectStorageUploadMode.RCLONE)
 
     def test_restore_data_without_manager(self):
         """The test restores the schema and data from a pre-created backup.
@@ -1209,7 +1226,8 @@ class ManagerOneToOneRestore(ManagerTestFunctionsMixIn):
             cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
             self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
         else:
-            self.log.info("Skipping verification read stress because of the test or snapshot configuration")
+            self.log.info(f"Skipping verification read stress because of the test or snapshot configuration,"
+                          f" mgmt_skip_post_restore_stress_read: {self.params.get('mgmt_skip_post_restore_stress_read')}, snapshot prohibit_verification_read: {snapshot_data.prohibit_verification_read}")
 
 
 class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
