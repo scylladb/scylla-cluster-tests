@@ -217,18 +217,23 @@ class CommandLog(BaseLogEntity):
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
         if not node or not node.remoter or remote_dst is None:
             return None
-        remote_logfile = LogCollector.collect_log_remotely(node=node,
-                                                           cmd=self.cmd,
-                                                           log_filename=os.path.join(remote_dst, self.name))
+        remote_logfile, is_file_remote = LogCollector.collect_log_remotely(node=node,
+                                                                           cmd=self.cmd,
+                                                                           log_filename=os.path.join(remote_dst, self.name))
         if not remote_logfile:
             LOGGER.warning(
                 "Nothing to collect. Command '%s' did not prepare log file on remote host '%s'", self.cmd, node.name)
             return None
-        LogCollector.receive_log(node=node,
-                                 remote_log_path=remote_logfile,
-                                 local_dir=local_dst,
-                                 timeout=self.collect_timeout)
-        return os.path.join(local_dst, os.path.basename(remote_logfile))
+        local_path = Path(local_dst) / Path(remote_logfile).name
+        if is_file_remote:
+            LogCollector.receive_log(node=node,
+                                     remote_log_path=remote_logfile,
+                                     local_dir=local_dst,
+                                     timeout=self.collect_timeout)
+        else:
+            # copy locally
+            shutil.copyfile(remote_logfile, str(local_path))
+        return str(local_path)
 
 
 class FileLog(CommandLog):
@@ -633,13 +638,44 @@ class LogCollector:
         return remote_dir
 
     @staticmethod
-    def collect_log_remotely(node, cmd: str, log_filename: str) -> Optional[str]:
+    def collect_log_remotely(node, cmd: str, log_filename: str) -> Tuple[Optional[str], bool]:
         if not node.remoter:
-            return None
+            return None, False
+
+        is_file_remote = True
         collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
         node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
         result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
-        return log_filename if result.ok else None
+        ok = result.ok
+
+        # Check if node is AWS-based
+        if not ok and hasattr(node, "instance") and node.instance and getattr(node.instance, "cloud", None) == "aws":
+            LOGGER.debug("Node %s is AWS-based", node.name)
+            # Use SSM to run the command and save it to a local file
+            is_file_remote = False
+
+            try:
+                from sdcm.utils.aws_ssm_runner import SSMCommandRunner
+
+                region = node.instance.region if hasattr(
+                    node.instance, 'region') else node.instance.placement['AvailabilityZone'][:-1]
+                ssm_runner = SSMCommandRunner(region_name=region, nstance_id=node.instance.instance_id, )
+
+                ssm_result = ssm_runner.run_command_and_save_output(
+                    command=collect_log_command,
+                    local_output_file=log_filename,
+                    comment=f'Collect log {log_filename}',
+                    ignore_status=True
+                )
+
+                ok = ssm_result.ok
+                if not ok:
+                    LOGGER.error("SSM command failed for instance %s: %s", node.instance.instance_id, ssm_result.stderr)
+                    return None, is_file_remote
+            except (ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
+                LOGGER.error("Failed to run SSM command: %s", e)
+                return None, is_file_remote
+        return log_filename if ok else None, is_file_remote
 
     @staticmethod
     def archive_log_remotely(node, log_filename: str, archive_name: Optional[str] = None) -> Optional[str]:

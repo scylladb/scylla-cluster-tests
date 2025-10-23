@@ -11,7 +11,10 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from sdcm.provision.aws.utils import network_config_ipv6_workaround_script
+from sdcm.provision.aws.utils import (
+    network_config_ipv6_workaround_script,
+    enable_ssm_agent_script,
+)
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 
 
@@ -26,7 +29,8 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
         return 'while ! systemctl status cloud-init.service | grep "active (exited)"; do sleep 1; done\n'
 
     def _script_body(self) -> str:
-        script = super()._script_body()
+        script = enable_ssm_agent_script()
+        script += super()._script_body()
         if self.aws_ipv6_workaround:
             script += network_config_ipv6_workaround_script()
         return script

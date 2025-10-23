@@ -292,6 +292,18 @@ def network_config_ipv6_workaround_script():
     """)
 
 
+def enable_ssm_agent_script():
+    """ or images are coming with it masked by default, for testing we want this for
+    debugging purposes, especially we can't have ssh connectivity."""
+    return dedent(r"""
+        if ! systemctl is-active --quiet amazon-ssm-agent; then
+            systemctl unmask amazon-ssm-agent
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+        fi
+    """)
+
+
 def configure_set_preserve_hostname_script():
     return 'grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 ' \
            '|| echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg\n'
