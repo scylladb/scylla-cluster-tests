@@ -2119,7 +2119,8 @@ class BaseNode(AutoSshContainerMixin):
             version = f"-{scylla_version}" if scylla_version else ""
             self.remoter.sudo('zypper install -y {}{}'.format(self.scylla_pkg(), version))
         else:
-            self.install_package(package_name="software-properties-common")
+            if self.distro.is_debian11 or self.distro.is_debian12:
+                self.install_package(package_name="software-properties-common")
             if self.distro.is_debian11:
                 self.install_package(package_name="apt-transport-https gnupg1-curl dirmngr openjdk-11-jre")
             elif self.distro.is_debian12:
