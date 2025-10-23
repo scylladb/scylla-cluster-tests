@@ -37,7 +37,7 @@ KNOWN_OS = (
     ("OEL", "ol", ["7", "8", "9"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2023"], DistroBase.RHEL),
     ("ROCKY", "rocky", ["8", "9", "10"], DistroBase.RHEL),
-    ("DEBIAN", "debian", ["11", "12"], DistroBase.DEBIAN),
+    ("DEBIAN", "debian", ["11", "12", "13"], DistroBase.DEBIAN),
     ("UBUNTU", "ubuntu", ["20.04", "21.04", "21.10", "22.04", "24.04"], DistroBase.DEBIAN),
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
     ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
