@@ -261,7 +261,9 @@ class _HdrRangeHistogramBuilder:
             line_index = 5
             while next_hist:
                 tag = next_hist.get_tag()
-                if tag == hdr_tag:
+                # The tag in the HDR file for the stress command with the user profile is in lowercase.
+                # Modify the tag validation to perform a case-insensitive comparison.
+                if tag.lower() == hdr_tag.lower():
                     if tag_not_found:
                         LOGGER.debug(f'found histogram entry with tag {hdr_tag} in file {hdr_file}')
                     if histogram.get_start_time_stamp() == 0:
