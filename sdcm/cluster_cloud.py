@@ -702,9 +702,10 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                              "Continuing with existing cluster version.", version, expected_version)
 
         # validate VS nodes config parameters
-        vs_nodes_per_az = self._api_client.get_vector_search_nodes(
-            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id
-        ).get('availabilityZones')[0]['nodes']
+        vs_nodes = (self._api_client.get_vector_search_nodes(
+            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id).get('availabilityZones') or [])
+        vs_nodes_per_az = [
+            n for n in vs_nodes[0].get('nodes', []) if n.get('status') not in ('DELETED', 'PENDING_DELETE')]
         if vs_nodes_per_az and len(vs_nodes_per_az) != int(self.params.get('n_vector_store_nodes')):
             raise ScyllaCloudError("Vector Search node count mismatch. "
                                    "Update 'n_vector_store_nodes' in test config or provision a new cluster.")
@@ -714,9 +715,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             self._retrieve_vpc_peering_info()
 
         self.nodes.extend(self._init_nodes_from_data(db_nodes, CloudNode))
-        vs_nodes = self.vs_nodes_data
         if vs_nodes:
-            self.vs_nodes.extend(self._init_nodes_from_data(vs_nodes, CloudVSNode, node_prefix='vs-node'))
+            self.vs_nodes.extend(self._init_nodes_from_data(self.vs_nodes_data, CloudVSNode, node_prefix='vs-node'))
 
         self._cluster_created = True
         self.log.info("Successfully reused cluster '%s' with %s DB nodes%s",
