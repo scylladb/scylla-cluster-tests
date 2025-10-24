@@ -337,6 +337,13 @@ class ScyllaCloudAPIClient:
             return next(cluster for cluster in clusters if cluster["clusterName"] == cluster_name)["id"]
         return None
 
+    def search_clusters_by_name_pattern(self, *, account_id: int, name_pattern: str) -> list[dict]:
+        """Search clusters by name pattern"""
+        clusters = self.get_clusters(account_id=account_id)
+        if not clusters:
+            return []
+        return [c for c in clusters if name_pattern in c.get('clusterName', '')]
+
     def get_cluster_nodes(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of cluster nodes"""
         params = {}
