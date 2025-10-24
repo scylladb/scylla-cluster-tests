@@ -120,11 +120,13 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):
             instance_parameters_dict['Placement'] = {
                 'HostId': host_id
             }
-        LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
-                    provision_parameters.region_name,
-                    instance_parameters.ImageId,
-                    instance_parameters_dict
-                    )
+        LOGGER.info(
+            "[%s] Creating %d on-demand instances using AMI id '%s' with following parameters:\n%s",
+            provision_parameters.region_name,
+            count,
+            instance_parameters.ImageId,
+            instance_parameters_dict,
+        )
         instances = ec2_services[provision_parameters.region_name].create_instances(
             **instance_parameters_dict, MinCount=count, MaxCount=count)
         LOGGER.info("Created instances: %s.", instances)
