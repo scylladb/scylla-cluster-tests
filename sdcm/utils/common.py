@@ -1355,6 +1355,111 @@ def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) 
             for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)]
 
 
+def find_equivalent_ami(
+        ami_id: str,
+        source_region: str,
+        target_regions: list[str] | None = None,
+        target_arch: AwsArchType | None = None) -> list[dict[str, str]]:
+    """
+    Find equivalent AMIs in different regions or architectures based on image tags.
+
+    :param ami_id: Source AMI ID to find equivalents for
+    :param source_region: AWS region where the source AMI is located
+    :param target_regions: List of target regions to search in (if None, searches in source region only)
+    :param target_arch: Target architecture (x86_64 or arm64). If None, uses same arch as source
+    :return: List of dictionaries containing equivalent AMI information
+    """
+    # Get the source AMI and its tags - try both default account and ScyllaDB images account
+    # Combine tags from both accounts if available
+    source_ami = None
+    source_tags = {}
+    source_arch = None
+
+    for ec2_resource in (boto3.resource('ec2', region_name=source_region),
+                         get_scylla_images_ec2_resource(region_name=source_region)):
+        try:
+            ami = ec2_resource.Image(ami_id)
+            ami.load()
+            # First successful load sets the source_ami and architecture
+            if source_ami is None:
+                source_ami = ami
+                source_arch = ami.architecture
+            # Combine tags from all accounts
+            if ami.tags:
+                for tag in ami.tags:
+                    source_tags[tag['Key']] = tag['Value']
+        except ClientError as exc:
+            LOGGER.debug("Failed to load AMI %s in region %s with current credentials: %s", ami_id, source_region, exc)
+            continue
+
+    if source_ami is None:
+        LOGGER.error("Failed to load AMI %s in region %s from any account", ami_id, source_region)
+        return []
+
+    if not source_tags:
+        LOGGER.warning("Source AMI %s has no tags, cannot find equivalents", ami_id)
+        return []
+
+    # Determine target architecture
+    search_arch = target_arch if target_arch else source_arch
+
+    # Determine regions to search
+    if target_regions is None:
+        search_regions = [source_region]
+    else:
+        search_regions = target_regions
+
+    # Use all tags from the source AMI for matching, except "Name" and "arch"
+    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ('Name', 'arch')]
+
+    if not matching_tags:
+        LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
+        return []
+
+    LOGGER.info("Searching for AMIs with tags: %s", matching_tags)
+    results = []
+    # Search for equivalent AMIs in target regions
+    for region in search_regions:
+        target_ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region)
+
+        # Search using ScyllaDB official image resources
+        for client, owner in zip((target_ec2_resource, get_scylla_images_ec2_resource(region_name=region)),
+                                 SCYLLA_AMI_OWNER_ID_LIST):
+            filters = [
+                {'Name': 'architecture', 'Values': [search_arch]},
+            ]
+
+            # Add tag filters based on what we found in source AMI
+            for tag_key, tag_value in matching_tags:
+                filters.append({'Name': f'tag:{tag_key}', 'Values': [tag_value]})
+
+            try:
+                images = list(client.images.filter(Owners=[owner], Filters=filters))
+
+                for image in images:
+                    image_tags = {tag['Key']: tag['Value'] for tag in (image.tags or [])}
+
+                    results.append({
+                        'region': region,
+                        'ami_id': image.image_id,
+                        'name': image.name,
+                        'architecture': image.architecture,
+                        'creation_date': image.creation_date,
+                        'name_tag': image_tags.get('Name', ''),
+                        'scylla_version': image_tags.get('scylla_version', ''),
+                        'build_id': image_tags.get('build-id', image_tags.get('build_id', '')),
+                        'owner_id': image.owner_id,
+                    })
+            except ClientError as exc:
+                LOGGER.warning("Failed to search for AMIs in region %s: %s", region, exc)
+                continue
+
+    # Sort by creation date (newest first)
+    results.sort(key=lambda x: x['creation_date'], reverse=True)
+
+    return results
+
+
 def get_gce_images_versioned(version: str = None) -> list[list[str]]:
     return [["GCE", image.name, image.self_link, image.creation_timestamp]
             for image in get_scylla_gce_images_versions(version=version)]
