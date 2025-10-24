@@ -69,3 +69,50 @@ hydra update-scylla-packages --test-id $SCT_REUSE_CLUSTER -p ~/new_scylla_packag
 # reuse the cluster and re-run the initial test
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-10gb-3h.yaml --config configurations/network_config/test_communication_public.yaml
 ```
+
+### Scylla Cloud (xcloud) backend
+
+When reusing clusters deployed in Scylla Cloud backend, the test environment consists of:
+- **Scylla Cloud cluster itself**: managed DB and Vector Search nodes (operated via Scylla Cloud API)
+- **Loader and monitor nodes**: regular AWS/GCE instances
+
+This adds additional step when identifying cluster resources to be reused.
+
+#### Cluster Identification
+
+The Scylla Cloud cluster to be reused is identified by searching for cluster where the test_id's first 8 characters appear in the cluster name.
+This matches the naming convention used during cluster creation: `{user_prefix}-{test_id[:8]}`.
+
+Example:
+- Test ID: `7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84`
+- Cluster name: `longevity-test-7c86f6de`
+- Search pattern: `7c86f6de`
+
+Loader and monitor nodes are identified by the `TestId` tag on the underlying AWS/GCE instances, following the same pattern as when reusing native AWS/GCE clusters.
+
+NOTE: the identification logic may be updated in the future to use tags/metadata on Scylla Cloud clusters once that functionality is supported by the Siren/Scylla Cloud API.
+
+#### Configuration
+
+The same `reuse_cluster` test configuration parameter (as for other backends) is used for selecting existing cluster:
+
+```yaml
+reuse_cluster: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+```
+
+Or via environment variable:
+
+```bash
+export SCT_REUSE_CLUSTER=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
+```
+
+#### Important Notes
+
+**Partial reuse is not supported**: Reusing only the Scylla Cloud DB cluster without loader/monitor nodes, or vice versa, is not supported. The `reuse_cluster` parameter applies to the entire test environment.
+
+When resuing a cluster SCT validates that the existing cluster configuration matches parameters defined in test configuration:
+- DB nodes count must match `n_db_nodes` parameter
+- Instance type must match `instance_type_db` parameter
+- VS node count must match `n_vector_store_nodes` parameter
+- Cluster status must be ACTIVE (not PROVISIONING, etc.)
+```
