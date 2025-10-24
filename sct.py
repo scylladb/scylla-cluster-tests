@@ -14,6 +14,7 @@
 
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta, UTC
+import json
 import os
 import re
 import sys
@@ -824,6 +825,79 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                         click.echo(azure_images_json)
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
+
+
+@cli.command('find-ami-equivalent', help="Find equivalent AMI in different region or architecture")
+@click.option('--ami-id', required=True, type=str, help="Source AMI ID to find equivalents for")
+@click.option('--source-region', required=True, type=str, help="AWS region where source AMI is located")
+@click.option('-r', '--target-region', "target_regions", type=str, multiple=True,
+              help="Target region(s) to search for equivalents. Can be specified multiple times. "
+                   "If not specified, searches in source region only.")
+@click.option('-a', '--target-arch', type=click.Choice(AwsArchType.__args__),
+              help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.")
+@click.option('-o', '--output-format', type=click.Choice(['table', 'json', 'text']), default='table',
+              help="Output format: 'table' for human-readable table, 'json' for structured data, or 'text' for AMI IDs only")
+def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[str, ...],
+                        target_arch: AwsArchType | None, output_format: str):
+    """Find equivalent AMIs in different regions or architectures based on tags."""
+    from sdcm.utils.common import find_equivalent_ami
+
+    add_file_logger()
+
+    # Convert tuple to list or None
+    target_regions_list = list(target_regions) if target_regions else None
+
+    # Find equivalent AMIs
+    results = find_equivalent_ami(
+        ami_id=ami_id,
+        source_region=source_region,
+        target_regions=target_regions_list,
+        target_arch=target_arch
+    )
+
+    if not results:
+        click.echo(f"No equivalent AMIs found for {ami_id}")
+        return
+
+    if output_format == 'table':
+        # Create pretty table output
+        field_names = ['Region', 'AMI ID', 'Name', 'Architecture', 'Creation Date',
+                       'Name Tag', 'Scylla Version', 'Build ID', 'Owner ID']
+        table = PrettyTable(field_names)
+        table.align = 'l'
+
+        for result in results:
+            table.add_row([
+                result['region'],
+                result['ami_id'],
+                result['name'],
+                result['architecture'],
+                result['creation_date'],
+                result['name_tag'],
+                result['scylla_version'],
+                result['build_id'][:6] if result['build_id'] else 'N/A',
+                result['owner_id']
+            ])
+
+        title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
+        if target_arch:
+            title += f" - Target arch: {target_arch}"
+        click.echo(table.get_string(title=title))
+
+    elif output_format == 'json':
+        # Create JSON output for pipeline usage
+        output = {
+            'source_ami_id': ami_id,
+            'source_region': source_region,
+            'target_arch': target_arch,
+            'results': results
+        }
+        click.echo(json.dumps(output, indent=2))
+
+    elif output_format == 'text':
+        # Output only AMI IDs, one per line
+        for result in results:
+            click.echo(result['ami_id'])
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
