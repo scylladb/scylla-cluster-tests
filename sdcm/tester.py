@@ -50,6 +50,7 @@ from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -942,6 +943,56 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return
 
+    def prepare_gcp_kms(self) -> None:  # noqa: PLR0911
+        if self.params.get('cluster_backend') != 'gce':
+            logging.debug("Skip configuring GCP KMS, test is not running on GCE")
+            return
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
+            return
+
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("Configuring GCP KMS: `scylla_encryption_options` is not set in the config, using default values")
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'GcpKeyProviderFactory', 'gcp_host': 'scylla-gcp-kms'}"
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
+        if not (gcp_host := (yaml.safe_load(scylla_encryption_options) or {}).get("gcp_host") or ''):
+            return
+
+        test_id = str(self.test_config.test_id())
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        if "gcp_hosts" not in append_scylla_yaml:
+            append_scylla_yaml["gcp_hosts"] = {}
+
+        gcp_kms_provider = GcpKmsProvider()
+        key_info = gcp_kms_provider.get_or_create_keys_pool(test_id)
+        if not key_info:
+            self.log.error("Failed to setup GCP KMS key pool")
+            return
+
+        append_scylla_yaml["gcp_hosts"][gcp_host] = {
+            'gcp_project_id': key_info['project_id'],
+            'gcp_location': key_info['location'],
+            'master_key': key_info['key_uri']
+        }
+
+        append_scylla_yaml['user_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'GcpKeyProviderFactory',
+            'gcp_host': gcp_host,
+        }
+        append_scylla_yaml['system_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'GcpKeyProviderFactory',
+            'gcp_host': gcp_host,
+        }
+
+        self.params["append_scylla_yaml"] = append_scylla_yaml
+        return
+
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get('kafka_connectors'):
@@ -1075,6 +1126,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.download_encrypt_keys()
         self.prepare_kms_host()
         self.prepare_azure_kms()
+        self.prepare_gcp_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -1174,6 +1226,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 if db_cluster:
                     db_cluster.start_kms_key_rotation_thread()
                     db_cluster.start_azure_kms_key_rotation_thread()
+                    db_cluster.start_gcp_key_rotation_thread()
 
             for future in as_completed(futures):
                 future.result()
