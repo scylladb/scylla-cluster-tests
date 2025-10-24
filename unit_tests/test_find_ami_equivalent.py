@@ -5,8 +5,7 @@ Unit tests for find_ami_equivalent functionality.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from collections import namedtuple
+from unittest.mock import Mock, patch
 
 from sdcm.utils.common import find_equivalent_ami
 
@@ -54,9 +53,9 @@ class TestFindEquivalentAmi:
             {'Key': 'scylla_version', 'Value': '5.2.0'},
             {'Key': 'build-id', 'Value': 'abc123'},
         ]
-        
+
         mock_source_resource.Image.return_value = mock_source_ami
-        
+
         # Setup search results
         mock_target_resource = Mock()
         mock_result_image = Mock()
@@ -70,17 +69,17 @@ class TestFindEquivalentAmi:
             {'Key': 'scylla_version', 'Value': '5.2.0'},
             {'Key': 'build-id', 'Value': 'abc123'},
         ]
-        
+
         mock_images_collection = Mock()
         mock_images_collection.filter.return_value = [mock_result_image]
         mock_target_resource.images = mock_images_collection
-        
+
         # Setup scylla images resource
         mock_scylla_resource = Mock()
         mock_scylla_images_collection = Mock()
         mock_scylla_images_collection.filter.return_value = []
         mock_scylla_resource.images = mock_scylla_images_collection
-        
+
         # Configure boto3.resource to return different resources for different calls
         call_count = [0]
         def resource_side_effect(*args, **kwargs):
@@ -89,16 +88,16 @@ class TestFindEquivalentAmi:
                 return mock_source_resource  # First call for loading source AMI
             else:
                 return mock_target_resource  # Subsequent calls for searching
-        
+
         mock_boto3_resource.side_effect = resource_side_effect
         mock_get_scylla_resource.return_value = mock_scylla_resource
-        
+
         # Execute
         results = find_equivalent_ami(
             ami_id='ami-source123',
             source_region='us-east-1'
         )
-        
+
         # Verify
         assert len(results) == 1
         assert results[0]['ami_id'] == 'ami-result456'
@@ -122,7 +121,7 @@ class TestFindEquivalentAmi:
             {'Key': 'build-id', 'Value': 'abc123'},
         ]
         mock_source_resource.Image.return_value = mock_source_ami
-        
+
         # Setup search results (arm64)
         mock_target_resource = Mock()
         mock_result_image = Mock()
@@ -136,17 +135,17 @@ class TestFindEquivalentAmi:
             {'Key': 'scylla_version', 'Value': '5.2.0'},
             {'Key': 'build-id', 'Value': 'abc123'},
         ]
-        
+
         mock_images_collection = Mock()
         mock_images_collection.filter.return_value = [mock_result_image]
         mock_target_resource.images = mock_images_collection
-        
+
         # Setup scylla images resource
         mock_scylla_resource = Mock()
         mock_scylla_images_collection = Mock()
         mock_scylla_images_collection.filter.return_value = []
         mock_scylla_resource.images = mock_scylla_images_collection
-        
+
         # Configure boto3.resource
         call_count = [0]
         def resource_side_effect(*args, **kwargs):
@@ -155,17 +154,17 @@ class TestFindEquivalentAmi:
                 return mock_source_resource
             else:
                 return mock_target_resource
-        
+
         mock_boto3_resource.side_effect = resource_side_effect
         mock_get_scylla_resource.return_value = mock_scylla_resource
-        
+
         # Execute
         results = find_equivalent_ami(
             ami_id='ami-x86-123',
             source_region='us-east-1',
             target_arch='arm64'
         )
-        
+
         # Verify
         assert len(results) == 1
         assert results[0]['ami_id'] == 'ami-arm-456'
@@ -187,7 +186,7 @@ class TestFindEquivalentAmi:
             {'Key': 'scylla_version', 'Value': '5.2.0'},
         ]
         mock_source_resource.Image.return_value = mock_source_ami
-        
+
         # Setup results for two different regions
         def create_mock_image(ami_id, region):
             mock_img = Mock()
@@ -201,37 +200,37 @@ class TestFindEquivalentAmi:
                 {'Key': 'scylla_version', 'Value': '5.2.0'},
             ]
             return mock_img
-        
+
         mock_us_east_image = create_mock_image('ami-us-east-123', 'us-east-1')
         mock_eu_west_image = create_mock_image('ami-eu-west-456', 'eu-west-1')
-        
+
         # Configure resources for different regions
         resources = {
             'source': mock_source_resource,
             'us-east-1': Mock(),
             'eu-west-1': Mock(),
         }
-        
+
         # Setup images collection for each region
         us_east_collection = Mock()
         us_east_collection.filter.return_value = [mock_us_east_image]
         resources['us-east-1'].images = us_east_collection
-        
+
         eu_west_collection = Mock()
         eu_west_collection.filter.return_value = [mock_eu_west_image]
         resources['eu-west-1'].images = eu_west_collection
-        
+
         # Setup scylla resources
         mock_scylla_us = Mock()
         mock_scylla_us_collection = Mock()
         mock_scylla_us_collection.filter.return_value = []
         mock_scylla_us.images = mock_scylla_us_collection
-        
+
         mock_scylla_eu = Mock()
         mock_scylla_eu_collection = Mock()
         mock_scylla_eu_collection.filter.return_value = []
         mock_scylla_eu.images = mock_scylla_eu_collection
-        
+
         # Configure boto3.resource to return appropriate resource based on region
         call_sequence = []
         def resource_side_effect(*args, **kwargs):
@@ -240,24 +239,24 @@ class TestFindEquivalentAmi:
             if region == 'us-east-1' and len([r for r in call_sequence if r == 'us-east-1']) == 1:
                 return mock_source_resource  # First us-east-1 call is for source
             return resources.get(region, Mock())
-        
+
         mock_boto3_resource.side_effect = resource_side_effect
-        
+
         def scylla_resource_side_effect(*args, **kwargs):
             region = kwargs.get('region_name', '')
             if 'us-east' in region:
                 return mock_scylla_us
             return mock_scylla_eu
-        
+
         mock_get_scylla_resource.side_effect = scylla_resource_side_effect
-        
+
         # Execute
         results = find_equivalent_ami(
             ami_id='ami-source123',
             source_region='us-east-1',
             target_regions=['us-east-1', 'eu-west-1']
         )
-        
+
         # Verify
         assert len(results) == 2
         ami_ids = {r['ami_id'] for r in results}
@@ -273,12 +272,12 @@ class TestFindEquivalentAmi:
         mock_ami.tags = None
         mock_resource.Image.return_value = mock_ami
         mock_boto3_resource.return_value = mock_resource
-        
+
         results = find_equivalent_ami(
             ami_id='ami-notags',
             source_region='us-east-1'
         )
-        
+
         assert results == []
 
     @patch('sdcm.utils.common.boto3.resource')
@@ -289,12 +288,12 @@ class TestFindEquivalentAmi:
         mock_ami.load.side_effect = Exception("AMI not found")
         mock_resource.Image.return_value = mock_ami
         mock_boto3_resource.return_value = mock_resource
-        
+
         results = find_equivalent_ami(
             ami_id='ami-notfound',
             source_region='us-east-1'
         )
-        
+
         assert results == []
 
     @patch('sdcm.utils.common.boto3.resource')
@@ -311,7 +310,7 @@ class TestFindEquivalentAmi:
             {'Key': 'scylla_version', 'Value': '5.2.0'},
         ]
         mock_source_resource.Image.return_value = mock_source_ami
-        
+
         # Setup multiple result images with different dates
         def create_image(ami_id, date):
             img = Mock()
@@ -325,39 +324,39 @@ class TestFindEquivalentAmi:
                 {'Key': 'scylla_version', 'Value': '5.2.0'},
             ]
             return img
-        
+
         # Create images with different dates (not in order)
         older_image = create_image('ami-old', '2024-01-10T10:00:00.000Z')
         newest_image = create_image('ami-new', '2024-01-20T10:00:00.000Z')
         middle_image = create_image('ami-mid', '2024-01-15T10:00:00.000Z')
-        
+
         mock_target_resource = Mock()
         mock_images_collection = Mock()
         # Return in non-sorted order
         mock_images_collection.filter.return_value = [older_image, newest_image, middle_image]
         mock_target_resource.images = mock_images_collection
-        
+
         mock_scylla_resource = Mock()
         mock_scylla_images_collection = Mock()
         mock_scylla_images_collection.filter.return_value = []
         mock_scylla_resource.images = mock_scylla_images_collection
-        
+
         call_count = [0]
         def resource_side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 return mock_source_resource
             return mock_target_resource
-        
+
         mock_boto3_resource.side_effect = resource_side_effect
         mock_get_scylla_resource.return_value = mock_scylla_resource
-        
+
         # Execute
         results = find_equivalent_ami(
             ami_id='ami-source',
             source_region='us-east-1'
         )
-        
+
         # Verify sorted by date (newest first)
         assert len(results) == 3
         assert results[0]['ami_id'] == 'ami-new'
@@ -378,14 +377,14 @@ class TestFindEquivalentAmiIntegration:
         # This AMI should exist in production
         source_ami = 'ami-0d9726c9053daff76'  # Example: scylla 5.2.x in us-east-1
         source_region = 'us-east-1'
-        
+
         try:
             results = find_equivalent_ami(
                 ami_id=source_ami,
                 source_region=source_region,
                 target_regions=['us-east-1', 'us-west-2']
             )
-            
+
             # Basic validation
             assert isinstance(results, list)
             if results:  # May be empty if AMI not found
@@ -402,7 +401,7 @@ class TestFindEquivalentAmiIntegration:
         # Use a known ScyllaDB x86_64 AMI
         source_ami = 'ami-0d9726c9053daff76'
         source_region = 'us-east-1'
-        
+
         try:
             results = find_equivalent_ami(
                 ami_id=source_ami,
@@ -410,7 +409,7 @@ class TestFindEquivalentAmiIntegration:
                 target_regions=['us-east-1'],
                 target_arch='arm64'
             )
-            
+
             # Validate all results are arm64
             for result in results:
                 assert result['architecture'] == 'arm64'
@@ -427,14 +426,14 @@ class TestFindEquivalentAmiIntegration:
             'us-east-1', 'us-west-2', 'eu-west-1', 'eu-central-1',
             'ap-southeast-1', 'ap-northeast-1'
         ]
-        
+
         try:
             results = find_equivalent_ami(
                 ami_id=source_ami,
                 source_region=source_region,
                 target_regions=target_regions
             )
-            
+
             # Should find equivalents in multiple regions
             if results:
                 regions_found = {r['region'] for r in results}

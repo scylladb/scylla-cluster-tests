@@ -1362,7 +1362,7 @@ def find_equivalent_ami(
         target_arch: AwsArchType | None = None) -> list[dict[str, str]]:
     """
     Find equivalent AMIs in different regions or architectures based on image tags.
-    
+
     :param ami_id: Source AMI ID to find equivalents for
     :param source_region: AWS region where the source AMI is located
     :param target_regions: List of target regions to search in (if None, searches in source region only)
@@ -1370,7 +1370,7 @@ def find_equivalent_ami(
     :return: List of dictionaries containing equivalent AMI information
     """
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=source_region)
-    
+
     # Get the source AMI and its tags
     try:
         source_ami = ec2_resource.Image(ami_id)
@@ -1378,67 +1378,67 @@ def find_equivalent_ami(
     except Exception as exc:
         LOGGER.error("Failed to load AMI %s in region %s: %s", ami_id, source_region, exc)
         return []
-    
+
     if not source_ami.tags:
         LOGGER.warning("Source AMI %s has no tags, cannot find equivalents", ami_id)
         return []
-    
+
     # Extract relevant tags from source AMI
     source_tags = {tag['Key']: tag['Value'] for tag in source_ami.tags}
     source_arch = source_ami.architecture
-    
+
     # Determine target architecture
     search_arch = target_arch if target_arch else source_arch
-    
+
     # Determine regions to search
     if target_regions is None:
         search_regions = [source_region]
     else:
         search_regions = target_regions
-    
+
     # Key tags to match for finding equivalents
     matching_tags = []
-    
+
     # Try to match by Name tag first (most reliable for ScyllaDB images)
     if 'Name' in source_tags:
         matching_tags.append(('Name', source_tags['Name']))
-    
+
     # Also try scylla_version tag if available
     if 'scylla_version' in source_tags:
         matching_tags.append(('scylla_version', source_tags['scylla_version']))
-    
+
     # Try build-id or build_id tag
     build_id_key = 'build-id' if 'build-id' in source_tags else 'build_id' if 'build_id' in source_tags else None
     if build_id_key:
         matching_tags.append((build_id_key, source_tags[build_id_key]))
-    
+
     if not matching_tags:
         LOGGER.warning("Source AMI %s has no identifiable tags (Name, scylla_version, build-id)", ami_id)
         return []
-    
+
     results = []
-    
+
     # Search for equivalent AMIs in target regions
     for region in search_regions:
         target_ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region)
-        
+
         # Search using ScyllaDB official image resources
         for client, owner in zip((target_ec2_resource, get_scylla_images_ec2_resource(region_name=region)),
                                  SCYLLA_AMI_OWNER_ID_LIST):
             filters = [
                 {'Name': 'architecture', 'Values': [search_arch]},
             ]
-            
+
             # Add tag filters based on what we found in source AMI
             for tag_key, tag_value in matching_tags:
                 filters.append({'Name': f'tag:{tag_key}', 'Values': [tag_value]})
-            
+
             try:
                 images = list(client.images.filter(Owners=[owner], Filters=filters))
-                
+
                 for image in images:
                     image_tags = {tag['Key']: tag['Value'] for tag in (image.tags or [])}
-                    
+
                     results.append({
                         'region': region,
                         'ami_id': image.image_id,
@@ -1453,10 +1453,10 @@ def find_equivalent_ami(
             except Exception as exc:
                 LOGGER.warning("Failed to search for AMIs in region %s: %s", region, exc)
                 continue
-    
+
     # Sort by creation date (newest first)
     results.sort(key=lambda x: x['creation_date'], reverse=True)
-    
+
     return results
 
 

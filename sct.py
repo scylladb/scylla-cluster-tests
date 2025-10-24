@@ -839,12 +839,12 @@ def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[s
                         target_arch: AwsArchType | None, output_format: str):
     """Find equivalent AMIs in different regions or architectures based on tags."""
     from sdcm.utils.common import find_equivalent_ami
-    
+
     add_file_logger()
-    
+
     # Convert tuple to list or None
     target_regions_list = list(target_regions) if target_regions else None
-    
+
     # Find equivalent AMIs
     results = find_equivalent_ami(
         ami_id=ami_id,
@@ -852,18 +852,18 @@ def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[s
         target_regions=target_regions_list,
         target_arch=target_arch
     )
-    
+
     if not results:
         click.echo(f"No equivalent AMIs found for {ami_id}")
         return
-    
+
     if output_format == 'table':
         # Create pretty table output
         field_names = ['Region', 'AMI ID', 'Name', 'Architecture', 'Creation Date',
                       'Name Tag', 'Scylla Version', 'Build ID', 'Owner ID']
         table = PrettyTable(field_names)
         table.align = 'l'
-        
+
         for result in results:
             table.add_row([
                 result['region'],
@@ -876,12 +876,12 @@ def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[s
                 result['build_id'][:6] if result['build_id'] else 'N/A',
                 result['owner_id']
             ])
-        
+
         title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
         if target_arch:
             title += f" - Target arch: {target_arch}"
         click.echo(table.get_string(title=title))
-    
+
     elif output_format == 'json':
         # Create JSON output for pipeline usage
         output = {
