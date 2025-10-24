@@ -195,6 +195,10 @@ class AwsBuilder:
                                 'Key': 'Owner',
                                 'Value': get_username()
                             },
+                            {
+                                'Key': 'Name',
+                                'Value': get_username()
+                            },
                         ]
                     },
                 ],
