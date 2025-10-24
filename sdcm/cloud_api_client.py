@@ -422,6 +422,18 @@ class ScyllaCloudAPIClient:
         """Get Vector Search nodes information"""
         return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
 
+    def install_vector_search(
+            self, *, account_id: int, cluster_id: int, dc_id: int, number_of_nodes: int, instance_type_id: int
+    ) -> dict[str, Any]:
+        """Install Vector Search nodes into an existing cluster"""
+        return self.request(
+            'POST', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search',
+            defaultNodes=number_of_nodes, defaultInstanceTypeId=instance_type_id)
+
+    def delete_vector_search(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Delete Vector Search nodes from an existing cluster"""
+        return self.request('DELETE', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
+
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:
         """Create a CIDR formatted firewall rule for a given cluster"""
