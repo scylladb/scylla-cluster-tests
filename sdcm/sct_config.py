@@ -33,6 +33,7 @@ from typing import List, Union, Set
 from distutils.util import strtobool
 import anyconfig
 from argus.client.sct.types import Package
+from packaging import version
 from pydantic import BaseModel
 
 from sdcm import sct_abs_path
@@ -77,6 +78,7 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
+from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS, XCLOUD_VS_INSTANCE_TYPES
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -792,7 +794,7 @@ class SCTConfiguration(dict):
              help="AMI ID for Vector Store nodes"),
 
         dict(name="instance_type_vector_store", env="SCT_INSTANCE_TYPE_VECTOR_STORE", type=str,
-             help="EC2 instance type for Vector Store nodes"),
+             help="AWS/GCP cloud provider instance type for Vector Store nodes"),
 
         dict(name="root_disk_size_db", env="SCT_ROOT_DISK_SIZE_DB", type=int,
              help=""),
@@ -3196,6 +3198,21 @@ class SCTConfiguration(dict):
             self['xcloud_replication_factor'] = min(n_nodes, 3)
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+
+        # validate Vector Search parameters for cloud backend
+        # TODO: update after Vector Search moves out of Beta for Scylla Cloud and limitations are changed/no longer apply
+        if int(self.get('n_vector_store_nodes')) > 0:
+            scylla_version = self.get('scylla_version').split('~')[0]
+            if version.parse(scylla_version) < version.parse(MIN_SCYLLA_VERSION_FOR_VS):
+                raise ValueError(f"Vector Search requires ScyllaDB {MIN_SCYLLA_VERSION_FOR_VS}+, "
+                                 f"but selected version is {scylla_version}")
+
+            vs_instance_type = self.get('instance_type_vector_store')
+            supported_types = XCLOUD_VS_INSTANCE_TYPES[cloud_provider]
+            if vs_instance_type not in supported_types.keys():
+                raise ValueError(
+                    f"Instance type '{vs_instance_type}' is not supported for Vector Search on {cloud_provider.upper()}.\n"
+                    f"Supported types: {', '.join(supported_types.keys())}")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

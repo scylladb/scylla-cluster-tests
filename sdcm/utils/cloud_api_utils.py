@@ -18,6 +18,22 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
+MIN_SCYLLA_VERSION_FOR_VS = "2025.4.0"
+# Node instance type limitations for Vector Search Beta on Scylla Cloud
+# Source: https://cloud.docs.scylladb.com/stable/vector-search/vector-search-clusters.html
+XCLOUD_VS_INSTANCE_TYPES = {
+    'aws': {
+        't4g.small': 175,
+        't4g.medium': 176,
+        'r7g.medium': 177,
+    },
+    'gce': {
+        'e2-small': 178,
+        'e2-medium': 179,
+        'n4-highmem-2': 180,
+    }
+}
+
 
 def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
     """Retrieve Scylla Cloud REST credentials from a file"""
