@@ -33,6 +33,7 @@ from sdcm.provision.common.utils import (
     install_docker_service,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
+from sdcm.utils.sct_agent_installer import install_agent_script
 
 SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
 SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
@@ -46,6 +47,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     log_file: str = ''
     test_config: Any | None = None
     install_docker: bool = False
+    install_agent: bool = False
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -141,5 +143,14 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
         if self.install_docker:
             script += install_docker_service()
+
+        if self.install_agent and self.test_config:
+            agent_config = self.test_config.tester_obj().params.get('agent')
+            if agent_config.get('enabled'):
+                script += install_agent_script(
+                    agent_binary_url=agent_config['binary_url'],
+                    api_keys=[agent_config['api_key']],
+                    port=agent_config['port'],
+                    max_concurrent_jobs=agent_config['max_concurrent_jobs'])
 
         return script
