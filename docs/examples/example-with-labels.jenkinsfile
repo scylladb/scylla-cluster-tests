@@ -1,0 +1,21 @@
+#!groovy
+// Example jenkinsfile demonstrating labels in jobDescription
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+/** jobDescription
+    This is an example longevity test that demonstrates how to use labels.
+
+    This test runs cassandra-stress with various workloads to test
+    cluster stability over an extended period.
+
+    Labels: performance, smoke-test, critical, stability
+*/
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml"]'''
+)
