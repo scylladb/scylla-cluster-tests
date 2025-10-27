@@ -72,6 +72,15 @@ class Operations(Enum):
     QUERY = ("query", _get_query_timeout, ("timeout", "query"))
     SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
                                  ("timeout", "service_level_for_test_step"))
+<<<<<<< HEAD
+||||||| parent of 68b70fa88 (fix(wait_ssh_up): use adaptive_timeout and triple the hard timeout)
+    TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
+=======
+    TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
+    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout, ("timeout",))
+>>>>>>> 68b70fa88 (fix(wait_ssh_up): use adaptive_timeout and triple the hard timeout)
 
 
 class TestInfoServices:  # pylint: disable=too-few-public-methods
@@ -90,6 +99,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: Ada
     Also store node load info and timeout value in AdaptiveTimeoutStore (ES by default) for future reference.
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
+<<<<<<< HEAD
     args = {}
     for arg in operation.value[2]:
         assert arg in kwargs, f"Argument '{arg}' is required for operation {operation.name}"
@@ -97,6 +107,59 @@ def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: Ada
     timeout, load_metrics = operation.value[1](node_info_service=NodeLoadInfoServices().get(node), **args)
     load_metrics = load_metrics | TestInfoServices.get(node)
     start_time = time.time()
+||||||| parent of 68b70fa88 (fix(wait_ssh_up): use adaptive_timeout and triple the hard timeout)
+    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
+    tablets_enabled = is_tablets_feature_enabled(node)
+
+    _, timeout_func, required_arg_names = operation.value
+    args = {arg: kwargs[arg] for arg in required_arg_names}
+    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+    if store_metrics:
+        metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
+    if tablet_sensitive_op:
+        args['tablets_enabled'] = tablets_enabled
+    result = timeout_func(node_info_service=metrics, **args)
+    if tablet_sensitive_op:
+        (soft_timeout, hard_timeout), load_metrics = result
+    else:
+        soft_timeout, load_metrics = result
+        hard_timeout = None
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
+
+    start_time = time.monotonic()
+=======
+    tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
+    kwargs.setdefault('node_available', True)
+
+    # in some situations we may want to skip tablet check, since it depends on ssh connectivity
+    tablets_enabled = kwargs['node_available'] and is_tablets_feature_enabled(node)
+
+    _, timeout_func, required_arg_names = operation.value
+    args = {arg: kwargs[arg] for arg in required_arg_names}
+
+    # if node is known to be not available, skip metrics gathering and use default timeouts
+    store_metrics = node.parent_cluster.params.get(
+        "adaptive_timeout_store_metrics") and kwargs['node_available']
+    if store_metrics:
+        metrics = NodeLoadInfoServices().get(node)
+    else:
+        metrics = {}
+    if tablet_sensitive_op:
+        args['tablets_enabled'] = tablets_enabled
+    result = timeout_func(node_info_service=metrics, **args)
+    if tablet_sensitive_op:
+        (soft_timeout, hard_timeout), load_metrics = result
+    else:
+        soft_timeout, load_metrics = result
+        hard_timeout = None
+    if store_metrics:
+        load_metrics.update(TestInfoServices.get(node))
+
+    start_time = time.monotonic()
+>>>>>>> 68b70fa88 (fix(wait_ssh_up): use adaptive_timeout and triple the hard timeout)
     timeout_occurred = False
     try:
         yield timeout
