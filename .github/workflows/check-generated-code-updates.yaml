@@ -8,7 +8,7 @@ on:
 
 jobs:
   check_org_membership:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
     steps:
@@ -21,7 +21,7 @@ jobs:
           team: ${{ secrets.SCT_ACTION_GITHUB_TEAM }}
 
   run_validations:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check_org_membership
     if: needs.check_org_membership.outputs.isTeamMember == 'true'
     env:
