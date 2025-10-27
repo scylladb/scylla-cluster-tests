@@ -1304,7 +1304,11 @@ class BaseNode(AutoSshContainerMixin):
         text = None
         if verbose:
             text = '%s: Waiting for SSH to be up' % self.name
-        wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
+
+        ssh_timeout_multiplier = 3
+        with adaptive_timeout(Operations.SSH_CONNECTIVITY, node=self, timeout=timeout, node_available=False):
+            wait.wait_for(func=self.remoter.is_up, step=10 * ssh_timeout_multiplier,
+                          text=text, timeout=timeout * ssh_timeout_multiplier, throw_exc=True)
 
     def is_port_used(self, port: int, service_name: str) -> bool:
         """Wait for the port to be used for the specified timeout. Returns True if used and False otherwise."""
