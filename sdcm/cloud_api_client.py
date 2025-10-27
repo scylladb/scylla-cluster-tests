@@ -260,6 +260,7 @@ class ScyllaCloudAPIClient:
         maintenance_windows: list[dict],
         scaling: dict[str, str],
         prom_proxy: bool,
+        tablets: str
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -285,6 +286,7 @@ class ScyllaCloudAPIClient:
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
+        :param tablets: tablets configuration. Standard cluster(default) - "", xcloud cluster - "enforced".
 
         :return: created cluster details
         """
@@ -310,6 +312,7 @@ class ScyllaCloudAPIClient:
             maintenanceWindows=maintenance_windows,
             scaling=scaling,
             promProxy=prom_proxy,
+            tablets=tablets,
         )
         return self._parse_response_data(response)
 

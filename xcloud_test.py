@@ -20,21 +20,21 @@ from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
 
 class XcloudScaleOutTest(ManagerTestFunctionsMixIn):
 
+    # The expected max time for scale out successful completion is 40 minutes
     @retrying(n=8, sleep_time=5, allowed_exceptions=(Retry,))
     def verify_cluster_scaled_out(self, nodes):
-        # The expected max time for scale out successful completion is 40 minutes
         self.log.info(f"Verify the number of nodes after scale out is 6 and all of them are 'UP'")
         assert len(nodes) == 6, "Initial number of nodes is not 3"
         for node in nodes.values():
             assert node.status == HostStatus.UP, "Not all nodes status is 'UP'"
 
-    def xcloud_scale_out_test(self):
+    def test_xcloud_scale_out(self):
         """
         Test Xcloud cluster automatic scale out triggering upon reaching specified threshold
         """
         self.log.info("Starting Xcloud scale out test")
-        mgr_cluster = self.db_cluster.get_cluster_manager()
-        initial_nodes = mgr_cluster.get_hosts_health()
+
+        initial_nodes = self.db_cluster.get_nodetool_status()
 
         self.log.info(f"Verify initial number of nodes -3 and all of them are 'UP'")
         assert len(initial_nodes) == 3, "Initial number of nodes is not 3"
@@ -43,6 +43,6 @@ class XcloudScaleOutTest(ManagerTestFunctionsMixIn):
 
         self.generate_load_and_wait_for_results()
 
-        updated_nodes = mgr_cluster.get_hosts_health()
+        updated_nodes =self.db_cluster.get_nodetool_status()
 
         self.verify_cluster_scaled_out(updated_nodes)

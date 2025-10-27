@@ -1893,12 +1893,12 @@ class SCTConfiguration(dict):
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
-        'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
+        'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor",
                 "region_name", "ami_id_db_scylla", "ami_id_loader",
                 "ami_id_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user", "scylla_network_config"],
 
-        'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
+        'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username',
                 'gce_root_disk_type_db',  'gce_n_local_ssd_disk_db',
                 'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
@@ -1982,8 +1982,8 @@ class SCTConfiguration(dict):
     }
 
     xcloud_per_provider_required_params = {
-        "aws": ['region_name', 'instance_type_db'],
-        "gce": ['gce_datacenter', 'gce_instance_type_db'],
+        "aws": ['region_name'],
+        "gce": ['gce_datacenter'],
     }
 
     stress_cmd_params = [
@@ -3182,19 +3182,21 @@ class SCTConfiguration(dict):
             i['externalId'] for i in cloud_api_client.get_instance_types(
                 cloud_provider_id=provider_id, region_id=region_id)['instances']
         ]
-        db_instance_type = self.get('instance_type_db' if cloud_provider == 'aws' else 'gce_instance_type_db')
-        if db_instance_type not in supported_instances:
-            raise ValueError(
-                f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
-                f"cloud provider '{cloud_provider}'.\n"
-                f"Supported instance types: {', '.join(supported_instances)}")
+        if not self.get("scaling"):
+            # setting db_instance_type, rf and n_nodes only for non-xcloud clusters
+            db_instance_type = self.get('instance_type_db' if cloud_provider == 'aws' else 'gce_instance_type_db')
+            if db_instance_type not in supported_instances:
+                raise ValueError(
+                    f"Database instance type '{db_instance_type}' is not supported in region '{region_name}' for "
+                    f"cloud provider '{cloud_provider}'.\n"
+                    f"Supported instance types: {', '.join(supported_instances)}")
 
-        rf = self.get('xcloud_replication_factor')
-        n_nodes = self.get('n_db_nodes')
-        if rf is None:
-            self['xcloud_replication_factor'] = n_nodes
-        elif rf > n_nodes:
-            raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+            rf = self.get('xcloud_replication_factor')
+            n_nodes = self.get('n_db_nodes')
+            if rf is None:
+                self['xcloud_replication_factor'] = n_nodes
+            elif rf > n_nodes:
+                raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

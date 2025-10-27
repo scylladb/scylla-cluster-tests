@@ -386,6 +386,15 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         return self._api_client.get_region_id_by_name(cloud_provider_id=self.provider_id, region_name=region_name)
 
     @cached_property
+    def account_credential_id(self):
+        # provider ID value of the cluster
+        providers_info = self._api_client.get_active_accounts(account_id=self._account_id)
+        account_credential_id = [acc["id"] for acc in providers_info if acc["cloudProviderId"] == self.provider_id]
+        if account_credential_id:
+            return account_credential_id[0]
+        raise Exception(f"Could not find 'accountCredentialId' value for '{self.provider_id}' provider ID")
+
+    @cached_property
     def dc_id(self) -> int:
         return self._api_client.get_cluster_details(
             account_id=self._account_id, cluster_id=self._cluster_id, enriched=True)['dc']['id']
@@ -478,9 +487,16 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         return created_nodes
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
-        instance_type_name = instance_type or self.params.cloud_provider_params.get('instance_type_db')
-        instance_id = self._api_client.get_instance_id_by_name(
-            cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name)
+        if self.scaling:
+            # these values are mandatory for xcloud cluster creation
+            instance_id = 0
+            node_count = 0
+            tablets = "enforced"
+        else:
+            instance_type_name = instance_type or self.params.cloud_provider_params.get('instance_type_db')
+            instance_id = self._api_client.get_instance_id_by_name(
+                cloud_provider_id=self.provider_id, region_id=self.region_id, instance_type_name=instance_type_name)
+            tablets = ""
 
         allowed_ips = [format_ip_with_cidr(self._api_client.client_ip)]
         allowed_ips.extend(format_ip_with_cidr(ip) for ip in self._allowed_ips)
@@ -499,7 +515,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             except CidrAllocationError as e:
                 raise ScyllaCloudError(f"CIDR allocation failed: {e}") from e
 
-        return {
+        config = {
             'account_id': self._account_id,
             'cluster_name': self.name,
             'scylla_version': self.params.get('scylla_version'),
@@ -511,7 +527,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'instance_id': instance_id,
             'replication_factor': self.params.get('xcloud_replication_factor'),
             'number_of_nodes': node_count,
-            'account_credential_id': self.params.get('xcloud_credential_id'),
+            'account_credential_id': self.account_credential_id,
             'free_trial': False,
             'user_api_interface': "CQL",
             'enable_dns_association': True,
@@ -519,8 +535,11 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'encryption_at_rest': None,
             'maintenance_windows': [],
             'prom_proxy': True,
-            'scaling': self.scaling
+            'scaling': self.scaling,
+            'tablets': tablets
         }
+
+        return config
 
     def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Scylla Cloud cluster to be ready")
