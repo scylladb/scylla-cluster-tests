@@ -182,6 +182,9 @@ class LatteStressThread(DockerBasedStressThread):
             # NOTE: it should not require any locking because practically we have multiple seconds
             #       diff reaching this code out by different stress threads.
             LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] += 1
+            tester = self.loader_set.test_config.tester_obj()
+            if hasattr(tester, "run_post_latte_schema_cmd"):
+                tester.run_post_latte_schema_cmd()
         else:
             LOGGER.debug("Skip calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
 
