@@ -16,7 +16,7 @@ from sdcm.wait import wait_for
 from sdcm.sct_events.group_common_events import decorate_with_context, \
     ignore_ycsb_connection_refused
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.raft import get_node_status_from_system_by
+from sdcm.utils.raft import get_node_status_from_system_by, NodeState
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
 from sdcm.rest.storage_service_client import StorageServiceClient
@@ -233,7 +233,7 @@ class NodeBootstrapAbortManager:
         coordinator = get_topology_coordinator_node(self.verification_node)
         coordinator_node_state = get_node_status_from_system_by(verification_node=coordinator, host_id=host_id)
         LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, coordinator_node_state)
-        if local_node_state["state"] == "BOOTSTRAPPING" or coordinator_node_state["state"] == "BOOTSTRAPPING":
+        if NodeState.BOOTSTRAPPING in {local_node_state.state, coordinator_node_state.state}:
             LOGGER.info("Node %s is still in BOOTSTRAPPING state", self.bootstrap_node.name)
             return False
         return all(all_nodes_group0) and all(all_nodes_token_ring)

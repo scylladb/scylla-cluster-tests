@@ -1,13 +1,12 @@
 import contextlib
 import logging
-# import random
 
-from enum import Enum
+from enum import Enum, StrEnum
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Mapping, Iterable, Any, Generator
+from typing import NamedTuple, Mapping, Iterable, Generator
 from itertools import cycle
 
-# import log
+
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -26,6 +25,21 @@ RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
 
 class Group0MembersNotConsistentWithTokenRingMembersException(Exception):
     pass
+
+
+class NodeState(StrEnum):
+    BOOTSTRAPPING = "BOOTSTRAPPING"
+    DECOMMISSIONING = "DECOMMISSIONING"
+    NORMAL = "NORMAL"
+    LEAVING = "LEAVING"
+    SHUTDOWN = "shutdown"
+
+
+class NodeStatus(NamedTuple):
+    ip_address: str
+    host_id: str
+    state: NodeState
+    up: bool
 
 
 class Group0Member(NamedTuple):
@@ -241,12 +255,12 @@ class RaftFeature(RaftFeatureOperations):
         def is_node_down(removing_host_id: str) -> bool:
             node_status = get_node_status_from_system_by(verification_node=self._node,
                                                          host_id=removing_host_id)
-            return not node_status.get("up", False)
+            return not node_status.up
 
         def is_node_in_bootstrapping_status(removing_host_id: str) -> bool:
             node_status = get_node_status_from_system_by(verification_node=self._node,
                                                          host_id=removing_host_id)
-            return node_status.get("status", "") == "BOOTSTRAPPING"
+            return node_status.state == NodeState.BOOTSTRAPPING
 
         LOGGER.debug("Clean group0 non-voter's members")
         host_ids = self.search_inconsistent_host_ids()
@@ -484,7 +498,7 @@ def get_raft_mode(node) -> RaftFeature | NoRaft:
         return RaftFeature(node) if is_consistent_cluster_management_feature_enabled(session) else NoRaft(node)
 
 
-def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address: str = "", host_id: str = "") -> dict[str, Any]:  # noqa: F821
+def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address: str = "", host_id: str = "") -> NodeStatus:  # noqa: F821
     """Get node status from system.cluster_status table
 
     The table contains actual information about nodes statuses in cluster
@@ -506,8 +520,7 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
         row = results.one()
         if not row:
             return {}
-        node_status = {"ip_address": row.peer, "host_id": str(
-            row.host_id), "state": row.status, "up": row.up}
+        node_status = NodeStatus(ip_address=row.peer, host_id=str(row.host_id), state=NodeState(row.status), up=row.up)
         LOGGER.debug("Node status: %s", node_status)
         return node_status
 
@@ -515,4 +528,6 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
 __all__ = ["get_raft_mode",
            "get_node_status_from_system_by",
            "Group0MembersNotConsistentWithTokenRingMembersException",
-           "TopologyOperations"]
+           "TopologyOperations",
+           "NodeState",
+           "NodeStatus"]
