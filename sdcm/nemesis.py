@@ -3214,8 +3214,12 @@ class Nemesis(NemesisFlags):
     def _mgmt_repair_cli(self, ignore_down_hosts=None):
         self.log.debug("Manager repair started")
         mgr_cluster = self.cluster.get_cluster_manager()
+        with self.node_allocator.run_nemesis(nemesis_label="GetAllTables") as wrk_node:
+            ks_tbls = self.cluster.get_any_ks_cf_list(
+                db_node=wrk_node, filter_out_mv=True, filter_out_cdc_log_tables=True)
         self.actions_log.info("Starting Scylla Manager repair task")
-        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
+        self.log.debug("Next tables will be repaired: %s", ",".join(ks_tbls))
+        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=bool(ignore_down_hosts), keyspace=",".join(ks_tbls))
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
         self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
         if task_final_status != TaskStatus.DONE:
