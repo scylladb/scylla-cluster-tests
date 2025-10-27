@@ -6,6 +6,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'xcloud',
     xcloud_provider: 'gce',
-    test_name: 'xcloud_test.XcloudScaleOutTest.xcloud_scale_out_test',
+    test_name: 'xcloud_test.XcloudScaleOutTest.test_xcloud_scale_out',
     test_config: 'test-cases/xcloud/xcloud-scale-out-gce.yaml'
 )

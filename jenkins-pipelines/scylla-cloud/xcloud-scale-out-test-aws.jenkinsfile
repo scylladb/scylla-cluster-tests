@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'xcloud',
     xcloud_provider: 'aws',
     region: 'us-east-1',
-    test_name: 'xcloud_test.XcloudScaleOutTest.xcloud_scale_out_test',
+    test_name: 'xcloud_test.XcloudScaleOutTest.test_xcloud_scale_out',
     test_config: 'test-cases/xcloud/xcloud-scale-out.yaml'
 )
