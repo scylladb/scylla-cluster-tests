@@ -143,11 +143,12 @@ class NodeBootstrapAbortManager:
             self._set_wait_stop_event()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
-    def clean_unbootstrapped_node(self):
+    def clean_unbootstrapped_node(self, terminate_node: bool = True):
         node_host_ids = self.get_host_ids_from_log()
-        self.bootstrap_node.log.debug("New host was not properly bootstrapped. Terminate it")
-        self.db_cluster.terminate_node(self.bootstrap_node)
-        self.monitors.reconfigure_scylla_monitoring()
+        if terminate_node:
+            self.bootstrap_node.log.debug("New host was not properly bootstrapped. Terminate it")
+            self.db_cluster.terminate_node(self.bootstrap_node)
+            self.monitors.reconfigure_scylla_monitoring()
         if node_host_ids:
             for host_id in set(node_host_ids):
                 self.verification_node.run_nodetool(
@@ -227,12 +228,14 @@ class NodeBootstrapAbortManager:
         LOGGER.info(">>>RESULT of bootstrap: token_ring: %s, group0: %s",
                     all_nodes_token_ring, all_nodes_group0)
         LOGGER.info(">> Check status in verification node and raft topology coordinator")
-        node_state = get_node_status_from_system_by(verification_node=self.verification_node, host_id=host_id)
-        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
+        local_node_state = get_node_status_from_system_by(verification_node=self.verification_node, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, local_node_state)
         coordinator = get_topology_coordinator_node(self.verification_node)
-        node_state = get_node_status_from_system_by(verification_node=coordinator, host_id=host_id)
-        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, node_state)
-
+        coordinator_node_state = get_node_status_from_system_by(verification_node=coordinator, host_id=host_id)
+        LOGGER.info("Node %s with hostid %s has state %s", self.bootstrap_node.name, host_id, coordinator_node_state)
+        if local_node_state["state"] == "BOOTSTRAPPING" or coordinator_node_state["state"] == "BOOTSTRAPPING":
+            LOGGER.info("Node %s is still in BOOTSTRAPPING state", self.bootstrap_node.name)
+            return False
         return all(all_nodes_group0) and all(all_nodes_token_ring)
 
     def clean_and_restart_bootstrap_after_abort(self):
@@ -248,6 +251,7 @@ class NodeBootstrapAbortManager:
                 self.verification_node.raft.clean_group0_garbage(raise_exception=True)
         if not self.is_bootstrapped_successfully():
             LOGGER.debug("Clean old scylla data and restart scylla service")
+            self.clean_unbootstrapped_node(terminate_node=False)
             with self.actions_log.action_scope(f"Clean Scylla data {self.bootstrap_node.name} node"):
                 self.bootstrap_node.clean_scylla_data()
         watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
