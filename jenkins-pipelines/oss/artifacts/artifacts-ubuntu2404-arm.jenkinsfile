@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for Ubuntu 24.04 ARM on AWS.
+    Validates Scylla installation, configuration, and basic functionality on Ubuntu 24.04 ARM64 platform.
+    Verifies package integrity and ARM architecture compatibility with the latest Ubuntu LTS release.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, ubuntu-24.04, ubuntu, noble, aws, arm, arm64, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

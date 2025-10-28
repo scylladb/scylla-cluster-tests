@@ -1,5 +1,15 @@
 #! groovy
 
+/** jobDescription
+    Artifact test for Amazon Linux 2023 (AL2023) installation on AWS with non-root offline installation.
+    Deploys a single-node Scylla cluster using spot instances with fallback to on-demand.
+    Tests non-root user installation using the ec2-user account without pre-installed Scylla.
+    This test is part of the artifacts test suite to verify installation packages.
+    Test runs for 60 minutes on i4i.large instance type.
+
+    Labels: artifacts, aws, amazon-linux-2023, installation, non-root, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

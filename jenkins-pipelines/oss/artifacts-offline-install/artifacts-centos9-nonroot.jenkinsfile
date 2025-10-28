@@ -1,5 +1,15 @@
 #! groovy
 
+/** jobDescription
+    Artifacts installation test for CentOS Stream 9 on GCE with spot instances.
+    Tests non-root offline installation of Scylla packages on a single-node cluster.
+    Validates package installation and basic functionality without network connectivity.
+    This test is part of the artifacts validation suite to ensure proper package distribution.
+    No stress tools or nemesis operations are used in this test.
+
+    Labels: artifacts, installation, gce, centos, centos-9, offline-install, non-root
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

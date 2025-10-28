@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact installation test for Amazon Linux 2023 ARM64 on AWS.
+    Validates Scylla installation on latest Amazon Linux 2023 ARM64 AMI using a single i4i.large node.
+    Tests installation without pre-installed Scylla packages on ARM architecture.
+    This test is part of the artifacts suite for validating OS compatibility.
+
+    Labels: artifacts, aws, amazon-linux-2023, arm, arm64, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

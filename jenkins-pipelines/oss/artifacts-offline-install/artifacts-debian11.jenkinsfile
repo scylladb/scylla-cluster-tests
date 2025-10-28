@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact validation test for Debian 11 (Bullseye) installation on GCE.
+    Deploys a single-node cluster from Debian 11 base image to verify package installation and basic functionality.
+    No load testing or nemesis operations - focuses on successful Scylla installation from artifacts.
+    This test is part of the artifacts validation suite.
+
+    Labels: artifacts, installation, gce, debian, debian-11, bullseye, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

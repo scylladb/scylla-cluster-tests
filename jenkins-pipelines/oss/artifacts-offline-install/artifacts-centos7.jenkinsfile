@@ -1,5 +1,13 @@
 #! groovy
 
+/** jobDescription
+    Artifact installation test for CentOS 7 on GCE with spot instances.
+    Validates Scylla installation from packages on a single-node cluster with local SSD.
+    This test is part of the artifacts suite for validating package installations across different Linux distributions.
+
+    Labels: artifacts, centos-7, gce, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

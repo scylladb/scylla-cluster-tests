@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact test for Rocky Linux 9 on GCE infrastructure.
+    Validates Scylla installation and basic functionality on Rocky 9 using spot instances.
+    Single-node cluster setup with 1-hour test duration.
+    Part of the artifacts test suite for OS distribution validation.
+
+    Labels: artifacts, gce, rocky-9, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Quick artifacts test for Ubuntu 22.04 ARM64 installation on AWS i8g.xlarge instances.
+    Validates Scylla installation on Ubuntu Jammy (22.04 LTS) ARM architecture.
+    Single-node cluster with 1-hour runtime using spot instances.
+    Part of the artifacts test suite.
+
+    Labels: artifacts, aws, arm, ubuntu, ubuntu-22.04, jammy, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
