@@ -6,6 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 perfRegressionParallelPipeline(
     backend: "aws",
     region: "us-east-1",
+    provision_type: 'on_demand',
     test_name: "performance_regression_gradual_grow_throughput.PerformanceRegressionPredefinedStepsTest",
     test_config: '''[
     "test-cases/performance/perf-regression-predefined-throughput-steps.yaml",
