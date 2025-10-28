@@ -291,6 +291,41 @@ hydra run-test longevity_test.LongevityTest.test_custom_time \
 - "Check that Argus reports contain new data points"
 - "Validate email reports format correctly"
 
+## Commit History and Squashing
+
+### Preferred Approach: Single Logical Commits
+
+When working on PRs, the **preferred approach** is to create single, logical commits rather than multiple incremental commits. This makes the git history cleaner and easier to review.
+
+**Best Practice:**
+- Combine all related changes (code, tests, documentation) into a single comprehensive commit
+- If you need to create multiple commits during development, squash them before the PR is merged
+- Use `git rebase -i` to squash commits locally, then provide the squashed commit hash for manual force push
+
+**When Squashing is Needed:**
+If you've already pushed multiple commits and need to squash them:
+
+1. Use `git rebase -i <base_commit>` to squash commits locally
+2. Create a well-formatted commit message that explains all changes
+3. Provide the squashed commit hash to the reviewer
+4. The reviewer will manually force push the squashed commit
+
+**Example workflow:**
+```bash
+# Squash last 4 commits
+git rebase -i HEAD~4
+
+# Mark commits as 'squash' or 's' except the first one
+# Edit the combined commit message
+# Provide the resulting commit hash for force push
+```
+
+This ensures:
+- Clean, linear git history
+- Each commit is self-contained and tests pass
+- Easier to understand changes and revert if needed
+- Better commit messages that explain the full context
+
 ## Additional Guidelines
 
 ### Code Quality Standards
