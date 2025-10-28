@@ -29,6 +29,7 @@ from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.nemesis import CategoricalMonkey
+from sdcm.stress_thread import get_timeout_from_stress_cmd
 
 
 class Mode(Enum):
@@ -386,12 +387,15 @@ class CDCReplicationTest(ClusterTester):
 
     def start_gemini(self, seed: Optional[int] = None) -> GeminiStressThread:
         params = {'gemini_seed': seed} if seed else {}
+        stress_cmd = self.params.get('gemini_cmd')
+        # Parse duration from gemini CLI command, fallback to test_duration if parsing fails
+        timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(None)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=None,
             loaders=self.loaders,
-            stress_cmd=self.params.get('gemini_cmd'),
-            timeout=self.get_duration(None),
+            stress_cmd=stress_cmd,
+            timeout=timeout,
             params=params).run()
 
     def setup_tools(self, loader_node) -> None:
