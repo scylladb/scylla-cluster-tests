@@ -7,7 +7,7 @@ on:
 jobs:
   assignAuthor:
     name: Assign author to PR/issue
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Assign author to PR/issue
         if: github.actor != 'scylladbbot'
