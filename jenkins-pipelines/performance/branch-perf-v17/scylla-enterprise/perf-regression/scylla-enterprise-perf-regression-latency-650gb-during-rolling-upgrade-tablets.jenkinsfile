@@ -6,6 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 perfRegressionParallelPipeline(
     base_versions: '',  // auto mode
     backend: "aws",
+    provision_type: 'on_demand',
     test_name: "performance_regression_test.PerformanceRegressionUpgradeTest",
     test_config: """["test-cases/performance/perf-regression-latency-650gb-upgrade.yaml", "configurations/disable_kms.yaml"]""",
     sub_tests: ["test_latency_write_with_upgrade", "test_latency_read_with_upgrade", "test_latency_mixed_with_upgrade"],
