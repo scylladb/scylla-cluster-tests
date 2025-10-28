@@ -478,17 +478,17 @@ class CassandraStressThread(DockerBasedStressThread):
         return results
 
 
-stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')
-stress_cmd_get_warmup_pattern = re.compile(r' [-]{0,2}warmup[\s=]+([\d]+[hms]+)')
+stress_cmd_get_duration_pattern = re.compile(r'(?:^|[ \n])[-]{0,2}duration[\s=]+([\d]+[hms]+)')
+stress_cmd_get_warmup_pattern = re.compile(r'(?:^|[ \n])[-]{0,2}warmup[\s=]+([\d]+[hms]+)')
 
 
 def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:
     """Gets timeout in seconds based on duration and warmup arguments from stress command."""
     timeout = 0
     if duration_match := stress_cmd_get_duration_pattern.search(stress_cmd):
-        timeout += time_period_str_to_seconds(duration_match.group(0))
+        timeout += time_period_str_to_seconds(duration_match.group(1))
     if warmup_match := stress_cmd_get_warmup_pattern.search(stress_cmd):
-        timeout += time_period_str_to_seconds(warmup_match.group(0))
+        timeout += time_period_str_to_seconds(warmup_match.group(1))
     if timeout == 0:
         return None
     else:

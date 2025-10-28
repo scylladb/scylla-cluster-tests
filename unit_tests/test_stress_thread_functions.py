@@ -42,6 +42,8 @@ def test_duration_str_to_seconds_function(duration, seconds):
     ("--duration=3h --warmup=30m --concurrency=50 --mode=mixed", 10800 + 1800 + 900),
     # Gemini command without warmup
     ("--duration 1h --concurrency 100 --mode write", 3600 + 900),
+    # Critical case: YAML multiline format with newlines (the actual issue scenario)
+    ("--duration 24h\n--warmup 10m\n--concurrency 200", 86400 + 600 + 900),
 ))
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
