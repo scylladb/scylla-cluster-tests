@@ -46,15 +46,36 @@ def xcloud_super_if_supported(method):
     """
     Decorator for instance methods: if self.xcloud_connect_supported is True,
     call the super method with all arguments; otherwise, do nothing.
+    
+    This decorator correctly handles inheritance by calling the parent class
+    of where the method is defined, not the parent of the runtime instance type.
     """
+    # Extract the class name from the method's qualified name
+    # e.g., "CloudNode.wait_ssh_up" -> "CloudNode"
+    owner_class_name = method.__qualname__.rsplit('.', 1)[0] if '.' in method.__qualname__ else None
+    
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         if getattr(self, 'xcloud_connect_supported', False):
-            # Call the super method with the same name and arguments
+            # Get the owner class from the instance's class hierarchy
+            if owner_class_name:
+                owner_class = None
+                for cls in type(self).__mro__:
+                    if cls.__name__ == owner_class_name:
+                        owner_class = cls
+                        break
+                
+                if owner_class:
+                    # Call the parent class of the owner class
+                    return getattr(super(owner_class, self), method.__name__)(*args, **kwargs)
+            
+            # Fallback: should not reach here in normal cases
             return getattr(super(type(self), self), method.__name__)(*args, **kwargs)
-        # Optionally, log or return None
+        
+        # Skip when xcloud is not supported
         self.log.debug(f"Skip {method.__name__} on scylla-cloud, no ssh connectivity available")
         return None
+    
     return wrapper
 
 
