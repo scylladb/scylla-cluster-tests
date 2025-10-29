@@ -10,6 +10,6 @@ class TestManagerVersions:
         assert url == 'https://downloads.scylladb.com/deb/debian/scylla-2025.3.list'
 
     def test_get_manager_repo_from_defaults_returns_repo_address(self):
-        url = get_manager_repo_from_defaults("3.6", Distro.UBUNTU22)
+        url = get_manager_repo_from_defaults("3.7", Distro.UBUNTU22)
 
-        assert url == 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.6.list'
+        assert url == 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.7.list'
