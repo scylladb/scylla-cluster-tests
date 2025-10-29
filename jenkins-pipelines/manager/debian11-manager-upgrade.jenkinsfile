@@ -7,6 +7,14 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+<<<<<<< HEAD:jenkins-pipelines/manager/debian11-manager-upgrade.jenkinsfile
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support):jenkins-pipelines/manager/ubuntu24-manager-upgrade.jenkinsfile
+    // Upgrade from the latest patch release
+    manager_version: '3.6',
+=======
+    // Upgrade from the latest patch release
+    manager_version: '3.7',
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support):jenkins-pipelines/manager/ubuntu24-manager-upgrade.jenkinsfile
     target_manager_version: 'master_latest',
 
     manager_version: '3.2',
