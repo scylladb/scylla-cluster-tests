@@ -1,0 +1,5 @@
+# this file contains overrides specific for xcloud so we can run performance tests
+
+# not point of using those since scylla-cloud is creating the cluster and we can't control those
+use_placement_group: false
+use_capacity_reservation: false
