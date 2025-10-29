@@ -65,6 +65,9 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     DATABASE_ERROR: Type[LogEventProtocol]
     BACKTRACE: Type[LogEventProtocol]
 
+    TABLET_SPLIT: Type[LogEventProtocol]
+    TABLET_MERGE: Type[LogEventProtocol]
+
 
 MILLI_RE = re.compile(r"(\d+) ms")
 
@@ -175,6 +178,12 @@ DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
                                    regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
                                    regex="^(?!.*audit:).*backtrace")
+
+DatabaseLogEvent.add_subevent_type("TABLET_SPLIT", severity=Severity.NORMAL,
+                                   regex=r"Detected tablet split for table")
+DatabaseLogEvent.add_subevent_type("TABLET_MERGE", severity=Severity.NORMAL,
+                                   regex=r"Detected tablet merge for table")
+
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.OVERSIZED_ALLOCATION(),
     DatabaseLogEvent.WARNING(),
@@ -212,6 +221,9 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.RPC_CONNECTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
+
+    DatabaseLogEvent.TABLET_SPLIT(),
+    DatabaseLogEvent.TABLET_MERGE(),
 )
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
