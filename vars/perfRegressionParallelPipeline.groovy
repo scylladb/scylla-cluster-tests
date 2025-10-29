@@ -22,6 +22,12 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
+            string(defaultValue: "${pipelineParams.get('xcloud_provider', 'aws')}",
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',
+                   name: 'xcloud_provider')
+            string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
+                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
+                   name: 'xcloud_env')
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'us-east-1|eu-west-1',
                name: 'region')
