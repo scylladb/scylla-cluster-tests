@@ -566,7 +566,13 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
     def _generate_load(self, keyspace_name: str = None):
         self.log.info('Starting c-s write workload')
         stress_cmd = self.params.get('stress_cmd')
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=keyspace_name)
+
+        # Handle list of stress commands using the pattern from LoaderUtilsMixin._run_all_stress_cmds
+        stress_queue = []
+        params = {'stress_cmd': stress_cmd, 'keyspace_name': keyspace_name, 'round_robin': False}
+        self._run_all_stress_cmds(stress_queue, params)
+        stress_thread = stress_queue[0] if stress_queue else None
+
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
@@ -584,8 +590,19 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
 
         throttle_per_node = 14666
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
-        stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
+
+        # Handle list of stress commands - replace placeholder in each command
+        if isinstance(stress_cmd, list):
+            stress_cmd = [cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader)) for cmd in stress_cmd]
+        else:
+            stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
+
+        # Handle list of stress commands using the pattern from LoaderUtilsMixin._run_all_stress_cmds
+        stress_queue = []
+        params = {'stress_cmd': stress_cmd, 'round_robin': False}
+        self._run_all_stress_cmds(stress_queue, params)
+        stress_thread = stress_queue[0] if stress_queue else None
+
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
