@@ -50,8 +50,9 @@ def xcloud_super_if_supported(method):
     This decorator correctly handles inheritance by calling the parent class
     of where the method is defined, not the parent of the runtime instance type.
     """
-    # Extract the class name from the method's qualified name
-    # e.g., "CloudNode.wait_ssh_up" -> "CloudNode"
+    # Extract owner class name from 'ClassName.method_name' format
+    # method.__qualname__ provides the qualified name like "CloudNode.wait_ssh_up"
+    # We parse this to get "CloudNode" - the class where the method is defined
     owner_class_name = method.__qualname__.rsplit('.', 1)[0] if '.' in method.__qualname__ else None
 
     @functools.wraps(method)
@@ -69,7 +70,12 @@ def xcloud_super_if_supported(method):
                     # Call the parent class of the owner class
                     return getattr(super(owner_class, self), method.__name__)(*args, **kwargs)
 
-            # Fallback: should not reach here in normal cases
+            # Fallback for edge cases where owner class cannot be found
+            # This should not happen in normal usage; log a warning if it does
+            self.log.warning(
+                f"Unable to find owner class '{owner_class_name}' in MRO for {method.__name__}. "
+                f"Using fallback super() call which may cause issues with deep inheritance."
+            )
             return getattr(super(type(self), self), method.__name__)(*args, **kwargs)
 
         # Skip when xcloud is not supported
