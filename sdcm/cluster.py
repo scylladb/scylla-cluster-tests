@@ -560,6 +560,13 @@ class BaseNode(AutoSshContainerMixin):
             for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
                 if kms_host_data["aws_region"] == "auto":
                     append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.vm_region
+            if "kmip_hosts" in append_scylla_yaml:
+                monitor_ip = self.test_config.tester_obj().monitors.nodes[0].private_ip_address
+                for kmip_host_name in append_scylla_yaml["kmip_hosts"]:
+                    # Take first KMIP host and update with monitor node IP
+                    append_scylla_yaml["kmip_hosts"][kmip_host_name]["hosts"] = f"{monitor_ip}:5696"
+                    break  # Only update the first one
+
             scylla_yml.update(append_scylla_yaml)
         if self.parent_cluster.node_type == "oracle-db":
             scylla_yml.experimental_features = []  # Oracle Scylla does not use experimental features
@@ -4135,6 +4142,7 @@ def wait_for_init_wrap(method):
         @raise_event_on_failure
         def node_startup(_node: BaseNode, task_queue: queue.Queue):
             exception_details = None
+            node.remoter
             try:
                 cl_inst.node_startup(_node, **setup_kwargs)
             except Exception as ex:  # noqa: BLE001
@@ -4183,8 +4191,6 @@ def wait_for_init_wrap(method):
                 yield
 
             add_severity_limit_rules([f'{e["rule_pattern"]}={e["default_severity"]}' for e in critical_events])
-
-        start_time = time.perf_counter()
 
         if isinstance(cl_inst, BaseScyllaCluster):
             # Update installed scylla before node setup, scylla server will be start at the end of node_setup
@@ -5072,6 +5078,18 @@ class BaseScyllaCluster:
         if not self.test_config.REUSE_CLUSTER:
             node.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
+
+            if self.params.get('kmip_host'):
+                text = "Waiting for PyKMIP server to be up"
+                wait.wait_for(
+                    func=lambda: node.remoter.run(
+                        f"nc -z {self.scylla_manager_node.private_ip_address} 5696").exit_status == 0,
+                    step=10,
+                    text=text,
+                    timeout=300,
+                    throw_exc=True,
+                )
+
             node.start_scylla_server(verify_up=False)
             if self.params.get("jmx_heap_memory"):
                 node.restart_scylla_jmx()
@@ -5765,6 +5783,15 @@ class BaseMonitorSet:
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
         if self.params.get("use_mgmt"):
             self.install_scylla_manager(node)
+        self.install_pykmip(node)
+
+    def install_pykmip(self, node):
+        install_encryption_at_rest_files(node.remoter)
+        node.remoter.run("mkdir -p /home/ubuntu/pykmip/data/logs")
+        node.remoter.run("cd /home/ubuntu/pykmip && "
+                         "curl -O https://raw.githubusercontent.com/jsmolar/PyKMIP/master/docker-compose.yaml")
+        node.remoter.sudo("chmod 777 /home/ubuntu/pykmip/data/logs")
+        node.remoter.run("cd /home/ubuntu/pykmip && docker compose up -d --scale pykmip=10")
 
     def node_startup(self, node, **kwargs):
         pass
