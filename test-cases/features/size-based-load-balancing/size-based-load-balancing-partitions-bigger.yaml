@@ -42,7 +42,7 @@ nemesis_grow_shrink_instance_type: 'i4i.2xlarge'
 user_prefix: 'balancer-test'
 
 round_robin: true
-append_scylla_args: '--logger-log-level load_balancer=debug --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_args: '++ --logger-log-level load_balancer=debug'
 
 append_scylla_yaml:
   enable_tablets: true

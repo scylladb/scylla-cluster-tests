@@ -167,34 +167,46 @@ class LongevityBalancerTest(LongevityTest):
         7. Let the background workload run for a while
         """
         self.run_prepare_write_cmd()
-        
+        InfoEvent('BALANCER: Finished prepare writes').publish()
+
         # wait for compactions to finish
         self.wait_no_compactions_running(n=720)
+        InfoEvent('BALANCER: Finished waiting for compactions').publish()
 
         # base load in background
         self.run_background_load()
+        InfoEvent('BALANCER: Started background load').publish()
 
         # get steady latency for base load with original cluster configuration
         self.calculate_latencies(row_name='steady_base_load_base_cluster')
+        InfoEvent('BALANCER: Latency calc #1 done (steady base load)').publish()
 
         # scale out
         original_nodes = list(self.db_cluster.data_nodes)
         new_nodes = self.scale_out('nemesis_grow_shrink_instance_type', 'nemesis_add_node_cnt')
+        InfoEvent('BALANCER: Added new nodes').publish()
         self.scale_in(original_nodes)
+        InfoEvent('BALANCER: Removed original nodes').publish()
 
         # increased the workload and measure latency
         self.run_bigger_load()
+        InfoEvent('BALANCER: Latency calc #2 done (with increased load)').publish()
 
         # get latency for base load with new cluster configuration
         self.calculate_latencies(row_name='base_load_scaled_cluster')
+        InfoEvent('BALANCER: Latency calc #3 done (base load with scaled cluster)').publish()
 
         # scale back to original capacity
         self.scale_out('instance_type_db', 'n_db_nodes')
+        InfoEvent('BALANCER: Added original nodes back').publish()
         self.scale_in(new_nodes)
+        InfoEvent('BALANCER: Removed new nodes').publish()
 
         # get latency for base load with original cluster configuration
         self.calculate_latencies(row_name='base_load_base_cluster')
+        InfoEvent('BALANCER: Latency calc #4 done (base load with original cluster)').publish()
 
         # kill the background load to end the test
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL, event_class=CassandraStressEvent, extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
+        InfoEvent('BALANCER: Killed base load, test should end now').publish()

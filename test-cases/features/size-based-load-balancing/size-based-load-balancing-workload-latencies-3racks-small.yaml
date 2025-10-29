@@ -47,7 +47,7 @@ nemesis_interval: 10 # time, in minutes, for calculating latencies
 
 # to enable debug logs, rest of the args are the default
 # but we need to override, extend is not possible
-append_scylla_args: '--logger-log-level load_balancer=debug --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_args: '++ --logger-log-level load_balancer=debug'
 
 append_scylla_yaml:
   enable_tablets: true
