@@ -2,15 +2,15 @@ manager_repos_by_version:
   "master_latest":
     rhel: 'https://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
     debian: 'https://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
+  "3.7":
+    rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.7.repo'
+    debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.7.list'
   "3.6":
     rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.6.repo'
     debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.6.list'
   "3.5":
     rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.5.repo'
     debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.5.list'
-  "3.4":
-    rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.4.repo'
-    debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.4.list'
 
 scylla_backend_repo_by_version:
   "2025":
