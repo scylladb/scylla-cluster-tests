@@ -8,8 +8,16 @@ ip_ssh_connections: 'private'
 
 scylla_repo: ''
 
+<<<<<<< HEAD
 manager_version: '3.5'
 manager_scylla_backend_version: '2024'
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+manager_version: '3.6'
+manager_scylla_backend_version: '2025'
+=======
+manager_version: '3.7'
+manager_scylla_backend_version: '2025'
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
@@ -159,8 +167,16 @@ jepsen_test_count: 1
 jepsen_test_run_policy: all
 
 max_events_severities: ""
+<<<<<<< HEAD
 scylla_mgmt_agent_version: '3.5.0'
 mgmt_docker_image: 'scylladb/scylla-manager:3.5.0'
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+scylla_mgmt_agent_version: '3.6.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.6.0'
+=======
+scylla_mgmt_agent_version: '3.7.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.7.0'
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
 k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'

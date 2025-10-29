@@ -7,6 +7,14 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+<<<<<<< HEAD
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+    // Upgrade from the latest patch release
+    manager_version: '3.6',
+=======
+    // Upgrade from the latest patch release
+    manager_version: '3.7',
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
     target_manager_version: 'master_latest',
 
     // Upgrade from latest patch release

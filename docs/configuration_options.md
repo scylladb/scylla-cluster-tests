@@ -249,7 +249,17 @@ Url to the repo of scylla manager agent version to install for management tests
 
 Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml
 
+<<<<<<< HEAD
 **default:** 3.5
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+**default:** 3.6
+
+**type:** str
+=======
+**default:** 3.7
+
+**type:** str
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
 
 
 ## **target_manager_version** / SCT_TARGET_MANAGER_VERSION
@@ -270,7 +280,17 @@ Branch of scylla db enterprise to install. Options in defaults/manager_versions.
 
 
 
+<<<<<<< HEAD
 **default:** 3.5.0
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+**default:** 3.6.0
+
+**type:** str
+=======
+**default:** 3.7.0
+
+**type:** str
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
 
 
 ## **scylla_mgmt_pkg** / SCT_SCYLLA_MGMT_PKG
@@ -1572,7 +1592,17 @@ Number of nodes in monitoring pool that will be used for scylla-operator's deplo
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
+<<<<<<< HEAD
 **default:** scylladb/scylla-manager:3.5.0
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+**default:** scylladb/scylla-manager:3.6.0
+
+**type:** str (appendable)
+=======
+**default:** scylladb/scylla-manager:3.7.0
+
+**type:** str (appendable)
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
 
 
 ## **docker_image** / SCT_DOCKER_IMAGE

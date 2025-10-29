@@ -107,7 +107,13 @@ def call(Map pipelineParams) {
                    name: 'ip_ssh_connections')
 
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
+<<<<<<< HEAD
                    description: 'master_latest|3.5|3.4',
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+                   description: 'master_latest|3.6|3.5',
+=======
+                   description: 'master_latest|3.7|3.6',
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
                    name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
@@ -123,7 +129,13 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_pkg')
 
             string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+<<<<<<< HEAD
                    description: 'master_latest|3.2|3.1. Only for upgrade test',
+||||||| parent of d79469377 (feature(manager): introduce Manager 3.7 support)
+                   description: 'master_latest|3.6|3.5. Only for upgrade test',
+=======
+                   description: 'master_latest|3.7|3.6. Only for upgrade test',
+>>>>>>> d79469377 (feature(manager): introduce Manager 3.7 support)
                    name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
