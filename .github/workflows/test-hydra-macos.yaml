@@ -2,16 +2,18 @@ name: Test Hydra on MacOS
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'Dockerfile'
-      - 'docker/env/build_n_push.sh'
-      - 'uv.lock'
-      - 'pyproject.toml'
+    types: [labeled]
 
 jobs:
     test:
+<<<<<<< HEAD
         runs-on: macos-13
+||||||| parent of e160a4cf0 (fix(workflow): make test-hydra-macos run only with test-macos label)
+        runs-on: macos-15-intel
+=======
+        if: contains(github.event.pull_request.labels.*.name, 'test-macos')
+        runs-on: macos-15-intel
+>>>>>>> e160a4cf0 (fix(workflow): make test-hydra-macos run only with test-macos label)
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
