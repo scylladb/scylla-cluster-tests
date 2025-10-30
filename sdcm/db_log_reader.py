@@ -74,6 +74,10 @@ class DbLogReader(Process):
         self._backtrace_stall_decoding = backtrace_stall_decoding
         self._backtrace_decoding_disable_regex = backtrace_decoding_disable_regex
         self._disable_regex_compiled = None
+        
+        LOGGER.info("DbLogReader initialized: node=%s, backtrace_stall_decoding=%s, backtrace_decoding_disable_regex=%s",
+                   node_name, backtrace_stall_decoding, backtrace_decoding_disable_regex)
+        
         if backtrace_decoding_disable_regex:
             try:
                 self._disable_regex_compiled = re.compile(backtrace_decoding_disable_regex)
