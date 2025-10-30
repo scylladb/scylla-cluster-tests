@@ -11,7 +11,7 @@ availability_zone: 'a,b,c'
 n_db_nodes: 6
 n_loaders: 3
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i7i.4xlarge'
 # Seems the c5.xlarge type is small for this load - I receive OOM on 2 loaders
 instance_type_loader: 'c6i.2xlarge'
 
