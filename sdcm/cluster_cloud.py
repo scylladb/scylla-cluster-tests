@@ -52,8 +52,15 @@ def xcloud_super_if_supported(method):
     """
     # Extract owner class name from 'ClassName.method_name' format
     # method.__qualname__ provides the qualified name like "CloudNode.wait_ssh_up"
+    # or "test_func.<locals>.CloudNode.wait_ssh_up" for nested classes
     # We parse this to get "CloudNode" - the class where the method is defined
-    owner_class_name = method.__qualname__.rsplit('.', 1)[0] if '.' in method.__qualname__ else None
+    qualname_parts = method.__qualname__.rsplit('.', 1)
+    if len(qualname_parts) == 2:
+        # Extract just the class name (last component before method name)
+        # e.g., "test.<locals>.CloudNode" -> "CloudNode"
+        owner_class_name = qualname_parts[0].split('.')[-1]
+    else:
+        owner_class_name = None
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
