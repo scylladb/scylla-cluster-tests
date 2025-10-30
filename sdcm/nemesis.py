@@ -3770,6 +3770,10 @@ class Nemesis(NemesisFlags):
             node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
             self._terminate_cluster_node(node_to_remove)
 
+        wait_for(node_operations.is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
+                 down_node=node_to_remove, verification_node=verification_node,
+                 text=f"Wait other nodes see {node_to_remove.name} as DOWN...")
+
         @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
         def remove_node():
             removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
@@ -3783,13 +3787,6 @@ class Nemesis(NemesisFlags):
                     raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
             return res.exit_status
-
-        # full cluster repair
-        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node)
-        # Repairing will result in a best effort repair due to the terminated node,
-        # and as a result requires ignoring repair errors
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
-            self.run_repair_on_nodes(nodes=up_normal_nodes, ignore_down_hosts=True)
 
         with self.action_log_scope(f"Remove {node_to_remove.name} node"):
             exit_status = remove_node()
@@ -3821,6 +3818,13 @@ class Nemesis(NemesisFlags):
             ip_address=node_to_remove.ip_address, verification_node=verification_node)
         assert removed_node_status is None, \
             "Node was not removed properly (Node status:{})".format(removed_node_status)
+
+        # full cluster repair
+        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node)
+        # Repairing will result in a best effort repair due to the terminated node,
+        # and as a result requires ignoring repair errors
+        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
+            self.run_repair_on_nodes(nodes=up_normal_nodes, ignore_down_hosts=True)
 
         # add new node with same type (data node / zero token node)
         new_node_args = {"count": 1, "rack": self.target_node.rack}
