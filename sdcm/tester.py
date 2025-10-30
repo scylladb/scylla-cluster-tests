@@ -1001,6 +1001,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.test_config.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
         if self.test_config.BACKTRACE_DECODING:
             self.test_config.set_decoding_queue()
+            self.test_config.BACKTRACE_STALL_DECODING = self.params.get('backtrace_stall_decoding')
+            self.test_config.BACKTRACE_DECODING_DISABLE_REGEX = self.params.get('backtrace_decoding_disable_regex')
         self.test_config.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public'))
 

@@ -97,7 +97,9 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             node_name=str(self),
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=None,
-            log_lines=False
+            log_lines=False,
+            backtrace_stall_decoding=True,
+            backtrace_decoding_disable_regex=None,
         )
 
     def _read_and_publish_events(self, log_text=None):

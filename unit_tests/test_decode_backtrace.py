@@ -78,6 +78,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             decoding_queue=self.test_config.DECODING_QUEUE,
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             log_lines=True,
+            backtrace_stall_decoding=True,
+            backtrace_decoding_disable_regex=None,
         )
 
     @cached_property
@@ -89,6 +91,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             decoding_queue=None,
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             log_lines=False,
+            backtrace_stall_decoding=True,
+            backtrace_decoding_disable_regex=None,
         )
 
     def _read_and_publish_events(self):
@@ -190,3 +194,113 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             if event.get('backtrace') and event.get('raw_backtrace'):
                 self.assertEqual(event['backtrace'].strip(),
                                  "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
+
+    def test_05_reactor_stalls_not_decoded_when_stall_decoding_disabled(self):
+        """Test that reactor stalls are not decoded when backtrace_stall_decoding is False."""
+        self.test_config.BACKTRACE_DECODING = True
+        self.test_config.BACKTRACE_STALL_DECODING = False
+        self.test_config.DECODING_QUEUE = Queue()
+
+        # Create a db_log_reader with stall decoding disabled
+        db_log_reader_no_stall = DbLogReader(
+            system_log=self.node.system_log,
+            node_name=str(self),
+            remoter=self.node.remoter,
+            decoding_queue=self.test_config.DECODING_QUEUE,
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            log_lines=True,
+            backtrace_stall_decoding=False,
+            backtrace_decoding_disable_regex=None,
+        )
+
+        self.monitor_node.start_decode_on_monitor_node_thread()
+        db_log_reader_no_stall._read_and_publish_events()
+        self.monitor_node.termination_event.set()
+        self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
+
+        events = []
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
+
+        # Check that reactor stall events have raw_backtrace but no decoded backtrace
+        reactor_stall_events = [e for e in events if e.get('type') == 'REACTOR_STALLED' and e.get('raw_backtrace')]
+        self.assertTrue(len(reactor_stall_events) > 0, "Should have at least one reactor stall event")
+        for event in reactor_stall_events:
+            self.assertIsNone(event.get('backtrace'), 
+                            "Reactor stall should not have decoded backtrace when backtrace_stall_decoding=False")
+
+    def test_06_other_backtraces_decoded_when_stall_decoding_disabled(self):
+        """Test that non-stall backtraces are still decoded when backtrace_stall_decoding is False."""
+        self.test_config.BACKTRACE_DECODING = True
+        self.test_config.BACKTRACE_STALL_DECODING = False
+        self.test_config.DECODING_QUEUE = Queue()
+
+        # Create a db_log_reader with stall decoding disabled, use system_core.log which has non-stall backtraces
+        db_log_reader_no_stall = DbLogReader(
+            system_log=os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log'),
+            node_name=str(self),
+            remoter=self.node.remoter,
+            decoding_queue=self.test_config.DECODING_QUEUE,
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            log_lines=True,
+            backtrace_stall_decoding=False,
+            backtrace_decoding_disable_regex=None,
+        )
+
+        self.monitor_node.start_decode_on_monitor_node_thread()
+        db_log_reader_no_stall._read_and_publish_events()
+        self.monitor_node.termination_event.set()
+        self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
+
+        events = []
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
+
+        # Check that non-reactor-stall events with backtraces are decoded
+        non_stall_backtrace_events = [e for e in events 
+                                     if e.get('raw_backtrace') and e.get('type') != 'REACTOR_STALLED']
+        self.assertTrue(len(non_stall_backtrace_events) > 0, 
+                       "Should have at least one non-reactor-stall backtrace event")
+        for event in non_stall_backtrace_events:
+            self.assertIsNotNone(event.get('backtrace'), 
+                               "Non-reactor-stall backtraces should be decoded when backtrace_stall_decoding=False")
+
+    def test_07_regex_filter_excludes_matching_events(self):
+        """Test that backtrace_decoding_disable_regex excludes matching event types."""
+        self.test_config.BACKTRACE_DECODING = True
+        self.test_config.BACKTRACE_STALL_DECODING = True
+        self.test_config.DECODING_QUEUE = Queue()
+
+        # Create a db_log_reader with regex filter to exclude REACTOR_STALLED
+        db_log_reader_regex = DbLogReader(
+            system_log=self.node.system_log,
+            node_name=str(self),
+            remoter=self.node.remoter,
+            decoding_queue=self.test_config.DECODING_QUEUE,
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            log_lines=True,
+            backtrace_stall_decoding=True,
+            backtrace_decoding_disable_regex="^REACTOR_STALLED$",
+        )
+
+        self.monitor_node.start_decode_on_monitor_node_thread()
+        db_log_reader_regex._read_and_publish_events()
+        self.monitor_node.termination_event.set()
+        self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
+
+        events = []
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
+
+        # Check that reactor stall events matching the regex are not decoded
+        reactor_stall_events = [e for e in events if e.get('type') == 'REACTOR_STALLED' and e.get('raw_backtrace')]
+        self.assertTrue(len(reactor_stall_events) > 0, "Should have at least one reactor stall event")
+        for event in reactor_stall_events:
+            self.assertIsNone(event.get('backtrace'), 
+                            "Events matching backtrace_decoding_disable_regex should not be decoded")
