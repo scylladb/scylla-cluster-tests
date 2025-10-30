@@ -21,6 +21,7 @@ user_prefix: 'perf-regression-mv'
 
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 
 adaptive_timeout_store_metrics: false

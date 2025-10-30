@@ -51,6 +51,9 @@ dynamodb_primarykey_type: HASH_AND_RANGE
 user_prefix: 'perf-alternator'
 space_node_threshold: 644245094
 
+backtrace_decoding: true
+backtrace_stall_decoding: false
+
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
 
