@@ -101,20 +101,24 @@ class DbLogReader(Process):
         1. backtrace_stall_decoding=False and event is REACTOR_STALLED
         2. backtrace_decoding_disable_regex matches the event type
         """
-        if not event.type:
+        if not hasattr(event, 'type') or not event.type:
+            LOGGER.debug("Event has no type attribute or type is None, not skipping decode")
             return False
-            
+        
+        event_type = event.type    
         # Check if reactor stall decoding is disabled
-        if not self._backtrace_stall_decoding and event.type == "REACTOR_STALLED":
-            LOGGER.debug("Skipping backtrace decoding for reactor stall event (backtrace_stall_decoding=False)")
+        if not self._backtrace_stall_decoding and event_type == "REACTOR_STALLED":
+            LOGGER.info("Skipping backtrace decoding for reactor stall event (backtrace_stall_decoding=False)")
             return True
         
         # Check if event type matches the disable regex
-        if self._disable_regex_compiled and self._disable_regex_compiled.match(event.type):
-            LOGGER.debug("Skipping backtrace decoding for event type '%s' (matches backtrace_decoding_disable_regex)", 
-                        event.type)
+        if self._disable_regex_compiled and self._disable_regex_compiled.match(event_type):
+            LOGGER.info("Skipping backtrace decoding for event type '%s' (matches backtrace_decoding_disable_regex)", 
+                        event_type)
             return True
         
+        LOGGER.debug("Not skipping decode for event type '%s' (backtrace_stall_decoding=%s)", 
+                    event_type, self._backtrace_stall_decoding)
         return False
 
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
@@ -233,6 +237,8 @@ class DbLogReader(Process):
             
             # Check if we should skip decoding for this event type
             if self._should_skip_decoding(event):
+                LOGGER.debug("Skipping decoding for event type='%s', raw_backtrace present=%s", 
+                           getattr(event, 'type', None), bool(event.raw_backtrace))
                 event.publish()
                 continue
                 
