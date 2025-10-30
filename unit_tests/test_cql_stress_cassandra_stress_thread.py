@@ -27,6 +27,15 @@ pytestmark = [
 ]
 
 
+def assert_cassandra_stress_results(output):
+    """Helper function to assert cassandra stress results with proper error handling."""
+    assert output, "CQL stress failed to produce results"
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+    assert "latency 99th percentile" in output[0]
+    assert float(output[0]["latency 99th percentile"]) > 0
+
+
 def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -61,11 +70,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
     check_metrics()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, params):
@@ -92,11 +97,7 @@ def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, par
     cs_thread.run()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
 
 
 def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_address, params):
@@ -152,8 +153,4 @@ def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_addre
     check_metrics()
 
     output, _ = cs_thread.parse_results()
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0
+    assert_cassandra_stress_results(output)
