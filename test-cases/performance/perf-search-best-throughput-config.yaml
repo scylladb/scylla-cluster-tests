@@ -36,7 +36,8 @@ gce_instance_type_monitor: 'n2-highmem-8'
 user_prefix: 'perf-search'
 
 
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
