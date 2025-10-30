@@ -7,5 +7,5 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
     test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
-    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml"]'''
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/ubuntu24.yaml", "configurations/manager/disable_rf_rack_valid_keyspaces.yaml"]'''
 )

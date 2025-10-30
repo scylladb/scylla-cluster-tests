@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-alternator-3h.yaml", "configurations/manager/manager_operations.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-alternator-3h.yaml", "configurations/manager/manager_operations.yaml", "configurations/manager/disable_rf_rack_valid_keyspaces.yaml"]''',
 
     email_recipients: 'qa@scylladb.com'
 )

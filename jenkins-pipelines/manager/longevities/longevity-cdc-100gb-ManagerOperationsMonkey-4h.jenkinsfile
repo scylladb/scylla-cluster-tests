@@ -8,6 +8,6 @@ longevityPipeline(
     region: 'eu-west-1',
     availability_zone: 'a',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-cdc-100gb-4h.yaml", "configurations/manager/manager_operations.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-cdc-100gb-4h.yaml", "configurations/manager/manager_operations.yaml", "configurations/manager/disable_rf_rack_valid_keyspaces.yaml"]'''
 
 )

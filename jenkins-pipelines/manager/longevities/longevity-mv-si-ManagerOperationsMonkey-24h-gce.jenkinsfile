@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'gce',
     region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-mv-si-24h.yaml", "configurations/manager/manager_operations.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-mv-si-24h.yaml", "configurations/manager/manager_operations.yaml", "configurations/manager/disable_rf_rack_valid_keyspaces.yaml"]'''
 )
