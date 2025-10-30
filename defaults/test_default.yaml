@@ -58,6 +58,8 @@ use_cloud_manager: false
 cloud_prom_bearer_token: ''
 
 backtrace_decoding: true
+backtrace_stall_decoding: true
+backtrace_decoding_disable_regex: null
 print_kernel_callstack: true
 
 update_db_packages: ''
