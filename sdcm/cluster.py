@@ -1069,7 +1069,9 @@ class BaseNode(AutoSshContainerMixin):
             node_name=str(self.name),
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=self.test_config.DECODING_QUEUE,
-            log_lines=self.parent_cluster.params.get('logs_transport') in ['syslog-ng', 'vector']
+            log_lines=self.parent_cluster.params.get('logs_transport') in ['syslog-ng', 'vector'],
+            backtrace_stall_decoding=self.parent_cluster.params.get('backtrace_stall_decoding'),
+            backtrace_decoding_disable_regex=self.parent_cluster.params.get('backtrace_decoding_disable_regex'),
         )
         self._db_log_reader_thread.start()
 

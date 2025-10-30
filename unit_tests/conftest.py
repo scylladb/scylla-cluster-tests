@@ -90,6 +90,15 @@ def events():
     mixing.teardown_events_processes()
 
 
+@pytest.fixture(scope='function')
+def events_function_scope():
+    mixing = EventsUtilsMixin()
+    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    yield mixing
+
+    mixing.teardown_events_processes()
+
+
 @pytest.fixture(scope='session')
 def prom_address():
     yield start_metrics_server()
