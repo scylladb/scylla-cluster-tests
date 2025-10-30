@@ -10,6 +10,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def perf_extra_jobs_to_compare = params.perf_extra_jobs_to_compare ? groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare) : ""
+    def email_recipients = params.email_recipients ? groovy.json.JsonOutput.toJson(params.email_recipients) : ""
 
     def test_cmd
 
@@ -201,6 +202,28 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
 
     if [[ -n "${perf_extra_jobs_to_compare}" ]] ; then
         export SCT_PERF_EXTRA_JOBS_TO_COMPARE="${perf_extra_jobs_to_compare}"
+    fi
+
+    if [[ -n "${email_recipients}" ]] ; then
+        export SCT_EMAIL_RECIPIENTS="${email_recipients}"
+    fi
+
+    if [[ -n "${params.stop_on_hw_perf_failure ? params.stop_on_hw_perf_failure : ''}" ]] ; then
+        if [[ "${params.stop_on_hw_perf_failure}" == "true" ]] ; then
+            export SCT_STOP_ON_HW_PERF_FAILURE="true"
+        fi
+    fi
+
+    if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
+        export SCT_EMAIL_SUBJECT_POSTFIX="${params.test_email_title}"
+    fi
+
+    if [[ -n "${pipelineParams.k8s_deploy_monitoring ? pipelineParams.k8s_deploy_monitoring : ''}" ]] ; then
+        export SCT_K8S_DEPLOY_MONITORING="${pipelineParams.k8s_deploy_monitoring}"
+    fi
+
+    if [[ -n "${pipelineParams.k8s_scylla_utils_docker_image ? pipelineParams.k8s_scylla_utils_docker_image : ''}" ]] ; then
+        export SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE="${pipelineParams.k8s_scylla_utils_docker_image}"
     fi
 
     echo "start test ......."
