@@ -5,6 +5,7 @@ stress_read_cmd: "cassandra-stress read cl=QUORUM n=4000000 -schema 'replication
 
 n_db_nodes: 3
 n_loaders: 1
+simulated_racks: 3
 
 azure_image_monitor: 'RedHat:RHEL:9_5:latest'
 # Default 50 GB value is changed here as the size of the corresponding disk in the VM image: 64 GB

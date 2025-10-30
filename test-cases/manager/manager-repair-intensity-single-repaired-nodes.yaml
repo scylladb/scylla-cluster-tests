@@ -14,6 +14,7 @@ hinted_handoff: 'disabled'  # Turned off so it would not interfere with the crea
 instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c6i.2xlarge'
 
+availability_zone: 'a,b,c'
 n_db_nodes: 6
 n_loaders: 4
 
