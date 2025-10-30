@@ -35,7 +35,8 @@ round_robin: true
 # Convert to "disk MB/s" using 1000/1024: 625 * 1000 / 1024 = ~610.35 MB/s
 # Take 75% of that: 0.75 * 610.35 = ~457.76 MB/s
 append_scylla_args: '--stream_io_throughput_mb_per_sec 458 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 
 store_perf_results: false
 use_prepared_loaders: false

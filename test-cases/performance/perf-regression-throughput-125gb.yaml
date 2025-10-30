@@ -24,7 +24,8 @@ ami_id_db_scylla_desc: 'VERSION_DESC'
 
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
