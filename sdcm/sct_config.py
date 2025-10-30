@@ -533,6 +533,15 @@ class SCTConfiguration(dict):
         dict(name="backtrace_decoding", env="SCT_BACKTRACE_DECODING", type=boolean,
              help="""If True, all backtraces found in db nodes would be decoded automatically"""),
 
+        dict(name="backtrace_stall_decoding", env="SCT_BACKTRACE_STALL_DECODING", type=boolean,
+             help="""If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during
+             backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True."""),
+
+        dict(name="backtrace_decoding_disable_regex", env="SCT_BACKTRACE_DECODING_DISABLE_REGEX", type=str,
+             help="""Regex pattern to match event types that should not be decoded. For example,
+             '^(REACTOR_STALLED|KERNEL_CALLSTACK)$' would skip decoding for those event types.
+             Only applies when backtrace_decoding is True."""),
+
         dict(name="print_kernel_callstack", env="SCT_PRINT_KERNEL_CALLSTACK", type=boolean,
              help="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
              that it failed to."""),
@@ -2654,6 +2663,9 @@ class SCTConfiguration(dict):
         if ((teardown_validators := self.get("teardown_validators.rackaware")) and
                 teardown_validators.get("enabled", False)):
             self._verify_rackaware_configuration()
+
+        if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
+            re.compile(backtrace_decoding_disable_regex)
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')

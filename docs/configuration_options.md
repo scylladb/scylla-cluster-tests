@@ -645,6 +645,24 @@ If True, all backtraces found in db nodes would be decoded automatically
 **type:** boolean
 
 
+## **backtrace_stall_decoding** / SCT_BACKTRACE_STALL_DECODING
+
+If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True.
+
+**default:** True
+
+**type:** boolean
+
+
+## **backtrace_decoding_disable_regex** / SCT_BACKTRACE_DECODING_DISABLE_REGEX
+
+Regex pattern to match event types that should not be decoded. For example,<br>'^(REACTOR_STALLED|KERNEL_CALLSTACK)$' would skip decoding for those event types.<br>Only applies when backtrace_decoding is True.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **print_kernel_callstack** / SCT_PRINT_KERNEL_CALLSTACK
 
 Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message<br>that it failed to.
