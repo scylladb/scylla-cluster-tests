@@ -8,5 +8,5 @@ managerPipeline(
     backend: 'azure',
     azure_region_name: 'eastus',  //TODO: modify to multy region once sct supports more than one region
     test_name: 'mgmt_cli_test.ManagerBackupTests.test_backup_feature',
-    test_config: '[test-cases/manager/manager-regression-azure.yaml, "configurations/manager/disable_rf_rack_valid_keyspaces.yaml"]'
+    test_config: '[test-cases/manager/manager-regression-azure.yaml]'
 )

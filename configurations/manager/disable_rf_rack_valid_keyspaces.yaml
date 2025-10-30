@@ -1,5 +1,0 @@
-# Configuration to disable rf_rack_valid_keyspaces for Manager tests
-# This is needed because most Manager tests don't have RF == rack_count alignment
-# which is required when rf_rack_valid_keyspaces is enabled
-append_scylla_yaml:
-  rf_rack_valid_keyspaces: false
