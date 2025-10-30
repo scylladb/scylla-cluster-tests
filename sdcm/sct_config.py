@@ -1857,7 +1857,7 @@ class SCTConfiguration(dict):
         dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
              help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
 
-        dict(name="scaling", env="SCT_CLUSTER_SCALING", type=dict,
+        dict(name="scaling_config", env="SCT_XCLOUD_SCALING_CONFIG", type=dict,
              help="""Scaling policy configuration. The payload should follow this structure:
 
             "Scaling": {
@@ -3182,7 +3182,7 @@ class SCTConfiguration(dict):
             i['externalId'] for i in cloud_api_client.get_instance_types(
                 cloud_provider_id=provider_id, region_id=region_id)['instances']
         ]
-        if not self.get("scaling"):
+        if not self.get("scaling_config"):
             # setting db_instance_type, rf and n_nodes only for non-xcloud clusters
             db_instance_type = self.get('instance_type_db' if cloud_provider == 'aws' else 'gce_instance_type_db')
             if db_instance_type not in supported_instances:

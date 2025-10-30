@@ -3776,10 +3776,11 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 
 **type:** int
 
-## **scaling** / SCT_CLUSTER_SCALING
 
-Scaling policy configuration
+## **scaling_config** / SCT_XCLOUD_SCALING_CONFIG
 
-**default:** {}
+Scaling policy configuration. The payload should follow this structure:<br><br>"Scaling": {<br>"InstanceFamilies": [<br>"i4i"<br>],<br>"Mode": "xcloud",<br>"Policies": {<br>"Storage": {<br>"Min": 0,<br>"TargetUtilization": 0.8<br>},<br>"VCPU": {<br>"Min": 0<br>}<br>}<br>}<br><br>- InstanceFamilies: list of instance families to use for scaling (e.g., ["i4i", "i3en"]).<br>- Mode: str - scaling mode, always "xcloud".<br>- Policies: dict - scaling policies with the following keys:<br>- Storage: dict with:<br>- Min: int - minimum storage in TB to maintain.<br>- TargetUtilization: float - target storage utilization from 0.7 to 0.9 with 0.05 step (e.g., 0.85 for 85%).<br>- VCPU: dict with:<br>- Min: int - minimum number of virtual CPUs to maintain.
+
+**default:** N/A
 
 **type:** dict

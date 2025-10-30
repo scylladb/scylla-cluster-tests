@@ -341,7 +341,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._aws_region = None
         self._gce_region = None
 
-        self.scaling =  params.get('scaling')
+        self.scaling_config =  params.get('scaling_config')
 
         if self.vpc_peering_enabled:
             region_name = params.cloud_provider_params.get('region')
@@ -487,7 +487,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         return created_nodes
 
     def _prepare_cluster_config(self, node_count: int, instance_type: str) -> dict[str, Any]:
-        if self.scaling:
+        if self.scaling_config:
             # these values are mandatory for xcloud cluster creation
             instance_id = 0
             node_count = 0
@@ -535,7 +535,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'encryption_at_rest': None,
             'maintenance_windows': [],
             'prom_proxy': True,
-            'scaling': self.scaling,
+            'scaling': self.scaling_config,
             'tablets': tablets
         }
 
