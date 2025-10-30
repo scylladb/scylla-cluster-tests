@@ -144,21 +144,27 @@ class NodeBootstrapAbortManager:
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def clean_unbootstrapped_node(self, terminate_node: bool = True):
+        """remove unbootstrapped node from cluster
+
+        Remove node from cluster if it was not bootstrapped successfully.
+        If terminate_node is True, then terminate the node after removal.
+
+        """
         node_host_ids = self.get_host_ids_from_log()
-        if terminate_node:
-            self.bootstrap_node.log.debug("New host was not properly bootstrapped. Terminate it")
-            self.db_cluster.terminate_node(self.bootstrap_node)
-            self.monitors.reconfigure_scylla_monitoring()
         if node_host_ids:
             for host_id in set(node_host_ids):
                 self.verification_node.run_nodetool(
                     f"removenode {host_id}", ignore_status=True, retry=3)
         self.verification_node.raft.clean_group0_garbage(raise_exception=True)
 
-        assert self.verification_node.raft.is_cluster_topology_consistent(), \
-            "Group0, Token Ring and number of node in cluster are differs. Check logs"
-        self.verification_node.parent_cluster.check_nodes_up_and_normal()
-        LOGGER.info("Failed bootstrapped node %s was removed. Cluster is in initial state", self.bootstrap_node.name)
+        if terminate_node:
+            self.bootstrap_node.log.debug("New host was not properly bootstrapped. Terminate it")
+            self.db_cluster.terminate_node(self.bootstrap_node)
+            self.monitors.reconfigure_scylla_monitoring()
+            assert self.verification_node.raft.is_cluster_topology_consistent(), \
+                "Group0, Token Ring and number of node in cluster are differs. Check logs"
+            self.verification_node.parent_cluster.check_nodes_up_and_normal()
+            LOGGER.info("Failed bootstrapped node %s was removed. Cluster is in initial state", self.bootstrap_node.name)
 
     def run_bootstrap_and_abort_with_action(self, terminate_pattern, abort_action: Callable, abort_action_timeout: int = 300):
         watcher = partial(self._abort_bootstrap,
@@ -245,15 +251,17 @@ class NodeBootstrapAbortManager:
         # stop scylla if it was started by scylla-manager-client during setup
         with self.actions_log.action_scope(f"Stop Scylla server on {self.bootstrap_node.name} node"):
             self.bootstrap_node.stop_scylla_server(ignore_status=True, timeout=600)
+
+        wait_for(func=lambda: self._node_is_down(), step=10,
+                 timeout=300,
+                 text=f"Waiting node {self.bootstrap_node.name} is down...")
+
         # Clean garbage from group 0 and scylla data and restart setup
-        if self.verification_node.raft.search_inconsistent_host_ids():
-            with self.actions_log.action_scope(f"Clean group0 garbage on {self.verification_node.name} node"):
-                self.verification_node.raft.clean_group0_garbage(raise_exception=True)
-        if not self.is_bootstrapped_successfully():
-            LOGGER.debug("Clean old scylla data and restart scylla service")
-            self.clean_unbootstrapped_node(terminate_node=False)
-            with self.actions_log.action_scope(f"Clean Scylla data {self.bootstrap_node.name} node"):
-                self.bootstrap_node.clean_scylla_data()
+        was_bootstrapped = self.is_bootstrapped_successfully()
+        LOGGER.debug("Was node %s bootstrapped successfully: %s", self.bootstrap_node.name, was_bootstrapped)
+        self.clean_unbootstrapped_node(terminate_node=False)
+        with self.actions_log.action_scope(f"Clean Scylla data {self.bootstrap_node.name} node"):
+            self.bootstrap_node.clean_scylla_data()
         watcher_startup_failed = partial(self.watch_startup_failed, timeout=3600)
         try:
             LOGGER.debug("Start rebootstrap as new node")
@@ -279,6 +287,10 @@ class NodeBootstrapAbortManager:
             raise BootstrapStreamErrorFailure(f"Rebootstrap failed with error: {exc}") from exc
         finally:
             self.bootstrap_node.stop_wait_db_up_event.clear()
+
+    def _node_is_down(self):
+        node_status = get_node_status_from_system_by(self.verification_node, ip_address=self.bootstrap_node.ip_address)
+        return not node_status.up
 
 
 class FailedDecommissionOperationMonitoring:

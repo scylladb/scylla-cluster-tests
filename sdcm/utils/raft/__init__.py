@@ -153,11 +153,11 @@ class RaftFeatureOperations(ABC):
 
     def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
         # random.seed(seed)
-        if not self.message_iter:
-            self.message_iter = cycle(self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation))
+        if not RaftFeatureOperations.message_iter:
+            RaftFeatureOperations.message_iter = cycle(self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation))
         # log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
         # log_pattern = random.choice(log_patterns)
-        log_pattern = next(self.message_iter)
+        log_pattern = next(RaftFeatureOperations.message_iter)
         return self.get_message_waiting_timeout(log_pattern)
 
     def get_all_messages_timeouts(self, operation: TopologyOperations):
@@ -519,7 +519,7 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
         results = session.execute(query)
         row = results.one()
         if not row:
-            return {}
+            return NodeStatus(ip_address="", host_id="", state=NodeState.SHUTDOWN, up=False)
         node_status = NodeStatus(ip_address=row.peer, host_id=str(row.host_id), state=NodeState(row.status), up=row.up)
         LOGGER.debug("Node status: %s", node_status)
         return node_status
