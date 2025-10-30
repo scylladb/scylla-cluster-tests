@@ -84,7 +84,7 @@ class GeminiStressThread(DockerBasedStressThread):
             "drop-schema": "true",
             "cql-features": "normal",
             "materialized-views": "false",
-            "use-server-timestamps": "true",
+            "use-server-timestamps": "false",
             "use-lwt": "false",
             "use-counters": "false",
             "max-tables": 1,
