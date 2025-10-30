@@ -46,7 +46,8 @@ scylla_linux_distro: 'ubuntu-jammy'
 user_prefix: 'perf-regression-z3'
 space_node_threshold: 644245094
 
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 print_kernel_callstack: false
 
 store_perf_results: true
