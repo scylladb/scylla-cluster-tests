@@ -69,7 +69,7 @@ requested_by_user=dimakr</properties>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=release:latest
 provision_type=on_demand
-region=us-east1
+gce_datacenter=us-east1
 xcloud_provider=gce
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
