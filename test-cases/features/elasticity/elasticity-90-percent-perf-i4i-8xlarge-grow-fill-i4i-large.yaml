@@ -1,0 +1,35 @@
+# Test case for ScyllaDB elasticity at 90% utilization
+# The test writes approximately 6 TB of data to fill the cluster at around 90% utilization.
+# After the cluster is filled, smaller nodes are added to the cluster.
+# The cluster is then filled to 90% again
+test_duration: 1200
+# the prepare write is long, increase the default duration to avoid soft timeout
+prepare_stress_duration: 600
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=1920000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1920000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=1920000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1920000001..3840000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=1920000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=3840000001..5760000000",
+]
+
+stress_cmd: [
+  "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..120000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=120000001..240000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=240000001..360000000",
+]
+
+n_db_nodes: 3
+simulated_racks: 3
+instance_type_db: 'i4i.8xlarge'
+
+cluster_target_size: 6
+add_node_cnt: 3
+cluster_target_instance_type: 'i4i.large'
+
+n_loaders: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+
+nemesis_class_name: 'NoOpMonkey'
+
+user_prefix: 'elasticity-test'
+round_robin: true
