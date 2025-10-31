@@ -1260,6 +1260,15 @@ class SCTConfiguration(dict):
              env="SCT_ONE_ONE_RESTORE_CLUSTER_BOOTSTRAP_DURATION", type=int,
              help="Time in seconds it took Siren to bootstrap 1-1-restore cluster"),
 
+        # VectorSearchInCloud
+        dict(name="vector_search_node_ids",
+             env="SCT_VECTOR_SEARCH_NODE_IDS", type=list,
+             help="Vector Search node ids"),
+
+        dict(name="vector_search_node_type_id",
+             env="SCT_VECTOR_SEARCH_TYPE_IDS", type=int,
+             help="Vector Search nodes type id"),
+
         # PerformanceRegressionTest
 
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",
