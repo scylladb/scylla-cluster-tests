@@ -738,7 +738,7 @@ class Nemesis(NemesisFlags):
                 self.target_node.restart()
 
         self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
-        self.repair_nodetool_repair()
+        self.run_repair()
 
     @target_all_nodes
     def disrupt_resetlocalschema(self):
@@ -1054,10 +1054,10 @@ class Nemesis(NemesisFlags):
 
     def disrupt_destroy_data_then_repair(self):
         """repair at the beginning added to avoid c-s failure 'data wasn't validated'"""
-        self.run_repair_on_nodes(self.cluster.data_nodes)
+        self.run_repair()
         self._destroy_data_and_restart_scylla()
         # try to save the node
-        self.repair_nodetool_repair()
+        self.run_repair()
 
     def disrupt_destroy_data_then_rebuild(self):
         self._destroy_data_and_restart_scylla()
@@ -1548,7 +1548,7 @@ class Nemesis(NemesisFlags):
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
-                self.repair_nodetool_repair(new_node)
+                self.run_repair()
                 InfoEvent(message='FinishEvent - Finished running repair on new node').publish()
 
             # wait until node gives up on the old node, the default timeout is `ring_delay_ms: 300000`
@@ -1588,7 +1588,7 @@ class Nemesis(NemesisFlags):
 
         self.log.debug("Start repair target_node in background")
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix='NodeToolRepairThread') as thread_pool:
-            thread = thread_pool.submit(self.repair_nodetool_repair)
+            thread = thread_pool.submit(partial(self.run_repair_nodetool, nodes=[self.target_node]))
             try:
                 # drop test tables one by one during repair
                 for i in range(10):
@@ -1900,27 +1900,58 @@ class Nemesis(NemesisFlags):
 
     # End of Nemesis running code
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
-    def repair_nodetool_repair(self, node=None, publish_event=True):
-        node = node if node else self.target_node
-        with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48), \
-                self.action_log_scope(f"Start nodetool repair on {node.name} node"):
-            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+    def run_repair_nodetool(self, nodes: list, publish_event=True, timeout=HOUR_IN_SEC * 3):
+        """
+        Execute a repair using Scylla Manager, which runs both vnode repair (repair) and tablet repairs (cluster repair)
+        """
+        for node in nodes:
+            with adaptive_timeout(Operations.REPAIR, node, timeout=timeout), \
+                    self.action_log_scope(f"nodetool repair -pr on {node.name} node"):
+                node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
-    def run_repair_on_nodes(self, nodes: list,  ignore_down_hosts=False, publish_event=True):
+        target_node = nodes[0]
+        if is_tablets_feature_enabled(target_node):
+            with adaptive_timeout(Operations.REPAIR, target_node, timeout=timeout), \
+                    self.action_log_scope("Start nodetool cluster repair", target=target_node.name):
+                target_node.run_nodetool(sub_cmd="cluster repair", publish_event=publish_event)
+
+    @latency_calculator_decorator(legend="Run repair process through Scylla manager")
+    def run_repair_manager(self, ignore_down_hosts: bool = False, timeout=HOUR_IN_SEC * 3):
+        """
+        Execute a repair using Scylla Manager, which repairs entire cluster.
+        ignore_down_hosts: If True, consider only nodes that are up and normal.
+        """
+        self.log.debug("Manager repair started")
+        mgr_cluster = self.cluster.get_cluster_manager()
+        self.actions_log.info("Starting Scylla Manager repair task")
+        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
+        task_final_status = mgr_task.wait_and_get_final_status(timeout=timeout)  # timeout is 24 hours
+        self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
+        if task_final_status != TaskStatus.DONE:
+            progress_full_string = mgr_task.progress_string(
+                parse_table_res=False, is_verify_errorless_result=True).stdout
+            if task_final_status != TaskStatus.ERROR_FINAL:
+                mgr_task.stop()
+            raise ScyllaManagerError(
+                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
+                f'{progress_full_string}')
+        self.log.info('Task: {} is done.'.format(mgr_task.id))
+
+    def run_repair(self, ignore_down_hosts=False):
         """
         Execute a nodetool repair on the specified nodes, disregarding errors that may
         arise from failed or unavailable nodes during the process.
         """
+        timeout = HOUR_IN_SEC * 3
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
-            for node in nodes:
-                try:
-                    with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 3), \
-                            self.action_log_scope(f"nodetool repair -pr on {node.name} node"):
-                        node.run_nodetool(sub_cmd="repair -pr", publish_event=publish_event)
-                except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
-                    self.log.warning(f"Repair failed to complete on node: {node}, with error: {str(err)}")
+            if ignore_down_hosts:
+                nodes = self.cluster.get_nodes_up_and_normal(self.target_node)
+            else:
+                nodes = self.cluster.data_nodes
+
+            self.run_repair_nodetool(nodes=nodes, timeout=timeout)
         else:
-            self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts)
+            self.run_repair_manager(ignore_down_hosts=ignore_down_hosts, timeout=timeout)
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
@@ -3201,32 +3232,14 @@ class Nemesis(NemesisFlags):
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
-        self._mgmt_repair_cli()
+        self.run_repair_manager()
 
     @target_data_nodes
     def disrupt_mgmt_corrupt_then_repair(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         self._destroy_data_and_restart_scylla()
-        self._mgmt_repair_cli()
-
-    @latency_calculator_decorator(legend="Scylla-Manger repair")
-    def _mgmt_repair_cli(self, ignore_down_hosts=None):
-        self.log.debug("Manager repair started")
-        mgr_cluster = self.cluster.get_cluster_manager()
-        self.actions_log.info("Starting Scylla Manager repair task")
-        mgr_task = mgr_cluster.create_repair_task(ignore_down_hosts=ignore_down_hosts)
-        task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-        self.actions_log.info(f"Scylla Manager repair task finished with status: {task_final_status}")
-        if task_final_status != TaskStatus.DONE:
-            progress_full_string = mgr_task.progress_string(
-                parse_table_res=False, is_verify_errorless_result=True).stdout
-            if task_final_status != TaskStatus.ERROR_FINAL:
-                mgr_task.stop()
-            raise ScyllaManagerError(
-                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
-                f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(mgr_task.id))
+        self.run_repair_manager()
 
     def disrupt_abort_repair(self):
         """
@@ -3291,7 +3304,7 @@ class Nemesis(NemesisFlags):
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
         self.log.debug("Execute a complete repair for target node")
-        self.repair_nodetool_repair()
+        self.run_repair()
 
     @target_data_nodes
     def disrupt_validate_hh_short_downtime(self):
@@ -3784,12 +3797,11 @@ class Nemesis(NemesisFlags):
 
             return res.exit_status
 
-        # full cluster repair
-        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node)
         # Repairing will result in a best effort repair due to the terminated node,
         # and as a result requires ignoring repair errors
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
-            self.run_repair_on_nodes(nodes=up_normal_nodes, ignore_down_hosts=True)
+        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                            line="failed to repair"):
+            self.run_repair(ignore_down_hosts=True)
 
         with self.action_log_scope(f"Remove {node_to_remove.name} node"):
             exit_status = remove_node()
@@ -4257,7 +4269,7 @@ class Nemesis(NemesisFlags):
         Ref: https://github.com/scylladb/scylladb/issues/21428
         """
         self.log.debug('Cluster repair starts')
-        self.run_repair_on_nodes(nodes=self.cluster.data_nodes)
+        self.run_repair()
         with ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_repair_streaming()
 
@@ -4654,7 +4666,7 @@ class Nemesis(NemesisFlags):
             self.has_steady_run = True
         InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
         if self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager'):
-            self._mgmt_repair_cli()
+            self.run_repair_manager()
             InfoEvent(message='FinishEvent - Manager repair has finished').publish()
         else:
             InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
