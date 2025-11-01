@@ -260,6 +260,20 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_backtrace2["type"] == "COMPACTION_STOPPED"
             assert event_backtrace2["line_number"] == 1
 
+    def test_search_cpu_bottlenecks(self):
+        self.node.system_log = os.path.join(os.path.dirname(
+            __file__), 'test_data', 'system_cpu_hog.log')
+
+        self._read_and_publish_events()
+
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
+
+            event_a = events[-1]
+
+            assert event_a["type"] == "SUSPECTED_CPU_BOTTLENECK", 'Not expected event type {}'.format(event_a["type"])
+            assert event_a["line_number"] == 16, 'Not expected event line number {}'.format(event_a["line_number"])
+
     def test_appending_to_log(self):
         logs = """
 INFO  2022-07-14 09:28:34,095 [shard 1] database - Flushing non-system tables
