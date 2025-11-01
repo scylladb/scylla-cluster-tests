@@ -489,6 +489,17 @@ class SCTConfiguration(dict):
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
+        dict(name="agent", env="SCT_AGENT", type=dict_or_str,
+             help="""Configuration for SCT agent - a lightweight service for remote command execution.
+                     When enabled, replaces SSH-based command execution with RESTful API calls for DB nodes.
+                     Configuration options:
+                     - enabled: bool - enable agent (required)
+                     - ip_type: str - which IP type to use for agent connection (default: 'private')
+                     - port: int - agent HTTP API port (default: 15000)
+                     - api_key: str - authentication API key
+                     - binary_url: str - URL to download agent binary
+                     - max_concurrent_jobs: int - max concurrent jobs per agent (default: 10)"""),
+
         dict(name="parallel_node_operations", env="SCT_PARALLEL_NODE_OPERATIONS", type=boolean,
              help="When defined true, will run node operations in parallel. Supported operations: startup"),
 

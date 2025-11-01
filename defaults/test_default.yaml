@@ -322,3 +322,12 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
+
+# SCT agent defaults
+agent:
+  enabled: false
+  port: 15000
+  api_key: "test-agent-secure-key-12345"
+  binary_url: ""
+  max_concurrent_jobs: 10
+  ip_type: "private"  # 'public' is needed for local development
