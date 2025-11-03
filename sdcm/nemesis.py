@@ -4857,10 +4857,10 @@ class Nemesis(NemesisFlags):
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
-    def _write_read_data_to_multi_dc_keyspace(self, datacenters: List[str]) -> None:
+    def _write_read_data_to_multi_dc_keyspace(self, dc_rf3: str, dc_rf1: str) -> None:
         InfoEvent(message='Writing and reading data with new dc').publish()
         write_cmd = f"cassandra-stress write no-warmup cl=ALL n=100000 -schema 'keyspace=keyspace_new_dc " \
-            f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
+            f"replication(strategy=NetworkTopologyStrategy,{dc_rf3}=3,{dc_rf1}=1) " \
             f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
             f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..100000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
@@ -4913,8 +4913,9 @@ class Nemesis(NemesisFlags):
             system_keyspaces.insert(0, "system_auth")
         self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
+        initial_dc_name = datacenters[0]
         self.tester.create_keyspace("keyspace_new_dc", replication_factor={
-                                    datacenters[0]: min(3, len(self.cluster.data_nodes))})
+                                    initial_dc_name: min(3, len(self.cluster.data_nodes))})
         node_added = False
         with ExitStack() as context_manager:
             def finalizer(exc_type, *_):
@@ -4945,7 +4946,7 @@ class Nemesis(NemesisFlags):
                     preserved_strategy.replication_factors_per_dc[new_dc_name] = 0
 
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                cmd = f"rebuild -- {datacenters[0]}"
+                cmd = f"rebuild -- {initial_dc_name}"
                 with wait_for_log_lines(node=new_node,
                                         start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
                                         end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
@@ -4957,9 +4958,8 @@ class Nemesis(NemesisFlags):
                 for cluster_node in self.cluster.data_nodes:
                     with self.action_log_scope(f"Run repair on {cluster_node.name} node with cmd: {cmd}"):
                         cluster_node.run_nodetool(sub_cmd=cmd, publish_event=True)
-                datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 with self.action_log_scope("Run write and then read data to multiDC keyspace"):
-                    self._write_read_data_to_multi_dc_keyspace(datacenters)
+                    self._write_read_data_to_multi_dc_keyspace(dc_rf3=initial_dc_name, dc_rf1=new_dc_name)
 
             with self.action_log_scope(f"Decommission of the new node {new_node.name}"):
                 self.cluster.decommission(new_node)
