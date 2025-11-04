@@ -1,7 +1,15 @@
 #!groovy
 import groovy.json.JsonSlurper
 
-def call(String backend, String region=null, String datacenter=null, String location=null) {
+def call(String backend, String region=null, String datacenter=null, String location=null, Map overrides=null) {
+    if (!(params instanceof Map)) {
+        params = params.collectEntries()
+    }
+    if (overrides == null){
+        overrides = [:]
+    }
+    params += overrides // merge, overrides take precedence
+
     if (!backend) {
         backend = 'aws'
         println("Backend is null or empty, defaulting to 'aws'")
@@ -37,7 +45,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'gce': "${gcp_project}-builders-us-east1-template-v5",
                           'aws': 'aws-sct-builders-eu-west-1-v3-asg',
                           'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg',
-                          'aws-fips': 'aws-sct-builders-us-east-1-v3-fibs-CI-FIPS',
+                          'aws-fips': 'aws-sct-builders-us-east-1-v4-fibs-CI-FIPS',
                           ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)

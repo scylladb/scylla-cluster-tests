@@ -36,6 +36,14 @@ def test_duration_str_to_seconds_function(duration, seconds):
     ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
     ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),
     ("latte run --duration 10m --sampling 5s", 600 + 900),
+    # Gemini commands from the issue - test case with 24h duration
+    ("--duration 24h --warmup 10m --concurrency 200 --mode mixed --max-mutation-retries-backoff 10s", 86400 + 600 + 900),
+    # Gemini with equals sign format
+    ("--duration=3h --warmup=30m --concurrency=50 --mode=mixed", 10800 + 1800 + 900),
+    # Gemini command without warmup
+    ("--duration 1h --concurrency 100 --mode write", 3600 + 900),
+    # Critical case: YAML multiline format with newlines (the actual issue scenario)
+    ("--duration 24h\n--warmup 10m\n--concurrency 200", 86400 + 600 + 900),
 ))
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout

@@ -1,0 +1,116 @@
+use latte::*;
+
+const TOTAL_ROWS = latte::param!("rows", 10_000_000);
+const RF = latte::param!("replication_factor", 3);
+const TABLETS = latte::param!("tablets", true);
+const KS = latte::param!("keyspace", "lwt_keyspace");
+const TABLE = latte::param!("table", "lwt_io");
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1000);
+const PARTITION_SIZES = "100:1";
+const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
+const DELETE_PCT = latte::param!("delete_pct", 50);
+const HALF_ROWS = TOTAL_ROWS / 2;
+
+pub async fn schema(db) {
+    db.execute(`
+        CREATE KEYSPACE IF NOT EXISTS ${KS}
+        WITH replication = {
+          'class'              : 'NetworkTopologyStrategy',
+          'replication_factor' : ${RF}
+        }
+        AND tablets = {'enabled': ${TABLETS}}
+    `).await?;
+
+
+    db.execute(
+        `CREATE TABLE IF NOT EXISTS ${KS}.${TABLE} (\
+            pk bigint,\
+            ck bigint,\
+            a int,\
+            pad text,\
+            PRIMARY KEY (pk, ck)) \
+         WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }
+    `)
+    .await?;
+}
+
+pub async fn prepare(db) {
+
+    db.init_partition_row_distribution_preset(
+        "main", TOTAL_ROWS, ROWS_PER_PARTITION, PARTITION_SIZES,
+    ).await?;
+
+    db.prepare(
+        "ins",
+        `INSERT INTO ${KS}.${TABLE} (pk, ck, a, pad) VALUES (?,?,?,?)`
+    ).await?;
+
+    db.prepare(
+        "del_part",
+        `DELETE FROM ${KS}.${TABLE} WHERE pk = ?`
+    ).await?;
+
+    db.prepare(
+        "update_if_lesser_threshold",
+        `UPDATE ${KS}.${TABLE} SET pad = ? WHERE pk = ? AND ck = ? IF a <= ${HALF_ROWS}`
+    ).await?;
+
+    db.prepare(
+        "upd_if_higher_threshold",
+        `UPDATE ${KS}.${TABLE} SET pad = ? WHERE pk = ? AND ck = ? IF a > ${HALF_ROWS}`
+    ).await?;
+
+    db.prepare(
+        "sel_lwt",
+        `SELECT a, pad FROM ${KS}.${TABLE} WHERE pk = ? AND ck = ?`
+    ).await?;
+}
+
+fn pad(i) {
+    latte::text(i, 200)
+}
+
+pub async fn lwt_insert(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    let a  = hash_range(i, 1_000_000);
+
+    db.execute_prepared("ins", [pk, ck, a, pad(i)]).await
+}
+
+
+pub async fn lwt_delete_partitions(db, i) {
+    let partition  = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let bucket = hash_range(partition.idx, 100);
+
+    if bucket < DELETE_PCT {
+        db.execute_prepared("del_part", [pk]).await?;
+    } else {
+        let ck = hash(i);
+        db.execute_prepared("sel_lwt", [pk, ck]).await?;
+    }
+}
+
+
+pub async fn upd_first_part(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk   = hash(partition.idx);
+    let ck   = hash(i);
+    db.execute_prepared("update_if_lesser_threshold", [pad(i), pk, ck]).await
+}
+
+pub async fn upd_second_part(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk   = hash(partition.idx);
+    let ck   = hash(i);
+    db.execute_prepared("upd_if_higher_threshold", [pad(i), pk, ck]).await
+}
+
+pub async fn lwt_read(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("sel_lwt", [pk, ck]).await
+}

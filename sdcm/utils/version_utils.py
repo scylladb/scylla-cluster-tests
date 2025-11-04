@@ -279,7 +279,6 @@ def get_url_content(url, return_url_data=True):
         raise ValueError(f"The repository URL '{url}' not contains any content")
     if return_url_data:
         return response_data.split('\n')
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned    return []
     return []
 
 
@@ -409,7 +408,6 @@ def get_branch_version(url, full_version: bool = False):
         return get_branch_version_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
         return get_branch_version_from_centos_repository(urls=urls, full_version=full_version)
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return []
 
 
@@ -421,7 +419,6 @@ def get_all_versions(url: str, full_version: bool = False) -> set[str]:
         return get_all_versions_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
         return get_all_versions_from_centos_repository(urls=urls, full_version=full_version)
-    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return set()
 
 
@@ -764,7 +761,7 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
     bucket = 'downloads.scylladb.com'
 
-    if dist_type == 'centos':
+    if dist_type in ('centos', 'rocky', 'rhel'):
         response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/', Delimiter='/')
 
         for repo_file in response['Contents']:
@@ -804,7 +801,7 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
     Get a repo/list of scylla, based on scylla version match
 
     :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
-    :param dist_type: one of ['centos', 'ubuntu', 'debian']
+    :param dist_type: one of ['centos', 'ubuntu', 'debian', 'rocky', 'rhel']
     :param dist_version: family name of the distro version
     :raises: ValueError if not found
 
@@ -825,13 +822,13 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
 
 
 def get_branched_repo(scylla_version: str,
-                      dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
+                      dist_type: Literal["centos", "ubuntu", "debian", "rocky"] = "centos",
                       bucket: str = "downloads.scylladb.com") -> Optional[str]:
     """
     Get a repo/list of scylla, based on scylla version match
 
     :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
-    :param dist_type: one of ['centos', 'ubuntu', 'debian']
+    :param dist_type: one of ['centos', 'ubuntu', 'debian', 'rocky', 'rhel']
     :param bucket: which bucket to download from
     :return: str url repo/list, or None if not found
     """
@@ -850,7 +847,7 @@ def get_branched_repo(scylla_version: str,
     else:
         product = "scylla"
 
-    if dist_type == "centos":
+    if dist_type in ("centos", "rocky", "rhel"):
         prefix = f"unstable/{product}/{branch}/rpm/centos/{branch_version}/"
         filename = "scylla.repo"
     elif dist_type in ("ubuntu", "debian",):

@@ -72,7 +72,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "false",
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
-            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
+            string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests', ''))}",
                    description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
                    name: 'sub_tests')
 
@@ -262,7 +262,7 @@ def call(Map pipelineParams) {
                         if (params.sub_tests) {
                             sub_tests = new JsonSlurper().parseText(params.sub_tests)
                         } else {
-                            sub_tests = [pipelineParams.test_name]
+                            sub_tests = [params.test_name]
                         }
                         // select the step function to use for throttling, if not throttling, it's a no-op
                         def throttle_closure = params.use_job_throttling ? this.&throttle : { labels, closure -> closure() }
@@ -270,10 +270,10 @@ def call(Map pipelineParams) {
                         for (t in sub_tests) {
                             def perf_test
                             def sub_test = t
-                            if (sub_test == pipelineParams.test_name) {
+                            if (sub_test == params.test_name) {
                                 perf_test = sub_test
                             } else {
-                                perf_test = "${pipelineParams.test_name}.${sub_test}"
+                                perf_test = "${params.test_name}.${sub_test}"
                             }
 
                             tasks["sub_test=${sub_test}"] = {

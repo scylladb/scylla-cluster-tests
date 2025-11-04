@@ -36,7 +36,7 @@ pre_create_keyspace: [
 # but this is just for example
 prepare_write_cmd:
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=500000
+    bin/ycsb load scylla -P workloads/workloada -threads 84 -p recordcount=500000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
@@ -45,7 +45,7 @@ prepare_write_cmd:
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=500000
+    bin/ycsb load scylla -P workloads/workloada -threads 84 -p recordcount=500000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128

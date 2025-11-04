@@ -8,7 +8,7 @@ ip_ssh_connections: 'private'
 
 scylla_repo: ''
 
-manager_version: '3.6'
+manager_version: '3.7'
 manager_scylla_backend_version: '2025'
 # Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
@@ -17,6 +17,8 @@ round_robin: false
 append_scylla_args: '--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 append_scylla_setup_args: ''
 append_scylla_node_exporter_args: ''
+append_scylla_yaml:
+  rf_rack_valid_keyspaces: true
 experimental_features: []
 
 db_nodes_shards_selection: 'default'
@@ -62,7 +64,7 @@ print_kernel_callstack: true
 
 update_db_packages: ''
 
-logs_transport: "syslog-ng"
+logs_transport: "vector"
 
 store_perf_results: false
 email_recipients: ['qa@scylladb.com']
@@ -141,6 +143,7 @@ disable_raft: true
 enable_tablets_on_upgrade: false
 enable_views_with_tablets_on_upgrade: false
 upgrade_node_system: true
+enable_truncate_checks_on_node_upgrade: true
 
 stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"
 
@@ -158,8 +161,8 @@ jepsen_test_count: 1
 jepsen_test_run_policy: all
 
 max_events_severities: ""
-scylla_mgmt_agent_version: '3.6.0'
-mgmt_docker_image: 'scylladb/scylla-manager:3.6.0'
+scylla_mgmt_agent_version: '3.7.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.7.0'
 k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'
@@ -313,9 +316,9 @@ mgmt_snapshots_preparer_params:
 adaptive_timeout_store_metrics: true
 
 # Vector Search defaults
-n_vs_nodes: 0
-vs_port: 6080
-vs_scylla_port: 9042
-vs_threads: 2
-vs_docker_image: 'scylladb/vector-store'
-vs_version: 'latest'
+n_vector_store_nodes: 0
+vector_store_port: 6080
+vector_store_scylla_port: 9042
+vector_store_threads: 0  # 0 = defaults to number of cores on a node
+vector_store_docker_image: 'scylladb/vector-store'
+vector_store_version: ''

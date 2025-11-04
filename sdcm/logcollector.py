@@ -25,9 +25,11 @@ from collections import OrderedDict
 from typing import Optional, Tuple, List
 from pathlib import Path
 from functools import cached_property
+from dataclasses import dataclass
 
 import requests
-from invoke.exceptions import UnexpectedExit
+from invoke.exceptions import UnexpectedExit, Failure as InvokeFailure
+from botocore.exceptions import ClientError
 
 import sdcm.monitorstack.ui as monitoring_ui
 from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH, \
@@ -62,6 +64,10 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
+from sdcm.localhost import LocalHost
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.utils.aws_ssm_runner import SSMCommandRunner
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
 
@@ -93,6 +99,17 @@ class CollectingNode:
         _distro = Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
         LOGGER.info("Detected Linux distribution: %s", _distro.name)
         return _distro
+
+    @cached_property
+    def is_aws(self) -> bool:
+        return isinstance(self._instance, dict) and self._instance.get("InstanceId") is not None
+
+    @cached_property
+    def aws_ssm_runner(self) -> Optional[SSMCommandRunner]:
+        if self.is_aws:
+            region = self._instance.get("Placement").get("AvailabilityZone")[:-1]
+            return SSMCommandRunner(region_name=region, instance_id=self._instance.get("InstanceId"))
+        return None
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
     def install_package(self,
@@ -194,7 +211,7 @@ class BaseMonitoringEntity(BaseLogEntity):
             return None, None, None
 
         try:
-            monitor_version, scylla_version = result.stdout.strip().split(':')
+            monitor_version, scylla_version = result.stdout.strip().split(':')[:2]
         except ValueError:
             monitor_version = None
             scylla_version = None
@@ -214,18 +231,24 @@ class CommandLog(BaseLogEntity):
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
         if not node or not node.remoter or remote_dst is None:
             return None
-        remote_logfile = LogCollector.collect_log_remotely(node=node,
-                                                           cmd=self.cmd,
-                                                           log_filename=os.path.join(remote_dst, self.name))
+
+        remote_logfile, is_file_remote = LogCollector.collect_log_remotely(node=node,
+                                                                           cmd=self.cmd,
+                                                                           log_filename=os.path.join(remote_dst, self.name))
         if not remote_logfile:
             LOGGER.warning(
                 "Nothing to collect. Command '%s' did not prepare log file on remote host '%s'", self.cmd, node.name)
             return None
-        LogCollector.receive_log(node=node,
-                                 remote_log_path=remote_logfile,
-                                 local_dir=local_dst,
-                                 timeout=self.collect_timeout)
-        return os.path.join(local_dst, os.path.basename(remote_logfile))
+        local_path = Path(local_dst) / Path(remote_logfile).name
+        if is_file_remote:
+            LogCollector.receive_log(node=node,
+                                     remote_log_path=remote_logfile,
+                                     local_dir=local_dst,
+                                     timeout=self.collect_timeout)
+        else:
+            # copy locally
+            shutil.copyfile(remote_logfile, str(local_path))
+        return str(local_path)
 
 
 class FileLog(CommandLog):
@@ -614,29 +637,76 @@ class LogCollector:
     def create_remote_storage_dir(self, node, path=''):
         if not path:
             path = node.name
-        try:
-            remote_dir = os.path.join(self.node_remote_dir, path)
-            result = node.remoter.run('mkdir -p {}'.format(remote_dir), ignore_status=True)
+        remote_dir = os.path.join(self.node_remote_dir, path)
 
-            if result.exited > 0:
-                LOGGER.error(
-                    'Remote storing folder not created.\n{}'.format(result))
+        if ssh_connected := node.remoter.is_up():
+
+            try:
+                result = node.remoter.run('mkdir -p {}'.format(remote_dir), ignore_status=True)
+
+                if result.exited > 0:
+                    LOGGER.error(
+                        'Remote storing folder not created.\n{}'.format(result))
+                    remote_dir = self.node_remote_dir
+
+            except (Libssh2_Failure, InvokeFailure) as details:
+                LOGGER.error("Error during creating remote directory %s", details)
+        elif not ssh_connected and (ssm_runner := node.aws_ssm_runner):
+            try:
+                ssm_result = ssm_runner.run('mkdir -p {}'.format(remote_dir), ignore_status=True)
+                ok = ssm_result.ok
+                if not ok:
+                    LOGGER.error("SSM command failed for instance %s: mkdir", node._instance.get("InstanceId"))
+
+            except (ClientError, AttributeError) as e:
+                LOGGER.error("Failed to run SSM command: %s", e)
                 remote_dir = self.node_remote_dir
-
-        except Exception as details:  # noqa: BLE001
-            LOGGER.error("Error during creating remote directory %s", details)
+        else:
             remote_dir = self.node_remote_dir
 
         return remote_dir
 
     @staticmethod
-    def collect_log_remotely(node, cmd: str, log_filename: str) -> Optional[str]:
+    def collect_log_remotely(node, cmd: str, log_filename: str) -> Tuple[Optional[str], bool]:
         if not node.remoter:
-            return None
-        collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
-        node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
-        result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
-        return log_filename if result.ok else None
+            return None, False
+
+        is_file_remote = True
+
+        if ssh_connected := node.remoter.is_up():
+            try:
+                collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
+                node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
+                result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
+                ok = result.ok
+            except (Libssh2_Failure, InvokeFailure):
+                ssh_connected = False
+
+        # Check if node is AWS-based
+        if not ssh_connected and (ssm_runner := node.aws_ssm_runner):
+            LOGGER.info("Collecting Node %s via SSM: %s", node.name, log_filename)
+            Path(log_filename).parent.mkdir(parents=True, exist_ok=True)
+
+            # Use SSM to run the command and save it to a local file
+            is_file_remote = False
+
+            try:
+                collect_log_command = f"{cmd}"
+                ssm_result = ssm_runner.run_command_and_save_output(
+                    command=collect_log_command,
+                    local_output_file=log_filename,
+                    comment=f'Collect log {log_filename}',
+                    ignore_status=True
+                )
+                ok = ssm_result.ok
+                if not ssm_result.ok:
+                    LOGGER.error("SSM command failed for instance %s: %s ",
+                                 node._instance.get("InstanceId"), collect_log_command)
+                    return None, is_file_remote
+            except (ImportError, AttributeError, TypeError, ValueError, KeyError, IndexError) as e:
+                LOGGER.error("Failed to run SSM command: %s", e)
+                return None, is_file_remote
+        return log_filename if ok else None, is_file_remote
 
     @staticmethod
     def archive_log_remotely(node, log_filename: str, archive_name: Optional[str] = None) -> Optional[str]:
@@ -873,7 +943,7 @@ def collect_log_entities(node, log_entities: List[BaseLogEntity]):
                              log_entity.name)
                 continue
             try:
-                log_entity.collect(node, node.logdir, remote_node_dir)
+                log_entity.collect(node, node.logdir, remote_dst=remote_node_dir)
                 LOGGER.debug("Diagnostic file '%s' collected", log_entity.name)
             except Exception as details:  # noqa: BLE001
                 LOGGER.error("Error occurred during collecting diagnostics data on host: %s\n%s", node.name, details)
@@ -1425,6 +1495,7 @@ class Collector:
         self.sct_set = []
         self.pt_report_set = []
         self.cluster_log_collectors = {}
+        self.localhost = None
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors |= {
                 KubernetesLogCollector: self.kubernetes_set,
@@ -1654,6 +1725,52 @@ class Collector:
                                                   global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
 
+    def get_xcloud_instances_by_testid(self):
+
+        xcloud_provider = self.params.get('xcloud_provider')
+        if xcloud_provider == 'aws':
+            self.get_aws_instances_by_testid()
+        elif xcloud_provider == 'gce':
+            self.get_gce_instances_by_testid()
+
+        if not self.localhost.xcloud_connect_supported(self.params):
+            LOGGER.warning("X-Cloud connectivity is not supported, can't collect db logs")
+            return
+
+        TestConfig().configure_xcloud_connectivity(self.localhost, self.params)
+
+        api_client = ScyllaCloudAPIClient(api_url=self.params.cloud_env_credentials["base_url"],
+                                          auth_token=self.params.cloud_env_credentials["api_token"])
+
+        account_id = api_client.get_account_details().get("accountId")
+        clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+        LOGGER.info("Found %s cluster(s) in Scylla Cloud account", len(clusters))
+
+        for cluster_data in clusters:
+            cluster_name = cluster_data.get('clusterName', '')
+            cluster_id = cluster_data.get('id')
+
+            if self.test_id and str(self.test_id)[:8] in cluster_name:
+                break
+        else:
+            LOGGER.info("No cluster found in Scylla Cloud account matching test_id: %s", self.test_id)
+            return
+        LOGGER.info("Found matching cluster: %s, id: %s", cluster_name, cluster_id)
+
+        cluster_nodes = api_client.get_cluster_nodes(account_id=account_id, cluster_id=cluster_id, enriched=True)
+
+        for node_data in cluster_nodes:
+            parent_cluster_mock = XCloudParentClusterMock(self.params)
+            node_mock = XCloudNodeMock(
+                _cluster_id=cluster_id,
+                _node_id=node_data.get('id'),
+                parent_cluster=parent_cluster_mock
+            )
+            ssh_login_info = self.localhost.xcloud_connect_get_ssh_address(node=node_mock)
+            self.db_cluster.append(CollectingNode(name=str(node_data.get('id')),
+                                                  ssh_login_info=ssh_login_info,
+                                                  tags={**self.tags, "NodeType": "scylla-db", }))
+
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
             self.get_aws_instances_by_testid()
@@ -1661,6 +1778,8 @@ class Collector:
             self.get_gce_instances_by_testid()
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
+        elif backend == 'xcloud':
+            self.get_xcloud_instances_by_testid()
         else:
             self.create_collecting_nodes()
 
@@ -1671,6 +1790,8 @@ class Collector:
         as single stage in pipeline for defined cluster sets
         """
         results = {}
+        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_id)
+
         self.define_test_id()
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
@@ -1698,6 +1819,8 @@ class Collector:
                 LOGGER.warning(
                     "%s is not able to collect logs. Moving to the next log collector",
                     log_collector.__class__.__name__, exc_info=True)
+
+        self.localhost.destroy()
         return results
 
     def create_base_storage_dir(self, test_dir=None):
@@ -1753,3 +1876,21 @@ def upload_archive_to_s3(archive_path: str, storing_path: str) -> Optional[str]:
         LOGGER.error("File `%s' will not be uploaded", archive_path)
         return None
     return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path, public=False)
+
+
+class XCloudParentClusterMock:
+    def __init__(self, params):
+        self.params = params
+        # Add any other attributes needed for compatibility
+
+
+@dataclass
+class XCloudNodeMock:
+    _cluster_id: str
+    _node_id: str
+    parent_cluster: XCloudParentClusterMock
+    _instance_name: str = None
+
+    def __post_init__(self):
+        if self._instance_name is None:
+            self._instance_name = self._node_id

@@ -13,7 +13,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 import os
 import re
 import sys
@@ -51,6 +51,7 @@ from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_conf
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
     update_sct_runner_tags, list_sct_runners
+
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
@@ -83,7 +84,8 @@ from sdcm.utils.common import (
     list_resources_docker,
     list_parallel_timelines_report_urls,
     search_test_id_in_latest,
-    get_latest_scylla_release, images_dict_in_json_format,
+    get_latest_scylla_release, images_dict_in_json_format, get_hdr_tags,
+    download_and_unpack_logs,
 )
 from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -856,7 +858,8 @@ def list_repos(dist_type, dist_version):
 @click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
-def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):
+@click.option('--base_version_all_sts_versions', is_flag=True, default=False, help='Whether to include all supported STS versions as base versions')
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend, base_version_all_sts_versions):
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
@@ -870,7 +873,7 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
     if not linux_distro or linux_distro == "null":
         linux_distro = test_defaults.get("scylla_linux_distro")
 
-    version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
+    version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version, base_version_all_sts_versions)
 
     if not version_detector.dist_type == 'centos' and version_detector.dist_version is None:
         click.secho("when passing --dist-type=debian/ubuntu need to pass --dist-version as well", fg='red')
@@ -1217,7 +1220,7 @@ def integration_tests(test, n):
         )
         local_cluster.setup_prerequisites()
 
-    sys.exit(pytest.main(['-v', '-m', 'integration',
+    sys.exit(pytest.main(['-v', '-m', 'integration', '--dist', 'loadgroup',
              f'-n{n}', *(f'unit_tests/{t}' for t in test)]))
 
 
@@ -1340,7 +1343,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     add_file_logger()
 
-    from sdcm.logcollector import Collector
+    from sdcm.logcollector import Collector  # noqa: PLC0415
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1553,7 +1556,7 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
              help="Create pipeline jobs for performance")
 @click.argument('username', envvar='JENKINS_USERNAME', type=str, required=False)
 @click.argument('password', envvar='JENKINS_PASSWORD', type=str, required=False)
-@click.option('--sct_branch', default='branch-perf-v15', type=str)
+@click.option('--sct_branch', default='branch-perf-v17', type=str)
 @click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
 @click.option('--triggers/--no-triggers', default=False)
 def create_performance_jobs(username, password, sct_branch, sct_repo, triggers):
@@ -1819,7 +1822,7 @@ def get_nemesis_list(backend, config):
 
     # NOTE: this import messes up logging for the test, since it's importing tester.py
     # directly down the line
-    from unit_tests.nemesis.fake_cluster import FakeTester
+    from unit_tests.nemesis.fake_cluster import FakeTester  # noqa: PLC0415
 
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
@@ -1877,14 +1880,15 @@ def finish_argus_test_run(jenkins_status):
             return
         test_config.set_test_id_only(params.get('test_id'))
         test_config.init_argus_client(params)
-        status = test_config.argus_client().get_status()
-        if status in [TestStatus.PASSED, TestStatus.FAILED, TestStatus.TEST_ERROR]:
-            LOGGER.info("Argus TestRun already finished with status %s", status.value)
-            return
-        new_status = TestStatus.FAILED
         if jenkins_status == "ABORTED":
             LOGGER.info("Jenkins build status is ABORTED, setting Argus TestRun status to ABORTED")
             new_status = TestStatus.ABORTED
+        else:
+            status = test_config.argus_client().get_status()
+            if status in [TestStatus.PASSED, TestStatus.FAILED, TestStatus.TEST_ERROR]:
+                LOGGER.info("Argus TestRun already finished with status %s", status.value)
+                return
+            new_status = TestStatus.FAILED
         test_config.argus_client().set_sct_run_status(new_status)
         test_config.argus_client().finalize_sct_run()
     except ArgusClientError:
@@ -1949,6 +1953,107 @@ def upload_artifact_file(test_id: str, file_path: str, use_argus: bool, public: 
     else:
         LOGGER.error("File %s does not exist", file.absolute())
         return
+
+
+@cli.command("hdr-investigate", help="Analyze HDR file for latency spikes.\n"
+                                     "Usage example:\n"
+                                     "hydra hdr-investigate --stress-operation READ --throttled-load true "
+                                     "--test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5 --start-time \"2025-09-14\\ 20:45:18\" "
+                                     "--duration-from-start-min 30")
+@click.option("--test-id", type=str, required=False, help="If hdr_folder is not provided, logs will be downloaded from argus "
+                                                          "using this test_id")
+@click.option("--stress-tool", default="cassandra-stress", required=False,
+              type=click.Choice(['cassandra-stress', 'scylla-bench', 'latte'], case_sensitive=False),
+              help="stress tool name. Supported tools: cassandra-stress|scylla-bench|latte")
+@click.option("--stress-operation", required=True,
+              type=click.Choice(["READ", "WRITE"], case_sensitive=False),
+              help="Supported stress operations: READ|WRITE")
+@click.option("--throttled-load", type=bool, required=True, help="Is the load throttled or not")
+@click.option("--start-time", type=str, required=True, help="Start time in format 'YYYY-MM-DD\\ HH:MM:SS'")
+@click.option("--duration-from-start-min", type=int, required=True,
+              help="Time period in minutes in HDR file to investigate, started from start-time ")
+@click.option("--error-threshold-ms", type=int, default=10, required=False,
+              help="Error threshold in ms for P99 to consider it as a spike")
+@click.option("--hdr-summary-interval-sec", type=int, default=600, required=False, help="Interval in seconds for scan")
+@click.option("--hdr-folder", type=str, default=None, required=False, help="Path to folder with hdr files. ")
+def hdr_investigate(test_id: str, stress_tool: str, stress_operation: str, throttled_load: bool, start_time: str,
+                    duration_from_start_min: int, error_threshold_ms: int, hdr_summary_interval_sec: int, hdr_folder: str) -> None:
+    """
+    Analyze HDR file for latency spikes.
+
+    This function scans HDR files to identify intervals with high latency spikes.
+    It performs a scan to find intervals with the highest P99 latency
+    Args:
+        test_id (str): Test ID. If `hdr_folder` is not provided, logs will be downloaded from Argus using this ID to /tmp/<test-id> folder.
+        stress_tool (str): Name of the stress tool. Supported: cassandra-stress, scylla-bench, latte.
+        stress_operation (str): Stress operation type. Supported: READ, WRITE.
+        throttled_load (bool): Whether the load is throttled.
+        start_time (str): Start time in format 'YYYY-MM-DD HH:MM:SS'.
+        duration_from_start_min (int): Time period in minutes in HDR file to investigate, starting from `start_time`.
+        error_threshold_ms (int): Error threshold in ms for P99 to consider it as a spike.
+        hdr_summary_interval_sec (int): Interval in seconds for scan.
+        hdr_folder (str): Path to folder with HDR files. If not provided, logs will be downloaded from Argus.
+
+    Returns:
+        None
+
+    Usage example:
+       hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
+       --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
+    """
+    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+    stress_operation = stress_operation.upper()
+
+    try:
+        start_time_ms = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC).timestamp()
+    except ValueError:
+        raise ValueError("start_time must be in 'YYYY-MM-DD HH:MM:SS' format")
+
+    if not hdr_folder:
+        if not test_id:
+            raise ValueError("Either test_id or hdr_folder must be provided")
+
+        hdr_folder = download_and_unpack_logs(test_id, log_type='loader-set')
+
+    hdr_tags = get_hdr_tags(stress_tool, stress_operation, throttled_load)
+
+    # Step 1: Coarse scan
+    end_time_ms = start_time_ms + duration_from_start_min * 60
+    hdr_summaries = make_hdrhistogram_summary_by_interval(
+        hdr_tags, stress_operation, hdr_folder, start_time_ms, end_time_ms, interval=hdr_summary_interval_sec
+    )
+
+    summaries = []
+    for tag in hdr_tags:
+        # Find intervals for this tag
+        tag_hdr_summaries = [
+            (summary.get(f"{stress_operation}--{tag}", {}))
+            for summary in hdr_summaries
+        ]
+        # Filter intervals where percentile_99 > error threshold. Meaning it is a spike
+        tag_summaries = [
+            s for s in tag_hdr_summaries if s and "percentile_99" in s and s["percentile_99"] > error_threshold_ms
+        ]
+        # Sort by percentile_99 descending
+        tag_summaries.sort(key=lambda x: x["percentile_99"], reverse=True)
+        for num, operation in enumerate(tag_summaries, start=1):
+            p99 = {}
+            # Convert to human readable time
+            dt_start = datetime.fromtimestamp(operation["start_time"] / 1000, UTC).strftime('%Y-%m-%d %H:%M:%S')
+            dt_end = datetime.fromtimestamp(operation["end_time"] / 1000, UTC).strftime('%Y-%m-%d %H:%M:%S')
+            if operation['percentile_99'] > error_threshold_ms:
+                p99[f"{dt_start} - {dt_end}"] = operation['percentile_99']
+            summaries.append({"tag": tag, "spikes": p99})
+
+    hdr_table = PrettyTable(["Tag", "Timeframe", "P99"])
+    hdr_table.align = "l"
+    for group in summaries:
+        # Example: group: {'tag': 'READ-st', 'spikes': {'2025-08-25 10:22:40 - 2025-08-25 10:32:40': 487.85}}
+        for time_frame, p99 in group["spikes"].items():
+            hdr_table.add_row([group["tag"], time_frame, p99])
+    click.echo(
+        f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n")
+    click.echo(hdr_table.get_string(title="HDR Latency Spikes"))
 
 
 cli.add_command(sct_ssh.ssh)

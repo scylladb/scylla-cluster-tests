@@ -37,6 +37,7 @@ class AwsRegion:
     SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
     SCT_SUBNET_PER_AZ = 2  # how many subnets to configure in each region.
+    SCT_NODES_ROLE_ARN = "qa-scylla-manager-backup-role"
 
     def __init__(self, region_name):
         self.region_name = region_name
@@ -44,7 +45,7 @@ class AwsRegion:
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
         # cause import straight from common create cyclic dependency
-        from sdcm.utils.common import all_aws_regions
+        from sdcm.utils.common import all_aws_regions  # noqa: PLC0415
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
@@ -238,6 +239,21 @@ class AwsRegion:
         assert len(existing_rts) == 1, \
             f"More than 1 Route Table with {sct_route_table_name} found in {self.region_name}: {existing_rts}!"
         return self.resource.RouteTable(existing_rts[0]["RouteTableId"])
+
+    @cached_property
+    def sct_route_tables(self) -> list:
+        """Get all route tables associated with the SCT VPC"""
+        route_tables = set()
+        main_route_table = self.sct_route_table(index=None)
+        if main_route_table:
+            route_tables.add(main_route_table)
+
+        route_tables.update(
+            rt for index in range(self.SCT_SUBNET_PER_AZ) if (rt := self.sct_route_table(index=index))
+        )
+
+        LOGGER.debug("Discovered %d SCT route tables in %s", len(route_tables), self.region_name)
+        return list(route_tables)
 
     def create_sct_subnet_route_table(self, subnet_name: str, index: int = None):
         subnet_route_table = self.sct_route_table_name(index=index)
@@ -539,6 +555,13 @@ class AwsRegion:
                                       'Description': 'Allow Scylla Manager pprof Debug For ALL'}],
                         "Ipv6Ranges": [{'CidrIpv6': '::/0',
                                         'Description': 'Allow Scylla Manager pprof Debug For ALL'}]
+                    },
+                    {
+                        "FromPort": 6080,
+                        "ToPort": 6080,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Vector Store REST API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Vector Store REST API for ALL'}]
                     }
                 ]
             )
@@ -615,6 +638,48 @@ class AwsRegion:
                                           PublicKeyMaterial=sct_key_pair.public_key)
             LOGGER.info("SCT Key Pair created.")
 
+    def get_vpc_peering_routes(self) -> list[str]:
+        """Discover all VPC peering routes in SCT route tables"""
+        peering_routes = []
+        for route_table in self.sct_route_tables:
+            routes = route_table.routes_attribute
+            for route in routes:
+                if route.get('VpcPeeringConnectionId') and route.get('DestinationCidrBlock'):
+                    dest_cidr = route.get('DestinationCidrBlock')
+                    if dest_cidr != '0.0.0.0/0' and dest_cidr not in peering_routes:
+                        peering_routes.append(dest_cidr)
+
+        LOGGER.debug("Discovered %s VPC peering routes in %s", peering_routes, self.region_name)
+        return peering_routes
+
+    @cached_property
+    def ssm(self):
+        return boto3.client("ssm", region_name=self.region_name)
+
+    @cached_property
+    def sts(self):
+        return boto3.client("sts", region_name=self.region_name)
+
+    def configure_ssm(self, role_name=SCT_NODES_ROLE_ARN):
+        """Ensure that SSM agent can work in the region by adding necessary IAM role and instance profile"""
+
+        # Replace with the actual ARN of your IAM role created in step 1
+        # Example: service-role/AWSSystemsManagerDefaultEC2InstanceManagementRole
+        # Note: The 'service-role/' prefix is crucial when setting the value.
+        iam_role_for_dhmc = f"service-role/{role_name}"
+
+        account_id = self.sts.get_caller_identity()["Account"]
+        region = self.ssm.meta.region_name
+
+        setting_id = f"arn:aws:ssm:{region}:{account_id}:servicesetting/ssm/managed-instance/default-ec2-instance-management-role"
+
+        try:
+            response = self.ssm.update_service_setting(SettingId=setting_id, SettingValue=iam_role_for_dhmc)
+            LOGGER.info("Default Host Management Configuration updated successfully.")
+            LOGGER.debug(response)
+        except botocore.exceptions.ClientError as e:
+            LOGGER.error(f"Error updating Default Host Management Configuration: {e}")
+
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.create_sct_vpc()
@@ -624,4 +689,5 @@ class AwsRegion:
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
         self.create_sct_key_pair()
+        self.configure_ssm()
         LOGGER.info("Region configured successfully.")

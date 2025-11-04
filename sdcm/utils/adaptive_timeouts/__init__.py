@@ -100,6 +100,8 @@ class Operations(Enum):
     SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
                                  ("timeout", "service_level_for_test_step"))
     TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
+    HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
+    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout, ("timeout",))
 
 
 class TestInfoServices:
@@ -164,11 +166,17 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
     Use Operation.SOFT_TIMEOUT to set timeout explicitly without calculations.
     """
     tablet_sensitive_op = operation in {Operations.DECOMMISSION, Operations.NEW_NODE}
-    tablets_enabled = is_tablets_feature_enabled(node)
+    kwargs.setdefault('node_available', True)
+
+    # in some situations we may want to skip tablet check, since it depends on ssh connectivity
+    tablets_enabled = kwargs['node_available'] and is_tablets_feature_enabled(node)
 
     _, timeout_func, required_arg_names = operation.value
     args = {arg: kwargs[arg] for arg in required_arg_names}
-    store_metrics = node.parent_cluster.params.get("adaptive_timeout_store_metrics")
+
+    # if node is known to be not available, skip metrics gathering and use default timeouts
+    store_metrics = node.parent_cluster.params.get(
+        "adaptive_timeout_store_metrics") and kwargs['node_available']
     if store_metrics:
         metrics = NodeLoadInfoServices().get(node)
     else:

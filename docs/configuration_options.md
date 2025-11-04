@@ -60,6 +60,24 @@ Time in minutes, Time of execution for stress commands from stress_cmd parameter
 **type:** int
 
 
+## **alternator_stress_rate** / SCT_ALTERNATOR_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing.
+
+**default:** N/A
+
+**type:** int
+
+
+## **alternator_write_always_lwt_stress_rate** / SCT_ALTERNATOR_WRITE_ALWAYS_LWT_STRESS_RATE
+
+Number of operations per second to achieve in stress commands for alternator testing, in write test with isolation set to always LWT. If non-zero, overwrites alternator_stress_rate.
+
+**default:** N/A
+
+**type:** int
+
+
 ## **n_db_nodes** / SCT_N_DB_NODES
 
 Number list of database data nodes in multiple data centers. To use with<br>multi data centers and zero nodes, dc with zero-nodes only should be set as 0,<br>ex. "3 3 0".
@@ -325,7 +343,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml
 
-**default:** 3.6
+**default:** 3.7
 
 **type:** str
 
@@ -352,7 +370,7 @@ Branch of scylla db enterprise to install. Options in defaults/manager_versions.
 
 
 
-**default:** 3.6.0
+**default:** 3.7.0
 
 **type:** str
 
@@ -888,6 +906,15 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
+
+
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)
@@ -946,7 +973,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** N/A
+**default:** {'rf_rack_valid_keyspaces': True}
 
 **type:** dict_or_str
 
@@ -1230,6 +1257,24 @@ AMS AMI id to use for oracle node
 **type:** str (appendable)
 
 
+## **ami_id_vector_store** / SCT_AMI_ID_VECTOR_STORE
+
+AMI ID for Vector Store nodes
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **instance_type_vector_store** / SCT_INSTANCE_TYPE_VECTOR_STORE
+
+AWS/GCP cloud provider instance type for Vector Store nodes
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **root_disk_size_db** / SCT_ROOT_DISK_SIZE_DB
 
 
@@ -1294,6 +1339,15 @@ root disk size in Gb for sct-runner
 
 
 ## **ami_db_cassandra_user** / SCT_AMI_DB_CASSANDRA_USER
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
+## **ami_vector_store_user** / SCT_AMI_VECTOR_STORE_USER
 
 
 
@@ -2035,7 +2089,7 @@ Number of nodes in monitoring pool that will be used for scylla-operator's deplo
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
-**default:** scylladb/scylla-manager:3.6.0
+**default:** scylladb/scylla-manager:3.7.0
 
 **type:** str (appendable)
 
@@ -2058,7 +2112,7 @@ local docker network to use, if there's need to have db cluster connect to other
 **type:** str (appendable)
 
 
-## **vs_docker_image** / SCT_VS_DOCKER_IMAGE
+## **vector_store_docker_image** / SCT_VECTOR_STORE_DOCKER_IMAGE
 
 Vector Store docker image repo
 
@@ -2067,11 +2121,11 @@ Vector Store docker image repo
 **type:** str (appendable)
 
 
-## **vs_version** / SCT_VS_VERSION
+## **vector_store_version** / SCT_VECTOR_STORE_VERSION
 
 Vector Store version / docker image tag
 
-**default:** latest
+**default:** N/A
 
 **type:** str (appendable)
 
@@ -2861,11 +2915,20 @@ options will be used for enable encryption at-rest for tables
 
 ## **kms_key_rotation_interval** / SCT_KMS_KEY_ROTATION_INTERVAL
 
-The time interval in minutes which gets waited before the KMS key rotation happens. Applied when the AWS KMS service is configured to be used.
+The time interval in minutes which gets waited before the KMS key rotation happens. Applied when AWS KMS or Azure KMS service is configured to be used. NOTE: Be aware that Azure Key rotations cost $1/rotation.
 
 **default:** N/A
 
 **type:** int
+
+
+## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
+
+Allows to disable KMS keys rotation. Applicable only to Azure backend. In case of AWS backend its KMS keys will always be rotated as of now.
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **enterprise_disable_kms** / SCT_ENTERPRISE_DISABLE_KMS
@@ -2881,7 +2944,7 @@ An escape hatch to disable KMS for enterprise run, when needed, we enable kms by
 
 How to transport logs: syslog-ng, ssh or docker
 
-**default:** syslog-ng
+**default:** vector
 
 **type:** str (appendable)
 
@@ -3080,6 +3143,15 @@ Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
 Whether to upgrade sstables as part of upgrade_node or not
 
 **default:** N/A
+
+**type:** boolean
+
+
+## **enable_truncate_checks_on_node_upgrade** / SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE
+
+Enables or disables truncate checks on each node upgrade and rollback
+
+**default:** True
 
 **type:** boolean
 
@@ -3671,14 +3743,23 @@ Cloud provider for Scylla Cloud deployment (aws, gce)
 
 ## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
 
-Replication factor for Scylla Cloud cluster (default: 3)
+Replication factor for Scylla Cloud cluster
 
 **default:** N/A
 
 **type:** int
 
 
-## **n_vs_nodes** / SCT_N_VS_NODES
+## **xcloud_vpc_peering** / SCT_XCLOUD_VPC_PEERING
+
+Dictionary of VPC peering parameters for private connectivity between<br>SCT infrastructure and Scylla Cloud. The following parameters are used:<br>enabled: bool - indicates whether VPC peering is to be used<br>cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)<br>cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)
+
+**default:** N/A
+
+**type:** dict_or_str
+
+
+## **n_vector_store_nodes** / SCT_N_VECTOR_STORE_NODES
 
 Number of vector store nodes (0 = VS is disabled)
 
@@ -3687,7 +3768,7 @@ Number of vector store nodes (0 = VS is disabled)
 **type:** int
 
 
-## **vs_port** / SCT_VS_PORT
+## **vector_store_port** / SCT_VECTOR_STORE_PORT
 
 Vector Store API port
 
@@ -3696,7 +3777,7 @@ Vector Store API port
 **type:** int
 
 
-## **vs_scylla_port** / SCT_VS_SCYLLA_PORT
+## **vector_store_scylla_port** / SCT_VECTOR_STORE_SCYLLA_PORT
 
 ScyllaDB connection port for Vector Store
 
@@ -3705,10 +3786,10 @@ ScyllaDB connection port for Vector Store
 **type:** int
 
 
-## **vs_threads** / SCT_VS_THREADS
+## **vector_store_threads** / SCT_VECTOR_STORE_THREADS
 
-Vector indexing threads (default: number of CPU cores)
+Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)
 
-**default:** 2
+**default:** N/A
 
 **type:** int

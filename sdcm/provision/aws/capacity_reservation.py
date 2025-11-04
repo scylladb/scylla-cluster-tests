@@ -62,7 +62,7 @@ class SCTCapacityReservation:
     @classmethod
     def get_cr_from_aws(cls, params, force_fetch=False) -> None:
         """Retrieves capacity reservations for given test_id from AWS."""
-        if not cls.is_capacity_reservation_enabled(params) and not force_fetch:
+        if (not cls.is_capacity_reservation_enabled(params) and not force_fetch) or not params.get("test_id"):
             LOGGER.info("Capacity reservation is not enabled. Skipping reservation.")
             return
         test_id = params.get("test_id")

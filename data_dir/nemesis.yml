@@ -414,6 +414,22 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
+disrupt_kill_mv_building_coordinator:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: true
+  zero_node_changes: false
 disrupt_kill_scylla:
   config_changes: false
   delete_rows: false
@@ -476,6 +492,22 @@ disrupt_major_compaction:
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_manager_backup:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: true
+  networking: false
+  run_with_gemini: true
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
   topology_changes: false
   zero_node_changes: false
 disrupt_maximum_allowed_sls_with_max_shares_during_load:

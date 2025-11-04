@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 CONSISTENT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
 CONSISTENT_CLUSTER_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"
 GROUP0_LIMITED_VOTERS = "GROUP0_LIMITED_VOTERS"
+VIEWS_WITH_TABLETS = "VIEWS_WITH_TABLETS"
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -100,3 +102,8 @@ def is_tablets_feature_enabled(node: BaseNode) -> bool:
 def is_group0_limited_voters_enabled(session: Session) -> bool:
     """ Check whether feature group0 limited voters is enabled"""
     return GROUP0_LIMITED_VOTERS in get_enabled_features(session)
+
+
+def is_views_with_tablets_enabled(session: Session) -> bool:
+    """ Check whether feature view with tablets is enabled"""
+    return VIEWS_WITH_TABLETS in get_enabled_features(session)

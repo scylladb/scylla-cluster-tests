@@ -14,14 +14,15 @@
 import json
 import logging
 import ipaddress
-import requests
 from enum import Enum
 from functools import cached_property
 from pprint import pformat
-from requests.adapters import HTTPAdapter
 from urllib.parse import urljoin
 from typing import Any, Literal
 
+import yaml
+import requests
+from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
@@ -135,7 +136,7 @@ class ScyllaCloudAPIClient:
     @cached_property
     def current_scylla_version(self) -> dict:
         """Get the latest ScyllaDB Cloud version that can be used to create a new cluster"""
-        return next(v for v in reversed(self.get_scylla_versions()) if v["newCluster"] == "ENABLED")
+        return next(v for v in reversed(self.get_scylla_versions()['scyllaVersions']) if v["newCluster"] == "ENABLED")
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
@@ -258,6 +259,8 @@ class ScyllaCloudAPIClient:
         encryption_at_rest: dict | None,
         maintenance_windows: list[dict],
         scaling: dict[str, str],
+        prom_proxy: bool,
+        vector_search: dict | None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -282,6 +285,8 @@ class ScyllaCloudAPIClient:
         :param encryption_at_rest: encryption at rest configuration
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
+        :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
+        :param vector_search: Vector Search configuration
 
         :return: created cluster details
         """
@@ -305,7 +310,10 @@ class ScyllaCloudAPIClient:
             jumpStart=jump_start,
             encryptionAtRest=encryption_at_rest,
             maintenanceWindows=maintenance_windows,
-            scaling=scaling,)
+            scaling=scaling,
+            promProxy=prom_proxy,
+            vectorSearch=vector_search
+        )
         return self._parse_response_data(response)
 
     def get_clusters(self, *, account_id: int, metrics: str = '', enriched: bool = False) -> list[dict[str, Any]]:
@@ -329,6 +337,13 @@ class ScyllaCloudAPIClient:
             return next(cluster for cluster in clusters if cluster["clusterName"] == cluster_name)["id"]
         return None
 
+    def search_clusters_by_name_pattern(self, *, account_id: int, name_pattern: str) -> list[dict]:
+        """Search clusters by name pattern"""
+        clusters = self.get_clusters(account_id=account_id)
+        if not clusters:
+            return []
+        return [c for c in clusters if name_pattern in c.get('clusterName', '')]
+
     def get_cluster_nodes(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of cluster nodes"""
         params = {}
@@ -342,6 +357,29 @@ class ScyllaCloudAPIClient:
         if enriched:
             params['enriched'] = 'true'
         return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dcs', params=params)['dataCenters']
+
+    def get_cluster_promproxy_config(self, *, account_id: int, cluster_id: int) -> str:
+        """
+        Get the Prometheus proxy configuration for a cluster.
+        """
+
+        url = f'/account/{account_id}/cluster/{cluster_id}/promproxy/config'
+        url = urljoin(self.api_url, url.lstrip('/'))
+
+        LOGGER.debug("Making get request to %s", url)
+        response = self.session.get(url)
+        response.raise_for_status()
+
+        # quick sanity check to ensure the response is valid YAML
+        try:
+            yaml.safe_load(response.text)
+        except Exception:
+            LOGGER.exception("Failed to parse Prometheus proxy config as YAML")
+            LOGGER.exception(response.text)
+            raise
+
+        LOGGER.info("Got Prometheus proxy config for cluster %d: %s", cluster_id, response.text)
+        return response.text
 
     def delete_cluster(self, *, account_id: int,  cluster_id: int, cluster_name: str) -> dict[str, Any]:
         """Delete a cluster"""
@@ -379,6 +417,22 @@ class ScyllaCloudAPIClient:
     def get_cluster_connection(self, *, account_id: int, cluster_id: int) -> dict[str, Any]:
         """Get cluster connection details including credentials and endpoints"""
         return self.request('GET', f'/account/{account_id}/cluster/connect', params={'clusterId': cluster_id})
+
+    def get_vector_search_nodes(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Get Vector Search nodes information"""
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
+
+    def install_vector_search(
+            self, *, account_id: int, cluster_id: int, dc_id: int, number_of_nodes: int, instance_type_id: int
+    ) -> dict[str, Any]:
+        """Install Vector Search nodes into an existing cluster"""
+        return self.request(
+            'POST', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search',
+            defaultNodes=number_of_nodes, defaultInstanceTypeId=instance_type_id)
+
+    def delete_vector_search(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Delete Vector Search nodes from an existing cluster"""
+        return self.request('DELETE', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
 
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:

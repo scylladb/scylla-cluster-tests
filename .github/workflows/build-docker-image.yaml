@@ -19,9 +19,11 @@ jobs:
     outputs:
       isTeamMember: ${{ steps.teamAffiliation.outputs.isTeamMember }}
     steps:
+      # Skip team membership check for bots since GitHub API cannot resolve bot users
+      # This prevents GraphQL errors like "Could not resolve to a User with the login of 'Copilot'"
       - name: Check user for team affiliation
         uses: tspascoal/get-user-teams-membership@v3
-        if: github.event.pull_request.user.login != 'renovate[bot]'
+        if: github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'Copilot'
         id: teamAffiliation
         with:
           GITHUB_TOKEN: ${{ secrets.AUTO_BACKPORT_TOKEN }}
@@ -30,7 +32,7 @@ jobs:
 
   build_image:
     needs: check_org_membership
-    if: ( github.event.pull_request.user.login == 'renovate[bot]' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
+    if: ( github.event.pull_request.user.login == 'renovate[bot]' || github.event.pull_request.user.login == 'Copilot' || needs.check_org_membership.outputs.isTeamMember == 'true' ) && contains(github.event.pull_request.labels.*.name, 'New Hydra Version')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -55,9 +57,9 @@ jobs:
           GH_TOKEN: ${{ secrets. GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
@@ -91,7 +93,7 @@ jobs:
           git commit -m "chore(hydra): create image $( cat ./docker/env/version )"
 
       - name: Push changes
-        uses: ad-m/github-push-action@v0.8.0
+        uses: ad-m/github-push-action@v1.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.head_ref }}

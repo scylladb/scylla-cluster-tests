@@ -19,8 +19,7 @@ from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import RepairTask
 from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
-from mgmt_cli_test import ManagerTestFunctionsMixIn
-
+from sdcm.mgmt.operations import ManagerTestFunctionsMixIn
 
 LOGGER = logging.getLogger(__name__)
 

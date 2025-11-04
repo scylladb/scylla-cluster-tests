@@ -12,7 +12,9 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+import time
 from functools import cached_property
+from typing import Optional
 
 import googleapiclient.errors
 from googleapiclient.discovery import build
@@ -44,6 +46,8 @@ class GceRegion:
 
         self.network_client = compute_v1.NetworksClient(credentials=credentials)
         self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
+        self.subnets_client = compute_v1.SubnetworksClient(credentials=credentials)
+        self.routes_client = compute_v1.RoutesClient(credentials=credentials)
         self.storage_client = storage.Client(credentials=credentials)
 
     @property
@@ -57,6 +61,13 @@ class GceRegion:
         except google.api_core.exceptions.NotFound:
             _network = self.create_network()
         return _network
+
+    @cached_property
+    def region_subnet(self) -> compute_v1.Subnetwork:
+        for subnet in self.subnets_client.list(project=self.project, region=self.region_name):
+            if subnet.network.endswith(f'networks/{self.SCT_NETWORK_NAME}'):
+                return subnet
+        raise RuntimeError(f"No subnet found for network {self.SCT_NETWORK_NAME} in region {self.region_name}")
 
     def create_network(self) -> compute_v1.Network:
         _network = compute_v1.Network()
@@ -208,6 +219,73 @@ class GceRegion:
         self.create_backup_service_account()
         self.configure_backup_storage()
         LOGGER.info("Region configured successfully.")
+
+    def add_network_peering(
+            self, peering_name: str, peer_project: str, peer_net: str, wait_for_active: bool = True) -> None:
+        peer_network_url = f"projects/{peer_project}/global/networks/{peer_net}"
+        peering_request = compute_v1.AddPeeringNetworkRequest(
+            network=self.SCT_NETWORK_NAME,
+            project=self.project,
+            networks_add_peering_request_resource=compute_v1.NetworksAddPeeringRequest(
+                name=peering_name,
+                peer_network=peer_network_url,
+                auto_create_routes=True)
+        )
+        self.network_client.add_peering(request=peering_request)
+        if wait_for_active:
+            self.wait_for_peering_status(peering_name, status='ACTIVE')
+
+    def get_peering_status(self, peering_name: str) -> Optional[str]:
+        network = self.network_client.get(project=self.project, network=self.SCT_NETWORK_NAME)
+        for peering in network.peerings or []:
+            if peering.name == peering_name:
+                return peering.state
+        return None
+
+    def wait_for_peering_status(self, peering_name: str, status: str = 'ACTIVE', timeout: int = 300) -> bool:
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            if (current_status := self.get_peering_status(peering_name)) == status:
+                LOGGER.debug("Peering %s status: %s", peering_name, current_status)
+                return True
+            time.sleep(5)
+
+        LOGGER.error("Timeout waiting for GCP network peering %s to become %s", peering_name, status)
+        return False
+
+    def cleanup_vpc_peering_connection(self, peering_name: str) -> bool:
+        peering_status = self.get_peering_status(peering_name)
+        if not peering_status:
+            LOGGER.debug("GCP network peering %s not found.", peering_name)
+            return True
+
+        remove_request = compute_v1.RemovePeeringNetworkRequest(
+            network=self.SCT_NETWORK_NAME,
+            project=self.project,
+            networks_remove_peering_request_resource=compute_v1.NetworksRemovePeeringRequest(name=peering_name))
+        self.network_client.remove_peering(request=remove_request)
+        time.sleep(3)  # wait a bit for the operation to propagate
+
+        final_status = self.get_peering_status(peering_name)
+        if final_status:
+            LOGGER.warning("GCP network peering %s still exists after deletion attempt (status: %s)",
+                           peering_name, final_status)
+            return False
+        return True
+
+    def get_peering_routes(self) -> list[str]:
+        """Discover all network peering routes in SCT VPC network"""
+        peering_routes = []
+
+        routes = self.routes_client.list(project=self.project)
+        for route in routes:
+            if hasattr(route, 'next_hop_peering') and route.next_hop_peering:  # peering routes have `next_hop_peering` attribute
+                if route.network and self.SCT_NETWORK_NAME in route.network:
+                    if route.dest_range and route.dest_range not in peering_routes:
+                        peering_routes.append(route.dest_range)
+
+        LOGGER.debug("Discovered %s peering routes in %s", peering_routes, self.region_name)
+        return peering_routes
 
 
 if __name__ == "__main__":

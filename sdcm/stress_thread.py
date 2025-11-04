@@ -107,19 +107,26 @@ class CassandraStressThread(DockerBasedStressThread):
     def set_hdr_tags(self, stress_cmd):
         # TODO: add support for the "counter_write", "counter_read" and "user" modes?
         params = get_stress_cmd_params(stress_cmd)
-        if "fixed threads" in params:
-            if " mixed " in stress_cmd:
-                self.hdr_tags = ["WRITE-rt", "READ-rt"]
-            elif " read " in stress_cmd:
-                self.hdr_tags = ["READ-rt"]
+        tag_suffix = "rt" if "fixed threads" in params else "st"
+        if "user profile=" in stress_cmd:
+            # Examples:
+            # Write: ops(insert=1)
+            # Read: ops(read=2)
+            # Mixed: ops(insert=1,read=2)
+            # Only standard operations (read and insert) are supported per user profile stress command in this implementation
+            if "insert=" in stress_cmd:
+                self.hdr_tags.append(f"WRITE-{tag_suffix}")
+            elif "read=" in stress_cmd:
+                self.hdr_tags.append(f"READ-{tag_suffix}")
             else:
-                self.hdr_tags = ["WRITE-rt"]
+                raise ValueError(
+                    "Cannot detect supported stress operation type from the stress command with user profile: %s", stress_cmd)
         elif " mixed " in stress_cmd:
-            self.hdr_tags = ["WRITE-st", "READ-st"]
+            self.hdr_tags = [f"WRITE-{tag_suffix}", f"READ-{tag_suffix}"]
         elif " read " in stress_cmd:
-            self.hdr_tags = ["READ-st"]
+            self.hdr_tags = [f"READ-{tag_suffix}"]
         else:
-            self.hdr_tags = ["WRITE-st"]
+            self.hdr_tags = [f"WRITE-{tag_suffix}"]
 
     @staticmethod
     def append_no_warmup_to_cmd(stress_cmd):
@@ -471,17 +478,17 @@ class CassandraStressThread(DockerBasedStressThread):
         return results
 
 
-stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')
-stress_cmd_get_warmup_pattern = re.compile(r' [-]{0,2}warmup[\s=]+([\d]+[hms]+)')
+stress_cmd_get_duration_pattern = re.compile(r'(?:^|[ \n])[-]{0,2}duration[\s=]+([\d]+[hms]+)')
+stress_cmd_get_warmup_pattern = re.compile(r'(?:^|[ \n])[-]{0,2}warmup[\s=]+([\d]+[hms]+)')
 
 
 def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:
     """Gets timeout in seconds based on duration and warmup arguments from stress command."""
     timeout = 0
     if duration_match := stress_cmd_get_duration_pattern.search(stress_cmd):
-        timeout += time_period_str_to_seconds(duration_match.group(0))
+        timeout += time_period_str_to_seconds(duration_match.group(1))
     if warmup_match := stress_cmd_get_warmup_pattern.search(stress_cmd):
-        timeout += time_period_str_to_seconds(warmup_match.group(0))
+        timeout += time_period_str_to_seconds(warmup_match.group(1))
     if timeout == 0:
         return None
     else:

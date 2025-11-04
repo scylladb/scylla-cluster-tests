@@ -20,7 +20,7 @@ from sdcm.test_config import TestConfig
 def test_can_provision_instances_according_to_sct_configuration(params, test_config, azure_service, fake_remoter):
     """Integration test for provisioning sct resources according to SCT configuration."""
     fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
-                               r"sudo cloud-init --version": Result(stdout="/bin/ 19.2-amzn", stderr="", exited=0),
+                               r"cloud-init --version 2>&1": Result(stdout="/bin/ 19.2-amzn", stderr="", exited=0),
                                r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0)}
     tags = TestConfig.common_tags()
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
@@ -58,7 +58,7 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
 def test_fallback_on_demand_when_spot_fails(fallback_on_demand, params, test_config, azure_service, fake_remoter):
 
     fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
-                               r"sudo cloud-init --version": Result(stdout="/bin/ 19.2-amzn", stderr="", exited=0),
+                               r"cloud-init --version 2>&1": Result(stdout="/bin/ 19.2-amzn", stderr="", exited=0),
                                r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0)}
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(

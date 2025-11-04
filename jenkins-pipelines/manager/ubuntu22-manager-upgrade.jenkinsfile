@@ -7,14 +7,12 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
+    scylla_version: '2025.2',
+
     // Upgrade from the previous minor release (the last one)
     manager_version: '3.5',
     target_manager_version: 'master_latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
-    test_config: 'test-cases/upgrades/manager-upgrade.yaml',
-
-    post_behavior_db_nodes: 'destroy',
-    post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'destroy'
+    test_config: 'test-cases/upgrades/manager-upgrade.yaml'
 )

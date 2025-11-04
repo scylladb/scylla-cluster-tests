@@ -220,7 +220,7 @@ def clean_instances(region_name, duration):
 
 
 def keep_alive_volume(volume):
-    if volume.create_time < datetime.datetime.now(tz=pytz.utc) + datetime.timedelta(hours=1):
+    if volume.create_time > (datetime.datetime.now(tz=pytz.utc) - datetime.timedelta(hours=1)):
         # skipping if created recently and might miss tags yet
         return True
     # checking tags

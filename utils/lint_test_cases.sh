@@ -7,7 +7,7 @@ OUT=$(($OUT + $?))
 SCT_AZURE_IMAGE_DB=image SCT_AZURE_REGION_NAME="eastus" ./sct.py lint-yamls --backend azure -i azure
 OUT=$(($OUT + $?))
 
-SCT_GCE_IMAGE_DB=image SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,jepsen' -e 'multi-dc,multiDC,docker,azure'
+SCT_GCE_IMAGE_DB=image SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,jepsen' -e 'multi-dc,multiDC,docker,azure,5dcs'
 OUT=$(($OUT + $?))
 
 echo "multi dc yamls with 2 regions"

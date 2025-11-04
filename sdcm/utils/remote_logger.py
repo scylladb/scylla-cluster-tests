@@ -131,7 +131,8 @@ class SSHLoggerBase(LoggerBase):
                 log_file=self._target_log_file,
             )
         except Exception as details:  # noqa: BLE001
-            self._log.error("Error retrieving remote node DB service log: %s", details)
+            self._log.error("Error retrieving remote node DB service log for file %s: %s",
+                            self._target_log_file, details)
 
     @cached_property
     def _remoter(self) -> RemoteCmdRunnerBase:
@@ -160,7 +161,8 @@ class HDRHistogramFileLogger(SSHLoggerBase):
         with self._lock:
             if self._started:
                 return
-            LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
+            LOGGER.debug("Start to read remote_log_file: %s, target_log_file: %s",
+                         self._remote_log_file, self.target_log_file)
             self._termination_event.clear()
             self._thread = self._child_thread.submit(self._journal_thread)
             self._started = True
@@ -168,12 +170,28 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     def stop(self, timeout: float | None = None) -> None:
         with self._lock:
+            if not self._started:
+                return
+            LOGGER.debug(f"Stopping HDRHistogramFileLogger for {self._remote_log_file} -> {self._target_log_file}")
             self._termination_event.set()
             # ensure the tail command to be stopped
             self._remoter.run(f"pkill -f '{self._remote_log_file}'", ignore_status=True)
             if self._thread.running():
                 self._thread.cancel()
             self._started = False
+
+    def remove_remote_log_file(self):
+        """
+        Remove the remote log file.
+        Makes sure the source file doesn't exist on the remote, which seems to mess things up for some reason.
+        """
+        LOGGER.debug("Removing remote log file: %s", self._remote_log_file)
+        assert not self._started, "Cannot remove remote log file while logger is running"
+        try:
+            self._remoter.run(f"rm -f {self._remote_log_file}", ignore_status=True)
+        except Exception as e:  # noqa: BLE001
+            # this is best effort, so just log the error and continue
+            LOGGER.error("Failed to remove remote log file '%s': %s", self._remote_log_file, e)
 
     @cached_property
     def _logger_cmd_template(self) -> str:
@@ -209,29 +227,36 @@ class HDRHistogramFileLogger(SSHLoggerBase):
 
     # @raise_event_on_failure
     def _journal_thread(self) -> None:
-        LOGGER.debug("Start journal thread. %s", self._remote_log_file)
+        LOGGER.debug("Start journal thread. %s -> %s", self._remote_log_file, self._target_log_file)
         read_from_timestamp = None
         te_is_set = self._termination_event.is_set()
         while not te_is_set:
-            LOGGER.debug("Start check if remoter ready. %s", self._remote_log_file)
+            LOGGER.debug("Start check if remoter ready. %s -> %s", self._remote_log_file, self._target_log_file)
             if self._is_ready_to_retrieve():
-                LOGGER.debug("Remoter ready. %s", self._remote_log_file)
+                LOGGER.debug("Remoter ready. %s -> %s", self._remote_log_file, self._target_log_file)
                 self._retrieve(since=read_from_timestamp)
-                LOGGER.debug("Retrieve finished. %s", self._remote_log_file)
+                try:
+                    file_size = os.path.getsize(self._target_log_file)
+                except Exception:  # noqa: BLE001
+                    #  best effort size retrieval for debugging, so we don't care about the error
+                    file_size = -1
+                LOGGER.debug("Retrieve finished. %s -> %s, dest file is size %d",
+                             self._remote_log_file, self._target_log_file, file_size)
                 read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             else:
-                LOGGER.debug("Remoter is not ready. %s", self._remote_log_file)
-                time.sleep(self.READINESS_CHECK_DELAY)
+                LOGGER.debug("Remoter is not ready. %s -> %s", self._remote_log_file, self._target_log_file)
+            self._termination_event.wait(self.READINESS_CHECK_DELAY)
             te_is_set = self._termination_event.is_set()
-            LOGGER.debug("_termination_event is set?: %s. %s", te_is_set, self._remote_log_file)
+            LOGGER.debug("_termination_event is set?: %s. %s -> %s", te_is_set,
+                         self._remote_log_file, self._target_log_file)
 
     def __enter__(self):
         self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.validate_and_collect_hdr_file()
         self.stop()
+        self.validate_and_collect_hdr_file()
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):

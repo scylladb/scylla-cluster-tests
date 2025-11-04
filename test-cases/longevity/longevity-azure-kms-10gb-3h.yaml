@@ -1,0 +1,20 @@
+test_duration: 255
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+             ]
+
+n_db_nodes: 6
+n_loaders: 1
+seeds_num: 3
+simulated_racks: 3
+
+azure_instance_type_db: 'Standard_L8s_v3'
+azure_region_name: "eastus"
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '032'
+nemesis_interval: 15
+
+user_prefix: 'longevity-azure-kms-10gb-3h'
+space_node_threshold: 64424
+enterprise_disable_kms: false
+enable_kms_key_rotation: true
+kms_key_rotation_interval: 60

@@ -225,7 +225,7 @@ class SctRunner(ABC):
 
             apt-get -qq clean
             apt-get -qq update
-            apt-get -qq install --no-install-recommends python3-pip htop screen tree systemd-coredump
+            apt-get -qq install --no-install-recommends python3-pip htop screen tree systemd-coredump rng-tools
             pip3 install awscli
 
             # disable unattended-upgrades
@@ -356,6 +356,7 @@ class SctRunner(ABC):
                 instance_type=self.IMAGE_BUILDER_INSTANCE_TYPE,
                 base_image=self.BASE_IMAGE,
                 tags={
+                    "RunByUser": "qa",
                     "keep": "1",
                     "keep_action": "terminate",
                     "Version": self.VERSION,
@@ -1392,5 +1393,5 @@ def clean_sct_runners(test_status: str,
 
 
 class AwsFipsSctRunner(AwsSctRunner):
-    VERSION = f"{SctRunner.VERSION}-fips"
+    VERSION = f"{SctRunner.VERSION}-v1-fips"
     BASE_IMAGE = 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest'

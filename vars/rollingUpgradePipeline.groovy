@@ -8,6 +8,10 @@ def completed_stages = [:]
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
+    // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
+    // we'll keep it as boolean to simplify its usage later on
+    def base_version_all_sts_versions = pipelineParams.get('base_version_all_sts_versions', false)
+
     pipeline {
         agent none
 
@@ -43,7 +47,9 @@ def call(Map pipelineParams) {
 	        string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
-
+            booleanParam(defaultValue: base_version_all_sts_versions,
+                         description: 'Whether to include all supported STS versions as base versions',
+                         name: 'base_version_all_sts_versions')
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'on_demand|spot_fleet|spot',
@@ -149,7 +155,8 @@ def call(Map pipelineParams) {
                                             base_versions_list,
                                             pipelineParams.linux_distro,
                                             params.new_scylla_repo,
-                                            params.backend
+                                            params.backend,
+                                            params.base_version_all_sts_versions
                                         )
                                         (testDuration,
                                          testRunTimeout,
@@ -204,6 +211,8 @@ def call(Map pipelineParams) {
                             def base_version = version
                             params_mapping[base_version] = params.collectEntries { param -> [param.key, param.value] }
                             params_mapping[base_version].put('scylla_version', base_version)
+                            // since scylla-pkg might pass this one, we are not supporting it here, as we always starts by version
+                            params_mapping[base_version].remove('scylla_repo')
 
                             // those params are not in the job params, so user can`t change them
                             // but they are coming from the pipelineParams, i.e. hardcoded per use case

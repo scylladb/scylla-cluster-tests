@@ -21,12 +21,15 @@ from functools import cached_property
 from itertools import chain
 
 from azure.identity import ClientSecretCredential
+from azure.keyvault.keys import KeyClient
+from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.storage.blob import BlobServiceClient
 from azure.core.credentials import AzureNamedKeyCredential
+from azure.mgmt.keyvault import KeyVaultManagementClient
 from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
@@ -127,6 +130,33 @@ class AzureService(metaclass=Singleton):
     @cached_property
     def get_by_id(self) -> Callable:
         return self.resource.resources.get_by_id
+
+    @cached_property
+    def keyvault(self) -> KeyVaultManagementClient:
+        return KeyVaultManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+
+    def create_vault_key(self, vault_uri: str, key_name: str, key_size: int = 2048) -> str:
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        key = key_client.create_rsa_key(name=key_name, size=key_size)
+        return key.id
+
+    def get_vault_key(self, vault_uri: str, key_name: str):
+        try:
+            key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+            key = key_client.get_key(name=key_name)
+            return key
+        except ResourceNotFoundError:
+            return None
+
+    def rotate_vault_key(self, key_uri: str) -> str:
+        # Extract vault URI and key name from full key URI
+        # Format: https://vault-name.vault.azure.net/scylla-key-N
+        vault_uri = key_uri.split('scylla-key-')[0]
+        key_name = key_uri.split('/')[-1]
+
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        rotated_key = key_client.rotate_key(name=key_name)
+        return rotated_key.id
 
     def _get_ip_configuration_dict(self, network_interface_id: str) -> dict:
         return self.get_by_id(

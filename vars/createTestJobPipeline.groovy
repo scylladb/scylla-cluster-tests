@@ -35,8 +35,6 @@ def call() {
                 '''
                     H 01 * * 0 %jenkins_path="scylla-master/releng-testing"
                     H 01 * * 0 %jenkins_path="scylla-master"
-                    H 01 * * 0 %sct_branch=branch-perf-v15
-                    H 01 * * 0 %sct_branch=branch-perf-v16
                     H 01 * * 0 %sct_branch=branch-perf-v17
                 '''
             )
@@ -80,18 +78,6 @@ def call() {
                                                 if [[ "${params.jenkins_path}" == "scylla-master" ]] ; then
                                                     echo "start create qa tools jobs  ......."
                                                         ./docker/env/hydra.sh create-qa-tools-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
-                                                    echo "all jobs have been created"
-                                                fi
-
-                                                if [[ "${params.sct_branch}" == "branch-perf-v15" ]] ; then
-                                                    echo "start create perf for ${params.sct_branch}  ......."
-                                                        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
-                                                    echo "all jobs have been created"
-                                                fi
-
-                                                if [[ "${params.sct_branch}" == "branch-perf-v16" ]] ; then
-                                                    echo "start create perf for ${params.sct_branch}  ......."
-                                                        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
 

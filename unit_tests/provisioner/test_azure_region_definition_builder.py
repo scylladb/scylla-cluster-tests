@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-import os
 from collections import namedtuple
 from pathlib import Path
 
@@ -22,7 +21,7 @@ from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
 
-def test_can_create_basic_scylla_instance_definition_from_sct_config():
+def test_can_create_basic_scylla_instance_definition_from_sct_config(monkeypatch):
     """Test for azure_region_definition_builder"""
     EnvConfig = namedtuple('EnvConfig',
                            ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
@@ -44,8 +43,8 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
         SCT_N_LOADERS="2 0",
         SCT_N_MONITORS_NODES="1"
     )
-
-    os.environ.update(env_config._asdict())
+    for key, value in env_config._asdict().items():
+        monkeypatch.setenv(key, value)
     config = SCTConfiguration()
     tags = TestConfig.common_tags()
     # TODO: switch to  get_azure_ssh_key_pair()

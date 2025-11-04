@@ -34,7 +34,7 @@ pre_create_keyspace: [
 # there is no sense to use more than 1 loader for 3 nodes cluster
 prepare_write_cmd:
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 840 -p recordcount=1000000000
+    bin/ycsb load scylla -P workloads/workloada -threads 840 -p recordcount=1000000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
