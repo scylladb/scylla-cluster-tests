@@ -21,6 +21,12 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
+            choice(name: 'xcloud_provider',
+                   choices: ['aws', 'gce'],
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',)
+            string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
+                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
+                   name: 'xcloud_env')
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'us-east-1|eu-west-1',
                name: 'region')
@@ -355,6 +361,10 @@ def call(Map pipelineParams) {
 
                                                         rm -fv ./latest
 
+                                                        if [[ "${params.backend}" == "xcloud" ]] ; then
+                                                            export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+                                                            export SCT_XCLOUD_ENV="${params.xcloud_env}"
+                                                        fi
                                                         if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
                                                             export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
                                                         fi
