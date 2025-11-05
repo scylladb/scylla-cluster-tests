@@ -51,6 +51,10 @@ class EksClusterCleanupMixin:
     def iam_client(self):
         return boto3.client('iam', region_name=self.region_name)
 
+    @cached_property
+    def sts_client(self):
+        return boto3.client('sts', region_name=self.region_name)
+
     @property
     def owned_object_tag_name(self):
         return f'kubernetes.io/cluster/{self.short_cluster_name}'

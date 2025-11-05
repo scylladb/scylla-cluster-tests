@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import base64
+import json
 import os
 import time
 import pprint
@@ -299,7 +300,11 @@ class EksNodePool(CloudK8sNodePool):
                     Tags=tags_as_ec2_tags(self.tags),
                 )]
             self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
-        self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
+        try:
+            self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
+        except InvalidRequestException as e:
+            decoded = self.k8s_cluster.sts_client.decode_authorization_message(EncodedMessage=e.message)
+            self.k8s_cluster.log.error('Failed to create a k8s cluster: %s', json.loads(decoded['DecodedMessage']))
         self.is_deployed = True
 
     def resize(self, num_nodes):
