@@ -245,7 +245,7 @@ class EksNodePool(CloudK8sNodePool):
     @property
     def _node_group_cfg(self) -> dict:
         labels = {} if self.labels is None else self.labels
-        tags = {} if self.tags is None else self.tags
+        tags = {'Owner': 'SCT', 'Name': 'SCT', **(self.tags or {})}
         node_labels = labels.copy()
         node_labels['node-pool'] = self.name
         node_pool_config = {
