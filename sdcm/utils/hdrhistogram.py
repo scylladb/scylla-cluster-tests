@@ -164,7 +164,7 @@ class _HdrRangeHistogramBuilder:
         try:
             start_ts = int(self.start_time)
             end_ts = int(self.end_time)
-            if end_ts - start_ts < TIME_INTERVAL:
+            if end_ts - start_ts < interval:
                 window_step = int(end_ts - start_ts)
             else:
                 window_step = interval or TIME_INTERVAL
@@ -188,7 +188,7 @@ class _HdrRangeHistogramBuilder:
                         f"Submitted future for tags {self.hdr_tags} and interval {interval_num} out of {len(start_intervals)}")
                     interval_num += 1
                 results = {}
-                for e, future in enumerate(futures):
+                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
                     res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 60 seconds
                     LOGGER.debug(
                         f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
@@ -261,7 +261,9 @@ class _HdrRangeHistogramBuilder:
             line_index = 5
             while next_hist:
                 tag = next_hist.get_tag()
-                if tag == hdr_tag:
+                # The tag in the HDR file for the stress command with the user profile is in lowercase.
+                # Modify the tag validation to perform a case-insensitive comparison.
+                if tag.lower() == hdr_tag.lower():
                     if tag_not_found:
                         LOGGER.debug(f'found histogram entry with tag {hdr_tag} in file {hdr_file}')
                     if histogram.get_start_time_stamp() == 0:

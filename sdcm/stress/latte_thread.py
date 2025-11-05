@@ -94,6 +94,7 @@ def get_latte_operation_type(stress_cmd):
 class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
+    SCHEMA_CMD_CALL_COUNTER = {}
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
@@ -102,6 +103,8 @@ class LatteStressThread(DockerBasedStressThread):
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
         script_name = script_name_regx.search(self.stress_cmd).group(0)
+        if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
+            self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
             cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
@@ -156,12 +159,29 @@ class LatteStressThread(DockerBasedStressThread):
                     if v not in ('true', 'false'):
                         processed_v = r"\"%s\"" % v
                 custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
-        cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} {auth_config}{custom_schema_params} -- {hosts}',
-            timeout=self.timeout,
-            retry=0,
-        )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter}{rack}-q '
+        first_tag_or_op = (find_latte_tags(self.stress_cmd) or [self.stress_operation])[0]
+        # NOTE: use superuser creds for the 'latte schema' cmd because test users will only be created with it.
+        schema_cmd = f'latte schema {script_name} {ssl_config}{auth_config}{custom_schema_params} -- {hosts}'
+        # NOTE: allow schema creation repetition for non-argus usages (unit and integration tests)
+        if LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] < 1 or not self.params.get("enable_argus"):
+            LOGGER.debug("Calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
+            result = cmd_runner.run(cmd=schema_cmd, timeout=self.timeout, retry=0)
+            try:
+                LOGGER.debug(
+                    "Output for 'latte schema' (tag: %s) cmd\nstdout: %s\nstderr: %s",
+                    first_tag_or_op, result.stdout, result.stderr)
+            except Exception as e:  # noqa: BLE001
+                LOGGER.error("Failed to print out the results of the `latte schema` command. e: %s", e)
+            # NOTE: it should not require any locking because practically we have multiple seconds
+            #       diff reaching this code out by different stress threads.
+            LatteStressThread.SCHEMA_CMD_CALL_COUNTER[script_name] += 1
+        else:
+            LOGGER.debug("Skip calling following 'latte schema' (tag: %s) cmd: %s", first_tag_or_op, schema_cmd)
+
+        # NOTE: set '--user' and '--password' params only if not defined explicitly
+        if " --user" in self.stress_cmd and " --password" in self.stress_cmd:
+            auth_config = ""
+        stress_cmd = f'{self.stress_cmd} {ssl_config}{auth_config} {datacenter}{rack}-q '
         self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd

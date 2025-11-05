@@ -7,7 +7,7 @@ instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 ami_id_loader: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
 # manual on updating monitor images see: docs/monitoring-images.md
-ami_id_monitor: 'scylladb-monitor-4-11-0-2025-07-21t09-39-20z'
+ami_id_monitor: 'scylladb-monitor-4-12-1-2025-10-16t09-22-59z'
 
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
@@ -23,7 +23,7 @@ ami_id_db_oracle: ''
 
 ami_id_vector_store: ''
 ami_vector_store_user: 'ubuntu'
-instance_type_vector_store: 'c6i.xlarge'
+instance_type_vector_store: 't4g.small'
 
 use_preinstalled_scylla: true
 

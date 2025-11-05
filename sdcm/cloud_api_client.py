@@ -136,7 +136,7 @@ class ScyllaCloudAPIClient:
     @cached_property
     def current_scylla_version(self) -> dict:
         """Get the latest ScyllaDB Cloud version that can be used to create a new cluster"""
-        return next(v for v in reversed(self.get_scylla_versions()) if v["newCluster"] == "ENABLED")
+        return next(v for v in reversed(self.get_scylla_versions()['scyllaVersions']) if v["newCluster"] == "ENABLED")
 
     def get_regions(self, *, cloud_provider_id: int, defaults: bool = False) -> dict[str, Any]:
         """Get regions supported by a given cloud provider"""
@@ -260,6 +260,7 @@ class ScyllaCloudAPIClient:
         maintenance_windows: list[dict],
         scaling: dict[str, str],
         prom_proxy: bool,
+        vector_search: dict | None,
     ) -> dict[str, Any]:
         """
         Create cluster-create request.
@@ -285,6 +286,7 @@ class ScyllaCloudAPIClient:
         :param maintenance_windows: list of maintenance windows specifications
         :param scaling: scaling configuration
         :param prom_proxy: whether to enable Prometheus proxy for the cluster (default: False)
+        :param vector_search: Vector Search configuration
 
         :return: created cluster details
         """
@@ -310,6 +312,7 @@ class ScyllaCloudAPIClient:
             maintenanceWindows=maintenance_windows,
             scaling=scaling,
             promProxy=prom_proxy,
+            vectorSearch=vector_search
         )
         return self._parse_response_data(response)
 
@@ -333,6 +336,13 @@ class ScyllaCloudAPIClient:
         if clusters := self.get_clusters(account_id=account_id):
             return next(cluster for cluster in clusters if cluster["clusterName"] == cluster_name)["id"]
         return None
+
+    def search_clusters_by_name_pattern(self, *, account_id: int, name_pattern: str) -> list[dict]:
+        """Search clusters by name pattern"""
+        clusters = self.get_clusters(account_id=account_id)
+        if not clusters:
+            return []
+        return [c for c in clusters if name_pattern in c.get('clusterName', '')]
 
     def get_cluster_nodes(self, *, account_id: int, cluster_id: int, enriched: bool = False) -> list[dict[str, Any]]:
         """Get the list of cluster nodes"""
@@ -407,6 +417,22 @@ class ScyllaCloudAPIClient:
     def get_cluster_connection(self, *, account_id: int, cluster_id: int) -> dict[str, Any]:
         """Get cluster connection details including credentials and endpoints"""
         return self.request('GET', f'/account/{account_id}/cluster/connect', params={'clusterId': cluster_id})
+
+    def get_vector_search_nodes(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Get Vector Search nodes information"""
+        return self.request('GET', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
+
+    def install_vector_search(
+            self, *, account_id: int, cluster_id: int, dc_id: int, number_of_nodes: int, instance_type_id: int
+    ) -> dict[str, Any]:
+        """Install Vector Search nodes into an existing cluster"""
+        return self.request(
+            'POST', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search',
+            defaultNodes=number_of_nodes, defaultInstanceTypeId=instance_type_id)
+
+    def delete_vector_search(self, *, account_id: int, cluster_id: int, dc_id: int) -> dict[str, Any]:
+        """Delete Vector Search nodes from an existing cluster"""
+        return self.request('DELETE', f'/account/{account_id}/cluster/{cluster_id}/dc/{dc_id}/vector-search')
 
     ### Account cluster network related APIs ###
     def create_fw_rule(self, *, account_id: int, cluster_id: int, ip_address: str) -> dict[str, Any]:

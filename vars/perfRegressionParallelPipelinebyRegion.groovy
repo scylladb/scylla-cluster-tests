@@ -25,6 +25,7 @@ def call(Map pipelineParams) {
             parameterizedCron (
                 '''
                     0 8 * * * %scylla_version=master:latest;labels_selector=alternator-daily;requested_by_user=radoslawcybulski
+                    0 8 * * 6 %scylla_version=master:latest;labels_selector=alternator-weekly;requested_by_user=radoslawcybulski
                     00 6 * * 0 %scylla_version=master:latest;labels_selector=master-weekly;requested_by_user=juliayakovlev
                     0 23 */21 * * %scylla_version=master:latest;labels_selector=master-3weeks;requested_by_user=juliayakovlev
                 '''
@@ -133,7 +134,7 @@ def call(Map pipelineParams) {
                                 region: 'eu-north-1',
                                 versions: ['master'],
                                 sub_tests: ['test_full'],
-                                labels: ['alternator-daily']
+                                labels: ['alternator-weekly']
                             ],
                             // Tablets
                             [

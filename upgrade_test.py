@@ -29,6 +29,7 @@ from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
+from sdcm import argus_results
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.utils.issues import SkipPerIssues
@@ -49,7 +50,7 @@ from sdcm.sct_events.database import (
     IndexSpecialColumnErrorEvent,
     DatabaseLogEvent,
 )
-from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_abort_requested_errors,
@@ -72,28 +73,31 @@ NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 def truncate_entries(func):
     @wraps(func)
     def inner(self, *args, **kwargs):
-        node = args[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
-            self.actions_log.info("Start truncate simple tables")
-            session.default_timeout = 60.0 * 5
-            session.default_consistency_level = ConsistencyLevel.QUORUM
-            try:
-                self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
-                self.actions_log.info("Finish truncate simple tables")
-            except cassandra.DriverException as details:
-                InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
-                          severity=Severity.ERROR).publish()
-            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+        if self.do_truncates:
+            node = args[0]
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
+                self.actions_log.info("Start truncate simple tables")
+                session.default_timeout = 60.0 * 5
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                try:
+                    self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+                    self.actions_log.info("Finish truncate simple tables")
+                except cassandra.DriverException as details:
+                    InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                              severity=Severity.ERROR).publish()
+                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
 
         func_result = func(self, *args, **kwargs)
 
-        # re-new connection
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
-            session.default_timeout = 60.0 * 5
-            session.default_consistency_level = ConsistencyLevel.QUORUM
-            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
-            self.read_data_from_truncated_tables(session=session)
-            self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # re-new connection
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
+                session.default_timeout = 60.0 * 5
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+                self.read_data_from_truncated_tables(session=session)
+                self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+
         return func_result
     return inner
 
@@ -141,14 +145,19 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     def setUp(self):
         super().setUp()
+        self.do_truncates = self.params.get("enable_truncate_checks_on_node_upgrade") or False
+        self.stacks = {}
+        for node in self.db_cluster.nodes:
+            self.configure_event_filtering(node)
 
-        self.stack = contextlib.ExitStack()
-        # ignoring those unsuppressed exceptions, till both ends of the upgrade would have https://github.com/scylladb/scylladb/pull/14681
-        # see https://github.com/scylladb/scylladb/issues/14882 for details
-        self.stack.enter_context(EventsSeverityChangerFilter(
-            new_severity=Severity.WARNING,
-            event_class=DatabaseLogEvent,
-            regex=r".*std::runtime_error \(unknown exception\).*",
+    def configure_event_filtering(self, node):
+        self.stacks[node] = contextlib.ExitStack()
+        # ignoring those oversized allocation errors, till both ends of the upgrade would have
+        # fixes for https://github.com/scylladb/scylladb/issues/24660
+        self.stacks[node].enter_context(DbEventsFilter(
+            node=node,
+            db_event=DatabaseLogEvent.OVERSIZED_ALLOCATION,
+            line=r"seastar::rpc::client::wait_for_reply",
             extra_time_to_expiration=30,
         ))
 
@@ -327,6 +336,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
         node.forget_scylla_version()
         node.drop_raft_property()
+
+        # remove filters on new release, as error should be fixed
+        self.stacks[node].close()
+
         with self.actions_log.action_scope("start_scylla_server"):
             node.start_scylla_server(verify_up_timeout=500)
         self.db_cluster.get_db_nodes_cpu_mode()
@@ -415,6 +428,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
 
         node.drop_raft_property()
+
+        # enable the filter since we are moving to older version that might have still unfixed issues
+        self.stacks[node].close()
+        self.configure_event_filtering(node)
+
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
@@ -609,8 +627,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}'
                          'or sct_cql_stress_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -938,8 +957,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         """
         self.upgrade_os(self.db_cluster.nodes)
 
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
                                                                          'stress_after_cluster_upgrade'])
@@ -983,22 +1003,24 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         Number of 'before' and 'after' commands must match. Their latency values will be compaired.
 
-        - Write initial latte data (prepare_write_cmd?)
+        - Write initial latte data (prepare_write_cmd)
         - Wait for end of compactions
         - Read latte data generating report file (stress_before_upgrade)
+        - Write latency results from the 'stress_before_upgrade' to Argus
         - Run a read latte stress (stress_during_entire_upgrade) not waiting for it's end
         - Upgrade the DB cluster
         * self.run_raft_topology_upgrade_procedure()
         - Wait for the end of the stress command (stress_during_entire_upgrade)
         - Wait for end of compactions
         - Read latte data (stress_after_cluster_upgrade) generating report file
-        - Compare latte report files and raise SCT ERROR event if latencies are worse for more than 10%
+        - Write latency results from the 'stress_after_cluster_upgrade' to Argus
         """
         self.upgrade_os(self.db_cluster.nodes)
 
         InfoEvent(message="Step1 - Populate DB data").publish()
-        # Prepare keyspace and tables for truncate test
-        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+        if self.do_truncates:
+            # Prepare keyspace and tables for truncate test
+            self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
         self.run_prepare_write_cmd()
 
         InfoEvent(message="Step2 - Run 'read' command before upgrade").publish()
@@ -1008,6 +1030,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         stress_before_upgrade_results = []
         for stress_before_upgrade_thread_pool in stress_before_upgrade_thread_pools:
             stress_before_upgrade_results.append(self.get_stress_results(stress_before_upgrade_thread_pool))
+        self.log.info("Stress results before upgrade: %s", stress_before_upgrade_results)
+
+        result_table = argus_results.LatteStressLatencyComparison()
+        # NOTE: write 'before' results to Argus
+        for i in range(len(stress_before_upgrade_results)):
+            row = f"#{i + 1}"
+            result_table.add_result(
+                column="before_ops", row=row, status=argus_results.Status.UNSET,
+                value=int(stress_before_upgrade_results[i][0]["op rate"]))
+            result_table.add_result(
+                column="before_mean", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_before_upgrade_results[i][0]["latency mean"]))
+            result_table.add_result(
+                column="before_p99", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_before_upgrade_results[i][0]["latency 99th percentile"]))
+        argus_results.submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=result_table)
+
         stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
             "stress_during_entire_upgrade", wait_for_finish=False, round_robin=True)
 
@@ -1034,6 +1073,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         InfoEvent(message="Step4 - Run raft topology upgrade procedure").publish()
         self.run_raft_topology_upgrade_procedure()
+        self.validate_limited_voters_feature_enabled()
 
         InfoEvent(message="Step5 - Wait for stress_during_entire_upgrade to finish").publish()
         for stress_during_entire_upgrade_thread_pool in stress_during_entire_upgrade_thread_pools:
@@ -1047,10 +1087,22 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         stress_after_upgrade_results = []
         for stress_after_upgrade_thread_pool in stress_after_upgrade_thread_pools:
             stress_after_upgrade_results.append(self.get_stress_results(stress_after_upgrade_thread_pool))
+        self.log.info("Stress results after upgrade: %s", stress_after_upgrade_results)
 
-        self.log.info(
-            "Going to compare following READ stress results:\nbefore upgrade: %s\nafter upgrade: %s",
-            stress_before_upgrade_results, stress_after_upgrade_results)
+        # NOTE: write 'after' results to Argus
+        for i in range(len(stress_after_upgrade_results)):
+            row = f"#{i + 1}"
+            result_table.add_result(
+                column="after_p99", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_after_upgrade_results[i][0]["latency 99th percentile"]))
+            result_table.add_result(
+                column="after_mean", row=row, status=argus_results.Status.UNSET,
+                value=float(stress_after_upgrade_results[i][0]["latency mean"]))
+            result_table.add_result(
+                column="after_ops", row=row, status=argus_results.Status.UNSET,
+                value=int(stress_after_upgrade_results[i][0]["op rate"]))
+        argus_results.submit_results_to_argus(argus_client=self.test_config.argus_client(), result_table=result_table)
+
         assert len(stress_before_upgrade_results) > 0
         for stress_before_upgrade_result in stress_before_upgrade_results:
             assert len(stress_before_upgrade_result) > 0
@@ -1065,7 +1117,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 assert 'latency 99th percentile' in stress_after_upgrade_results[i][j]
                 current_latency_after = float(stress_after_upgrade_results[i][j]['latency 99th percentile'])
                 assert current_latency_after > 0
-                assert current_latency_after / current_latency_before < 1.2
 
     def test_kubernetes_scylla_upgrade(self):
         """

@@ -5,8 +5,9 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
+    provision_type: 'on_demand',
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml", "configurations/disable_simulated_racks.yaml", configurations/tablets_disabled.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-vnodes.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml", "configurations/disable_simulated_racks.yaml", "configurations/tablets_disabled.yaml", "configurations/disable_kms.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-vnodes.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
     perf_extra_jobs_to_compare: """["scylla-enterprise/scylla-enterprise-perf-regression-latency-650gb-with-nemesis","scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis"]""",
 )

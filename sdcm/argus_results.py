@@ -227,6 +227,20 @@ class IOPropertiesDeviationResultsTable(StaticGenericResultTable):
         }
 
 
+class LatteStressLatencyComparison(StaticGenericResultTable):
+    class Meta:
+        name = "Latency comparison"
+        description = "Compares identical sets of latte commands ran twice (i.e before and after upgrade)"
+        Columns = [
+            ColumnMetadata(name="before_ops", unit="", type=ResultType.INTEGER),
+            ColumnMetadata(name="before_mean", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="before_p99", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="after_p99", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="after_mean", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="after_ops", unit="", type=ResultType.INTEGER),
+        ]
+
+
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,

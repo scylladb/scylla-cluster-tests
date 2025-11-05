@@ -6,6 +6,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
+    region: "us-east-1",
+    provision_type: 'on_demand',
     test_name: "performance_regression_manager_backup_test.PerformanceRegressionManagerBackupTest.test_manager_backup",
-    test_config: """["test-cases/performance/perf-regression-latency-backup-nemesis.yaml", "configurations/kms-ear.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-tablets.yaml", "configurations/manager/manager_native_backup_nemesis.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-backup-nemesis.yaml", "configurations/kms-ear.yaml", "configurations/performance/latency-decorator-error-thresholds-nemesis-ent-tablets.yaml", "configurations/manager/manager_native_backup_nemesis.yaml", "configurations/manager/2TB_backup_dataset.yaml", "configurations/object_storage.yaml"]""",
 )

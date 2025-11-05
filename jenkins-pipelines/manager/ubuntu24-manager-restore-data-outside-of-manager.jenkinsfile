@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    backend: 'aws',
+    region: 'us-east-1',
+    test_name: 'mgmt_cli_test.ManagerRestoreBenchmarkTests.test_restore_data_without_manager',
+    test_config: '''["test-cases/manager/manager-restore-outside.yaml", "configurations/manager/ubuntu24.yaml"]''',
+
+    backup_bucket_location: 'manager-backup-tests-permanent-snapshots-us-east-1'
+)

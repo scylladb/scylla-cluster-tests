@@ -850,7 +850,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"
             scylla_encryption_options = self.params.get('scylla_encryption_options')
 
-        if 'auto' not in (kms_host := yaml.safe_load(scylla_encryption_options).get("kms_host")):
+        if 'auto' not in (kms_host := (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''):
             return
         # Create a KMS key alias in each of the regions used by the current test run
         aws_kms = AwsKms(region_names=self.params.region_names)
@@ -911,7 +911,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'AzureKeyProviderFactory', 'azure_host': 'scylla-azure-kms'}"
             scylla_encryption_options = self.params.get('scylla_encryption_options')
 
-        if not (azure_host := yaml.safe_load(scylla_encryption_options).get("azure_host")):
+        if not (azure_host := (yaml.safe_load(scylla_encryption_options) or {}).get("azure_host") or ''):
             return
 
         test_id = str(self.test_config.test_id())
@@ -1247,13 +1247,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         node = self.db_cluster.nodes[0]
         if self.params.get('alternator_port'):
             self.log.info("Going to create alternator tables")
-            if self.params.get('alternator_enforce_authorization'):
-                with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
-                                    (self.params.get('alternator_access_key_id'),
-                                     self.params.get('alternator_secret_access_key')))
+            self.alternator.set_credentials(node=node)
 
-            tablets_enabled = is_tablets_feature_enabled(self.db_cluster.nodes[0])
+            tablets_enabled = is_tablets_feature_enabled(node)
             prepare_cmd = self.params.get('prepare_write_cmd')
             stress_cmd = self.params.get('stress_cmd')
             is_ttl_in_workload = any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd])
@@ -4028,9 +4024,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
-        if email_data is not None:
+        if email_data:
             email_data['grafana_screenshots'] = grafana_screenshots
-            email_data["reporter"] = self.email_reporter.__class__.__name__
+            if self.email_reporter is not None:
+                email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)

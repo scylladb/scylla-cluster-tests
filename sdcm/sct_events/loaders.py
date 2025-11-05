@@ -274,7 +274,7 @@ class ScyllaBenchLogEvent(LogEvent, abstract=True):
 ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
 # Scylla-bench data validation was added by https://github.com/scylladb/scylla-bench/commit/3eb53d8ce11e5ad26062bcc662edb31dda521ccf
 ScyllaBenchLogEvent.add_subevent_type("DataValidationError", severity=Severity.CRITICAL,
-                                      regex=r"doesn't match |failed to validate data|failed to verify checksum|corrupt checksum or data|"
+                                      regex=r"doesn't match stored checksum|doesn't match ck stored in value|doesn't match pk stored in value|actual value doesn't match expected value|doesn't match size stored in value|failed to validate data|failed to verify checksum|corrupt checksum or data|"
                                             r"data corruption")
 ScyllaBenchLogEvent.add_subevent_type(
     "ParseDistributionError",

@@ -30,7 +30,3 @@ user_prefix: 'longevity-mv-si-4d'
 space_node_threshold: 644245
 
 use_preinstalled_scylla: true
-
-# enable vector.dev logging for all tier1
-# TODO: remove this when vector.dev logging is enabled by default
-logs_transport: 'vector'

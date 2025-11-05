@@ -296,7 +296,7 @@ class AwsCiBuilder(AwsBuilder):
 class AwsFipsCiBuilder(AwsBuilder):
     NUM_CPUS = 2
     NUM_EXECUTORS = 1
-    VERSION = 'v3-fibs'
+    VERSION = 'v4-fibs'
 
     @cached_property
     def name(self):

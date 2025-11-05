@@ -12,7 +12,7 @@
 # Copyright (c) 2025 ScyllaDB
 from dataclasses import dataclass
 
-from sdcm.provision.common.utils import configure_vector_target_script, install_vector_service
+from sdcm.provision.common.utils import configure_vector_target_script, install_vector_service, configure_backoff_timeout
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
@@ -25,7 +25,8 @@ class VectorDevUserDataObject(SctUserDataObject):
 
     @property
     def script_to_run(self) -> str:
-        script = install_vector_service()
+        script = configure_backoff_timeout()
+        script += install_vector_service()
         host, port = self.test_config.get_logging_service_host_port()
         script += configure_vector_target_script(host=host, port=port)
         return script

@@ -343,7 +343,7 @@ Url to the repo of scylla manager agent version to install for management tests
 
 Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml
 
-**default:** 3.6
+**default:** 3.7
 
 **type:** str
 
@@ -370,7 +370,7 @@ Branch of scylla db enterprise to install. Options in defaults/manager_versions.
 
 
 
-**default:** 3.6.0
+**default:** 3.7.0
 
 **type:** str
 
@@ -906,6 +906,15 @@ If true, spawn a docker with a dns server for the ycsb loader to point to
 **type:** boolean
 
 
+## **alternator_test_table** / SCT_ALTERNATOR_TEST_TABLE
+
+Dictionary of a test alternator table features:<br>name: str - the name of the table<br>lsi_name: str - the name of the local secondary index to create with a table<br>gsi_name: str - the name of the global secondary index to create with a table<br>tags: dict - the tags to apply to the created table<br>items: int - expected number of items in the table after prepare
+
+**default:** N/A
+
+**type:** dict
+
+
 ## **alternator_enforce_authorization** / SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
 
 If true, enable the authorization check in dynamodb api (alternator)
@@ -964,7 +973,7 @@ More arguments to append to oracle command line
 
 More configuration to append to /etc/scylla/scylla.yaml
 
-**default:** N/A
+**default:** {'rf_rack_valid_keyspaces': True}
 
 **type:** dict_or_str
 
@@ -1259,7 +1268,7 @@ AMI ID for Vector Store nodes
 
 ## **instance_type_vector_store** / SCT_INSTANCE_TYPE_VECTOR_STORE
 
-EC2 instance type for Vector Store nodes
+AWS/GCP cloud provider instance type for Vector Store nodes
 
 **default:** N/A
 
@@ -2080,7 +2089,7 @@ Number of nodes in monitoring pool that will be used for scylla-operator's deplo
 
 Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1'
 
-**default:** scylladb/scylla-manager:3.6.0
+**default:** scylladb/scylla-manager:3.7.0
 
 **type:** str (appendable)
 
@@ -2935,7 +2944,7 @@ An escape hatch to disable KMS for enterprise run, when needed, we enable kms by
 
 How to transport logs: syslog-ng, ssh or docker
 
-**default:** syslog-ng
+**default:** vector
 
 **type:** str (appendable)
 
@@ -3134,6 +3143,15 @@ Number of nodes to upgrade and rollback in test_generic_cluster_upgrade
 Whether to upgrade sstables as part of upgrade_node or not
 
 **default:** N/A
+
+**type:** boolean
+
+
+## **enable_truncate_checks_on_node_upgrade** / SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE
+
+Enables or disables truncate checks on each node upgrade and rollback
+
+**default:** True
 
 **type:** boolean
 
@@ -3725,7 +3743,7 @@ Cloud provider for Scylla Cloud deployment (aws, gce)
 
 ## **xcloud_replication_factor** / SCT_XCLOUD_REPLICATION_FACTOR
 
-Replication factor for Scylla Cloud cluster (default: 3)
+Replication factor for Scylla Cloud cluster
 
 **default:** N/A
 

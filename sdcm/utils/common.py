@@ -134,6 +134,7 @@ def _remote_get_file(remoter, src, dst, user_agent=None):
     cmd = 'curl -L {} -o {}'.format(src, dst)
     if user_agent:
         cmd += ' --user-agent %s' % user_agent
+    cmd += f' && chmod 644 {dst}'
     return remoter.run(cmd, ignore_status=True)
 
 
@@ -2597,3 +2598,51 @@ def format_size(size_in_bytes):
         if size_in_bytes < 1024:
             return f"{size_in_bytes:.2f} {unit}"
         size_in_bytes /= 1024
+
+
+def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) -> list:
+    match stress_tool:
+        case "cassandra-stress":
+            suffix = "-rt" if throttled_load else "-st"
+            if stress_operation == "MIXED":
+                hdr_tags = [f"WRITE{suffix}", f"READ{suffix}"]
+            elif stress_operation == "READ":
+                hdr_tags = [f"READ{suffix}"]
+            elif stress_operation == "WRITE":
+                hdr_tags = [f"WRITE{suffix}"]
+            else:
+                raise ValueError(f"Unsupported stress_operation: {stress_operation}")
+        case "scylla-bench":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case "latte":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case _:
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+
+    return hdr_tags
+
+
+def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = None) -> str:
+    logs_links = list_logs_by_test_id(test_id)
+    tmp_dir = download_to or os.path.join('/tmp/', test_id)
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+    logs_file = ""
+    for log in logs_links:
+        if log["type"] == log_type:
+            logs_file = S3Storage().download_file(link=log["link"], dst_dir=tmp_dir)
+            LOGGER.debug("Downloaded %slog to %s", log_type, logs_file)
+
+    if not logs_file:
+        raise ValueError("%s not found in argus logs", log_type)
+
+    LOGGER.debug("Unpacking loader logs...")
+    from sdcm.monitorstack import extract_file_from_tar_archive
+    hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
+    LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])
+    if not hdr_folder:
+        raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
+
+    return hdr_folder[test_id]

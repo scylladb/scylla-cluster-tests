@@ -1,0 +1,17 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    backend: 'aws',
+    region: 'us-east-1',
+
+    scylla_version: '2024.1',
+
+    manager_version: '3.4',
+    target_manager_version: 'master_latest',
+
+    test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu24.yaml"]'''
+)

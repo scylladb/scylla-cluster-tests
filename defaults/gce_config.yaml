@@ -5,7 +5,7 @@ gce_project: '' # empty mean default one, can be overwritten to use different on
 
 gce_image_db: '' # so we can use `scylla_version` as needed
 gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
-gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-11-0-2025-07-21t09-39-20z'
+gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylladb-monitor-4-12-1-2025-10-16t09-22-59z'
 
 gce_image_username: 'scylla-test'
 
@@ -22,6 +22,8 @@ gce_instance_type_db: 'n2-highmem-8'
 gce_root_disk_type_db: 'pd-ssd'
 root_disk_size_db: 50
 gce_n_local_ssd_disk_db: 4
+
+instance_type_vector_store: 'e2-small'
 
 gce_pd_standard_disk_size_db: 0
 gce_pd_ssd_disk_size_db: 0

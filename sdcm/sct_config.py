@@ -33,6 +33,7 @@ from typing import List, Union, Set
 from distutils.util import strtobool
 import anyconfig
 from argus.client.sct.types import Package
+from packaging import version
 from pydantic import BaseModel
 
 from sdcm import sct_abs_path
@@ -77,6 +78,7 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
+from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS, XCLOUD_VS_INSTANCE_TYPES
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -633,6 +635,13 @@ class SCTConfiguration(dict):
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
         dict(name="alternator_use_dns_routing", env="SCT_ALTERNATOR_USE_DNS_ROUTING", type=boolean,
              help="If true, spawn a docker with a dns server for the ycsb loader to point to"),
+        dict(name="alternator_test_table", env="SCT_ALTERNATOR_TEST_TABLE", type=dict,
+             help="""Dictionary of a test alternator table features:
+                    name: str - the name of the table
+                    lsi_name: str - the name of the local secondary index to create with a table
+                    gsi_name: str - the name of the global secondary index to create with a table
+                    tags: dict - the tags to apply to the created table
+                    items: int - expected number of items in the table after prepare"""),
         dict(name="alternator_enforce_authorization", env="SCT_ALTERNATOR_ENFORCE_AUTHORIZATION", type=boolean,
              help="If true, enable the authorization check in dynamodb api (alternator)"),
         dict(name="alternator_access_key_id", env="SCT_ALTERNATOR_ACCESS_KEY_ID", type=str,
@@ -785,7 +794,7 @@ class SCTConfiguration(dict):
              help="AMI ID for Vector Store nodes"),
 
         dict(name="instance_type_vector_store", env="SCT_INSTANCE_TYPE_VECTOR_STORE", type=str,
-             help="EC2 instance type for Vector Store nodes"),
+             help="AWS/GCP cloud provider instance type for Vector Store nodes"),
 
         dict(name="root_disk_size_db", env="SCT_ROOT_DISK_SIZE_DB", type=int,
              help=""),
@@ -1593,6 +1602,10 @@ class SCTConfiguration(dict):
              type=boolean,
              help="Whether to upgrade sstables as part of upgrade_node or not"),
 
+        dict(name="enable_truncate_checks_on_node_upgrade", env="SCT_ENABLE_TRUNCATE_CHECKS_ON_NODE_UPGRADE",
+             type=boolean,
+             help="Enables or disables truncate checks on each node upgrade and rollback"),
+
         dict(name="stress_before_upgrade", env="SCT_STRESS_BEFORE_UPGRADE",
              type=str,
              help="Stress command to be run before upgrade (preapre stage)"),
@@ -1840,7 +1853,7 @@ class SCTConfiguration(dict):
              help="Cloud provider for Scylla Cloud deployment (aws, gce)"),
 
         dict(name="xcloud_replication_factor", env="SCT_XCLOUD_REPLICATION_FACTOR", type=int,
-             help="Replication factor for Scylla Cloud cluster (default: 3)"),
+             help="Replication factor for Scylla Cloud cluster"),
 
         dict(name="xcloud_vpc_peering", env="SCT_XCLOUD_VPC_PEERING", type=dict_or_str,
              help="""Dictionary of VPC peering parameters for private connectivity between
@@ -2122,6 +2135,8 @@ class SCTConfiguration(dict):
                     scylla_azure_images.append(azure_image)
                 self["azure_image_db"] = " ".join(getattr(image, 'id', None) or getattr(
                     image, 'unique_id', None) for image in scylla_azure_images)
+            elif self.get("cluster_backend") == 'xcloud' and ':' in scylla_version:
+                self._resolve_xcloud_version_tag(self.get('scylla_version'))
             elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
@@ -2656,6 +2671,27 @@ class SCTConfiguration(dict):
                     "'latest' should not be used.")
             self['scylla_version'] = result
 
+    def _resolve_xcloud_version_tag(self, version_tag: str) -> None:
+        """
+        Resolve version tags for xcloud backend.
+
+        Resolves version tag given in the format <tag_type>:<tag_value> to actual Scylla Cloud release.
+        For example: 'release:latest', is to be resolved into latest Scylla release supported by Scylla Cloud.
+        """
+        tag_type, tag_value = version_tag.split(':', 1)
+        if tag_type == 'release':
+            if tag_value == 'latest':
+                cloud_api_client = ScyllaCloudAPIClient(
+                    api_url=self.cloud_env_credentials['base_url'],
+                    auth_token=self.cloud_env_credentials['api_token'],
+                    raise_for_status=True)
+
+                self['scylla_version'] = cloud_api_client.current_scylla_version['version']
+                self.log.debug("Resolved xcloud version tag '%s' to '%s'", version_tag, self['scylla_version'])
+        else:
+            # TODO: support for non-release tag type will be added after Scylla Cloud supports deploying dev versions
+            pass
+
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
         if new_scylla_repo := self.get('new_scylla_repo'):
@@ -3165,11 +3201,26 @@ class SCTConfiguration(dict):
                 f"Supported instance types: {', '.join(supported_instances)}")
 
         rf = self.get('xcloud_replication_factor')
-        n_nodes = self.get('n_db_nodes')
+        n_nodes = int(self.get('n_db_nodes'))
         if rf is None:
-            self['xcloud_replication_factor'] = n_nodes
+            self['xcloud_replication_factor'] = min(n_nodes, 3)
         elif rf > n_nodes:
             raise ValueError(f"xcloud_replication_factor ({rf}) cannot be greater than n_db_nodes ({n_nodes})")
+
+        # validate Vector Search parameters for cloud backend
+        # TODO: update after Vector Search moves out of Beta for Scylla Cloud and limitations are changed/no longer apply
+        if int(self.get('n_vector_store_nodes')) > 0:
+            scylla_version = self.get('scylla_version').split('~')[0]
+            if version.parse(scylla_version) < version.parse(MIN_SCYLLA_VERSION_FOR_VS):
+                raise ValueError(f"Vector Search requires ScyllaDB {MIN_SCYLLA_VERSION_FOR_VS}+, "
+                                 f"but selected version is {scylla_version}")
+
+            vs_instance_type = self.get('instance_type_vector_store')
+            supported_types = XCLOUD_VS_INSTANCE_TYPES[cloud_provider]
+            if vs_instance_type not in supported_types.keys():
+                raise ValueError(
+                    f"Instance type '{vs_instance_type}' is not supported for Vector Search on {cloud_provider.upper()}.\n"
+                    f"Supported types: {', '.join(supported_types.keys())}")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

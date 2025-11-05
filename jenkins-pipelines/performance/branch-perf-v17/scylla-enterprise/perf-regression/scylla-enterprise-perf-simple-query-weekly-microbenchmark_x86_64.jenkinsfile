@@ -6,6 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
+    provision_type: 'on_demand',
     test_name: 'microbenchmarking_test.PerfSimpleQueryTest.test_perf_simple_query',
     test_config: """[ 'test-cases/microbenchmarking/amazon_perf_simple_query_ARM.yaml', 'test-cases/microbenchmarking/amazon_perf_simple_query_x86.yaml', 'configurations/performance/perf_simple/latency-decorator-error-thresholds-perf-simple-query-microbenchmark_x86_64.yaml' ]""",
     email_recipients: "scylla-perf-results@scylladb.com",
