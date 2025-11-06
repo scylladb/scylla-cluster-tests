@@ -163,7 +163,7 @@ class SkipPerIssues:
             branch_version = '.'.join(self.params.scylla_version.split('.')[0:2])
             issues_labels = sum([issue.labels for issue in self.issues], [])
 
-            return any(f'sct-{branch_version}-skip' in label.name for label in issues_labels)
+            return any(f'sct-{branch_version}-skip' in label.name for label in issues_labels) or any(f'dtest/{branch_version}-skip' in label.name for label in issues_labels)
 
         return False
 
