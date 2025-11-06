@@ -18,12 +18,14 @@ import builtins
 import logging
 import contextlib
 from enum import Enum
+from itertools import chain
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
-from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
+from sdcm.sct_events import Severity
+from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -48,11 +50,12 @@ class ScyllaBenchWorkloads(str, Enum):
 
 
 class ScyllaBenchStressEventsPublisher(FileFollowerThread):
-    def __init__(self, node, sb_log_filename, event_id=None):
+    def __init__(self, node, sb_log_filename, event_id=None, stop_test_on_failure: bool = True):
         super().__init__()
         self.sb_log_filename = sb_log_filename
         self.node = str(node)
         self.event_id = event_id
+        self.stop_test_on_failure = stop_test_on_failure
 
     def run(self):
         while not self.stopped():
@@ -65,13 +68,17 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for pattern, event in SCYLLA_BENCH_ERROR_EVENTS_PATTERNS:
+                for pattern, event in chain(SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS):
                     if self.event_id:
                         # Connect the event to the stress load
                         event.event_id = self.event_id
 
                     if pattern.search(line):
+                        if event.severity == Severity.CRITICAL and not self.stop_test_on_failure:
+                            event = event.clone()  # so we don't change the severity to other stress threads  # noqa: PLW2901
+                            event.severity = Severity.ERROR
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
+                        break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
 class ScyllaBenchThread(DockerBasedStressThread):
@@ -140,6 +147,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
         #       Another "raw" tag/metric is ignored because it is coordinated omission affected
         #       and not really needed having 'coordinated omission fixed' latency one.
         self.hdr_tags = ["co-fixed"]
+        self.stop_test_on_failure = stop_test_on_failure
 
     def get_datacenter_name_for_loader(self, loader):
         datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
@@ -277,7 +285,8 @@ class ScyllaBenchThread(DockerBasedStressThread):
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
                 cleanup_context, \
-                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher, \
+                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name,
+                                                 stop_test_on_failure=self.stop_test_on_failure) as publisher, \
                 ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd,
                                  log_file_name=log_file_name) as scylla_bench_event:
             publisher.event_id = scylla_bench_event.event_id
