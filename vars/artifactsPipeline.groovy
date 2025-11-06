@@ -75,7 +75,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
                name: 'availability_zone')
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
