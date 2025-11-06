@@ -26,7 +26,7 @@ from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES
+from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours
 from sdcm.utils.gce_region import GceRegion
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteCmdRunner, shell_script_cmd
@@ -202,10 +202,15 @@ class CloudNode(cluster.BaseNode):
     def _init_port_mapping(self):
         pass
 
-    def set_keep_alive(self):
-        # TODO: Implement keep alive tagging for Scylla Cloud
-        self.log.info("Setting keep alive for node %s", self.name)
+    # For cloud clusters, the keep duration is calculated and set during cluster creation.
+    # _set_keep_alive and _set_keep_duration methods in base classes are invoked after cluster
+    # creation, during nodes init, when it is already late to modify cluster details.
+    # The basic implementations of these methods remain here for backward compatibility.
+    def _set_keep_alive(self) -> bool:
         return True
+
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        pass
 
     def restart(self):
         raise NotImplementedError("There is no public Scylla Cloud API for node restart.\n"
@@ -580,9 +585,14 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'defaultInstanceTypeId': XCLOUD_VS_INSTANCE_TYPES[self._cloud_provider][self.params.get('instance_type_vector_store')]
         } if self._deploy_vs_nodes else None
 
+        expiration_hours = compute_cluster_exp_hours(
+            self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type))
+        cluster_name = f"{self.name}-keep-{expiration_hours}h"
+        self.log.info("Cluster will be created with expiration time of %s hours", expiration_hours)
+
         return {
             'account_id': self._account_id,
-            'cluster_name': self.name,
+            'cluster_name': cluster_name,
             'scylla_version': self.params.get('scylla_version'),
             'cidr_block': cidr_block,
             'broadcast_type': broadcast_type,
