@@ -226,7 +226,8 @@ class LatteExporter(StressExporter):
             return True
 
         # NOTE: all latency data lines consist of digits only.
-        if columns := line.split():
+        #       But we should trim out the [time prefix] written in square brackets.
+        if columns := line.split("]", maxsplit=1)[-1].split():
             for column in columns:
                 try:
                     float(column)
@@ -243,7 +244,7 @@ class LatteExporter(StressExporter):
 
     @staticmethod
     def split_line(line: str) -> list:
-        ret = line.split()
+        ret = line.split("]", maxsplit=1)[-1].split()
         if len(ret) != 12:
             LOGGER.error(
                 "'%s' line got splitted in the following unexpected list: %s",
