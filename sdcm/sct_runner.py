@@ -794,7 +794,7 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str,  params: SCTConfiguration | None = None):
-        availability_zone = random_zone(region_name)
+        availability_zone = params.get("availability_zone") or random_zone(region_name)
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.gce_region = region_name
         self.gce_source_region = self.SOURCE_IMAGE_REGION
