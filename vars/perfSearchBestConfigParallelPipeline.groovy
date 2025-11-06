@@ -23,7 +23,7 @@ def call(Map pipelineParams) {
                description: 'us-east-1|eu-west-1',
                name: 'region')
 
-            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                 description: 'Availability zone',
                 name: 'availability_zone')
 
