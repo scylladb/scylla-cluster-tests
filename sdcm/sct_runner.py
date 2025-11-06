@@ -33,8 +33,8 @@ import boto3
 import pytz
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
-from azure.mgmt.compute.v2021_07_01.models import VirtualMachine
-from azure.mgmt.resource.resources.v2021_04_01.models import TagsPatchResource, TagsPatchOperation
+from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.resource.resources.models import TagsPatchResource, TagsPatchOperation
 import google.api_core.exceptions
 from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
