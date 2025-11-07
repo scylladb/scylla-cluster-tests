@@ -1,8 +1,6 @@
-import logging
 from dataclasses import dataclass
 from typing import Optional
 
-LOGGER = logging.getLogger(__name__)
 
 class NetworkInterfaceNotFound(Exception):
     pass
@@ -68,11 +66,11 @@ class ScyllaNetworkConfiguration:
     def broadcast_address_ip_type(self):
         # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
         # broadcast_address. Keep this output in correlation with `nodetool status`
-        LOGGER.debug("### Scylla network config: " + str(self.scylla_network_config))
+        print("### Scylla network config: " + str(self.scylla_network_config))
         broadcast_address_config = [
             conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]
         if len(broadcast_address_config) == 0:
-            LOGGER.warning("Broadcast config is empty, assuming public: " + str(broadcast_address_config))
+            print("Broadcast config is empty, assuming public: " + str(broadcast_address_config))
             return "public"
         if broadcast_address_config[0]["ip_type"] == "ipv6":
             return "ipv6"
