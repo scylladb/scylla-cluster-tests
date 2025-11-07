@@ -291,7 +291,7 @@ class CloudNode(cluster.BaseNode):
             self.remoter = RemoteCmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
-            self.log.debug("XCloud connectivity is not supported, SSH remoter is not initialized")
+            self.log.warning("XCloud connectivity is not supported, SSH remoter is not initialized")
 
     @xcloud_super_if_supported
     def wait_ssh_up(self, verbose=True, timeout=500):
