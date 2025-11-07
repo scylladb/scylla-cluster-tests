@@ -301,6 +301,7 @@ class EksNodePool(CloudK8sNodePool):
                 )]
             self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
         try:
+            self.k8s_cluster.log.info("Node group configuration: " + self._node_group_cfg)
             self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         except self.k8s_cluster.eks_client.exceptions.InvalidRequestException as e:
             decoded = self.k8s_cluster.sts_client.decode_authorization_message(EncodedMessage=e.response['Error']['Message'])
