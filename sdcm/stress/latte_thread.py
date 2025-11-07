@@ -30,12 +30,13 @@ from sdcm.reporting.tooling_reporter import LatteVersionReporter
 from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.sct_events import Severity
 from sdcm.stress.base import DockerBasedStressThread
-from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.common import get_sct_root_path, S3Storage
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 LATTE_FN_NAME_RE = r'(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
 LATTE_TAG_RE = r'--tag(?:\s+|=)([\w-]+(?:,[\w-]+)*)\b'
+_VECTOR_SEARCH_DATAFILES_DOWNLOADED = False
 LOGGER = logging.getLogger(__name__)
 
 
@@ -91,20 +92,43 @@ def get_latte_operation_type(stress_cmd):
         return "mixed"
 
 
+def download_vector_search_test_data_from_s3(files_to_download: tuple, dst_dir: str):
+    bucket_name = "vector-search-sct"
+    base_url = f"https://{bucket_name}.s3.amazonaws.com"
+
+    s3_storage = S3Storage(bucket=bucket_name)
+    for f in files_to_download:
+        s3_storage.download_file(link=f"{base_url}/{f}", dst_dir=dst_dir)
+
+
 class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
     SCHEMA_CMD_CALL_COUNTER = {}
+    VECTOR_SEARCH_SCRIPT_DATAFILES = {
+        "data_dir/latte/vector_search.rn": ("vs_sanity_dataset_50k_1536dim.txt",
+                                            "vs_sanity_ground_truth_1k_1536dim.txt",
+                                            "vs_sanity_test_vectors_1k_1536dim.txt",),
+    }
 
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
     def build_stress_cmd(self, cmd_runner, loader, hosts):
+        global _VECTOR_SEARCH_DATAFILES_DOWNLOADED  # noqa: PLW0603
+
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
         script_name = script_name_regx.search(self.stress_cmd).group(0)
         if script_name not in self.SCHEMA_CMD_CALL_COUNTER:
             self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
+
+        if script_name in self.VECTOR_SEARCH_SCRIPT_DATAFILES and not _VECTOR_SEARCH_DATAFILES_DOWNLOADED:
+            download_vector_search_test_data_from_s3(
+                files_to_download=self.VECTOR_SEARCH_SCRIPT_DATAFILES[script_name],
+                dst_dir=str(Path(script_name).parent),
+            )
+            _VECTOR_SEARCH_DATAFILES_DOWNLOADED = True
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
             cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
