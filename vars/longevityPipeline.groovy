@@ -64,7 +64,9 @@ def call(Map pipelineParams) {
 	    string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
 	    string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 	    string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs:// ', name: 'update_db_packages')
-            string(name: 'scylla_version', defaultValue: '', description: 'Version of ScyllaDB')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}",
+                   description: 'Version of ScyllaDB',
+                   name: 'scylla_version')
             string(name: 'scylla_repo', defaultValue: '', description: 'Repository for ScyllaDB')
 
             // Provisioning Configuration
