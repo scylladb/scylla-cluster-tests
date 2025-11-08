@@ -29,7 +29,6 @@ backtrace_decoding: false
 
 store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
-use_prepared_loaders: true
 use_hdrhistogram: true
 email_subject_postfix: 'latency during grow-shrink'
 hinted_handoff: 'enabled'
