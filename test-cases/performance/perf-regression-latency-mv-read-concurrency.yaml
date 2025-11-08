@@ -24,7 +24,6 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 backtrace_decoding: false
 
 store_perf_results: true
-use_prepared_loaders: true
 use_hdrhistogram: true
 custom_es_index: 'mv-overloading-latency-read'
 
