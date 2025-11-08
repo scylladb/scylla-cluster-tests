@@ -1,5 +1,4 @@
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 # AMIs from branch-perf-v8 with non-shardware driver
-use_prepared_loaders: true
 append_scylla_yaml:
   enable_shard_aware_drivers: false
