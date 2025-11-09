@@ -1,5 +1,15 @@
 #! groovy
 
+/** jobDescription
+    Utility job to restore and investigate monitoring stack from a previous test run.
+    Deploys an AWS instance with restored Grafana/Prometheus monitoring for debugging purposes.
+    Allows specifying custom duration, region, and availability zone for the monitoring instance.
+    Uses hydra investigate show-monitor command to restore monitoring data from a given test ID.
+    Part of the infrastructure/debugging utility suite.
+
+    Labels: utility, monitoring, infrastructure, debug, investigate, restore-monitoring
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

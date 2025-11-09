@@ -1,5 +1,13 @@
 #!groovy
 
+/** jobDescription
+    Longevity test on 4-node cluster.
+        Stress tool: cassandra-stress.
+        Runs for 13 minutes.
+        Part of the longevity suite.
+        Labels: longevity
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(

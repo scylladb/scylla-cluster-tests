@@ -1,5 +1,14 @@
 #!groovy
 
+/** jobDescription
+    Test on 3-node cluster.
+        Stress tool: ycsb.
+        Runs for 14 minutes.
+        Tests DynamoDB-compatible Alternator API.
+        Part of the performance suite.
+        Labels: alternator, performance
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

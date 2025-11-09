@@ -1,5 +1,11 @@
 #!groovy
 
+/** jobDescription
+    Longevity test.
+        Part of the longevity suite.
+        Labels: longevity
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(

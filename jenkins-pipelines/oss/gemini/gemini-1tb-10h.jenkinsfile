@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Test on 6-node cluster with ~1TB dataset.
+        Tests SisyphusMonkey nemesis.
+        Runs for 13 minutes.
+        Labels: 1tb, gemini, nemesis
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

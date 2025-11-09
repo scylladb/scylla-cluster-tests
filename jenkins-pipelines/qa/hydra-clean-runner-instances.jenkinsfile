@@ -1,5 +1,15 @@
 #! groovy
 
+/** jobDescription
+    Cleanup job for SCT runner instances in AWS EU-West-1 region.
+    Runs hydra clean-runner-instances command to remove stale or unused CI runner instances.
+    This is a maintenance utility job that helps manage infrastructure costs and resources.
+    Supports dry-run mode for validation before actual cleanup.
+    Main tool: hydra
+
+    Labels: maintenance, cleanup, infrastructure, aws, ci-utilities
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,9 @@
 #!groovy
 
+/** jobDescription
+    Test.
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(

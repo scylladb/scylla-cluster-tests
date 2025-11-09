@@ -5,12 +5,13 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 /** jobDescription
-    This is an example longevity test that demonstrates how to use labels.
+    4-hour longevity test on a 6-node cluster with ~100GB dataset using mixed read/write workload.
+    Runs cassandra-stress with SizeTieredCompactionStrategy and parallel read/write operations.
+    Tests SisyphusMonkey nemesis with encryption enabled (server+client) and parallel node operations.
+    This test serves as part of the longevity test suite.
+    Main load stress tool: cassandra-stress
 
-    This test runs cassandra-stress with various workloads to test
-    cluster stability over an extended period.
-
-    Labels: performance, smoke-test, critical, stability
+    Labels: longevity, cassandra-stress, mixed-workload, encryption, size-tiered-compaction, sisyphus, nemesis, 100gb
 */
 
 longevityPipeline(

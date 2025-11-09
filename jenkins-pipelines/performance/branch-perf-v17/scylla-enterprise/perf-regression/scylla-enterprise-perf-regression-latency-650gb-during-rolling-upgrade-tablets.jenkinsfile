@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Latency performance regression test with ~650GB dataset using write/read/mixed workload.
+        Tablets enabled.
+        Part of the upgrades suite.
+        Labels: 650gb, latency, performance, tablets, upgrade
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,15 @@
 #!groovy
 
+/** jobDescription
+    1.5-hour longevity test on a 3-node cluster with ~5GB dataset using mixed read/write workload.
+    Runs cassandra-stress and scylla-bench stress tools with NetworkTopologyStrategy (RF=3).
+    Tests BlockNetworkMonkey nemesis with encryption enabled (server+client) on Docker backend.
+    Part of the longevity suite.
+    Main load stress tools: cassandra-stress, scylla-bench
+
+    Labels: longevity, 5gb, cassandra-stress, scylla-bench, mixed-workload, encryption, block-network, nemesis, docker, two-interfaces
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

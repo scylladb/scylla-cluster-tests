@@ -1,5 +1,11 @@
 #!groovy
 
+/** jobDescription
+    Test.
+        Part of the performance suite.
+        Labels: performance, write-workload
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

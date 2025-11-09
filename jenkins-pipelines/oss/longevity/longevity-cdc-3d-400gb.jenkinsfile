@@ -1,5 +1,15 @@
 #!groovy
 
+/** jobDescription
+    Longevity test on 6-node cluster with ~400GB dataset.
+        Stress tool: cassandra-stress.
+        Tests SisyphusMonkey nemesis.
+        Runs for 1.3 hours.
+        Tests Change Data Capture (CDC).
+        Part of the longevity suite.
+        Labels: 400gb, cdc, longevity, nemesis
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,14 @@
 #!groovy
 
+/** jobDescription
+    Throughput performance regression test on 3-node cluster using write/read/mixed workload.
+        Stress tool: ycsb.
+        Runs for 5 minutes.
+        Tests DynamoDB-compatible Alternator API.
+        Part of the performance suite.
+        Labels: alternator, performance, throughput
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

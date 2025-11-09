@@ -1,5 +1,11 @@
 #!groovy
 
+/** jobDescription
+    Throughput performance regression test with ~125GB dataset using write/read/mixed workload.
+        Part of the performance suite.
+        Labels: 125gb, performance, throughput
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

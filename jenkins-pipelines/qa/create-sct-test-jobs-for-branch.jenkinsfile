@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Basic SCT pipeline test job with default configuration.
+    No specific test parameters or stress tools configured in the Jenkinsfile.
+
+    Labels: test, default
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

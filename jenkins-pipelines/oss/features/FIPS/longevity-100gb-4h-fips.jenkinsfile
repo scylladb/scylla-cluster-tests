@@ -1,5 +1,11 @@
 #!groovy
 
+/** jobDescription
+    Longevity test with ~100GB dataset.
+        Part of the longevity suite.
+        Labels: 100gb, longevity
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 // This scenario can only be triggered with a scylla repo, not an ami

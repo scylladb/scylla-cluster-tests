@@ -1,5 +1,15 @@
 #!groovy
 
+/** jobDescription
+    Maximum throughput search test on 3-node cluster using read/write/mixed workloads.
+    Automatically searches for optimal throughput configuration for each workload type.
+    Runs cassandra-stress with multiple sub-tests to find best performance settings.
+    Part of the performance suite for throughput optimization.
+    Main load stress tool: cassandra-stress
+
+    Labels: performance, throughput, search-best-config, cassandra-stress, read-workload, write-workload, mixed-workload
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

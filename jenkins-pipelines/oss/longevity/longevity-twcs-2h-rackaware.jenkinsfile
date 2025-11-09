@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Longevity test.
+        Using TimeWindowCompactionStrategy.
+        Part of the longevity suite.
+        Labels: longevity
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

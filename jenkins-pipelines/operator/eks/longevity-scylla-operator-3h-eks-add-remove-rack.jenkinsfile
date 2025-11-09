@@ -1,5 +1,14 @@
 #!groovy
 
+/** jobDescription
+    Longevity test on 4-node cluster.
+        Stress tool: cassandra-stress.
+        Tests AddRemoveRackNemesis nemesis.
+        Runs for 5 minutes.
+        Part of the longevity suite.
+        Labels: longevity, nemesis
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
