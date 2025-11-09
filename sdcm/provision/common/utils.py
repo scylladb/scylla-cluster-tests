@@ -266,6 +266,16 @@ def install_docker_service():
             sleep $(backoff $n)
         done
 
+        # Configure Docker to use Google Container Registry mirrors
+        mkdir -p /etc/docker
+        cat > /etc/docker/daemon.json <<EOF
+        {
+          "registry-mirrors": [
+            "https://mirror.gcr.io"
+          ]
+        }
+        EOF
+
         systemctl enable docker.service
         systemctl start docker.service
     """)
