@@ -526,7 +526,13 @@ class RestoreTask(ManagerTask):
             return None
 
         download_bandwidth_match = re.search(r"(\d+\.\d+)", download_bandwidth_str)
-        return float(download_bandwidth_match.group(1))
+        if download_bandwidth_match:
+            # Numerical value found, return it as a float
+            return float(download_bandwidth_match.group(1))
+        else:
+            # Non-numeric value found (e.g., 'unknown')
+            LOGGER.warning(f"Download bandwidth is non-numeric: {download_bandwidth_str.strip()}. Returning None.")
+            return None
 
     @property
     def load_and_stream_bw(self) -> float | None:
@@ -547,7 +553,13 @@ class RestoreTask(ManagerTask):
             return None
 
         las_bandwidth_match = re.search(r"(\d+\.\d+)", las_bandwidth_str)
-        return float(las_bandwidth_match.group(1))
+        if las_bandwidth_match:
+            # Numerical value found, return it as a float
+            return float(las_bandwidth_match.group(1))
+        else:
+            # Non-numeric value found (e.g., 'unknown'). Log warning and return None.
+            LOGGER.warning(f"Load&Stream bandwidth is non-numeric: {las_bandwidth_str.strip()}. Returning None.")
+            return None
 
     @property
     def post_restore_repair_duration(self) -> datetime.timedelta:
