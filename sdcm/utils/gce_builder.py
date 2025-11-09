@@ -88,7 +88,13 @@ class GceBuilder:
 
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
+<<<<<<< HEAD
     VERSION = 'v4'
+||||||| parent of 91ebaa945 (feature(docker): configure google registry mirrors)
+    VERSION = 'v5'
+=======
+    VERSION = 'v6'
+>>>>>>> 91ebaa945 (feature(docker): configure google registry mirrors)
 
     def __init__(self, region: GceRegion):
         self.region = region
