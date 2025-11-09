@@ -584,7 +584,16 @@ def resolve_latest_repo_symlink(url: str) -> str:
     return resolved_url
 
 
-def get_specific_tag_of_docker_image(docker_repo: str):
+def get_specific_tag_of_docker_image(docker_repo: str, architecture: Literal['x86_64', 'aarch64'] = 'x86_64') -> str:
+    """
+    Get the latest docker image tag from ScyllaDB S3 storage for given nightly docker repo.
+
+    :param docker_repo: docker repository name, e.g. 'scylladb/scylla-nightly'
+    :param architecture: architecture of the docker image, either 'x86_64' or 'aarch64' (default: 'x86_64')
+    :return: docker image tag string if found
+    :raises ValueError: if docker repo is not supported or tag info cannot be found
+    """
+
     if docker_repo == 'scylladb/scylla-nightly':
         product = 'scylla'
         branch = 'master'
@@ -602,9 +611,11 @@ def get_specific_tag_of_docker_image(docker_repo: str):
     #    url-id: 2022-08-29T08:05:34Z
     #    docker-image-name: scylla-nightly:5.2.0-dev-0.20220829.67c91e8bcd61
     build_info = yaml.safe_load(res.content)
-    tag = build_info['docker-image-name'].split(':', maxsplit=1)[1]
-    LOGGER.debug('found %s for %s repo', tag, docker_repo)
-    return tag
+    if tag := build_info.get(f'docker-image-name-{architecture}', build_info.get('docker-image-name')):
+        tag = tag.split(':', maxsplit=1)[1]
+        LOGGER.debug('found %s for %s repo', tag, docker_repo)
+        return tag
+    raise ValueError(f"Cannot find docker image tag info in {build_url} for architecture={architecture}")
 
 
 def transform_non_semver_scylla_version_to_semver(scylla_version: str):
