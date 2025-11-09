@@ -337,7 +337,8 @@ class Test1:
 
         LOGGER.info("Testing inline labels from example-with-labels.jenkinsfile")
         LOGGER.info(f"Found labels: {labels}")
-        expected = ["performance", "smoke-test", "critical", "stability"]
+        expected = ["longevity", "cassandra-stress", "mixed-workload",
+                    "encryption", "size-tiered-compaction", "sisyphus", "nemesis", "100gb"]
         assert set(labels) == set(expected), f"Expected {expected}, got {labels}"
         LOGGER.info("✓ Test passed")
 
