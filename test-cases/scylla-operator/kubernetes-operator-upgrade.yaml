@@ -10,7 +10,7 @@ k8s_n_scylla_pods_per_cluster: 3
 n_loaders: 1
 
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
-k8s_scylla_operator_chart_version: 'latest'  # will pick up the latest stable version, i.e. 'v1.3.0'
+k8s_scylla_operator_chart_version: '1.18.1'  # will pick up the latest stable version, i.e. 'v1.3.0'
 k8s_scylla_operator_docker_image: ''  # default value from the Helm chart will be used
 
 k8s_scylla_operator_upgrade_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
