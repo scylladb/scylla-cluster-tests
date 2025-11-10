@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 artifactsPipeline(
     test_config: '''["test-cases/artifacts/ubuntu2204.yaml", "configurations/arm/ubuntu2204.yaml"]''',
     backend: 'aws',
-    region: 'eu-west-1',
+    region: 'us-east-1',
     provision_type: 'spot',
 
     timeout: [time: 30, unit: 'MINUTES'],
