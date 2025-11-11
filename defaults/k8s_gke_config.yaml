@@ -25,7 +25,7 @@ scylla_version: '6.2.3'
 k8s_scylla_operator_docker_image: ''
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
 k8s_scylla_operator_chart_version: 'latest'
-k8s_cert_manager_version: '1.17.4'
+k8s_cert_manager_version: '1.19.1'
 k8s_deploy_monitoring: false
 k8s_enable_performance_tuning: true
 
