@@ -40,6 +40,8 @@ from argus.common.enums import TestStatus
 
 import sct_ssh
 import sct_scan_issues
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
@@ -388,15 +390,16 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
             click.echo(f"SCT runner cleanup for {param} has been finished")
 
 
-@cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure)')
+@cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure/XCloud)')
 @click.option('--user', type=str, help='user name to filter instances by')
 @click.option('--get-all', is_flag=True, default=False, help='All resources')
 @click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.option('-b', '--backend', 'backend_type', type=click.Choice(SCTConfiguration.available_backends + ['all']), default='all', help="use specific backend")
+@click.option('--xcloud-env', 'xcloud_envs', type=str, multiple=True, default=['lab', 'staging'], help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab and staging")
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type):  # noqa: PLR0912, PLR0914, PLR0915
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
 
     add_file_logger()
 
@@ -679,13 +682,91 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         else:
             click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
+    def list_resources_on_xcloud():
+        """List ScyllaDB Cloud clusters across specified environments"""
+        # Use environments from command line option
+        environments = xcloud_envs
+
+        for environment in environments:
+            try:
+                click.secho(f"Checking ScyllaDB Cloud ({environment})...", fg='green')
+                credentials = KeyStore().get_cloud_rest_credentials(environment)
+                api_client = ScyllaCloudAPIClient(
+                    api_url=credentials['base_url'],
+                    auth_token=credentials['api_token']
+                )
+                account_id = api_client.get_account_details().get('accountId')
+                clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+
+                if clusters:
+                    # Filter by test_id or user if provided
+                    filtered_clusters = []
+                    for cluster in clusters:
+                        # Get cluster details to access tags/metadata
+                        cluster_details = api_client.get_cluster_details(
+                            account_id=account_id,
+                            cluster_id=cluster.get('id'),
+                            enriched=True
+                        )
+                        # Check if cluster matches filters
+                        cluster_name = cluster_details.get('clusterName', '')
+                        # Filter by test_id if provided
+                        if test_id:
+                            short_test_id = extract_short_test_id_from_name(cluster_name)
+                            if short_test_id and not test_id.startswith(short_test_id):
+                                continue
+                        if user:
+                            if user not in cluster_name:
+                                continue
+
+                        filtered_clusters.append(cluster_details)
+
+                    if filtered_clusters:
+                        xcloud_table = PrettyTable(["Name", "Environment", "Status",
+                                                   "Provider", "TestId", "RunByUser", "CreatedAt"])
+                        xcloud_table.align = "l"
+                        xcloud_table.sortby = 'CreatedAt'
+
+                        for cluster in filtered_clusters:
+                            cluster_name = cluster.get('clusterName', 'N/A')
+                            cluster_status = cluster.get('status', 'N/A')
+                            cloud_provider = cluster.get("cloudProvider", {}).get("name", "N/A")
+                            created_at = cluster.get('createdAt', 'N/A')
+
+                            # Extract test_id and user from metadata or cluster name
+                            short_test_id = extract_short_test_id_from_name(cluster_name) or 'N/A'
+                            # TODO: Extract cluster_user from cluster name once naming convention includes username,
+                            #       or from cluster tags/metadata when API provides user information.
+                            cluster_user = "N/A"
+
+                            xcloud_table.add_row([
+                                cluster_name,
+                                environment,
+                                cluster_status,
+                                cloud_provider,
+                                short_test_id,
+                                cluster_user,
+                                created_at
+                            ])
+
+                        click.echo(xcloud_table.get_string(title=f"ScyllaDB Cloud clusters ({environment})"))
+                    else:
+                        click.secho(
+                            f"Nothing found for selected filters in ScyllaDB Cloud ({environment})!", fg="yellow")
+                else:
+                    click.secho(f"No clusters found in ScyllaDB Cloud ({environment})!", fg="yellow")
+
+            except Exception as exc:  # noqa: BLE001
+                click.secho(f"Failed to list resources in ScyllaDB Cloud ({environment}): {exc}", fg="red")
+
     backend_listing_map = {
         "aws": list_resources_on_aws,
         "gce": list_resources_on_gce,
         "k8s-gke": list_resources_on_gke,
         "k8s-eks": list_resources_on_eks,
         "docker": list_resources_on_docker,
-        "azure": list_resources_on_azure
+        "azure": list_resources_on_azure,
+        "xcloud": list_resources_on_xcloud
     }
     if list_resources_per_backend_type := backend_listing_map.get(backend_type):
         list_resources_per_backend_type()
