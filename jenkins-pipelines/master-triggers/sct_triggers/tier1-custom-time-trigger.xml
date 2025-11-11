@@ -30,7 +30,7 @@ requested_by_user=timtimb0t</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier1/gemini-1tb-10h-test,../tier1/longevity-1tb-5days-azure-test,../tier1/longevity-large-partition-200k-pks-4days-gce-test,../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../longevity/longevity-twcs-2h-rackaware-test,../longevity/longevity-harry-2h-test</projects>
+          <projects>../tier1/gemini-1tb-10h-test,../tier1/longevity-1tb-5days-azure-test,../tier1/longevity-large-partition-200k-pks-4days-gce-test,../tier1/longevity-mv-si-4days-streaming-test,../tier1/longevity-schema-topology-changes-12h-test,../longevity/longevity-harry-2h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
