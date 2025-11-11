@@ -14,6 +14,7 @@
 import os
 import ipaddress
 import logging
+import re
 from functools import cached_property
 from types import SimpleNamespace
 from typing import Any
@@ -112,6 +113,27 @@ def download_file(url, dest, chunk_size=16384):
             os.remove(tmp_dest)
         LOGGER.error(f"Failed to download {url} to {dest}: {e}")
         raise
+
+
+CLUSTER_NAME_REGEX = re.compile(r'\b[0-9a-f]{8}\b')
+
+
+def extract_short_test_id_from_name(name: str) -> str | None:
+    """Extract short test ID (8 hex chars) from cluster/resource name.
+
+    Handles names like:
+    - "PR-provision-test-fruch-db-cluster-3dc74f22-keep-4h" -> "3dc74f22"
+    - "my-cluster-12345678" -> "12345678"
+    - "simple-3dc74f22" -> "3dc74f22"
+
+    Returns None if no test ID pattern is found.
+    """
+    # Pattern to match 8 hexadecimal characters (typical short UUID format)
+    # This looks for 8 hex chars that are either at word boundaries or surrounded by hyphens
+    if match := CLUSTER_NAME_REGEX.search(name.lower()):
+        return match.group(0)
+
+    return
 
 
 VECTOR_BASE_URL = "https://packages.timber.io/vector/latest"
