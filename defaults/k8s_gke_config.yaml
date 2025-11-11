@@ -3,7 +3,7 @@ gce_datacenter: 'us-east1'
 availability_zone: 'c'
 gce_network: 'qa-vpc'
 
-gke_cluster_version: '1.27'
+gke_cluster_version: '1.31'
 gke_k8s_release_channel: ''
 
 gce_instance_type_db: 'n2-standard-8'
@@ -18,14 +18,14 @@ k8s_n_auxiliary_nodes: 2
 
 k8s_instance_type_auxiliary: 'n2-standard-2'
 
-scylla_version: '5.2.11'
+scylla_version: '6.2.3'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
 k8s_scylla_operator_docker_image: ''
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
 k8s_scylla_operator_chart_version: 'latest'
-k8s_cert_manager_version: '1.8.0'
+k8s_cert_manager_version: '1.19.1'
 k8s_deploy_monitoring: false
 k8s_enable_performance_tuning: true
 

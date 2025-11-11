@@ -4,14 +4,14 @@ mini_k8s_version: '0.20.0'
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 
-scylla_version: '5.2.11'
+scylla_version: '6.2.3'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
 k8s_scylla_operator_docker_image: ''
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
 k8s_scylla_operator_chart_version: 'latest'
-k8s_cert_manager_version: '1.8.0'
+k8s_cert_manager_version: '1.19.1'
 
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 10
