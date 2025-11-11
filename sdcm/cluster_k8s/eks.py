@@ -289,7 +289,7 @@ class EksNodePool(CloudK8sNodePool):
     def deploy(self) -> None:
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
         if self.is_launch_template_required:
-            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
+            self.k8s_cluster.log.info("Deploy launch template %s with the configuration %s", self.launch_template_name, str(self._node_group_cfg))
             create_launch_template_args = {
                 "LaunchTemplateName": self.launch_template_name,
                 "LaunchTemplateData": self._launch_template_cfg,

@@ -583,7 +583,9 @@ class BaseNode(AutoSshContainerMixin):
     def tags(self) -> Dict[str, str]:
         return {**self.parent_cluster.tags,
                 "Name": str(self.name),
-                "UserName": str(self.ssh_login_info.get('user')) if self.ssh_login_info else ''}
+                "UserName": str(self.ssh_login_info.get('user')) if self.ssh_login_info else '',
+                "Owner": "SCT",
+                "RunByUser": "SCT"}
 
     def _set_keep_alive(self):
         ContainerManager.set_all_containers_keep_alive(self)
