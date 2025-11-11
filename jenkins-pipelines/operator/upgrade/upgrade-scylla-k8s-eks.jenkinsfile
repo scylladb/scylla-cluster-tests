@@ -4,7 +4,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingOperatorUpgradePipeline(
     backend: 'k8s-eks',
-    region: 'eu-north-1',
+    region: 'eu-west-1',
     availability_zone: 'a,b',
     base_versions: '["2024.1.18"]',
     new_version: '2024.1.19',
