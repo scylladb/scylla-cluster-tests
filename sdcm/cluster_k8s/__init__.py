@@ -184,9 +184,9 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
         self.taints = taints
         self.is_deployed = is_deployed
 
-    @property
+    @cached_property
     def tags(self):
-        return self.k8s_cluster.tags
+        return {**self.k8s_cluster.tags, **{'Owner': 'SCT', 'Name': 'SCT'}}
 
     @abc.abstractmethod
     def deploy(self):
