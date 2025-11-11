@@ -17,7 +17,7 @@ eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-N
 eks_vpc_cni_version: 'v1.19.2-eksbuild.5'
 
 scylla_version: '6.2.3'
-k8s_cert_manager_version: '1.8.0'
+k8s_cert_manager_version: '1.17.4'
 
 k8s_deploy_monitoring: false
 k8s_enable_performance_tuning: true
