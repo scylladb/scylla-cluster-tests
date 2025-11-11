@@ -2,6 +2,7 @@ disrupt_abort_repair:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -18,6 +19,7 @@ disrupt_add_drop_column:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -34,6 +36,7 @@ disrupt_add_remove_dc:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -50,6 +53,7 @@ disrupt_add_remove_mv:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -66,6 +70,7 @@ disrupt_bootstrap_streaming_error:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -82,6 +87,7 @@ disrupt_corrupt_then_scrub:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -98,6 +104,7 @@ disrupt_create_index:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -114,6 +121,7 @@ disrupt_decommission_streaming_err:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -130,6 +138,7 @@ disrupt_delete_10_full_partitions:
   config_changes: false
   delete_rows: true
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -146,6 +155,7 @@ disrupt_delete_by_rows_range:
   config_changes: false
   delete_rows: true
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -162,6 +172,7 @@ disrupt_delete_overlapping_row_ranges:
   config_changes: false
   delete_rows: true
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -178,6 +189,7 @@ disrupt_destroy_data_then_rebuild:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -194,6 +206,7 @@ disrupt_destroy_data_then_repair:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -210,6 +223,7 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -226,6 +240,7 @@ disrupt_disable_enable_ldap_authorization:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -242,6 +257,7 @@ disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -258,6 +274,7 @@ disrupt_drain_kubernetes_node_then_replace_scylla_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -274,6 +291,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -290,6 +308,7 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -306,6 +325,7 @@ disrupt_end_of_quota_nemesis:
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -322,6 +342,7 @@ disrupt_grow_shrink_cluster:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -338,6 +359,7 @@ disrupt_grow_shrink_new_rack:
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -354,6 +376,7 @@ disrupt_grow_shrink_zero_nodes:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -370,6 +393,7 @@ disrupt_hard_reboot_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -386,6 +410,7 @@ disrupt_hot_reloading_internode_certificate:
   config_changes: true
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -402,6 +427,7 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -418,6 +444,7 @@ disrupt_kill_mv_building_coordinator:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -434,6 +461,7 @@ disrupt_kill_scylla:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -450,6 +478,7 @@ disrupt_ldap_connection_toggle:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -466,6 +495,7 @@ disrupt_load_and_stream:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -482,6 +512,7 @@ disrupt_major_compaction:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -498,6 +529,7 @@ disrupt_manager_backup:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -514,6 +546,7 @@ disrupt_maximum_allowed_sls_with_max_shares_during_load:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -530,6 +563,7 @@ disrupt_memory_stress:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -546,6 +580,7 @@ disrupt_mgmt_backup:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -562,6 +597,7 @@ disrupt_mgmt_backup_specific_keyspaces:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -578,6 +614,7 @@ disrupt_mgmt_corrupt_then_repair:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -594,6 +631,7 @@ disrupt_mgmt_repair_cli:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -610,6 +648,7 @@ disrupt_mgmt_restore:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -626,6 +665,7 @@ disrupt_modify_table:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -642,6 +682,7 @@ disrupt_multiple_hard_reboot_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -658,6 +699,7 @@ disrupt_network_block:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -674,6 +716,7 @@ disrupt_network_random_interruptions:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -690,6 +733,7 @@ disrupt_network_reject_inter_node_communication:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -706,6 +750,7 @@ disrupt_network_reject_node_exporter:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -722,6 +767,7 @@ disrupt_network_reject_thrift:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -738,6 +784,7 @@ disrupt_network_start_stop_interface:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -754,6 +801,7 @@ disrupt_no_corrupt_repair:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -770,6 +818,7 @@ disrupt_nodetool_cleanup:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -786,6 +835,7 @@ disrupt_nodetool_decommission:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -802,6 +852,7 @@ disrupt_nodetool_drain:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -818,6 +869,7 @@ disrupt_nodetool_enospc:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: true
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -834,6 +886,7 @@ disrupt_nodetool_flush_and_reshard_on_kubernetes:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -850,6 +903,7 @@ disrupt_nodetool_refresh:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -866,6 +920,7 @@ disrupt_nodetool_seed_decommission:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -882,6 +937,7 @@ disrupt_rebuild_streaming_err:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -898,6 +954,7 @@ disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -914,6 +971,7 @@ disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -930,6 +988,7 @@ disrupt_remove_node_then_add_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -946,6 +1005,7 @@ disrupt_remove_service_level_while_load:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -962,6 +1022,7 @@ disrupt_repair_streaming_err:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -978,6 +1039,7 @@ disrupt_replace_scylla_node_on_kubernetes:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -994,6 +1056,7 @@ disrupt_replace_service_level_using_detach_during_load:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1010,6 +1073,7 @@ disrupt_replace_service_level_using_drop_during_load:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1026,6 +1090,7 @@ disrupt_resetlocalschema:
   config_changes: true
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -1042,6 +1107,7 @@ disrupt_restart_then_repair_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1058,6 +1124,7 @@ disrupt_restart_with_resharding:
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1074,6 +1141,7 @@ disrupt_rolling_config_change_internode_compression:
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   full_cluster_restart: true
   has_steady_run: false
@@ -1091,6 +1159,7 @@ disrupt_rolling_restart_cluster:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1107,6 +1176,7 @@ disrupt_run_cdcstressor_tool:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -1123,6 +1193,7 @@ disrupt_run_unique_sequence:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1139,6 +1210,7 @@ disrupt_serial_restart_elected_topology_coordinator:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1155,6 +1227,7 @@ disrupt_show_toppartitions:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1171,6 +1244,7 @@ disrupt_sla_decrease_shares_during_load:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1187,6 +1261,7 @@ disrupt_sla_increase_shares_during_load:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1203,6 +1278,7 @@ disrupt_snapshot_operations:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1219,6 +1295,7 @@ disrupt_soft_reboot_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1235,6 +1312,7 @@ disrupt_start_stop_cleanup_compaction:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1251,6 +1329,7 @@ disrupt_start_stop_major_compaction:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1267,6 +1346,7 @@ disrupt_start_stop_scrub_compaction:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1283,6 +1363,7 @@ disrupt_start_stop_validation_compaction:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1299,6 +1380,7 @@ disrupt_stop_start_scylla_server:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1315,6 +1397,7 @@ disrupt_stop_wait_start_scylla_server:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1331,6 +1414,7 @@ disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_ba
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1347,6 +1431,7 @@ disrupt_terminate_and_replace_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: false
@@ -1363,6 +1448,7 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1379,6 +1465,7 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: false
   has_steady_run: false
   kubernetes: true
@@ -1395,6 +1482,7 @@ disrupt_toggle_audit_syslog:
   config_changes: true
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -1411,6 +1499,7 @@ disrupt_toggle_cdc_feature_properties_on_table:
   config_changes: true
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: false
@@ -1427,6 +1516,7 @@ disrupt_toggle_table_gc_mode:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1443,6 +1533,7 @@ disrupt_toggle_table_ics:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1459,6 +1550,7 @@ disrupt_truncate:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1475,6 +1567,7 @@ disrupt_truncate_large_partition:
   config_changes: false
   delete_rows: false
   disruptive: false
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true
@@ -1491,6 +1584,7 @@ disrupt_validate_hh_short_downtime:
   config_changes: false
   delete_rows: false
   disruptive: true
+  enospc: false
   free_tier_set: true
   has_steady_run: false
   kubernetes: true

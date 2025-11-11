@@ -8,7 +8,7 @@ user_prefix: 'ics-gemini-nemesis-3h'
 ami_db_scylla_user: 'centos'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: "run_with_gemini and not disruptive"
+nemesis_selector: "run_with_gemini and not disruptive  and not enospc"
 
 gemini_cmd: |
   --duration 3h

@@ -226,6 +226,7 @@ class NemesisFlags:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
     sla: bool = False               # flag that signal that nemesis is used for SLA tests
+    enospc: bool = False             # flag that signal that nemesis causes a node to go out of space
 
 
 class Nemesis(NemesisFlags):
@@ -6199,6 +6200,7 @@ class EnospcMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    enospc = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc()
@@ -6207,6 +6209,7 @@ class EnospcMonkey(Nemesis):
 class EnospcAllNodesMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    enospc = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc(all_nodes=True)
