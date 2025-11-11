@@ -191,6 +191,9 @@ class NodeLoadInfoService:
             "scylla_version": self._scylla_version,
         }
 
+    def __str__(self):
+        return "Node name: %s, node Scylla version: %s, node idx: %s" % (self._name, self._scylla_version, self.node_idx)
+
 
 class AdaptiveTimeoutStore(metaclass=Singleton):
     """Class for storing metrics and other info related to adaptive timeouts.

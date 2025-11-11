@@ -23,6 +23,7 @@ class NetworkInterface:
 
 class ScyllaNetworkConfiguration:
     LISTEN_ALL = '0.0.0.0'
+    scylla_network_config = []
 
     def __init__(self, network_interfaces, scylla_network_config):
         self.network_interfaces = network_interfaces
@@ -69,7 +70,7 @@ class ScyllaNetworkConfiguration:
         broadcast_address_config = [
             conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]
         if len(broadcast_address_config) == 0:
-            raise NetworkInterfaceNotFound(f"Empty broadcast address config, see the Scylla network configuration: {str(conf for conf in self.scylla_network_config)}")
+            raise NetworkInterfaceNotFound(f"Empty broadcast address config, see the Scylla network configuration: {self.scylla_network_config}")
         if broadcast_address_config[0]["ip_type"] == "ipv6":
             return "ipv6"
         else:

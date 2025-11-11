@@ -53,9 +53,10 @@ def _get_new_node_timeout(node_info_service: NodeLoadInfoService,
 def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
     # no timeout calculation - just return the timeout passed as argument along with node load info
     try:
+        LOGGER.info("Getting node load info for node: %s", node_info_service)
         return timeout, node_info_service.as_dict()
     except Exception as exc:  # noqa: BLE001
-        LOGGER.warning("Failed to get node info for timeout: \n%s", exc)
+        LOGGER.warning("Failed to get node info for timeout: \n%s\nNode info: %s", exc, node_info_service)
         return timeout, {}
 
 
