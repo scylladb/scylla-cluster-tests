@@ -215,6 +215,7 @@ class EksNodePool(CloudK8sNodePool):
         self.launch_template = launch_template
         self.k8s_version = self.k8s_cluster.eks_cluster_version if k8s_version is None else k8s_version
         self.user_data = user_data
+        self.tags = {'Owner': 'SCT', 'Name': 'SCT'}
 
     @property
     def launch_template_name(self) -> str:
@@ -254,7 +255,7 @@ class EksNodePool(CloudK8sNodePool):
     @property
     def _node_group_cfg(self) -> dict:
         labels = {} if self.labels is None else self.labels
-        tags = {**{'Owner': 'SCT', 'Name': self.name}, **(self.tags or {})}
+        tags = {**{'Owner': 'SCT', 'Name': 'SCT'}, **(self.tags or {})}
         node_labels = labels.copy()
         node_labels['node-pool'] = self.name
         node_pool_config = {
