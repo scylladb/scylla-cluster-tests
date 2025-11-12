@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import base64
-import json
 import os
 import time
 import pprint
@@ -216,6 +215,7 @@ class EksNodePool(CloudK8sNodePool):
         self.launch_template = launch_template
         self.k8s_version = self.k8s_cluster.eks_cluster_version if k8s_version is None else k8s_version
         self.user_data = user_data
+        self.tags = {'Owner': 'SCT', 'Name': 'SCT'}
 
     @property
     def launch_template_name(self) -> str:
@@ -255,7 +255,7 @@ class EksNodePool(CloudK8sNodePool):
     @property
     def _node_group_cfg(self) -> dict:
         labels = {} if self.labels is None else self.labels
-        tags = {**{'Owner': 'SCT'}, **(self.tags or {})}
+        tags = {**{'Owner': 'SCT', 'Name': 'SCT'}, **(self.tags or {})}
         node_labels = labels.copy()
         node_labels['node-pool'] = self.name
         node_pool_config = {
@@ -289,7 +289,7 @@ class EksNodePool(CloudK8sNodePool):
     def deploy(self) -> None:
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
         if self.is_launch_template_required:
-            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
+            self.k8s_cluster.log.info("Deploy launch template %s with the configuration %s", self.launch_template_name, str(self._node_group_cfg))
             create_launch_template_args = {
                 "LaunchTemplateName": self.launch_template_name,
                 "LaunchTemplateData": self._launch_template_cfg,
@@ -300,12 +300,7 @@ class EksNodePool(CloudK8sNodePool):
                     Tags=tags_as_ec2_tags(self.tags),
                 )]
             self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
-        try:
-            self.k8s_cluster.log.info("Node group configuration: " + str(self._node_group_cfg))
-            self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
-        except self.k8s_cluster.eks_client.exceptions.InvalidRequestException as e:
-            decoded = self.k8s_cluster.sts_client.decode_authorization_message(EncodedMessage=e.response['Error']['Message'])
-            self.k8s_cluster.log.error('Failed to create a k8s cluster: %s', json.loads(decoded['DecodedMessage']))
+        self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         self.is_deployed = True
 
     def resize(self, num_nodes):
@@ -504,7 +499,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                  text='Waiting till aws-ebs-csi-driver become operational')
         LOCALRUNNER.run(
             f'eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve')
-        LOCALRUNNER.run(f'aws sts get-caller-identity')
         LOCALRUNNER.run(f'eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system '
                         f'--cluster {self.short_cluster_name} '
                         f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
