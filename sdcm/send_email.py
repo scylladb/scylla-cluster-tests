@@ -668,7 +668,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
         for container in containers:
             container.reload()
             nodes.append([container.name,
-                          container.attrs["NetworkSettings"]["IPAddress"],
+                          container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"],
                           container.status,
                           "docker container",
                           builder_name])
