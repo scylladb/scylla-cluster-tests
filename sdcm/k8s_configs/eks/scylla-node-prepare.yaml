@@ -79,7 +79,7 @@ spec:
       serviceAccountName: node-setup-daemonset
       containers:
       - name: cpu-policy
-        image: registry.k8s.io/kubectl:v1.33.3
+        image: bitnami/kubectl:latest
         imagePullPolicy: Always
         env:
           - name: NODE
@@ -220,7 +220,7 @@ spec:
       containers:
       # NOTE: the 'pv-setup' is needed only for the 'static' local volume provisioner
       - name: pv-setup
-        image: registry.k8s.io/kubectl:v1.33.3
+        image: bitnami/kubectl:latest
         imagePullPolicy: Always
         env:
           - name: HOSTFS
