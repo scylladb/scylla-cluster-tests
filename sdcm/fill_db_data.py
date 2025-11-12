@@ -3276,7 +3276,7 @@ class FillDatabaseData(ClusterTester):
                     res = session.execute(item['queries'][i])
                     self.assertEqual([list(row) for row in res], item['results'][i])
             except Exception as ex:
-                LOGGER.exception(item['queries'][i])
+                LOGGER.exception("An error occurred while executing the query %s: \n---\n%s\n---\n", str(i), item['queries'][i])
                 raise ex
 
     @staticmethod
