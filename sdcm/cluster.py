@@ -1117,7 +1117,7 @@ class BaseNode(AutoSshContainerMixin):
         # If multiple network interface is defined on the node (AWS), private address in the `nodetool status`
         # is IP that defined in broadcast_address. Keep this output in correlation with `nodetool status`
         LOGGER.info('###DEBUG network configuration: %s', str(self.scylla_network_configuration))
-        if (self.scylla_network_configuration and
+        if (self.scylla_network_configuration and self.scylla_network_configuration.broadcast_address_ip_type and
                 self.scylla_network_configuration.broadcast_address_ip_type == "private"):
             node_private_ip = self.scylla_network_configuration.broadcast_address
         else:
