@@ -59,6 +59,11 @@ def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | flo
         return timeout, {}
 
 
+def _get_soft_timeout_no_node_info(node_info_service: NodeLoadInfoService, timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
+    # no timeout calculation - just return the timeout passed as argument without node load info
+    return timeout, {}
+
+
 def _get_query_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None, query: str = None) -> \
         tuple[int | float, dict[str, Any]]:
     timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
@@ -100,7 +105,7 @@ class Operations(Enum):
     SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
                                  ("timeout", "service_level_for_test_step"))
     TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
-    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout, ("timeout",))
+    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout_no_node_info, ("timeout",))
 
 
 class TestInfoServices:
