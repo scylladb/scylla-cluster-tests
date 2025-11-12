@@ -23,22 +23,25 @@ class ScyllaApiException(Exception):
 
 
 class RemoteCurlClient(RestClient):
-    def __init__(self, host: str, endpoint: str, node: 'BaseNode'):
+    def __init__(self, host: str, endpoint: str, node: "BaseNode"):
         super().__init__(host=host, endpoint=endpoint)
         self._node = node
         self._remoter = self._node.remoter
 
-    def run_remoter_curl(self, method: Literal["GET", "POST"],
-                         path: str,
-                         params: dict[str, str] | None,
-                         timeout: int = 120,
-                         retry: int = 0):
+    def run_remoter_curl(
+        self,
+        method: Literal["GET", "POST"],
+        path: str,
+        params: dict[str, str] | None,
+        timeout: int = 120,
+        retry: int = 0,
+    ):
         prepared_request = self._prepare_request(method=method, path=path, params=params)
         result = self._remoter.run(
-            f'curl -v -X {prepared_request.method} "{prepared_request.url}"', timeout=timeout, retry=retry)
+            f'curl -v -X {prepared_request.method} "{prepared_request.url}"', timeout=timeout, retry=retry
+        )
         if result.failed:
-            raise ScyllaApiException(f"Scylla Rest Api request failed. Method: {prepared_request.method}, "
-                                     f"url: {prepared_request.url}, "
-                                     f"stdout: {result.stdout}, "
-                                     f"stderr: {result.stderr}")
+            raise ScyllaApiException(
+                f"Scylla Rest Api request failed. Method: {prepared_request.method}, url: {prepared_request.url}, stdout: {result.stdout}, stderr: {result.stderr}"
+            )
         return result
