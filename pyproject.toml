@@ -34,7 +34,7 @@ dependencies = [
     "jinja2==3.1.6",
     "kubernetes==34.1.0",
     "ldap3-bleeding-edge==2.10.1.1338",
-    "lz>=3.0.0",
+    "lz4>3.0.0",
     "moto[server]==5.1.1",
     "mysql-connector-python==9.1.0",
     "packaging>=24",
