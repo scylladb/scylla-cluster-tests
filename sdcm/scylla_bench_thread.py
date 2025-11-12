@@ -230,7 +230,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
         stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
-                                       stress_operation=self.sb_mode,
+                                       stress_operation=str(self.sb_mode.value),
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
                 cleanup_context, \
