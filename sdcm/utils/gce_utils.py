@@ -39,21 +39,22 @@ LOGGER = logging.getLogger(__name__)
 SUPPORTED_REGIONS = {
     # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
     # Currently choose only zones c and d as zone b frequently fails allocating resources.
-    'us-east1': 'cd',
-    'us-east4': 'abc',
-    'us-west1': 'abc',
-    'us-central1': 'a',
+    "us-east1": "cd",
+    "us-east4": "abc",
+    "us-west1": "abc",
+    "us-central1": "a",
 }
 
 
-SUPPORTED_PROJECTS = {'gcp', 'gcp-sct-project-1',
-                      'gcp-local-ssd-latency'} | {os.environ.get('SCT_GCE_PROJECT', 'gcp-sct-project-1')}
+SUPPORTED_PROJECTS = {"gcp", "gcp-sct-project-1", "gcp-local-ssd-latency"} | {
+    os.environ.get("SCT_GCE_PROJECT", "gcp-sct-project-1")
+}
 
 
 def random_zone(region: str) -> str:
     availability_zones = SUPPORTED_REGIONS.get(region, None)
     if not availability_zones:
-        raise Exception(f'Unsupported region: {region}')
+        raise Exception(f"Unsupported region: {region}")
     return f"{random.choice(availability_zones)}"
 
 
@@ -113,7 +114,8 @@ def gce_private_addresses(instance: compute_v1.Instance) -> list[str]:
 
 
 GCE_IMAGE_URL_REGEX = re.compile(
-    r'https://www.googleapis.com/compute/v1/projects/(?P<project>.*)/global/images/(?P<image>.*)')
+    r"https://www.googleapis.com/compute/v1/projects/(?P<project>.*)/global/images/(?P<image>.*)"
+)
 
 
 def get_gce_image_tags(link: str) -> dict:
@@ -123,16 +125,16 @@ def get_gce_image_tags(link: str) -> dict:
 
     image_params = GCE_IMAGE_URL_REGEX.search(link).groupdict()
 
-    if image_params.get('image').startswith('family'):
-        family = image_params.get('image').split('/')[-1]
-        image: Image = images_client.get_from_family(family=family, project=image_params.get('project'))
+    if image_params.get("image").startswith("family"):
+        family = image_params.get("image").split("/")[-1]
+        image: Image = images_client.get_from_family(family=family, project=image_params.get("project"))
     else:
         image: Image = images_client.get(**image_params)
     return image.labels
 
 
 class GcloudContextManager:
-    def __init__(self, instance: 'GcloudContainerMixin', name: str):
+    def __init__(self, instance: "GcloudContainerMixin", name: str):
         self._instance = instance
         self._name = name
         self._container = None
@@ -191,6 +193,7 @@ class GcloudContainerMixin:
 
     See more details here: https://hub.docker.com/r/google/cloud-sdk
     """
+
     _gcloud_container_instance = None
 
     def gcloud_container_run_args(self) -> dict:
@@ -198,15 +201,16 @@ class GcloudContainerMixin:
         volumes = {
             user_home: {"bind": user_home, "mode": "rw"},
         }
-        return dict(image=GOOGLE_CLOUD_SDK_IMAGE,
-                    command="cat",
-                    tty=True,
-                    name=f"{self.name}-gcloud",
-                    volumes=volumes,
-                    user=f"{os.getuid()}:{os.getgid()}",
-                    tmpfs={'/.config': f'size=50M,uid={os.getuid()}'},
-                    environment={},
-                    )
+        return dict(
+            image=GOOGLE_CLOUD_SDK_IMAGE,
+            command="cat",
+            tty=True,
+            name=f"{self.name}-gcloud",
+            volumes=volumes,
+            user=f"{os.getuid()}:{os.getgid()}",
+            tmpfs={"/.config": f"size=50M,uid={os.getuid()}"},
+            environment={},
+        )
 
     def _get_gcloud_container(self) -> Container:
         """Create Google Cloud SDK container.
@@ -225,24 +229,32 @@ class GcloudContainerMixin:
         res = container.exec_run(["bash", "-c", shell_command])
         if res.exit_code:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
-        res = container.exec_run(["gcloud", "auth", "activate-service-account", credentials["client_email"],
-                                  "--key-file", "/tmp/gcloud_svc_account.json",
-                                  "--project", credentials["project_id"]])
+        res = container.exec_run(
+            [
+                "gcloud",
+                "auth",
+                "activate-service-account",
+                credentials["client_email"],
+                "--key-file",
+                "/tmp/gcloud_svc_account.json",
+                "--project",
+                credentials["project_id"],
+            ]
+        )
         if res.exit_code:
             raise DockerException(f"{container}[]: {res.output.decode('utf-8')}")
         return container
 
     @property
     def gcloud(self) -> GcloudContextManager:
-        return GcloudContextManager(self, 'gcloud')
+        return GcloudContextManager(self, "gcloud")
 
 
 class GceLoggingClient:  # pylint: disable=too-few-public-methods
-
     def __init__(self, instance_name: str, zone: str):
         credentials = KeyStore().get_gcp_credentials()
         self.credentials = service_account.Credentials.from_service_account_info(credentials)
-        self.project_id = credentials['project_id']
+        self.project_id = credentials["project_id"]
         self.instance_name = instance_name
         self.zone = zone
 
@@ -250,24 +262,22 @@ class GceLoggingClient:  # pylint: disable=too-few-public-methods
         """Gets system events logs entries from GCE between time (since -> to).
 
         Returns list of entries in a form of dictionaries. See example output in unit tests."""
-        from_ = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(from_))
-        until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(until))
+        from_ = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(from_))
+        until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
         query = {
-            "resourceNames": [
-                f"projects/{self.project_id}"
-            ],
+            "resourceNames": [f"projects/{self.project_id}"],
             "filter": f'protoPayload.resourceName="projects/{self.project_id}/zones/{self.zone}/instances/{self.instance_name}"'
-                      f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
-                      f' timestamp > "{from_}" timestamp < "{until}"'
+            f" logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event"
+            f' timestamp > "{from_}" timestamp < "{until}"',
         }
-        with build('logging', 'v2', credentials=self.credentials, cache_discovery=False) as service:
+        with build("logging", "v2", credentials=self.credentials, cache_discovery=False) as service:
             return self._get_log_entries(service, query)
 
     def _get_log_entries(self, service, query, page_token=None):
         if page_token:
             query.update({"page_token": page_token})
         ret = service.entries().list(body=query).execute()
-        entries = ret.get('entries', [])
+        entries = ret.get("entries", [])
         if page_token := ret.get("nextPageToken"):
             entries.extend(self._get_log_entries(service, query, page_token))
         return entries
@@ -305,8 +315,7 @@ def wait_for_extended_operation(
     result = operation.result(timeout=timeout)
 
     if operation.error_code:
-        LOGGER.debug("Error during %s: [Code: %s]: %s", verbose_name,
-                     operation.error_code, operation.error_message)
+        LOGGER.debug("Error during %s: [Code: %s]: %s", verbose_name, operation.error_code, operation.error_message)
         LOGGER.debug("Operation ID: %s", operation.name)
         raise operation.exception() or RuntimeError(operation.error_message)
 
@@ -471,9 +480,7 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
 
     if spot:
         # Set the Spot VM setting
-        instance.scheduling.provisioning_model = (
-            compute_v1.Scheduling.ProvisioningModel.SPOT.name
-        )
+        instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
         instance.scheduling.instance_termination_action = instance_termination_action
 
     if custom_hostname is not None:
@@ -511,11 +518,13 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     return instance_client.get(project=project_id, zone=zone, instance=instance_name)
 
 
-def gce_set_labels(instances_client: compute_v1.InstancesClient,
-                   instance: compute_v1.Instance,
-                   new_labels: dict,
-                   project: str,
-                   zone: str):
+def gce_set_labels(
+    instances_client: compute_v1.InstancesClient,
+    instance: compute_v1.Instance,
+    new_labels: dict,
+    project: str,
+    zone: str,
+):
     """
     Helper to do the set_labels operation correctly, without
     removing existing labels and applying the fingerprinting correctly
@@ -536,19 +545,16 @@ def gce_set_labels(instances_client: compute_v1.InstancesClient,
     request.label_fingerprint = instance.label_fingerprint
     request.labels.update(new_labels)
 
-    operation = instances_client.set_labels(project=project,
-                                            zone=zone,
-                                            instance=instance.name,
-                                            instances_set_labels_request_resource=request)
+    operation = instances_client.set_labels(
+        project=project, zone=zone, instance=instance.name, instances_set_labels_request_resource=request
+    )
 
     return wait_for_extended_operation(operation, f"setting labels on {instance.name}")
 
 
-def gce_set_tags(instances_client: compute_v1.InstancesClient,
-                 instance: compute_v1.Instance,
-                 new_tags: list,
-                 project: str,
-                 zone: str):
+def gce_set_tags(
+    instances_client: compute_v1.InstancesClient, instance: compute_v1.Instance, new_tags: list, project: str, zone: str
+):
     """
     Helper to do the set_tags operation correctly, without
     removing existing tags and applying the fingerprinting correctly

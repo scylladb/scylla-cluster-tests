@@ -36,11 +36,11 @@ class GceRegion:
     def __init__(self, region_name):
         self.region_name = region_name
         info = KeyStore().get_gcp_credentials()
-        self.project = info['project_id']
+        self.project = info["project_id"]
 
         credentials = service_account.Credentials.from_service_account_info(info)
 
-        self.iam = build('iam', 'v1', credentials=credentials, cache_discovery=False)
+        self.iam = build("iam", "v1", credentials=credentials, cache_discovery=False)
 
         self.network_client = compute_v1.NetworksClient(credentials=credentials)
         self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
@@ -67,89 +67,119 @@ class GceRegion:
 
     def configure_firewall(self):
         firewall_configurations = [
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-ssh',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["22"])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-all-internal',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="all")],
-                     source_ranges=["10.0.0.0/8"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-icmp',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="icmp")],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-grafana',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["3000"])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-node-gossip',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['7000', '7001'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-node-api',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['10000'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-node-cql',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['9042', '9142'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-prometheus',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['9090', '9100', '9103', '9180'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-http',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['80'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-alternator',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['8080'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-manager',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['10001', '5080', '5443', '5090', '5112'])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-deny-all',
-                     direction="INGRESS",
-                     denied=[compute_v1.Denied(I_p_protocol="all")],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link,
-                     target_tags=["sct-network-only"],
-                     priority=200),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-only-sct-network',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="all")],
-                     source_ranges=["10.0.0.0/8"],
-                     network=self.network.self_link,
-                     target_tags=["sct-network-only"],
-                     priority=100),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-grafana-public',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["3000"])],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link,
-                     target_tags=["sct-network-only"],
-                     priority=100),
-            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-public',
-                     direction="INGRESS",
-                     allowed=[compute_v1.Allowed(I_p_protocol="all")],
-                     source_ranges=["0.0.0.0/0"],
-                     network=self.network.self_link,
-                     target_tags=["sct-allow-public"],
-                     priority=100),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-ssh",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["22"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-all-internal",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="all")],
+                source_ranges=["10.0.0.0/8"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-icmp",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="icmp")],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-grafana",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["3000"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-node-gossip",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["7000", "7001"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-node-api",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["10000"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-node-cql",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["9042", "9142"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-prometheus",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["9090", "9100", "9103", "9180"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-http",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["80"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-alternator",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["8080"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-manager",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["10001", "5080", "5443", "5090", "5112"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-deny-all",
+                direction="INGRESS",
+                denied=[compute_v1.Denied(I_p_protocol="all")],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+                target_tags=["sct-network-only"],
+                priority=200,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-only-sct-network",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="all")],
+                source_ranges=["10.0.0.0/8"],
+                network=self.network.self_link,
+                target_tags=["sct-network-only"],
+                priority=100,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-grafana-public",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=["3000"])],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+                target_tags=["sct-network-only"],
+                priority=100,
+            ),
+            Firewall(
+                name=f"{self.SCT_NETWORK_NAME}-allow-public",
+                direction="INGRESS",
+                allowed=[compute_v1.Allowed(I_p_protocol="all")],
+                source_ranges=["0.0.0.0/0"],
+                network=self.network.self_link,
+                target_tags=["sct-allow-public"],
+                priority=100,
+            ),
         ]
         for firewall_rule in firewall_configurations:
             try:
@@ -160,30 +190,41 @@ class GceRegion:
                     LOGGER.info("updating firewall")
                     LOGGER.info("before: %s %s", firewall.allowed, firewall.source_ranges)
                     LOGGER.info("after : %s %s", firewall_rule.allowed, firewall_rule.source_ranges)
-                    self.firewall_client.patch(project=self.project, firewall=firewall_rule.name,
-                                               firewall_resource=firewall_rule)
+                    self.firewall_client.patch(
+                        project=self.project, firewall=firewall_rule.name, firewall_resource=firewall_rule
+                    )
 
     def create_backup_service_account(self):
         """Creates a service account."""
         backup_service_account = None
 
         try:
-            backup_service_account = self.iam.projects().serviceAccounts().create(  # pylint: disable=no-member
-                name='projects/' + self.project,
-                body={
-                    'accountId': self.SCT_BACKUP_SERVICE_ACCOUNT,
-                    'serviceAccount': {
-                        'displayName': "Account for having access to the gcs bucket for SCT backup tests"
-                    }
-                }).execute()
-            LOGGER.info('Created service account: %s', backup_service_account['email'])
+            backup_service_account = (
+                self.iam.projects()  # pylint: disable=no-member
+                .serviceAccounts()
+                .create(
+                    name="projects/" + self.project,
+                    body={
+                        "accountId": self.SCT_BACKUP_SERVICE_ACCOUNT,
+                        "serviceAccount": {
+                            "displayName": "Account for having access to the gcs bucket for SCT backup tests"
+                        },
+                    },
+                )
+                .execute()
+            )
+            LOGGER.info("Created service account: %s", backup_service_account["email"])
         except googleapiclient.errors.HttpError as exc:
             if not exc.status_code == 409:
                 raise
-            service_accounts = self.iam.projects().serviceAccounts().list(  # pylint: disable=no-member
-                name=f'projects/{self.project}', pageSize=100).execute()
-            for service in service_accounts['accounts']:
-                if self.SCT_BACKUP_SERVICE_ACCOUNT in service['name']:
+            service_accounts = (
+                self.iam.projects()  # pylint: disable=no-member
+                .serviceAccounts()
+                .list(name=f"projects/{self.project}", pageSize=100)
+                .execute()
+            )
+            for service in service_accounts["accounts"]:
+                if self.SCT_BACKUP_SERVICE_ACCOUNT in service["name"]:
                     backup_service_account = service
             assert backup_service_account, f"couldn't find {self.SCT_BACKUP_SERVICE_ACCOUNT} service"
         return backup_service_account
@@ -198,7 +239,7 @@ class GceRegion:
 
         service = self.create_backup_service_account()
         policy = bucket.get_iam_policy(requested_policy_version=3)
-        role = 'roles/storage.objectAdmin'
+        role = "roles/storage.objectAdmin"
         policy.bindings.append({"role": role, "members": {f"serviceAccount:{service['email']}"}})
         bucket.set_iam_policy(policy)
 
@@ -212,5 +253,5 @@ class GceRegion:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    a = GceRegion('us-east1')
+    a = GceRegion("us-east1")
     print(a.configure())

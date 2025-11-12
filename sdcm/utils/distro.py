@@ -42,7 +42,6 @@ KNOWN_OS = (
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
     ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
     ("MINT", "linuxmint", ["20", "21"], DistroBase.DEBIAN),
-
 )
 
 
@@ -78,13 +77,14 @@ class EnumFunctionalMixin:
                 return p_name[0].lower()
             else:
                 return name
+
         properties_mapping = {}
         for enum_name, data in enum_data.items():
             version_for_prop = data[1].replace(".", "_")
-            version_prefix = version_for_prop.split('_')[0]
+            version_prefix = version_for_prop.split("_")[0]
             os_name_for_prop = get_os_name_for_prop(data[0])
-            prop_name = f'is_{os_name_for_prop}'
-            prop_name_with_version = f'{prop_name}{version_prefix}'
+            prop_name = f"is_{os_name_for_prop}"
+            prop_name_with_version = f"{prop_name}{version_prefix}"
             if prop_name not in properties_mapping:
                 properties_mapping[prop_name] = []
             if prop_name_with_version not in properties_mapping:
@@ -92,18 +92,18 @@ class EnumFunctionalMixin:
             properties_mapping[prop_name].append(enum_name)
             properties_mapping[prop_name_with_version].append(enum_name)
             if version_for_prop != version_prefix:
-                prop_name_with_version = f'{prop_name}{version_prefix}'
+                prop_name_with_version = f"{prop_name}{version_prefix}"
                 if prop_name_with_version not in properties_mapping:
                     properties_mapping[prop_name_with_version] = []
                 properties_mapping[prop_name_with_version].append(enum_name)
-        setattr(cls, 'properties_mapping', properties_mapping)
+        setattr(cls, "properties_mapping", properties_mapping)
         for prop_name, enum_names in properties_mapping.items():
             setattr(cls, prop_name, property(lambda self, enum_names=enum_names: self.name in enum_names))
-        enum_data['UNKNOWN'] = (None, None)
+        enum_data["UNKNOWN"] = (None, None)
 
     @property
     def is_unknown(self):
-        return self.name == 'UNKNOWN'
+        return self.name == "UNKNOWN"
 
     @property
     def is_debian_like(self):
@@ -164,7 +164,7 @@ class EnumFunctionalMixin:
     @property
     def uses_systemd(self):
         # Debian uses systemd as a default init system since 8.0, Ubuntu since 15.04, and RedHat-based since 7.0
-        return self not in (self.UNKNOWN, )
+        return self not in (self.UNKNOWN,)
 
 
-Distro: enum.Enum = enum.Enum('Distro', enum_data, module=__name__, type=EnumFunctionalMixin)
+Distro: enum.Enum = enum.Enum("Distro", enum_data, module=__name__, type=EnumFunctionalMixin)

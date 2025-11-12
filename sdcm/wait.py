@@ -14,6 +14,7 @@
 """
 Wait functions appropriate for tests that have high timing variance.
 """
+
 import time
 import logging
 from contextlib import contextmanager
@@ -50,11 +51,12 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=N
     def retry_logger(retry_state):
         # pylint: disable=protected-access
         LOGGER.debug(
-            'wait_for: Retrying %s: attempt %s ended with: %s',
+            "wait_for: Retrying %s: attempt %s ended with: %s",
             text or retry_state.fn.__name__,
             retry_state.attempt_number,
             retry_state.outcome._exception or retry_state.outcome._result,
         )
+
     stops = [tenacity.stop_after_delay(timeout)]
     if stop_event:
         stops.append(tenacity.stop.stop_when_event_set(stop_event))
@@ -65,7 +67,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=N
             stop=tenacity.stop_any(*stops),
             wait=tenacity.wait_fixed(step),
             before_sleep=retry_logger,
-            retry=(tenacity.retry_if_result(lambda value: not value) | tenacity.retry_if_exception_type())
+            retry=(tenacity.retry_if_result(lambda value: not value) | tenacity.retry_if_exception_type()),
         )
         res = retry(func, **kwargs)
 
@@ -77,12 +79,12 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=N
             raising_exc = ExitByEventError(err)
 
         LOGGER.error(err)
-        if hasattr(ex, 'last_attempt') and ex.last_attempt.exception() is not None:  # pylint: disable=no-member
+        if hasattr(ex, "last_attempt") and ex.last_attempt.exception() is not None:  # pylint: disable=no-member
             LOGGER.error("last error: %r", ex.last_attempt.exception())  # pylint: disable=no-member
         else:
             LOGGER.error("last error: %r", ex)
         if throw_exc:
-            if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
+            if hasattr(ex, "last_attempt") and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
                 raise raising_exc from ex
             raise
 
@@ -109,23 +111,30 @@ def forever_wait_for(func, step=1, text=None, **kwargs):
         time.sleep(step)
         time_elapsed = time.time() - start_time
         if text is not None:
-            LOGGER.debug('%s (%s s)', text, time_elapsed)
+            LOGGER.debug("%s (%s s)", text, time_elapsed)
     return ok
 
 
-def exponential_retry(func: Callable[[], R],
-                      exceptions: tuple[type[BaseException]] | type[BaseException] = Exception,
-                      threshold: float = 300,
-                      retries: int = 10,
-                      logger: logging.Logger | None = LOGGER) -> R:
+def exponential_retry(
+    func: Callable[[], R],
+    exceptions: tuple[type[BaseException]] | type[BaseException] = Exception,
+    threshold: float = 300,
+    retries: int = 10,
+    logger: logging.Logger | None = LOGGER,
+) -> R:
     """
     Retry using an exponential backoff algorithm, similar to what Amazon recommends for its own service [1].
 
     :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
     """
+
     def retry_logger(retry_state: tenacity.RetryCallState) -> None:
-        logger.error("Call to method %s (retries: %s) failed: %s",
-                     retry_state.fn, retry_state.attempt_number, retry_state.outcome.exception())
+        logger.error(
+            "Call to method %s (retries: %s) failed: %s",
+            retry_state.fn,
+            retry_state.attempt_number,
+            retry_state.outcome.exception(),
+        )
 
     retry = tenacity.Retrying(
         stop=tenacity.stop_after_attempt(max_attempt_number=retries),
@@ -138,8 +147,14 @@ def exponential_retry(func: Callable[[], R],
 
 
 @contextmanager
-def wait_for_log_lines(node, start_line_patterns, end_line_patterns, start_timeout=60, end_timeout=120,  # pylint: disable=too-many-arguments
-                       error_msg_ctx=""):
+def wait_for_log_lines(  # pylint: disable=too-many-arguments
+    node,
+    start_line_patterns,
+    end_line_patterns,
+    start_timeout=60,
+    end_timeout=120,
+    error_msg_ctx="",
+):
     """Waits for given lines patterns to appear in node logs despite exception raised"""
     start_ctx = f"Timeout occurred while waiting for start log line {start_line_patterns} on node: {node.name}."
     if error_msg_ctx:

@@ -33,7 +33,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
     RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
-    IP_SSH_CONNECTIONS = 'private'
+    IP_SSH_CONNECTIONS = "private"
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
@@ -50,7 +50,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     _test_id = None
     _test_name = None
     _logdir = None
-    _latency_results_file_name = 'latency_results.json'
+    _latency_results_file_name = "latency_results.json"
     _latency_results_file_path = None
     _tester_obj = None
     _argus_client: ArgusSCTClient | MagicMock = MagicMock()
@@ -107,14 +107,14 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def logdir(cls) -> str:
         if not cls._logdir:
             cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
-            os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
+            os.environ["_SCT_TEST_LOGDIR"] = cls._logdir
         return cls._logdir
 
     @classmethod
     def latency_results_file(cls):
         if not cls._latency_results_file_path:
             cls._latency_results_file_path = os.path.join(cls._logdir, cls._latency_results_file_name)
-            with open(cls._latency_results_file_path, 'w', encoding="utf-8"):
+            with open(cls._latency_results_file_path, "w", encoding="utf-8"):
                 pass
         return cls._latency_results_file_path
 
@@ -147,13 +147,13 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         cls.REUSE_CLUSTER = val
 
     @classmethod
-    def keep_cluster(cls, node_type, val='destroy'):
+    def keep_cluster(cls, node_type, val="destroy"):
         if "db_nodes" in node_type:
-            cls.KEEP_ALIVE_DB_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_DB_NODES = bool(val == "keep")
         elif "loader_nodes" in node_type:
-            cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_LOADER_NODES = bool(val == "keep")
         elif "monitor_nodes" in node_type:
-            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == "keep")
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:
@@ -173,14 +173,16 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def common_tags(cls) -> Dict[str, str]:
-        job_name = os.environ.get('JOB_NAME')
-        tags = dict(RunByUser=get_username(),
-                    TestName=str(cls.test_name()),
-                    TestId=str(cls.test_id()),
-                    version=job_name.split('/', 1)[0] if job_name else "unknown",
-                    CreatedBy="SCT")
+        job_name = os.environ.get("JOB_NAME")
+        tags = dict(
+            RunByUser=get_username(),
+            TestName=str(cls.test_name()),
+            TestId=str(cls.test_id()),
+            version=job_name.split("/", 1)[0] if job_name else "unknown",
+            CreatedBy="SCT",
+        )
 
-        build_tag = os.environ.get('BUILD_TAG')
+        build_tag = os.environ.get("BUILD_TAG")
         if build_tag:
             tags["JenkinsJobTag"] = build_tag
 
@@ -191,12 +193,12 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def configure_ldap(cls, node, use_ssl=False):
         ContainerManager.run_container(node, "ldap")
         if use_ssl:
-            port = node.ldap_ports['ldap_ssl_port']
+            port = node.ldap_ports["ldap_ssl_port"]
         else:
-            port = node.ldap_ports['ldap_port']
+            port = node.ldap_ports["ldap_port"]
         address = get_my_ip()
         cls.LDAP_ADDRESS = (address, port)
-        if ContainerManager.get_container(node, 'ldap').exec_run("timeout 30s container/tool/wait-process")[0] != 0:
+        if ContainerManager.get_container(node, "ldap").exec_run("timeout 30s container/tool/wait-process")[0] != 0:
             raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
 
     @classmethod
@@ -207,8 +209,11 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         if syslog_logdir == current_logdir:
             LOGGER.debug("Syslog docker is running on the same directory where SCT is running")
             return
-        LOGGER.debug("Syslog docker is running on the another directory. Linking it's directory %s to %s",
-                     syslog_logdir, current_logdir)
+        LOGGER.debug(
+            "Syslog docker is running on the another directory. Linking it's directory %s to %s",
+            syslog_logdir,
+            current_logdir,
+        )
         current_logdir = Path(current_logdir) / "hosts"
         docker_logdir = Path(syslog_logdir) / "hosts"
         if current_logdir.exists():
@@ -232,19 +237,14 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         LOGGER.info("rsyslog listen on port %s (config: %s)", port, node.rsyslog_confpath)
 
         if enable_ngrok:
-            requests.delete('http://localhost:4040/api/tunnels/rsyslogd')
+            requests.delete("http://localhost:4040/api/tunnels/rsyslogd")
 
-            tunnel = {
-                "addr": port,
-                "proto": "tcp",
-                "name": "rsyslogd",
-                "bind_tls": False
-            }
-            res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
+            tunnel = {"addr": port, "proto": "tcp", "name": "rsyslogd", "bind_tls": False}
+            res = requests.post("http://localhost:4040/api/tunnels", json=tunnel)
             assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
-            ngrok_address = res.json()['public_url'].replace('tcp://', '')
+            ngrok_address = res.json()["public_url"].replace("tcp://", "")
 
-            address, port = ngrok_address.split(':')
+            address, port = ngrok_address.split(":")
         else:
             address = get_my_ip()
 
@@ -257,7 +257,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             host_port = None
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
-            logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "rsyslog",
+            logs_transport=cls._tester_obj.params.get("logs_transport") if cls._tester_obj else "rsyslog",
             disable_ssh_while_running=True,
         ).to_string()
 
@@ -300,7 +300,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
                 LOGGER.warning("Failed to initialize argus client: %s", exc.message)
         TestFrameworkEvent(
             source=cls.__name__,
-            source_method='init_argus_client',
+            source_method="init_argus_client",
             message="Argus is disabled by configuration",
             severity=Severity.WARNING,
         ).publish_or_dump()

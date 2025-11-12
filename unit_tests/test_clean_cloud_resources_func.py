@@ -15,9 +15,14 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.common import \
-    clean_cloud_resources, \
-    clean_instances_aws, clean_elastic_ips_aws, clean_clusters_gke, clean_instances_gce, clean_resources_docker
+from sdcm.utils.common import (
+    clean_cloud_resources,
+    clean_instances_aws,
+    clean_elastic_ips_aws,
+    clean_clusters_gke,
+    clean_instances_gce,
+    clean_resources_docker,
+)
 from sdcm.utils.context_managers import environment
 
 
@@ -34,22 +39,63 @@ class CleanInstanceAwsTest(unittest.TestCase):
 
     def test_empty_list(self, ec2_client):  # pylint: disable=no-self-use
         with patch("sdcm.utils.common.list_instances_aws", return_value={}) as list_instances_aws:
-            clean_instances_aws({"TestId": 1111, })
-        list_instances_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
+            clean_instances_aws(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_instances_aws.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            },
+            group_as_region=True,
+        )
         ec2_client().terminate_instances.assert_not_called()
 
     def test_sct_runner(self, ec2_client):  # pylint: disable=no-self-use
-        with patch("sdcm.utils.common.list_instances_aws",
-                   return_value={"eu-north-1": [SCT_RUNNER_AWS, ]}) as list_instances_aws:
-            clean_instances_aws({"TestId": 1111, })
-        list_instances_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
+        with patch(
+            "sdcm.utils.common.list_instances_aws",
+            return_value={
+                "eu-north-1": [
+                    SCT_RUNNER_AWS,
+                ]
+            },
+        ) as list_instances_aws:
+            clean_instances_aws(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_instances_aws.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            },
+            group_as_region=True,
+        )
         ec2_client().terminate_instances.assert_not_called()
 
     def test_terminate(self, ec2_client):  # pylint: disable=no-self-use
-        with patch("sdcm.utils.common.list_instances_aws",
-                   return_value={"eu-north-1": [{"InstanceId": "i-1111", }, ]}) as list_instances_aws:
-            clean_instances_aws({"TestId": 1111, })
-        list_instances_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
+        with patch(
+            "sdcm.utils.common.list_instances_aws",
+            return_value={
+                "eu-north-1": [
+                    {
+                        "InstanceId": "i-1111",
+                    },
+                ]
+            },
+        ) as list_instances_aws:
+            clean_instances_aws(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_instances_aws.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            },
+            group_as_region=True,
+        )
         ec2_client().terminate_instances.assert_called_once_with(InstanceIds=["i-1111"])
 
 
@@ -60,20 +106,44 @@ class CleanElasticIpsAws(unittest.TestCase):
 
     def test_empty_list(self, ec2_client):  # pylint: disable=no-self-use
         with patch("sdcm.utils.common.list_elastic_ips_aws", return_value={}) as list_elastic_ips_aws:
-            clean_elastic_ips_aws({"TestId": 1111, })
-        list_elastic_ips_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
+            clean_elastic_ips_aws(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_elastic_ips_aws.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            },
+            group_as_region=True,
+        )
         ec2_client().disassociate_address.assert_not_called()
         ec2_client().release_address.assert_not_called()
 
     def test_release(self, ec2_client):  # pylint: disable=no-self-use
-        with patch("sdcm.utils.common.list_elastic_ips_aws",
-                   return_value={"eu-north-1": [{
-                       "AssociationId": 2222,
-                       "AllocationId": 3333,
-                       "PublicIp": '127.0.0.1',
-                   }]}) as list_elastic_ips_aws:
-            clean_elastic_ips_aws({"TestId": 1111, })
-        list_elastic_ips_aws.assert_called_with(tags_dict={"TestId": 1111, }, group_as_region=True)
+        with patch(
+            "sdcm.utils.common.list_elastic_ips_aws",
+            return_value={
+                "eu-north-1": [
+                    {
+                        "AssociationId": 2222,
+                        "AllocationId": 3333,
+                        "PublicIp": "127.0.0.1",
+                    }
+                ]
+            },
+        ) as list_elastic_ips_aws:
+            clean_elastic_ips_aws(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_elastic_ips_aws.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            },
+            group_as_region=True,
+        )
         ec2_client().disassociate_address.assert_called_once_with(AssociationId=2222)
         ec2_client().release_address.assert_called_once_with(AllocationId=3333)
 
@@ -84,9 +154,22 @@ class CleanClustersGkeTest(unittest.TestCase):
 
     def test_destroy(self):  # pylint: disable=no-self-use
         cluster = MagicMock()
-        with patch("sdcm.utils.common.list_clusters_gke", return_value=[cluster, ]) as list_clusters_gke:
-            clean_clusters_gke({"TestId": 1111, })
-        list_clusters_gke.assert_called_with(tags_dict={"TestId": 1111, })
+        with patch(
+            "sdcm.utils.common.list_clusters_gke",
+            return_value=[
+                cluster,
+            ],
+        ) as list_clusters_gke:
+            clean_clusters_gke(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_clusters_gke.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            }
+        )
         cluster.destroy.assert_called_once_with()
 
 
@@ -96,13 +179,28 @@ class CleanInstancesGceTest(unittest.TestCase):
 
     def test_destroy(self):  # pylint: disable=no-self-use
         instance = MagicMock()
-        with patch("sdcm.utils.common.list_instances_gce",
-                   return_value=[instance, ]) as list_instances_gce, \
-                patch('sdcm.utils.common.get_gce_compute_instances_client',
-                      return_value=(instance, dict(project_id='test'))):
-            clean_instances_gce({"TestId": 1111, })
-        list_instances_gce.assert_called_with(tags_dict={"TestId": 1111, })
-        instance.delete.assert_called_once_with(instance=instance.name, project='test', zone=unittest.mock.ANY)
+        with (
+            patch(
+                "sdcm.utils.common.list_instances_gce",
+                return_value=[
+                    instance,
+                ],
+            ) as list_instances_gce,
+            patch(
+                "sdcm.utils.common.get_gce_compute_instances_client", return_value=(instance, dict(project_id="test"))
+            ),
+        ):
+            clean_instances_gce(
+                {
+                    "TestId": 1111,
+                }
+            )
+        list_instances_gce.assert_called_with(
+            tags_dict={
+                "TestId": 1111,
+            }
+        )
+        instance.delete.assert_called_once_with(instance=instance.name, project="test", zone=unittest.mock.ANY)
 
 
 class CleanResourcesDockerTest(unittest.TestCase):
@@ -113,11 +211,26 @@ class CleanResourcesDockerTest(unittest.TestCase):
     def test_destroy():
         image = MagicMock()
         container = MagicMock()
-        with patch("sdcm.utils.common.list_resources_docker",
-                   return_value={"images": [image, ], "containers": [container, ], }) as list_resources_docker:
-            clean_resources_docker({"TestId": 1111, })
+        with patch(
+            "sdcm.utils.common.list_resources_docker",
+            return_value={
+                "images": [
+                    image,
+                ],
+                "containers": [
+                    container,
+                ],
+            },
+        ) as list_resources_docker:
+            clean_resources_docker(
+                {
+                    "TestId": 1111,
+                }
+            )
         list_resources_docker.assert_called_with(
-            tags_dict={"TestId": 1111, },
+            tags_dict={
+                "TestId": 1111,
+            },
             builder_name=None,
             group_as_builder=False,
         )
@@ -142,7 +255,7 @@ class CleanCloudResourcesTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        with environment(SCT_CLUSTER_BACKEND="aws", SCT_REGION_NAME='eu-north-1 eu-west-1'):
+        with environment(SCT_CLUSTER_BACKEND="aws", SCT_REGION_NAME="eu-north-1 eu-west-1"):
             cls.config = SCTConfiguration()
         if not cls.integration:
             for func in cls.functions_to_patch:
@@ -178,8 +291,6 @@ class CleanCloudResourcesTest(unittest.TestCase):
         self.assertTrue(res)
 
     def test_tags_testid_and_runbyuser_with_other(self):
-        params = {"RunByUser": "test",
-                  "TestId": "1111",
-                  "NodeType": "monitor"}
+        params = {"RunByUser": "test", "TestId": "1111", "NodeType": "monitor"}
         res = clean_cloud_resources(params, self.config)
         self.assertTrue(res)

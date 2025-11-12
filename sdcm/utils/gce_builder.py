@@ -88,13 +88,13 @@ class GceBuilder:
 
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
-    VERSION = 'v4'
+
+    VERSION = "v4"
 
     def __init__(self, region: GceRegion):
         self.region = region
         self.jenkins_info = KeyStore().get_json("jenkins.json")
-        self.runner = GceSctRunner(region_name=self.region.region_name,
-                                   availability_zone="a")
+        self.runner = GceSctRunner(region_name=self.region.region_name, availability_zone="a")
 
         info = KeyStore().get_gcp_credentials()
         self.credentials = service_account.Credentials.from_service_account_info(info)
@@ -110,20 +110,26 @@ class GceBuilder:
 
     def _add_cloud_configuration_to_jenkins(self):
         click.echo(f"{self.region.project}: {self.region.region_name}: add_cloud_configuration_to_jenkins")
-        res = requests.post(url=f"{self.jenkins_info['url']}/scriptText",
-                            auth=(self.jenkins_info['username'], self.jenkins_info['password']),
-                            params=dict(script=JENKINS_CONFIG_FORMAT.format(name=self.name,
-                                                                            project_id=self.region.project,
-                                                                            region_name=self.region.region_name,
-                                                                            max_instances=20,
-                                                                            jenkins_labels=self.jenkins_labels)))
+        res = requests.post(
+            url=f"{self.jenkins_info['url']}/scriptText",
+            auth=(self.jenkins_info["username"], self.jenkins_info["password"]),
+            params=dict(
+                script=JENKINS_CONFIG_FORMAT.format(
+                    name=self.name,
+                    project_id=self.region.project,
+                    region_name=self.region.region_name,
+                    max_instances=20,
+                    jenkins_labels=self.jenkins_labels,
+                )
+            ),
+        )
         res.raise_for_status()
         logging.info(res.text)
         assert not res.text
 
     @staticmethod
     def _wait_for_extended_operation(
-            operation: ExtendedOperation, verbose_name: str = "operation", timeout: int = 300
+        operation: ExtendedOperation, verbose_name: str = "operation", timeout: int = 300
     ) -> Any:
         """
         This method will wait for the extended (long-running) operation to
@@ -179,10 +185,8 @@ class GceBuilder:
         # to attach to the instance.
         disk = compute_v1.AttachedDisk()
         initialize_params = compute_v1.AttachedDiskInitializeParams()
-        initialize_params.source_image = (
-            self.runner.image.self_link
-        )
-        initialize_params.disk_type = 'pd-standard'
+        initialize_params.source_image = self.runner.image.self_link
+        initialize_params.disk_type = "pd-standard"
         initialize_params.disk_size_gb = 80
         disk.initialize_params = initialize_params
         disk.auto_delete = True
@@ -214,14 +218,13 @@ class GceBuilder:
         template.properties.metadata = metadata
         template_client = compute_v1.InstanceTemplatesClient(credentials=self.credentials)
         try:
-            operation = template_client.insert(
-                project=self.region.project, instance_template_resource=template
-            )
+            operation = template_client.insert(project=self.region.project, instance_template_resource=template)
 
             self._wait_for_extended_operation(operation, "instance template creation")
         except google.api_core.exceptions.Conflict:
-            click.echo(f'template: {template.name} already exists. '
-                       'if change affecting were made, delete it and run this again')
+            click.echo(
+                f"template: {template.name} already exists. if change affecting were made, delete it and run this again"
+            )
 
         return template_client.get(project=self.region.project, instance_template=self.name)
 

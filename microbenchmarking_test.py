@@ -26,13 +26,15 @@ class PerfSimpleQueryTest(ClusterTester):
 
     def test_perf_simple_query(self):
         result = self.db_cluster.nodes[0].remoter.run(
-            "scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G")
+            "scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G"
+        )
         if result.ok:
             output = self.db_cluster.nodes[0].remoter.run("cat perf-simple-query-result.txt").stdout
             self.create_test_stats(
-                specific_tested_stats={"perf_simple_query_result": json.loads(output)},
-                doc_id_with_timestamp=True)
+                specific_tested_stats={"perf_simple_query_result": json.loads(output)}, doc_id_with_timestamp=True
+            )
             if self.create_stats:
-                is_gce = self.params.get('cluster_backend') == 'gce'
+                is_gce = self.params.get("cluster_backend") == "gce"
                 PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
-                    self._test_id, is_gce=is_gce)
+                    self._test_id, is_gce=is_gce
+                )

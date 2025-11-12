@@ -1,6 +1,7 @@
 """
 Utility functions related to network information
 """
+
 import ipaddress
 
 import os
@@ -25,8 +26,12 @@ def get_my_ip():
 
 
 def get_my_public_ip() -> str:
-    hostnames = ['https://checkip.amazonaws.com', 'https://api4.ipify.org',
-                 'https://v4.ident.me/', 'https://myip.dnsomatic.com']
+    hostnames = [
+        "https://checkip.amazonaws.com",
+        "https://api4.ipify.org",
+        "https://v4.ident.me/",
+        "https://myip.dnsomatic.com",
+    ]
 
     for hostname in hostnames:
         try:

@@ -35,16 +35,21 @@ class JepsenTest(ClusterTester):
     def setup_jepsen(self):
         remoter = self.jepsen_node.remoter
         remoter.sudo(
-            "apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-11-jre openjdk-11-jre-headless libjna-java gnuplot graphviz git")
-        remoter.run(shell_script_cmd("""\
+            "apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-11-jre openjdk-11-jre-headless libjna-java gnuplot graphviz git"
+        )
+        remoter.run(
+            shell_script_cmd("""\
             curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
             chmod +x lein
             ./lein
-        """))
-        clone_repo(remoter=remoter,
-                   repo_url=self.params.get('jepsen_scylla_repo'),
-                   destination_dir_name="jepsen-scylla",
-                   clone_as_root=False)
+        """)
+        )
+        clone_repo(
+            remoter=remoter,
+            repo_url=self.params.get("jepsen_scylla_repo"),
+            destination_dir_name="jepsen-scylla",
+            clone_as_root=False,
+        )
         for db_node in self.db_cluster.nodes:
             remoter.run(f"ssh-keyscan -t ed25519 {db_node.ip_address} >> ~/.ssh/known_hosts")
 
@@ -59,7 +64,7 @@ class JepsenTest(ClusterTester):
         self.setup_jepsen()
 
     def iter_jepsen_cmd(self, jepsen_cmd, ntimes=1):
-        for ntry in range(1, ntimes+1):
+        for ntry in range(1, ntimes + 1):
             self.log.info("Run #%s/%s of Jepsen test: `%s'", ntry, ntimes, jepsen_cmd)
             yield self.jepsen_node.remoter.run(jepsen_cmd, ignore_status=True, verbose=True).ok
 
@@ -77,7 +82,7 @@ class JepsenTest(ClusterTester):
         creds = f"--username {self.db_cluster.nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
         run_jepsen_cmd = partial(
             getattr(self, f"run_jepsen_cmd_{self.params.get('jepsen_test_run_policy')}"),
-            ntimes=self.params.get("jepsen_test_count")
+            ntimes=self.params.get("jepsen_test_count"),
         )
         passed = True
         for test in self.params.get("jepsen_test_cmd"):
@@ -89,11 +94,14 @@ class JepsenTest(ClusterTester):
         url = f"http://{self.jepsen_node.external_address}:8080/"
 
         self.log.info("Start web server to serve Jepsen results (will listen on %s)...", url)
-        self.jepsen_node.remoter.run(shell_script_cmd(f"""\
+        self.jepsen_node.remoter.run(
+            shell_script_cmd(f"""\
             cd ~/jepsen-scylla
             setsid ~/lein run serve > save_jepsen_report.log 2>&1 < /dev/null &
             sleep {JEPSEN_WEB_SERVER_START_DELAY}
-        """), verbose=True)
+        """),
+            verbose=True,
+        )
 
         with open(os.path.join(self.logdir, "jepsen_report.html"), "wt", encoding="utf-8") as jepsen_report:
             jepsen_report.write(requests.get(url).text)
@@ -105,12 +113,14 @@ class JepsenTest(ClusterTester):
         self.log.info("Prepare data for email")
         email_data = self._get_common_email_data()
         grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
-        email_data.update({
-            "grafana_screenshots": grafana_dataset.get("screenshots", []),
-            "grafana_snapshots": grafana_dataset.get("snapshots", []),
-            "jepsen_report": self.save_jepsen_report(),
-            "jepsen_scylla_repo": self.params.get("jepsen_scylla_repo"),
-            "jepsen_test_cmd": self.params.get("jepsen_test_cmd"),
-            "scylla_repo": self.params.get("scylla_repo"),
-        })
+        email_data.update(
+            {
+                "grafana_screenshots": grafana_dataset.get("screenshots", []),
+                "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                "jepsen_report": self.save_jepsen_report(),
+                "jepsen_scylla_repo": self.params.get("jepsen_scylla_repo"),
+                "jepsen_test_cmd": self.params.get("jepsen_test_cmd"),
+                "scylla_repo": self.params.get("scylla_repo"),
+            }
+        )
         return email_data
