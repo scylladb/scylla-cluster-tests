@@ -43,7 +43,7 @@ class RemoteDocker(BaseNode):
                     f" {self.docker_id}").stdout.strip()
             else:
                 self._internal_ip_address = self.node.remoter.run(
-                    f"docker inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {self.docker_id}").stdout.strip()
+                    f"docker inspect --format='{{{{ .NetworkSettings.Networks.bridge.IPAddress }}}}' {self.docker_id}").stdout.strip()
         return self._internal_ip_address
 
     @property
