@@ -312,7 +312,7 @@ class ContainerManager:
             ip_address = cls.get_container(
                 instance, name).attrs["NetworkSettings"]["Networks"][docker_network]["IPAddress"]
         else:
-            ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
+            ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
         if not ip_address:
             raise Retry
         return ip_address
