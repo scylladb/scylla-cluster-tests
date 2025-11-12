@@ -588,7 +588,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         docker_table.add_row([
                             container.name,
                             builder_name,
-                            container.attrs["NetworkSettings"]["IPAddress"] if get_all_running else container.status,
+                            container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"] if get_all_running else container.status,
                             container.labels.get("TestId", "N/A"),
                             container.labels.get("RunByUser", "N/A"),
                             container.attrs.get("Created", "N/A"),
