@@ -68,6 +68,8 @@ class ScyllaNetworkConfiguration:
         # broadcast_address. Keep this output in correlation with `nodetool status`
         broadcast_address_config = [
             conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]
+        if len(broadcast_address_config) == 0:
+            return "unknown, empty broadcast address in scylla network config"
         if broadcast_address_config[0]["ip_type"] == "ipv6":
             return "ipv6"
         else:
