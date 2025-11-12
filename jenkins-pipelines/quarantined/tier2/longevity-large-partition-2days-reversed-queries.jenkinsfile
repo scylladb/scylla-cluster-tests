@@ -1,4 +1,9 @@
 #!groovy
+/* Reason for quarantine
+Test (Test Config) was failing for multiple releases:
+https://github.com/scylladb/scylla-cluster-tests/issues/10998
+Needs to be re-evaluated or readjusted
+ */
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
@@ -7,6 +12,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
-    test_config: '''["test-cases/longevity/longevity-large-partitions-deletions-and-reversed-queries.yaml"]'''
+    test_config: '''["test-cases/quarantined/longevity-large-partitions-deletions-and-reversed-queries.yaml"]'''
 
 )
