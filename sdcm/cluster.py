@@ -1902,12 +1902,7 @@ class BaseNode(AutoSshContainerMixin):
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.install_package('gnupg2')
-            self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
-            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
-                                  f"--keyserver hkp://keyserver.ubuntu.com:80 --keyserver-options timeout=10 --recv-keys {apt_key}",
-                                  retry=3)
-            self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
+            self.fetch_apt_keys()
         self.update_repo_cache()
 
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
@@ -1924,12 +1919,32 @@ class BaseNode(AutoSshContainerMixin):
         self.remoter.sudo(f"chmod 644 {repo_path}")
 
         if self.distro.is_debian_like:
-            self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
-            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
-                                  f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
-            self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
+            self.fetch_apt_keys()
             self.remoter.sudo("apt-get update", ignore_status=True)
+
+    def fetch_apt_keys(self):
+        """
+        Fetch and install GPG keys for ScyllaDB's APT repository.
+
+        Uses a temporary keyring in /tmp to fetch and export the keys, then installs them
+        into /etc/apt/keyrings/scylladb.gpg. This approach is required for compatibility
+        with Debian 13 and newer, which have changed how APT keys are managed and require
+        keys to be stored in /etc/apt/keyrings rather than the legacy /etc/apt/trusted.gpg.
+        The temporary keyring avoids polluting the system keyring and ensures the correct
+        format for APT to use.
+        """
+        self.remoter.sudo("mkdir -m 0755 -p /etc/apt/keyrings")
+        # Import all keys into a temporary keyring
+        for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+            self.remoter.sudo(shell_script_cmd(dedent(f"""
+                gpg --homedir /tmp --no-default-keyring --keyring /tmp/temp.gpg --keyserver hkp://keyserver.ubuntu.com:80 --keyserver-options timeout=10 --recv-keys {apt_key}
+            """)), retry=3)
+        # Export all keys at once to the keyring file
+        self.remoter.sudo(shell_script_cmd(dedent("""
+            gpg --homedir /tmp --no-default-keyring --keyring /tmp/temp.gpg --export --armor | gpg --dearmor > /etc/apt/keyrings/scylladb.gpg
+            rm /tmp/temp.gpg
+        """)), retry=3)
+        self.remoter.sudo("chmod 644 /etc/apt/keyrings/scylladb.gpg")
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
     def install_package(self,
