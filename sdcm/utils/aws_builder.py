@@ -127,20 +127,21 @@ class AwsBuilder:
         wait_ami_available(self.region.client, runner.image.id)
         return dict(
             LaunchTemplateData={
-                'BlockDeviceMappings': [
+                "BlockDeviceMappings": [{"DeviceName": "/dev/sda1", "Ebs": self.get_root_ebs_info_from_ami(runner.image.id) | {"Iops": 3000, "VolumeType": "gp3", "Throughput": 125}}],
+                "ImageId": runner.image.id,
+                "KeyName": self.region.SCT_KEY_PAIR_NAME,
+                "SecurityGroupIds": [self.region.sct_ssh_security_group.id, self.region.sct_security_group.id],
+                "TagSpecifications": [
                     {
-                        "DeviceName": "/dev/sda1",
-                        "Ebs": self.get_root_ebs_info_from_ami(runner.image.id) | {
-                            "Iops": 3000,
-                            "VolumeType": "gp3",
-                            "Throughput": 125
-                        }
-                    }
+                        "ResourceType": "instance",
+                        "Tags": [
+                            {"Key": "Name", "Value": self.launch_template_name},
+                            {"Key": "RunByUser", "Value": "QA"},
+                        ],
+                    },
                 ],
-                'ImageId': runner.image.id,
-                'KeyName': self.region.SCT_KEY_PAIR_NAME,
-                'SecurityGroupIds': [self.region.sct_ssh_security_group.id, self.region.sct_security_group.id],
-            }
+            },
+
         )
 
     def update_launch_template_if_needed(self, runner):
@@ -182,17 +183,6 @@ class AwsBuilder:
         try:
             self.region.client.create_launch_template(
                 LaunchTemplateName=self.launch_template_name,
-                TagSpecifications=[
-                    {
-                        'ResourceType': 'launch-template',
-                        'Tags': [
-                            {
-                                'Key': 'RunByUser',
-                                'Value': 'QA'
-                            },
-                        ]
-                    },
-                ],
                 **self.get_launch_template_data(runner)
             )
         except botocore.exceptions.ClientError as error:
@@ -237,8 +227,8 @@ class AwsBuilder:
             )
 
         except botocore.exceptions.ClientError as error:
-            LOGGER.debug(error.response)
-            if not error.response['Error']['Code'] == 'AlreadyExists':
+            LOGGER.info(error.response)
+            if not error.response['Error']['Code'] in ['AlreadyExists',]:
                 raise
 
     def add_scaling_group_to_jenkins(self):
