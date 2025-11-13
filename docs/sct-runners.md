@@ -33,7 +33,6 @@ because that would slow it down
      ./sct.py create-runner-image -c aws -r eu-west-2 -z a
 
     ./sct.py create-runner-image -c gce -r us-east1 -z a
-    SCT_GCE_PROJECT=gcp ./sct.py create-runner-image -c gce -r us-east1 -z a
     SCT_GCE_PROJECT=gcp-local-ssd-latency ./sct.py create-runner-image -c gce -r us-east1 -z a
 
     ./sct.py create-runner-image -c azure -r eastus -z a
