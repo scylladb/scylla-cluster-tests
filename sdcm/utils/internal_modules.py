@@ -1,11 +1,29 @@
 import sys
 from pathlib import Path
 
+from sdcm.remote import LOCALRUNNER
+from sdcm.utils.git import clone_repo
+
+scylla_qa_internal_path = Path(__file__).resolve().parents[2] / 'scylla-qa-internal'
+if not scylla_qa_internal_path.exists():
+    print("scylla-qa-internal not found, cloning...")
+    try:
+        clone_repo(
+            remoter=LOCALRUNNER,
+            repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+            destination_dir_name=str(scylla_qa_internal_path),
+            clone_as_root=False,
+            branch="master")
+        print("Successfully cloned scylla-qa-internal")
+    except Exception as exc:  # noqa: BLE001
+        print(f"Failed to clone scylla-qa-internal: {exc}")
+
+
 # Add scylla-qa-internal to the Python path using pathlib
 # TODO: make this support multiple paths if needed
-scylla_qa_internal_path = str((Path(__file__).parent.parent.parent / 'scylla-qa-internal').resolve())
-if scylla_qa_internal_path not in sys.path:
-    sys.path.insert(0, scylla_qa_internal_path)
+scylla_qa_internal_path_str = str(scylla_qa_internal_path)
+if scylla_qa_internal_path_str not in sys.path:
+    sys.path.insert(0, scylla_qa_internal_path_str)
 
 # Import the internal modules
 try:
