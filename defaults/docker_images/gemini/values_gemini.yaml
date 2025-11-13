@@ -1,2 +1,8 @@
 gemini:
+<<<<<<< HEAD
   image: scylladb/gemini:2.1.0
+||||||| parent of 38c760bbb (fix(gemini): pin the image to the amd64 image)
+  image: scylladb/gemini:2.1.5
+=======
+  image: scylladb/gemini:2.1.5-amd64
+>>>>>>> 38c760bbb (fix(gemini): pin the image to the amd64 image)
