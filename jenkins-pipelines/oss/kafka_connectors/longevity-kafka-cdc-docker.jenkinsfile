@@ -1,5 +1,15 @@
 #!groovy
 
+/** jobDescription
+    1-minute longevity test on a single-node cluster with cassandra-stress writing 1000 operations.
+    Tests Change Data Capture (CDC) functionality with Kafka integration using scylla-cdc-source-connector.
+    Uses SizeTieredCompactionStrategy with CDC enabled (postimage, no preimage) and localstack Kafka backend.
+    Part of the longevity suite for CDC validation with Kafka.
+    Main load stress tool: cassandra-stress
+
+    Labels: cdc, longevity, kafka, debezium, size-tiered-compaction, docker, cassandra-stress
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

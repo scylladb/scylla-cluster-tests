@@ -1,0 +1,21 @@
+#!groovy
+
+/** jobDescription
+    1-hour longevity test on a 3-node cluster with ~5GB dataset using mixed read/write workload.
+    Runs cassandra-stress and scylla-bench stress tools with NetworkTopologyStrategy (RF=3).
+    Tests KillMVBuildingCoordinator nemesis with encryption enabled (server+client).
+    Part of the longevity suite.
+    Main load stress tools: cassandra-stress, scylla-bench
+
+    Labels: longevity, 5gb, 1h, cassandra-stress, scylla-bench, mixed-workload, encryption, nemesis, kill-mv-building-coordinator
+*/
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: "aws",
+    region: "eu-west-1",
+    test_name: "longevity_test.LongevityTest.test_custom_time",
+    test_config: "['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/KillMVBuildingCoordinator.yaml']"
+)

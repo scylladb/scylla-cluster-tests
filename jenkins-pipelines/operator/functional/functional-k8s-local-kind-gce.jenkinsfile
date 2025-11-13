@@ -1,5 +1,10 @@
 #!groovy
 
+/** jobDescription
+    Test on 4-node cluster.
+        Runs for 5 minutes.
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(

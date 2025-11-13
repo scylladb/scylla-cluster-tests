@@ -1,5 +1,13 @@
 #!groovy
 
+/** jobDescription
+    Upgrade test on 4-node cluster.
+        Stress tool: cassandra-stress.
+        Runs for 5 minutes.
+        Part of the upgrades suite.
+        Labels: upgrade
+*/
+
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingOperatorUpgradePipeline(

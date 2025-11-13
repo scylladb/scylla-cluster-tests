@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Automated cloud infrastructure cleanup job that removes orphaned resources across AWS, Azure, and GCE.
+    Runs cloud_cleanup utilities to identify and delete stale test resources, unused instances, and KMS aliases.
+    Includes optional dry-run mode for validation before actual cleanup.
+    Part of the CI maintenance suite to prevent resource accumulation and cost overruns.
+
+    Labels: ci, maintenance, cleanup, aws, azure, gce, infrastructure
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,10 @@
 #!groovy
 
+/** jobDescription
+    Scylla Manager test with ~1TB dataset.
+        Labels: 1tb
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

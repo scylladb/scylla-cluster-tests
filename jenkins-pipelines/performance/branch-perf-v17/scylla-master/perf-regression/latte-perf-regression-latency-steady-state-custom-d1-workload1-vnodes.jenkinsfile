@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Latency performance regression test.
+        Virtual nodes (vnodes) enabled.
+        Part of the performance suite.
+        Labels: latency, performance, vnodes
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

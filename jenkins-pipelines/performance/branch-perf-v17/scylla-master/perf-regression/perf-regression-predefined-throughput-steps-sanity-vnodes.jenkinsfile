@@ -1,5 +1,12 @@
 #!groovy
 
+/** jobDescription
+    Throughput performance regression test using read/mixed/write workload.
+        Virtual nodes (vnodes) enabled.
+        Part of the sanity suite.
+        Labels: performance, sanity, throughput, vnodes
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

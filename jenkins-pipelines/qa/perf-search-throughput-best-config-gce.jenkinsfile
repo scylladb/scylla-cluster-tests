@@ -1,5 +1,15 @@
 #!groovy
 
+/** jobDescription
+    Performance test that searches for maximum throughput configuration across read, write, and mixed workloads.
+    Runs multiple test configurations in parallel to find optimal performance settings.
+    Uses cassandra-stress for workload generation with automated parameter optimization.
+    Part of the performance regression test suite.
+    Main load stress tool: cassandra-stress
+
+    Labels: performance, throughput, regression, cassandra-stress, read-workload, write-workload, mixed-workload, optimization
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

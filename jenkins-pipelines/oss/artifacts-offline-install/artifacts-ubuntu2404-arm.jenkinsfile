@@ -1,3 +1,11 @@
+/** jobDescription
+    Validates offline installation of Scylla artifacts on Ubuntu 24.04 LTS (Noble Numbat) ARM64/Graviton.
+    Tests package installation and basic cluster setup on ARM architecture without pre-installed Scylla.
+    Runs for 35 minutes on a single-node cluster with NoOpMonkey nemesis.
+    Part of the artifacts validation suite for release quality assurance.
+
+    Labels: artifacts, offline-install, ubuntu2404, noble, arm64, graviton, validation
+*/
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

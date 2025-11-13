@@ -1,5 +1,16 @@
 #!groovy
 
+/** jobDescription
+    Longevity test on 6-node cluster.
+        Stress tool: ycsb.
+        Tests SisyphusMonkey nemesis.
+        Runs for 50 minutes.
+        Tests lightweight transactions (LWT).
+        Tests DynamoDB-compatible Alternator API.
+        Part of the longevity suite.
+        Labels: alternator, authentication, longevity, lwt, nemesis
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

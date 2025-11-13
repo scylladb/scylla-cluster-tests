@@ -1,3 +1,11 @@
+/** jobDescription
+    Validates offline installation of Scylla artifacts on Rocky Linux 8.
+    Tests package installation and basic cluster setup without pre-installed Scylla.
+    Runs for 30 minutes on a single-node cluster with NoOpMonkey nemesis.
+    Part of the artifacts validation suite for release quality assurance.
+
+    Labels: artifacts, offline-install, rocky8, rocky-linux, validation
+*/
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

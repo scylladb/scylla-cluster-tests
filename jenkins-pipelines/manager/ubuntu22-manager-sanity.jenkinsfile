@@ -1,5 +1,13 @@
 #!groovy
 
+/** jobDescription
+    Scylla Manager test on 3-node cluster.
+        Stress tool: cassandra-stress.
+        Runs for 4 minutes.
+        Part of the sanity suite.
+        Labels: sanity
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

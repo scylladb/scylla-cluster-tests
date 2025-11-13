@@ -1,5 +1,11 @@
 #!groovy
 
+/** jobDescription
+    Test on 3-node cluster.
+        Runs for 3 minutes.
+        Labels: authentication, read-workload, write-workload
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

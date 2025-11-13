@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Utility job to restore and display Jepsen test results from a previous SCT test run.
+    Deploys a temporary AWS instance in a specified region to investigate Jepsen consistency test results.
+    Uses hydra investigate show-jepsen-results command to analyze distributed system correctness testing output.
+    Instance duration is configurable and automatically terminated after the specified time period.
+
+    Labels: jepsen, investigation, utility, consistency-testing, aws
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
