@@ -124,8 +124,8 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
-K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0"  # without 'v' prefix
-SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.2.6"
+K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.5.0"  # without 'v' prefix
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.7.0"
 
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
@@ -1090,7 +1090,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             if obj["kind"] != "DaemonSet":
                 return
             for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if "scylladb/k8s-local-volume-provisioner" in container_data["image"]:
+                if "scylladb/local-csi-driver" in container_data["image"]:
                     container_data["image"] = (
                         f"{container_data['image'].split(':')[0]}:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}")
 
@@ -1115,7 +1115,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             repo_dst_dir = os.path.join(tmp_dir_name, 'dynamic-local-volume-provisioner')
 
             download_from_github(
-                repo='scylladb/k8s-local-volume-provisioner',
+                repo='scylladb/local-csi-driver',
                 tag=f'tags/v{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}',
                 dst_dir=repo_dst_dir)
 
