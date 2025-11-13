@@ -53,6 +53,17 @@ if ! docker --version ; then
     usermod -aG docker $USER || true
 fi
 
+# Configure Docker to use Google Container Registry mirrors
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<EOF
+{
+  "registry-mirrors": [
+    "https://mirror.gcr.io"
+  ]
+}
+EOF
+systemctl restart docker || true
+
 
 # Make sdcm available in python path
 if [ "$1" == "docker" ]; then
