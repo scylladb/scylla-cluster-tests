@@ -741,7 +741,8 @@ class HelmContainerMixin:
                                  values: 'HelmValues' = None,
                                  namespace: Optional[str] = None,
                                  atomic: bool = False,
-                                 timeout: Optional[str] = None) -> str:
+                                 timeout: Optional[str] = None,
+                                 enable_alpha_beta_features: bool = True) -> str:
         command = [operation_type, target_chart_name, source_chart_name]
         prepend_command = []
         if version:
@@ -758,6 +759,8 @@ class HelmContainerMixin:
         if timeout is not None:
             # timeout in Go duration format
             command.extend(("--timeout", timeout))
+        if enable_alpha_beta_features:
+            command.extend(("--set", "'additionalArgs[0].AllAlpha=true,AllBeta=true'"))
         # Inject Docker Hub authentication secrets
         command.extend(("--set", "'imagePullSecrets[0].name=docker-auth'"))
         return self.helm(

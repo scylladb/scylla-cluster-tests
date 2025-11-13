@@ -758,7 +758,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 version=self.scylla_operator_chart_version,
                 use_devel=True,
                 namespace=SCYLLA_OPERATOR_NAMESPACE,
-                values=values
+                values=values,
+                additional_args="--feature-gates=AllAlpha=true,AllBeta=true",
             ))
             scylla_operator_version = self.scylla_operator_chart_version.split("-")[0]
             enable_tls = 'true' if self.params.get('k8s_enable_tls') else 'false'
