@@ -351,7 +351,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @cached_property
     def dynamic_local_volume_provisioner_image(self):
-        return f"scylladb/k8s-local-volume-provisioner:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
+        return f"scylladb/local-csi-driver:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
 
     @cached_property
     def cert_manager_images(self):
