@@ -56,7 +56,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: pv-setup
-        image: bitnami/kubectl:1.26.11
+        image: bitnami/kubectl:latest
         imagePullPolicy: Always
         env:
           - name: HOSTFS
