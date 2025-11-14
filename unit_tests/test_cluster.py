@@ -448,12 +448,13 @@ class TestBaseMonitorSet(unittest.TestCase):
 
 class NodetoolDummyNode(BaseNode):
 
-    def __init__(self, resp, myregion=None, myname=None, myrack=None):
+    def __init__(self, resp, myregion=None, myname=None, myrack=None, db_up=True):
         self.resp = resp
         self.myregion = myregion
         self.myname = myname
         self.parent_cluster = None
         self.rack = myrack
+        self._db_up = db_up
 
     @property
     def region(self):
@@ -465,6 +466,12 @@ class NodetoolDummyNode(BaseNode):
 
     def run_nodetool(self, *args, **kwargs):
         return Result(exited=0, stderr="", stdout=self.resp)
+
+    def db_up(self):
+        """ return True if the database is up
+        Couldn't be a property, because BaseNode.db_up is a method
+        """
+        return self._db_up
 
 
 class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):
@@ -552,6 +559,62 @@ class TestNodetoolStatus(unittest.TestCase):
         assert datacenter_name_per_region == {'east-us': 'eastus', 'west-us': 'westus'}
 
         datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1])
+        assert datacenter_name_per_region == {'east-us': 'eastus'}
+
+    def test_datacenter_name_per_region_when_region_doesnt_have_live_nodes(self):
+        resp = "\n".join(["Datacenter: eastus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+                          "Datacenter: westus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "DN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+                          ]
+                         )
+        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
+        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34', db_up=False)
+        db_cluster = DummyScyllaCluster([node1, node2, node3])
+        setattr(db_cluster, "params", {"use_zero_nodes": False})
+        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+        assert datacenter_name_per_region == {'east-us': 'eastus'}
+
+        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node3])
+        assert datacenter_name_per_region == {}
+
+    def test_datacenter_name_per_region_when_first_node_is_dn(self):
+        resp = "\n".join(["Datacenter: eastus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "DN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+                          "Datacenter: westus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+                          ]
+                         )
+        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34", db_up=False)
+        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34')
+        db_cluster = DummyScyllaCluster([node1, node2, node3])
+        setattr(db_cluster, "params", {"use_zero_nodes": False})
+        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+        assert datacenter_name_per_region == {'east-us': 'eastus', 'west-us': 'westus'}
+
+        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=[node1, node2])
         assert datacenter_name_per_region == {'east-us': 'eastus'}
 
     def test_get_rack_names_per_datacenter_and_rack_idx(self):
