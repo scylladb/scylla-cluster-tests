@@ -39,6 +39,10 @@ class Workload:
             self.num_threads = [self.num_threads]
 
 
+def is_latte_command(stress_cmd: str) -> bool:
+    return "latte " in stress_cmd and " run " in stress_cmd
+
+
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
     """
     This class presents new performance test that run gradual increased throughput steps.
@@ -132,7 +136,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                                  test_name="test_read_gradual_increase_load (100% reads)")
 
     def _base_test_workflow(self, workload: Workload, test_name):
-        stress_num = 1
+        stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
@@ -302,7 +306,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for throttle_step, num_threads, current_throttle_step in zip(workload.throttle_steps, workload.num_threads, sequential_steps):
             self.log.info("Run cs command with rate: %s Kops; threads: %s; step name: %s", throttle_step, num_threads,
                           current_throttle_step)
-            current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
+            if throttle_step == "unthrottled":
+                current_throttle = ""
+            else:
+                throttle_value = int(int(throttle_step) // (num_loaders * stress_num))
+                if is_latte_command(workload.cs_cmd_tmpl[0]):
+                    current_throttle = f"--rate={throttle_value}"
+                else:
+                    current_throttle = f"fixed={throttle_value}/s"
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
                                                       cycle_name=current_throttle_step))(self.run_step))
             results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
