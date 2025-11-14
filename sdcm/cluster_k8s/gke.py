@@ -94,6 +94,16 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     if params.get("k8s_enable_sni"):
         k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    if params.get('k8s_deploy_monitoring'):
+        monitor_pool = GkeNodePool(
+            name=k8s_cluster.MONITORING_POOL_NAME,
+            local_ssd_count=params.get("gce_n_local_ssd_disk_monitor"),
+            disk_size=params.get("root_disk_size_monitor"),
+            disk_type=params.get("gce_root_disk_type_monitor"),
+            instance_type=params.get("k8s_instance_type_monitor") or params.get("gce_instance_type_monitor"),
+            num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
+            k8s_cluster=k8s_cluster)
+        k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
     k8s_cluster.deploy_scylla_operator()
     if params.get("k8s_use_chaos_mesh"):
         k8s_cluster.chaos_mesh.initialize()
@@ -110,17 +120,6 @@ def deploy_k8s_gke_cluster(k8s_cluster) -> None:
             num_nodes=params.get("n_loaders"),
             k8s_cluster=k8s_cluster)
         k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
-
-    if params.get('k8s_deploy_monitoring'):
-        monitor_pool = GkeNodePool(
-            name=k8s_cluster.MONITORING_POOL_NAME,
-            local_ssd_count=params.get("gce_n_local_ssd_disk_monitor"),
-            disk_size=params.get("root_disk_size_monitor"),
-            disk_type=params.get("gce_root_disk_type_monitor"),
-            instance_type=params.get("k8s_instance_type_monitor") or params.get("gce_instance_type_monitor"),
-            num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
-            k8s_cluster=k8s_cluster)
-        k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
 
     # TODO: add support for different DB nodes amount in different K8S clusters
     scylla_pool = GkeNodePool(

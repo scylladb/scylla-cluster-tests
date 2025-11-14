@@ -19,7 +19,7 @@ eks_vpc_cni_version: 'v1.19.2-eksbuild.5'
 scylla_version: '6.2.3'
 k8s_cert_manager_version: '1.19.1'
 
-k8s_deploy_monitoring: false
+k8s_deploy_monitoring: true
 k8s_enable_performance_tuning: true
 
 k8s_loader_cluster_name: 'sct-loaders'
