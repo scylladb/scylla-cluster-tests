@@ -3449,12 +3449,16 @@ class BaseCluster:
     def get_datacenter_name_per_region(self, db_nodes=None):
         datacenter_name_per_region = {}
         for region, nodes in self.nodes_by_region(nodes=db_nodes).items():
-            if status := nodes[0].get_nodes_status():
+            node = next((node for node in nodes if node.db_up()), None)
+            if node is None:
+                LOGGER.error("No DB up node found in region %s to get datacenter name", region)
+                continue
+            if status := node.get_nodes_status():
                 # If `nodetool status` failed to get status for the node
-                if dc_name := status.get(nodes[0], {}).get('dc'):
+                if dc_name := status.get(node, {}).get('dc'):
                     datacenter_name_per_region[region] = dc_name
             else:
-                LOGGER.error("Failed to get nodes status from node %s", nodes[0].name)
+                LOGGER.error("Failed to get nodes status from node %s", node.name)
 
         return datacenter_name_per_region
 
