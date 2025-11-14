@@ -3748,7 +3748,8 @@ class BaseCluster:
             loader = self.nodes[0].test_config.tester_obj().loaders.nodes[0]
             loader_rack = loader.node_rack
             loader_dc = loader.datacenter
-            datacenter_name_per_region = self.get_datacenter_name_per_region(db_nodes=self.nodes)
+            nodes = whitelist_nodes or self.nodes  # need to get datacenter names from alive nodes if whitelist_nodes passed
+            datacenter_name_per_region = self.get_datacenter_name_per_region(db_nodes=nodes)
             datacenter_name = datacenter_name_per_region.get(loader_dc) if datacenter_name_per_region else loader_dc
             wlrr = RackAwareRoundRobinPolicy(local_dc=datacenter_name, local_rack=loader_rack)
             LOGGER.debug("Using RackAwareRoundRobinPolicy. Loader rack: %s. Loader datacenter: %s. Node IPs: %s",
