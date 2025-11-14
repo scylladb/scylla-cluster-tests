@@ -760,8 +760,8 @@ class HelmContainerMixin:
             # timeout in Go duration format
             command.extend(("--timeout", timeout))
         if enable_alpha_beta_features:
-            command.extend(("--set", "'args[0]=--feature-gates=AllAlpha=true'"))
-            command.extend(("--set", "'args[1]=--feature-gates=AllBeta=true'"))
+            command.extend(("--set", "'additionalArgs[0]=--feature-gates=AllAlpha=true'"))
+            command.extend(("--set", "'additionalArgs[1]=--feature-gates=AllBeta=true'"))
         # Inject Docker Hub authentication secrets
         command.extend(("--set", "'imagePullSecrets[0].name=docker-auth'"))
         return self.helm(
