@@ -1784,9 +1784,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get("k8s_enable_sni"):
             k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        k8s_cluster.deploy_scylla_operator(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        if self.params.get('use_mgmt'):
-            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
 
         n_monitor_nodes = self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes")
         if n_monitor_nodes:
@@ -1798,6 +1795,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 instance_type="fake-instance-type")
             k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=True)
             k8s_cluster.deploy_prometheus_operator()
+
+        k8s_cluster.deploy_scylla_operator(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('use_mgmt'):
+            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
 
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_clusters=[k8s_cluster],
