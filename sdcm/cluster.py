@@ -76,6 +76,7 @@ from sdcm.provision.helpers.certificate import (
     export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
+from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -472,7 +473,22 @@ class BaseNode(AutoSshContainerMixin):
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
     def _init_remoter(self, ssh_login_info):
-        self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
+        agent_config = self.parent_cluster.params.get('agent')
+        if agent_config['enabled'] and 'db' in self.parent_cluster.node_type:
+            if agent_config.get('ip_type') == 'public':
+                agent_hostname = self.public_ip_address or self.external_address
+            else:
+                agent_hostname = self.private_ip_address
+
+            self.remoter = AgentCmdRunner(
+                hostname=agent_hostname,
+                port=agent_config['port'],
+                api_key=agent_config['api_key'],
+                user=ssh_login_info.get('user', 'root') if ssh_login_info else 'root')
+            self.log.info("Using SCT Agent for command execution at %s:%s",
+                          agent_hostname, agent_config['port'])
+        else:
+            self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
@@ -3560,12 +3576,14 @@ class BaseCluster:
                 user_data_format_version = self.params.get(
                     'oracle_user_data_format_version') or user_data_format_version
 
+        agent_config = self.params.get('agent')
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
                                                   syslog_host_port=self.test_config.get_logging_service_host_port(),
                                                   test_config=self.test_config,
-                                                  install_docker=self.node_type == 'loader')
+                                                  install_docker=self.node_type == 'loader',
+                                                  install_agent=agent_config.get('enabled') and 'db' in self.node_type)
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):
