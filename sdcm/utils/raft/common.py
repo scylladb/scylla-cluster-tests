@@ -58,7 +58,7 @@ def get_topology_coordinator_node(node: BaseNode) -> BaseNode:
     active_nodes: list[BaseNode] = node.parent_cluster.get_nodes_up_and_normal(node)
     stm = "select description from system.group0_history where key = 'history' and \
             description LIKE 'Starting new topology coordinator%' ALLOW FILTERING;"
-    with node.parent_cluster.cql_connection_patient(node) as session:
+    with node.parent_cluster.cql_connection_patient(node=node, whitelist_nodes=active_nodes) as session:
         result = list(session.execute(stm))
     coordinators_ids = []
     for row in result:
