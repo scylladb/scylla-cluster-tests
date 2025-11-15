@@ -68,3 +68,6 @@ fabric.properties
 
 # SSL artifacts
 data_dir/ssl_conf/
+
+# Internal private repo
+scylla-qa-internal/
