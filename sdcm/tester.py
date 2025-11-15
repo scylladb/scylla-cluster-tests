@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 import shutil
 import configparser
+import importlib
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -101,7 +102,7 @@ from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetc
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying, measure_time, optional_stage
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
@@ -134,7 +135,6 @@ from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.stress.latte_thread import LatteStressThread
-from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
     KubernetesAPIServerLogCollector,
@@ -150,7 +150,7 @@ from sdcm.logcollector import (
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
-from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
@@ -714,7 +714,35 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return thread
 
     def _init_localhost(self):
+        # lazy import to pick up reloaded version of LocalHost after cloning scylla-qa-internal
+        from sdcm.localhost import LocalHost  # noqa: PLC0415
         return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_config.test_id())
+
+    def _ensure_scylla_qa_internal(self):
+        scylla_qa_internal_path = Path(__file__).resolve().parents[1] / 'scylla-qa-internal'
+        if not scylla_qa_internal_path.exists():
+            self.log.info("scylla-qa-internal not found, cloning...")
+            try:
+                clone_repo(
+                    remoter=LOCALRUNNER,
+                    repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+                    destination_dir_name=str(scylla_qa_internal_path),
+                    clone_as_root=False,
+                    branch="master")
+                self.log.info("Successfully cloned scylla-qa-internal")
+
+                scylla_qa_internal_path_str = str(scylla_qa_internal_path)
+                if scylla_qa_internal_path_str not in sys.path:
+                    sys.path.insert(0, scylla_qa_internal_path_str)
+
+                # reload modules to pick up XCloudConnectivityContainerMixin from scylla-qa-internal (not a dummy one)
+                if 'sdcm.utils.internal_modules' in sys.modules:
+                    importlib.reload(sys.modules['sdcm.utils.internal_modules'])
+                if 'sdcm.localhost' in sys.modules:
+                    importlib.reload(sys.modules['sdcm.localhost'])
+                self.log.info("Reloaded internal modules to use real XCloud implementation")
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Failed to clone scylla-qa-internal: %s", exc)
 
     def _init_params(self):
         self.params = init_and_verify_sct_config()
@@ -1017,6 +1045,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
+
+        if self.params.get("cluster_backend") == 'xcloud':
+            self._ensure_scylla_qa_internal()
+
         self.localhost = self._init_localhost()
 
         if self.params.get("logs_transport") == 'syslog-ng':
