@@ -1038,9 +1038,6 @@ class SCTConfiguration(dict):
         dict(name="k8s_enable_alternator", env="SCT_K8S_ENABLE_ALTERNATOR", type=boolean,
              help="Defines whether we enable the alternator feature using scylla-operator or not."),
 
-        dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
-             help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
-
         # NOTE: following 'k8s_db_node_service_type', 'k8s_db_node_to_node_broadcast_ip_type' and
         #       'k8s_db_node_to_client_broadcast_ip_type' options are supported only starting with
         #       the 'v1.11.0-rc.0' scylla-operator version.
