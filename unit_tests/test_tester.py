@@ -290,7 +290,9 @@ def test_tester_subclass(pytester, test_class, results, outcomes):
         from unit_tests.test_tester import {test_class.__name__}
         {test_class.__name__}.__test__ = True
     """)
-    result = pytester.runpytest_inprocess()
+    # cause of https://github.com/pytest-dev/pytest/issues/13905
+    # we need to run with extra flag -q, so subtest summary output is shown
+    result = pytester.runpytest_inprocess('-q')
     summary = result.parseoutcomes()
     for status, count in results.items():
         assert status in summary, f"Status '{status}' not found in results"
