@@ -18,7 +18,6 @@ import logging
 import contextlib
 from typing import Any
 from itertools import chain
-from pathlib import Path
 
 from sdcm.db_stats import get_stress_cmd_params
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
@@ -177,11 +176,7 @@ class CassandraStressThread(DockerBasedStressThread):
         return stress_cmd
 
     def adjust_cmd_connection_options(self, stress_cmd: str, loader, cmd_runner) -> str:
-        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
-            stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
-        else:
-            stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
-        return stress_cmd
+        return self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
@@ -331,10 +326,6 @@ class CassandraStressThread(DockerBasedStressThread):
                     cmd_runner.send_files(str(ssl_file),
                                           str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
                                           verbose=True)
-
-        if connection_bundle_file := self.connection_bundle_file:
-            cmd_runner.send_files(str(connection_bundle_file),
-                                  self.target_connection_bundle_file, delete_dst=True, verbose=True)
 
         if self.params.get("use_hdrhistogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)

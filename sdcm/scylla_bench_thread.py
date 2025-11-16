@@ -206,26 +206,23 @@ class ScyllaBenchThread(DockerBasedStressThread):
         return stress_cmd
 
     def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
-        if self.connection_bundle_file:
-            stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
-        else:
-            # Select first seed node to send the scylla-bench cmds
-            stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
+        # Select first seed node to send the scylla-bench cmds
+        stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
 
-            if self.params.get("client_encrypt"):
-                for ssl_file in loader.ssl_conf_dir.iterdir():
-                    if ssl_file.is_file():
-                        cmd_runner.send_files(str(ssl_file),
-                                              str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
-                                              verbose=True)
-                stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
+        if self.params.get("client_encrypt"):
+            for ssl_file in loader.ssl_conf_dir.iterdir():
+                if ssl_file.is_file():
+                    cmd_runner.send_files(str(ssl_file),
+                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
+                                          verbose=True)
+            stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
 
-                if self.params.get("peer_verification"):
-                    stress_cmd = f'{stress_cmd.strip()} -tls-host-verification'
-                if self.params.get("client_encrypt_mtls"):
-                    stress_cmd = (
-                        f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
-                        f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
+            if self.params.get("peer_verification"):
+                stress_cmd = f'{stress_cmd.strip()} -tls-host-verification'
+            if self.params.get("client_encrypt_mtls"):
+                stress_cmd = (
+                    f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
+                    f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
 
         return stress_cmd
 
@@ -243,9 +240,6 @@ class ScyllaBenchThread(DockerBasedStressThread):
                 loader, self.params.get("stress_image.scylla-bench"), extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined '
             )
             cmd_runner_name = loader.ip_address
-
-        if self.connection_bundle_file:
-            cmd_runner.send_files(str(self.connection_bundle_file), self.target_connection_bundle_file)
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
             loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
