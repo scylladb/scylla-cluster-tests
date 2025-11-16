@@ -649,13 +649,17 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
-        self.actions_log.info("Starting gemini during upgrade")
-        gemini_cmd = self.params.get("gemini_cmd")
-        if self.enable_cdc_for_tables:
-            gemini_cmd += " --table-options \"cdc={'enabled': true}\""
-        gemini_thread = self.run_gemini(gemini_cmd)
-        self.metric_has_data(
-            metric_query='sum(increase(gemini_cql_requests[1m]))', n=10)
+        gemini_thread = None
+        if self.params.get("run_gemini_in_rolling_upgrade"):
+            self.actions_log.info("Starting gemini during upgrade")
+            gemini_cmd = self.params.get("gemini_cmd")
+            if self.enable_cdc_for_tables:
+                gemini_cmd += " --table-options \"cdc={'enabled': true}\""
+            gemini_thread = self.run_gemini(gemini_cmd)
+            self.metric_has_data(
+                metric_query='sum(increase(gemini_cql_requests[1m]))', n=10)
+        else:
+            self.actions_log.info("Gemini workload is disabled for this rolling upgrade test")
 
         with ignore_upgrade_schema_errors():
 
@@ -843,8 +847,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
 
-        self.actions_log.info('Step10 - Verify that gemini did not failed during upgrade')
-        self.verify_gemini_results(queue=gemini_thread)
+        if gemini_thread:
+            self.actions_log.info('Step10 - Verify that gemini did not failed during upgrade')
+            self.verify_gemini_results(queue=gemini_thread)
+        else:
+            self.actions_log.info('Step10 - Skipping Gemini verification as Gemini was not run during this test')
 
         self.actions_log.info('all nodes were upgraded, and last workaround is verified.')
 
