@@ -5,10 +5,11 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingUpgradePipeline(
     backend: 'gce',
+    gce_datacenter: 'us-central1',
     base_versions: '',  // auto mode
     linux_distro: 'ubuntu-focal',
     use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/n2-highmem-32.yaml"]''',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml"]''',
     internode_compression: 'all'
 )

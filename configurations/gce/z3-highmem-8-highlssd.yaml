@@ -1,0 +1,2 @@
+gce_instance_type_db: 'z3-highmem-8-highlssd'
+gce_n_local_ssd_disk_db: 0
