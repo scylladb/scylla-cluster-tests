@@ -2040,15 +2040,6 @@ Defines whether we enable the alternator feature using scylla-operator or not.
 **type:** boolean
 
 
-## **k8s_connection_bundle_file** / SCT_K8S_CONNECTION_BUNDLE_FILE
-
-Serverless configuration bundle file
-
-**default:** N/A
-
-**type:** _file
-
-
 ## **k8s_db_node_service_type** / SCT_K8S_DB_NODE_SERVICE_TYPE
 
 Defines the type of the K8S 'Service' objects type used for ScyllaDB pods. Empty value means 'do not set and allow scylla-operator to choose'.

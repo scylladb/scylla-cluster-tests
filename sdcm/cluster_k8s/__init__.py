@@ -2682,51 +2682,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def seed_nodes(self):
         return []
 
-    @cached_property
-    def connection_bundle_file(self) -> Path | None:
-        if bundle_file := super().connection_bundle_file:
-            return bundle_file
-
-        # TODO: support multiDC case
-        k8s_cluster = self.k8s_clusters[0]
-        bundle_cmd_output = k8s_cluster.kubectl(
-            f"get secret/{self.scylla_cluster_name}-local-cql-connection-configs-admin"
-            f" --template='{{{{ index .data \"{self.scylla_cluster_name}.sct.scylladb.com\" }}}}'",
-            namespace=self.namespace, ignore_status=True)
-
-        if bundle_cmd_output.failed:
-            return None
-
-        fd, file_name = tempfile.mkstemp(suffix='.yaml')
-        os.close(fd)
-        bundle_file = Path(file_name)
-        bundle_file.write_bytes(base64.decodebytes(bytes(bundle_cmd_output.stdout.strip(), encoding='utf-8')))
-
-        lb_external_hostname = k8s_cluster.kubectl(
-            "get service/haproxy-kubernetes-ingress "
-            "-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'",
-            namespace=INGRESS_CONTROLLER_NAMESPACE)
-
-        sni_address = None
-        if not (lb_external_hostname.ok and lb_external_hostname.stdout):
-            lb_cluster_ip = k8s_cluster.kubectl(
-                "get service/haproxy-kubernetes-ingress --template='{{ index .spec.clusterIP }}'",
-                namespace=INGRESS_CONTROLLER_NAMESPACE)
-            if lb_cluster_ip.ok:
-                sni_address = lb_cluster_ip.stdout
-        else:
-            sni_address = lb_external_hostname.stdout
-
-        if sni_address:
-            # TODO: handle the case of multiple datacenters
-            # need to get the cluster ip from each k8s cluster
-            bundle_yaml = yaml.safe_load(bundle_file.open('r', encoding='utf-8'))
-            for _, connection_data in bundle_yaml.get('datacenters', {}).items():
-                connection_data['server'] = f'{sni_address.strip()}:9142'
-            yaml.dump(bundle_yaml, bundle_file.open('w', encoding='utf-8'))
-
-        return bundle_file
-
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
