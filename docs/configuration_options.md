@@ -1131,6 +1131,15 @@ table options for created table. example:<br>["cdc={'enabled': true}"]<br>["cdc=
 **type:** list
 
 
+## **run_gemini_in_rolling_upgrade** / SCT_RUN_GEMINI_IN_ROLLING_UPGRADE
+
+Enable running Gemini workload during rolling upgrade test. Default is false.
+
+**default:** N/A
+
+**type:** boolean
+
+
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
 
 AWS image type of the loader node
