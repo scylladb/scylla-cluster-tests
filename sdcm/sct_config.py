@@ -754,6 +754,8 @@ class SCTConfiguration(dict):
              help="""table options for created table. example:
                      ["cdc={'enabled': true}"]
                      ["cdc={'enabled': true}", "compaction={'class': 'IncrementalCompactionStrategy'}"] """),
+        dict(name="run_gemini_in_rolling_upgrade", env="SCT_RUN_GEMINI_IN_ROLLING_UPGRADE", type=boolean,
+             help="Enable running Gemini workload during rolling upgrade test. Default is false."),
         # AWS config options
 
         dict(name="instance_type_loader", env="SCT_INSTANCE_TYPE_LOADER", type=str,
