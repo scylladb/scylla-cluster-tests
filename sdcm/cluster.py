@@ -57,7 +57,7 @@ from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver
 from cassandra.cluster import NoHostAvailable
 from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy
 from cassandra.query import SimpleStatement
 from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
@@ -2926,10 +2926,6 @@ class BaseNode(AutoSshContainerMixin):
         return f' ({node.running_nemesis} nemesis target node)' if node.running_nemesis else ' (not target node)'
 
     @property
-    def is_cqlsh_support_cloud_bundle(self):
-        return bool(self.parent_cluster.connection_bundle_file)
-
-    @property
     def is_replacement_by_host_id_supported(self):
         return ComparableScyllaVersion(self.scylla_version) > '5.2.0~dev'
 
@@ -2950,12 +2946,6 @@ class BaseNode(AutoSshContainerMixin):
         command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
         cqlsh_cmd = self.add_install_prefix('/usr/bin/cqlsh')
-        if self.is_cqlsh_support_cloud_bundle:
-            connection_bundle_file = self.parent_cluster.connection_bundle_file
-            target_connection_bundle_file = str(Path('/tmp/') / connection_bundle_file.name)
-            self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
-
-            return f'{cqlsh_cmd} {options} -e {command} --cloudconf {target_connection_bundle_file}'
         return f'{cqlsh_cmd} {options} -e {command} {host}'
 
     def run_cqlsh(self, cmd, keyspace=None, timeout=120, verbose=True, split=False, connect_timeout=60,
@@ -3665,7 +3655,7 @@ class BaseCluster:
         return ssl_context
 
     def _create_session(self, node, keyspace, user, password, compression, protocol_version, load_balancing_policy=None, port=None,  # noqa: PLR0913
-                        ssl_context=None, node_ips=None, connect_timeout=None, verbose=True, connection_bundle_file=None):
+                        ssl_context=None, node_ips=None, connect_timeout=None, verbose=True):
         if not port:
             port = node.CQL_PORT
 
@@ -3691,8 +3681,6 @@ class BaseCluster:
         self.log.debug("ssl_context: %s", str(ssl_context))
 
         kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
-        if connection_bundle_file:
-            kwargs = dict(scylla_cloud=connection_bundle_file)
         cluster_driver = ClusterDriver(auth_provider=auth_provider,
                                        compression=compression,
                                        protocol_version=protocol_version,
@@ -3742,40 +3730,21 @@ class BaseCluster:
             - If a connection bundle file is available in the parent cluster, it will be used for the connection.
             - If no connection bundle file is provided, the method will use the WhiteListRoundRobinPolicy with the specified nodes.
         """
-        if connection_bundle_file := node.parent_cluster.connection_bundle_file:
-            wlrr = None
-            node_ips = []
-        else:
-            node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
-            wlrr = WhiteListRoundRobinPolicy(node_ips)
+        node_ips = self.get_node_cql_ips(nodes=whitelist_nodes)
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
-                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
-                                    connection_bundle_file=connection_bundle_file)
+                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
                                  ssl_context=None, connect_timeout=100, verbose=True):
-        if connection_bundle_file := node.parent_cluster.connection_bundle_file:
-            # TODO: handle the case of multiple datacenters
-            bundle_yaml = yaml.safe_load(connection_bundle_file.open('r', encoding='utf-8'))
-            node_domain = None
-            for _, connection_data in bundle_yaml.get('datacenters', {}).items():
-                node_domain = connection_data.get('nodeDomain').strip()
-            assert node_domain, f"didn't found nodeDomain in bundle [{connection_bundle_file}]"
-
-            def host_filter(host):
-                return str(host.host_id) == str(node.host_id) or node_domain == host.endpoint._server_name
-            wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
-            node_ips = []
-        else:
-            node_ips = [node.cql_address]
-            wlrr = WhiteListRoundRobinPolicy(node_ips)
+        node_ips = [node.cql_address]
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
                                     protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
-                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
-                                    connection_bundle_file=connection_bundle_file)
+                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose)
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
@@ -4242,11 +4211,6 @@ class BaseScyllaCluster:
             msldap_server_info=KeyStore().get_ldap_ms_ad_credentials()
         )
         return ScyllaYaml(**cluster_params_builder.model_dump(exclude_unset=True, exclude_none=True))
-
-    @property
-    def connection_bundle_file(self) -> Path | None:
-        bundle_file = self.params.get("k8s_connection_bundle_file")
-        return Path(bundle_file) if bundle_file else None
 
     @property
     def racks(self) -> Set[int]:
