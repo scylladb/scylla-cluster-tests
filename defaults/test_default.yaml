@@ -120,6 +120,7 @@ authenticator_password: ''
 n_test_oracle_db_nodes: 1
 oracle_scylla_version: '2022.1.14'
 append_scylla_args_oracle: '--enable-cache false'
+run_gemini_in_rolling_upgrade: false
 
 # cassandra-stress defaults
 stress_multiplier: 1
