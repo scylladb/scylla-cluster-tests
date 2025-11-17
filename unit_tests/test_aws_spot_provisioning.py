@@ -45,7 +45,7 @@ class TestGetProvisionedSpotInstanceIds:
         """Test successful spot instance provisioning."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_instance_requests.return_value = {
             'SpotInstanceRequests': [
                 {
@@ -56,10 +56,10 @@ class TestGetProvisionedSpotInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.INFO):
             result = get_provisioned_spot_instance_ids('us-east-1', ['sir-12345'])
-        
+
         assert result == ['i-12345']
         assert len(caplog.records) == 0  # No errors or warnings
 
@@ -67,7 +67,7 @@ class TestGetProvisionedSpotInstanceIds:
         """Test capacity not available error logging."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_instance_requests.return_value = {
             'SpotInstanceRequests': [
                 {
@@ -80,10 +80,10 @@ class TestGetProvisionedSpotInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_spot_instance_ids('us-east-1', ['sir-12345'])
-        
+
         assert result is None
         assert len(caplog.records) == 1
         assert 'Critical spot provisioning failure' in caplog.records[0].message
@@ -95,7 +95,7 @@ class TestGetProvisionedSpotInstanceIds:
         """Test price too low error logging."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_instance_requests.return_value = {
             'SpotInstanceRequests': [
                 {
@@ -108,10 +108,10 @@ class TestGetProvisionedSpotInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_spot_instance_ids('us-west-2', ['sir-67890'])
-        
+
         assert result is None
         assert len(caplog.records) == 1
         assert 'Critical spot provisioning failure' in caplog.records[0].message
@@ -122,7 +122,7 @@ class TestGetProvisionedSpotInstanceIds:
         """Test warning for pending spot request."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_instance_requests.return_value = {
             'SpotInstanceRequests': [
                 {
@@ -135,10 +135,10 @@ class TestGetProvisionedSpotInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.WARNING):
             result = get_provisioned_spot_instance_ids('eu-west-1', ['sir-pending'])
-        
+
         assert result == []
         assert len(caplog.records) == 1
         assert 'Spot instance request not yet fulfilled' in caplog.records[0].message
@@ -148,12 +148,12 @@ class TestGetProvisionedSpotInstanceIds:
         """Test exception handling for API errors."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_instance_requests.side_effect = Exception('API Error')
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_spot_instance_ids('us-east-1', ['sir-error'])
-        
+
         assert result == []
         assert len(caplog.records) == 1
         assert 'Failed to describe spot instance requests' in caplog.records[0].message
@@ -167,7 +167,7 @@ class TestGetProvisionedFleetInstanceIds:
         """Test successful spot fleet provisioning."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.return_value = {
             'SpotFleetRequestConfigs': [
                 {
@@ -177,17 +177,17 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         mock_client.describe_spot_fleet_instances.return_value = {
             'ActiveInstances': [
                 {'InstanceId': 'i-fleet-1'},
                 {'InstanceId': 'i-fleet-2'},
             ]
         }
-        
+
         with caplog.at_level(logging.INFO):
             result = get_provisioned_fleet_instance_ids('us-east-1', ['sfr-12345'])
-        
+
         assert result == ['i-fleet-1', 'i-fleet-2']
         assert len(caplog.records) == 0  # No errors or warnings
 
@@ -195,7 +195,7 @@ class TestGetProvisionedFleetInstanceIds:
         """Test fleet capacity not available error logging."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.return_value = {
             'SpotFleetRequestConfigs': [
                 {
@@ -205,7 +205,7 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         mock_client.describe_spot_fleet_request_history.return_value = {
             'HistoryRecords': [
                 {
@@ -217,10 +217,10 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_fleet_instance_ids('us-east-1', ['sfr-error'])
-        
+
         assert result is None
         assert len(caplog.records) == 1
         assert 'Critical spot fleet provisioning failure' in caplog.records[0].message
@@ -231,7 +231,7 @@ class TestGetProvisionedFleetInstanceIds:
         """Test fleet limit exceeded error logging."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.return_value = {
             'SpotFleetRequestConfigs': [
                 {
@@ -241,7 +241,7 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         mock_client.describe_spot_fleet_request_history.return_value = {
             'HistoryRecords': [
                 {
@@ -253,10 +253,10 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_fleet_instance_ids('us-west-1', ['sfr-limit'])
-        
+
         assert result is None
         assert len(caplog.records) == 1
         assert 'Critical spot fleet provisioning failure' in caplog.records[0].message
@@ -267,7 +267,7 @@ class TestGetProvisionedFleetInstanceIds:
         """Test warning for pending fleet request."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.return_value = {
             'SpotFleetRequestConfigs': [
                 {
@@ -277,10 +277,10 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         with caplog.at_level(logging.WARNING):
             result = get_provisioned_fleet_instance_ids('ap-south-1', ['sfr-pending'])
-        
+
         assert result == []
         assert len(caplog.records) == 1
         assert 'Spot fleet request not yet fulfilled' in caplog.records[0].message
@@ -289,12 +289,12 @@ class TestGetProvisionedFleetInstanceIds:
         """Test exception handling for fleet API errors."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.side_effect = Exception('Fleet API Error')
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_fleet_instance_ids('eu-central-1', ['sfr-error'])
-        
+
         assert result == []
         assert len(caplog.records) == 1
         assert 'Failed to describe spot fleet requests' in caplog.records[0].message
@@ -304,7 +304,7 @@ class TestGetProvisionedFleetInstanceIds:
         """Test exception handling when describing fleet instances."""
         mock_client = MagicMock()
         mock_ec2_client.__getitem__.return_value = mock_client
-        
+
         mock_client.describe_spot_fleet_requests.return_value = {
             'SpotFleetRequestConfigs': [
                 {
@@ -314,12 +314,12 @@ class TestGetProvisionedFleetInstanceIds:
                 }
             ]
         }
-        
+
         mock_client.describe_spot_fleet_instances.side_effect = Exception('Instance describe error')
-        
+
         with caplog.at_level(logging.ERROR):
             result = get_provisioned_fleet_instance_ids('us-east-1', ['sfr-12345'])
-        
+
         assert result is None
         assert len(caplog.records) == 1
         assert 'Failed to describe spot fleet instances' in caplog.records[0].message
