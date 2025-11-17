@@ -121,15 +121,18 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
                 cols = self.split_line(line=line)
 
-                for metric in self.METRIC_NAMES:
-                    if metric_value := self.get_metric_value(columns=cols, metric_name=metric):
-                        self.set_metric(metric, convert_metric_to_ms(str(metric_value)))
+                if len(cols) == 0:
+                    LOGGER.error("Failed to extract metrics from the line: %s", line)
+                else:
+                    for metric in self.METRIC_NAMES:
+                        if metric_value := self.get_metric_value(columns=cols, metric_name=metric):
+                            self.set_metric(metric, convert_metric_to_ms(str(metric_value)))
 
-                if ops := self.get_metric_value(columns=cols, metric_name='ops'):
-                    self.set_metric('ops', float(ops))
+                    if ops := self.get_metric_value(columns=cols, metric_name='ops'):
+                        self.set_metric('ops', float(ops))
 
-                if errors := self.get_metric_value(columns=cols, metric_name='errors'):
-                    self.set_metric('errors', int(errors))
+                    if errors := self.get_metric_value(columns=cols, metric_name='errors'):
+                        self.set_metric('errors', int(errors))
 
 
 class CassandraStressExporter(StressExporter):
