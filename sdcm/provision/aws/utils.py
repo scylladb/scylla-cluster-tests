@@ -171,7 +171,7 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
         request_id = req.get('SpotFleetRequestId', 'unknown')
         fleet_state = req.get('SpotFleetRequestState', 'unknown')
         activity_status = req.get('ActivityStatus', None)
-        
+
         if fleet_state == 'active' and activity_status == STATUS_FULFILLED:
             continue
         if activity_status == SPOT_STATUS_UNEXPECTED_ERROR:
@@ -189,7 +189,7 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
                     f"{i['EventType']}: {i['EventInformation'].get('EventDescription', 'No description')}"
                     for i in history_resp['HistoryRecords']
                 ]
-                
+
                 for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                     if error in errors:
                         LOGGER.error(
@@ -197,7 +197,7 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
                             "State='%s', ActivityStatus='%s', Error='%s'. "
                             "Error history: %s. "
                             "This request cannot be fulfilled and provisioning will not retry.",
-                            region_name, request_id, fleet_state, activity_status, error, 
+                            region_name, request_id, fleet_state, activity_status, error,
                             "; ".join(error_messages)
                         )
                         return None
@@ -246,7 +246,7 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
         status_code = req['Status']['Code']
         status_message = req['Status'].get('Message', 'No message provided')
         state = req['State']
-        
+
         if status_code != STATUS_FULFILLED or state != 'active':
             if status_code in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 # This code tells that query is not going to be fulfilled
