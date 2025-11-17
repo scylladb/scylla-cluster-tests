@@ -1743,35 +1743,38 @@ def gce_download_dir(bucket, path, target):
         obj.download_to_filename(filename=local_file_path)
 
 
-def download_dir_from_cloud(url):
+def download_dir_from_cloud(url, dst_dir=None, skip_if_dst_dir_exists=True):
     """
     download a directory from AWS S3 or from google storage
 
     :param url: a url that starts with `s3://` or `gs://`
-    :return: the temp directory create with the downloaded content
+    :param dst_dir: destination directory to download the content to
+    :param skip_if_dst_dir_exists: skip download if
+    :return: the temp directory created with the downloaded content or dst_dir if it was provided
     """
     if not url:
         return url
 
     md5 = hashlib.md5()  # deepcode ignore insecureHash: can't change it
     md5.update(url.encode('utf-8'))
-    tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
+    if not dst_dir:
+        dst_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
     parsed = urlparse(url)
-    LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
-    if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
-        LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+    LOGGER.info("Downloading [%s] to [%s]", url, dst_dir)
+    if os.path.isdir(dst_dir) and os.listdir(dst_dir) and skip_if_dst_dir_exists:
+        LOGGER.warning("[{}] already exists, skipping download".format(dst_dir))
     elif url.startswith('s3://'):
-        s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
+        s3_download_dir(parsed.hostname, parsed.path, dst_dir)
     elif url.startswith('gs://'):
-        gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+        gce_download_dir(parsed.hostname, parsed.path, dst_dir)
     elif os.path.isdir(url):
-        tmp_dir = url
+        dst_dir = url
     else:
         raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
-    if not tmp_dir.endswith('/'):
-        tmp_dir += '/'
+    if not dst_dir.endswith('/'):
+        dst_dir += '/'
     LOGGER.info("Finished downloading [%s]", url)
-    return tmp_dir
+    return dst_dir
 
 
 def filter_aws_instances_by_type(instances):
