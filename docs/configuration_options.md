@@ -3811,3 +3811,12 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **default:** N/A
 
 **type:** int
+
+
+## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
+
+Destination-source map of dirs/buckets to download from S3 before starting the test
+
+**default:** N/A
+
+**type:** list
