@@ -1878,6 +1878,8 @@ class SCTConfiguration(dict):
         dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
              help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
 
+        dict(name="download_from_s3", env="SCT_DOWNLOAD_FROM_S3", type=list,
+             help="Destination-source map of dirs/buckets to download from S3 before starting the test"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

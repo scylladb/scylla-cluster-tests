@@ -4324,3 +4324,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         """
         db_clusters = self.db_clusters_multitenant or [self.db_cluster]
         return [node for cluster in db_clusters for node in cluster.nodes]
+
+    def download_artifacts_from_s3(self):
+        """Downloads artifacts from an S3 to specified local directories.
+
+        This method retrieves S3 download configurations from SCT `download_from_s3` parameter and performs
+        the downloads for each configured source and destination mapping.
+        """
+        if download_config := self.params.get('download_from_s3'):
+            self.log.info("Starting download of artifacts from S3 with config: %s", download_config)
+            for dst_src_mapping in download_config:
+                dst_dir = list(dst_src_mapping.keys())[0]
+                for src_dir_s3_url in dst_src_mapping[dst_dir]:
+                    download_dir_from_cloud(url=src_dir_s3_url, dst_dir=dst_dir, skip_if_dst_dir_exists=False)
