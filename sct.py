@@ -1176,6 +1176,73 @@ def extract_labels(path, output, stats):
                 click.echo(f"{label}: {count}")
 
 
+@cli.command('validate-labels', help="Validate labels against authorized_labels.yaml")
+@click.option('--authorized-labels', type=click.Path(exists=True),
+              default='authorized_labels.yaml',
+              help="Path to authorized labels YAML file (default: authorized_labels.yaml)")
+@click.option('--path', type=click.Path(exists=True), default=None,
+              help="Specific path to scan (defaults to repository root)")
+def validate_labels(authorized_labels, path):
+    """
+    Validate that all labels used in the repository are authorized.
+
+    This command:
+    1. Scans the repository for all labels
+    2. Loads authorized labels from YAML file
+    3. Validates that all found labels are in the authorized list
+    4. Reports any violations with file locations
+    5. Exits with non-zero status if validation fails
+    """
+    root_path = Path(__file__).parent
+    extractor = LabelsExtractor(root_path)
+
+    # Load authorized labels
+    authorized_labels_path = Path(authorized_labels)
+    if not authorized_labels_path.is_absolute():
+        authorized_labels_path = root_path / authorized_labels_path
+
+    try:
+        click.echo(f"Loading authorized labels from: {authorized_labels_path}")
+        authorized_list = extractor.load_authorized_labels(authorized_labels_path)
+        click.echo(f"Loaded {len(authorized_list)} authorized labels")
+    except (FileNotFoundError, yaml.YAMLError) as exc:
+        click.secho(f"Error loading authorized labels: {exc}", fg='red', err=True)
+        sys.exit(1)
+
+    # Scan repository for labels
+    click.echo(f"Scanning repository for labels in: {root_path if path is None else path}")
+    scan_result = extractor.scan_repository(Path(path) if path else None)
+    click.echo(f"Found {len(scan_result['all_labels'])} unique labels in use")
+
+    # Validate labels
+    validation_result = extractor.validate_labels(scan_result, authorized_list)
+
+    if validation_result['valid']:
+        click.secho("\n✓ All labels are authorized!", fg='green', bold=True)
+        sys.exit(0)
+    else:
+        click.secho(f"\n✗ Found {len(validation_result['unknown_labels'])} unauthorized label(s)!",
+                    fg='red', bold=True, err=True)
+
+        click.echo("\nUnknown labels:", err=True)
+        for label in validation_result['unknown_labels']:
+            click.secho(f"  - {label}", fg='red', err=True)
+
+        click.echo(f"\nViolations ({len(validation_result['violations'])}):", err=True)
+        for violation in validation_result['violations']:
+            click.secho(
+                f"  [{violation['type']}] {violation['file']} - {violation['location']}: '{violation['label']}'",
+                fg='yellow', err=True
+            )
+
+        click.echo("\nTo fix this issue:", err=True)
+        click.echo("1. If the label should be authorized, add it to authorized_labels.yaml", err=True)
+        click.echo("2. If the label is a typo, correct it in the source file", err=True)
+        click.echo("3. If the label is obsolete, remove it from the source file", err=True)
+
+        sys.exit(1)
+
+
 @cli.command("perf-regression-report", help="Generate and send performance regression report")
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")

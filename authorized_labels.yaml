@@ -1,0 +1,173 @@
+# Authorized Labels for SCT Repository
+#
+# This file contains the list of authorized labels that can be used in:
+# - _folder_definitions.yaml files
+# - .jenkinsfile jobDescription annotations
+# - Python test method docstrings
+#
+# Any label not in this list will cause validation to fail during pre-commit checks.
+#
+# To add a new label:
+# 1. Add it to this list (keep alphabetically sorted)
+# 2. Document its purpose in a comment
+# 3. Run: uv run sct.py validate-labels
+#
+# Label format:
+# - Must be descriptive and follow kebab-case naming convention
+# - Should describe infrastructure, test type, or feature area
+# - Examples: provision-aws, longevity-test, performance-regression
+
+labels:
+  # Backend/Infrastructure labels
+  - aws
+  - gce
+  - gcp
+  - azure
+  - docker
+  - k8s
+  - baremetal
+  - xcloud
+
+  # Test type labels
+  - artifacts
+  - installation
+  - longevity
+  - performance
+  - functional
+  - integration
+  - rolling-upgrade
+  - upgrade
+  - security
+  - scale
+  - manager
+
+  # Feature area labels
+  - scylla-operator
+  - backup-restore
+  - change-data-capture  # cdc
+  - tablets
+  - topology
+  - rpc-compression # internode-compression
+  - internode-encryption # server-encrypt
+  - audit
+  - time-series
+  - client-encryption # tls / ssl / encryption
+  - tombstone-gc
+  - incremental-compaction-strategy # ics
+  - time-window-compaction-strategy # twcs
+  - leveled-compaction-strategy # lcs
+  - lightweight-transactions # lwt
+  - materialized-views
+  - secondary-indexes
+  - authentication
+  - authorization
+  - vector-search
+  - topology-changes
+  - schema-changes
+  - size-tiered-compaction
+  - reversed-queries
+  - grow-shrink
+  - full-scan
+  - streaming # rbno-disabled
+  - rbno-disabled
+  - counters
+  - rack-aware
+  - repair
+
+  # distro labels
+  - ami
+  - scylla-machine-image
+  - centos
+  - centos-9
+  - oel-7.6
+  - oel-8
+  - oel-9
+  - oracle-linux
+  - ubuntu
+  - ubuntu-20.04
+  - ubuntu-22.04
+  - ubuntu-24.04
+  - centos-7
+  - centos-8
+  - red-hat
+  - rhel-7
+  - rhel-8
+  - rhel-9
+  - rhel-10
+  - debian
+  - debian-10
+  - debian-11
+  - debian-12
+  - debian-13
+  - rocky-10
+  - rocky-9
+  - rocky-8
+  - amazon-linux-2023
+  - arm
+  - arm64
+  - web-installer
+  - selinux
+  - bookworm
+  - bullseye
+  - focal
+  - jammy
+  - bionic
+  - xenial
+  - noble
+
+  # sizes labels
+  - 100gb
+  - 1000-keyspaces
+  - 100gb
+  - 150gb
+  - 1tb
+  - 200gb
+  - 5000-tables
+  - 50gb
+  - 6-nodes
+  - 80gb
+
+  # stress tool labels
+  - cassandra-stress
+  - scylla-bench
+  - ycsb
+  - gemini
+  - cql-stress
+  - latte
+
+  # workload labels
+  - mixed-workload
+  - read-cache-only-workload
+  - write-workload
+  - read-disk-only-workload
+  - user-profile-workload
+  - sequential-workload
+  - large-partition
+  - large-collections
+  - large-dataset
+
+  # testing methodology labels
+  - oracle-testing
+  - data-validation
+  - sisyphus
+  - nemesis
+  - jepsen
+  - consistency
+  - linearizability
+  - network-disruption
+  - deletions
+
+  # configuration labels
+  - multi-datacenter # multi-region / multi-dc
+  - ipv6
+  - two-interfaces
+  - persistent-disk
+  - fips
+
+  # tiering labels
+  - nightly
+  - daily
+  - weekly
+  - sanity
+  - tier1
+  - tier2

@@ -156,7 +156,7 @@ Recommended conventions:
   - Duration: `quick`, `long-running`, `multi-day`
   - Priority: `critical`, `high-priority`, `low-priority`
   - Features: `materialized-views`, `cdc`, `alternator`
-  - Infrastructure: `multi-cloud`, `large-dataset`, `disk-intensive`
+  - Infrastructure: `multi-datacenter`, `large-dataset`, `disk-intensive`
 
 ## Testing
 

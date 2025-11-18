@@ -316,3 +316,120 @@ class LabelsExtractor:
         stats["label_usage"] = dict(sorted(label_counts.items(), key=lambda x: x[1], reverse=True))
 
         return stats
+
+    def load_authorized_labels(self, authorized_labels_path: Path) -> List[str]:
+        """
+        Load authorized labels from a YAML file.
+
+        Args:
+            authorized_labels_path: Path to authorized_labels.yaml file
+
+        Returns:
+            List of authorized label strings
+
+        Raises:
+            FileNotFoundError: If the authorized labels file doesn't exist
+            yaml.YAMLError: If the YAML file is malformed
+        """
+        try:
+            with open(authorized_labels_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+
+            if not data:
+                return []
+
+            # Support both list format and dict with 'labels' key
+            if isinstance(data, list):
+                return data
+            elif isinstance(data, dict) and 'labels' in data:
+                if isinstance(data['labels'], list):
+                    return data['labels']
+
+            return []
+
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"Authorized labels file not found: {authorized_labels_path}"
+            ) from exc
+        except yaml.YAMLError as exc:
+            raise yaml.YAMLError(
+                f"Failed to parse authorized labels file: {authorized_labels_path}"
+            ) from exc
+
+    def validate_labels(
+        self,
+        scan_result: Dict[str, Any],
+        authorized_labels: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Validate that all labels in scan results are authorized.
+
+        Args:
+            scan_result: Result from scan_repository()
+            authorized_labels: List of authorized label strings
+
+        Returns:
+            Dictionary containing:
+            - valid: bool, True if all labels are authorized
+            - unknown_labels: list of labels not in authorized list
+            - violations: list of dicts with details about where unknown labels are used
+        """
+        authorized_set = set(authorized_labels)
+        found_labels = set(scan_result["all_labels"])
+        unknown_labels = found_labels - authorized_set
+
+        result = {
+            "valid": len(unknown_labels) == 0,
+            "unknown_labels": sorted(unknown_labels),
+            "violations": []  # type: ignore
+        }
+
+        if not unknown_labels:
+            return result
+
+        # Find all locations where unknown labels are used
+        # Check folder definitions
+        for path_str, labels_data in scan_result["folder_definitions"].items():
+            for label in labels_data["folder_labels"]:
+                if label in unknown_labels:
+                    result["violations"].append({
+                        "type": "folder_definition",
+                        "file": path_str,
+                        "location": "folder labels",
+                        "label": label
+                    })
+
+            for job_name, override_labels in labels_data["overrides"].items():
+                for label in override_labels:
+                    if label in unknown_labels:
+                        result["violations"].append({
+                            "type": "folder_definition",
+                            "file": path_str,
+                            "location": f"override: {job_name}",
+                            "label": label
+                        })
+
+        # Check jenkinsfiles
+        for path_str, labels in scan_result["jenkinsfiles"].items():
+            for label in labels:
+                if label in unknown_labels:
+                    result["violations"].append({
+                        "type": "jenkinsfile",
+                        "file": path_str,
+                        "location": "jobDescription",
+                        "label": label
+                    })
+
+        # Check test methods
+        for path_str, methods in scan_result["test_methods"].items():
+            for method_name, labels in methods.items():
+                for label in labels:
+                    if label in unknown_labels:
+                        result["violations"].append({
+                            "type": "test_method",
+                            "file": path_str,
+                            "location": f"method: {method_name}",
+                            "label": label
+                        })
+
+        return result

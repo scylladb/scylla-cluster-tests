@@ -13,10 +13,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
     Labels:
         - longevity
         - performance
-        - critical
-        - smoke-test
-        - regression
-        - multi-dc
+        - multi-datacenter
 */
 
 longevityPipeline(

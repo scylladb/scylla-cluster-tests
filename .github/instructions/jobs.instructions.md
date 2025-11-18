@@ -17,8 +17,9 @@ For all `.jenkinsfile` files add a job description at the top of the file in the
 \```
 
 * it should include stress tool, if used by the configuration, otherwise it shouldn't mention it
-* if should metion which nemesis is used, if NoOpMonkey is used, it shouldn't be mention nemesis
+* if should mention which nemesis is used, if NoOpMonkey is used, it shouldn't be mention nemesis
 * it should have a list of labels/tags base on its configuration and name - shouldn't mention (spot-instance, )
+* labels should be cross-checked with `authorized_labels.yaml` file, and suggest new labels in that file as needed.
 * it should have a short description of what the job does, what it is goal
 * it should mention any non default configurations (like client encryption)
 * it should mention if it's part of any suite (like sanity, tier1, upgrades, artifacts, etc)

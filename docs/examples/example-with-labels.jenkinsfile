@@ -11,7 +11,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
     This test serves as part of the longevity test suite.
     Main load stress tool: cassandra-stress
 
-    Labels: longevity, cassandra-stress, mixed-workload, encryption, size-tiered-compaction, sisyphus, nemesis, 100gb
+    Labels: longevity, cassandra-stress, mixed-workload, client-encryption, size-tiered-compaction, sisyphus, nemesis, 100gb
 */
 
 longevityPipeline(

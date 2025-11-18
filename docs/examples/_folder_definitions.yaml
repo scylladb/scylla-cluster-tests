@@ -17,9 +17,7 @@ folder-description: |
 # These can be used by Argus and other automation tools for filtering
 labels:
   - performance
-  - regression
   - nightly
-  - long-running
 
 # Per-job overrides with regex or exact name matching
 overrides:
@@ -28,18 +26,16 @@ overrides:
     job-sub-type: artifact
     labels:
       - large-dataset
-      - disk-intensive
 
   # Exact match - specific job name
   longevity-5tb-1day-gce:
     job-sub-type: rolling-upgrade
     labels:
       - upgrade
-      - multi-cloud
-      - extra-large
+      - multi-datacenter
+      - large-dataset
 
   # Another example with multiple labels
   longevity-mv:
     labels:
       - materialized-views
-      - feature-test
