@@ -78,13 +78,13 @@ class GeminiStressThread(DockerBasedStressThread):
         self.gemini_commands = []
         self.unique_id = uuid.uuid4()
         self.gemini_default_flags = {
-            "level": "info",
+            "level": "debug",
             "request-timeout": "3s",
             "connect-timeout": "60s",
             "consistency": "QUORUM",
-            "async-objects-stabilization-backoff": "10ms",
+            "async-objects-stabilization-backoff": "250ms",
             "async-objects-stabilization-attempts": 10,
-            "max-mutation-retries-backoff": "10ms",
+            "max-mutation-retries-backoff": "1s",
             "max-mutation-retries": 10,
             "dataset-size": "large",
             "oracle-host-selection-policy": "token-aware",
@@ -103,10 +103,18 @@ class GeminiStressThread(DockerBasedStressThread):
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
             "partition-key-distribution": "uniform",  # Distribution for hitting the partition
+<<<<<<< HEAD
             "token-range-slices": 10000,
             "partition-key-buffer-reuse-size": 128,
             "statement-log-file-compression": "zstd",
             "io-worker-pool": 2048,  # Number of threads to perform IO operations (mainly Scylla reads/writes)
+||||||| parent of 162a87ac2 (feature(gemini): upgrade gemini to the latest version)
+            "token-range-slices": 10000,
+            "partition-key-buffer-reuse-size": 128,
+            "statement-log-file-compression": "zstd",
+=======
+            "partition-count": 5_000_000,
+>>>>>>> 162a87ac2 (feature(gemini): upgrade gemini to the latest version)
             "max-errors-to-store": 1000,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
         }
 
