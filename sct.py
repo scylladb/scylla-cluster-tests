@@ -119,6 +119,7 @@ from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
+from sdcm.utils.docker_utils import get_ip_address_of_container
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -625,7 +626,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         docker_table.add_row([
                             container.name,
                             builder_name,
-                            container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"] if get_all_running else container.status,
+                            get_ip_address_of_container(container) if get_all_running else container.status,
                             container.labels.get("TestId", "N/A"),
                             container.labels.get("RunByUser", "N/A"),
                             container.attrs.get("Created", "N/A"),
