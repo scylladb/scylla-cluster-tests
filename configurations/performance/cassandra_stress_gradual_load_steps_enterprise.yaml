@@ -3,6 +3,6 @@
 ## The value of perf_gradual_threads[load] must be either:
 ##   - a single-element list or integer (applied to all throttle steps)
 ##   - a list with the same length as perf_gradual_throttle_steps[load] (one thread count per step).
-perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900}
-perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled']}  # where every value is in ops
-perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m'}
+perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900, "read_disk_only": 620}  # number of threads to use for each load type
+perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled'], "read_disk_only": ['80000', '165000', '250000', '300000', 'unthrottled']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '30m', "write": None, "mixed": '30m', "read_disk_only": '30m'}  # duration per step; None means until completion of the stress command
