@@ -1,11 +1,11 @@
 test_duration: 420
 
 latte_schema_parameters:
-  lwt: 'true'
-  cdc: 'false'
+  lwt: 'false'
+  cdc: 'true'
   mv: 'false'
-  ks_name: 'lwt_keyspace'
-  table_name: 'lwt_table'
+  ks_name: 'cdc_keyspace'
+  table_name: 'cdc_table'
 
 prepare_write_cmd:
   - >-
@@ -18,20 +18,18 @@ prepare_write_cmd:
 
 stress_cmd:
   - >-
-    latte run -f update_first_part_of_table --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update-first-part
+    latte run -f update_table --consistency=QUORUM --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f update_second_part_of_table --serial-consistency=LOCAL_SERIAL --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update-second-part
-    data_dir/latte/tablet_split_merge_load.rn
-
-  - >-
-    latte run -f read_from_table --consistency=LOCAL_SERIAL --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-table
+    latte run -f read_from_table --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-table
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
     latte run -f delete_partition -P delete_pct=50 --rate 20  --concurrency=10 --duration=360m --tag delete-partition
     data_dir/latte/tablet_split_merge_load.rn
+
+db_type: mixed_scylla
 
 n_db_nodes: 6
 simulated_racks: 3
@@ -42,13 +40,18 @@ instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8
 
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: ''
+ami_id_db_oracle: 'ami-0c14b7ebb55b4ce15'
+
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: ["topology_changes", "schema_changes and not disruptive"]
+nemesis_selector: ["schema_changes and not disruptive"]
 nemesis_seed: '021'
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
-user_prefix: 'longevity-lwt-24h'
+user_prefix: 'longevity-cdc-24h'
 
 use_preinstalled_scylla: true
 

@@ -1,0 +1,156 @@
+use latte::*;
+
+const ENABLE_TABLETS = latte::param!("tablets", true);
+const ENABLE_LWT = latte::param!("lwt", true);
+const ENABLE_MV = latte::param!("mv", true);
+const ENABLE_CDC = latte::param!("cdc", true);
+
+const KS_NAME = latte::param!("ks_name", "keyspace1");
+const TABLE_NAME = latte::param!("table_name", "table1");
+const MV_NAME = latte::param!("mv_name", "mv1");
+
+const RF = latte::param!("replication_factor", 3);
+const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
+
+const TOTAL_ROWS = latte::param!("rows", 10_000_000);
+const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1000);
+const PARTITION_SIZES = "100:1";
+const DELETE_PCT = latte::param!("delete_pct", 50);
+const HALF_ROWS = TOTAL_ROWS / 2;
+
+pub async fn schema(db) {
+    db.execute(`
+        CREATE KEYSPACE IF NOT EXISTS ${KS_NAME}
+        WITH replication = {
+          'class'              : 'NetworkTopologyStrategy',
+          'replication_factor' : ${RF}
+        }
+        AND tablets = { 'enabled': ${ENABLE_TABLETS} }
+    `).await?;
+
+    db.execute(`
+        CREATE TABLE IF NOT EXISTS ${KS_NAME}.${TABLE_NAME} (
+            pk bigint,
+            ck bigint,
+            a int,
+            pad text,
+            PRIMARY KEY (pk, ck))
+         WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }
+         AND cdc = { 'enabled' : ${ENABLE_CDC} }
+    `).await?;
+
+    if ENABLE_MV {
+        db.execute(`
+            CREATE MATERIALIZED VIEW IF NOT EXISTS ${KS_NAME}.${MV_NAME}
+            AS SELECT pk, ck, a, pad
+            FROM ${KS_NAME}.${TABLE_NAME}
+            WHERE pk IS NOT NULL
+            AND ck IS NOT NULL
+            PRIMARY KEY (pk, ck)
+        `).await?;
+    }
+}
+
+pub async fn prepare(db) {
+    db.init_partition_row_distribution_preset(
+        "main", TOTAL_ROWS, ROWS_PER_PARTITION, PARTITION_SIZES,
+    ).await?;
+
+    db.prepare(
+        "write_to_table",
+        `INSERT INTO ${KS_NAME}.${TABLE_NAME} (pk, ck, a, pad) VALUES (?, ?, ?, ?)`
+    ).await?;
+
+    db.prepare(
+        "delete_partition",
+        `DELETE FROM ${KS_NAME}.${TABLE_NAME} WHERE pk = ?`
+    ).await?;
+
+    db.prepare(
+        "update_table",
+        `UPDATE ${KS_NAME}.${TABLE_NAME} SET pad = ? WHERE pk = ? AND ck = ?`
+    ).await?;
+
+    db.prepare(
+        "update_if_lesser_threshold",
+        `UPDATE ${KS_NAME}.${TABLE_NAME} SET pad = ? WHERE pk = ? AND ck = ? IF a <= ?`
+    ).await?;
+
+    db.prepare(
+        "update_if_higher_threshold",
+        `UPDATE ${KS_NAME}.${TABLE_NAME} SET pad = ? WHERE pk = ? AND ck = ? IF a > ?`
+    ).await?;
+
+    db.prepare(
+        "read_from_table",
+        `SELECT a, pad FROM ${KS_NAME}.${TABLE_NAME} WHERE pk = ? AND ck = ?`
+    ).await?;
+
+    if ENABLE_MV {
+        db.prepare(
+            "read_from_mv",
+            `SELECT a, pad FROM ${KS_NAME}.${MV_NAME} WHERE pk = ? AND ck = ?`
+        ).await?;
+    }
+}
+
+fn pad(i) {
+    latte::text(i, 200)
+}
+
+pub async fn write_to_table(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    let a = hash_range(i, 1_000_000);
+
+    db.execute_prepared("write_to_table", [pk, ck, a, pad(i)]).await
+}
+
+pub async fn delete_partition(db, i) {
+    let partition  = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let bucket = hash_range(partition.idx, 100);
+
+    if bucket < DELETE_PCT {
+        db.execute_prepared("delete_partition", [pk]).await?;
+    } else {
+        let ck = hash(i);
+        db.execute_prepared("read_from_table", [pk, ck]).await?;
+    }
+}
+
+pub async fn update_table(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("update_table", [pad(i), pk, ck]).await
+}
+
+pub async fn update_first_part_of_table(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("update_if_lesser_threshold", [pad(i), pk, ck, HALF_ROWS]).await
+}
+
+pub async fn update_second_part_of_table(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("update_if_higher_threshold", [pad(i), pk, ck, HALF_ROWS]).await
+}
+
+pub async fn read_from_table(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("read_from_table", [pk, ck]).await
+}
+
+pub async fn read_from_mv(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    db.execute_prepared("read_from_mv", [pk, ck]).await
+}
