@@ -24,7 +24,7 @@ from sdcm.sct_events.operator import (
 
 class ScyllaOperatorLogMonitoring(threading.Thread):
     lookup_time = 0.1
-    log = logging.getLogger('ScyllaOperatorLogMonitoring')
+    log = logging.getLogger("ScyllaOperatorLogMonitoring")
 
     def __init__(self, kluster):
         self.termination_event = threading.Event()
@@ -34,12 +34,12 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
 
     def _get_file_follower(self) -> Iterable[str]:
         follower_message = (
-            f"{self.kluster.region_name}: Wait for the '{self.kluster.scylla_operator_log}' "
-            "file to be available")
+            f"{self.kluster.region_name}: Wait for the '{self.kluster.scylla_operator_log}' file to be available"
+        )
 
         @timeout(timeout=300, sleep_time=10, message=follower_message)
         def _get_file_follower_wrapped(kluster) -> Iterable[str]:
-            return File(kluster.scylla_operator_log, 'r').iterate_lines()
+            return File(kluster.scylla_operator_log, "r").iterate_lines()
 
         return _get_file_follower_wrapped(self.kluster)
 

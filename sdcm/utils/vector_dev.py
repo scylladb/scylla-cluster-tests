@@ -58,22 +58,22 @@ class VectorDevContainerMixin:
         }
         username = getpass.getuser()
         return {
-            'image': VECTOR_DEV_IMAGE,
-            'name': f"{self.name}-vector",
-            'command': " -c /etc/vector/vector.yaml",
-            'auto_remove': True,
-            'ports': {f"{VECTOR_DEV_PORT}/tcp": None},
-            'volumes': volumes,
-            'environment': {
-                'PUID': getpwnam(username).pw_uid,
-                'PGID': getpwnam(username).pw_gid,
-            }
+            "image": VECTOR_DEV_IMAGE,
+            "name": f"{self.name}-vector",
+            "command": " -c /etc/vector/vector.yaml",
+            "auto_remove": True,
+            "ports": {f"{VECTOR_DEV_PORT}/tcp": None},
+            "volumes": volumes,
+            "environment": {
+                "PUID": getpwnam(username).pw_uid,
+                "PGID": getpwnam(username).pw_gid,
+            },
         }
 
 
 def generate_vector_conf_file():
     conf_fd, conf_path = mkstemp(prefix="vector", suffix=".yaml")
-    with os.fdopen(conf_fd, 'w') as file_obj:
+    with os.fdopen(conf_fd, "w") as file_obj:
         file_obj.write(VECTOR_CONF.format(port=VECTOR_DEV_PORT))
     LOGGER.debug("vector conf file created in '%s'", conf_path)
     return conf_path
