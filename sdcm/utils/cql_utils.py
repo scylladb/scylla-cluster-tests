@@ -23,7 +23,7 @@ def cql_quote_if_needed(identifier: str) -> str:
 
     https://cassandra.apache.org/doc/stable/cassandra/cql/definitions.html#identifiers
     """
-    identifier_regex = re.compile(r'^[^0-9][a-z0-9_]+$')
+    identifier_regex = re.compile(r"^[^0-9][a-z0-9_]+$")
     if not identifier_regex.match(identifier):
         return f'"{identifier}"'
     return identifier
