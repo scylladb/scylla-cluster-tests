@@ -38,6 +38,7 @@ class RegionDefinition:
     """List of InstancesDefinitions and Provisioner creation attributes.
 
     Contains complete information needed to create instances for given region and test id"""
+
     backend: str
     test_id: str
     region: str
@@ -48,6 +49,7 @@ class RegionDefinition:
 @dataclass
 class ConfigParamsMap:
     """Maps basic params to sct configuration parameters in yaml files."""
+
     image_id: str
     type: str
     user_name: str
@@ -60,6 +62,7 @@ class DefinitionBuilder(abc.ABC):
     Builds InstanceDefinition objects based on sct configuration file mapping (SCT_PARAM_MAPPER),
     which maps sct params to proper attributes in InstanceDefinition.
     """
+
     BACKEND: str
     SCT_PARAM_MAPPER: Dict[NodeTypeType, ConfigParamsMap]
     REGION_MAP: str
@@ -73,49 +76,54 @@ class DefinitionBuilder(abc.ABC):
     def regions(self) -> List[str]:
         return self.params.get(self.REGION_MAP)
 
-    def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None) -> InstanceDefinition:
+    def build_instance_definition(
+        self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None
+    ) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
-        user_prefix = self.params.get('user_prefix')
+        user_prefix = self.params.get("user_prefix")
         common_tags = TestConfig.common_tags()
         node_type_short = "db" if "db" in node_type else node_type
         short_test_id = TestConfig.test_id().split("-")[0]
         name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
         action = self.params.get(f"post_behavior_{node_type_short}_nodes")
-        tags = common_tags | {"NodeType": node_type,
-                              "keep_action": "terminate" if action == "destroy" else "",
-                              "NodeIndex": str(index)}
+        tags = common_tags | {
+            "NodeType": node_type,
+            "keep_action": "terminate" if action == "destroy" else "",
+            "NodeIndex": str(index),
+        }
         user_data = self._get_user_data_objects(node_type=node_type, instance_name=name)
         mapper = self.SCT_PARAM_MAPPER[node_type]
         use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
-        return InstanceDefinition(name=name,
-                                  image_id=self.params.get(mapper.image_id),
-                                  type=instance_type or self.params.get(mapper.type),
-                                  user_name=self.params.get(mapper.user_name),
-                                  root_disk_size=self.params.get(mapper.root_disk_size),
-                                  tags=tags,
-                                  ssh_key=self._get_ssh_key(),
-                                  user_data=user_data,
-                                  use_public_ip=use_public_ip,
-                                  )
+        return InstanceDefinition(
+            name=name,
+            image_id=self.params.get(mapper.image_id),
+            type=instance_type or self.params.get(mapper.type),
+            user_name=self.params.get(mapper.user_name),
+            root_disk_size=self.params.get(mapper.root_disk_size),
+            tags=tags,
+            ssh_key=self._get_ssh_key(),
+            user_data=user_data,
+            use_public_ip=use_public_ip,
+        )
 
-    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,
-                                n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
+    def build_region_definition(
+        self, region: str, availability_zone: str, n_db_nodes: int, n_loader_nodes: int, n_monitor_nodes: int
+    ) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
         for idx in range(n_db_nodes):
-            definitions.append(
-                self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1)
-            )
+            definitions.append(self.build_instance_definition(region=region, node_type="scylla-db", index=idx + 1))
         for idx in range(n_loader_nodes):
-            definitions.append(
-                self.build_instance_definition(region=region, node_type="loader", index=idx + 1)
-            )
+            definitions.append(self.build_instance_definition(region=region, node_type="loader", index=idx + 1))
         for idx in range(n_monitor_nodes):
-            definitions.append(
-                self.build_instance_definition(region=region, node_type="monitor", index=idx + 1)
-            )
-        return RegionDefinition(backend=self.BACKEND, test_id=self.test_id, region=region,
-                                availability_zone=availability_zone, definitions=definitions)
+            definitions.append(self.build_instance_definition(region=region, node_type="monitor", index=idx + 1))
+        return RegionDefinition(
+            backend=self.BACKEND,
+            test_id=self.test_id,
+            region=region,
+            availability_zone=availability_zone,
+            definitions=definitions,
+        )
 
     def build_all_region_definitions(self) -> List[RegionDefinition]:
         """Builds all instances definitions in all regions based on SCT test configuration."""
@@ -124,10 +132,17 @@ class DefinitionBuilder(abc.ABC):
         n_db_nodes = self._get_node_count_for_each_region(str(self.params.get("n_db_nodes")))
         n_loader_nodes = self._get_node_count_for_each_region(str(self.params.get("n_loaders")))
         n_monitor_nodes = self._get_node_count_for_each_region(str(self.params.get("n_monitor_nodes")))
-        for region, db_nodes, loader_nodes, monitor_nodes in zip(self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes):
+        for region, db_nodes, loader_nodes, monitor_nodes in zip(
+            self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes
+        ):
             region_definitions.append(
-                self.build_region_definition(region=region, availability_zone=availability_zone, n_db_nodes=db_nodes,
-                                             n_loader_nodes=loader_nodes, n_monitor_nodes=monitor_nodes)
+                self.build_region_definition(
+                    region=region,
+                    availability_zone=availability_zone,
+                    n_db_nodes=db_nodes,
+                    n_loader_nodes=loader_nodes,
+                    n_monitor_nodes=monitor_nodes,
+                )
             )
         return region_definitions
 
@@ -156,8 +171,7 @@ class DefinitionBuilder(abc.ABC):
             DockerUserDataObject,
         ]
         user_data_objects = [
-            klass(test_config=self.test_config, params=self.params,
-                  instance_name=instance_name, node_type=node_type)
+            klass(test_config=self.test_config, params=self.params, instance_name=instance_name, node_type=node_type)
             for klass in user_data_object_classes
         ]
         applicable_user_data_objects = [obj for obj in user_data_objects if obj.is_applicable]

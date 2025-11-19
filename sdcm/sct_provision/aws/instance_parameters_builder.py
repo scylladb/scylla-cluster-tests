@@ -53,8 +53,8 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
                     DeviceName=self._root_device_name,
                     Ebs=AWSDiskMappingEbsInfo(
                         VolumeSize=self._root_device_size,
-                        VolumeType='gp3',
-                    )
+                        VolumeType="gp3",
+                    ),
                 )
             )
         return device_mappings
@@ -76,14 +76,14 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     def NetworkInterfaces(self) -> List[dict]:
         output = []
         for index in range(network_interfaces_count(self.params)):
-            output.append({'DeviceIndex': index, **self._network_interface_params(interface_index=index)})
+            output.append({"DeviceIndex": index, **self._network_interface_params(interface_index=index)})
         return output
 
     @computed_field
     @property
     def IamInstanceProfile(self) -> dict | None:
         if profile := self.params.get(self._INSTANCE_PROFILE_PARAM_NAME):
-            return {'Name': profile}
+            return {"Name": profile}
         return None
 
     @computed_field
@@ -96,7 +96,8 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     def Placement(self) -> Optional[AWSPlacementInfo]:
         return AWSPlacementInfo(
             AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
-            GroupName=self.placement_group)
+            GroupName=self.placement_group,
+        )
 
     @computed_field
     @property
@@ -121,13 +122,13 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @cached_property
     def _availability_zones(self) -> List[str]:
-        return self.params.get('availability_zone').split(',')
+        return self.params.get("availability_zone").split(",")
 
     @cached_property
     def _ec2_network_configuration(self) -> Tuple[List[str], List[List[str]]]:
-        ec2_network_configuration = EC2NetworkConfiguration(regions=self.params.region_names,
-                                                            availability_zones=self._availability_zones,
-                                                            params=self.params)
+        ec2_network_configuration = EC2NetworkConfiguration(
+            regions=self.params.region_names, availability_zones=self._availability_zones, params=self.params
+        )
         return ec2_network_configuration.security_groups, ec2_network_configuration.subnets
 
     @cached_property
@@ -139,16 +140,20 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self._ec2_network_configuration[0]
 
     def _network_interface_params(self, interface_index: int = 0):
-        LOGGER.debug("ec2_subnet_ids: %s; availability_zone: %s, interface_index: %s",
-                     self._ec2_subnet_ids, self.availability_zone, interface_index)
+        LOGGER.debug(
+            "ec2_subnet_ids: %s; availability_zone: %s, interface_index: %s",
+            self._ec2_subnet_ids,
+            self.availability_zone,
+            interface_index,
+        )
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],
-            'Groups': self._ec2_security_group_ids[self.region_id],
+            "SubnetId": self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],
+            "Groups": self._ec2_security_group_ids[self.region_id],
         }
 
     @property
     def _credentials(self):
-        user_credentials = self.params.get('user_credentials_path')
+        user_credentials = self.params.get("user_credentials_path")
         return [UserRemoteCredentials(key_file=user_credentials) for _ in self.params.region_names]
 
     @property
@@ -157,25 +162,25 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
 
 class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
-    _IMAGE_ID_PARAM_NAME = 'ami_id_db_scylla'
-    _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
-    _INSTANCE_PROFILE_PARAM_NAME = 'aws_instance_profile_name_db'
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db"
+    _IMAGE_ID_PARAM_NAME = "ami_id_db_scylla"
+    _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_db"
+    _INSTANCE_PROFILE_PARAM_NAME = "aws_instance_profile_name_db"
 
     @computed_field
     @property
     def BlockDeviceMappings(self) -> List[AWSDiskMapping]:
         device_mappings = super().BlockDeviceMappings
-        volume_type = self.params.get('data_volume_disk_type')
-        disk_num = self.params.get('data_volume_disk_num')
+        volume_type = self.params.get("data_volume_disk_type")
+        disk_num = self.params.get("data_volume_disk_num")
         if disk_num == 0:
             return device_mappings
         additional_volumes_ebs_info = AWSDiskMappingEbsInfo(
             DeleteOnTermination=True,
-            VolumeSize=self.params.get('data_volume_disk_size'),
+            VolumeSize=self.params.get("data_volume_disk_size"),
             VolumeType=volume_type,
-            Iops=self.params.get('data_volume_disk_iops') if volume_type in ['io1', 'io2', 'gp3'] else None,
-            Throughput=self.params.get('data_volume_disk_throughput') if volume_type == 'gp3' else None,
+            Iops=self.params.get("data_volume_disk_iops") if volume_type in ["io1", "io2", "gp3"] else None,
+            Throughput=self.params.get("data_volume_disk_throughput") if volume_type == "gp3" else None,
         )
         for disk_char in "fghijklmnop"[:disk_num]:
             device_mappings.append(
@@ -188,24 +193,24 @@ class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
 
 
 class OracleScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db_oracle'
-    _IMAGE_ID_PARAM_NAME = 'ami_id_db_oracle'
-    _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db_oracle"
+    _IMAGE_ID_PARAM_NAME = "ami_id_db_oracle"
+    _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_db"
 
 
 class ScyllaZeroTokenParamsBuilder(ScyllaInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'zero_token_instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
 
 
 # Since AWS Loaders is being built on scylla image we need to base it from ScyllaInstanceParams
 class LoaderInstanceParamsBuilder(AWSInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_loader'
-    _IMAGE_ID_PARAM_NAME = 'ami_id_loader'
-    _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_loader'
-    _INSTANCE_PROFILE_PARAM_NAME = 'aws_instance_profile_name_loader'
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_loader"
+    _IMAGE_ID_PARAM_NAME = "ami_id_loader"
+    _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_loader"
+    _INSTANCE_PROFILE_PARAM_NAME = "aws_instance_profile_name_loader"
 
 
 class MonitorInstanceParamsBuilder(AWSInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_monitor'
-    _IMAGE_ID_PARAM_NAME = 'ami_id_monitor'
-    _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_monitor'
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_monitor"
+    _IMAGE_ID_PARAM_NAME = "ami_id_monitor"
+    _ROOT_DISK_SIZE_PARAM_NAME = "root_disk_size_monitor"

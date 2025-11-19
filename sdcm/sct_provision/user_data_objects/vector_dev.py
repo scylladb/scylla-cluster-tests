@@ -18,10 +18,9 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 @dataclass
 class VectorDevUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
-        return self.params.get('logs_transport') == 'vector'
+        return self.params.get("logs_transport") == "vector"
 
     @property
     def script_to_run(self) -> str:

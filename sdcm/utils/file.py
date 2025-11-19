@@ -32,9 +32,16 @@ class File:
         >>> ).move_to_beginning().readlines() == ['someline\\n', 'someline #1\\n', 'someline #2\\n']
     """
 
-    def __init__(self, path: str, mode: str = 'r', buffering: Optional[int] = None,
-                 encoding: Optional[str] = None, errors: Optional[str] = None, newline: Optional[str] = None,
-                 closefd: bool = True):
+    def __init__(
+        self,
+        path: str,
+        mode: str = "r",
+        buffering: Optional[int] = None,
+        encoding: Optional[str] = None,
+        errors: Optional[str] = None,
+        newline: Optional[str] = None,
+        closefd: bool = True,
+    ):
         self.path = path
         self.mode = mode
         self.buffering = buffering
@@ -58,39 +65,42 @@ class File:
         self._io.close()
 
     def _open(self) -> TextIO:
-        kwargs = {attr_name: getattr(self, attr_name) for attr_name in
-                  ['mode', 'buffering', 'encoding', 'errors', 'closefd'] if getattr(self, attr_name, None) is not None}
+        kwargs = {
+            attr_name: getattr(self, attr_name)
+            for attr_name in ["mode", "buffering", "encoding", "errors", "closefd"]
+            if getattr(self, attr_name, None) is not None
+        }
         return open(self.path, **kwargs)
 
-    def move_to(self, pos) -> 'File':
+    def move_to(self, pos) -> "File":
         self._io.seek(pos)
         return self
 
-    def move_to_end(self) -> 'File':
+    def move_to_end(self) -> "File":
         self._io.seek(0, 2)
         return self
 
-    def move_to_beginning(self) -> 'File':
+    def move_to_beginning(self) -> "File":
         self._io.seek(0)
         return self
 
-    def move_to_relative(self, pos: int) -> 'File':
+    def move_to_relative(self, pos: int) -> "File":
         self._io.seek(pos, 1)
         return self
 
-    def move_to_relative_from_end(self, pos: int = 0) -> 'File':
+    def move_to_relative_from_end(self, pos: int = 0) -> "File":
         self._io.seek(pos, 2)
         return self
 
-    def write(self, any_str: AnyStr) -> 'File':
+    def write(self, any_str: AnyStr) -> "File":
         self._io.write(any_str)
         return self
 
-    def writelines(self, list_of_any_str: List[AnyStr]) -> 'File':
+    def writelines(self, list_of_any_str: List[AnyStr]) -> "File":
         self._io.writelines(list_of_any_str)
         return self
 
-    def seek(self, offset: int, whence: int = 0) -> 'File':
+    def seek(self, offset: int, whence: int = 0) -> "File":
         self._io.seek(offset, whence)
         return self
 
@@ -110,18 +120,21 @@ class File:
         :param return_pattern: If True, it will return tuple of string and pattern
         :return:
         """
+
         def generator():
             for line in self._io:
                 for pattern in patterns:
                     if pattern.search(line):
                         yield line
                         break
+
         return ReiterableGenerator(generator=generator)
 
     def iterate_lines(self) -> Iterable[str]:
         def generator():
             for line in self._io:
                 yield line
+
         return ReiterableGenerator(generator=generator)
 
     def __getattr__(self, item):

@@ -15,14 +15,12 @@ from functools import cached_property
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
-from sdcm.sct_provision.aws.cluster import (
-    OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup)
+from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
 
 
-class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
-
+class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
     @cached_property
     def _test_config(self):
         return TestConfig()

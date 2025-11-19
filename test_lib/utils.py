@@ -12,9 +12,8 @@ class __DEFAULT2__:
 
 
 def get_data_by_path(
-        data: typing.Union[list, dict, object, typing.Type[object]],
-        data_path: str,
-        default: typing.Any = __DEFAULT__):
+    data: typing.Union[list, dict, object, typing.Type[object]], data_path: str, default: typing.Any = __DEFAULT__
+):
     """
     Get data, that could be dict, list, class or instance and go thru it using data_path
 
@@ -28,16 +27,16 @@ def get_data_by_path(
 
     """
     current = data
-    for param_name in data_path.split('.'):
+    for param_name in data_path.split("."):
         value = __DEFAULT__
         if hasattr(current, param_name):
             value = getattr(current, param_name)
-        elif hasattr(current, 'get'):
+        elif hasattr(current, "get"):
             value = current.get(param_name, __DEFAULT__)
-        elif len(param_name) > 3 and param_name[0] == '[' and param_name[-1] == ']':
+        elif len(param_name) > 3 and param_name[0] == "[" and param_name[-1] == "]":
             tmp = param_name[1:-1]
             if tmp.isdecimal():
-                if hasattr(current, '__getitem__'):
+                if hasattr(current, "__getitem__"):
                     tmp = int(param_name[1:-1])
                     if len(current) > tmp:
                         value = current[tmp]
@@ -49,10 +48,7 @@ def get_data_by_path(
     return current
 
 
-def get_class_by_path(
-        cls: typing.Type[object],
-        class_path: str,
-        default: typing.Any = __DEFAULT__):
+def get_class_by_path(cls: typing.Type[object], class_path: str, default: typing.Any = __DEFAULT__):
     """
     Get class go thru it's annotations using class_path
 
@@ -66,9 +62,9 @@ def get_class_by_path(
 
     """
     current = cls
-    for param_name in class_path.split('.'):
+    for param_name in class_path.split("."):
         value = __DEFAULT__
-        if hasattr(current, '__annotations__'):
+        if hasattr(current, "__annotations__"):
             value = current.__annotations__.get(param_name, __DEFAULT__)
         if value is __DEFAULT__:
             if default is __DEFAULT__:
@@ -78,16 +74,13 @@ def get_class_by_path(
     return current
 
 
-GroupByType = typing.Dict[typing.Any, typing.Union['GroupByType', 'MagicList']]
+GroupByType = typing.Dict[typing.Any, typing.Union["GroupByType", "MagicList"]]
 
 
 class MagicList(list):
     def group_by(
-            self,
-            data_path,
-            default: typing.Any = __DEFAULT__,
-            sort_keys=None,
-            group_values: dict = None) -> GroupByType:
+        self, data_path, default: typing.Any = __DEFAULT__, sort_keys=None, group_values: dict = None
+    ) -> GroupByType:
         """
         Groups list content by data_path, do that iterative if group_values is provided and return resulted dict
         data_path: str,  data path to get group value, look at get_data_by_path for more details
@@ -109,29 +102,20 @@ class MagicList(list):
             else:
                 output[idx].append(element)
         if group_values:
-            if 'data_path' not in group_values:
+            if "data_path" not in group_values:
                 raise ValueError("sort_values dict should contains same parameters as needed for sort_by")
             for key, values in list(output.items()):
                 output[key] = MagicList(values).group_by(
-                    data_path=group_values['data_path'],
-                    default=group_values.get('default', __DEFAULT__),
-                    sort_keys=group_values.get('sort_keys', None),
-                    group_values=group_values.get('group_values', None),
+                    data_path=group_values["data_path"],
+                    default=group_values.get("default", __DEFAULT__),
+                    sort_keys=group_values.get("sort_keys", None),
+                    group_values=group_values.get("group_values", None),
                 )
         if sort_keys:
-            return collections.OrderedDict(
-                sorted(
-                    output.items(),
-                    reverse=bool(sort_keys < 0),
-                    key=lambda x: x[0]
-                )
-            )
+            return collections.OrderedDict(sorted(output.items(), reverse=bool(sort_keys < 0), key=lambda x: x[0]))
         return output
 
-    def sort_by(self,
-                data_path: str,
-                default: typing.Any = __DEFAULT__
-                ) -> 'MagicList':
+    def sort_by(self, data_path: str, default: typing.Any = __DEFAULT__) -> "MagicList":
         """
         Returns list of same entities sorted by data_path
         data_path: str,  data_path of keys for sorting, look at get_data_by_path for more details
