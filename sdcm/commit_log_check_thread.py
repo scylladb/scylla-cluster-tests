@@ -12,28 +12,42 @@ from sdcm.rest.remote_curl_client import RemoteCurlClient
 def get_max_disk_size_metric(db_cluster):
     node = db_cluster.nodes[0]
     node.wait_native_transport()
-    return RemoteCurlClient(
-        host="localhost:10000", endpoint="commitlog",
-        node=node).run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None).stdout
+    return (
+        RemoteCurlClient(host="localhost:10000", endpoint="commitlog", node=node)
+        .run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None)
+        .stdout
+    )
 
 
 @dataclass
 class CommitlogConfigParams:
-    def __init__(self, db_cluster, ):
+    def __init__(
+        self,
+        db_cluster,
+    ):
         logger = logging.getLogger(self.__class__.__name__)
         with db_cluster.cql_connection_patient(
-                node=db_cluster.data_nodes[0],
-                connect_timeout=300,) as session:
-            self.use_hard_size_limit = bool(strtobool(session.execute(
-                "SELECT value FROM system.config WHERE name='commitlog_use_hard_size_limit'").one().value))
-            self.segment_size_in_mb = int(session.execute(
-                "SELECT value FROM system.config WHERE name='commitlog_segment_size_in_mb'").one().value)
-            self.max_disk_size = int(RemoteCurlClient(
-                host="localhost:10000", endpoint="commitlog", node=db_cluster.nodes[0]).run_remoter_curl(
-                method="GET", path="metrics/max_disk_size", params=None).stdout)
-            self.smp = len(re.findall(
-                "shard",
-                db_cluster.data_nodes[0].remoter.run('sudo seastar-cpu-map.sh -n scylla').stdout))
+            node=db_cluster.data_nodes[0],
+            connect_timeout=300,
+        ) as session:
+            self.use_hard_size_limit = bool(
+                strtobool(
+                    session.execute("SELECT value FROM system.config WHERE name='commitlog_use_hard_size_limit'")
+                    .one()
+                    .value
+                )
+            )
+            self.segment_size_in_mb = int(
+                session.execute("SELECT value FROM system.config WHERE name='commitlog_segment_size_in_mb'").one().value
+            )
+            self.max_disk_size = int(
+                RemoteCurlClient(host="localhost:10000", endpoint="commitlog", node=db_cluster.nodes[0])
+                .run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None)
+                .stdout
+            )
+            self.smp = len(
+                re.findall("shard", db_cluster.data_nodes[0].remoter.run("sudo seastar-cpu-map.sh -n scylla").stdout)
+            )
             self.total_space = int(self.max_disk_size / self.smp)
 
             logger.debug("CommitlogConfigParams")
@@ -55,16 +69,18 @@ class PrometheusQueries:
     def __init__(self, commitlog_params: CommitlogConfigParams):
         self.overflow_commit_log_directory = self.overflow_commit_log_directory.format(
             commitlog_total_space=commitlog_params.total_space,
-            commitlog_segment_size_in_mb=commitlog_params.segment_size_in_mb
+            commitlog_segment_size_in_mb=commitlog_params.segment_size_in_mb,
         )
 
         self.zero_free_segments = self.zero_free_segments.format(
             commitlog_total_space=commitlog_params.total_space,
-            commitlog_segment_size_in_mb=commitlog_params.segment_size_in_mb
+            commitlog_segment_size_in_mb=commitlog_params.segment_size_in_mb,
         )
+
     # Prometheus queries with detailed description below
-    overflow_commit_log_directory = ("scylla_commitlog_disk_total_bytes>=({commitlog_total_space}"
-                                     "%2B({commitlog_segment_size_in_mb}%2A1048576))")
+    overflow_commit_log_directory = (
+        "scylla_commitlog_disk_total_bytes>=({commitlog_total_space}%2B({commitlog_segment_size_in_mb}%2A1048576))"
+    )
     """
         returns commitlog total size on disk if commit log directory exceed the limit
 
@@ -86,9 +102,10 @@ class PrometheusQueries:
         and return from Prometheus only bad
     """
 
-    zero_free_segments = \
-        ("scylla_commitlog_disk_active_bytes>((scylla_commitlog_disk_total_bytes>={commitlog_total_space})"
-         "%2D({commitlog_segment_size_in_mb}%2A1048576))")
+    zero_free_segments = (
+        "scylla_commitlog_disk_active_bytes>((scylla_commitlog_disk_total_bytes>={commitlog_total_space})"
+        "%2D({commitlog_segment_size_in_mb}%2A1048576))"
+    )
     """
         returns commitlog active size on disk if number of free segments drop to zero
 
@@ -116,14 +133,14 @@ class PrometheusQueries:
 
 class CommitLogCheckThread:
     """
-        if commitlog-use-hard-size-limit is enabled,
-        this thread will check the following metrics during the test:
+    if commitlog-use-hard-size-limit is enabled,
+    this thread will check the following metrics during the test:
 
-        1) commit log directory does not exceed the limit at any stage of the test.
-           if it exceeded - send an error event that fails the test.
+    1) commit log directory does not exceed the limit at any stage of the test.
+       if it exceeded - send an error event that fails the test.
 
-        2) free segments don't drop to zero at any stage of the test,
-        otherwise, send an error event that fails the test.
+    2) free segments don't drop to zero at any stage of the test,
+    otherwise, send an error event that fails the test.
     """
 
     # Prometheus API limit: check_interval/discreteness must be less then 11000
@@ -142,7 +159,8 @@ class CommitLogCheckThread:
         self.start_time = None
 
         self._thread = threading.Thread(
-            daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run_thread)
+            daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run_thread
+        )
         self.termination_event = termination_event
         if not self.termination_event:
             self.termination_event = custer_tester.db_cluster.nemesis_termination_event
@@ -154,7 +172,8 @@ class CommitLogCheckThread:
         else:
             self.log.debug(
                 "CommitLogCheckThread was not started due to commitlog_use_hard_size_limit is %s",
-                self.commitlog_params.use_hard_size_limit)
+                self.commitlog_params.use_hard_size_limit,
+            )
 
     def join(self, timeout=None):
         return self._thread.join(timeout)
@@ -176,7 +195,8 @@ class CommitLogCheckThread:
         except Exception as exc:  # noqa: BLE001
             trace = traceback.format_exc()
             CommitLogCheckErrorEvent(
-                message=f"CommitLogCheckThread failed: {exc.__repr__()} with traceback {trace}").publish()
+                message=f"CommitLogCheckThread failed: {exc.__repr__()} with traceback {trace}"
+            ).publish()
         self.log.debug("CommitLogCheckThread finished")
 
     @staticmethod
@@ -200,20 +220,21 @@ class CommitLogCheckThread:
 
     def overflow_commit_log_directory_checker(self, start_time, end_time):
         response = self.prometheus.query(
-            self.prometheus_queries.overflow_commit_log_directory, start_time, end_time, self.discreteness)
+            self.prometheus_queries.overflow_commit_log_directory, start_time, end_time, self.discreteness
+        )
         self.log.debug("overflow_commit_log_directory: %s", response)
         if response and self.get_commit_log_directory_max_exceed_time(response) > self.exceed_time_interval:
             CommitLogCheckErrorEvent(
-                message=f"commit log directory exceed the limit longer that expected."
-                f" Prometheus response: {response}").publish()
+                message=f"commit log directory exceed the limit longer that expected. Prometheus response: {response}"
+            ).publish()
 
     def zero_free_segments_checker(self, start_time, end_time):
         response = self.prometheus.query(
-            self.prometheus_queries.zero_free_segments, start_time, end_time, self.discreteness)
+            self.prometheus_queries.zero_free_segments, start_time, end_time, self.discreteness
+        )
         self.log.debug("zero_free_segments: %s", response)
         if response:
-            CommitLogCheckErrorEvent(
-                message=f"free segments drop to zero. Prometheus response:: {response}").publish()
+            CommitLogCheckErrorEvent(message=f"free segments drop to zero. Prometheus response:: {response}").publish()
 
     @staticmethod
     def run(custer_tester, duration):
@@ -221,14 +242,16 @@ class CommitLogCheckThread:
         if not (custer_tester.monitors and custer_tester.monitors.nodes):
             CommitLogCheckErrorEvent(
                 severity=Severity.WARNING,
-                message="CommitLogCheckThread will not start due to no monitors in the cluster").publish()
+                message="CommitLogCheckThread will not start due to no monitors in the cluster",
+            ).publish()
             return
 
         if "Not found" in get_max_disk_size_metric(custer_tester.db_cluster):
             CommitLogCheckErrorEvent(
                 severity=Severity.WARNING,
                 message="CommitLogCheckThread will not start due to current scylla version has no "
-                        "commitlog/metrics/max_disk_size endpoint ").publish()
+                "commitlog/metrics/max_disk_size endpoint ",
+            ).publish()
             return
 
         try:
@@ -237,7 +260,8 @@ class CommitLogCheckThread:
             trace = traceback.format_exc()
             CommitLogCheckErrorEvent(
                 message=f"CommitLogCheckThread.__init__ failed with unexpected exception:"
-                f" {exc.__repr__()} with traceback {trace}").publish()
+                f" {exc.__repr__()} with traceback {trace}"
+            ).publish()
         else:
             try:
                 thread.start()
@@ -245,4 +269,5 @@ class CommitLogCheckThread:
                 trace = traceback.format_exc()
                 CommitLogCheckErrorEvent(
                     message=f"CommitLogCheckThread.start failed with unexpected exception:"
-                    f" {exc.__repr__()} with traceback {trace}").publish()
+                    f" {exc.__repr__()} with traceback {trace}"
+                ).publish()

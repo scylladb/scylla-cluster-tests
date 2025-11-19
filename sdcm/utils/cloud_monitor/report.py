@@ -30,7 +30,6 @@ from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 
 
 class BaseReport:
-
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs | None, html_template: str):
         self.cloud_instances = cloud_instances
         self.static_ips = static_ips
@@ -43,8 +42,12 @@ class BaseReport:
 
     def _jinja_render_template(self, **kwargs):
         loader = jinja2.FileSystemLoader(self.templates_dir)
-        env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'],
-                                 finalize=lambda x: x if x != 0 else "")
+        env = jinja2.Environment(
+            loader=loader,
+            autoescape=True,
+            extensions=["jinja2.ext.loopcontrols"],
+            finalize=lambda x: x if x != 0 else "",
+        )
         template = env.get_template(self.html_template)
         html = template.render(**kwargs)
         return html
@@ -56,8 +59,9 @@ class BaseReport:
         return self.render_template()
 
     def to_file(self):
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
-                                         prefix='cloud-report_', delete=False, suffix='.html') as report_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix="cloud-report_", delete=False, suffix=".html"
+        ) as report_file:
             report_file.write(self.to_html())
             return report_file.name
 
@@ -65,11 +69,12 @@ class BaseReport:
 class CloudResourcesReport(BaseReport):
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
         super().__init__(cloud_instances, static_ips, html_template="cloud_resources.html")
-        stats = dict(num_running_instances=0,
-                     num_stopped_instances=0,
-                     unused_static_ips=0,
-                     num_used_static_ips=0,
-                     )
+        stats = dict(
+            num_running_instances=0,
+            num_stopped_instances=0,
+            unused_static_ips=0,
+            num_used_static_ips=0,
+        )
         self.report = {cloud_provider: deepcopy(stats) for cloud_provider in CLOUD_PROVIDERS}
 
     def to_html(self):
@@ -99,8 +104,9 @@ class PerUserSummaryReport(BaseReport):
                 user_type = self.user_type(instance.owner)
                 results = self.report["results"]
                 if instance.owner not in results[user_type]:
-                    stats = dict(num_running_instances_spot=0, num_running_instances_on_demand=0,
-                                 num_stopped_instances=0)
+                    stats = dict(
+                        num_running_instances_spot=0, num_running_instances_on_demand=0, num_stopped_instances=0
+                    )
                     results[user_type][instance.owner] = {cp: deepcopy(stats) for cp in self.report["cloud_providers"]}
                     results[user_type][instance.owner]["num_instances_keep_alive"] = 0
                     results[user_type][instance.owner]["total_cost"] = 0
@@ -153,8 +159,12 @@ class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
     def __init__(self, cloud_instances: CloudInstances, user=None):
         super().__init__(cloud_instances, static_ips=None, html_template="per_qa_user.html")
         self.user = user
-        self.report = {"unknown": defaultdict(list), "7": defaultdict(
-            list), "5": defaultdict(list), "3": defaultdict(list)}
+        self.report = {
+            "unknown": defaultdict(list),
+            "7": defaultdict(list),
+            "5": defaultdict(list),
+            "3": defaultdict(list),
+        }
         self.qa_users = KeyStore().get_qa_users()
 
     def to_html(self):
@@ -181,21 +191,26 @@ class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _is_older_than_3days(create_time):
-        return pytz.utc.localize(datetime.utcnow() - timedelta(days=3)) > create_time > pytz.utc.localize(
-            datetime.utcnow() - timedelta(days=5))
+        return (
+            pytz.utc.localize(datetime.utcnow() - timedelta(days=3))
+            > create_time
+            > pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+        )
 
     @staticmethod
     def _is_older_than_5days(create_time):
-        return pytz.utc.localize(datetime.utcnow() - timedelta(days=5)) > create_time > pytz.utc.localize(
-            datetime.utcnow() - timedelta(days=7))
+        return (
+            pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+            > create_time
+            > pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+        )
 
     @staticmethod
     def _is_older_than_7days(create_time):
         return create_time < pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
 
     @abstractmethod
-    def _is_user_be_skipped(self, instance):
-        ...
+    def _is_user_be_skipped(self, instance): ...
 
     @staticmethod
     def _is_instance_be_skipped(instance):

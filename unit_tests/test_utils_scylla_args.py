@@ -38,16 +38,17 @@ class TestScyllaArgParser(unittest.TestCase):
 
     def test_double_args(self):
         ScyllaArgParser.from_scylla_help(
-            SCYLLA_HELP_EXAMPLE + '\n' + SCYLLA_HELP_EXAMPLE,
+            SCYLLA_HELP_EXAMPLE + "\n" + SCYLLA_HELP_EXAMPLE,
             duplicate_cb=lambda dups: self.assertEqual(
-                ['--help', '--options-file', '--version', '--workdir'], sorted(dups))
+                ["--help", "--options-file", "--version", "--workdir"], sorted(dups)
+            ),
         )
 
     def test_filter_args(self):
         self.assertEqual(
             self.parser.filter_args(
                 "--arg1 arg --version -W arg --arg2 -h --options-file arg",
-                unknown_args_cb=lambda args: self.assertEqual(['--arg1', 'arg', '--arg2'], args)
+                unknown_args_cb=lambda args: self.assertEqual(["--arg1", "arg", "--arg2"], args),
             ),
             "--version --workdir arg --help --options-file arg",
         )

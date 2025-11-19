@@ -1,4 +1,3 @@
-
 import abc
 from typing import Dict, Any, List, Union
 
@@ -25,12 +24,14 @@ class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):
     """
     Base class for provisioner - a class that provide API to provision instances
     """
+
     @abc.abstractmethod
     def provision(
-            self,
-            provision_parameters: ProvisionParameters,
-            instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
-            count: int,
-            tags: Union[List[TagsType], TagsType] = None,
-            names: List[str] = None) -> List[Any]:
+        self,
+        provision_parameters: ProvisionParameters,
+        instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
+        count: int,
+        tags: Union[List[TagsType], TagsType] = None,
+        names: List[str] = None,
+    ) -> List[Any]:
         pass

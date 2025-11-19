@@ -22,9 +22,7 @@ def configure_logging():
             "version": 1,
             "disable_existing_loggers": True,
             "formatters": {
-                "standard": {
-                    "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-                },
+                "standard": {"format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"},
             },
             "handlers": {
                 "default": {
@@ -74,9 +72,7 @@ def update_value(index_name, test_id, new_job_name):
     res = scan(
         elastic_search,
         index=index_name,
-        query={
-            "query": {"query_string": {"query": f'test_details.test_id: "{test_id}"'}}
-        },
+        query={"query": {"query_string": {"query": f'test_details.test_id: "{test_id}"'}}},
         size=300,
         scroll="3h",
     )
@@ -90,9 +86,7 @@ def update_value(index_name, test_id, new_job_name):
             test_data["test_details"]["job_name"],
         )
         test_data["test_details"]["job_name"] = new_job_name
-        elastic_search.update(
-            index=index_name, id=hit["_id"], doc=test_data
-        )
+        elastic_search.update(index=index_name, id=hit["_id"], doc=test_data)
         click.secho(f"updated {test_data['test_details']['test_id']}", fg="green")
 
 
