@@ -41,28 +41,32 @@ class EksClusterCleanupMixin:
 
     @cached_property
     def eks_client(self):
-        return boto3.client('eks', region_name=self.region_name)
+        return boto3.client("eks", region_name=self.region_name)
 
     @cached_property
     def ec2_client(self):
-        return boto3.client('ec2', region_name=self.region_name)
+        return boto3.client("ec2", region_name=self.region_name)
 
     @cached_property
     def iam_client(self):
-        return boto3.client('iam', region_name=self.region_name)
+        return boto3.client("iam", region_name=self.region_name)
 
     @property
     def owned_object_tag_name(self):
-        return f'kubernetes.io/cluster/{self.short_cluster_name}'
+        return f"kubernetes.io/cluster/{self.short_cluster_name}"
 
     @cached_property
     def cluster_owned_objects_filter(self):
-        return [{"Name": f"tag:{self.owned_object_tag_name}", 'Values': ['owned']}]
+        return [{"Name": f"tag:{self.owned_object_tag_name}", "Values": ["owned"]}]
 
     @property
     def attached_security_group_ids(self) -> List[str]:
-        return [group_desc['GroupId'] for group_desc in
-                self.ec2_client.describe_security_groups(Filters=self.cluster_owned_objects_filter)['SecurityGroups']]
+        return [
+            group_desc["GroupId"]
+            for group_desc in self.ec2_client.describe_security_groups(Filters=self.cluster_owned_objects_filter)[
+                "SecurityGroups"
+            ]
+        ]
 
     @property
     def attached_nodegroup_names(self) -> List[str]:
@@ -70,25 +74,29 @@ class EksClusterCleanupMixin:
 
     @property
     def failed_to_delete_nodegroup_names(self) -> List[str]:
-        return self._get_attached_nodegroup_names(status='DELETE_FAILED')
+        return self._get_attached_nodegroup_names(status="DELETE_FAILED")
 
     @property
     def deleting_nodegroup_names(self) -> List[str]:
-        return self._get_attached_nodegroup_names(status='DELETING')
+        return self._get_attached_nodegroup_names(status="DELETING")
 
     def _get_attached_nodegroup_names(self, status: str = None) -> List[str]:
         if status is None:
-            return self.eks_client.list_nodegroups(clusterName=self.short_cluster_name)['nodegroups']
+            return self.eks_client.list_nodegroups(clusterName=self.short_cluster_name)["nodegroups"]
         output = []
         for nodegroup_name in self.attached_nodegroup_names:
-            if status == self.eks_client.describe_nodegroup(
-                    clusterName=self.short_cluster_name, nodegroupName=nodegroup_name)['nodegroup']['status']:
+            if (
+                status
+                == self.eks_client.describe_nodegroup(
+                    clusterName=self.short_cluster_name, nodegroupName=nodegroup_name
+                )["nodegroup"]["status"]
+            ):
                 output.append(nodegroup_name)
         return output
 
     @property
     def cluster_exists(self) -> bool:
-        if self.short_cluster_name in self.eks_client.list_clusters()['clusters']:
+        if self.short_cluster_name in self.eks_client.list_clusters()["clusters"]:
             return True
         return False
 
@@ -96,7 +104,7 @@ class EksClusterCleanupMixin:
         for _ in range(2):
             self.destroy_nodegroups()
             if self.failed_to_delete_nodegroup_names:
-                self.destroy_nodegroups(status='DELETE_FAILED')
+                self.destroy_nodegroups(status="DELETE_FAILED")
             self.destroy_cluster()
             # Destroying of the security groups will affect load balancers and node groups that is why
             # in order to do not distract load balancers cleaning process we should have
@@ -109,30 +117,36 @@ class EksClusterCleanupMixin:
 
     def check_if_all_network_interfaces_detached(self, sg_id):
         for interface_description in self.ec2_client.describe_network_interfaces(
-                Filters=[{'Name': 'group-id', 'Values': [sg_id]}])['NetworkInterfaces']:
-            if attachment := interface_description.get('Attachment'):
-                if attachment.get('AttachmentId'):
+            Filters=[{"Name": "group-id", "Values": [sg_id]}]
+        )["NetworkInterfaces"]:
+            if attachment := interface_description.get("Attachment"):
+                if attachment.get("AttachmentId"):
                     return False
         return True
 
     def delete_network_interfaces_of_sg(self, sg_id: str):
         network_interfaces = self.ec2_client.describe_network_interfaces(
-            Filters=[{'Name': 'group-id', 'Values': [sg_id]}])['NetworkInterfaces']
+            Filters=[{"Name": "group-id", "Values": [sg_id]}]
+        )["NetworkInterfaces"]
 
         for interface_description in network_interfaces:
-            network_interface_id = interface_description['NetworkInterfaceId']
-            if attachment := interface_description.get('Attachment'):
-                if attachment_id := attachment.get('AttachmentId'):
+            network_interface_id = interface_description["NetworkInterfaceId"]
+            if attachment := interface_description.get("Attachment"):
+                if attachment_id := attachment.get("AttachmentId"):
                     try:
                         self.ec2_client.detach_network_interface(AttachmentId=attachment_id, Force=True)
                     except Exception as exc:  # noqa: BLE001
-                        LOGGER.debug("Failed to detach network interface (%s) attachment %s:\n%s",
-                                     network_interface_id, attachment_id, exc)
+                        LOGGER.debug(
+                            "Failed to detach network interface (%s) attachment %s:\n%s",
+                            network_interface_id,
+                            attachment_id,
+                            exc,
+                        )
 
         wait_for(self.check_if_all_network_interfaces_detached, sg_id=sg_id, timeout=120, throw_exc=False)
 
         for interface_description in network_interfaces:
-            network_interface_id = interface_description['NetworkInterfaceId']
+            network_interface_id = interface_description["NetworkInterfaceId"]
             try:
                 self.ec2_client.delete_network_interface(NetworkInterfaceId=network_interface_id)
             except Exception as exc:  # noqa: BLE001
@@ -159,24 +173,30 @@ class EksClusterCleanupMixin:
             try:
                 self.ec2_client.delete_security_group(GroupId=security_group_id)
             except Exception as exc:  # noqa: BLE001
-                LOGGER.debug("Failed to delete security groups %s, due to the following error:\n%s",
-                             security_group_id, exc)
+                LOGGER.debug(
+                    "Failed to delete security groups %s, due to the following error:\n%s", security_group_id, exc
+                )
 
     def destroy_nodegroups(self, status=None):
-
         def _destroy_attached_nodegroups():
             for node_group_name in self._get_attached_nodegroup_names(status=status):
                 try:
                     self.eks_client.delete_nodegroup(clusterName=self.short_cluster_name, nodegroupName=node_group_name)
                 except Exception as exc:  # noqa: BLE001
-                    LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
-                                 self.short_cluster_name, node_group_name, exc)
+                    LOGGER.debug(
+                        "Failed to delete nodegroup %s/%s, due to the following error:\n%s",
+                        self.short_cluster_name,
+                        node_group_name,
+                        exc,
+                    )
             time.sleep(10)
-            return wait_for(lambda: not self._get_attached_nodegroup_names(status='DELETING'),
-                            text='Waiting till target nodegroups are deleted',
-                            step=10,
-                            timeout=300,
-                            throw_exc=False)
+            return wait_for(
+                lambda: not self._get_attached_nodegroup_names(status="DELETING"),
+                text="Waiting till target nodegroups are deleted",
+                step=10,
+                timeout=300,
+                throw_exc=False,
+            )
 
         wait_for(_destroy_attached_nodegroups, timeout=400, throw_exc=False)
 
@@ -184,34 +204,34 @@ class EksClusterCleanupMixin:
         try:
             self.eks_client.delete_cluster(name=self.short_cluster_name)
         except Exception as exc:  # noqa: BLE001
-            LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
-                         self.short_cluster_name, exc)
+            LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s", self.short_cluster_name, exc)
 
     def destroy_oidc_provider(self):
         try:
             oidc_providers = self.iam_client.list_open_id_connect_providers()
             for oidc_provider in oidc_providers["OpenIDConnectProviderList"]:
                 oidc_provider_tags = self.iam_client.list_open_id_connect_provider_tags(
-                    OpenIDConnectProviderArn=oidc_provider["Arn"])["Tags"]
+                    OpenIDConnectProviderArn=oidc_provider["Arn"]
+                )["Tags"]
                 for oidc_provider_tag in oidc_provider_tags:
                     if "cluster-name" not in oidc_provider_tag.get("Key", "key-not-found"):
                         continue
                     if oidc_provider_tag.get("Value", "value-not-found") == self.short_cluster_name:
-                        self.iam_client.delete_open_id_connect_provider(
-                            OpenIDConnectProviderArn=oidc_provider["Arn"])
+                        self.iam_client.delete_open_id_connect_provider(OpenIDConnectProviderArn=oidc_provider["Arn"])
                         break
                 else:
                     continue
                 break
             else:
                 LOGGER.warning(
-                    "Couldn't find any OIDC provider associated with the '%s' EKS cluster",
-                    self.short_cluster_name)
+                    "Couldn't find any OIDC provider associated with the '%s' EKS cluster", self.short_cluster_name
+                )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
-                "Failed to delete OIDC provider for the '%s' cluster due to "
-                "the following error:\n%s",
-                self.short_cluster_name, exc)
+                "Failed to delete OIDC provider for the '%s' cluster due to the following error:\n%s",
+                self.short_cluster_name,
+                exc,
+            )
 
 
 class EksClusterForCleaner(EksClusterCleanupMixin):
@@ -219,82 +239,83 @@ class EksClusterForCleaner(EksClusterCleanupMixin):
         self.short_cluster_name = name
         self.name = name
         self.region_name = region
-        self.body = self.eks_client.describe_cluster(name=name)['cluster']
+        self.body = self.eks_client.describe_cluster(name=name)["cluster"]
 
     @cached_property
     def metadata(self) -> dict:
-        metadata = self.body['tags'].items()
-        return {"items": [{"key": key, "value": value} for key, value in metadata], }
+        metadata = self.body["tags"].items()
+        return {
+            "items": [{"key": key, "value": value} for key, value in metadata],
+        }
 
     @cached_property
     def create_time(self):
-        return self.body['createdAt']
+        return self.body["createdAt"]
 
 
 def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: List):
-    if monitor_info['n_nodes'] is None:
-        monitor_info['n_nodes'] = params.get('n_monitor_nodes')
-    if monitor_info['type'] is None:
-        monitor_info['type'] = params.get('instance_type_monitor')
-    if monitor_info['disk_size'] is None:
-        monitor_info['disk_size'] = params.get('root_disk_size_monitor')
-    if monitor_info['device_mappings'] is None:
-        if monitor_info['disk_size']:
-            monitor_info['device_mappings'] = [{
-                "DeviceName": ec2_ami_get_root_device_name(image_id=params.get('ami_id_monitor').split()[0],
-                                                           region_name=regions[0]),
-                "Ebs": {
-                    "VolumeSize": monitor_info['disk_size'],
-                    "VolumeType": "gp3"
+    if monitor_info["n_nodes"] is None:
+        monitor_info["n_nodes"] = params.get("n_monitor_nodes")
+    if monitor_info["type"] is None:
+        monitor_info["type"] = params.get("instance_type_monitor")
+    if monitor_info["disk_size"] is None:
+        monitor_info["disk_size"] = params.get("root_disk_size_monitor")
+    if monitor_info["device_mappings"] is None:
+        if monitor_info["disk_size"]:
+            monitor_info["device_mappings"] = [
+                {
+                    "DeviceName": ec2_ami_get_root_device_name(
+                        image_id=params.get("ami_id_monitor").split()[0], region_name=regions[0]
+                    ),
+                    "Ebs": {"VolumeSize": monitor_info["disk_size"], "VolumeType": "gp3"},
                 }
-            }]
+            ]
         else:
-            monitor_info['device_mappings'] = []
+            monitor_info["device_mappings"] = []
     return monitor_info
 
 
 def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_device: str = None):
-    if db_info['n_nodes'] is None:
-        db_info['n_nodes'] = params.total_db_nodes
-    if db_info['type'] is None:
-        db_info['type'] = params.get('instance_type_db')
-    if db_info['disk_size'] is None:
-        db_info['disk_size'] = params.get('root_disk_size_db')
-    if db_info['device_mappings'] is None and (root_device or params.get('ami_id_db_scylla')):
-        if db_info['disk_size']:
-            root_device = root_device if root_device else ec2_ami_get_root_device_name(
-                image_id=params.get('ami_id_db_scylla').split()[0],
-                region_name=regions[0])
-            db_info['device_mappings'] = [{
-                "DeviceName": root_device,
-                "Ebs": {
-                    "VolumeSize": db_info['disk_size'],
-                    "VolumeType": "gp3"
-                }
-            }]
+    if db_info["n_nodes"] is None:
+        db_info["n_nodes"] = params.total_db_nodes
+    if db_info["type"] is None:
+        db_info["type"] = params.get("instance_type_db")
+    if db_info["disk_size"] is None:
+        db_info["disk_size"] = params.get("root_disk_size_db")
+    if db_info["device_mappings"] is None and (root_device or params.get("ami_id_db_scylla")):
+        if db_info["disk_size"]:
+            root_device = (
+                root_device
+                if root_device
+                else ec2_ami_get_root_device_name(
+                    image_id=params.get("ami_id_db_scylla").split()[0], region_name=regions[0]
+                )
+            )
+            db_info["device_mappings"] = [
+                {"DeviceName": root_device, "Ebs": {"VolumeSize": db_info["disk_size"], "VolumeType": "gp3"}}
+            ]
         else:
-            db_info['device_mappings'] = []
+            db_info["device_mappings"] = []
 
         additional_ebs_volumes_num = params.get("data_volume_disk_num")
         if additional_ebs_volumes_num > 0:
-            ebs_info = {"DeleteOnTermination": True,
-                        "VolumeType": params.get("data_volume_disk_type"),
-                        "VolumeSize": params.get('data_volume_disk_size')}
+            ebs_info = {
+                "DeleteOnTermination": True,
+                "VolumeType": params.get("data_volume_disk_type"),
+                "VolumeSize": params.get("data_volume_disk_size"),
+            }
 
-            if ebs_info['VolumeType'] in ['io1', 'io2', 'gp3']:
-                ebs_info["Iops"] = params.get('data_volume_disk_iops')
+            if ebs_info["VolumeType"] in ["io1", "io2", "gp3"]:
+                ebs_info["Iops"] = params.get("data_volume_disk_iops")
             if ebs_info["VolumeType"] == "gp3":
                 ebs_info["Throughput"] = params.get("data_volume_disk_throughput")
 
             for disk_char in "fghijklmnop"[:additional_ebs_volumes_num]:
-                ebs_volume = {
-                    "DeviceName": f"/dev/xvd{disk_char}",
-                    "Ebs": ebs_info
-                }
+                ebs_volume = {"DeviceName": f"/dev/xvd{disk_char}", "Ebs": ebs_info}
 
-                db_info['device_mappings'].append(ebs_volume)
+                db_info["device_mappings"].append(ebs_volume)
 
-        LOGGER.debug(db_info['device_mappings'])
+        LOGGER.debug(db_info["device_mappings"])
     return db_info
 
 
@@ -312,9 +333,9 @@ class EC2NetworkConfiguration:
             aws_region = AwsRegion(region_name=region)
             ec2_subnet_ids[region] = {}
             for availability_zone in self.availability_zones:
-                ec2_subnet_ids[region][availability_zone] = self.subnets_per_availability_zone(region=region,
-                                                                                               aws_region=aws_region,
-                                                                                               availability_zone=availability_zone)
+                ec2_subnet_ids[region][availability_zone] = self.subnets_per_availability_zone(
+                    region=region, aws_region=aws_region, availability_zone=availability_zone
+                )
         LOGGER.debug("All ec2 subnet ids: %s", ec2_subnet_ids)
         return ec2_subnet_ids
 
@@ -341,8 +362,9 @@ class EC2NetworkConfiguration:
     def security_groups(self):
         ec2_security_group_ids = []
         for region in self.regions:
-            ec2_security_group_ids.append(self.region_security_groups(region=region,
-                                                                      aws_region=AwsRegion(region_name=region)))
+            ec2_security_group_ids.append(
+                self.region_security_groups(region=region, aws_region=AwsRegion(region_name=region))
+            )
         return ec2_security_group_ids
 
     def region_security_groups(self, region: str, aws_region: AwsRegion):
@@ -351,7 +373,7 @@ class EC2NetworkConfiguration:
         assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
         security_groups.append(sct_sg.group_id)
 
-        if ssh_connection_ip_type(self.params) == 'public':
+        if ssh_connection_ip_type(self.params) == "public":
             test_config = TestConfig()
             test_id = test_config.test_id()
 
@@ -360,17 +382,21 @@ class EC2NetworkConfiguration:
         return security_groups
 
 
-def get_common_params(params: dict, regions: List, credentials: List, services: List, availability_zone: str = None) -> dict:
-    availability_zones = [availability_zone] if availability_zone else params.get('availability_zone').split(',')
+def get_common_params(
+    params: dict, regions: List, credentials: List, services: List, availability_zone: str = None
+) -> dict:
+    availability_zones = [availability_zone] if availability_zone else params.get("availability_zone").split(",")
     ec2_network_configuration = EC2NetworkConfiguration(
-        regions=regions, availability_zones=availability_zones, params=params)
-    return dict(ec2_security_group_ids=ec2_network_configuration.security_groups,
-                ec2_subnet_id=ec2_network_configuration.subnets,
-                services=services,
-                credentials=credentials,
-                user_prefix=params.get('user_prefix'),
-                params=params,
-                )
+        regions=regions, availability_zones=availability_zones, params=params
+    )
+    return dict(
+        ec2_security_group_ids=ec2_network_configuration.security_groups,
+        ec2_subnet_id=ec2_network_configuration.subnets,
+        services=services,
+        credentials=credentials,
+        user_prefix=params.get("user_prefix"),
+        params=params,
+    )
 
 
 def get_ec2_network_configuration(regions: list[str], availability_zones: list[str], params: dict):
@@ -390,7 +416,7 @@ def get_ec2_network_configuration(regions: list[str], availability_zones: list[s
         assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
         security_groups.append(sct_sg.group_id)
 
-        if ssh_connection_ip_type(params) == 'public':
+        if ssh_connection_ip_type(params) == "public":
             test_config = TestConfig()
             test_id = test_config.test_id()
 
@@ -406,7 +432,7 @@ def get_ec2_services(regions):
     services = []
     for region in regions:
         session = boto3.session.Session(region_name=region)
-        service = session.resource('ec2')
+        service = session.resource("ec2")
         services.append(service)
     return services
 
@@ -419,8 +445,12 @@ class PublicIpNotReady(Exception):
     pass
 
 
-@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady, botocore.exceptions.ClientError),
-          message="Waiting for instance to get public ip")
+@retrying(
+    n=90,
+    sleep_time=10,
+    allowed_exceptions=(PublicIpNotReady, botocore.exceptions.ClientError),
+    message="Waiting for instance to get public ip",
+)
 def ec2_instance_wait_public_ip(instance):
     instance.reload()
     if instance.public_ip_address is None:
@@ -429,7 +459,7 @@ def ec2_instance_wait_public_ip(instance):
 
 
 def ec2_ami_get_root_device_name(image_id, region_name):
-    ec2_resource = boto3.resource('ec2', region_name)
+    ec2_resource = boto3.resource("ec2", region_name)
 
     for client in (ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)):
         try:
@@ -443,13 +473,13 @@ def ec2_ami_get_root_device_name(image_id, region_name):
 
 @functools.cache
 def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArchType:
-    arch = 'x86_64'
+    arch = "x86_64"
     if instance_type:
-        client: EC2Client = boto3.client('ec2', region_name=region_name)
+        client: EC2Client = boto3.client("ec2", region_name=region_name)
         instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
 
         try:
-            arch = instance_type_info['InstanceTypes'][0].get('ProcessorInfo', {}).get('SupportedArchitectures')[0]
+            arch = instance_type_info["InstanceTypes"][0].get("ProcessorInfo", {}).get("SupportedArchitectures")[0]
         except (IndexError, KeyError):
             pass
     return arch
@@ -458,15 +488,17 @@ def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArch
 def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
     session = boto3.Session()
     sts = session.client("sts", region_name=region_name)
-    role_info = KeyStore().get_json('aws_images_role.json')
+    role_info = KeyStore().get_json("aws_images_role.json")
     response = sts.assume_role(
-        RoleArn=role_info['role_arn'],
-        RoleSessionName=role_info['role_session_name'],
+        RoleArn=role_info["role_arn"],
+        RoleSessionName=role_info["role_session_name"],
     )
 
-    new_session = boto3.Session(aws_access_key_id=response['Credentials']['AccessKeyId'],
-                                aws_secret_access_key=response['Credentials']['SecretAccessKey'],
-                                aws_session_token=response['Credentials']['SessionToken'])
+    new_session = boto3.Session(
+        aws_access_key_id=response["Credentials"]["AccessKeyId"],
+        aws_secret_access_key=response["Credentials"]["SecretAccessKey"],
+        aws_session_token=response["Credentials"]["SessionToken"],
+    )
 
     return new_session.resource("ec2", region_name=region_name)
 
@@ -486,15 +518,17 @@ def get_scylla_images_ec2_client(region_name: str) -> EC2Client:
     """
     session = boto3.Session()
     sts = session.client("sts", region_name=region_name)
-    role_info = KeyStore().get_json('aws_images_role.json')
+    role_info = KeyStore().get_json("aws_images_role.json")
     response = sts.assume_role(
-        RoleArn=role_info['role_arn'],
-        RoleSessionName=role_info['role_session_name'],
+        RoleArn=role_info["role_arn"],
+        RoleSessionName=role_info["role_session_name"],
     )
 
-    new_session = boto3.Session(aws_access_key_id=response['Credentials']['AccessKeyId'],
-                                aws_secret_access_key=response['Credentials']['SecretAccessKey'],
-                                aws_session_token=response['Credentials']['SessionToken'])
+    new_session = boto3.Session(
+        aws_access_key_id=response["Credentials"]["AccessKeyId"],
+        aws_secret_access_key=response["Credentials"]["SecretAccessKey"],
+        aws_session_token=response["Credentials"]["SessionToken"],
+    )
 
     return new_session.client("ec2", region_name=region_name)
 
@@ -509,9 +543,9 @@ def get_ssm_ami(parameter: str, region_name) -> str:
 
     Ref: https://discourse.ubuntu.com/t/finding-ubuntu-images-with-the-aws-ssm-parameter-store/15507
     """
-    client = boto3.client('ssm', region_name=region_name)
+    client = boto3.client("ssm", region_name=region_name)
     value = client.get_parameter(Name=parameter)
-    return value['Parameter']['Value']
+    return value["Parameter"]["Value"]
 
 
 def is_using_aws_mock() -> bool:
@@ -537,16 +571,16 @@ def get_by_owner_ami(parameter: str, region_name) -> str:
     - '131827586825/x86_64/OL8.*' - it's oracle linux 8, and we want the latest one
 
     """
-    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
-    owner, arch, name_filter = parameter.split('/')
+    owner, arch, name_filter = parameter.split("/")
     assert arch in get_args(AwsArchType)
 
     images = ec2_resource.images.filter(
         Owners=[owner],
         Filters=[
-            {'Name': 'name', 'Values': [name_filter]},
-            {'Name': 'architecture', 'Values': [arch]},
+            {"Name": "name", "Values": [name_filter]},
+            {"Name": "architecture", "Values": [arch]},
         ],
     )
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
@@ -558,11 +592,11 @@ def aws_check_instance_type_supported(instance_type: str, region_name: str) -> b
     """
     check if the instance type is supported in the region
     """
-    client: EC2Client = boto3.client('ec2', region_name=region_name)
+    client: EC2Client = boto3.client("ec2", region_name=region_name)
     try:
         client.describe_instance_types(InstanceTypes=[instance_type])
     except ClientError as exc:
-        if exc.response['Error']['Code'] == 'InvalidInstanceType':
+        if exc.response["Error"]["Code"] == "InvalidInstanceType":
             return False
         raise
     return True
@@ -576,7 +610,7 @@ class AwsIAM:
 
     @cached_property
     def iam_client(self):
-        return boto3.client('iam')
+        return boto3.client("iam")
 
     def get_full_arn(self, policy_name, policy_type):
         if policy_type == "policy":
@@ -589,10 +623,10 @@ class AwsIAM:
 
     def get_policy_by_name_prefix(self, prefix: str) -> list[str]:
         policies = []
-        paginator = self.iam_client.get_paginator('list_policies')
+        paginator = self.iam_client.get_paginator("list_policies")
         for page in paginator.paginate():
-            for policy in page['Policies']:
-                policy_name = policy['PolicyName']
+            for policy in page["Policies"]:
+                policy_name = policy["PolicyName"]
                 if policy_name.startswith(prefix):
                     policies.append(self.get_full_arn(policy_name=policy_name, policy_type="policy"))
         return policies
@@ -600,20 +634,17 @@ class AwsIAM:
     def add_resource_to_iam_policy(self, policy_arn: str, resource_to_add: str) -> None:
         policy = self.iam_client.get_policy(PolicyArn=policy_arn)
         policy_version = self.iam_client.get_policy_version(
-            PolicyArn=policy_arn,
-            VersionId=policy['Policy']['DefaultVersionId']
+            PolicyArn=policy_arn, VersionId=policy["Policy"]["DefaultVersionId"]
         )
-        policy_document = policy_version['PolicyVersion']['Document']
+        policy_document = policy_version["PolicyVersion"]["Document"]
 
-        for statement in policy_document['Statement']:
-            if statement['Effect'] == 'Allow':
-                if "/*" in statement['Resource'][0]:
-                    statement['Resource'].append(resource_to_add + "/*")
+        for statement in policy_document["Statement"]:
+            if statement["Effect"] == "Allow":
+                if "/*" in statement["Resource"][0]:
+                    statement["Resource"].append(resource_to_add + "/*")
                 else:
-                    statement['Resource'].append(resource_to_add)
+                    statement["Resource"].append(resource_to_add)
 
         self.iam_client.create_policy_version(
-            PolicyArn=policy_arn,
-            PolicyDocument=json.dumps(policy_document),
-            SetAsDefault=True
+            PolicyArn=policy_arn, PolicyDocument=json.dumps(policy_document), SetAsDefault=True
         )

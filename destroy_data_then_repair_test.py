@@ -18,16 +18,16 @@ from sdcm import nemesis
 
 
 class CorruptThenRepair(ClusterTester):
-
     def test_destroy_data_then_repair_test_nodes(self):
         # populates 100GB
         write_queue = self.populate_data_parallel(100, blocking=False)
 
-        self.db_cluster.wait_total_space_used_per_node(50 * (1024 ** 3))  # calculates 50gb in bytes
+        self.db_cluster.wait_total_space_used_per_node(50 * (1024**3))  # calculates 50gb in bytes
 
         # run rebuild
         current_nemesis = nemesis.CorruptThenRepairMonkey(
-            tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event)
+            tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event
+        )
         current_nemesis.disrupt()
 
         for stress in write_queue:

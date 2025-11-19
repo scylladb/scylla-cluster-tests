@@ -18,27 +18,23 @@ def generate_nemesis_yaml(file_opener=open):
     registry = NemesisRegistry(Nemesis, NemesisFlags, COMPLEX_NEMESIS)
     class_properties, method_properties = registry.gather_properties()
     sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
-    with file_opener(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
+    with file_opener(sct_abs_path("data_dir/nemesis.yml"), "w", encoding="utf-8") as outfile1:
         yaml.dump(sorted_dict, outfile1, default_flow_style=False)
 
-    with file_opener(sct_abs_path('data_dir/nemesis_classes.yml'), 'w', encoding="utf-8") as outfile2:
+    with file_opener(sct_abs_path("data_dir/nemesis_classes.yml"), "w", encoding="utf-8") as outfile2:
         yaml.dump(sorted(class_properties.keys()), outfile2, default_flow_style=False)
 
 
 class NemesisJobGenerator:
     """Generates Config files and pipelines for all nemesis"""
-    BACKEND_TO_REGION = {
-        "aws": "eu-west-1",
-        "gce": "us-east1",
-        "azure": "eastus",
-        "docker": "eu-west-1"
-    }
 
-    BACKEND_CONFIGS = {
-        "docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]
-    }
+    BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
 
-    def __init__(self, file_opener=open, base_job: str = None, base_dir: str | Path = Path("../.."), backends: list[str] = None):
+    BACKEND_CONFIGS = {"docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]}
+
+    def __init__(
+        self, file_opener=open, base_job: str = None, base_dir: str | Path = Path("../.."), backends: list[str] = None
+    ):
         self.file_opener = file_opener
         self.base_dir = base_dir if isinstance(base_dir, Path) else Path(base_dir)
         self.verify_env()
@@ -96,8 +92,7 @@ class NemesisJobGenerator:
     def create_test_cases_from_template(self):
         for cls in self.nemesis_class_list:
             new_config_name = f"{cls}.yaml"
-            nemesis_config_body = Template(self.nemesis_config_template_content).render(
-                {"nemesis_class": cls})
+            nemesis_config_body = Template(self.nemesis_config_template_content).render({"nemesis_class": cls})
             target_config = self.nemesis_test_config_dir / new_config_name
             with self.file_opener(target_config, "w") as file:
                 file.write(nemesis_config_body)
@@ -122,12 +117,12 @@ class NemesisJobGenerator:
                         "params": {
                             "backend": backend,
                             "region": self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
-                            "test_name": 'longevity_test.LongevityTest.test_custom_time',
+                            "test_name": "longevity_test.LongevityTest.test_custom_time",
                             "test_config": config_name,
                             **additional_params,
                         }
-
-                    })
+                    }
+                )
                 job_path = self.base_nemesis_job_dir / job_file_name
                 with self.file_opener(job_path, "w") as file:
                     file.write(nemesis_job_groovy_source + "\n")
@@ -136,13 +131,11 @@ class NemesisJobGenerator:
         params = params if params else {}
         base_config_body = Template(self.nemesis_base_config_file_template).render(params)
         with self.file_opener(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml", "w") as file:
-            file.write(base_config_body + '\n')
+            file.write(base_config_body + "\n")
 
     def verify_env(self):
-        assert self.template_path.exists(), \
-            "Nemesis template directory is missing, cannot continue"
-        assert self.nemesis_class_list_path.exists(), \
-            "Nemesis class list is not generated, cannot continue"
+        assert self.template_path.exists(), "Nemesis template directory is missing, cannot continue"
+        assert self.nemesis_class_list_path.exists(), "Nemesis class list is not generated, cannot continue"
 
         if not self.nemesis_test_config_dir.exists():
             self.nemesis_test_config_dir.mkdir()

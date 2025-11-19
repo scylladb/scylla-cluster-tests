@@ -31,7 +31,7 @@ RAW_ALERT = dict(
         instance="[10.0.201.178]",
         job="scylla",
         monitor="scylla-monitor",
-        sct_severity='ERROR',
+        sct_severity="ERROR",
     ),
 )
 
@@ -49,7 +49,7 @@ class TestPrometheusAlertManagerEvent(unittest.TestCase):
             "start=2019-12-24T17:00:09.591Z end=2019-12-26T06:21:09.591Z "
             "description=[10.0.201.178] has been down for more than 30 seconds. updated=2019-12-26T06:18:09.593Z "
             "state= fingerprint=None labels={'alertname': 'InstanceDown', 'instance': '[10.0.201.178]', 'job': 'scylla'"
-            ", 'monitor': 'scylla-monitor', 'sct_severity': 'ERROR'}"
+            ", 'monitor': 'scylla-monitor', 'sct_severity': 'ERROR'}",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 

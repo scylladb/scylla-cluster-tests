@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-scylla_qa_internal_path = Path(__file__).resolve().parents[2] / 'scylla-qa-internal'
+scylla_qa_internal_path = Path(__file__).resolve().parents[2] / "scylla-qa-internal"
 
 # if scylla-qa-internal already exists, add it to the Python path
 # TODO: make this support multiple paths if needed
@@ -43,5 +43,6 @@ except ImportError:
 
         def xcloud_connect_get_vs_ssh_address(self, node):
             raise NotImplementedError(not_supported_message)
+
 
 __all__ = ["XCloudConnectivityContainerMixin"]

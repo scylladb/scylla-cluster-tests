@@ -35,7 +35,7 @@ class CompactionStrategy(Enum):
 
 @dataclass
 class TimeWindowCompactionProperties:
-    class_name: str = ''
+    class_name: str = ""
     compaction_window_unit: Optional[str] = None
     compaction_window_size: Optional[int] = None
     expired_sstable_check_frequency_seconds: Optional[int] = None
@@ -58,20 +58,21 @@ def get_gc_mode(node: BaseNode, keyspace: str, table: str) -> str | GcMode:
     """
     table_gc_mode_result = node.run_cqlsh(
         f"SELECT extensions FROM system_schema.tables where keyspace_name = '{keyspace}' and table_name = '{table}'",
-        split=True)
+        split=True,
+    )
     LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, table_gc_mode_result)
-    gc_mode = 'N/A'
+    gc_mode = "N/A"
     if table_gc_mode_result and len(table_gc_mode_result) >= 4:
         extensions_value = table_gc_mode_result[3]
         # TODO: A temporary workaround until 5.0 query-table-extensions issue is fixed:
         # https://github.com/scylladb/scylla/issues/10309
-        if '6d6f646506000000' in extensions_value:
+        if "6d6f646506000000" in extensions_value:
             return GcMode.REPAIR
-        elif '6d6f646507000000' in extensions_value:
+        elif "6d6f646507000000" in extensions_value:
             return GcMode.TIMEOUT
-        elif '6d6f646509000000' in extensions_value:
+        elif "6d6f646509000000" in extensions_value:
             return GcMode.IMMEDIATE
-        elif '6d6f646508000000' in extensions_value:
+        elif "6d6f646508000000" in extensions_value:
             return GcMode.DISABLED
 
     LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, gc_mode)
@@ -86,16 +87,17 @@ def get_compaction_strategy(node, keyspace, table):
         keyspace
         table
     """
-    list_tables_compaction = node.run_cqlsh('SELECT keyspace_name, table_name, compaction FROM system_schema.tables',
-                                            split=True)
-    compaction = 'N/A'
+    list_tables_compaction = node.run_cqlsh(
+        "SELECT keyspace_name, table_name, compaction FROM system_schema.tables", split=True
+    )
+    compaction = "N/A"
     for row in list_tables_compaction:
-        if '|' not in row:
+        if "|" not in row:
             continue
-        list_stripped_values = [val.strip() for val in row.split('|')]
+        list_stripped_values = [val.strip() for val in row.split("|")]
         if list_stripped_values[0] == keyspace and list_stripped_values[1] == table:
             dict_compaction_values = yaml.safe_load(list_stripped_values[2])
-            compaction = CompactionStrategy.from_str(output_str=dict_compaction_values['class'])
+            compaction = CompactionStrategy.from_str(output_str=dict_compaction_values["class"])
             break
 
     LOGGER.debug("Query result for {}.{} compaction is: {}".format(keyspace, table, compaction))
@@ -103,8 +105,9 @@ def get_compaction_strategy(node, keyspace, table):
 
 
 def get_table_compaction_info(keyspace: str, table: str, session: object):
-
-    query = f"SELECT compaction FROM system_schema.tables WHERE keyspace_name = '{keyspace}' AND table_name = '{table}';"
+    query = (
+        f"SELECT compaction FROM system_schema.tables WHERE keyspace_name = '{keyspace}' AND table_name = '{table}';"
+    )
     result = session.execute(query).one()
     LOGGER.debug(f"Query result for {keyspace}.{table} compaction is: {result}")
 
@@ -112,7 +115,7 @@ def get_table_compaction_info(keyspace: str, table: str, session: object):
         compaction_dict = result.compaction
         compaction_properties = TimeWindowCompactionProperties.from_dict(data=compaction_dict)
     else:
-        compaction_properties = TimeWindowCompactionProperties(class_name='')
+        compaction_properties = TimeWindowCompactionProperties(class_name="")
 
     return compaction_properties
 
@@ -131,15 +134,23 @@ def get_compaction_random_additional_params(strategy: CompactionStrategy):
 
     # doc : https://github.com/scylladb/scylladb/blob/d543b96d1837c73f2ded42d4c5c8de17005c2f36/docs/cql/compaction.rst
     list_additional_params_options = {
-        CompactionStrategy.LEVELED: [{'sstable_size_in_mb': sstable_size_in_mb}],
-        CompactionStrategy.SIZE_TIERED:
-            [{'bucket_high': bucket_high}, {'bucket_low': bucket_low}, {'min_sstable_size': min_sstable_size},
-             {'min_threshold': min_threshold}, {'max_threshold': max_threshold}],
-        CompactionStrategy.TIME_WINDOW: [{'min_threshold': min_threshold}, {'max_threshold': max_threshold}],
-        CompactionStrategy.INCREMENTAL:
-            [{'bucket_high': bucket_high}, {'bucket_low': bucket_low}, {'min_sstable_size': min_sstable_size},
-             {'min_threshold': min_threshold}, {'max_threshold': max_threshold},
-             {'sstable_size_in_mb': sstable_size_in_mb}]
+        CompactionStrategy.LEVELED: [{"sstable_size_in_mb": sstable_size_in_mb}],
+        CompactionStrategy.SIZE_TIERED: [
+            {"bucket_high": bucket_high},
+            {"bucket_low": bucket_low},
+            {"min_sstable_size": min_sstable_size},
+            {"min_threshold": min_threshold},
+            {"max_threshold": max_threshold},
+        ],
+        CompactionStrategy.TIME_WINDOW: [{"min_threshold": min_threshold}, {"max_threshold": max_threshold}],
+        CompactionStrategy.INCREMENTAL: [
+            {"bucket_high": bucket_high},
+            {"bucket_low": bucket_low},
+            {"min_sstable_size": min_sstable_size},
+            {"min_threshold": min_threshold},
+            {"max_threshold": max_threshold},
+            {"sstable_size_in_mb": sstable_size_in_mb},
+        ],
     }
     return list_additional_params_options[strategy]
 
@@ -151,14 +162,14 @@ def calculate_allowed_twcs_ttl(
 ):
     # TODO retrieve twcs_max_window_count from scylla
     compaction_window_size = int(compaction_properties.compaction_window_size or 1)
-    compaction_window_unit = (compaction_properties.compaction_window_unit or 'DAYS').upper()
-    LOGGER.debug(f'Compaction window size: {compaction_window_size}, Unit: {compaction_window_unit}')
+    compaction_window_unit = (compaction_properties.compaction_window_unit or "DAYS").upper()
+    LOGGER.debug(f"Compaction window size: {compaction_window_size}, Unit: {compaction_window_unit}")
 
     unit_multipliers = {
-        'MINUTES': 60,
-        'HOURS': 3600,
-        'DAYS': 86400,
-        'WEEKS': 604800,
+        "MINUTES": 60,
+        "HOURS": 3600,
+        "DAYS": 86400,
+        "WEEKS": 604800,
     }
     multiplier = unit_multipliers.get(compaction_window_unit, 86400)
     window_size_in_seconds = compaction_window_size * multiplier

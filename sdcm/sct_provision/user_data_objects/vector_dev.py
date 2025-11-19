@@ -12,16 +12,19 @@
 # Copyright (c) 2025 ScyllaDB
 from dataclasses import dataclass
 
-from sdcm.provision.common.utils import configure_vector_target_script, install_vector_service, configure_backoff_timeout
+from sdcm.provision.common.utils import (
+    configure_vector_target_script,
+    install_vector_service,
+    configure_backoff_timeout,
+)
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
 @dataclass
 class VectorDevUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
-        return self.params.get('logs_transport') == 'vector'
+        return self.params.get("logs_transport") == "vector"
 
     @property
     def script_to_run(self) -> str:
