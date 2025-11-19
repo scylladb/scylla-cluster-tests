@@ -6,7 +6,7 @@ on:
 
 jobs:
   collect_n_upload:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     # run only on main repository, won't work on forks
     if: github.repository == 'scylladb/scylla-cluster-tests'
     steps:
