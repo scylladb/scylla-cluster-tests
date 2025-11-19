@@ -24,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class NemesisElasticSearchPublisher:
-    index_name = 'nemesis_data'
+    index_name = "nemesis_data"
     es: Elasticsearch
     error_message_size_limit_mb = 100
 
@@ -39,34 +39,34 @@ class NemesisElasticSearchPublisher:
     @cached_property
     def stats(self):
         _stats = {}
-        _stats['versions'] = self.tester.get_scylla_versions()
-        _stats['test_details'] = self.tester.get_test_details()
-        _stats['test_details']['test_name'] = self.tester.id()
+        _stats["versions"] = self.tester.get_scylla_versions()
+        _stats["test_details"] = self.tester.get_test_details()
+        _stats["test_details"]["test_name"] = self.tester.id()
         return _stats
 
     def publish(self, disrupt_name, status=True, data=None):
         test_data = self.stats
         assert test_data, "without self.stats data we can't publish nemesis ES"
-        if 'scylla-server' in test_data['versions']:
-            version = test_data['versions']['scylla-server'].get('version', '')
-            commit_id = test_data['versions']['scylla-server'].get('commit_id', '')
-            commit_date = test_data['versions']['scylla-server'].get('date', '')
-            build_id = test_data['versions']['scylla-server'].get('build_id', '')
-        elif 'version' in test_data['versions']:
-            version = test_data['versions'].get('version', '')
-            commit_id = test_data['versions'].get('commit_id', '')
-            commit_date = test_data['versions'].get('date', '')
-            build_id = test_data['versions'].get('build_id', '')
+        if "scylla-server" in test_data["versions"]:
+            version = test_data["versions"]["scylla-server"].get("version", "")
+            commit_id = test_data["versions"]["scylla-server"].get("commit_id", "")
+            commit_date = test_data["versions"]["scylla-server"].get("date", "")
+            build_id = test_data["versions"]["scylla-server"].get("build_id", "")
+        elif "version" in test_data["versions"]:
+            version = test_data["versions"].get("version", "")
+            commit_id = test_data["versions"].get("commit_id", "")
+            commit_date = test_data["versions"].get("date", "")
+            build_id = test_data["versions"].get("build_id", "")
         else:
-            version = ''
-            commit_id = ''
-            commit_date = ''
-            build_id = ''
-        scylla_version = '.'.join([version, commit_date, commit_id])
+            version = ""
+            commit_id = ""
+            commit_date = ""
+            build_id = ""
+        scylla_version = ".".join([version, commit_date, commit_id])
         new_nemesis_data = dict(
-            test_id=test_data['test_details']['test_id'],
-            job_name=test_data['test_details']['job_name'],
-            test_name=test_data['test_details']['test_name'],
+            test_id=test_data["test_details"]["test_id"],
+            job_name=test_data["test_details"]["job_name"],
+            test_name=test_data["test_details"]["test_name"],
             scylla_version=version,
             scylla_git_sha=commit_id,
             scylla_commit_date=commit_date,
@@ -76,15 +76,15 @@ class NemesisElasticSearchPublisher:
         if status:
             new_nemesis_data.update(
                 nemesis_name=disrupt_name,
-                nemesis_duration=data['duration'],
-                start_time=datetime.utcfromtimestamp(data['start']),
-                end_time=datetime.utcfromtimestamp(data['end']),
-                target_node=data['node'],
-                outcome="passed"
+                nemesis_duration=data["duration"],
+                start_time=datetime.utcfromtimestamp(data["start"]),
+                end_time=datetime.utcfromtimestamp(data["end"]),
+                target_node=data["node"],
+                outcome="passed",
             )
-            if 'skip_reason' in data:
-                new_nemesis_data['outcome'] = 'skipped'
-                new_nemesis_data['skip_reason'] = data['skip_reason']
+            if "skip_reason" in data:
+                new_nemesis_data["outcome"] = "skipped"
+                new_nemesis_data["skip_reason"] = data["skip_reason"]
 
         else:
             error_message_size_mb = sys.getsizeof(data["error"]) / 1024**2
@@ -92,20 +92,25 @@ class NemesisElasticSearchPublisher:
             if diff > 1.0:
                 # NOTE: useful for cases when loader nodes fail to connect to
                 # terminated K8S host machines. It may provide very huge output up to 1Gb.
-                LOGGER.warning("Got too big error message running '%s' nemesis: %sMb.\n"
-                               "The limit is '%sMb'. Trimming the error message...",
-                               disrupt_name, error_message_size_mb, self.error_message_size_limit_mb)
+                LOGGER.warning(
+                    "Got too big error message running '%s' nemesis: %sMb.\nThe limit is '%sMb'. Trimming the error message...",
+                    disrupt_name,
+                    error_message_size_mb,
+                    self.error_message_size_limit_mb,
+                )
                 # NOTE: we are satisfied making rough rounding here
-                data["error"] = data["error"][:int(len(data["error"]) / diff)]
-            new_nemesis_data.update(dict(
-                nemesis_name=disrupt_name,
-                nemesis_duration=data['duration'],
-                start_time=datetime.utcfromtimestamp(data['start']),
-                end_time=datetime.utcfromtimestamp(data['end']),
-                target_node=data['node'],
-                outcome="failure",
-                failure_message=data['error']
-            ))
+                data["error"] = data["error"][: int(len(data["error"]) / diff)]
+            new_nemesis_data.update(
+                dict(
+                    nemesis_name=disrupt_name,
+                    nemesis_duration=data["duration"],
+                    start_time=datetime.utcfromtimestamp(data["start"]),
+                    end_time=datetime.utcfromtimestamp(data["end"]),
+                    target_node=data["node"],
+                    outcome="failure",
+                    failure_message=data["error"],
+                )
+            )
 
         res = self.es.index(index=self.index_name, body=new_nemesis_data)
         LOGGER.debug(res)

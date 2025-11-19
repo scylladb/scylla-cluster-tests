@@ -13,9 +13,8 @@ LOGGER = getLogger(__name__)
 
 # TODO: get all prices in __init__
 class AWSPricing:
-
     def __init__(self):
-        self.pricing_client: PricingClient = boto3.client('pricing', region_name='us-east-1')
+        self.pricing_client: PricingClient = boto3.client("pricing", region_name="us-east-1")
 
     @lru_cache(maxsize=None)
     def get_on_demand_instance_price(self, region_name: str, instance_type: str):
@@ -51,37 +50,40 @@ class AWSPricing:
         }
 
         response = self.pricing_client.get_products(
-            ServiceCode='AmazonEC2',
+            ServiceCode="AmazonEC2",
             Filters=[
-                {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
-                {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
-                {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw', 'Value': 'NA'},
-                {'Type': 'TERM_MATCH', 'Field': 'tenancy', 'Value': 'Shared'},
-                {'Type': 'TERM_MATCH', 'Field': 'capacitystatus', 'Value': 'Used'},
-                {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': regions_names_map[region_name]}
+                {"Type": "TERM_MATCH", "Field": "operatingSystem", "Value": "Linux"},
+                {"Type": "TERM_MATCH", "Field": "instanceType", "Value": instance_type},
+                {"Type": "TERM_MATCH", "Field": "preInstalledSw", "Value": "NA"},
+                {"Type": "TERM_MATCH", "Field": "tenancy", "Value": "Shared"},
+                {"Type": "TERM_MATCH", "Field": "capacitystatus", "Value": "Used"},
+                {"Type": "TERM_MATCH", "Field": "location", "Value": regions_names_map[region_name]},
             ],
-            MaxResults=10
+            MaxResults=10,
         )
-        assert response['PriceList'], "failed to get price for {instance_type} in {region_name}".format(
-            region_name=region_name, instance_type=instance_type)
-        price = response['PriceList'][0]
-        price_dimensions = next(iter(json.loads(price)['terms']['OnDemand'].values()))['priceDimensions']
-        instance_price = next(iter(price_dimensions.values()))['pricePerUnit']['USD']
+        assert response["PriceList"], "failed to get price for {instance_type} in {region_name}".format(
+            region_name=region_name, instance_type=instance_type
+        )
+        price = response["PriceList"][0]
+        price_dimensions = next(iter(json.loads(price)["terms"]["OnDemand"].values()))["priceDimensions"]
+        instance_price = next(iter(price_dimensions.values()))["pricePerUnit"]["USD"]
         return float(instance_price)
 
     @staticmethod
     @lru_cache(maxsize=None)
     def get_spot_instance_price(region_name, instance_type):
         """currently doesn't take AZ into consideration"""
-        client = boto3.client('ec2', region_name=region_name)
-        result = client.describe_spot_price_history(InstanceTypes=[instance_type],
-                                                    ProductDescriptions=['Linux/UNIX (Amazon VPC)', 'Linux/UNIX'],
-                                                    StartTime=datetime.now() - timedelta(hours=3),
-                                                    EndTime=datetime.now())
-        prices = result['SpotPriceHistory']
+        client = boto3.client("ec2", region_name=region_name)
+        result = client.describe_spot_price_history(
+            InstanceTypes=[instance_type],
+            ProductDescriptions=["Linux/UNIX (Amazon VPC)", "Linux/UNIX"],
+            StartTime=datetime.now() - timedelta(hours=3),
+            EndTime=datetime.now(),
+        )
+        prices = result["SpotPriceHistory"]
         if prices:
             # average between different AZs
-            all_prices = [float(p['SpotPrice']) for p in prices]
+            all_prices = [float(p["SpotPrice"]) for p in prices]
             return sum(all_prices) / len(all_prices)
         else:
             LOGGER.warning("Spot price not found for '%s' in '%s':\n%s", instance_type, region_name, result)
@@ -265,7 +267,6 @@ class GCEPricing:
 
 
 class AzurePricing:
-
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
             prices = self._get_sku_prices(instance_type, region)
@@ -273,8 +274,11 @@ class AzurePricing:
                 return 0
             try:
                 if lifecycle == InstanceLifecycle.ON_DEMAND:
-                    return [price["retailPrice"] for price in prices
-                            if "Spot" not in price["meterName"] and "Low" not in price["meterName"]][0]
+                    return [
+                        price["retailPrice"]
+                        for price in prices
+                        if "Spot" not in price["meterName"] and "Low" not in price["meterName"]
+                    ][0]
                 else:
                     return [price["retailPrice"] for price in prices if "Spot" in price["meterName"]][0]
             except KeyError:
@@ -288,8 +292,8 @@ class AzurePricing:
     @lru_cache(maxsize=None)
     def _get_sku_prices(instance_type: str, region):
         resp = requests.get(
-            f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' "
-            f"and armSkuName eq '{instance_type}' and armRegionName eq '{region}' and priceType eq 'consumption'")
+            f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' and armSkuName eq '{instance_type}' and armRegionName eq '{region}' and priceType eq 'consumption'"
+        )
         if not resp.ok:
             LOGGER.warning("Failed to fetch prices for %s in location: %s", instance_type, region)
             return []

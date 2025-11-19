@@ -10,13 +10,17 @@ import random
 
 from sdcm.cluster import BaseNode
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS
-from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator, NemesisNodeAllocationError, AllNodesRunNemesisError
+from sdcm.utils.nemesis_utils.node_allocator import (
+    NemesisNodeAllocator,
+    NemesisNodeAllocationError,
+    AllNodesRunNemesisError,
+)
 
 
 @pytest.fixture(autouse=True)
 def reset_node_allocator_singleton():
     """Reset NemesisNodeAllocator singleton state before each test"""
-    if hasattr(NemesisNodeAllocator.__class__, '_instances'):
+    if hasattr(NemesisNodeAllocator.__class__, "_instances"):
         NemesisNodeAllocator.__class__._instances.clear()
     yield
 
@@ -28,7 +32,7 @@ class MockNode(BaseNode):
         self.is_seed = is_seed
         self.dc_idx = dc_idx
         self.rack = rack
-        self._is_zero_token_node = (node_type == "zero_nodes")
+        self._is_zero_token_node = node_type == "zero_nodes"
 
     def __repr__(self):
         return f"MockNode({self.name})"
@@ -80,14 +84,16 @@ def test_select_and_release_target_node(allocator_with_nodes):
 
     # select a node
     selected_node = allocator.select_target_node(
-        nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+        nemesis_name="TestNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+    )
     assert selected_node is not None
     assert selected_node in allocator.active_nemesis_on_nodes
     assert allocator.active_nemesis_on_nodes[selected_node] == "TestNemesis"
 
     # select another node
     second_node = allocator.select_target_node(
-        nemesis_name="SecondNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+        nemesis_name="SecondNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+    )
     assert second_node is not None
     assert second_node != selected_node
 
@@ -105,7 +111,8 @@ def test_no_available_nodes(allocator_with_nodes):
 
     with pytest.raises(AllNodesRunNemesisError):
         allocator.select_target_node(
-            nemesis_name="ExtraNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False)
+            nemesis_name="ExtraNemesis", pool_type=NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False
+        )
 
 
 def test_nodes_filtering(allocator_with_nodes):
@@ -113,12 +120,12 @@ def test_nodes_filtering(allocator_with_nodes):
 
     # filter seed node
     seed_node = allocator.select_target_node(
-        "SeedNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, is_seed=True)
+        "SeedNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, is_seed=True
+    )
     assert seed_node.is_seed
 
     # filter a rack
-    rack1_node = allocator.select_target_node(
-        "RackNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, rack=1)
+    rack1_node = allocator.select_target_node("RackNemesis", NEMESIS_TARGET_POOLS.data_nodes, filter_seed=False, rack=1)
     assert rack1_node.rack == 1
 
     # filter a pool type
