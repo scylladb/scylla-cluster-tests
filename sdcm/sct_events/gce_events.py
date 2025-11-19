@@ -7,10 +7,7 @@ from sdcm.sct_events.base import SctEvent, EventPeriod
 
 
 class GceInstanceEvent(SctEvent):
-
-    def __init__(self,
-                 gce_log_entry: Dict,
-                 severity=Severity.ERROR):
+    def __init__(self, gce_log_entry: Dict, severity=Severity.ERROR):
         self.date = str(parser.parse(gce_log_entry["timestamp"]).astimezone())
         self.node = gce_log_entry["protoPayload"]["resourceName"].split("/")[-1]
         self.method = gce_log_entry["protoPayload"]["methodName"]

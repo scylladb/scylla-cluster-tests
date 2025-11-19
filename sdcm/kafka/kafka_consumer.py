@@ -35,8 +35,16 @@ class KafkaCDCReaderThread(Thread):
     received, so we can validate how many unique key we got
     """
 
-    def __init__(self, tester, params: SCTConfiguration, kafka_addresses: list | None = None,
-                 connector_index: int = 0, group_id: str = None, duration: int | None = None, **kwargs):
+    def __init__(
+        self,
+        tester,
+        params: SCTConfiguration,
+        kafka_addresses: list | None = None,
+        connector_index: int = 0,
+        group_id: str = None,
+        duration: int | None = None,
+        **kwargs,
+    ):
         self.keys = set()
         self.termination_event = Event()
         self.params = params
@@ -44,20 +52,20 @@ class KafkaCDCReaderThread(Thread):
         self.duration = duration
         self._kafka_addresses = kafka_addresses
         self.group_id = group_id or generate_random_string(16)
-        self.read_number_of_key = int(kwargs.get('read_number_of_key', 0))
+        self.read_number_of_key = int(kwargs.get("read_number_of_key", 0))
 
         connector_config: SctKafkaConfiguration = params.get("kafka_connectors")[connector_index]
         consumer_config = {
-            'bootstrap.servers': ','.join(self.kafka_addresses),
-            'group.id': self.group_id,
-            'auto.offset.reset': 'earliest',
-            'enable.auto.commit': True,
-            'auto.commit.interval.ms': 1000,
+            "bootstrap.servers": ",".join(self.kafka_addresses),
+            "group.id": self.group_id,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": True,
+            "auto.commit.interval.ms": 1000,
         }
         self.consumer = Consumer(consumer_config)
 
         # TODO: handle setup of multiple tables
-        topic = f'{connector_config.config.scylla_name}.{connector_config.config.scylla_table_names}'
+        topic = f"{connector_config.config.scylla_name}.{connector_config.config.scylla_table_names}"
         self.wait_for_topic(topic, timeout=60)
         self.consumer.subscribe([topic])
 
@@ -65,8 +73,8 @@ class KafkaCDCReaderThread(Thread):
 
     @property
     def kafka_addresses(self):
-        if self.params.get('kafka_backend') == 'localstack':
-            return ['localhost']
+        if self.params.get("kafka_backend") == "localstack":
+            return ["localhost"]
         elif self._kafka_addresses:
             return self._kafka_addresses
         return None
@@ -90,8 +98,8 @@ class KafkaCDCReaderThread(Thread):
                 time.sleep(0.5)
                 continue
             for msg in msgs:
-                data = json.loads(msg.value()).get('payload', {}).get('after', {})
-                key = base64.b64decode(data.get('key')).decode()
+                data = json.loads(msg.value()).get("payload", {}).get("after", {})
+                key = base64.b64decode(data.get("key")).decode()
                 self.keys.add(key)
 
                 if len(self.keys) >= self.read_number_of_key:

@@ -3,18 +3,21 @@ from sdcm.tester import ClusterTester
 
 
 class HintedHandoffTest(ClusterTester):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 " \
-                                "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' " \
-                                "-mode cql3 native -rate 'threads=20 throttle=16000/s' " \
-                                "-col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100123123 -log interval=15"
+        self.stress_write_cmd = (
+            "cassandra-stress write no-warmup cl=ONE n=100123123 "
+            "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' "
+            "-mode cql3 native -rate 'threads=20 throttle=16000/s' "
+            "-col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100123123 -log interval=15"
+        )
 
-        self.stress_read_cmd = "cassandra-stress read no-warmup cl=ONE n=100123123 " \
-                               "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' " \
-                               "-mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)'" \
-                               " -pop seq=1..100123123 -log interval=15"
+        self.stress_read_cmd = (
+            "cassandra-stress read no-warmup cl=ONE n=100123123 "
+            "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' "
+            "-mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)'"
+            " -pop seq=1..100123123 -log interval=15"
+        )
 
     def setUp(self):
         super().setUp()
@@ -22,16 +25,16 @@ class HintedHandoffTest(ClusterTester):
 
     def test_stop_nodes_under_stress(self):
         """
-            3 nodes cluster, RF=3.
-            While Write n=X with CL=1.
-            Stop node1
-            Wait some time
-            Stop node2
-            Wait till write finish
-            Start all stopped nodes (1 & 2).
-            Wait for hints to be sent.
-            Stop node3.
-            Read all data n=X with CL=ONE.
+        3 nodes cluster, RF=3.
+        While Write n=X with CL=1.
+        Stop node1
+        Wait some time
+        Stop node2
+        Wait till write finish
+        Start all stopped nodes (1 & 2).
+        Wait for hints to be sent.
+        Stop node3.
+        Read all data n=X with CL=ONE.
         """
         assert len(self.db_cluster.nodes) == 3, "The test requires 3 DB nodes!"
         node1 = self.db_cluster.nodes[0]
