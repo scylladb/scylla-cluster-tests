@@ -32,9 +32,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
     def __init__(self, params, remoter=LOCALRUNNER):
         super().__init__(cluster_prefix="kafka", add_nodes=False, params=params)
         self.remoter = remoter
-        self.docker_compose_path = (
-            Path(get_sct_root_path()) / "kafka-stack-docker-compose"
-        )
+        self.docker_compose_path = Path(get_sct_root_path()) / "kafka-stack-docker-compose"
         self._journal_thread: DockerComposeLogger | None = None
         self.init_repository()
 
@@ -42,7 +40,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
         # TODO: make the url configurable
         # TODO: get the version after install, and send out to Argus
         repo_url = "https://github.com/fruch/kafka-stack-docker-compose.git"
-        branch = 'master'
+        branch = "master"
         clone_repo(
             remoter=self.remoter,
             repo_url=repo_url,
@@ -50,7 +48,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
             destination_dir_name=str(self.docker_compose_path),
             clone_as_root=False,
         )
-        self.remoter.run(f'mkdir -p {self.docker_compose_path / "connectors"}')
+        self.remoter.run(f"mkdir -p {self.docker_compose_path / 'connectors'}")
 
     @property
     def compose_context(self):
@@ -77,35 +75,27 @@ class LocalKafkaCluster(cluster.BaseCluster):
         else:
             self.install_connector_from_url(connector_version)
 
-    def install_connector_from_hub(
-        self, connector_version: str = "scylladb/scylla-cdc-source-connector:latest"
-    ):
-        self.compose(
-            f"exec kafka-connect confluent-hub install --no-prompt {connector_version}"
-        )
+    def install_connector_from_hub(self, connector_version: str = "scylladb/scylla-cdc-source-connector:latest"):
+        self.compose(f"exec kafka-connect confluent-hub install --no-prompt {connector_version}")
         self.compose("restart kafka-connect")
 
     def install_connector_from_url(self, connector_url: str):
         if connector_url.startswith("http"):
-            if connector_url.endswith('.jar'):
+            if connector_url.endswith(".jar"):
                 self.remoter.run(
-                    f'curl --show-error --fail -L --create-dirs -O --output-dir {self.docker_compose_path / "connectors"} {connector_url} '
+                    f"curl --show-error --fail -L --create-dirs -O --output-dir {self.docker_compose_path / 'connectors'} {connector_url} "
                 )
-            if connector_url.endswith('.zip'):
+            if connector_url.endswith(".zip"):
                 self.remoter.run(
-                    f'curl --show-error --fail -L -o /tmp/connector.zip {connector_url} && '
-                    f'unzip -o /tmp/connector.zip -d {self.docker_compose_path / "connectors"} && rm /tmp/connector.zip'
+                    f"curl --show-error --fail -L -o /tmp/connector.zip {connector_url} && "
+                    f"unzip -o /tmp/connector.zip -d {self.docker_compose_path / 'connectors'} && rm /tmp/connector.zip"
                 )
         if connector_url.startswith("file://"):
             connector_local_path = connector_url.replace("file://", "")
-            if connector_url.endswith('.jar'):
-                self.remoter.run(
-                    f'cp {connector_local_path} {self.docker_compose_path / "connectors"}'
-                )
-            if connector_url.endswith('.zip'):
-                self.remoter.run(
-                    f'unzip {connector_local_path} -d {self.docker_compose_path / "connectors"}'
-                )
+            if connector_url.endswith(".jar"):
+                self.remoter.run(f"cp {connector_local_path} {self.docker_compose_path / 'connectors'}")
+            if connector_url.endswith(".zip"):
+                self.remoter.run(f"unzip {connector_local_path} -d {self.docker_compose_path / 'connectors'}")
         self.compose("restart kafka-connect")
 
         # TODO: find release based on 'curl https://api.github.com/repos/scylladb/scylla-cdc-source-connector/releases'
@@ -150,9 +140,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
             throw_exc=True,
         )
         LOGGER.debug(connector_data)
-        res = requests.post(
-            url=f"{self.kafka_connect_url}/connectors", json=connector_data
-        )
+        res = requests.post(url=f"{self.kafka_connect_url}/connectors", json=connector_data)
         LOGGER.debug(res)
         LOGGER.debug(res.text)
         res.raise_for_status()

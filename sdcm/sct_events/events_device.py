@@ -28,9 +28,15 @@ from sdcm.sct_events.filters import BaseFilter
 
 import zmq
 
-from sdcm.sct_events.events_processes import \
-    EVENTS_MAIN_DEVICE_ID, StopEvent, EventsProcessesRegistry, \
-    start_events_process, get_events_process, verbose_suppress, suppress_interrupt
+from sdcm.sct_events.events_processes import (
+    EVENTS_MAIN_DEVICE_ID,
+    StopEvent,
+    EventsProcessesRegistry,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+    suppress_interrupt,
+)
 
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
@@ -142,9 +148,9 @@ class EventsDevice(multiprocessing.Process):
                 if sub.poll(timeout=self.sub_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
-    def outbound_events(self,
-                        stop_event: StopEvent,
-                        events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
+    def outbound_events(
+        self, stop_event: StopEvent, events_counter: multiprocessing.Value
+    ) -> Generator[Tuple[str, Any], None, None]:
         filters: Dict[UUID, BaseFilter] = {}
         filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
@@ -162,8 +168,9 @@ class EventsDevice(multiprocessing.Process):
                         LOGGER.debug("%s: delete filter with uuid=%s", self, obj.uuid)
                         filters.pop(obj.uuid, None)
                     elif obj.clear_filter and obj.expire_time and obj.uuid in filters:
-                        LOGGER.debug("%s: set expire_time to %s for filter with uuid=%s",
-                                     self, obj.expire_time, obj.uuid)
+                        LOGGER.debug(
+                            "%s: set expire_time to %s for filter with uuid=%s", self, obj.expire_time, obj.uuid
+                        )
                         filters[obj.uuid].expire_time = obj.expire_time
                     else:
                         LOGGER.debug("%s: add filter %s with uuid=%s", self, obj, obj.uuid)
@@ -191,4 +198,8 @@ start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, 
 get_events_main_device = cast(Callable[..., EventsDevice], partial(get_events_process, EVENTS_MAIN_DEVICE_ID))
 
 
-__all__ = ("EventsDevice", "start_events_main_device", "get_events_main_device", )
+__all__ = (
+    "EventsDevice",
+    "start_events_main_device",
+    "get_events_main_device",
+)

@@ -31,7 +31,7 @@ class DBCluster:
 
 
 def test_01_gemini_thread(request, docker_scylla, params):
-    params.update({'gemini_table_options': ['gc_grace_seconds=60']})
+    params.update({"gemini_table_options": ["gc_grace_seconds=60"]})
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
 

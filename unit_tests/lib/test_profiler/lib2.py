@@ -17,8 +17,10 @@ from sdcm.utils.profiler import ProfileableProcess as LibProfileableProcess, Pro
 
 
 __all__ = [
-    'LibProfileableProcessCustomClass', 'LibProfileableProcessCustomClassWithRun',
-    'LibProfileableThreadCustomClass', 'LibProfileableThreadCustomClassWithRun'
+    "LibProfileableProcessCustomClass",
+    "LibProfileableProcessCustomClassWithRun",
+    "LibProfileableThreadCustomClass",
+    "LibProfileableThreadCustomClassWithRun",
 ]
 
 
