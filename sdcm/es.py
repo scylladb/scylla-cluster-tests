@@ -27,13 +27,13 @@ class ES(elasticsearch.Elasticsearch):
         """
         Add document in json format
         """
-        LOGGER.info('Create doc')
-        LOGGER.info('INDEX: %s', index)
-        LOGGER.info('DOC_ID: %s', doc_id)
-        LOGGER.info('BODY: %s', body)
+        LOGGER.info("Create doc")
+        LOGGER.info("INDEX: %s", index)
+        LOGGER.info("DOC_ID: %s", doc_id)
+        LOGGER.info("BODY: %s", body)
         self._create_index(index)
         if self.exists(index=index, id=doc_id):
-            self.update(index=index, id=doc_id, body={'doc': body})
+            self.update(index=index, id=doc_id, body={"doc": body})
         else:
             self.create(index=index, id=doc_id, body=body)
 
@@ -41,7 +41,7 @@ class ES(elasticsearch.Elasticsearch):
         """
         Update document with partial data
         """
-        LOGGER.info('Update doc %s with info %s', doc_id, body)
+        LOGGER.info("Update doc %s with info %s", doc_id, body)
         self.update(index=index, id=doc_id, body=dict(doc=body))
 
     def get_all(self, index, limit=1000):
@@ -54,10 +54,9 @@ class ES(elasticsearch.Elasticsearch):
         """
         Get document by id
         """
-        doc = self.get(index=index, id=doc_id, ignore=[
-                       400, 404])
-        if not doc['found']:
-            LOGGER.warning('Document not found: %s', doc_id)
+        doc = self.get(index=index, id=doc_id, ignore=[400, 404])
+        if not doc["found"]:
+            LOGGER.warning("Document not found: %s", doc_id)
             return None
         return doc
 

@@ -27,21 +27,29 @@ class SSHAgent:
     @classmethod
     def start(cls, verbose: bool = True) -> None:
         if cls.is_running():
-            LOGGER.warning("ssh-agent started already:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
-                           os.getenv("SSH_AUTH_SOCK", "N/A"), os.getenv("SSH_AGENT_PID", "N/A"))
+            LOGGER.warning(
+                "ssh-agent started already:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
+                os.getenv("SSH_AUTH_SOCK", "N/A"),
+                os.getenv("SSH_AGENT_PID", "N/A"),
+            )
             return
 
-        res = LOCALRUNNER.run(r"""eval $(ssh-agent -s) && """
-                              r"""eval 'echo "{\"SSH_AUTH_SOCK\": \"$SSH_AUTH_SOCK\", """
-                              r"""             \"SSH_AGENT_PID\": \"$SSH_AGENT_PID\"}" >&2'""",
-                              verbose=verbose)
+        res = LOCALRUNNER.run(
+            r"""eval $(ssh-agent -s) && """
+            r"""eval 'echo "{\"SSH_AUTH_SOCK\": \"$SSH_AUTH_SOCK\", """
+            r"""             \"SSH_AGENT_PID\": \"$SSH_AGENT_PID\"}" >&2'""",
+            verbose=verbose,
+        )
         if not res.ok:
             raise RuntimeError()
 
         os.environ.update(json.loads(res.stderr))
         if verbose:
-            LOGGER.info("ssh-agent started successfully:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
-                        os.environ["SSH_AUTH_SOCK"], os.environ["SSH_AGENT_PID"])
+            LOGGER.info(
+                "ssh-agent started successfully:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
+                os.environ["SSH_AUTH_SOCK"],
+                os.environ["SSH_AGENT_PID"],
+            )
 
         atexit.register(cls.stop, verbose)
 

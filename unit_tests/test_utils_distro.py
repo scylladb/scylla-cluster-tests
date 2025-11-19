@@ -30,7 +30,6 @@ HOME_URL="https://www.debian.org/"
 SUPPORT_URL="https://www.debian.org/support"
 BUG_REPORT_URL="https://bugs.debian.org/"
 """,
-
     "Debian 11": """\
 PRETTY_NAME="Debian GNU/Linux 11 (bullseye)"
 NAME="Debian GNU/Linux"
@@ -42,7 +41,6 @@ HOME_URL="https://www.debian.org/"
 SUPPORT_URL="https://www.debian.org/support"
 BUG_REPORT_URL="https://bugs.debian.org/"
 """,
-
     "CentOS 7": """\
 NAME="CentOS Linux"
 VERSION="7 (Core)"
@@ -60,7 +58,6 @@ CENTOS_MANTISBT_PROJECT_VERSION="7"
 REDHAT_SUPPORT_PRODUCT="centos"
 REDHAT_SUPPORT_PRODUCT_VERSION="7"
 """,
-
     "CentOS 8": """\
 NAME="CentOS Linux"
 VERSION="8 (Core)"
@@ -79,7 +76,6 @@ CENTOS_MANTISBT_PROJECT_VERSION="8"
 REDHAT_SUPPORT_PRODUCT="centos"
 REDHAT_SUPPORT_PRODUCT_VERSION="8"
 """,
-
     "RHEL 7": """\
 NAME="Red Hat Enterprise Linux Server"
 VERSION="7.7 (Maipo)"
@@ -99,7 +95,6 @@ REDHAT_BUGZILLA_PRODUCT_VERSION=7.7
 REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
 REDHAT_SUPPORT_PRODUCT_VERSION="7.7"
 """,
-
     "RHEL 8": """\
 NAME="Red Hat Enterprise Linux"
 VERSION="8.1 (Ootpa)"
@@ -118,7 +113,6 @@ REDHAT_BUGZILLA_PRODUCT_VERSION=8.1
 REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
 REDHAT_SUPPORT_PRODUCT_VERSION="8.1"
 """,
-
     "OEL 7.3": """\
 NAME="Oracle Linux Server"
 VERSION="7.3"
@@ -135,7 +129,6 @@ ORACLE_BUGZILLA_PRODUCT_VERSION=7.3
 ORACLE_SUPPORT_PRODUCT="Oracle Linux"
 ORACLE_SUPPORT_PRODUCT_VERSION=7.3
 """,
-
     "OEL 8.1": """\
 NAME="Oracle Linux Server"
 VERSION="8.1"
@@ -156,7 +149,6 @@ ORACLE_BUGZILLA_PRODUCT_VERSION=8.1
 ORACLE_SUPPORT_PRODUCT="Oracle Linux"
 ORACLE_SUPPORT_PRODUCT_VERSION=8.1
 """,
-
     "SLES 15": """\
 NAME="SLES"
 VERSION="15-SP3"
@@ -168,7 +160,6 @@ ANSI_COLOR="0;32"
 CPE_NAME="cpe:/o:suse:sles:15:sp3"
 DOCUMENTATION_URL="https://documentation.suse.com/"
 """,
-
     "Ubuntu 20.04": """\
 NAME="Ubuntu"
 VERSION="20.04 LTS (Focal Fossa)"
@@ -183,7 +174,6 @@ PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-poli
 VERSION_CODENAME=focal
 UBUNTU_CODENAME=focal
 """,
-
     "Ubuntu 22.04": """\
 NAME="Ubuntu"
 VERSION="22.04 LTS (Jammy Jellyfish)"
@@ -198,7 +188,6 @@ PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-poli
 VERSION_CODENAME=jammy
 UBUNTU_CODENAME=jammy
     """,
-
     "Amazon Linux 2": """\
 NAME="Amazon Linux"
 VERSION="2"
@@ -210,7 +199,6 @@ ANSI_COLOR="0;33"
 CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2"
 HOME_URL="https://amazonlinux.com/"
 """,
-
     "Amazon Linux 2023": """\
 NAME="Amazon Linux"
 VERSION="2023"
@@ -229,7 +217,6 @@ VENDOR_NAME="AWS"
 VENDOR_URL="https://aws.amazon.com/"
 SUPPORT_END="2028-03-15"
 """,
-
     "Rocky Linux 8": """\
 NAME="Rocky Linux"
 VERSION="8.5 (Green Obsidian)"
@@ -263,12 +250,10 @@ ROCKY_SUPPORT_PRODUCT_VERSION="9.0"
 REDHAT_SUPPORT_PRODUCT="Rocky Linux"
 REDHAT_SUPPORT_PRODUCT_VERSION="9.0"
 """,
-
     "Unknown": """\
 ID=sillylinux
 VERSION_ID=666
 """,
-
     "Garbage": """\
 ID ubuntu
 VERSION_ID 18.04
