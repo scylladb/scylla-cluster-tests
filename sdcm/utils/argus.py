@@ -31,7 +31,7 @@ class Argus:
         cls.INIT_DONE.set()
 
     @classmethod
-    def get(cls, init_default=False) -> 'Argus':
+    def get(cls, init_default=False) -> "Argus":
         if init_default and not cls.INIT_DONE.is_set():
             cls.init_global(get_argus_client(run_id=os.environ.get("SCT_TEST_ID"), init_global=False))
         return cls.INSTANCE
@@ -42,7 +42,6 @@ class Argus:
 
 
 class ArgusError(Exception):
-
     def __init__(self, message: str, *args: list) -> None:
         self._message = message
         super().__init__(*args)
@@ -68,7 +67,8 @@ def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
         raise ArgusError("Malformed UUID provided")
     creds = KeyStore().get_argus_rest_credentials()
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
+        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+    )
 
     if init_global:
         Argus.init_global(argus_client)

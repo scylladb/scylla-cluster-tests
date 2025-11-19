@@ -32,14 +32,12 @@ pytestmark = [
 
 @pytest.mark.integration
 def test_01_latte_schema(request, docker_scylla, params):
-    params['enable_argus'] = False
+    params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
-    cmd = ("latte schema docker/latte/workloads/workload.rn")
+    cmd = "latte schema docker/latte/workloads/workload.rn"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -53,14 +51,12 @@ def test_01_latte_schema(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_02_latte_load(request, docker_scylla, params):
-    params['enable_argus'] = False
+    params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
-    cmd = ("latte load docker/latte/workloads/workload.rn")
+    cmd = "latte load docker/latte/workloads/workload.rn"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -74,14 +70,12 @@ def test_02_latte_load(request, docker_scylla, params):
 
 @pytest.mark.integration
 def test_03_latte_run(request, docker_scylla, prom_address, params):
-    params['enable_argus'] = False
+    params["enable_argus"] = False
     loader_set = LocalLoaderSetDummy(params=params)
 
-    cmd = ("latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report")
+    cmd = "latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report"
 
-    latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    latte_thread = LatteStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         latte_thread.kill()
@@ -115,15 +109,18 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
 @pytest.mark.integration
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
-    params['client_encrypt'] = True
-    params['enable_argus'] = False
+    params["client_encrypt"] = True
+    params["enable_argus"] = False
 
     loader_set = LocalLoaderSetDummy(params=params)
 
-    cmd = ("latte run -d 10s docker/latte/workloads/workload.rn --generate-report")
+    cmd = "latte run -d 10s docker/latte/workloads/workload.rn --generate-report"
 
     latte_thread = LatteStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5,
+        loader_set,
+        cmd,
+        node_list=[docker_scylla],
+        timeout=5,
         params=params,
     )
 
@@ -147,8 +144,12 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
 
 def test_05_latte_parse_final_output():
     latte = LatteStressThread(
-        loader_set=["fake-loader"], stress_cmd="fake", timeout=1,
-        node_list=["fake-db-node-1"], params={"cluster_backend": "aws"})
+        loader_set=["fake-loader"],
+        stress_cmd="fake",
+        timeout=1,
+        node_list=["fake-db-node-1"],
+        params={"cluster_backend": "aws"},
+    )
     with open(sct_abs_path("data_dir/latte_stress_output.log"), "r", encoding="utf-8") as latte_output:
         stress_result = type("FakeStressResult", (), {"stdout": latte_output.read()})
 
@@ -164,14 +165,15 @@ def test_05_latte_parse_final_output():
 
 
 @pytest.mark.parametrize(
-    "cmd,items", (
+    "cmd,items",
+    (
         ("latte run /foo/bar.rn %swrite -q -r 500", ["write"]),
         ("latte run /foo/bar.rn %sread -q -r 500", ["read"]),
         ("latte run /foo/bar.rn %scustom -q -r 500", ["custom"]),
         ("latte run /foo/bar.rn %sread,write -q -r 500", ["read", "write"]),
         ("latte run /foo/bar.rn %sread,custom,write,user -q -r 500", ["read", "custom", "write", "user"]),
         ("latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", ["foo_bar", "quuz_tea"]),
-    )
+    ),
 )
 def test_find_latte_fn_names(cmd, items):
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
@@ -184,7 +186,8 @@ def test_find_latte_fn_names(cmd, items):
 
 
 @pytest.mark.parametrize(
-    "cmd,expected_operation_type", (
+    "cmd,expected_operation_type",
+    (
         ("latte run /foo/bar.rn %swrite -q -r 500", "write"),
         ("latte run /foo/bar.rn %swrite_batch -q -r 500", "write"),
         ("latte run /foo/bar.rn %sbatch_write -q -r 500", "write"),
@@ -199,7 +202,6 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %sinsert_delete -q -r 500", "write"),
         ("latte run /foo/bar.rn %sinsert_delete_by_one -q -r 500", "write"),
         ("latte run /foo/bar.rn %scounter_write -q -r 500", "counter_write"),
-
         ("latte run /foo/bar.rn %sread -q -r 500", "read"),
         ("latte run /foo/bar.rn %sread_all -q -r 500", "read"),
         ("latte run /foo/bar.rn %sdo_read -q -r 500", "read"),
@@ -215,7 +217,6 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %sdo_get_all -q -r 500", "read"),
         ("latte run /foo/bar.rn %sget_all,get_single -q -r 500", "read"),
         ("latte run /foo/bar.rn %scounter_read -q -r 500", "counter_read"),
-
         ("latte run /foo/bar.rn %sread,write -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite:1,read:2 -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %sbatch_insert:1,read_all:2,get_bar:0.5 -q -r 500", "mixed"),
@@ -223,12 +224,11 @@ def test_find_latte_fn_names(cmd, items):
         ("latte run /foo/bar.rn %sread,counter_read -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite,counter_read -q -r 500", "mixed"),
         ("latte run /foo/bar.rn %swrite,counter_write -q -r 500", "mixed"),
-
         ("latte run /foo/bar.rn %scustom -q -r 500", "user"),
         ("latte run /foo/bar.rn %suser_profile -q -r 500", "user"),
         ("latte run /foo/bar.rn %sfoo_bar:1,quuz_tea:2 -q -r 500", "user"),
         ("latte run /foo/bar.rn %sread,write,custom -q -r 500", "user"),
-    )
+    ),
 )
 def test_get_latte_operation_type(cmd, expected_operation_type):
     fn_params = ("-f ", "-f=", "--function ", "--function=", "--functions ", "--functions=")
@@ -238,7 +238,8 @@ def test_get_latte_operation_type(cmd, expected_operation_type):
 
 
 @pytest.mark.parametrize(
-    "cmd,items", (
+    "cmd,items",
+    (
         ("%s --tag=latte-prepare-01 -q -r 500", ["latte-prepare-01"]),
         ("%s --tag latte-main-01 -q -r 500", ["latte-main-01"]),
         ("%s --tag  latte-prepare-01,write  -q -r 500", ["latte-prepare-01", "write"]),
@@ -246,10 +247,10 @@ def test_get_latte_operation_type(cmd, expected_operation_type):
         ("%s  --tag=latte-main-01  --tag   write,table1    -q -r 500", ["latte-main-01", "write", "table1"]),
         ("%s --tag=latte-main-01,read  --tag table2  -q -r 500", ["latte-main-01", "read", "table2"]),
         ("%s --tag=latte-main-01,read -q -r 500 --tag table2", ["latte-main-01", "read", "table2"]),
-    )
+    ),
 )
 def test_find_latte_tags(cmd, items):
-    result = find_latte_tags(cmd % 'latte run /foo/bar.rn')
+    result = find_latte_tags(cmd % "latte run /foo/bar.rn")
     assert len(result) > 0
     assert len(result) == len(items), f"Expected: {items}, Actual: {result}"
     for item in items:

@@ -9,7 +9,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ElasticRunReporter:
-
     INDEX_NAME = "sct_test_runs"
 
     def __init__(self) -> None:

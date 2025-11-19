@@ -23,14 +23,24 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.sct_events import Severity
 from sdcm.sct_events.stress_events import StressEvent
 from sdcm.remote.libssh2_client.exceptions import Failure
+
 LOGGER = logging.getLogger(__name__)
 
 
 class DockerBasedStressThread:
     DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,
-                 round_robin=False, params=None, stop_test_on_failure=True):
+    def __init__(
+        self,
+        loader_set,
+        stress_cmd,
+        timeout,
+        stress_num=1,
+        node_list=None,
+        round_robin=False,
+        params=None,
+        stop_test_on_failure=True,
+    ):
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
@@ -66,7 +76,6 @@ class DockerBasedStressThread:
         return self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
 
     def configure_executer(self):
-
         if self.round_robin:
             self.stress_num = 1
             loaders = [self.loader_set.get_loader()]
@@ -77,8 +86,7 @@ class DockerBasedStressThread:
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
-        self.executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.max_workers)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
 
     def run(self):
         self.configure_executer()
@@ -94,7 +102,7 @@ class DockerBasedStressThread:
     def get_results(self):
         results = []
         timeout = self.hard_timeout + 120
-        LOGGER.debug('Wait for %s stress threads results', self.max_workers)
+        LOGGER.debug("Wait for %s stress threads results", self.max_workers)
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
@@ -104,7 +112,7 @@ class DockerBasedStressThread:
         results = []
         errors = []
         timeout = self.hard_timeout + 120
-        LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
+        LOGGER.debug("Wait for %s stress threads to verify", self.max_workers)
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
 
@@ -116,9 +124,11 @@ class DockerBasedStressThread:
                 loader.remoter.stop()
         else:
             for loader in self.loaders:
-                loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
-                                   timeout=60,
-                                   ignore_status=True)
+                loader.remoter.run(
+                    cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
+                    timeout=60,
+                    ignore_status=True,
+                )
 
     def db_node_to_query(self, loader):
         """Select DB node in the same region as loader node to query"""

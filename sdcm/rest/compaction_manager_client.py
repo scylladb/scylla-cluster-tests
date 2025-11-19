@@ -27,8 +27,7 @@ class CompactionManagerClient(RemoteCurlClient):
         super().__init__(host="localhost:10000", endpoint="compaction_manager", node=node)
 
     def stop_compaction(self, compaction_type: Literal["reshape"]) -> Result:
-        """Stops compaction using Scylla Rest API.
-        """
+        """Stops compaction using Scylla Rest API."""
         LOGGER.debug("Stopping reshape compaction via Scylla REST API")
         params = {"type": compaction_type.upper()}
 

@@ -36,9 +36,7 @@ def test_01_cassandra_harry(docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
 
     cmd = "cassandra-harry -run-time 1 -run-time-unit MINUTES"
-    harry_thread = CassandraHarryThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=10, params=params
-    )
+    harry_thread = CassandraHarryThread(loader_set, cmd, node_list=[docker_scylla], timeout=10, params=params)
 
     harry_thread.run()
 

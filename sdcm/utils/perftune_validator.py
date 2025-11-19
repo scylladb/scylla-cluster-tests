@@ -22,10 +22,7 @@ PERFTUNE_EXPECTED_RESULTS_PATH = "defaults/perftune_results.json"
 
 
 def count_bits(mask_string) -> int:
-    return sum([
-        int(m, base=16).bit_count() if m else 0
-        for m in mask_string.split(",")
-    ])
+    return sum([int(m, base=16).bit_count() if m else 0 for m in mask_string.split(",")])
 
 
 def get_number_of_cpu_cores(node) -> int:
@@ -46,21 +43,23 @@ def get_number_of_irq_bits(node) -> int:
 
     node.install_package("hwloc")
 
-    cpu_mask_all = node.remoter.run('hwloc-calc all').stdout.strip()
-    numa_ids_list = node.remoter.run(f'hwloc-calc -I numa {cpu_mask_all}').stdout.strip().split(",")
-    num_cores0 = int(node.remoter.run(f'hwloc-calc --restrict {cpu_mask_all} --number-of core numa:0').stdout.strip())
+    cpu_mask_all = node.remoter.run("hwloc-calc all").stdout.strip()
+    numa_ids_list = node.remoter.run(f"hwloc-calc -I numa {cpu_mask_all}").stdout.strip().split(",")
+    num_cores0 = int(node.remoter.run(f"hwloc-calc --restrict {cpu_mask_all} --number-of core numa:0").stdout.strip())
 
-    num_cores_total = int(node.remoter.run(
-        f'hwloc-calc --restrict {cpu_mask_all} --number-of core machine:0').stdout.strip())
-    num_process_units_total = int(node.remoter.run(
-        f'hwloc-calc --restrict {cpu_mask_all} --number-of PU machine:0').stdout.strip())
+    num_cores_total = int(
+        node.remoter.run(f"hwloc-calc --restrict {cpu_mask_all} --number-of core machine:0").stdout.strip()
+    )
+    num_process_units_total = int(
+        node.remoter.run(f"hwloc-calc --restrict {cpu_mask_all} --number-of PU machine:0").stdout.strip()
+    )
 
     if num_process_units_total <= 4:
         return count_bits(cpu_mask_all)
     elif num_cores_total <= 4:
-        return count_bits(node.remoter.run(f'hwloc-calc --restrict {cpu_mask_all} PU:0').stdout.strip())
+        return count_bits(node.remoter.run(f"hwloc-calc --restrict {cpu_mask_all} PU:0").stdout.strip())
     elif num_cores_total <= cores_per_irq_core:
-        return count_bits(node.remoter.run(f'hwloc-calc --restrict {cpu_mask_all} core:0').stdout.strip())
+        return count_bits(node.remoter.run(f"hwloc-calc --restrict {cpu_mask_all} core:0").stdout.strip())
     else:
         num_irq_cores = len(numa_ids_list) * math.ceil(num_cores0 / cores_per_irq_core)
 
@@ -92,11 +91,7 @@ class PerftuneExpectedResult:
             self.expected_compute_bits: int = number_of_cpu_cores - self.expected_irq_bits
 
     def get_expected_options_file_contents(self) -> dict:
-        return {
-            "nic": [self.nic_name],
-            "irq_core_auto_detection_ratio": 16,
-            "tune": ["net"]
-        }
+        return {"nic": [self.nic_name], "irq_core_auto_detection_ratio": 16, "tune": ["net"]}
 
 
 class PerftuneExecutor:
@@ -106,12 +101,14 @@ class PerftuneExecutor:
 
     def get_cpu_mask(self) -> str:
         result = self.node.remoter.run(
-            f"{self.node.add_install_prefix(PERFTUNE_LOCATION)} --tune net --nic {self.nic_name} --get-cpu-mask")
+            f"{self.node.add_install_prefix(PERFTUNE_LOCATION)} --tune net --nic {self.nic_name} --get-cpu-mask"
+        )
         return result.stdout.strip()
 
     def get_irq_cpu_mask(self) -> str:
         result = self.node.remoter.run(
-            f"{self.node.add_install_prefix(PERFTUNE_LOCATION)} --tune net --nic {self.nic_name} --get-irq-cpu-mask")
+            f"{self.node.add_install_prefix(PERFTUNE_LOCATION)} --tune net --nic {self.nic_name} --get-irq-cpu-mask"
+        )
         return result.stdout.strip()
 
     def get_default_perftune_config(self) -> dict:
@@ -139,16 +136,19 @@ class PerftuneOutputChecker:
         self.node = node
         nic_name = node.get_nic_devices()[0]
         self.executor = PerftuneExecutor(node, nic_name)
-        self.expected_result = PerftuneExpectedResult(number_of_cpu_cores=get_number_of_cpu_cores(node),
-                                                      nic_name=nic_name,
-                                                      expected_irq_bits=get_number_of_irq_bits(node))
+        self.expected_result = PerftuneExpectedResult(
+            number_of_cpu_cores=get_number_of_cpu_cores(node),
+            nic_name=nic_name,
+            expected_irq_bits=get_number_of_irq_bits(node),
+        )
 
     @cached_property
     def systemd_version(self):
         systemd_version = 0
         try:
-            systemd_version = get_systemd_version(self.node.remoter.run(
-                "systemctl --version", ignore_status=True).stdout)
+            systemd_version = get_systemd_version(
+                self.node.remoter.run("systemctl --version", ignore_status=True).stdout
+            )
         except Exception:  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
@@ -159,9 +159,10 @@ class PerftuneOutputChecker:
         if cpu_mask_bits != self.expected_result.expected_compute_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-cpu-mask' command on {self.node}"
-                        f"\nActual result: '{cpu_mask}' / {cpu_mask_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_compute_bits} bits",
-                severity=Severity.ERROR).publish()
+                f"\nActual result: '{cpu_mask}' / {cpu_mask_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_compute_bits} bits",
+                severity=Severity.ERROR,
+            ).publish()
 
     def compare_irq_cpu_mask(self) -> None:
         irq_cpu_mask = self.executor.get_irq_cpu_mask()
@@ -169,10 +170,11 @@ class PerftuneOutputChecker:
         if irq_cpu_bits != self.expected_result.expected_irq_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-irq-cpu-mask' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{irq_cpu_mask}' / {irq_cpu_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
-                severity=Severity.ERROR).publish()
+                f"{self.node}"
+                f"\nActual result: '{irq_cpu_mask}' / {irq_cpu_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
+                severity=Severity.ERROR,
+            ).publish()
 
     def compare_default_option_file(self, option_file_dict) -> None:
         cpu_mask_bits = count_bits(option_file_dict["cpu_mask"])
@@ -181,37 +183,41 @@ class PerftuneOutputChecker:
         if cpu_mask_bits != self.expected_result.total_cpu_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of `cpu_mask` from the 'dump-options-file' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict['cpu_mask']}' / {cpu_mask_bits} bits"
-                        f"\nExpected output: {self.expected_result.total_cpu_bits} bits",
-                severity=Severity.ERROR).publish()
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict['cpu_mask']}' / {cpu_mask_bits} bits"
+                f"\nExpected output: {self.expected_result.total_cpu_bits} bits",
+                severity=Severity.ERROR,
+            ).publish()
 
         if irq_cpu_bits != self.expected_result.expected_irq_bits:
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'get-irq-cpu-mask' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict['irq_cpu_mask']}' / {irq_cpu_bits} bits"
-                        f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
-                severity=Severity.ERROR).publish()
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict['irq_cpu_mask']}' / {irq_cpu_bits} bits"
+                f"\nExpected output: {self.expected_result.expected_irq_bits} bits",
+                severity=Severity.ERROR,
+            ).publish()
 
         if option_file_dict.items() <= self.expected_result.get_expected_options_file_contents().items():
             PerftuneResultEvent(
                 message=f"Mismatched results when testing the output of the 'dump-options-file' command on "
-                        f"{self.node}"
-                        f"\nActual result: '{option_file_dict}'"
-                        f"\nExpected output: '{self.expected_result.get_expected_options_file_contents()}'",
-                severity=Severity.ERROR).publish()
+                f"{self.node}"
+                f"\nActual result: '{option_file_dict}'"
+                f"\nExpected output: '{self.expected_result.get_expected_options_file_contents()}'",
+                severity=Severity.ERROR,
+            ).publish()
 
     def compare_option_file_yaml_with_temp_yaml_copy(self, option_file_dict) -> None:
         temp_perftune_yaml_content_dict = self.executor.get_options_file_contents(use_temp_file=True)
         if diff := DeepDiff(temp_perftune_yaml_content_dict, option_file_dict, ignore_order=True):
             PerftuneResultEvent(
                 message=f"Mismatched results when comparing the output of the 'dump-options-file' command to "
-                        f"the content of the generated perftune.yaml file on {self.node}"
-                        f"\nActual result: '{temp_perftune_yaml_content_dict}'"
-                        f"\nExpected output: '{option_file_dict}'"
-                        f"\nDiff: {diff}",
-                severity=Severity.ERROR).publish()
+                f"the content of the generated perftune.yaml file on {self.node}"
+                f"\nActual result: '{temp_perftune_yaml_content_dict}'"
+                f"\nExpected output: '{option_file_dict}'"
+                f"\nDiff: {diff}",
+                severity=Severity.ERROR,
+            ).publish()
 
     @staticmethod
     def _generate_new_irq_cpu_mask_string(mask_int_values) -> str:
@@ -238,17 +244,17 @@ class PerftuneOutputChecker:
         cpu_mask_int_values = self.get_mask_int_values(current_cpu_mask)
         random_irq_cpu_mask_string = self._generate_new_irq_cpu_mask_string(cpu_mask_int_values)
         altered_option_file_contents = self.executor.get_options_file_contents(
-            override_irq_cpu_mask=random_irq_cpu_mask_string)
+            override_irq_cpu_mask=random_irq_cpu_mask_string
+        )
         if altered_option_file_contents["irq_cpu_mask"] != random_irq_cpu_mask_string:
             PerftuneResultEvent(
                 message=f"Despite overriding the irq_cpu_mask param, its value is was not altered properly in the "
-                        f"output of the 'dump-options-file' command on node {self.node}",
-                severity=Severity.ERROR).publish()
+                f"output of the 'dump-options-file' command on node {self.node}",
+                severity=Severity.ERROR,
+            ).publish()
 
     def compare_perftune_results(self) -> None:
-        PerftuneResultEvent(
-            message="Checking the output of perftune.py",
-            severity=Severity.NORMAL).publish()
+        PerftuneResultEvent(message="Checking the output of perftune.py", severity=Severity.NORMAL).publish()
         try:
             self.compare_cpu_mask()
             self.compare_irq_cpu_mask()
@@ -263,4 +269,6 @@ class PerftuneOutputChecker:
         except Exception as error:  # noqa: BLE001
             PerftuneResultEvent(
                 message=f"Unexpected error when verifying the output of Perftune: {error}",
-                severity=Severity.ERROR, trace=traceback.format_exc()).publish()
+                severity=Severity.ERROR,
+                trace=traceback.format_exc(),
+            ).publish()

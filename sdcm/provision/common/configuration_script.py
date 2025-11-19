@@ -36,9 +36,9 @@ SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     syslog_host_port: tuple[str, int] = None
-    logs_transport: str = 'syslog-ng'
+    logs_transport: str = "syslog-ng"
     configure_sshd: bool = True
-    hostname: str = ''
+    hostname: str = ""
     install_docker: bool = False
 
     def to_string(self) -> str:
@@ -49,7 +49,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _wait_before_running_script() -> str:
-        return ''
+        return ""
 
     @staticmethod
     def _skip_if_already_run() -> str:
@@ -71,8 +71,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         return f"mkdir -p {CLOUD_INIT_SCRIPTS_PATH} && touch {CLOUD_INIT_SCRIPTS_PATH}/done"
 
     def _start_script(self) -> str:
-        script = '#!/bin/bash\n'
-        script += 'set -x\n'
+        script = "#!/bin/bash\n"
+        script += "set -x\n"
         script += self._wait_before_running_script()
         return script
 
@@ -88,17 +88,18 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 3. scylla image is running it in such mode that "echo -e" is not working
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
-        script = ''
+        script = ""
 
         script += configure_backoff_timeout()
-        if self.logs_transport == 'syslog-ng':
+        if self.logs_transport == "syslog-ng":
             script += configure_syslogng_destination_conf(
                 host=self.syslog_host_port[0],
                 port=self.syslog_host_port[1],
-                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
+                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND,
+            )
         script += self._skip_if_already_run()
         script += disable_daily_apt_triggers()
-        if self.logs_transport == 'syslog-ng':
+        if self.logs_transport == "syslog-ng":
             script += update_repo_cache()
             script += install_syslogng_service()
             script += configure_syslogng_target_script(hostname=self.hostname)

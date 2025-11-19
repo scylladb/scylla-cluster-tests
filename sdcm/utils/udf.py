@@ -41,6 +41,7 @@ class UDF(BaseModel):
     WASM blog post: https://www.scylladb.com/2022/04/14/wasmtime/
     UDF/UDA testing desing doc: https://docs.google.com/document/d/16GTe1bLmMBC5IVCjC_nY-UNnMCLr_3V2C6K6tiYPstQ/edit?usp=sharing
     """
+
     name: str
     args: str
     called_on_null_input_returns: str
@@ -50,11 +51,13 @@ class UDF(BaseModel):
 
     def get_create_query(self, ks: str, create_or_replace: bool = True) -> str:
         create_part = "CREATE OR REPLACE FUNCTION" if create_or_replace else "CREATE FUNCTION"
-        return f"{create_part} {ks}.{self.name}{self.args} " \
-               f"RETURNS {self.called_on_null_input_returns} ON NULL INPUT " \
-               f"RETURNS {self.return_type} " \
-               f"LANGUAGE {self.language} " \
-               f"AS '{self.script}'"
+        return (
+            f"{create_part} {ks}.{self.name}{self.args} "
+            f"RETURNS {self.called_on_null_input_returns} ON NULL INPUT "
+            f"RETURNS {self.return_type} "
+            f"LANGUAGE {self.language} "
+            f"AS '{self.script}'"
+        )
 
     @classmethod
     def from_yaml(cls, udf_yaml_filename: str) -> UDF:

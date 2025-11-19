@@ -13,8 +13,8 @@
 from collections import defaultdict
 
 
-def group_nodes_by_dc_idx(nodes: list['BaseNode']) -> dict[int, list['BaseNode']]:  # noqa: F821
-    """ Group nodes by dc_idx """
+def group_nodes_by_dc_idx(nodes: list["BaseNode"]) -> dict[int, list["BaseNode"]]:  # noqa: F821
+    """Group nodes by dc_idx"""
     nodes_by_dc_idx = defaultdict(list)
     for node in nodes:
         nodes_by_dc_idx[node.dc_idx].append(node)
