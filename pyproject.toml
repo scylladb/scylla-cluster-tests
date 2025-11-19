@@ -58,7 +58,12 @@ dependencies = [
 ]
 [dependency-groups]
 dev = [
+<<<<<<< HEAD
     "autopep8==2.3.1",
+||||||| parent of ba8c629a3 (improvement(treewide): Use ruff format instead of autopep8)
+    "autopep8==2.3.2",
+=======
+>>>>>>> ba8c629a3 (improvement(treewide): Use ruff format instead of autopep8)
     "pre-commit==4.0.1",
     "pycodestyle==2.13.0",
     "ruff==0.14.6",
@@ -89,7 +94,7 @@ exclude = ["argus/"]
 target-version = "py310"
 
 force-exclude = true
-line-length = 240
+line-length = 120
 respect-gitignore = true
 
 [tool.ruff.lint.pylint]
