@@ -37,9 +37,19 @@ repos:
 
 -   repo: local
     hooks:
+<<<<<<< HEAD
     -   id: autopep8
         name: autopep8
         entry: autopep8 -i -j 2 --max-line-length=120 --ignore=E226,E24,W50,W690,E402,E731
+||||||| parent of ba8c629a3 (improvement(treewide): Use ruff format instead of autopep8)
+    -   id: autopep8
+        name: autopep8
+        entry: autopep8 -i -j 2
+=======
+    -   id: ruff-format
+        name: ruff-format
+        entry: ruff format
+>>>>>>> ba8c629a3 (improvement(treewide): Use ruff format instead of autopep8)
         language: system
         types: [python]
         exclude: '(\.sh$|argus/.*)'
