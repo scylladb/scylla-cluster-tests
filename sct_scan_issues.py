@@ -26,6 +26,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.sct_cmd_helpers import add_file_logger
 from sdcm.sct_events.setup import start_events_device, stop_events_device
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -53,9 +54,11 @@ def scan_issue_skips():
 
     params = SCTConfiguration()
     for file_path in Path(get_sct_root_path()).glob("**/*.py"):
-        if (file_path.name.startswith("test_")
-                or file_path.name == Path(__file__).name
-                or any(subdir in str(file_path) for subdir in (".tox/", ".venv/", ".env/"))):
+        if (
+            file_path.name.startswith("test_")
+            or file_path.name == Path(__file__).name
+            or any(subdir in str(file_path) for subdir in (".tox/", ".venv/", ".env/"))
+        ):
             # skip tests and virtual env files
             continue
         for node in ast.walk(ast.parse(file_path.read_text())):
@@ -68,8 +71,11 @@ def scan_issue_skips():
                     issues_opened = check.issues_opened()
 
                     issues_labels = sum([issue.labels for issue in check.issues], [])
-                    issues_labeled = any(label.name for label in issues_labels if label.name.startswith(
-                        "sct-") and label.name.endswith("-skip"))
+                    issues_labeled = any(
+                        label.name
+                        for label in issues_labels
+                        if label.name.startswith("sct-") and label.name.endswith("-skip")
+                    )
 
                     if not (issues_opened or issues_labeled):
                         click.secho(f"{args[:1]} is closed, should be consider to be remove from code", fg="red")

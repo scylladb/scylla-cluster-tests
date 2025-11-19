@@ -17,14 +17,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class NemesisJobGenerator:
-    BACKEND_TO_REGION = {
-        "aws": "eu-west-1",
-        "gce": "us-east1",
-        "azure": "eastus",
-        "docker": "eu-west-1"
-    }
+    BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
 
-    def __init__(self, base_job: str = None, base_dir: str | Path = Path("."), backend: str = None) -> 'NemesisJobGenerator':
+    def __init__(
+        self, base_job: str = None, base_dir: str | Path = Path("."), backend: str = None
+    ) -> "NemesisJobGenerator":
         self.base_dir = base_dir if isinstance(base_dir, Path) else Path(base_dir)
         self.verify_env()
         self.nemesis_class_list = self.load_nemesis_class_list()
@@ -77,8 +74,7 @@ class NemesisJobGenerator:
     def create_test_cases_from_template(self):
         for cls in self.nemesis_class_list:
             new_config_name = f"{cls}.yaml"
-            nemesis_config_body = Template(self.nemesis_config_template_content).render(
-                {"nemesis_class": cls})
+            nemesis_config_body = Template(self.nemesis_config_template_content).render({"nemesis_class": cls})
             target_config = self.nemesis_test_config_dir / new_config_name
             if target_config.exists():
                 handle = target_config.open("r+")
@@ -94,10 +90,14 @@ class NemesisJobGenerator:
                             content.splitlines(keepends=True),
                             nemesis_config_body.splitlines(keepends=True),
                             fromfile=f"{cls}-old.yaml",
-                            tofile=f"{cls}-new.yaml"
+                            tofile=f"{cls}-new.yaml",
                         )
-                        LOGGER.error("Difference detected in %s.yaml, Diff:\n%s\n\nExtra keys: %s",
-                                     cls, "\n".join(diff), ", ".join(key_diff))
+                        LOGGER.error(
+                            "Difference detected in %s.yaml, Diff:\n%s\n\nExtra keys: %s",
+                            cls,
+                            "\n".join(diff),
+                            ", ".join(key_diff),
+                        )
                         continue
             else:
                 handle = target_config.open("w")
@@ -127,7 +127,8 @@ class NemesisJobGenerator:
                     "backend": self.backend,
                     "region": self.BACKEND_TO_REGION.get(self.backend, "eu-west-1"),
                     "additional_params": additional_params,
-                })
+                }
+            )
             job_path = self.base_nemesis_job_dir / job_file_name
             with job_path.open("w") as file:
                 file.write(nemesis_job_groovy_source + "\n")
@@ -141,15 +142,13 @@ class NemesisJobGenerator:
         params = params if params else {}
         base_config_body = Template(self.nemesis_base_config_file_template).render(params)
         with (self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml").open(mode="w") as file:
-            file.write(base_config_body + '\n')
+            file.write(base_config_body + "\n")
 
         LOGGER.info("Rendered base config:\n\n%s\n\n", self.nemesis_base_config_file_template)
 
     def verify_env(self):
-        assert self.template_path.exists(), \
-            "Nemesis template directory is missing, cannot continue"
-        assert self.nemesis_class_list_path.exists(), \
-            "Nemesis class list is not generated, cannot continue"
+        assert self.template_path.exists(), "Nemesis template directory is missing, cannot continue"
+        assert self.nemesis_class_list_path.exists(), "Nemesis class list is not generated, cannot continue"
 
         if not self.nemesis_test_config_dir.exists():
             self.nemesis_test_config_dir.mkdir()

@@ -17,25 +17,34 @@ from sdcm.stress_thread import get_timeout_from_stress_cmd
 from sdcm.utils.common import time_period_str_to_seconds
 
 
-@pytest.mark.parametrize("duration,seconds", (
-    ("1h1m20s", 3680),
-    ("1m20s", 80),
-    ("1h20s", 3620),
-    ("25m", 1500),
-    ("10h", 36000),
-    ("25s", 25),
-))
+@pytest.mark.parametrize(
+    "duration,seconds",
+    (
+        ("1h1m20s", 3680),
+        ("1m20s", 80),
+        ("1h20s", 3620),
+        ("25m", 1500),
+        ("10h", 36000),
+        ("25s", 25),
+    ),
+)
 def test_duration_str_to_seconds_function(duration, seconds):
     assert time_period_str_to_seconds(duration) == seconds
 
 
-@pytest.mark.parametrize("stress_cmd, timeout", (
-    ("cassandra-stress counter_write cl=QUORUM duration=20m"
-     " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' no-warmup", 1200 + 900),
-    ("scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data", 3600 + 900),
-    ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
-    ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),
-    ("latte run --duration 10m --sampling 5s", 600 + 900),
-))
+@pytest.mark.parametrize(
+    "stress_cmd, timeout",
+    (
+        (
+            "cassandra-stress counter_write cl=QUORUM duration=20m"
+            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' no-warmup",
+            1200 + 900,
+        ),
+        ("scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data", 3600 + 900),
+        ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
+        ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),
+        ("latte run --duration 10m --sampling 5s", 600 + 900),
+    ),
+)
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout
