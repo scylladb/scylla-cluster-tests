@@ -6,7 +6,6 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 @dataclass
 class DisableAptTriggersUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
         return True
