@@ -23,7 +23,7 @@ class TabletsConfiguration:
             if v is not None:
                 value = str(v).lower() if isinstance(v, bool) else v
                 items.append(f"'{k}': {value}")
-        return '{' + ', '.join(items) + '}'
+        return "{" + ", ".join(items) + "}"
 
 
 def wait_no_tablets_migration_running(node, timeout: int = 3600):
@@ -45,9 +45,10 @@ def wait_no_tablets_migration_running(node, timeout: int = 3600):
     LOGGER.info("Waiting for having no ongoing tablets topology operations")
     try:
         with adaptive_timeout(Operations.TABLET_MIGRATION, node, timeout=timeout):
-            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
-                                    params={}, timeout=4*3600)
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology", params={}, timeout=4 * 3600)
         LOGGER.info("All ongoing tablets topology operations are done")
     except Exception as exc:  # noqa: BLE001
-        InfoEvent(f"Failed to wait for having no ongoing tablets topology operations. Exception: {exc.__repr__()}",
-                  severity=Severity.ERROR).publish()
+        InfoEvent(
+            f"Failed to wait for having no ongoing tablets topology operations. Exception: {exc.__repr__()}",
+            severity=Severity.ERROR,
+        ).publish()

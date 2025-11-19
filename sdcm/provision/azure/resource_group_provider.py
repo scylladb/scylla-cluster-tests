@@ -27,6 +27,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class ResourceGroupProvider:
     """Class for providing resource groups and taking care about discovery existing ones."""
+
     _name: str
     _region: str
     _az: str
@@ -37,8 +38,9 @@ class ResourceGroupProvider:
         """Discover existing resource group for this provider."""
         try:
             resource_group = self._azure_service.resource.resource_groups.get(self._name)
-            assert resource_group.location == self._region, \
+            assert resource_group.location == self._region, (
                 f"resource group {resource_group.name} does not belong to {self._region} region (location)"
+            )
             self._cache = resource_group
         except ResourceNotFoundError:
             pass
@@ -52,7 +54,7 @@ class ResourceGroupProvider:
             resource_group_name=self._name,
             parameters={
                 "location": self._region,
-                "tags": {"creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds"), "_az": self._az}
+                "tags": {"creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds"), "_az": self._az},
             },
         )
         LOGGER.info("Provisioned resource group %s in the %s region", resource_group.name, resource_group.location)
