@@ -35,9 +35,9 @@ class NemesisNodeAllocator(metaclass=Singleton):
     def __init__(self, tester_obj):
         self.lock = threading.Lock()
         self._tester = tester_obj
-        self.active_nemesis_on_nodes: dict['BaseNode', str] = {}
+        self.active_nemesis_on_nodes: dict["BaseNode", str] = {}
 
-    def _get_pool_type_nodes(self, pool_type: Enum) -> list['BaseNode']:
+    def _get_pool_type_nodes(self, pool_type: Enum) -> list["BaseNode"]:
         all_nodes = self._tester.all_db_nodes
         match pool_type:
             case NEMESIS_TARGET_POOLS.all_nodes:
@@ -50,11 +50,13 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 raise NemesisNodeAllocationError(f"Unsupported pool type: {pool_type}")
 
     @staticmethod
-    def _filter_nodes(nodes_to_filter: list['BaseNode'],
-                      is_seed: bool | DefaultValue | None = DefaultValue,
-                      dc_idx: int | None = None,
-                      rack: int | None = None,
-                      filter_seed: bool = False) -> list['BaseNode']:
+    def _filter_nodes(
+        nodes_to_filter: list["BaseNode"],
+        is_seed: bool | DefaultValue | None = DefaultValue,
+        dc_idx: int | None = None,
+        rack: int | None = None,
+        filter_seed: bool = False,
+    ) -> list["BaseNode"]:
         """
         Filters nodes based on is_seed, dc_idx, rack criteria.
 
@@ -80,9 +82,13 @@ class NemesisNodeAllocator(metaclass=Singleton):
         return filtered
 
     @contextmanager
-    def run_nemesis(self, nemesis_label: str, node_list: list['BaseNode'] | None = None,
-                    pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes,
-                    filter_seed: bool = False):
+    def run_nemesis(
+        self,
+        nemesis_label: str,
+        node_list: list["BaseNode"] | None = None,
+        pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes,
+        filter_seed: bool = False,
+    ):
         """
         Select a node from node_list and mark it as running nemesis for the duration of the context.
 
@@ -95,26 +101,24 @@ class NemesisNodeAllocator(metaclass=Singleton):
         unique_nemesis_label = unique_disruption_name(nemesis_label)
         try:
             reserved_node = self.select_target_node(
-                nemesis_name=unique_nemesis_label,
-                pool_type=pool_type,
-                filter_seed=filter_seed,
-                node_list=node_list
+                nemesis_name=unique_nemesis_label, pool_type=pool_type, filter_seed=filter_seed, node_list=node_list
             )
             yield reserved_node
         finally:
             if reserved_node:
                 self.unset_running_nemesis(reserved_node, unique_nemesis_label)
 
-    def select_target_node(self,
-                           nemesis_name: str,
-                           pool_type: Enum,
-                           filter_seed: bool,
-                           is_seed: bool | DefaultValue | None = DefaultValue,
-                           dc_idx: int | None = None,
-                           rack: int | None = None,
-                           allow_only_last_node_in_rack: bool = False,
-                           node_list: list['BaseNode'] | None = None
-                           ) -> 'BaseNode':
+    def select_target_node(
+        self,
+        nemesis_name: str,
+        pool_type: Enum,
+        filter_seed: bool,
+        is_seed: bool | DefaultValue | None = DefaultValue,
+        dc_idx: int | None = None,
+        rack: int | None = None,
+        allow_only_last_node_in_rack: bool = False,
+        node_list: list["BaseNode"] | None = None,
+    ) -> "BaseNode":
         """
         Selects a not allocated node as a target for the nemesis.
 
@@ -132,20 +136,22 @@ class NemesisNodeAllocator(metaclass=Singleton):
                 raise AllNodesRunNemesisError(f"{nemesis_name}: node allocation failed.\n{reason}")
 
             candidate_nodes = self._filter_nodes(
-                available_for_selection, is_seed=is_seed, dc_idx=dc_idx, rack=rack, filter_seed=filter_seed)
+                available_for_selection, is_seed=is_seed, dc_idx=dc_idx, rack=rack, filter_seed=filter_seed
+            )
 
             if not candidate_nodes:
-                dc_str = f'dc_idx={dc_idx}' if dc_idx is not None else ''
-                rack_str = f'rack={rack}' if rack is not None else ''
-                seed_str = f'is_seed={is_seed}' if is_seed is not DefaultValue else ''
+                dc_str = f"dc_idx={dc_idx}" if dc_idx is not None else ""
+                rack_str = f"rack={rack}" if rack is not None else ""
+                seed_str = f"is_seed={is_seed}" if is_seed is not DefaultValue else ""
                 filter_str = ", ".join([dc_str, rack_str, seed_str])
                 reason = (
                     f"The following '{pool_type.value}' nodes are available for selection, but none of "
                     f"them match the specified criteria ({filter_str}).\n"
-                    f"{[n.name for n in available_for_selection]}.")
+                    f"{[n.name for n in available_for_selection]}."
+                )
                 raise NoNodeMatchesCriteriaError(f"{nemesis_name}: node allocation failed.\n{reason}")
 
-            selected_node: 'BaseNode'
+            selected_node: "BaseNode"
             if allow_only_last_node_in_rack and rack is not None:
                 selected_node = candidate_nodes[-1]
             else:
@@ -153,11 +159,10 @@ class NemesisNodeAllocator(metaclass=Singleton):
 
             self.active_nemesis_on_nodes[selected_node] = nemesis_name
             selected_node.running_nemesis = nemesis_name
-            LOGGER.info("%s: selected target node %s. Marked it as running nemesis.",
-                        nemesis_name, selected_node.name)
+            LOGGER.info("%s: selected target node %s. Marked it as running nemesis.", nemesis_name, selected_node.name)
             return selected_node
 
-    def set_running_nemesis(self, node: 'BaseNode', nemesis_name: str) -> bool:
+    def set_running_nemesis(self, node: "BaseNode", nemesis_name: str) -> bool:
         """
         Sets running nemesis for the node.
 
@@ -169,7 +174,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                     source=self.__class__.__name__,
                     message=f"{nemesis_name}: setting running nemesis failed.\nTried to set running nemesis for "
                     f"node {node.name}, but it was already reserved by '{self.active_nemesis_on_nodes[node]}' nemesis.",
-                    severity=Severity.ERROR
+                    severity=Severity.ERROR,
                 ).publish()
                 return False
 
@@ -178,7 +183,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
             LOGGER.info("%s: set running nemesis for node %s.", nemesis_name, node.name)
             return True
 
-    def unset_running_nemesis(self, node: 'BaseNode', nemesis_name: str):
+    def unset_running_nemesis(self, node: "BaseNode", nemesis_name: str):
         """Unsets running nemesis, making the node available for other nemeses."""
         with self.lock:
             if node in self.active_nemesis_on_nodes:
@@ -192,14 +197,14 @@ class NemesisNodeAllocator(metaclass=Singleton):
                         message=f"{nemesis_name}: unsetting running nemesis failed.\nTried to unset '{nemesis_name}' "
                         f"nemesis from node {node.name}, but it was running another "
                         f"'{self.active_nemesis_on_nodes[node]}' nemesis.",
-                        severity=Severity.ERROR
+                        severity=Severity.ERROR,
                     ).publish()
             else:
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
                     message=f"{nemesis_name}: unsetting running nemesis failed.\nTried to unset '{nemesis_name}' "
                     f"nemesis from node {node.name}, but it was not running any nemesis.",
-                    severity=Severity.ERROR
+                    severity=Severity.ERROR,
                 ).publish()
 
     def unset_running_nemesis_from_all_nodes(self, nemesis_name: str):
@@ -213,13 +218,14 @@ class NemesisNodeAllocator(metaclass=Singleton):
         with self.lock:
             nodes_to_release = [node for node, owner in self.active_nemesis_on_nodes.items() if owner == nemesis_name]
             if nodes_to_release:
-                LOGGER.info("%s: unset running nemesis from nodes: %s",
-                            nemesis_name, [n.name for n in nodes_to_release])
+                LOGGER.info(
+                    "%s: unset running nemesis from nodes: %s", nemesis_name, [n.name for n in nodes_to_release]
+                )
                 for node in nodes_to_release:
                     del self.active_nemesis_on_nodes[node]
                     node.running_nemesis = None
 
-    def switch_target_node(self, old_node: 'BaseNode', new_node: 'BaseNode', nemesis_name: str) -> bool:
+    def switch_target_node(self, old_node: "BaseNode", new_node: "BaseNode", nemesis_name: str) -> bool:
         """
         Switches the nemesis target from an old node to a new one.
 
@@ -242,7 +248,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
                         source=self.__class__.__name__,
                         message=f"{nemesis_name}: switching target node failed.\nDuring switch, old node "
                         f"{old_node.name} was running another '{self.active_nemesis_on_nodes[old_node]}' nemesis.",
-                        severity=Severity.ERROR
+                        severity=Severity.ERROR,
                     ).publish()
 
             self.active_nemesis_on_nodes[new_node] = nemesis_name
@@ -251,7 +257,7 @@ class NemesisNodeAllocator(metaclass=Singleton):
             return True
 
     @contextmanager
-    def nodes_running_nemesis(self, nodes: Union[Iterable['BaseNode'], 'BaseNode'], nemesis_name: str):
+    def nodes_running_nemesis(self, nodes: Union[Iterable["BaseNode"], "BaseNode"], nemesis_name: str):
         """Temporarily marks nodes as running the specified nemesis."""
         if not isinstance(nodes, Iterable):
             nodes = [nodes]
@@ -264,7 +270,8 @@ class NemesisNodeAllocator(metaclass=Singleton):
                     marked_nodes.clear()
                     raise NemesisNodeAllocationError(
                         f"{nemesis_name}: failed to set running nemesis for all requested nodes; "
-                        f"{node.name} was already reserved.")
+                        f"{node.name} was already reserved."
+                    )
                 marked_nodes.append(node)
             yield
         finally:
@@ -282,12 +289,13 @@ def mark_new_nodes_as_running_nemesis(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        allocator = getattr(self.test_config.tester_obj(), 'nemesis_allocator', None)
-        disruption_name = kwargs.pop('disruption_name', None)
+        allocator = getattr(self.test_config.tester_obj(), "nemesis_allocator", None)
+        disruption_name = kwargs.pop("disruption_name", None)
 
         new_nodes = func(self, *args, **kwargs)
         if new_nodes and allocator and disruption_name:
             for node in new_nodes:
                 allocator.set_running_nemesis(node, disruption_name)
         return new_nodes
+
     return wrapper
