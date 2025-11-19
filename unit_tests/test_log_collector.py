@@ -20,7 +20,7 @@ from sdcm.provision import provisioner_factory
 from unit_tests.lib.fake_resources import prepare_fake_region
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def test_id():
     return f"{str(uuid.uuid4())}"
 
@@ -28,8 +28,9 @@ def test_id():
 def test_create_collecting_nodes(test_id, tmp_path_factory):
     test_dir = tmp_path_factory.mktemp("log-collector")
     prepare_fake_region(test_id, "region_1", n_db_nodes=3, n_loaders=2, n_monitor_nodes=1)
-    collector = Collector(test_id=test_id, test_dir=test_dir,
-                          params={"cluster_backend": "fake", "use_cloud_manager": False})
+    collector = Collector(
+        test_id=test_id, test_dir=test_dir, params={"cluster_backend": "fake", "use_cloud_manager": False}
+    )
     collector.create_collecting_nodes()
     provisioner = provisioner_factory.discover_provisioners(backend="fake", test_id=test_id)[0]
 
