@@ -24,15 +24,15 @@ class TestUDF(TestCase):
         "called_on_null_input_returns": "NULL",
         "return_type": "int",
         "language": "lua",
-        "script": "return #var"
+        "script": "return #var",
     }
 
     MOCK_WASM_UDF_VALS = {
-        "name": 'wasm_plus',
-        "args": '(input1 int, input2 int)',
-        "called_on_null_input_returns": 'NULL',
-        "return_type": 'int',
-        "language": 'wasm',
+        "name": "wasm_plus",
+        "args": "(input1 int, input2 int)",
+        "called_on_null_input_returns": "NULL",
+        "return_type": "int",
+        "language": "wasm",
         "script": r"""(module
 (type (;0;) (func))
 (type (;1;) (func (param i32 i32) (result i32)))
@@ -58,7 +58,7 @@ class TestUDF(TestCase):
 (export "__global_base" (global 3))
 (export "__heap_base" (global 4))
 (export "__memory_base" (global 5))
-(export "__table_base" (global 6)))"""
+(export "__table_base" (global 6)))""",
     }
 
     def test_create_udf_instance(self):
@@ -70,16 +70,20 @@ class TestUDF(TestCase):
             self.assertEqual(value, getattr(udf, key), f"Did not find expected value for {key} in the udf class.")
 
     def test_get_create_query_from_udf(self):
-        expected_query = "CREATE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
-                         "RETURNS int LANGUAGE lua AS 'return #var'"
+        expected_query = (
+            "CREATE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT "
+            "RETURNS int LANGUAGE lua AS 'return #var'"
+        )
         udf = UDF(**self.MOCK_LUA_UDF_VALS)
         actual_query = udf.get_create_query(ks="mock_keyspace", create_or_replace=False)
 
         self.assertEqual(expected_query, actual_query)
 
     def test_get_create_or_replace_query_from_udf(self):
-        expected_query = "CREATE OR REPLACE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
-                         "RETURNS int LANGUAGE lua AS 'return #var'"
+        expected_query = (
+            "CREATE OR REPLACE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT "
+            "RETURNS int LANGUAGE lua AS 'return #var'"
+        )
         udf = UDF(**self.MOCK_LUA_UDF_VALS)
         actual_query = udf.get_create_query(ks="mock_keyspace")
 
@@ -92,16 +96,18 @@ class TestUDF(TestCase):
             udf_args = self.MOCK_LUA_UDF_VALS.copy()
             udf_args.update({arg_name: None})
 
-            with self.assertRaises(ValidationError,
-                                   msg=f"Creating a udf without providing {arg_name} did not raise a ValidationError."):
+            with self.assertRaises(
+                ValidationError, msg=f"Creating a udf without providing {arg_name} did not raise a ValidationError."
+            ):
                 UDF(**udf_args)
 
     def test_creating_udf_class_with_invalid_language(self):
         udf_vals = self.MOCK_LUA_UDF_VALS.copy()
         udf_vals.update({"language": "Java"})
 
-        with self.assertRaises(ValidationError,
-                               msg="Creating UDF class with invalid language did not raise ValidationError."):
+        with self.assertRaises(
+            ValidationError, msg="Creating UDF class with invalid language did not raise ValidationError."
+        ):
             UDF(**udf_vals)
 
     def test_loading_udfs_with_lua_scripts(self):

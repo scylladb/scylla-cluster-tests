@@ -27,7 +27,7 @@ class NodetoolCommand:
         cmd_split = self.cmd.split()
         if len(cmd_split) > 1:
             options_to_list = [self.options] if self.options else []
-            self.options = ' '.join(cmd_split[1:] + options_to_list)
+            self.options = " ".join(cmd_split[1:] + options_to_list)
             self.cmd = cmd_split[0]
 
 
@@ -40,12 +40,7 @@ class NodetoolEventEncoder(JSONEncoder):
 
 
 class NodetoolEvent(ContinuousEvent):
-    def __init__(self,
-                 nodetool_command,
-                 severity=Severity.NORMAL,
-                 node=None,
-                 options=None,
-                 publish_event=True):
+    def __init__(self, nodetool_command, severity=Severity.NORMAL, node=None, options=None, publish_event=True):
         self.nodetool_command = NodetoolCommand(cmd=nodetool_command, options=options)
         self.node = str(node)
         self.full_traceback = None
