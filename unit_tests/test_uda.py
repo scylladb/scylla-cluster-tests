@@ -29,7 +29,7 @@ class TestUDA(TestCase):
             called_on_null_input_returns="NULL",
             return_type="tuple<int, int>",
             language="lua",
-            script="return {acc[1] + val, acc[2] + 1}"
+            script="return {acc[1] + val, acc[2] + 1}",
         ),
         "negator": UDF(
             name="my_negator",
@@ -37,7 +37,7 @@ class TestUDA(TestCase):
             called_on_null_input_returns="NULL",
             return_type="bigint",
             language="lua",
-            script="return -acc"
+            script="return -acc",
         ),
         "reducer": UDF(
             name="sum_reductor",
@@ -45,8 +45,8 @@ class TestUDA(TestCase):
             called_on_null_input_returns="NULL",
             return_type="bigint",
             language="lua",
-            script="return acc1 + acc2"
-        )
+            script="return acc1 + acc2",
+        ),
     }
 
     def test_create_uda_instance(self):
@@ -57,18 +57,13 @@ class TestUDA(TestCase):
             accumulator_udf=self.UDFS["accumulator"],
             reduce_udf=self.UDFS["reducer"],
             final_udf=self.UDFS["negator"],
-            initial_condition="(0, 0)"
+            initial_condition="(0, 0)",
         )
 
         self.assertIsInstance(new_uda, UDA)
 
     def test_get_create_query_string(self):
-        expected_create_query_string = "CREATE AGGREGATE testing.my_uda(int) " \
-                                       "SFUNC my_acc " \
-                                       "STYPE tuple<int, int> " \
-                                       "REDUCEFUNC sum_reductor " \
-                                       "FINALFUNC my_negator " \
-                                       "INITCOND (0, 0);"
+        expected_create_query_string = "CREATE AGGREGATE testing.my_uda(int) SFUNC my_acc STYPE tuple<int, int> REDUCEFUNC sum_reductor FINALFUNC my_negator INITCOND (0, 0);"
 
         new_uda = UDA(
             name="my_uda",
@@ -77,19 +72,14 @@ class TestUDA(TestCase):
             accumulator_udf=self.UDFS["accumulator"],
             reduce_udf=self.UDFS["reducer"],
             final_udf=self.UDFS["negator"],
-            initial_condition="(0, 0)"
+            initial_condition="(0, 0)",
         )
 
         actual_create_query_string = new_uda.get_create_query_string(ks="testing")
         self.assertEqual(actual_create_query_string, expected_create_query_string)
 
     def test_load_uda_from_yaml(self):
-        expected_create_string = "CREATE AGGREGATE testing.my_uda(int) " \
-                                 "SFUNC wasm_plus " \
-                                 "STYPE int " \
-                                 "REDUCEFUNC wasm_plus " \
-                                 "FINALFUNC wasm_simple_return_int " \
-                                 "INITCOND (0, 0);"
+        expected_create_string = "CREATE AGGREGATE testing.my_uda(int) SFUNC wasm_plus STYPE int REDUCEFUNC wasm_plus FINALFUNC wasm_simple_return_int INITCOND (0, 0);"
 
         data = {
             "name": "my_uda",
@@ -98,7 +88,7 @@ class TestUDA(TestCase):
             "accumulator_udf_name": "wasm_plus",
             "reduce_udf_name": "wasm_plus",
             "final_udf_name": "wasm_simple_return_int",
-            "initial_condition": "(0, 0)"
+            "initial_condition": "(0, 0)",
         }
 
         with tempfile.TemporaryDirectory() as tempdir:

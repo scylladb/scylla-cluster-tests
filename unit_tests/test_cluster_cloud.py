@@ -1,4 +1,5 @@
 """Unit tests for cluster_cloud module."""
+
 from unittest.mock import MagicMock
 from sdcm.cluster_cloud import xcloud_super_if_supported
 

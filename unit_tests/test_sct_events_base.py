@@ -19,8 +19,7 @@ from typing import Optional, Type, Protocol, runtime_checkable
 from unittest.mock import patch
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import \
-    SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
+from sdcm.sct_events.base import SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
 
 
 Y = None  # define a global name for pickle.
@@ -32,12 +31,7 @@ class TestSctEventDefaultRegistry(unittest.TestCase):
 
 
 class SctEventTestCase(unittest.TestCase):
-    severities_yaml = (b"Y: NORMAL\n"
-                       b"Z: ERROR\n"
-                       b"Y.T: WARNING\n"
-                       b"Y.T.S: CRITICAL\n"
-                       b"Z.T.S: NORMAL\n"
-                       b"W.T.S: NORMAL\n")
+    severities_yaml = b"Y: NORMAL\nZ: ERROR\nY.T: WARNING\nY.T.S: CRITICAL\nZ.T.S: NORMAL\nW.T.S: NORMAL\n"
     severities_conf: Optional[str] = None
     _registry_bu = None
 
@@ -64,7 +58,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertRaisesRegex(TypeError, "may not be instantiated directly", SctEvent)
 
     def test_subclass_no_max_severity(self):
-        self.assertRaisesRegex(ValueError, "no max severity", type, "X", (SctEvent, ), {})
+        self.assertRaisesRegex(ValueError, "no max severity", type, "X", (SctEvent,), {})
 
     def test_subclass_abstract_no_max_severity(self):
         class X(SctEvent, abstract=True):
@@ -91,11 +85,10 @@ class TestSctEvent(SctEventTestCase):
         self.assertIsInstance(y, SctEventProtocol)
 
     def test_subclass_twice_with_same_name(self):
-
         class Y(SctEvent):
             pass
 
-        self.assertRaisesRegex(TypeError, "is already used", type, "Y", (SctEvent, ), {})
+        self.assertRaisesRegex(TypeError, "is already used", type, "Y", (SctEvent,), {})
 
     def test_default_str(self):
         class Y(SctEvent):
@@ -103,8 +96,9 @@ class TestSctEvent(SctEventTestCase):
 
         y = Y()
         y.event_id = "d81c016f-2333-4047-8c91-7cde98c38a15"
-        self.assertEqual(str(y),
-                         "(Y Severity.UNKNOWN) period_type=not-set event_id=d81c016f-2333-4047-8c91-7cde98c38a15")
+        self.assertEqual(
+            str(y), "(Y Severity.UNKNOWN) period_type=not-set event_id=d81c016f-2333-4047-8c91-7cde98c38a15"
+        )
 
     def test_equal(self):
         class Y(SctEvent):
@@ -152,10 +146,7 @@ class TestSctEvent(SctEventTestCase):
         y.event_id = "fa4a84a2-968b-474c-b188-b3bac4be8527"
         self.assertEqual(
             y.to_json(),
-            f'{{"base": "Y", "type": null, "subtype": null, "event_timestamp": {y.event_timestamp}, '
-            f'"source_timestamp": null, '
-            f'"severity": "UNKNOWN", "event_id": "fa4a84a2-968b-474c-b188-b3bac4be8527", "log_level": 30, '
-            f'"subcontext": []}}'
+            f'{{"base": "Y", "type": null, "subtype": null, "event_timestamp": {y.event_timestamp}, "source_timestamp": null, "severity": "UNKNOWN", "event_id": "fa4a84a2-968b-474c-b188-b3bac4be8527", "log_level": 30, "subcontext": []}}',
         )
 
     def test_publish(self):
@@ -559,20 +550,25 @@ class TestLogEvent(SctEventTestCase):
 
         y = Y.T()
         y.event_id = "04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e"
-        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
-                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=0")
+        self.assertEqual(
+            str(y),
+            "(Y Severity.ERROR) period_type=one-time event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=0",
+        )
 
         y.add_info(node="n1", line="l1", line_number=1)
-        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
-                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
-                                 "node=n1\nl1")
+        self.assertEqual(
+            str(y),
+            "(Y Severity.ERROR) period_type=one-time event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 node=n1\nl1",
+        )
 
         y.raw_backtrace = "rb1"
-        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
-                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
-                                 "node=n1\nl1\nrb1")
+        self.assertEqual(
+            str(y),
+            "(Y Severity.ERROR) period_type=one-time event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 node=n1\nl1\nrb1",
+        )
 
         y.backtrace = "b1"
-        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
-                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
-                                 "node=n1\nl1\nb1")
+        self.assertEqual(
+            str(y),
+            "(Y Severity.ERROR) period_type=one-time event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 node=n1\nl1\nb1",
+        )

@@ -27,7 +27,9 @@ from sdcm.utils.health_checker import (
 
 
 class Node:
-    GOSSIP_STATUSES_FILTER_OUT = ["FILTERED", ]
+    GOSSIP_STATUSES_FILTER_OUT = [
+        "FILTERED",
+    ]
 
     def __init__(self, ip_address, name):
         self.ip_address = ip_address
@@ -63,71 +65,56 @@ class ProblematicNode(Node):
         if self.get_gossip_info_call_counter > self.num_of_failed_attempts:
             return super().get_gossip_info()
         return {
-            node1: {
-                'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-                'status': 'NORMAL',
-                'dc': 'datacenter1'
-            },
-            node2: {
-                'schema': 'who_cares_about_this_node_is_shutdown',
-                'status': 'shutdown',
-                'dc': 'datacenter1'
-            },
-            node3: {
-                'schema': 'bad-schema',
-                'status': 'NORMAL',
-                'dc': 'datacenter1'
-            },
+            node1: {"schema": "cbe15453-33f3-3387-aaf1-4120548f41e8", "status": "NORMAL", "dc": "datacenter1"},
+            node2: {"schema": "who_cares_about_this_node_is_shutdown", "status": "shutdown", "dc": "datacenter1"},
+            node3: {"schema": "bad-schema", "status": "NORMAL", "dc": "datacenter1"},
         }
 
 
-node1 = Node('127.0.0.1', "node-0")
-node2 = Node('127.0.0.2', "node-1")
-node3 = Node('127.0.0.3', "node-2")
-node4 = Node('127.0.0.4', "node-3")
+node1 = Node("127.0.0.1", "node-0")
+node2 = Node("127.0.0.2", "node-1")
+node3 = Node("127.0.0.3", "node-2")
+node4 = Node("127.0.0.4", "node-3")
 
 
 NODES_STATUS = {
-    node1: {"status": "UN", "dc": "datacenter1", },
-    node2: {"status": "DN", "dc": "datacenter1", },
-    node3: {"status": "UN", "dc": "datacenter1", },
+    node1: {
+        "status": "UN",
+        "dc": "datacenter1",
+    },
+    node2: {
+        "status": "DN",
+        "dc": "datacenter1",
+    },
+    node3: {
+        "status": "UN",
+        "dc": "datacenter1",
+    },
 }
 
 PEERS_INFO = {
     node2: {
-        'data_center': 'datacenter1',
-        'host_id': UUID('b231fe54-8093-4d5c-9a35-b5e34dc81500'),
-        'rack': 'rack1',
-        'release_version': '3.0.8',
-        'rpc_address': '127.0.0.2',
-        'schema_version': UUID('cbe15453-33f3-3387-aaf1-4120548f41e8'),
+        "data_center": "datacenter1",
+        "host_id": UUID("b231fe54-8093-4d5c-9a35-b5e34dc81500"),
+        "rack": "rack1",
+        "release_version": "3.0.8",
+        "rpc_address": "127.0.0.2",
+        "schema_version": UUID("cbe15453-33f3-3387-aaf1-4120548f41e8"),
     },
     node3: {
-        'data_center': 'datacenter1',
-        'host_id': UUID('e11cb4ea-a129-48aa-a9e9-7815dcd2828c'),
-        'rack': 'rack1',
-        'release_version': '3.0.8',
-        'rpc_address': '127.0.0.3',
-        'schema_version': UUID('cbe15453-33f3-3387-aaf1-4120548f41e8'),
+        "data_center": "datacenter1",
+        "host_id": UUID("e11cb4ea-a129-48aa-a9e9-7815dcd2828c"),
+        "rack": "rack1",
+        "release_version": "3.0.8",
+        "rpc_address": "127.0.0.3",
+        "schema_version": UUID("cbe15453-33f3-3387-aaf1-4120548f41e8"),
     },
 }
 
 GOSSIP_INFO = {
-    node1: {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'NORMAL',
-        'dc': 'datacenter1'
-    },
-    node2: {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'shutdown',
-        'dc': 'datacenter1'
-    },
-    node3: {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'NORMAL',
-        'dc': 'datacenter1'
-    },
+    node1: {"schema": "cbe15453-33f3-3387-aaf1-4120548f41e8", "status": "NORMAL", "dc": "datacenter1"},
+    node2: {"schema": "cbe15453-33f3-3387-aaf1-4120548f41e8", "status": "shutdown", "dc": "datacenter1"},
+    node3: {"schema": "cbe15453-33f3-3387-aaf1-4120548f41e8", "status": "NORMAL", "dc": "datacenter1"},
 }
 
 
@@ -142,7 +129,16 @@ class TestHealthChecker(unittest.TestCase):
         self.assertNotEqual(event.error, "")
 
     def test_check_nodes_status_removed(self):
-        event = next(check_nodes_status(NODES_STATUS, node1, [node1, ]), None)
+        event = next(
+            check_nodes_status(
+                NODES_STATUS,
+                node1,
+                [
+                    node1,
+                ],
+            ),
+            None,
+        )
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "NodeStatus")
         self.assertEqual(event.severity, Severity.CRITICAL)
@@ -186,7 +182,9 @@ class TestHealthChecker(unittest.TestCase):
         GOSSIP_INFO[node2]["status"] = gossip_status
 
     def test_check_nulls_in_peers_not_in_gossip(self):
-        PEERS_INFO[node4] = {"data_center": "null", }
+        PEERS_INFO[node4] = {
+            "data_center": "null",
+        }
         event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         self.assertIsNone(event)
         PEERS_INFO.pop(node4)
@@ -205,34 +203,28 @@ class TestHealthChecker(unittest.TestCase):
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(node1, attempts)
 
-        self.assertEqual(
-            mocked_sleep.call_count, 0,
-            "Looks like redundant retries were executed")
+        self.assertEqual(mocked_sleep.call_count, 0, "Looks like redundant retries were executed")
         self.assertIsInstance(err, str)
         self.assertFalse(err)
 
     def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt(self):
-        problem_node = ProblematicNode('127.0.0.1', "node-0", num_of_failed_attempts=1)
+        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=1)
         attempts = 3
 
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
 
-        self.assertEqual(
-            mocked_sleep.call_count, 1,
-            "Unexpected number of retries applied")
+        self.assertEqual(mocked_sleep.call_count, 1, "Unexpected number of retries applied")
         self.assertIsInstance(err, str)
         self.assertFalse(err)
 
     def test_check_schema_agreement_in_gossip_and_peers_constant_error(self):
         attempts = 3
-        problem_node = ProblematicNode('127.0.0.1', "node-0", num_of_failed_attempts=attempts)
+        problem_node = ProblematicNode("127.0.0.1", "node-0", num_of_failed_attempts=attempts)
 
         with unittest.mock.patch("time.sleep") as mocked_sleep:
             err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
 
-        self.assertEqual(
-            mocked_sleep.call_count, attempts - 1,
-            "Unexpected number of retries applied")
+        self.assertEqual(mocked_sleep.call_count, attempts - 1, "Unexpected number of retries applied")
         self.assertIsInstance(err, str)
         self.assertTrue(err)

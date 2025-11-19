@@ -37,9 +37,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
         """-rate threads=10 -pop seq=1..10000000"""
     )
 
-    cs_thread = CqlStressCassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CqlStressCassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()
@@ -51,8 +49,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(
-            r"^sct_cql_stress_cassandra_stress_write_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        regex = re.compile(r"^sct_cql_stress_cassandra_stress_write_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_cql_stress_cassandra_stress_write_gauge" in output
 
         matches = regex.findall(output)
@@ -71,8 +68,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
 def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
     loader_set.test_config.set_multi_region(True)
-    request.addfinalizer(
-        lambda: loader_set.test_config.set_multi_region(False))
+    request.addfinalizer(lambda: loader_set.test_config.set_multi_region(False))
     cmd = (
         """cql-stress-cassandra-stress write cl=ONE duration=1m """
         """-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) """
@@ -80,9 +76,7 @@ def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, par
         """-rate threads=10 -pop seq=1..10000000"""
     )
 
-    cs_thread = CqlStressCassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CqlStressCassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()
@@ -128,9 +122,7 @@ def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_addre
         """-rate threads=10 -pop seq=1..10000000"""
     )
 
-    cs_thread = CqlStressCassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CqlStressCassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()
@@ -142,8 +134,7 @@ def test_03_cql_stress_cassandra_stress_mixed(request, docker_scylla, prom_addre
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(
-            r"^sct_cql_stress_cassandra_stress_mixed_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        regex = re.compile(r"^sct_cql_stress_cassandra_stress_mixed_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_cql_stress_cassandra_stress_mixed_gauge" in output
 
         matches = regex.findall(output)
