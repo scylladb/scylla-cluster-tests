@@ -60,7 +60,7 @@ def get_enabled_features(session: Session) -> list[str]:
 
 
 def is_consistent_cluster_management_feature_enabled(session: Session) -> bool:
-    """ Check whether raft consistent cluster management feature enabled
+    """Check whether raft consistent cluster management feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
 
@@ -68,7 +68,7 @@ def is_consistent_cluster_management_feature_enabled(session: Session) -> bool:
 
 
 def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
-    """ Check whether raft topology feature enabled
+    """Check whether raft topology feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
 
@@ -76,8 +76,7 @@ def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
 
 
 def is_tablets_feature_enabled(node) -> bool:
-    """ Check whether tablets enabled
-    """
+    """Check whether tablets enabled"""
     with node.remote_scylla_yaml() as scylla_yaml:
         # for backward compatibility of 2024.1 and earlier
         if "tablets" in scylla_yaml.experimental_features:
@@ -91,5 +90,5 @@ def is_tablets_feature_enabled(node) -> bool:
 
 
 def is_group0_limited_voters_enabled(session: Session) -> bool:
-    """ Check whether feature group0 limited voters is enabled"""
+    """Check whether feature group0 limited voters is enabled"""
     return GROUP0_LIMITED_VOTERS in get_enabled_features(session)

@@ -31,7 +31,7 @@ class AWSInstanceProfile(BaseModel):
 
 
 class AWSDiskMappingEbsInfo(BaseModel):
-    VolumeType: Literal['standard', 'io1', 'io2', 'gp2', 'sc1', 'st1', 'gp3']
+    VolumeType: Literal["standard", "io1", "io2", "gp2", "sc1", "st1", "gp3"]
     VolumeSize: int
     VirtualName: str = None
     DeleteOnTermination: bool = None
@@ -51,11 +51,10 @@ class AWSDiskMapping(BaseModel):
 class AWSPlacementInfo(BaseModel):
     AvailabilityZone: str
     GroupName: str = None
-    Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
+    Tenancy: Literal["default", "dedicated", "host"] = "default"
 
 
 class AWSInstanceParams(InstanceParamsBase):
-
     ImageId: str
     KeyName: str
     InstanceType: str
@@ -72,15 +71,15 @@ class AWSInstanceParams(InstanceParamsBase):
     def dict(
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
+        include: Union["AbstractSetIntStr", "MappingIntStrAny"] = None,  # noqa: F821
+        exclude: Union["AbstractSetIntStr", "MappingIntStrAny"] = None,  # noqa: F821
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
-        encode_user_data: bool = False
-    ) -> 'DictStrAny':  # noqa: F821
+        encode_user_data: bool = False,
+    ) -> "DictStrAny":  # noqa: F821
         dict_data = super().dict(
             include=include,
             exclude=exclude,
@@ -91,6 +90,6 @@ class AWSInstanceParams(InstanceParamsBase):
             exclude_none=exclude_none,
         )
         if encode_user_data:
-            if user_data := dict_data.get('UserData'):
-                dict_data['UserData'] = base64.b64encode(user_data.encode('ascii')).decode("ascii")
+            if user_data := dict_data.get("UserData"):
+                dict_data["UserData"] = base64.b64encode(user_data.encode("ascii")).decode("ascii")
         return dict_data

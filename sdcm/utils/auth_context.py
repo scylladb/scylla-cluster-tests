@@ -7,7 +7,7 @@ VALID_AUTHENTICATORS = [
     "org.apache.cassandra.auth.PasswordAuthenticator",
     "org.apache.cassandra.auth.AllowAllAuthenticator",
     "com.scylladb.auth.TransitionalAuthenticator",
-    "com.scylladb.auth.SaslauthdAuthenticator"
+    "com.scylladb.auth.SaslauthdAuthenticator",
 ]
 
 LOGGER = logging.getLogger(__name__)

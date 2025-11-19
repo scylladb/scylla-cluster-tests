@@ -22,6 +22,7 @@ class EnableWaLinuxAgent(SctUserDataObject):
     Scylla machines on Azure have WaLinuxAgent disabled by default. This script enables it.
     https://github.com/scylladb/scylla-machine-image/pull/627
     """
+
     @property
     def is_applicable(self) -> bool:
         return self.node_type == "scylla-db" and self.params.get("cluster_backend") == "azure"

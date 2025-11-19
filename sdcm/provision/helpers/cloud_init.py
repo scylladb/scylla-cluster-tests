@@ -27,16 +27,14 @@ class CloudInitError(Exception):
     pass
 
 
-@retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError, ),
-          message="waiting for cloud-init to complete")
+@retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError,), message="waiting for cloud-init to complete")
 def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance):
-    """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok.
-    """
+    """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok."""
     LOGGER.info("Waiting for cloud-init to complete on node %s...", instance.name)
     errors_found = False
     remoter.is_up(60 * 5)
     # examples: 24.1.3-0ubuntu3.3, 19.3-46.amzn2.0.2
-    cloud_init_version = Version(remoter.sudo("cloud-init --version 2>&1").stdout.split()[1].split('-')[0])
+    cloud_init_version = Version(remoter.sudo("cloud-init --version 2>&1").stdout.split()[1].split("-")[0])
     # cloud-init supports json output from version 23.4, see:
     # https://cloudinit.readthedocs.io/en/latest/explanation/return_codes.html#id1
     if cloud_init_version >= Version("23.4"):
@@ -44,7 +42,7 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
         status = json.loads(result.stdout)
 
         LOGGER.debug("cloud-init status: %s", status)
-        if status['status'] != "done" or status['errors'] or result.return_code == 1:
+        if status["status"] != "done" or status["errors"] or result.return_code == 1:
             LOGGER.error("Some errors during cloud-init %s", status)
             errors_found = True
     else:
