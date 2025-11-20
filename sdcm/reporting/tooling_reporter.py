@@ -309,3 +309,15 @@ class GeminiGoCqlDriverVersionReporter(ToolReporterBase):
 
     def _collect_version_info(self) -> None:
         pass
+
+
+class VectorStoreVersionReporter(ToolReporterBase):
+    TOOL_NAME = "vector-store"
+
+    def _collect_version_info(self):
+        output = self.runner.sudo(f"{self.command_prefix} --version")
+        LOGGER.info("%s: Collected vector-store output:\n%s", self, output.stdout)
+
+        name, version, *_ = output.stdout.split(" ")
+        LOGGER.info("%s: Collected %s version:\n%s", self, name, version)
+        self.version = version
