@@ -17,6 +17,7 @@ def call(Map pipelineParams = [:]) {
         parameters {
             string(name: 'scylla_version', defaultValue: '', description: 'Scylla version to test')
             string(name: 'scylla_repo', defaultValue: '', description: 'Scylla repo URL')
+            string(name: 'job_folder', defaultValue: '', description: 'Job folder prefix (e.g., scylla-master, branch-2025.4). If empty, will be determined from scylla_version')
             booleanParam(name: 'use_job_throttling', defaultValue: true, description: 'if true, use job throttling to limit the number of concurrent builds')
             string(name: 'labels_selector', defaultValue: '', description: 'This parameter is used for trigger with Scylla master version only. It points how to trigger the test: weekly. Expected value: master-weekly')
             string(name: 'skip_jobs', defaultValue: '', description: 'Comma-separated list of job names to skip (emergency hatch)')
@@ -47,12 +48,32 @@ def call(Map pipelineParams = [:]) {
                             }
                         }
 
+                        // Determine job folder based on scylla_version if not explicitly provided
+                        def job_folder = params.job_folder?.trim()
+                        if (!job_folder) {
+                            if (scylla_version == "master" || scylla_version?.startsWith("master:")) {
+                                job_folder = "scylla-master"
+                            } else {
+                                // Extract version prefix for release branches (e.g., "2025.4" -> "branch-2025.4")
+                                def versionMatch = scylla_version =~ /^(\d+\.\d+)/
+                                if (versionMatch) {
+                                    job_folder = "branch-${versionMatch[0][1]}"
+                                } else {
+                                    job_folder = "scylla-master"  // Fallback to master
+                                }
+                            }
+                            println("Job folder determined from scylla_version: $job_folder")
+                        } else {
+                            println("Using explicit job_folder parameter: $job_folder")
+                        }
+
                         // Define the tier1 test matrix
                         // Each entry defines a test job with its configuration
+                        // Job names use {JOB_FOLDER} placeholder which will be replaced with actual folder
                         def tier1TestMatrix = [
                             // AWS Tests
                             [
-                                job_name: 'scylla-master/tier1/longevity-50gb-3days-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-50gb-3days-test',
                                 backend: 'aws',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -60,7 +81,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/longevity-150gb-asymmetric-cluster-12h-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-150gb-asymmetric-cluster-12h-test',
                                 backend: 'aws',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -68,7 +89,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey-cql-stress.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/longevity-twcs-48h-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-twcs-48h-test',
                                 backend: 'aws',
                                 region: 'us-east-1',
                                 arch: 'arm64',
@@ -77,7 +98,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-twcs-48h.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/longevity-multidc-schema-topology-changes-12h-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-multidc-schema-topology-changes-12h-test',
                                 backend: 'aws',
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -85,7 +106,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-schema-topology-changes-12h.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/longevity-mv-si-4days-streaming-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-mv-si-4days-streaming-test',
                                 backend: 'aws',
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -93,7 +114,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-mv-si-4days.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/longevity-schema-topology-changes-12h-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-schema-topology-changes-12h-test',
                                 backend: 'aws',
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -101,7 +122,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-schema-topology-changes-12h.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/gemini-1tb-10h-test',
+                                job_name: '{JOB_FOLDER}/tier1/gemini-1tb-10h-test',
                                 backend: 'aws',
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -109,7 +130,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/gemini/gemini-1tb-10h.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/longevity/longevity-harry-2h-test',
+                                job_name: '{JOB_FOLDER}/longevity/longevity-harry-2h-test',
                                 backend: 'aws',
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -118,7 +139,7 @@ def call(Map pipelineParams = [:]) {
                             ],
                             // Azure Tests
                             [
-                                job_name: 'scylla-master/tier1/longevity-1tb-5days-azure-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-1tb-5days-azure-test',
                                 backend: 'azure',
                                 region: '',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -127,7 +148,7 @@ def call(Map pipelineParams = [:]) {
                             ],
                             // GCE Tests
                             [
-                                job_name: 'scylla-master/tier1/longevity-large-partition-200k-pks-4days-gce-test',
+                                job_name: '{JOB_FOLDER}/tier1/longevity-large-partition-200k-pks-4days-gce-test',
                                 backend: 'gce',
                                 region: '',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -135,7 +156,7 @@ def call(Map pipelineParams = [:]) {
                                 test_config: 'test-cases/longevity/longevity-large-partition-200k-pks-4days.yaml'
                             ],
                             [
-                                job_name: 'scylla-master/tier1/jepsen-all-test',
+                                job_name: '{JOB_FOLDER}/tier1/jepsen-all-test',
                                 backend: 'gce',
                                 region: '',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
@@ -144,6 +165,12 @@ def call(Map pipelineParams = [:]) {
                             ],
                         ]
 
+                        // Replace {JOB_FOLDER} placeholder with actual folder in all job names
+                        tier1TestMatrix.each { entry ->
+                            entry.job_name = entry.job_name.replace('{JOB_FOLDER}', job_folder)
+                        }
+
+                        println("Using job_folder: $job_folder")
                         println("tier1TestMatrix: $tier1TestMatrix")
                         println("Skip jobs list: $skip_jobs_list")
 

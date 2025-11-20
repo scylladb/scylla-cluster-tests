@@ -90,6 +90,10 @@ The pipeline includes the following 11 tier1 tests:
 - **scylla_version**: Scylla version to test (e.g., `master:latest`, `2025.4`, `2025.4.1`)
 
 ### Optional Parameters
+- **job_folder**: Job folder prefix (e.g., `scylla-master`, `branch-2025.4`). If empty, automatically determined from scylla_version:
+  - `master` or `master:latest` → `scylla-master`
+  - `2025.4.x` → `branch-2025.4`
+  - `2024.2.x` → `branch-2024.2`
 - **scylla_repo**: Scylla repo URL (optional, for custom repos)
 - **use_job_throttling**: Whether to throttle concurrent builds (default: true)
 - **labels_selector**: Filter jobs by label (e.g., `master-weekly`)
@@ -113,10 +117,22 @@ The pipeline will use the scheduled trigger parameters or allow manual triggerin
 
 ### Manual Trigger for Release Branch
 
-Trigger the pipeline with parameters:
+Trigger the pipeline with parameters (job_folder is automatically determined):
 ```groovy
 tier1ParallelPipeline(
     scylla_version: '2025.4',
+    requested_by_user: 'john_doe'
+)
+// Will automatically use job_folder: 'branch-2025.4'
+```
+
+### Explicit Job Folder
+
+Explicitly specify the job folder:
+```groovy
+tier1ParallelPipeline(
+    scylla_version: '2025.4.1',
+    job_folder: 'branch-2025.4',  // Explicit folder specification
     requested_by_user: 'john_doe'
 )
 ```
@@ -146,14 +162,18 @@ tier1ParallelPipeline(
 ## How It Works
 
 1. **Version Detection**: The pipeline checks if `scylla_version` is `master:latest` and converts it to `master`
-2. **Image Fetching**: For master builds on AWS, fetches the latest x86_64 AMI using hydra
-3. **ARM Architecture Handling**: If a job specifies `arch: 'arm64'`, the pipeline uses `find-ami-equivalent` to find the corresponding ARM64 AMI
-4. **Job Filtering**:
+2. **Job Folder Determination**: If `job_folder` is not explicitly provided, it's determined from `scylla_version`:
+   - `master` → `scylla-master`
+   - `2025.4.x` → `branch-2025.4`
+   - Job names use `{JOB_FOLDER}` placeholder which is replaced with the actual folder
+3. **Image Fetching**: For master builds on AWS, fetches the latest x86_64 AMI using hydra
+4. **ARM Architecture Handling**: If a job specifies `arch: 'arm64'`, the pipeline uses `find-ami-equivalent` to find the corresponding ARM64 AMI
+5. **Job Filtering**:
    - Checks if the job version matches the requested version
    - Checks if the job label matches the labels_selector (if provided)
    - Checks if the job is in the skip_jobs list
-5. **Parameter Building**: Builds backend-specific parameters for each job
-6. **Job Triggering**: Triggers all matching jobs in parallel with `wait: false`
+6. **Parameter Building**: Builds backend-specific parameters for each job
+7. **Job Triggering**: Triggers all matching jobs in parallel with `wait: false`
 
 ## Job Matrix Structure
 
