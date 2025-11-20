@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass, replace
 from typing import List, Union
 
+
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
@@ -32,11 +33,23 @@ class Workload:
     drop_keyspace: bool
     wait_no_compactions: bool
     step_duration: str
+    test_table: str = "keyspace1.standard1"
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
             # If only one thread count is provided, convert it to a list
             self.num_threads = [self.num_threads]
+
+        # Determine the stress tool and set the test table accordingly.
+        # This will be used for choosing correct post_prepare_cql_cmd
+        cs_cmd_tmpl = self.cs_cmd_tmpl[0] if isinstance(self.cs_cmd_tmpl, list) else self.cs_cmd_tmpl
+        stress_tool = cs_cmd_tmpl.split(" ")[0]
+        if stress_tool == "scylla-bench":
+            self.test_table = "scylla_bench.test"
+        elif stress_tool in ["cassandra-stress", "cql-stress-cassandra-stress"]:
+            self.test_table = "keyspace1.standard1"
+        else:
+            raise ValueError(f"Not supported stress tool in command: {cs_cmd_tmpl}")
 
 
 def is_latte_command(stress_cmd: str) -> bool:
@@ -143,8 +156,16 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         if workload.preload_data and not skip_optional_stage('perf_preload_data'):
             self.preload_data()
             if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
-                self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
-                self._run_cql_commands(post_prepare_cql_cmds)
+                post_prepare_cql_cmds = [post_prepare_cql_cmds] if isinstance(
+                    post_prepare_cql_cmds, str) else post_prepare_cql_cmds
+                for post_prepare_cql_cmd in post_prepare_cql_cmds:
+                    if workload.test_table not in post_prepare_cql_cmd.lower():
+                        self.log.error("Post prepare cql command '%s' does not match test table '%s', skipping it.",
+                                       post_prepare_cql_cmd.lower(), workload.test_table)
+                        continue
+
+                    self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmd)
+                    self._run_cql_commands(post_prepare_cql_cmd)
 
             self.wait_no_compactions_running(n=400, sleep_time=120)
             # In the test_read performance test, we observed that even without any write operations, compactions were occurring.
@@ -225,10 +246,11 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         # NOTE: 'stress_queue' will be used by the 'latency_calculator_decorator' decorator
         return results, stress_queue
 
-    def drop_keyspace(self):
-        self.log.debug(f'Drop keyspace {"keyspace1"}')
+    def drop_keyspace(self, keyspace_name):
+        self.log.debug(f'Drop keyspace {keyspace_name}')
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            session.execute(f'DROP KEYSPACE IF EXISTS {"keyspace1"};')
+            session.execute(f'DROP KEYSPACE IF EXISTS {keyspace_name};')
+        self.log.debug("Keyspace '%s' has been dropped", keyspace_name)
 
     @staticmethod
     def _step_names(step_names, total_counts):
@@ -287,6 +309,22 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             workload = replace(workload, num_threads=[workload.num_threads[0]] * len(workload.throttle_steps))
         return workload
 
+    @staticmethod
+    def current_throttle(throttle_step, num_loaders, stress_num, stress_cmd):
+        if throttle_step == "unthrottled":
+            return ""
+
+        throttle_value = int(int(throttle_step) // (num_loaders * stress_num))
+        if is_latte_command(stress_cmd):
+            current_throttle = f"--rate={throttle_value}"
+        elif stress_cmd.startswith("scylla-bench"):
+            current_throttle = f"-max-rate={throttle_value}"
+        else:
+            # cassandra-stress and cql-cassandra-stress
+            current_throttle = f"fixed={throttle_value}/s"
+
+        return current_throttle
+
     # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
         workload = self.update_num_threads_for_steps(workload=workload)
@@ -306,18 +344,13 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         for throttle_step, num_threads, current_throttle_step in zip(workload.throttle_steps, workload.num_threads, sequential_steps):
             self.log.info("Run cs command with rate: %s Kops; threads: %s; step name: %s", throttle_step, num_threads,
                           current_throttle_step)
-            if throttle_step == "unthrottled":
-                current_throttle = ""
-            else:
-                throttle_value = int(int(throttle_step) // (num_loaders * stress_num))
-                if is_latte_command(workload.cs_cmd_tmpl[0]):
-                    current_throttle = f"--rate={throttle_value}"
-                else:
-                    current_throttle = f"fixed={throttle_value}/s"
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {current_throttle_step} op/s",
                                                       cycle_name=current_throttle_step))(self.run_step))
-            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
-                                  num_threads=num_threads, step_duration=workload.step_duration)
+            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl,
+                                  current_throttle=self.current_throttle(
+                                      throttle_step, num_loaders, stress_num, workload.cs_cmd_tmpl[0]),
+                                  num_threads=num_threads,
+                                  step_duration=workload.step_duration)
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             calculate_result = self._calculate_average_max_latency(results)
@@ -326,7 +359,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             summary_result[current_throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
             if workload.drop_keyspace:
-                self.drop_keyspace()
+                self.drop_keyspace(keyspace_name=workload.test_table.split(".")[0])
             # We want 3 minutes (180 sec) wait between steps.
             # In case of "mixed" workflow - wait for compactions finished.
             # In case of "read" workflow -  it just will wait for 3 minutes
@@ -377,18 +410,21 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 exception=exc
             ).publish_or_dump()
 
-    @staticmethod
-    def _calculate_average_max_latency(results):
+    # @staticmethod
+    def _calculate_average_max_latency(self, results):
         status = defaultdict(float).fromkeys(results[0].keys(), 0.0)
         max_latency = defaultdict(list)
 
         for result in results:
             for key in status:
                 try:
-                    status[key] += float(result.get(key, 0.0))
+                    status[key] += float(result.get(key, 0.0)) if result.get(key) else 0.0
                     if key in ["latency 95th percentile", "latency 99th percentile"]:
                         max_latency[f"{key} max"].append(float(result.get(key, 0.0)))
                 except ValueError:
+                    continue
+                except TypeError as error:
+                    self.log.info("TypeError for key %s with value %s: %s", key, result.get(key), error)
                     continue
 
         for key in status:
