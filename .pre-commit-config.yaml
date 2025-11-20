@@ -73,6 +73,13 @@ repos:
         pass_filenames: false
         files: (sdcm/nemesis.py|sdcm/nemesis_registry.py|sdcm/utils/nemesis_generation.py|templates/.*.j2)
 
+    -   id: validate-labels
+        name: validate-labels
+        entry: ./sct.py validate-labels
+        language: system
+        pass_filenames: false
+        files: (authorized_labels\.yaml|_folder_definitions\.yaml|.*\.jenkinsfile|.*_test\.py)
+
     -   id: uv-sort
         name: uv-sort
         entry: uv-sort

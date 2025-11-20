@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for CentOS 7.
+    Validates Scylla installation, configuration, and basic functionality on CentOS 7 platform.
+    Verifies package integrity and backward compatibility with legacy systems.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, centos-7, centos, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

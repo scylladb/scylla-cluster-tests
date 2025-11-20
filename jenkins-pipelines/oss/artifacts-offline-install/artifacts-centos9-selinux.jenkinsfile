@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact test for CentOS 9 Stream with SELinux enabled on GCE.
+    Validates Scylla installation without SELinux automatic setup (--no-selinux-setup flag).
+    Single node cluster with 1-hour test duration to verify SELinux compatibility.
+    This test is part of the artifacts suite for validating OS-specific installations.
+
+    Labels: artifacts, gce, centos-9, selinux, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

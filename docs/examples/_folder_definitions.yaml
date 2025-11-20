@@ -1,0 +1,41 @@
+# Example _folder_definitions.yaml
+# This file demonstrates the use of labels/tags in folder definitions
+
+# Basic job type and subtype (required)
+job-type: scylla-cluster-tests
+job-sub-type: longevity
+
+# Folder display name in Jenkins
+folder-name: Cluster - Longevity Tests with Labels Example
+
+# Optional folder description
+folder-description: |
+  This folder contains longevity tests that run for extended periods
+  to test cluster stability and performance over time.
+
+# Labels/tags for categorizing this test folder
+# These can be used by Argus and other automation tools for filtering
+labels:
+  - performance
+  - nightly
+
+# Per-job overrides with regex or exact name matching
+overrides:
+  # Regex match - applies to any job with "100gb" in the name
+  100gb:
+    job-sub-type: artifact
+    labels:
+      - large-dataset
+
+  # Exact match - specific job name
+  longevity-5tb-1day-gce:
+    job-sub-type: rolling-upgrade
+    labels:
+      - upgrade
+      - multi-datacenter
+      - large-dataset
+
+  # Another example with multiple labels
+  longevity-mv:
+    labels:
+      - materialized-views

@@ -1,0 +1,24 @@
+#!groovy
+// Test file for markdown list labels in jobDescription
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+/** jobDescription
+
+    Test job demonstrating markdown-style list labels in jobDescription.
+
+    This format is useful when you have many labels and want to keep
+    them organized in a list format.
+
+    Labels:
+        - longevity
+        - performance
+        - multi-datacenter
+*/
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml"]'''
+)

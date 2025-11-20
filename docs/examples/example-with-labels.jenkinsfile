@@ -1,0 +1,22 @@
+#!groovy
+// Example jenkinsfile demonstrating labels in jobDescription
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+/** jobDescription
+    4-hour longevity test on a 6-node cluster with ~100GB dataset using mixed read/write workload.
+    Runs cassandra-stress with SizeTieredCompactionStrategy and parallel read/write operations.
+    Tests SisyphusMonkey nemesis with encryption enabled (server+client) and parallel node operations.
+    This test serves as part of the longevity test suite.
+    Main load stress tool: cassandra-stress
+
+    Labels: longevity, cassandra-stress, mixed-workload, client-encryption, size-tiered-compaction, sisyphus, nemesis, 100gb
+*/
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml"]'''
+)

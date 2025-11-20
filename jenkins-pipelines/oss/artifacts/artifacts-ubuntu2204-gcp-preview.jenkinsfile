@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for Ubuntu 22.04 GCP preview image on GCE.
+    Validates Scylla installation, configuration, and basic functionality on Ubuntu 22.04 using GCP preview features.
+    Verifies compatibility with latest GCP platform features and image formats.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, ubuntu-22.04, ubuntu, jammy, gce, gcp, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

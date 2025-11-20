@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifacts validation test for Rocky Linux 9 using non-root offline installation.
+    Tests package installation and basic functionality on a single GCE node with 30-minute timeout.
+    Validates Rocky 9 distribution compatibility without requiring monitoring or load generation.
+    This test is part of the artifacts validation suite.
+
+    Labels: artifacts, gce, rocky-9, installation, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

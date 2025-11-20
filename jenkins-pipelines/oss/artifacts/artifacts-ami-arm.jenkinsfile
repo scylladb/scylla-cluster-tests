@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for AWS AMI ARM image creation and validation.
+    Validates Scylla AMI image build on ARM64 architecture, configuration, and basic functionality.
+    Verifies AMI integrity and ARM architecture compatibility.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, ami, aws, arm, arm64, scylla-machine-image, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

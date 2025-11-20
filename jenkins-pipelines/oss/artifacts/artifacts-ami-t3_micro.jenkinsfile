@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for AWS AMI image on t3.micro instance type.
+    Validates Scylla AMI image deployment on minimal AWS t3.micro instances.
+    Verifies compatibility with low-resource instance types.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, ami, aws, scylla-machine-image, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

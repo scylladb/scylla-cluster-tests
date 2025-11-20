@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for Oracle Enterprise Linux 7.6 on AWS.
+    Validates Scylla installation, configuration, and basic functionality on OEL 7.6 platform.
+    Verifies package integrity and Oracle Linux compatibility.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, oel-7.6, oracle-linux, aws, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

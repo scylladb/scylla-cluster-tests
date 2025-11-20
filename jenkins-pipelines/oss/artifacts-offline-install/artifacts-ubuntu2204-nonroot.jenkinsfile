@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifacts installation test for Ubuntu 22.04 (Jammy) on a single-node GCE cluster.
+    Tests nonroot offline installation with spot instance provisioning.
+    Uses NoOpMonkey (no disruptions). No stress workload executed.
+    This test is part of the artifacts suite for validating package installations.
+
+    Labels: artifacts, installation, gce, ubuntu-22.04, jammy, ubuntu, offline-install, non-root
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
