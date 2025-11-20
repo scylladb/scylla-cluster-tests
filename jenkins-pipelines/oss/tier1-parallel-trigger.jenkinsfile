@@ -1,0 +1,11 @@
+#!groovy
+
+// Example Jenkinsfile for tier1 parallel pipeline trigger
+// This demonstrates how to use the tier1ParallelPipeline from vars/
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// Call the tier1ParallelPipeline with default parameters
+// This will run all tier1 jobs for the specified Scylla version
+tier1ParallelPipeline()
