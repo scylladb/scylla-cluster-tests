@@ -25,6 +25,7 @@ import requests
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
@@ -640,6 +641,14 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
         vs_nodes = self._init_vs_nodes_from_cluster() if self._deploy_vs_nodes else []
+        if len(vs_nodes) > 0:
+            try:
+                node = vs_nodes[0]
+                VectorStoreVersionReporter(
+                    node.remoter, "/home/ubuntu/vector-store/vector-store", self.test_config.argus_client()
+                ).report()
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Error submitting vector store version, VS package won't show in Argus.", exc_info=True)
 
         self._init_manager_node()
 
