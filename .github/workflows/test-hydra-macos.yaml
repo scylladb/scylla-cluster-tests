@@ -1,4 +1,6 @@
 name: Test Hydra on MacOS
+permissions:
+  contents: read
 
 on:
   pull_request_target:

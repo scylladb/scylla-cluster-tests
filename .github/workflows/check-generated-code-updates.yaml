@@ -1,4 +1,6 @@
 name: Check generated code is up-to-date
+permissions:
+  contents: read
 
 on:
   pull_request_target:

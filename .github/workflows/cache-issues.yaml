@@ -1,4 +1,8 @@
 name: Cache issues status
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
 on:
   schedule:
     - cron: '0 */6 * * *'
