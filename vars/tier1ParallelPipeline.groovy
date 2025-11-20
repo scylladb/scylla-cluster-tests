@@ -1,4 +1,4 @@
-def call(Map pipelineParams) {
+def call(Map pipelineParams = [:]) {
     def builder = getJenkinsLabels("aws", "eu-west-1")
     pipeline {
         agent {
@@ -146,7 +146,22 @@ def call(Map pipelineParams) {
                         def jobs_names = tier1TestMatrix*.job_name.toSet()
                         println("Jobs names: $jobs_names")
 
+                        // Fetch AMI image once for master builds (before looping through jobs)
                         def image_name = null
+                        if (scylla_version == "master") {
+                            def region = 'us-east-1'  // Default region for image fetching
+                            def output = sh(script: "./docker/env/hydra.sh list-images -c aws -r ${region} -o text", returnStdout: true).trim()
+                            println("Output from hydra list-images: $output")
+                            def image_name_json = output.split('\n')[-1].trim()
+                            println("Image name json: $image_name_json")
+                            if (!image_name_json){
+                                error "Image name is empty. Please check the hydra.sh command output."
+                            }
+
+                            image_name = new groovy.json.JsonSlurper().parseText(image_name_json).keySet()[0]
+                            println("AMI image name for master: $image_name")
+                        }
+
                         for (job_name in jobs_names) {
                             // Skip if job is in skip list
                             if (skip_jobs_list.contains(job_name)) {
@@ -161,20 +176,6 @@ def call(Map pipelineParams) {
                                 def region = null
                                 def test_config = null
                                 def image_name_for_job = null
-
-                                if (scylla_version == "master" && !image_name && backend == 'aws'){
-                                    region = entry.region ?: 'us-east-1'
-                                    def output = sh(script: "./docker/env/hydra.sh list-images -c ${backend} -r ${region} -o text", returnStdout: true).trim()
-                                    println("Output from hydra list-images: $output")
-                                    def image_name_json = output.split('\n')[-1].trim()
-                                    println("Image name json: $image_name_json")
-                                    if (!image_name_json){
-                                        error "Image name is empty. Please check the hydra.sh command output."
-                                    }
-
-                                    image_name = new groovy.json.JsonSlurper().parseText(image_name_json).keySet()[0]
-                                    println("Image name: $image_name")
-                                }
 
                                 if (entry.job_name == job_name) {
                                     for (def ver in entry.versions) {
@@ -213,20 +214,20 @@ def call(Map pipelineParams) {
                                         // Add backend-specific parameters
                                         if (backend == 'aws') {
                                             build_params += [
-                                                string(name: 'scylla_version', value: image_name_for_job ? null : params.scylla_version),
-                                                string(name: 'scylla_ami_id', value: image_name_for_job ? image_name_for_job : null),
+                                                string(name: 'scylla_version', value: image_name_for_job ? '' : params.scylla_version),
+                                                string(name: 'scylla_ami_id', value: image_name_for_job ?: ''),
                                                 string(name: 'region', value: region ?: 'us-east-1'),
                                                 string(name: 'availability_zone', value: 'c')
                                             ]
                                         } else if (backend == 'azure') {
                                             build_params += [
                                                 string(name: 'scylla_version', value: params.scylla_version),
-                                                string(name: 'azure_image_db', value: null)
+                                                string(name: 'azure_image_db', value: '')
                                             ]
                                         } else if (backend == 'gce') {
                                             build_params += [
                                                 string(name: 'scylla_version', value: params.scylla_version),
-                                                string(name: 'gce_image_db', value: null),
+                                                string(name: 'gce_image_db', value: ''),
                                                 string(name: 'availability_zone', value: 'a')
                                             ]
                                         }
