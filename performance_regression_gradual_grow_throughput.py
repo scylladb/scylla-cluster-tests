@@ -135,6 +135,26 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         self._base_test_workflow(workload=workload,
                                  test_name="test_read_gradual_increase_load (100% reads)")
 
+    def test_read_disk_only_gradual_increase_load(self):
+        """
+        Test steps:
+
+        1. Run a write workload as a preparation
+        2. Run a read workload with gradual increase load that reads data only from disk (no cache hits)
+        """
+        workload_type = "read_disk_only"
+        workload = Workload(workload_type=workload_type,
+                            cs_cmd_tmpl=self.params.get('stress_cmd_read_disk'),
+                            cs_cmd_warm_up=None,
+                            num_threads=self.params["perf_gradual_threads"][workload_type],
+                            throttle_steps=self.throttle_steps(workload_type),
+                            preload_data=True,
+                            drop_keyspace=False,
+                            wait_no_compactions=True,
+                            step_duration=self.step_duration(workload_type))
+        self._base_test_workflow(workload=workload,
+                                 test_name="test_read_disk_only_gradual_increase_load (100% reads from disk)")
+
     def _base_test_workflow(self, workload: Workload, test_name):
         stress_num = 1  # TODO: fix it to support multiple stress cmds per loader node (useful for latte)
         num_loaders = len(self.loaders.nodes)

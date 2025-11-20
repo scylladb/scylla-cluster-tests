@@ -89,6 +89,22 @@ class LatencyCalculatorReadResult(StaticGenericResultTable):
         ]
 
 
+class LatencyCalculatorReadDiskOnlyResult(StaticGenericResultTable):
+    class Meta:
+        name = ""  # to be set by the decorator to differentiate different operations
+        description = ""
+        Columns = [
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+        ]
+
+
 class ReactorStallStatsResult(StaticGenericResultTable):
     class Meta:
         name = ""
@@ -245,6 +261,7 @@ workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
     "read": LatencyCalculatorReadResult,
+    "read_disk_only": LatencyCalculatorReadDiskOnlyResult,
     "throughput": LatencyCalculatorMixedResult,
 }
 
