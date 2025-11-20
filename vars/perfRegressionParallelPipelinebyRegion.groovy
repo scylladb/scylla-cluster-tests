@@ -53,7 +53,7 @@ def call(Map pipelineParams) {
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 pre_release: [], // Example: ['rc1', 'rc3']
-                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
@@ -163,7 +163,7 @@ def call(Map pipelineParams) {
                                 region: 'us-east-1',
                                 versions: ['2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 pre_release: [],
-                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"'],
+                                sub_tests: ['"test_read_gradual_increase_load"', '"test_mixed_gradual_increase_load"', '"test_read_disk_only_gradual_increase_load"'],
                                 labels: ['master-weekly']
                             ],
                             [
