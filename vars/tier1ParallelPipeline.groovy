@@ -1,3 +1,6 @@
+// Tier1 Parallel Pipeline
+// Consolidates all tier1 test triggers into a single Groovy pipeline
+// Parameters are passed via Jenkins pipeline parameters, not the pipelineParams Map
 def call(Map pipelineParams = [:]) {
     def builder = getJenkinsLabels("aws", "eu-west-1")
     pipeline {
@@ -62,7 +65,7 @@ def call(Map pipelineParams = [:]) {
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 labels: ['master-weekly'],
-                                test_config: 'test-cases/longevity/longevity-asymmetric-150gb-12h-tls.yaml'
+                                test_config: 'test-cases/longevity/longevity-150GB-12h-autorization-LimitedMonkey-cql-stress.yaml'
                             ],
                             [
                                 job_name: 'scylla-master/tier1/longevity-twcs-48h-test',
@@ -70,7 +73,7 @@ def call(Map pipelineParams = [:]) {
                                 region: 'us-east-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 labels: ['master-weekly'],
-                                test_config: 'test-cases/longevity/longevity-twcs-48h-test.yaml'
+                                test_config: 'test-cases/longevity/longevity-twcs-48h.yaml'
                             ],
                             [
                                 job_name: 'scylla-master/tier1/longevity-multidc-schema-topology-changes-12h-test',
@@ -86,7 +89,7 @@ def call(Map pipelineParams = [:]) {
                                 region: 'eu-west-1',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 labels: ['master-weekly'],
-                                test_config: 'test-cases/longevity/longevity-mv-si-4days-streaming.yaml'
+                                test_config: 'test-cases/longevity/longevity-mv-si-4days.yaml'
                             ],
                             [
                                 job_name: 'scylla-master/tier1/longevity-schema-topology-changes-12h-test',
@@ -119,7 +122,7 @@ def call(Map pipelineParams = [:]) {
                                 region: '',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 labels: ['master-weekly'],
-                                test_config: 'test-cases/longevity/longevity-1tb-5d.yaml'
+                                test_config: 'test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml'
                             ],
                             // GCE Tests
                             [
