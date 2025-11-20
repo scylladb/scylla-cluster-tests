@@ -53,19 +53,29 @@ For master builds, the pipeline automatically fetches the latest AMI/image using
 ./docker/env/hydra.sh list-images -c aws -r us-east-1 -o text
 ```
 
+### 7. ARM64 Architecture Support
+The pipeline supports ARM64 architecture for specific jobs. When a job is configured with `arch: 'arm64'`, the pipeline:
+1. Fetches the base x86_64 AMI using hydra
+2. Uses `find-ami-equivalent` to find the corresponding ARM64 AMI:
+```bash
+./sct.py find-ami-equivalent --ami-id <x86_ami> --source-region us-east-1 --target-region <target_region> --target-arch arm64 --output-format text
+```
+
+Example: The **longevity-twcs-48h-test** runs with ARM64 architecture.
+
 ## Tier1 Jobs Included
 
 The pipeline includes the following 11 tier1 tests:
 
 ### AWS Tests (8 jobs)
-1. **longevity-50gb-3days-test** - us-east-1
-2. **longevity-150gb-asymmetric-cluster-12h-test** - us-east-1
-3. **longevity-twcs-48h-test** - us-east-1
-4. **longevity-multidc-schema-topology-changes-12h-test** - us-east-1
-5. **longevity-mv-si-4days-streaming-test** - eu-west-1
-6. **longevity-schema-topology-changes-12h-test** - eu-west-1
-7. **gemini-1tb-10h-test** - eu-west-1
-8. **longevity-harry-2h-test** - eu-west-1
+1. **longevity-50gb-3days-test** - us-east-1 (x86_64)
+2. **longevity-150gb-asymmetric-cluster-12h-test** - us-east-1 (x86_64)
+3. **longevity-twcs-48h-test** - us-east-1 (arm64) ⭐
+4. **longevity-multidc-schema-topology-changes-12h-test** - us-east-1 (x86_64)
+5. **longevity-mv-si-4days-streaming-test** - eu-west-1 (x86_64)
+6. **longevity-schema-topology-changes-12h-test** - eu-west-1 (x86_64)
+7. **gemini-1tb-10h-test** - eu-west-1 (x86_64)
+8. **longevity-harry-2h-test** - eu-west-1 (x86_64)
 
 ### Azure Tests (1 job)
 9. **longevity-1tb-5days-azure-test**
@@ -136,13 +146,14 @@ tier1ParallelPipeline(
 ## How It Works
 
 1. **Version Detection**: The pipeline checks if `scylla_version` is `master:latest` and converts it to `master`
-2. **Image Fetching**: For master builds on AWS, fetches the latest AMI using hydra
-3. **Job Filtering**: 
+2. **Image Fetching**: For master builds on AWS, fetches the latest x86_64 AMI using hydra
+3. **ARM Architecture Handling**: If a job specifies `arch: 'arm64'`, the pipeline uses `find-ami-equivalent` to find the corresponding ARM64 AMI
+4. **Job Filtering**:
    - Checks if the job version matches the requested version
    - Checks if the job label matches the labels_selector (if provided)
    - Checks if the job is in the skip_jobs list
-4. **Parameter Building**: Builds backend-specific parameters for each job
-5. **Job Triggering**: Triggers all matching jobs in parallel with `wait: false`
+5. **Parameter Building**: Builds backend-specific parameters for each job
+6. **Job Triggering**: Triggers all matching jobs in parallel with `wait: false`
 
 ## Job Matrix Structure
 
@@ -153,6 +164,7 @@ Each job in `tier1TestMatrix` has the following structure:
     job_name: 'scylla-master/tier1/longevity-50gb-3days-test',
     backend: 'aws',
     region: 'us-east-1',
+    arch: 'x86_64',  // Optional, defaults to 'x86_64'
     versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
     labels: ['master-weekly'],
     test_config: 'test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml'
@@ -173,6 +185,24 @@ To add a new tier1 job, add an entry to the `tier1TestMatrix`:
     test_config: 'test-cases/longevity/my-new-test.yaml'
 ]
 ```
+
+### Adding an ARM64 Job
+
+To add a job that runs on ARM64 architecture, specify the `arch` field:
+
+```groovy
+[
+    job_name: 'scylla-master/tier1/my-arm-test',
+    backend: 'aws',
+    region: 'us-east-1',
+    arch: 'arm64',  // This triggers ARM64 AMI lookup
+    versions: ['2025.4', 'master'],
+    labels: ['master-weekly'],
+    test_config: 'test-cases/longevity/my-arm-test.yaml'
+]
+```
+
+The pipeline will automatically find the ARM64 equivalent AMI using `find-ami-equivalent`.
 
 ### Removing a Job Temporarily
 

@@ -71,6 +71,7 @@ def call(Map pipelineParams = [:]) {
                                 job_name: 'scylla-master/tier1/longevity-twcs-48h-test',
                                 backend: 'aws',
                                 region: 'us-east-1',
+                                arch: 'arm64',
                                 versions: ['2024.1', '2024.2', '2025.1', '2025.2', '2025.3', '2025.4', 'master'],
                                 labels: ['master-weekly'],
                                 test_config: 'test-cases/longevity/longevity-twcs-48h.yaml'
@@ -179,6 +180,7 @@ def call(Map pipelineParams = [:]) {
                                 def region = null
                                 def test_config = null
                                 def image_name_for_job = null
+                                def arch = entry.arch ?: 'x86_64'
 
                                 if (entry.job_name == job_name) {
                                     for (def ver in entry.versions) {
@@ -192,13 +194,39 @@ def call(Map pipelineParams = [:]) {
                                             }
                                             region = entry.region
                                             test_config = entry.test_config
-                                            println("Found for job $job_name: backend: $backend, region: $region, version: $version, test_config: $test_config")
+                                            println("Found for job $job_name: backend: $backend, region: $region, version: $version, test_config: $test_config, arch: $arch")
                                         } else {
                                             continue
                                         }
 
                                         if (backend == 'aws' && image_name) {
-                                            image_name_for_job = image_name
+                                            // If ARM architecture is specified and we have an x86_64 image,
+                                            // find the ARM equivalent using find-ami-equivalent
+                                            if (arch == 'arm64') {
+                                                println("Finding ARM64 equivalent for AMI: $image_name in region: ${region ?: 'us-east-1'}")
+                                                def target_region = region ?: 'us-east-1'
+                                                def find_ami_output = sh(
+                                                    script: "./sct.py find-ami-equivalent --ami-id ${image_name} --source-region us-east-1 --target-region ${target_region} --target-arch arm64 --output-format text",
+                                                    returnStdout: true
+                                                ).trim()
+                                                println("ARM64 AMI equivalent output: $find_ami_output")
+                                                if (find_ami_output) {
+                                                    // The text format returns just the AMI ID
+                                                    def arm_ami = find_ami_output.split('\n')[-1].trim()
+                                                    if (arm_ami && arm_ami.startsWith('ami-')) {
+                                                        image_name_for_job = arm_ami
+                                                        println("Using ARM64 AMI: $image_name_for_job")
+                                                    } else {
+                                                        println("Warning: Could not find ARM64 equivalent for $image_name, using original")
+                                                        image_name_for_job = image_name
+                                                    }
+                                                } else {
+                                                    println("Warning: find-ami-equivalent returned empty, using original AMI")
+                                                    image_name_for_job = image_name
+                                                }
+                                            } else {
+                                                image_name_for_job = image_name
+                                            }
                                         }
                                     }
                                 }
