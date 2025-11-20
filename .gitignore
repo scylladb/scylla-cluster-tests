@@ -71,3 +71,10 @@ data_dir/ssl_conf/
 
 # Internal private repo
 scylla-qa-internal/
+
+# Maven build artifacts
+target/
+*.class
+.mvn/
+mvnw
+mvnw.cmd
