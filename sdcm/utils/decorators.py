@@ -240,6 +240,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
             if workload_type:
                 workload = workload_type
+            elif 'read_disk_only' in test_name:
+                workload = 'read_disk_only'
             elif 'read' in test_name:
                 workload = 'read'
             elif 'write' in test_name:
