@@ -630,7 +630,7 @@ class ManagerCluster(ScyllaManagerBase):
             # --dc-mapping flag is applicable only for --restore-tables mode
             # https://manager.docs.scylladb.com/stable/sctool/restore.html#dc-mapping
             cmd += f" --dc-mapping {dc_mapping}"
-        if object_storage_method is not None:
+        if object_storage_method:
             cmd += " --method {} ".format(object_storage_method.value)
         if extra_params:
             cmd += f" {extra_params}"
@@ -644,7 +644,7 @@ class ManagerCluster(ScyllaManagerBase):
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
                            snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, transfers=None,
-                           object_storage_upload_mode=None, legacy_args=None):
+                           object_storage_transfer_method=None, legacy_args=None):
         cmd = "backup -c {}".format(self.id)
 
         if dc_list is not None:
@@ -684,8 +684,8 @@ class ManagerCluster(ScyllaManagerBase):
         if upload_parallel_list is not None:
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
-        if object_storage_upload_mode is not None:
-            cmd += " --method {} ".format(object_storage_upload_mode.value)
+        if object_storage_transfer_method is not None:
+            cmd += " --method {} ".format(object_storage_transfer_method.value)
         if legacy_args:
             cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)

@@ -1106,33 +1106,21 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         else:
             self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
-    def test_restore_native_benchmark(self):
-        """Benchmark restore operation using Native method.
+    def test_restore_benchmark(self):
+        """Benchmark restore operation using configured method.
 
         The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
         restore from a pre-created backup.
         """
+        if object_storage_method := self.params.get('object_storage_method'):
+            object_storage_method = ObjectStorageUploadMode(object_storage_method)
         if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
-            self.log.info("Executing test_restore_from_precreated_backup with method Native...")
+            self.log.info("Executing test_restore_from_precreated_backup...")
             self.test_restore_from_precreated_backup(
-                reuse_snapshot_name, object_storage_method=ObjectStorageUploadMode.NATIVE)
+                reuse_snapshot_name, object_storage_method=object_storage_method)
         else:
-            self.log.info("Executing test_backup_and_restore_only_data with method Native...")
-            self.test_backup_and_restore_only_data(object_storage_method=ObjectStorageUploadMode.NATIVE)
-
-    def test_restore_rclone_benchmark(self):
-        """Benchmark restore operation using rClone method.
-
-        The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
-        restore from a pre-created backup.
-        """
-        if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
-            self.log.info("Executing test_restore_from_precreated_backup with method rClone...")
-            self.test_restore_from_precreated_backup(
-                reuse_snapshot_name, object_storage_method=ObjectStorageUploadMode.RCLONE)
-        else:
-            self.log.info("Executing test_backup_and_restore_only_data with method rClone...")
-            self.test_backup_and_restore_only_data(object_storage_method=ObjectStorageUploadMode.RCLONE)
+            self.log.info("Executing test_backup_and_restore_only_data...")
+            self.test_backup_and_restore_only_data(object_storage_method=object_storage_method)
 
     def test_restore_data_without_manager(self):
         """The test restores the schema and data from a pre-created backup.
