@@ -1,0 +1,130 @@
+# Tier1 Test Matrix Definition
+# This file defines all tier1 tests with their configurations
+# Used by: sct.py trigger-matrix --matrix configurations/triggers/tier1.yaml
+#
+# Version Filtering:
+# - By default, all jobs run on all Scylla versions
+# - Use 'exclude_versions' to specify versions where a job should NOT run
+# - If 'exclude_versions' is not specified or empty, the job runs on all versions
+
+# Cron trigger configuration for automated runs
+# Format: standard cron syntax with parameterized values after %
+# Multiple cron schedules can be defined, one per line
+cron_triggers:
+  - schedule: '00 6 * * 6'  # Saturdays at 6:00 AM UTC
+    params:
+      scylla_version: 'master:latest'
+      labels_selector: 'master-weekly'
+      requested_by_user: 'timtimb0t'
+
+jobs:
+  # AWS Tests
+  - job_name: '{JOB_FOLDER}/tier1/longevity-50gb-3days-test'
+    backend: aws
+    region: us-east-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/longevity-150gb-asymmetric-cluster-12h-test'
+    backend: aws
+    region: us-east-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/longevity-twcs-48h-test'
+    backend: aws
+    region: us-east-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    test_config: test-cases/longevity/longevity-twcs-48h.yaml
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/longevity-multidc-schema-topology-changes-12h-test'
+    backend: aws
+    region: '["eu-west-1", "eu-west-2"]'  # Multi-region deployment
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: 'a,b,c'
+
+  - job_name: '{JOB_FOLDER}/tier1/longevity-mv-si-4days-streaming-test'
+    backend: aws
+    region: eu-west-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/longevity-schema-topology-changes-12h-test'
+    backend: aws
+    region: eu-west-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/gemini-1tb-10h-test'
+    backend: aws
+    region: eu-west-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/longevity/longevity-harry-2h-test'
+    backend: aws
+    region: eu-west-1
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  # Azure Tests
+  - job_name: '{JOB_FOLDER}/tier1/longevity-1tb-5days-azure-test'
+    backend: azure
+    region: ''
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  # GCE Tests
+  - job_name: '{JOB_FOLDER}/tier1/longevity-large-partition-200k-pks-4days-gce-test'
+    backend: gce
+    region: ''
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly
+    params:
+      stress_duration: 1440
+      availability_zone: c
+
+  - job_name: '{JOB_FOLDER}/tier1/jepsen-all-test'
+    backend: gce
+    region: ''
+    exclude_versions: []  # Runs on all versions
+    labels:
+      - master-weekly

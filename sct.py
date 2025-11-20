@@ -148,6 +148,7 @@ from sdcm.utils.docker_utils import get_ip_address_of_container
 from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
 from unit_tests.nemesis.fake_cluster import FakeTester
 from sdcm.logcollector import Collector
+from sdcm.utils.trigger_matrix import trigger_matrix_jobs
 
 SUPPORTED_CLOUDS = (
     "aws",
@@ -1985,7 +1986,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
 
     if branch == "scylla-master":
         base_path = f"{server.base_sct_dir}/jenkins-pipelines/master-triggers"
-        server.create_job_tree(base_path)
+        server.create_job_tree(base_path, job_name_suffix="")
 
 
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
@@ -2491,6 +2492,84 @@ def hdr_investigate(
         f"\nFound P99 spikes higher than {error_threshold_ms} ms for tags {hdr_tags} with interval {hdr_summary_interval_sec} seconds\n"
     )
     click.echo(hdr_table.get_string(title="HDR Latency Spikes"))
+
+
+@cli.command("trigger-matrix", help="Trigger matrix of jobs from YAML matrix definition")
+@click.option(
+    "--matrix",
+    type=click.Path(exists=True),
+    default="configurations/triggers/tier1.yaml",
+    help="Path to matrix YAML file",
+)
+@click.option(
+    "--scylla-version", help="Scylla version to test (e.g., master, 2025.4). Required unless backend image is provided."
+)
+@click.option("--job-folder", help="Job folder prefix (auto-detected if not provided)")
+@click.option("--scylla-repo", help="Scylla repo URL")
+@click.option("--scylla-ami-id", help="Specific AWS AMI ID to use (overrides auto-detection for master)")
+@click.option("--azure-image-db", help="Specific Azure image ID to use (overrides auto-detection for master)")
+@click.option("--gce-image-db", help="Specific GCE image self_link to use (overrides auto-detection for master)")
+@click.option("--update-db-packages", help="Cloud path for RPMs, s3:// or gs://")
+@click.option("--labels-selector", help="Filter jobs by label (e.g., master-weekly)")
+@click.option("--backend", help="Filter jobs by backend (e.g., aws, gce, azure, docker)")
+@click.option("--skip-jobs", help="Comma-separated list of job names to skip")
+@click.option("--requested-by-user", default="", help="User requesting the build")
+@click.option(
+    "--use-job-throttling/--no-job-throttling", default=True, help="Enable job throttling to limit concurrent builds"
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be triggered without actually triggering")
+@click.option("--stress-duration", help="Stress duration to override the default test duration")
+def trigger_matrix(  # noqa: PLR0913
+    matrix,
+    scylla_version,
+    job_folder,
+    scylla_repo,
+    scylla_ami_id,
+    azure_image_db,
+    gce_image_db,  # noqa: PLR0913
+    update_db_packages,
+    labels_selector,
+    backend,
+    skip_jobs,
+    requested_by_user,
+    use_job_throttling,
+    dry_run,
+    stress_duration,
+):
+    """
+    Trigger matrix of test jobs from YAML matrix definition.
+
+    Architecture is automatically deduced from instance_type_db in test configurations (AWS only).
+
+    Examples:
+        ./sct.py trigger-matrix --scylla-version master --labels-selector master-weekly
+        ./sct.py trigger-matrix --scylla-version 2025.4 --skip-jobs "job1,job2" --dry-run
+    """
+
+    # Validate that either scylla_version or at least one backend image is provided
+    if not scylla_version and not any([scylla_ami_id, azure_image_db, gce_image_db]):
+        raise click.UsageError(
+            "Either --scylla-version or at least one of the backend image options "
+            "(--scylla-ami-id, --azure-image-db, --gce-image-db) must be provided"
+        )
+
+    trigger_matrix_jobs(
+        matrix_file=matrix,
+        scylla_version=scylla_version,
+        job_folder=job_folder,
+        scylla_repo=scylla_repo,
+        scylla_ami_id=scylla_ami_id,
+        azure_image_db=azure_image_db,
+        gce_image_db=gce_image_db,
+        update_db_packages=update_db_packages,
+        labels_selector=labels_selector,
+        backend=backend,
+        skip_jobs=skip_jobs,
+        requested_by_user=requested_by_user,
+        use_job_throttling=use_job_throttling,
+        dry_run=dry_run,
+        stress_duration=stress_duration,
+    )
 
 
 cli.add_command(sct_ssh.ssh)
