@@ -327,3 +327,11 @@ vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
 
 download_from_s3: []
+
+# SCT agent defaults
+agent:
+  enabled: false
+  port: 15000
+  binary_url: ""
+  max_concurrent_jobs: 10
+  log_level: "info"

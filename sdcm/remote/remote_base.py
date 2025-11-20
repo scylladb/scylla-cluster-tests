@@ -27,11 +27,11 @@ from invoke.runners import Result
 
 from sdcm.utils.decorators import retrying
 
-from .base import RetryableNetworkException, CommandRunner
+from .base import RetryableNetworkException, CommandRunner, RetryMixin
 from .local_cmd_runner import LocalCmdRunner
 
 
-class RemoteCmdRunnerBase(CommandRunner):
+class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
     port: int = 22
     connect_timeout: int = 60
     key_file: Optional[str] = None
@@ -630,20 +630,6 @@ class RemoteCmdRunnerBase(CommandRunner):
         if hasattr(exc, "result"):
             self._print_command_results(exc.result, verbose, ignore_status)
         return True
-
-    def _get_retry_params(self, retry: int = 1) -> dict:
-        if retry == 0:
-            # Won't retry on any case
-            allowed_exceptions = tuple()
-            retry = 1
-        elif retry == 1:
-            # Only retry 3 times on network exception
-            allowed_exceptions = (RetryableNetworkException,)
-            retry = self.default_run_retry
-        else:
-            # Retry times that user wants on any exception
-            allowed_exceptions = (Exception, )
-        return {'n': retry, 'sleep_time': 5, 'allowed_exceptions': allowed_exceptions}
 
     def run(self,
             cmd: str,

@@ -77,6 +77,7 @@ from sdcm.provision.helpers.certificate import (
     export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
+from sdcm.remote.agent_cmd_runner import AgentCmdRunner
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -155,6 +156,7 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.utils.raft import get_raft_mode
+from sdcm.utils.sct_agent_installer import reconfigure_agent_script
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -406,11 +408,17 @@ class BaseNode(AutoSshContainerMixin):
         self.log = SDCMAdapter(self.log, extra={"prefix": str(self)})
         if self.ssh_login_info:
             self.ssh_login_info["hostname"] = self.external_address
-        self._init_remoter(self.ssh_login_info)
+
+        self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
+
         # Start task threads after ssh is up, otherwise the dense ssh attempts from task
         # threads will make SCT builder to be blocked by sshguard of gce instance.
         self.wait_ssh_up(verbose=True)
         self.wait_for_cloud_init()
+
+        self._reconfigure_agent(self.remoter)
+
+        self._init_remoter(self.ssh_login_info)
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
             self.configure_remote_logging()
@@ -482,8 +490,49 @@ class BaseNode(AutoSshContainerMixin):
         except Exception:
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
+    def _reconfigure_agent(self, ssh_remoter):
+        """Reconfigure SCT agent with current API key"""
+        agent_config = self.parent_cluster.params.get('agent')
+        agent_enabled = agent_config.get('enabled', False) and 'db' in self.parent_cluster.node_type
+        agent_api_key = self.test_config.agent_api_key()
+
+        if not (agent_enabled and agent_api_key):
+            return
+
+        result = ssh_remoter.run('systemctl is-active sct-agent.service', ignore_status=True, verbose=False)
+        if result.exited != 0:
+            return
+
+        self.log.info("Reconfiguring SCT agent on node %s with the current API key", self.name)
+        script = reconfigure_agent_script(
+            api_keys=[agent_api_key],
+            port=agent_config.get('port'),
+            max_concurrent_jobs=agent_config.get('max_concurrent_jobs'),
+            log_level=agent_config.get('log_level'))
+
+        ssh_remoter.run(f'sudo bash -cxe {shlex.quote(script)}', verbose=True)
+
     def _init_remoter(self, ssh_login_info):
-        self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
+        agent_config = self.parent_cluster.params.get('agent')
+        agent_enabled = agent_config.get('enabled', False) and 'db' in self.parent_cluster.node_type
+        agent_api_key = self.test_config.agent_api_key()
+
+        if agent_enabled and agent_api_key:
+            agent_hostname = (
+                self.public_ip_address or self.external_address if self.test_config.IP_SSH_CONNECTIONS == 'public'
+                else self.private_ip_address)
+            agent_port = agent_config.get('port')
+            self.remoter = AgentCmdRunner(
+                hostname=agent_hostname,
+                api_key=agent_api_key,
+                port=agent_port,
+                user=ssh_login_info.get('user', 'root') if ssh_login_info else 'root')
+            self.log.info("Using SCT agent for command execution at %s:%s", agent_hostname, agent_port)
+        else:
+            if agent_enabled:
+                self.log.info("SCT agent is enabled but API key is not available, falling back to SSH")
+            self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
+
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
@@ -3577,12 +3626,14 @@ class BaseCluster:
                 user_data_format_version = self.params.get(
                     'oracle_user_data_format_version') or user_data_format_version
 
+        agent_config = self.params.get('agent')
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
                                                   syslog_host_port=self.test_config.get_logging_service_host_port(),
                                                   test_config=self.test_config,
-                                                  install_docker=self.node_type == 'loader')
+                                                  install_docker=self.node_type == 'loader',
+                                                  install_agent=agent_config.get('enabled') and 'db' in self.node_type)
         return user_data_builder.to_string()
 
     def get_node_private_ips(self):

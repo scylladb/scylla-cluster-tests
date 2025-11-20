@@ -64,11 +64,24 @@ def configure_vector_target_script(host: str, port: int) -> str:
                 type: filter
                 condition: |
                     !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? \\"default\\", \\"AUDIT\\")
+            filter_verbose_scylla:
+                inputs:
+                    - filter_audit
+                type: filter
+                condition: |
+                    message = to_string(.message) ?? \\"\\"
+                    !contains(message, \\"] compaction - [Compact\\") &&
+                    !contains(message, \\"] table - Done with off-strategy compaction\\") &&
+                    !contains(message, \\"] table - Starting off-strategy compaction\\") &&
+                    !contains(message, \\"] repair - Repair\\") &&
+                    !contains(message, \\"repair id [id=\\") &&
+                    !contains(message, \\"] stream_session - [Stream\\") &&
+                    !contains(message, \\"] sstable - Rebuilding bloom filter\\")
         sinks:
             sct-runner:
                 type: vector
                 inputs:
-                    - filter_audit
+                    - filter_verbose_scylla
                 address: {host}:{port}
                 healthcheck: false
             prometheus:

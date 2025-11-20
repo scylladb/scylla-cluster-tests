@@ -33,3 +33,4 @@ class ScyllaOpenPorts(Enum):
     MANAGER_HTTPS = 5443  # Scylla Manager HTTPS API
     MANAGER_AGENT_PROMETHEUS = 5090  # Scylla Manager Agent Prometheus API
     MANAGER_DEBUG = 5112  # Scylla Manager pprof Debug
+    SCT_AGENT = 15000  # SCT agent HTTP API
