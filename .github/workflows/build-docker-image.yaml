@@ -2,7 +2,7 @@ name: Build hydra image
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [labeled]
     paths:
       - 'docker/env/Dockerfile'
       - 'docker/env/build_n_push.sh'
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
 
       - name: Check if docker image is already built
