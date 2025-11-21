@@ -154,7 +154,8 @@ class TimeoutMonitor:
                 return
             if not self.soft_timeout_triggered and self.soft_timeout and duration > self.soft_timeout:
                 SoftTimeoutEvent(
-                    operation=self.operation, duration=duration, soft_timeout=self.soft_timeout).publish_or_dump()
+                    operation=self.operation, duration=duration, soft_timeout=self.soft_timeout, still_running=True
+                ).publish_or_dump()
                 self.soft_timeout_triggered = True
 
             time.sleep(5.0)
@@ -215,7 +216,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
         soft_timeout_exceeded = soft_timeout and duration > soft_timeout
         if soft_timeout_exceeded:
             timeout_occurred = True
-        if timeout_occurred and not (tablet_sensitive_op and tablets_enabled):
+        if timeout_occurred:
             SoftTimeoutEvent(operation=operation.name, soft_timeout=soft_timeout, duration=duration).publish_or_dump()
 
         try:
