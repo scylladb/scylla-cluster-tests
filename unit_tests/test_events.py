@@ -507,7 +507,7 @@ class SctEventsTests(BaseEventsTest):
         event_data = str(event)
 
         assert event.trace
-        assert "operation 'long-one' took 0.2s and soft-timeout was set to 0.1s" in event_data
+        assert "operation 'long-one' is finished and took 0.2s (soft timeout was set to 0.1s)" in event_data
 
     def test_count_reactor_stall(self):
         count_condition_name = "test_method"
