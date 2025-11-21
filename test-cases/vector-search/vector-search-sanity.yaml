@@ -15,9 +15,10 @@ stress_cmd:
 n_db_nodes: 3
 instance_type_loader: 'c6i.2xlarge'
 instance_type_db: 'i4i.large'
+gce_instance_type_loader: 'n2-highmem-2'
+gce_instance_type_db: 'n2-highmem-2'
 n_loaders: 1
 n_vector_store_nodes: 1
-instance_type_vector_store: 't4g.small'
 
 download_from_s3:
   - data_dir/latte/vector_search:

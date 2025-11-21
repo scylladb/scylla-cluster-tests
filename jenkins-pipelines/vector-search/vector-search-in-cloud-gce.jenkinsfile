@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'xcloud',
+    xcloud_provider: 'gce',
+    xcloud_env: 'staging',
+    gce_datacenter: 'us-east1',
+    scylla_version: '2025.4.0~rc0-0.20251001.6969918d3151',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/vector-search/vector-search-sanity.yaml'
+)
