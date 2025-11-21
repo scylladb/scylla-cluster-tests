@@ -26,9 +26,9 @@ def call(Map pipelineParams) {
                description: 'aws|gce|azure|docker|xcloud',
                name: 'backend')
 
-            choice(name: 'xcloud_provider',
-                   choices: ['aws', 'gce'],
-                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',)
+            string(defaultValue: "${pipelineParams.get('xcloud_provider', 'aws')}",
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',
+                   name: 'xcloud_provider')
 
             string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
                    description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
