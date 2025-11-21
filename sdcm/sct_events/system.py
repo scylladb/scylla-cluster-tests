@@ -98,8 +98,11 @@ class TestFrameworkEvent(InformationalEvent):
 
 class SoftTimeoutEvent(TestFrameworkEvent):
 
-    def __init__(self, operation: str, duration: int | float, soft_timeout: int | float):
-        message = f"operation '{operation}' took {duration}s and soft-timeout was set to {soft_timeout}s"
+    def __init__(self, operation: str, duration: int | float, soft_timeout: int | float, still_running: bool = False):
+        if still_running:
+            message = f"operation '{operation}' exceeded soft-timeout of {soft_timeout}s and is still in progress"
+        else:
+            message = f"operation '{operation}' is finished and took {duration:.1f}s (soft timeout was set to {soft_timeout}s)"
         super().__init__(source='SoftTimeout', severity=Severity.ERROR, trace=sys._getframe().f_back, message=message)
 
 
