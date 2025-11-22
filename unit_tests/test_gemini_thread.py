@@ -45,7 +45,7 @@ def test_01_gemini_thread(request, docker_scylla, params):
         "--max-mutation-retries-backoff=100ms",
         "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
         "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
-        "--use-server-timestamps=true",
+        "--use-server-timestamps=false",
     ]
 
     gemini_thread = GeminiStressThread(
@@ -85,7 +85,7 @@ def test_gemini_thread_without_cluster(request, docker_scylla, params):
             "--max-mutation-retries-backoff=100ms",
             "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
             "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
-            "--use-server-timestamps=true",
+            "--use-server-timestamps=false",
         ]
     )
 
