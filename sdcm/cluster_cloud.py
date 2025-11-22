@@ -342,6 +342,26 @@ class CloudNode(cluster.BaseNode):
             is_enabled=True,
             is_ready=lambda: True)
 
+    @property
+    def scylla_shards(self) -> int:
+        if self.xcloud_connect_supported:
+            return super().scylla_shards
+        self.log.warning("XCloud connectivity is not supported, skip collecting scylla_shards info")
+        return 0
+
+    @property
+    def kernel_version(self):
+        if self.xcloud_connect_supported:
+            return super().kernel_version
+        self.log.warning("XCloud connectivity is not supported, skip collecting kernel version info")
+        return "N/A"
+
+    @property
+    def scylla_version_detailed(self):
+        return (super().scylla_version_detailed
+                if self.xcloud_connect_supported
+                else self.parent_cluster.params.get('scylla_version'))
+
 
 class CloudVSNode(CloudNode):
     """A Vector Search node running on Scylla Cloud"""
