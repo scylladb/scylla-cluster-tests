@@ -98,13 +98,12 @@ region=us-east-1</properties>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=%(sct_branch)s:latest
-availability_zone=c
+availability_zone=a,b,c
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
 stress_duration=1440
-requested_by_user=timtimb0t
-region=us-east-1</properties>
+requested_by_user=timtimb0t</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
