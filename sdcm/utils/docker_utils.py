@@ -46,6 +46,27 @@ def deprecation(message):
     warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
+def get_ip_address_of_container(container: Container) -> str:
+    """
+    Get the IP address of a Docker container.
+    Takes into account https://docs.docker.com/engine/deprecated/#top-level-network-properties-in-networksettings.
+
+    :param container: Docker container object
+    :return: IP address string or None if not available
+    """
+    network_settings = container.attrs.get("NetworkSettings", {})
+    ip_address = network_settings.get("IPAddress")
+    if ip_address:
+        return ip_address
+    networks = network_settings.get("Networks", {})
+    if networks:
+        # Get the IP address from the first network, if available
+        first_network = next(iter(networks.values()), None)
+        if first_network:
+            return first_network.get("IPAddress")
+    return None
+
+
 class ContainerAlreadyRegistered(DockerException):
     pass
 
@@ -312,7 +333,7 @@ class ContainerManager:
             ip_address = cls.get_container(
                 instance, name).attrs["NetworkSettings"]["Networks"][docker_network]["IPAddress"]
         else:
-            ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
+            ip_address = get_ip_address_of_container(cls.get_container(instance, name))
         if not ip_address:
             raise Retry
         return ip_address

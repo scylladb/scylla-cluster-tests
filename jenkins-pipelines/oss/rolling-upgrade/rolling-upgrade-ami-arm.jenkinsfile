@@ -9,6 +9,9 @@ rollingUpgradePipeline(
     linux_distro: 'ubuntu-focal',
     use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/arm_instance_types/im4gn_2xlarge.yaml"]''' ,
-    internode_compression: 'all'
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/arm_instance_types/i8g_2xlarge.yaml"]''' ,
+    internode_compression: 'all',
+
+    // since i8g.2xlarge only supported out of the box from 2025.3.3 and up, we need to force it
+    extra_environment_variables: 'SCT_FORCE_RUN_IOTUNE=true'
 )

@@ -14,6 +14,7 @@
 import abc
 import contextlib
 import datetime
+import logging
 import time
 from textwrap import dedent
 from typing import (
@@ -40,6 +41,9 @@ from mypy_boto3_ec2.type_defs import (
 from sdcm.provision.aws.constants import SPOT_REQUEST_TIMEOUT, SPOT_REQUEST_WAITING_TIME, STATUS_FULFILLED, \
     SPOT_STATUS_UNEXPECTED_ERROR, SPOT_PRICE_TOO_LOW, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
 from sdcm.provision.common.provisioner import TagsType
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Singleton(type):
@@ -157,30 +161,66 @@ def wait_for_provision_request_done(
 def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
     try:
         resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot fleet requests in region %s for request IDs %s: %s",
+            region_name, request_ids, exc
+        )
         return []
     for req in resp['SpotFleetRequestConfigs']:
-        if req['SpotFleetRequestState'] == 'active' and req.get('ActivityStatus', None) == STATUS_FULFILLED:
+        request_id = req.get('SpotFleetRequestId', 'unknown')
+        fleet_state = req.get('SpotFleetRequestState', 'unknown')
+        activity_status = req.get('ActivityStatus', None)
+
+        if fleet_state == 'active' and activity_status == STATUS_FULFILLED:
             continue
-        if 'ActivityStatus' in req and req['ActivityStatus'] == SPOT_STATUS_UNEXPECTED_ERROR:
+        if activity_status == SPOT_STATUS_UNEXPECTED_ERROR:
             current_time = datetime.datetime.now().timetuple()
             search_start_time = datetime.datetime(
                 current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
-            resp = ec2_clients[region_name].describe_spot_fleet_request_history(
-                SpotFleetRequestId=req['SpotFleetRequestId'],
-                StartTime=search_start_time,
-                MaxResults=10,
-            )
-            errors = [i['EventInformation']['EventSubType'] for i in resp['HistoryRecords']]
-            for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
-                if error in errors:
-                    return None
+            try:
+                history_resp = ec2_clients[region_name].describe_spot_fleet_request_history(
+                    SpotFleetRequestId=request_id,
+                    StartTime=search_start_time,
+                    MaxResults=10,
+                )
+                errors = [i['EventInformation']['EventSubType'] for i in history_resp['HistoryRecords']]
+                error_messages = [
+                    f"{i['EventType']}: {i['EventInformation'].get('EventDescription', 'No description')}"
+                    for i in history_resp['HistoryRecords']
+                ]
+
+                for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+                    if error in errors:
+                        LOGGER.error(
+                            "Critical spot fleet provisioning failure in region %s for fleet request %s: "
+                            "State='%s', ActivityStatus='%s', Error='%s'. "
+                            "Error history: %s. "
+                            "This request cannot be fulfilled and provisioning will not retry.",
+                            region_name, request_id, fleet_state, activity_status, error,
+                            "; ".join(error_messages)
+                        )
+                        return None
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error(
+                    "Failed to retrieve spot fleet request history for %s in region %s: %s",
+                    request_id, region_name, exc
+                )
+        LOGGER.warning(
+            "Spot fleet request not yet fulfilled in region %s for request %s: "
+            "State='%s', ActivityStatus='%s'",
+            region_name, request_id, fleet_state, activity_status
+        )
         return []
     provisioned_instances = []
     for request_id in request_ids:
         try:
             resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error(
+                "Failed to describe spot fleet instances for fleet request %s in region %s: %s",
+                request_id, region_name, exc
+            )
             return None
         provisioned_instances.extend([inst['InstanceId'] for inst in resp['ActiveInstances']])
     return provisioned_instances
@@ -194,15 +234,35 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     """
     try:
         resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot instance requests in region %s for request IDs %s: %s",
+            region_name, request_ids, exc
+        )
         return []
     provisioned = []
     for req in resp['SpotInstanceRequests']:
-        if req['Status']['Code'] != STATUS_FULFILLED or req['State'] != 'active':
-            if req['Status']['Code'] in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+        request_id = req.get('SpotInstanceRequestId', 'unknown')
+        status_code = req['Status']['Code']
+        status_message = req['Status'].get('Message', 'No message provided')
+        state = req['State']
+
+        if status_code != STATUS_FULFILLED or state != 'active':
+            if status_code in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 # This code tells that query is not going to be fulfilled
                 # And we need to stop the cycle
+                LOGGER.error(
+                    "Critical spot provisioning failure in region %s for request %s: "
+                    "Status='%s', State='%s', Message='%s'. "
+                    "This request cannot be fulfilled and provisioning will not retry.",
+                    region_name, request_id, status_code, state, status_message
+                )
                 return None
+            LOGGER.warning(
+                "Spot instance request not yet fulfilled in region %s for request %s: "
+                "Status='%s', State='%s', Message='%s'",
+                region_name, request_id, status_code, state, status_message
+            )
             return []
         provisioned.append(req['InstanceId'])
     return provisioned

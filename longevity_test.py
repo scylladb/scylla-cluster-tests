@@ -129,6 +129,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
+
+        self.download_artifacts_from_s3()
+
         stress_queue = []
 
         # prepare write workload

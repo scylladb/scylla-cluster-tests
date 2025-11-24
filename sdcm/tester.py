@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 import shutil
 import configparser
+import importlib
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,6 +51,7 @@ from argus.common.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
+from sdcm.provision.gce.kms_provider import GcpKmsProvider
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
@@ -101,7 +103,7 @@ from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetc
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying, measure_time, optional_stage
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.git import get_git_commit_id, get_git_status_info, clone_repo
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
@@ -134,7 +136,6 @@ from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.stress.latte_thread import LatteStressThread
-from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
     KubernetesAPIServerLogCollector,
@@ -150,7 +151,7 @@ from sdcm.logcollector import (
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
-from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
@@ -714,7 +715,35 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         return thread
 
     def _init_localhost(self):
+        # lazy import to pick up reloaded version of LocalHost after cloning scylla-qa-internal
+        from sdcm.localhost import LocalHost  # noqa: PLC0415
         return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_config.test_id())
+
+    def _ensure_scylla_qa_internal(self):
+        scylla_qa_internal_path = Path(__file__).resolve().parents[1] / 'scylla-qa-internal'
+        if not scylla_qa_internal_path.exists():
+            self.log.info("scylla-qa-internal not found, cloning...")
+            try:
+                clone_repo(
+                    remoter=LOCALRUNNER,
+                    repo_url="git@github.com:scylladb/scylla-qa-internal.git",
+                    destination_dir_name=str(scylla_qa_internal_path),
+                    clone_as_root=False,
+                    branch="master")
+                self.log.info("Successfully cloned scylla-qa-internal")
+
+                scylla_qa_internal_path_str = str(scylla_qa_internal_path)
+                if scylla_qa_internal_path_str not in sys.path:
+                    sys.path.insert(0, scylla_qa_internal_path_str)
+
+                # reload modules to pick up XCloudConnectivityContainerMixin from scylla-qa-internal (not a dummy one)
+                if 'sdcm.utils.internal_modules' in sys.modules:
+                    importlib.reload(sys.modules['sdcm.utils.internal_modules'])
+                if 'sdcm.localhost' in sys.modules:
+                    importlib.reload(sys.modules['sdcm.localhost'])
+                self.log.info("Reloaded internal modules to use real XCloud implementation")
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Failed to clone scylla-qa-internal: %s", exc)
 
     def _init_params(self):
         self.params = init_and_verify_sct_config()
@@ -942,6 +971,56 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return
 
+    def prepare_gcp_kms(self) -> None:  # noqa: PLR0911
+        if self.params.get('cluster_backend') != 'gce':
+            logging.debug("Skip configuring GCP KMS, test is not running on GCE")
+            return
+        if self.params.get('enterprise_disable_kms'):
+            logging.debug("Skip configuring GCP KMS, `enterprise_disable_kms` is set in the config")
+            return
+        if self.params.get("db_type") == "mixed_scylla":
+            logging.debug("Skip configuring GCP KMS, test uses mixed scylla versions")
+            return
+
+        if not (scylla_encryption_options := self.params.get('scylla_encryption_options')):
+            logging.debug("Configuring GCP KMS: `scylla_encryption_options` is not set in the config, using default values")
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'GcpKeyProviderFactory', 'gcp_host': 'scylla-gcp-kms'}"
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+
+        if not (gcp_host := (yaml.safe_load(scylla_encryption_options) or {}).get("gcp_host") or ''):
+            return
+
+        test_id = str(self.test_config.test_id())
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
+        if "gcp_hosts" not in append_scylla_yaml:
+            append_scylla_yaml["gcp_hosts"] = {}
+
+        gcp_kms_provider = GcpKmsProvider()
+        key_info = gcp_kms_provider.get_or_create_keys_pool(test_id)
+        if not key_info:
+            self.log.error("Failed to setup GCP KMS key pool")
+            return
+
+        append_scylla_yaml["gcp_hosts"][gcp_host] = {
+            'gcp_project_id': key_info['project_id'],
+            'gcp_location': key_info['location'],
+            'master_key': key_info['key_uri']
+        }
+
+        append_scylla_yaml['user_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'GcpKeyProviderFactory',
+            'gcp_host': gcp_host,
+        }
+        append_scylla_yaml['system_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'GcpKeyProviderFactory',
+            'gcp_host': gcp_host,
+        }
+
+        self.params["append_scylla_yaml"] = append_scylla_yaml
+        return
+
     def kafka_configure(self):
         if self.kafka_cluster:
             for connector_config in self.params.get('kafka_connectors'):
@@ -1017,6 +1096,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
+
+        if self.params.get("cluster_backend") == 'xcloud':
+            self._ensure_scylla_qa_internal()
+
         self.localhost = self._init_localhost()
 
         if self.params.get("logs_transport") == 'syslog-ng':
@@ -1075,6 +1158,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.download_encrypt_keys()
         self.prepare_kms_host()
         self.prepare_azure_kms()
+        self.prepare_gcp_kms()
 
         self.nemesis_allocator = NemesisNodeAllocator(self)
 
@@ -1174,6 +1258,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 if db_cluster:
                     db_cluster.start_kms_key_rotation_thread()
                     db_cluster.start_azure_kms_key_rotation_thread()
+                    db_cluster.start_gcp_key_rotation_thread()
 
             for future in as_completed(futures):
                 future.result()
@@ -4240,3 +4325,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         """
         db_clusters = self.db_clusters_multitenant or [self.db_cluster]
         return [node for cluster in db_clusters for node in cluster.nodes]
+
+    def download_artifacts_from_s3(self):
+        """Downloads artifacts from an S3 to specified local directories.
+
+        This method retrieves S3 download configurations from SCT `download_from_s3` parameter and performs
+        the downloads for each configured source and destination mapping.
+        """
+        if download_config := self.params.get('download_from_s3'):
+            self.log.info("Starting download of artifacts from S3 with config: %s", download_config)
+            for dst_src_mapping in download_config:
+                dst_dir = list(dst_src_mapping.keys())[0]
+                for src_dir_s3_url in dst_src_mapping[dst_dir]:
+                    download_dir_from_cloud(url=src_dir_s3_url, dst_dir=dst_dir, skip_if_dst_dir_exists=False)

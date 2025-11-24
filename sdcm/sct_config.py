@@ -533,6 +533,15 @@ class SCTConfiguration(dict):
         dict(name="backtrace_decoding", env="SCT_BACKTRACE_DECODING", type=boolean,
              help="""If True, all backtraces found in db nodes would be decoded automatically"""),
 
+        dict(name="backtrace_stall_decoding", env="SCT_BACKTRACE_STALL_DECODING", type=boolean,
+             help="""If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during
+             backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True."""),
+
+        dict(name="backtrace_decoding_disable_regex", env="SCT_BACKTRACE_DECODING_DISABLE_REGEX", type=str,
+             help="""Regex pattern to match event types that should not be decoded. For example,
+             '^(REACTOR_STALLED|KERNEL_CALLSTACK)$' would skip decoding for those event types.
+             Only applies when backtrace_decoding is True."""),
+
         dict(name="print_kernel_callstack", env="SCT_PRINT_KERNEL_CALLSTACK", type=boolean,
              help="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
              that it failed to."""),
@@ -745,6 +754,8 @@ class SCTConfiguration(dict):
              help="""table options for created table. example:
                      ["cdc={'enabled': true}"]
                      ["cdc={'enabled': true}", "compaction={'class': 'IncrementalCompactionStrategy'}"] """),
+        dict(name="run_gemini_in_rolling_upgrade", env="SCT_RUN_GEMINI_IN_ROLLING_UPGRADE", type=boolean,
+             help="Enable running Gemini workload during rolling upgrade test. Default is false."),
         # AWS config options
 
         dict(name="instance_type_loader", env="SCT_INSTANCE_TYPE_LOADER", type=str,
@@ -1073,9 +1084,6 @@ class SCTConfiguration(dict):
              help="Defines whether we install SNI and use it or not (serverless feature)."),
         dict(name="k8s_enable_alternator", env="SCT_K8S_ENABLE_ALTERNATOR", type=boolean,
              help="Defines whether we enable the alternator feature using scylla-operator or not."),
-
-        dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
-             help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
 
         # NOTE: following 'k8s_db_node_service_type', 'k8s_db_node_to_node_broadcast_ip_type' and
         #       'k8s_db_node_to_client_broadcast_ip_type' options are supported only starting with
@@ -1487,7 +1495,7 @@ class SCTConfiguration(dict):
         # TODO: AWS KMS needs to support the enable_kms_key_rotation config option
 
         dict(name="enable_kms_key_rotation", env="SCT_ENABLE_KMS_KEY_ROTATION", type=boolean,
-             help="Allows to disable KMS keys rotation. Applicable only to Azure backend. "
+             help="Allows to disable KMS keys rotation. Applicable to GCP and Azure backends. "
                   "In case of AWS backend its KMS keys will always be rotated as of now."),
 
         dict(name="enterprise_disable_kms", env="SCT_ENTERPRISE_DISABLE_KMS", type=boolean,
@@ -1874,6 +1882,8 @@ class SCTConfiguration(dict):
         dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
              help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
 
+        dict(name="download_from_s3", env="SCT_DOWNLOAD_FROM_S3", type=list,
+             help="Destination-source map of dirs/buckets to download from S3 before starting the test"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -2659,6 +2669,9 @@ class SCTConfiguration(dict):
                 teardown_validators.get("enabled", False)):
             self._verify_rackaware_configuration()
 
+        if backtrace_decoding_disable_regex := self.get("backtrace_decoding_disable_regex"):
+            re.compile(backtrace_decoding_disable_regex)
+
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
         scylla_version = self.get('scylla_version')
@@ -3171,6 +3184,9 @@ class SCTConfiguration(dict):
         supported_versions = [
             v['version'] for v in cloud_api_client.get_scylla_versions()['scyllaVersions']
         ]
+        # TODO: the version is not listed in Scylla Cloud API but is used in Prod exclusively for Vector Search beta
+        # TODO: must be removed after Scylla 2025.4 is generally available in Scylla Cloud
+        supported_versions.append("2025.4.0~rc0-0.20251001.6969918d3151")
         if (selected_version := self.get('scylla_version')) not in supported_versions:
             raise ValueError(f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
                              f"Currently supported versions: {', '.join(supported_versions)}")

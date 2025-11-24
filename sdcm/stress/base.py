@@ -14,7 +14,6 @@
 import logging
 import random
 import concurrent.futures
-from pathlib import Path
 from functools import cached_property
 import uuid
 from datetime import datetime
@@ -151,14 +150,6 @@ class DockerBasedStressThread:
             LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
             return node_to_query.cql_address
         return self.node_list[0].cql_address
-
-    @property
-    def connection_bundle_file(self) -> Path:
-        return self.node_list[0].parent_cluster.connection_bundle_file
-
-    @property
-    def target_connection_bundle_file(self) -> str:
-        return str(Path('/tmp/') / self.connection_bundle_file.name)
 
     def configure_event_on_failure(self, stress_event: StressEvent, exc: Exception | Failure):
         error_msg = format_stress_cmd_error(exc)

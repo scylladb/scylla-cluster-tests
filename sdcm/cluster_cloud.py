@@ -14,6 +14,7 @@
 import os
 import ipaddress
 import logging
+import re
 from functools import cached_property
 from types import SimpleNamespace
 from typing import Any
@@ -26,7 +27,7 @@ from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES
+from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours
 from sdcm.utils.gce_region import GceRegion
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteCmdRunner, shell_script_cmd
@@ -112,6 +113,27 @@ def download_file(url, dest, chunk_size=16384):
             os.remove(tmp_dest)
         LOGGER.error(f"Failed to download {url} to {dest}: {e}")
         raise
+
+
+CLUSTER_NAME_REGEX = re.compile(r'\b[0-9a-f]{8}\b')
+
+
+def extract_short_test_id_from_name(name: str) -> str | None:
+    """Extract short test ID (8 hex chars) from cluster/resource name.
+
+    Handles names like:
+    - "PR-provision-test-fruch-db-cluster-3dc74f22-keep-4h" -> "3dc74f22"
+    - "my-cluster-12345678" -> "12345678"
+    - "simple-3dc74f22" -> "3dc74f22"
+
+    Returns None if no test ID pattern is found.
+    """
+    # Pattern to match 8 hexadecimal characters (typical short UUID format)
+    # This looks for 8 hex chars that are either at word boundaries or surrounded by hyphens
+    if match := CLUSTER_NAME_REGEX.search(name.lower()):
+        return match.group(0)
+
+    return
 
 
 VECTOR_BASE_URL = "https://packages.timber.io/vector/latest"
@@ -236,10 +258,15 @@ class CloudNode(cluster.BaseNode):
     def _init_port_mapping(self):
         pass
 
-    def set_keep_alive(self):
-        # TODO: Implement keep alive tagging for Scylla Cloud
-        self.log.info("Setting keep alive for node %s", self.name)
+    # For cloud clusters, the keep duration is calculated and set during cluster creation.
+    # _set_keep_alive and _set_keep_duration methods in base classes are invoked after cluster
+    # creation, during nodes init, when it is already late to modify cluster details.
+    # The basic implementations of these methods remain here for backward compatibility.
+    def _set_keep_alive(self) -> bool:
         return True
+
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        pass
 
     def restart(self):
         raise NotImplementedError("There is no public Scylla Cloud API for node restart.\n"
@@ -286,7 +313,7 @@ class CloudNode(cluster.BaseNode):
             self.remoter = RemoteCmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
-            self.log.debug("XCloud connectivity is not supported, SSH remoter is not initialized")
+            self.log.warning("XCloud connectivity is not supported, SSH remoter is not initialized")
 
     @xcloud_super_if_supported
     def wait_ssh_up(self, verbose=True, timeout=500):
@@ -614,9 +641,14 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             'defaultInstanceTypeId': XCLOUD_VS_INSTANCE_TYPES[self._cloud_provider][self.params.get('instance_type_vector_store')]
         } if self._deploy_vs_nodes else None
 
+        expiration_hours = compute_cluster_exp_hours(
+            self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type))
+        cluster_name = f"{self.name}-keep-{expiration_hours}h"
+        self.log.info("Cluster will be created with expiration time of %s hours", expiration_hours)
+
         return {
             'account_id': self._account_id,
-            'cluster_name': self.name,
+            'cluster_name': cluster_name,
             'scylla_version': self.params.get('scylla_version'),
             'cidr_block': cidr_block,
             'broadcast_type': broadcast_type,

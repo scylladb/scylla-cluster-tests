@@ -60,6 +60,11 @@ def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | flo
         return timeout, {}
 
 
+def _get_soft_timeout_no_node_info(node_info_service: NodeLoadInfoService, timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
+    # no timeout calculation - just return the timeout passed as argument without node load info
+    return timeout, {}
+
+
 def _get_query_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None, query: str = None) -> \
         tuple[int | float, dict[str, Any]]:
     timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
@@ -102,7 +107,7 @@ class Operations(Enum):
                                  ("timeout", "service_level_for_test_step"))
     TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
     HEALTHCHECK = ("healthcheck", _get_soft_timeout, ("timeout",))
-    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout, ("timeout",))
+    SSH_CONNECTIVITY = ("ssh_connectivity", _get_soft_timeout_no_node_info, ("timeout",))
 
 
 class TestInfoServices:
@@ -151,7 +156,8 @@ class TimeoutMonitor:
                 return
             if not self.soft_timeout_triggered and self.soft_timeout and duration > self.soft_timeout:
                 SoftTimeoutEvent(
-                    operation=self.operation, duration=duration, soft_timeout=self.soft_timeout).publish_or_dump()
+                    operation=self.operation, duration=duration, soft_timeout=self.soft_timeout, still_running=True
+                ).publish_or_dump()
                 self.soft_timeout_triggered = True
 
             time.sleep(5.0)
@@ -212,7 +218,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: PLR0914, 
         soft_timeout_exceeded = soft_timeout and duration > soft_timeout
         if soft_timeout_exceeded:
             timeout_occurred = True
-        if timeout_occurred and not (tablet_sensitive_op and tablets_enabled):
+        if timeout_occurred:
             SoftTimeoutEvent(operation=operation.name, soft_timeout=soft_timeout, duration=duration).publish_or_dump()
 
         try:

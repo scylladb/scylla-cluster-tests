@@ -171,3 +171,31 @@ Those parameters can be overridden during job triggering by setting the environm
 SCT_PERF_GRADUAL_THREADS={"read": [450, 400, 450], "write": 400, "mixed": 1900}
 SCT_PERF_GRADUAL_THROTTLE_STEPS={"read": ['700000', 'unthrottled', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', 'unthrottled']}
 ```
+
+## How to find equivalent AMIs across regions or architectures?
+
+Use the `find-ami-equivalent` command to find equivalent AWS AMIs in different regions or architectures based on image tags:
+
+```bash
+# Find equivalent in different regions
+./sct.py find-ami-equivalent \
+    --ami-id ami-0d9726c9053daff76 \
+    --source-region us-east-1 \
+    --target-region us-west-2 \
+    --target-region eu-west-1
+
+# Find ARM64 equivalent of an x86_64 AMI
+./sct.py find-ami-equivalent \
+    --ami-id ami-0d9726c9053daff76 \
+    --source-region us-east-1 \
+    --target-arch arm64
+
+# Get JSON output for pipeline automation
+./sct.py find-ami-equivalent \
+    --ami-id ami-0d9726c9053daff76 \
+    --source-region us-east-1 \
+    --target-region us-west-2 \
+    --output-format json
+```
+
+The command matches AMIs based on ScyllaDB's tagging conventions (Name, scylla_version, build-id) and returns results sorted by creation date.

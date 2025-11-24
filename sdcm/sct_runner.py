@@ -28,13 +28,14 @@ from math import ceil
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from textwrap import dedent
 
 import boto3
 import pytz
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
-from azure.mgmt.compute.v2021_07_01.models import VirtualMachine
-from azure.mgmt.resource.resources.v2021_04_01.models import TagsPatchResource, TagsPatchOperation
+from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.resource.resources.models import TagsPatchResource, TagsPatchOperation
 import google.api_core.exceptions
 from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
@@ -138,7 +139,7 @@ class SctRunnerInfo:
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.12"  # Version of the Image
+    VERSION = "1.15"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -201,7 +202,7 @@ class SctRunner(ABC):
         LOGGER.info("Installing required packages...")
         login_user = self.LOGIN_USER
         public_key = self.key_pair.public_key.decode()
-        result = remoter.sudo(shell_script_cmd(quote="'", cmd=f"""\
+        result = remoter.sudo(shell_script_cmd(quote="'", cmd=dedent(f"""\
             # Make sure that cloud-init finished running.
             until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
 
@@ -239,6 +240,10 @@ class SctRunner(ABC):
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             usermod -aG docker {login_user}
 
+            # Configure Docker to use Google Container Registry mirrors.
+            mkdir -p /etc/docker
+            printf "%s\n" "{{" "  \\"registry-mirrors\\": [" "    \\"https://mirror.gcr.io\\"" "  ]" "}}" > /etc/docker/daemon.json
+
             # Install kubectl.
             curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
@@ -255,7 +260,7 @@ class SctRunner(ABC):
 
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
-        """), ignore_status=True)
+        """)), ignore_status=True)
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(remoter=remoter)

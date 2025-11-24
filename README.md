@@ -110,6 +110,16 @@ export SCT_SCYLLA_VERSION=5.2.1
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend docker --config test-cases/PR-provision-test-docker.yaml
 ```
 
+#### Run test with ScyllaDB Cloud (xcloud) backend:
+```bash
+export SCT_SCYLLA_VERSION=2025.3.0
+export SCT_XCLOUD_PROVIDER=aws
+export SCT_XCLOUD_ENV=lab
+
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend xcloud --config test-cases/PR-provision-test.yaml
+```
+For more details on xcloud backend, see [xcloud backend documentation](./docs/xcloud-backend.md)
+
 You can specify a specific scylla version by:
 ```bash
 export SCT_SCYLLA_VERSION=2025.1
@@ -176,6 +186,7 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 * `azure` -
 * `docker` - should be used for local development
 * `baremetal` - can be used to run with already setup cluster
+* `xcloud` - ScyllaDB Cloud managed clusters
 
 * `k8s-eks` -
 * `k8s-gke` -

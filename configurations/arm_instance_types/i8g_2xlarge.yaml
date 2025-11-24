@@ -1,0 +1,3 @@
+instance_type_db: 'i8g.2xlarge'
+# enhanced network isn't supported
+append_scylla_setup_args: ' --no-ec2-check '

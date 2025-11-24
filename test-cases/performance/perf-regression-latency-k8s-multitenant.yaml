@@ -22,7 +22,8 @@ instance_type_monitor: 't3.small'
 instance_type_db: 'i3.4xlarge'
 
 space_node_threshold: 644245094
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 
 round_robin: true
 
