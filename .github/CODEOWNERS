@@ -1,3 +1,77 @@
-/jenkins-pipelines/manager      @rayakurl @mikliapko
-/test-cases/manager             @rayakurl @mikliapko
-/configurations/manager         @rayakurl @mikliapko
+/docs/                          @fruch
+/sdcm/remote                    @fruch @dimakr
+/sdcm/sct_events                @fruch
+/defaults                       @fruch
+/docker                         @fruch @soyacz
+
+# manager related files
+/jenkins-pipelines/manager      @mikliapko
+/test-cases/manager             @mikliapko
+/configurations/manager         @mikliapko
+/sdcm/mgmt                      @mikliapko
+
+# backends for different clouds
+/sdcm/provision/aws         @fruch
+/sdcm/cluster_aws.py        @fruch
+/sdcm/sct_provision/aws     @fruch
+/sdcm/aws_*.py              @fruch
+
+/sdcm/provision/azure       @soyacz
+/sdcm/cluster_azure.py      @soyacz
+/sdcm/sct_provision/azure   @soyacz
+/sdcm/azure_*.py            @soyacz
+
+/sdcm/provision/gce         @juliayakovlev
+/sdcm/cluster_gce.py        @juliayakovlev
+/sdcm/gce_*.py              @juliayakovlev @fruch
+
+/sdcm/cluster_docker.py     @dimakr
+/sdcm/docker_*.py           @dimakr
+
+/sdcm/cluster_cloud.py      @dimakr
+/sdcm/cloud_api_client.py   @dimakr
+/sdcm/cloud_api_utils.py    @dimakr
+
+# Stress tools
+/sdcm/stress_thread.py                      @soyacz @CodeLieutenant
+/sdcm/stress/base.py                        @soyacz @CodeLieutenant
+/sdcm/cql_stress_cassandra_stress_thread.py @soyacz @CodeLieutenant
+/sdcm/scylla_bench_thread.py                @soyacz @CodeLieutenant
+/sdcm/gemini_thread.py                      @soyacz @CodeLieutenant
+/sdcm/ndbench_thread.py                     @soyacz @CodeLieutenant
+/sdcm/ycsb_thread.py                        @fruch
+/sdcm/stress/latte_thread.py                @vponomaryov
+/sdcm/loader.py                             @soyacz @vponomaryov
+
+# Argus
+/argus                                      @k0machi @soyacz
+/sdcm/argus_results.py                      @k0machi @soyacz
+
+# others specific parts
+/sdcm/kafka                                         @dimakr
+/sdcm/monitorstack                                  @k0machi
+/sdcm/utils/sstable                                 @juliayakovlev
+/sdcm/utils/adaptive_timeouts                       @soyacz @fruch
+/sdcm/utils/nemesis_utils/node_allocator.py         @dimakr
+/sdcm/provision/helpers/certificate.py              @dimakr
+/sdcm/provision/scylla_yaml/certificate_builder.py  @dimakr
+/sdcm/hdrhistogram.py                               @juliayakovlev
+/sdcm/version_utils.py                              @fruch @vponomaryov
+/sdcm/utils/repo_parser.py                          @fruch
+/sdcm/utils/issues.py                               @fruch
+/sdcm/utils/action_logger.py                        @soyacz
+
+# Vector store related files
+/sdcm/utils/vector_store_client.py          @dimakr @soyacz
+/sdcm/utils/vector_store_utils.py           @dimakr @soyacz
+
+# teardown validators
+/sdcm/teardown_validators                   @dimakr
+/sdcm/teardown_validators/sstables.py       @soyacz
+/sdcm/teardown_validators/events.py         @k0machi
+/sdcm/teardown_validators/rackaware.py      @juliayakovlev
+
+# logging system
+/sdcm/utils/vector_dev.py                   @fruch
+/sdcm/utils/remote_logger.py                @fruch
+/sdcm/logcollector.py                       @fruch

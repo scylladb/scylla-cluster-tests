@@ -226,7 +226,8 @@ class LatteExporter(StressExporter):
             return True
 
         # NOTE: all latency data lines consist of digits only.
-        if columns := line.split():
+        #       But we should trim out the [time prefix] written in square brackets.
+        if columns := line.split("]", maxsplit=1)[-1].split():
             for column in columns:
                 try:
                     float(column)
@@ -243,7 +244,7 @@ class LatteExporter(StressExporter):
 
     @staticmethod
     def split_line(line: str) -> list:
-        ret = line.split()
+        ret = line.split("]", maxsplit=1)[-1].split()
         if len(ret) != 12:
             LOGGER.error(
                 "'%s' line got splitted in the following unexpected list: %s",
@@ -386,8 +387,8 @@ class ScyllaBenchStressExporter(StressExporter):
 
     def metrics_position_in_log(self) -> MetricsPosition:
         # Enumerate stress metric position in the log. Example:
-        # time  operations/s    rows/s   errors  max   99.9th   99th      95th     90th       median        mean
-        # 1.033603151s    3439    34390    0  71.434239ms   70.713343ms   62.685183ms    2.818047ms  1.867775ms 1.048575ms  2.947276ms
+        # time   ops/s  rows/s errors max    99.9th 99th   95th   90th   median mean
+        # 1.1s  191149  191149      0 343ms  154ms  3.2ms  1.6ms  1.2ms  688µs  1.1ms
 
         return MetricsPosition(ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5,
                                lat_max=4, errors=3)
@@ -395,22 +396,21 @@ class ScyllaBenchStressExporter(StressExporter):
     def skip_line(self, line) -> bool:
         # If line is not starts with numeric ended by "s" - skip this line.
         # Example:
-        #    Client compression:  true
-        #    1.004777157s       2891    28910     0  67.829759ms   64.290815ms    58.327039ms    4.653055ms   3.244031µs   1.376255µs
+        #    [2025-11-10 15:21:00.186] Hdr memory consumption:	 85251200 bytes
+        #    [2025-11-10 15:21:01.187]  time   ops/s  rows/s errors max    99.9th 99th   95th   90th   median mean
+        #    [2025-11-10 15:21:01.187] 15m27s   89225   89225      0 5.3ms  3.8ms  2.7ms  1.7ms  1.4ms  1.1ms  1.1ms
 
-        line_splitted = (line or '').split()
-        if not line_splitted or not line_splitted[0].endswith('s'):
-            return True  # skip the line
-
-        try:
-            _ = float(line_splitted[0][:-1])
+        line_no_date = line.split(']', maxsplit=1)[-1].strip()
+        line_splitted = (line_no_date or '').split()
+        if len(line_splitted) == 11 and line_splitted[0].endswith("s"):
             return False  # The line hold the metrics, don't skip the line
-        except ValueError:
+        else:
             return True  # skip the line
 
     @staticmethod
     def split_line(line: str) -> list:
-        return [element.strip() for element in line.split()]
+        line_no_date = line.split(']', maxsplit=1)[-1].strip()
+        return [element.strip() for element in line_no_date.split()]
 
 
 class CassandraHarryStressExporter(StressExporter):

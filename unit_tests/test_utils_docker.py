@@ -282,8 +282,8 @@ class TestContainerManager(unittest.TestCase):
 
     @patch("time.sleep", int)
     def test_get_ip_address(self):
-        no_ip_address = dict(NetworkSettings=dict(IPAddress=""))
-        ip_address = dict(NetworkSettings=dict(IPAddress="10.0.0.1"))
+        no_ip_address = dict(NetworkSettings=dict(Networks=dict(bridge=dict(IPAddress=""))))
+        ip_address = dict(NetworkSettings=dict(Networks=dict(bridge=dict(IPAddress="10.0.0.1"))))
         ip_addresses = iter((no_ip_address, no_ip_address, ip_address, "mark", ) + (no_ip_address, ) * 10)
 
         def attrs():

@@ -645,6 +645,24 @@ If True, all backtraces found in db nodes would be decoded automatically
 **type:** boolean
 
 
+## **backtrace_stall_decoding** / SCT_BACKTRACE_STALL_DECODING
+
+If True, reactor stall backtraces will be decoded. If False, reactor stalls are skipped during<br>backtrace decoding to reduce overhead in performance tests. Only applies when backtrace_decoding is True.
+
+**default:** True
+
+**type:** boolean
+
+
+## **backtrace_decoding_disable_regex** / SCT_BACKTRACE_DECODING_DISABLE_REGEX
+
+Regex pattern to match event types that should not be decoded. For example,<br>'^(REACTOR_STALLED|KERNEL_CALLSTACK)$' would skip decoding for those event types.<br>Only applies when backtrace_decoding is True.
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **print_kernel_callstack** / SCT_PRINT_KERNEL_CALLSTACK
 
 Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message<br>that it failed to.
@@ -1129,6 +1147,15 @@ table options for created table. example:<br>["cdc={'enabled': true}"]<br>["cdc=
 **default:** N/A
 
 **type:** list
+
+
+## **run_gemini_in_rolling_upgrade** / SCT_RUN_GEMINI_IN_ROLLING_UPGRADE
+
+Enable running Gemini workload during rolling upgrade test. Default is false.
+
+**default:** N/A
+
+**type:** boolean
 
 
 ## **instance_type_loader** / SCT_INSTANCE_TYPE_LOADER
@@ -2020,15 +2047,6 @@ Defines whether we enable the alternator feature using scylla-operator or not.
 **default:** N/A
 
 **type:** boolean
-
-
-## **k8s_connection_bundle_file** / SCT_K8S_CONNECTION_BUNDLE_FILE
-
-Serverless configuration bundle file
-
-**default:** N/A
-
-**type:** _file
 
 
 ## **k8s_db_node_service_type** / SCT_K8S_DB_NODE_SERVICE_TYPE
@@ -2924,7 +2942,7 @@ The time interval in minutes which gets waited before the KMS key rotation happe
 
 ## **enable_kms_key_rotation** / SCT_ENABLE_KMS_KEY_ROTATION
 
-Allows to disable KMS keys rotation. Applicable only to Azure backend. In case of AWS backend its KMS keys will always be rotated as of now.
+Allows to disable KMS keys rotation. Applicable to GCP and Azure backends. In case of AWS backend its KMS keys will always be rotated as of now.
 
 **default:** N/A
 
@@ -3793,3 +3811,12 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **default:** N/A
 
 **type:** int
+
+
+## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
+
+Destination-source map of dirs/buckets to download from S3 before starting the test
+
+**default:** N/A
+
+**type:** list

@@ -1,0 +1,28 @@
+test_duration: 60
+
+prepare_write_cmd:
+  - >-
+    latte run --function insert --threads 4 --rate 500 --duration 50000 -P is_schema_creation=true
+    data_dir/latte/vector_search/vector_search_recall.rn
+
+# Make sure values in `--rate` == `-P recall_validation_rate` and `--duration` == -P recall_validation_duration`
+# Latte don't have access to non-custom parameters in runtime of prepare function
+stress_cmd:
+  - >-
+    latte run --function validate_average_recall --connections 2 --rate 350 -P recall_validation_rate=350
+    --duration 300s -P recall_validation_duration=300 data_dir/latte/vector_search/vector_search_recall.rn
+
+n_db_nodes: 3
+instance_type_loader: 'c6i.2xlarge'
+instance_type_db: 'i4i.large'
+n_loaders: 1
+n_vector_store_nodes: 1
+instance_type_vector_store: 't4g.small'
+
+download_from_s3:
+  - data_dir/latte/vector_search:
+     - 's3://vector-search-sct/'
+
+user_prefix: 'vector-search-sanity'
+
+use_preinstalled_scylla: true

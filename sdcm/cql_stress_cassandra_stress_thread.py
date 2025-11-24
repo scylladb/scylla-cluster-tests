@@ -139,6 +139,7 @@ class CqlStressCassandraStressThread(CassandraStressThread):
         cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
                                                     command_line="-c 'tail -f /dev/null'",
                                                     extra_docker_opts=f'{cpu_options} '
+                                                    '--ulimit nofile=65536:65536 '
                                                     '--network=host '
                                                     '--security-opt seccomp=unconfined '
                                                     f'--label shell_marker={self.shell_marker}'

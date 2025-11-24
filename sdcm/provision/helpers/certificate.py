@@ -97,11 +97,15 @@ def install_encryption_at_rest_files(remoter):
     if remoter.sudo('ls /etc/encrypt_conf/system_key_dir', ignore_status=True).ok:
         return
     remoter.send_files(src=get_data_dir_path('encrypt_conf'), dst="/tmp/")
-    remoter.sudo(shell_script_cmd(dedent("""
+
+    # Use scylla-test if scylla user doesnt exists
+    scylla_user = "scylla:scylla" if remoter.sudo('id scylla', ignore_status=True).ok else "scylla-test:scylla-test"
+
+    remoter.sudo(shell_script_cmd(dedent(f"""
         rm -rf /etc/encrypt_conf
         mv -f /tmp/encrypt_conf /etc
         mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
-        chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
+        chown -R {scylla_user} /etc/scylla /etc/encrypt_conf
     """)))
     remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 

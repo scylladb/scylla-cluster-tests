@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'gce',
+    gce_datacenter: 'us-central1',
+    base_versions: '',  // auto mode
+    linux_distro: 'debian-trixie',
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-13',
+
+    test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/z3-highmem-8-highlssd.yaml"]''',
+)

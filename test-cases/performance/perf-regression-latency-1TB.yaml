@@ -24,7 +24,8 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
-backtrace_decoding: false
+backtrace_decoding: true
+backtrace_stall_decoding: false
 custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
 

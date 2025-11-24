@@ -1,0 +1,253 @@
+use latte::*;
+
+
+const KEYSPACE = latte::param!("keyspace", "vdb_bench");
+const TABLE = latte::param!("table", "vdb_bench_collection");
+const INDEX = latte::param!("index", "vdb_bench_collection_vector_idx");
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const TABLETS_ENABLED = latte::param!("tablets_enabled", false);
+
+const ANN_LIMIT = latte::param!("ann_limit", 10);
+const MIN_RECALL_THRESHOLD = latte::param!("min_recall_threshold", 0.9);
+const RECALL_VALIDATION_CHUNK_SIZE = latte::param!("recall_validation_chunk_size", 1000);
+const RECALL_VALIDATION_RATE = latte::param!("recall_validation_rate", 350);  // in ops/sec
+const RECALL_VALIDATION_DURATION = latte::param!("recall_validation_duration", 300);  // in seconds
+const IS_SCHEMA_CREATION = latte::param!("is_schema_creation", false);
+
+const VECTOR_DATA_DIR = latte::param!("vector_data_dir", "data_dir/latte/vector_search/");
+
+const PARSING_DELIMITER = ", ";
+
+const P_STMT = #{
+    "INSERT": #{
+        "NAME": "p_stmt_vdb_bench_collection__insert",
+        "CQL": `INSERT INTO ${KEYSPACE}.${TABLE} (id, vector) VALUES (:id, :vector)`,
+    },
+    "GET": #{
+        "NAME": "p_stmt_vdb_bench_collection__get",
+        "CQL": `SELECT * FROM ${KEYSPACE}.${TABLE} ORDER BY vector ANN OF :vector LIMIT ${ANN_LIMIT}`,
+    }
+};
+
+
+pub async fn schema(db) {
+    db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = {
+        'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'} AND durable_writes = true AND tablets = {'enabled': ${TABLETS_ENABLED}}`).await?;
+
+    db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
+        id int,
+        vector vector<float, 1536>,
+        PRIMARY KEY (id)
+    ) WITH bloom_filter_fp_chance = 0.01
+        AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+        AND compaction = {'class': 'IncrementalCompactionStrategy'}
+        AND compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}
+        AND cdc = {'delta': 'full', 'enabled': 'true', 'postimage': 'false', 'preimage': 'false', 'ttl': '86400'}
+        AND tombstone_gc = {'mode': 'timeout', 'propagation_delay_in_seconds': '3600'}`).await?;
+
+    db.execute(`CREATE CUSTOM INDEX ${INDEX} ON ${KEYSPACE}.${TABLE}(vector) USING 'vector_index'`).await?;
+}
+
+pub async fn erase(db) {
+   db.execute(`TRUNCATE TABLE ${KEYSPACE}.${TABLE}`).await?;
+}
+
+pub async fn prepare(db) {
+    // Run different preparation steps based on the function type
+    if IS_SCHEMA_CREATION {
+        db.prepare(P_STMT.INSERT.NAME, P_STMT.INSERT.CQL).await?;
+        prepare_dataset(db).await?;
+    }
+    else {
+        db.prepare(P_STMT.GET.NAME, P_STMT.GET.CQL).await?;
+        prepare_test_vectors(db).await?;
+        prepare_ground_truth_ids(db).await?;
+        prepare_recall_map(db)?;
+    }
+}
+
+////////////////////
+// User functions //
+////////////////////
+
+pub async fn insert(db, i) {
+    // Get the line for this iteration (dataset loaded in prepare phase)
+    let row_to_insert = db.data.dataset[i];
+
+    let params = #{ "id": row_to_insert.id, "vector": row_to_insert.vectors };
+    db.execute_prepared(P_STMT.INSERT.NAME, params).await?;
+}
+
+pub async fn validate_average_recall(db, i) {
+    // Get a vector and ground truth IDs from test_data
+    let idx = latte::hash(i) % db.data.test_vectors.len();
+    let vector = db.data.test_vectors[idx];
+    let ground_truth_ids = db.data.ground_truth_ids[idx];
+
+    // Execute ANN query with the vector
+    let params = #{ "vector": vector };
+    let rows = db.execute_prepared_with_result(P_STMT.GET.NAME, params).await?;
+
+    if rows.is_empty() {
+        println!("WARNING: Query #{} returned no results!", i);
+        return Ok(());
+    }
+
+    // Extract actual IDs from query results
+    let actual_ids = [];
+    for row in rows {
+        actual_ids.push(row.id);
+    }
+
+    // Take first N IDs of ground truth (matching ANN_LIMIT)
+    let expected_ids = [];
+    for j in 0..ANN_LIMIT {
+        expected_ids.push(ground_truth_ids[j]);
+    }
+
+    // Count how many actual IDs are in expected IDs
+    let elements_present = 0;
+    for actual_id in actual_ids {
+        if contains(expected_ids, actual_id) {
+            elements_present = elements_present + 1;
+        }
+    }
+
+    // Calculate recall for this query
+    let query_recall = 0.0;
+    if !actual_ids.is_empty() {
+        query_recall = elements_present as f64 / actual_ids.len() as f64;
+    }
+
+    // Group recalls by chunks of 1000 queries for periodic validation
+    let chunk_key = (i / 1000).to_string();
+    db.data.recalls_map[chunk_key].push(query_recall);
+
+    // When all requests per chunk executed, compute average recall for this chunk and assert it's above threshold
+    if (db.data.recalls_map[chunk_key].len()) % 1000 == 0 {
+        let recalls = db.data.recalls_map[chunk_key];
+
+        let avg = recalls.iter().sum::<f64>() / recalls.len() as f64;
+        println!("RECALL_PROGRESS: chunk={} avg_recall={:.3} threshold={}", chunk_key, avg, MIN_RECALL_THRESHOLD);
+        assert!(avg > MIN_RECALL_THRESHOLD);
+
+        // Assign empty map to free memory
+        db.data.recalls_map[chunk_key] = [];
+    }
+}
+
+///////////////////////
+// Utility functions //
+///////////////////////
+
+fn contains(list, item) {
+    for element in list {
+        if element == item {
+            return true;
+        }
+    }
+    false
+}
+
+fn strip_surrounding_brackets(s) {
+    let cleaned = s;
+    if s.len() > 0 {
+        let chars = s.chars().collect::<Vec>();
+        let first_char = chars[0];
+        let last_idx = s.len() - 1;
+        let last_char = chars[last_idx];
+
+        if first_char == '[' && last_char == ']' {
+            cleaned = s[1..last_idx];
+        }
+    }
+    cleaned
+}
+
+pub async fn prepare_dataset(db) {
+    let dataset_path = VECTOR_DATA_DIR + "vs_sanity_dataset_50k_1536dim.txt";
+    let maxsplit = 1;
+    let file_iterator = fs::read_split_lines_iter(dataset_path, [PARSING_DELIMITER, maxsplit])?;
+
+    db.data.dataset = [];
+    while let Some(_entry) = file_iterator.next() {
+        let raw_entry = _entry?;
+        if !raw_entry.is_empty() {
+            let id = raw_entry[0].parse::<i64>()?;
+
+            let vectors = [];
+            let raw_vectors = strip_surrounding_brackets(raw_entry[1]);
+            let vector_strings = raw_vectors.split(',').collect::<Vec>();
+
+            for vector_str in vector_strings {
+                vectors.push(f64::parse(vector_str.trim())?);
+            }
+
+            let entry = #{ "id": id, "vectors": vectors };
+            db.data.dataset.push(entry)
+        }
+    }
+    println!("Loaded {} dataset lines", db.data.dataset.len());
+
+    Ok(())
+}
+
+pub async fn prepare_test_vectors(db) {
+    let test_data_path = VECTOR_DATA_DIR + "vs_sanity_test_vectors_1k_1536dim.txt";
+    let file_iterator = fs::read_split_lines_iter(test_data_path, [PARSING_DELIMITER])?;
+
+    db.data.test_vectors = [];
+    while let Some(_vectors) = file_iterator.next() {
+        let raw_vectors = _vectors?;
+        if !raw_vectors.is_empty() {
+            let vectors = [];
+            for vector in raw_vectors {
+                vectors.push(f64::parse(vector)?);
+            }
+            db.data.test_vectors.push(vectors)
+        }
+    }
+    println!("Loaded {} test vector lines", db.data.test_vectors.len());
+
+    Ok(())
+}
+
+pub async fn prepare_ground_truth_ids(db) {
+    let ground_truth_path = VECTOR_DATA_DIR + "vs_sanity_ground_truth_1k_1536dim.txt";
+    let file_iterator = fs::read_split_lines_iter(ground_truth_path, [PARSING_DELIMITER])?;
+
+    db.data.ground_truth_ids = [];
+    while let Some(_ids) = file_iterator.next() {
+        let raw_ids = _ids?;
+        if !raw_ids.is_empty() {
+            let ids = [];
+            for id_str in raw_ids {
+                ids.push(id_str.parse::<i64>()?);
+            }
+            db.data.ground_truth_ids.push(ids)
+        }
+    }
+    println!("Loaded {} ground truth lines", db.data.ground_truth_ids.len());
+
+    Ok(())
+}
+
+fn prepare_recall_map(db) {
+    db.data.recalls_map = #{};  // A map for per-chunk recall tracking
+
+    // Calculate expected number of chunks based on duration and rate
+    let duration = latte::param!("duration", RECALL_VALIDATION_DURATION);
+    let rate = latte::param!("rate", RECALL_VALIDATION_RATE);
+    let total_operations = duration * rate;
+    let num_chunks = (total_operations + RECALL_VALIDATION_CHUNK_SIZE - 1) / RECALL_VALIDATION_CHUNK_SIZE;
+
+    // Pre-create empty arrays for each chunk
+    for chunk_idx in 0..num_chunks {
+        db.data.recalls_map[chunk_idx.to_string()] = [];
+    }
+
+    println!("Pre-created {} chunks for recall tracking (duration={}s, rate={} ops/s, chunk_size={})",
+             num_chunks, duration, rate, RECALL_VALIDATION_CHUNK_SIZE);
+
+    Ok(())
+}

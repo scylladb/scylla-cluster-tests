@@ -5,7 +5,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    region: 'eu-west-1',
+    region: 'us-east-1',
+    availability_zone: 'b',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-change-cluster-size-by-2-times.yaml", "configurations/raft/enable_raft_experimental.yaml"]''',
 

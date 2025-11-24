@@ -88,7 +88,7 @@ class GceBuilder:
 
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
-    VERSION = 'v5'
+    VERSION = 'v6'
 
     def __init__(self, region: GceRegion):
         self.region = region

@@ -14,6 +14,7 @@
 
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta, UTC
+import json
 import os
 import re
 import sys
@@ -39,6 +40,8 @@ from argus.common.enums import TestStatus
 
 import sct_ssh
 import sct_scan_issues
+from sdcm.cloud_api_client import ScyllaCloudAPIClient
+from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
@@ -119,6 +122,7 @@ from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
+from sdcm.utils.docker_utils import get_ip_address_of_container
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -387,15 +391,16 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
             click.echo(f"SCT runner cleanup for {param} has been finished")
 
 
-@cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure)')
+@cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure/XCloud)')
 @click.option('--user', type=str, help='user name to filter instances by')
 @click.option('--get-all', is_flag=True, default=False, help='All resources')
 @click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.option('-b', '--backend', 'backend_type', type=click.Choice(SCTConfiguration.available_backends + ['all']), default='all', help="use specific backend")
+@click.option('--xcloud-env', 'xcloud_envs', type=str, multiple=True, default=['lab', 'staging'], help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab and staging")
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type):  # noqa: PLR0912, PLR0914, PLR0915
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
 
     add_file_logger()
 
@@ -624,7 +629,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         docker_table.add_row([
                             container.name,
                             builder_name,
-                            container.attrs["NetworkSettings"]["IPAddress"] if get_all_running else container.status,
+                            get_ip_address_of_container(container) if get_all_running else container.status,
                             container.labels.get("TestId", "N/A"),
                             container.labels.get("RunByUser", "N/A"),
                             container.attrs.get("Created", "N/A"),
@@ -678,13 +683,91 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         else:
             click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
+    def list_resources_on_xcloud():
+        """List ScyllaDB Cloud clusters across specified environments"""
+        # Use environments from command line option
+        environments = xcloud_envs
+
+        for environment in environments:
+            try:
+                click.secho(f"Checking ScyllaDB Cloud ({environment})...", fg='green')
+                credentials = KeyStore().get_cloud_rest_credentials(environment)
+                api_client = ScyllaCloudAPIClient(
+                    api_url=credentials['base_url'],
+                    auth_token=credentials['api_token']
+                )
+                account_id = api_client.get_account_details().get('accountId')
+                clusters = api_client.get_clusters(account_id=account_id, enriched=True)
+
+                if clusters:
+                    # Filter by test_id or user if provided
+                    filtered_clusters = []
+                    for cluster in clusters:
+                        # Get cluster details to access tags/metadata
+                        cluster_details = api_client.get_cluster_details(
+                            account_id=account_id,
+                            cluster_id=cluster.get('id'),
+                            enriched=True
+                        )
+                        # Check if cluster matches filters
+                        cluster_name = cluster_details.get('clusterName', '')
+                        # Filter by test_id if provided
+                        if test_id:
+                            short_test_id = extract_short_test_id_from_name(cluster_name)
+                            if short_test_id and not test_id.startswith(short_test_id):
+                                continue
+                        if user:
+                            if user not in cluster_name:
+                                continue
+
+                        filtered_clusters.append(cluster_details)
+
+                    if filtered_clusters:
+                        xcloud_table = PrettyTable(["Name", "Environment", "Status",
+                                                   "Provider", "TestId", "RunByUser", "CreatedAt"])
+                        xcloud_table.align = "l"
+                        xcloud_table.sortby = 'CreatedAt'
+
+                        for cluster in filtered_clusters:
+                            cluster_name = cluster.get('clusterName', 'N/A')
+                            cluster_status = cluster.get('status', 'N/A')
+                            cloud_provider = cluster.get("cloudProvider", {}).get("name", "N/A")
+                            created_at = cluster.get('createdAt', 'N/A')
+
+                            # Extract test_id and user from metadata or cluster name
+                            short_test_id = extract_short_test_id_from_name(cluster_name) or 'N/A'
+                            # TODO: Extract cluster_user from cluster name once naming convention includes username,
+                            #       or from cluster tags/metadata when API provides user information.
+                            cluster_user = "N/A"
+
+                            xcloud_table.add_row([
+                                cluster_name,
+                                environment,
+                                cluster_status,
+                                cloud_provider,
+                                short_test_id,
+                                cluster_user,
+                                created_at
+                            ])
+
+                        click.echo(xcloud_table.get_string(title=f"ScyllaDB Cloud clusters ({environment})"))
+                    else:
+                        click.secho(
+                            f"Nothing found for selected filters in ScyllaDB Cloud ({environment})!", fg="yellow")
+                else:
+                    click.secho(f"No clusters found in ScyllaDB Cloud ({environment})!", fg="yellow")
+
+            except Exception as exc:  # noqa: BLE001
+                click.secho(f"Failed to list resources in ScyllaDB Cloud ({environment}): {exc}", fg="red")
+
     backend_listing_map = {
         "aws": list_resources_on_aws,
         "gce": list_resources_on_gce,
         "k8s-gke": list_resources_on_gke,
         "k8s-eks": list_resources_on_eks,
         "docker": list_resources_on_docker,
-        "azure": list_resources_on_azure
+        "azure": list_resources_on_azure,
+        "xcloud": list_resources_on_xcloud
     }
     if list_resources_per_backend_type := backend_listing_map.get(backend_type):
         list_resources_per_backend_type()
@@ -824,6 +907,79 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                         click.echo(azure_images_json)
                 case _:
                     click.echo(f"Cloud provider {cloud_provider} is not supported")
+
+
+@cli.command('find-ami-equivalent', help="Find equivalent AMI in different region or architecture")
+@click.option('--ami-id', required=True, type=str, help="Source AMI ID to find equivalents for")
+@click.option('--source-region', required=True, type=str, help="AWS region where source AMI is located")
+@click.option('-r', '--target-region', "target_regions", type=str, multiple=True,
+              help="Target region(s) to search for equivalents. Can be specified multiple times. "
+                   "If not specified, searches in source region only.")
+@click.option('-a', '--target-arch', type=click.Choice(AwsArchType.__args__),
+              help="Target architecture (x86_64 or arm64). If not specified, uses same arch as source AMI.")
+@click.option('-o', '--output-format', type=click.Choice(['table', 'json', 'text']), default='table',
+              help="Output format: 'table' for human-readable table, 'json' for structured data, or 'text' for AMI IDs only")
+def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[str, ...],
+                        target_arch: AwsArchType | None, output_format: str):
+    """Find equivalent AMIs in different regions or architectures based on tags."""
+    from sdcm.utils.common import find_equivalent_ami
+
+    add_file_logger()
+
+    # Convert tuple to list or None
+    target_regions_list = list(target_regions) if target_regions else None
+
+    # Find equivalent AMIs
+    results = find_equivalent_ami(
+        ami_id=ami_id,
+        source_region=source_region,
+        target_regions=target_regions_list,
+        target_arch=target_arch
+    )
+
+    if not results:
+        click.echo(f"No equivalent AMIs found for {ami_id}")
+        return
+
+    if output_format == 'table':
+        # Create pretty table output
+        field_names = ['Region', 'AMI ID', 'Name', 'Architecture', 'Creation Date',
+                       'Name Tag', 'Scylla Version', 'Build ID', 'Owner ID']
+        table = PrettyTable(field_names)
+        table.align = 'l'
+
+        for result in results:
+            table.add_row([
+                result['region'],
+                result['ami_id'],
+                result['name'],
+                result['architecture'],
+                result['creation_date'],
+                result['name_tag'],
+                result['scylla_version'],
+                result['build_id'][:6] if result['build_id'] else 'N/A',
+                result['owner_id']
+            ])
+
+        title = f"Equivalent AMIs for {ami_id} (source: {source_region})"
+        if target_arch:
+            title += f" - Target arch: {target_arch}"
+        click.echo(table.get_string(title=title))
+
+    elif output_format == 'json':
+        # Create JSON output for pipeline usage
+        output = {
+            'source_ami_id': ami_id,
+            'source_region': source_region,
+            'target_arch': target_arch,
+            'results': results
+        }
+        click.echo(json.dumps(output, indent=2))
+
+    elif output_format == 'text':
+        # Output only AMI IDs, one per line
+        for result in results:
+            click.echo(result['ami_id'])
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')

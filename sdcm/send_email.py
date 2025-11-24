@@ -30,6 +30,7 @@ import jinja2
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
 from sdcm.utils.gce_utils import gce_public_addresses
+from sdcm.utils.docker_utils import get_ip_address_of_container
 
 LOGGER = logging.getLogger(__name__)
 
@@ -675,7 +676,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
         for container in containers:
             container.reload()
             nodes.append([container.name,
-                          container.attrs["NetworkSettings"]["IPAddress"],
+                          get_ip_address_of_container(container),
                           container.status,
                           "docker container",
                           builder_name])

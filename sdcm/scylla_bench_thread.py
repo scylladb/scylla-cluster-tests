@@ -18,12 +18,14 @@ import builtins
 import logging
 import contextlib
 from enum import Enum
+from itertools import chain
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.reporting.tooling_reporter import ScyllaBenchVersionReporter
-from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
+from sdcm.sct_events import Severity
+from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -48,11 +50,12 @@ class ScyllaBenchWorkloads(str, Enum):
 
 
 class ScyllaBenchStressEventsPublisher(FileFollowerThread):
-    def __init__(self, node, sb_log_filename, event_id=None):
+    def __init__(self, node, sb_log_filename, event_id=None, stop_test_on_failure: bool = True):
         super().__init__()
         self.sb_log_filename = sb_log_filename
         self.node = str(node)
         self.event_id = event_id
+        self.stop_test_on_failure = stop_test_on_failure
 
     def run(self):
         while not self.stopped():
@@ -65,13 +68,17 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for pattern, event in SCYLLA_BENCH_ERROR_EVENTS_PATTERNS:
+                for pattern, event in chain(SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS):
                     if self.event_id:
                         # Connect the event to the stress load
                         event.event_id = self.event_id
 
                     if pattern.search(line):
+                        if event.severity == Severity.CRITICAL and not self.stop_test_on_failure:
+                            event = event.clone()  # so we don't change the severity to other stress threads  # noqa: PLW2901
+                            event.severity = Severity.ERROR
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
+                        break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
 class ScyllaBenchThread(DockerBasedStressThread):
@@ -140,6 +147,7 @@ class ScyllaBenchThread(DockerBasedStressThread):
         #       Another "raw" tag/metric is ignored because it is coordinated omission affected
         #       and not really needed having 'coordinated omission fixed' latency one.
         self.hdr_tags = ["co-fixed"]
+        self.stop_test_on_failure = stop_test_on_failure
 
     def get_datacenter_name_for_loader(self, loader):
         datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
@@ -198,26 +206,23 @@ class ScyllaBenchThread(DockerBasedStressThread):
         return stress_cmd
 
     def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
-        if self.connection_bundle_file:
-            stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
-        else:
-            # Select first seed node to send the scylla-bench cmds
-            stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
+        # Select first seed node to send the scylla-bench cmds
+        stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
 
-            if self.params.get("client_encrypt"):
-                for ssl_file in loader.ssl_conf_dir.iterdir():
-                    if ssl_file.is_file():
-                        cmd_runner.send_files(str(ssl_file),
-                                              str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
-                                              verbose=True)
-                stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
+        if self.params.get("client_encrypt"):
+            for ssl_file in loader.ssl_conf_dir.iterdir():
+                if ssl_file.is_file():
+                    cmd_runner.send_files(str(ssl_file),
+                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
+                                          verbose=True)
+            stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
 
-                if self.params.get("peer_verification"):
-                    stress_cmd = f'{stress_cmd.strip()} -tls-host-verification'
-                if self.params.get("client_encrypt_mtls"):
-                    stress_cmd = (
-                        f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
-                        f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
+            if self.params.get("peer_verification"):
+                stress_cmd = f'{stress_cmd.strip()} -tls-host-verification'
+            if self.params.get("client_encrypt_mtls"):
+                stress_cmd = (
+                    f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
+                    f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
 
         return stress_cmd
 
@@ -235,9 +240,6 @@ class ScyllaBenchThread(DockerBasedStressThread):
                 loader, self.params.get("stress_image.scylla-bench"), extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined '
             )
             cmd_runner_name = loader.ip_address
-
-        if self.connection_bundle_file:
-            cmd_runner.send_files(str(self.connection_bundle_file), self.target_connection_bundle_file)
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
             loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
@@ -273,11 +275,12 @@ class ScyllaBenchThread(DockerBasedStressThread):
 
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
-                                       stress_operation=self.sb_mode,
+                                       stress_operation=str(self.sb_mode.value),
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
                 cleanup_context, \
-                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher, \
+                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name,
+                                                 stop_test_on_failure=self.stop_test_on_failure) as publisher, \
                 ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd,
                                  log_file_name=log_file_name) as scylla_bench_event:
             publisher.event_id = scylla_bench_event.event_id

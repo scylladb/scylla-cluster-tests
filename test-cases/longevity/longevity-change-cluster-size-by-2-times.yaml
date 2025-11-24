@@ -13,7 +13,10 @@ stress_cmd: ["cassandra-stress write cl=QUORUM duration=720m no-warmup -schema '
 n_db_nodes: 3
 n_loaders: 2
 
-instance_type_db: 'i3en.xlarge'
+# Note: the instance of i8ge is not supported on all region and not on all availability zones.
+# Example: i8ge.2xlarge is currently supported on us-east-1b,us-east-1c,us-east-1d. And not on us-east-1a.
+instance_type_db: 'i8ge.2xlarge'
+
 
 nemesis_class_name: 'GrowShrinkClusterNemesis:1 SisyphusMonkey:1'
 nemesis_selector: ["","schema_changes and not disruptive"]

@@ -63,12 +63,20 @@ class DbLogReader(Process):
                  system_event_patterns: list,
                  decoding_queue: Optional[Queue],
                  log_lines: bool,
+                 backtrace_stall_decoding: bool = True,
+                 backtrace_decoding_disable_regex: Optional[str] = None,
                  ):
         self._system_log = system_log
         self._system_event_patterns = system_event_patterns
         self._decoding_queue = decoding_queue
         self._log_lines = log_lines
         self._node_name = node_name
+        self._backtrace_stall_decoding = backtrace_stall_decoding
+        self._disable_regex_compiled = None
+        if backtrace_decoding_disable_regex:
+            self._backtrace_decoding_disable_regex = re.compile(backtrace_decoding_disable_regex)
+        else:
+            self._backtrace_decoding_disable_regex = None
 
         self._terminate_event = Event()
         self._last_error: LogEvent | None = None
@@ -82,6 +90,27 @@ class DbLogReader(Process):
     @cached_property
     def _continuous_event_patterns(self):
         return get_pattern_to_event_to_func_mapping(node=self._node_name)
+
+    def _should_skip_decoding(self, event: LogEvent) -> bool:
+        """Check if backtrace decoding should be skipped for this event.
+
+        Returns True if the event should skip decoding based on:
+        1. backtrace_stall_decoding=False and event is REACTOR_STALLED
+        2. backtrace_decoding_disable_regex matches the event type
+        """
+
+        # Check if reactor stall decoding is disabled
+        if not self._backtrace_stall_decoding and event.type == "REACTOR_STALLED":
+            LOGGER.debug("Skipping backtrace decoding for reactor stall event (backtrace_stall_decoding=False)")
+            return True
+
+        # Check if event type matches the disable regex
+        if self._disable_regex_compiled and self._disable_regex_compiled.match(event.type):
+            LOGGER.debug("Skipping backtrace decoding for event type '%s' (matches backtrace_decoding_disable_regex)",
+                         event.type)
+            return True
+
+        return False
 
     def _read_and_publish_events(self) -> None:  # noqa: PLR0912
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
@@ -192,17 +221,24 @@ class DbLogReader(Process):
             backtraces = list(filter(self.filter_backtraces, backtraces))
 
         for backtrace in backtraces:
-            if not (self._decoding_queue and backtrace["event"].raw_backtrace):
-                backtrace["event"].publish()
+            event = backtrace["event"]
+            if not (self._decoding_queue and event.raw_backtrace):
+                event.publish()
                 continue
+
+            # Check if we should skip decoding for this event type
+            if self._should_skip_decoding(event):
+                event.publish()
+                continue
+
             try:
                 self._decoding_queue.put({
                     "node": self._node_name,
                     "build_id": self._build_id,
-                    "event": backtrace["event"],
+                    "event": event,
                 })
             except Exception:
-                backtrace["event"].publish()
+                event.publish()
                 raise
 
     @raise_event_on_failure

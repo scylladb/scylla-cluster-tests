@@ -269,6 +269,7 @@ class ScyllaBenchLogEvent(LogEvent, abstract=True):
     ConsistencyError: Type[LogEventProtocol]
     DataValidationError: Type[LogEventProtocol]
     ParseDistributionError: Type[LogEventProtocol]
+    RackAwarePolicy: Type[LogEventProtocol]
 
 
 ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
@@ -281,6 +282,8 @@ ScyllaBenchLogEvent.add_subevent_type(
     severity=Severity.CRITICAL,
     regex=r"missing parameter|unexpected parameter|unsupported"
           r"|invalid input value|distribution is invalid|distribution has invalid format")
+ScyllaBenchLogEvent.add_subevent_type("RackAwarePolicy", severity=Severity.NORMAL,
+                                      regex=r"Using provided rack name '.+' for RackAwareRoundRobinPolicy")
 
 
 SCYLLA_BENCH_ERROR_EVENTS = (
@@ -290,6 +293,11 @@ SCYLLA_BENCH_ERROR_EVENTS = (
 )
 SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
+
+SCYLLA_BENCH_NORMAL_EVENTS = (ScyllaBenchLogEvent.RackAwarePolicy(), )
+
+SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in SCYLLA_BENCH_NORMAL_EVENTS]
 
 CASSANDRA_HARRY_ERROR_EVENTS = (
 )

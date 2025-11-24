@@ -32,6 +32,5 @@ user_prefix: 'longevity-1000-keyspaces'
 
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false
-use_prepared_loaders: true
 
 use_preinstalled_scylla: true

@@ -95,6 +95,7 @@ SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 ScyllaBenchLogEvent.DataValidationError: CRITICAL
 ScyllaBenchLogEvent.ParseDistributionError: CRITICAL
+ScyllaBenchLogEvent.RackAwarePolicy: NORMAL
 GeminiStressLogEvent.GeminiEvent: CRITICAL
 PrometheusAlertManagerEvent: CRITICAL
 ScyllaOperatorLogEvent: ERROR

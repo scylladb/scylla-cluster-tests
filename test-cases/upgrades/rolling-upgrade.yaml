@@ -45,3 +45,6 @@ gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
 use_preinstalled_scylla: false
 
 gemini_log_cql_statements: false
+
+# Disable Gemini workload during rolling upgrade test
+run_gemini_in_rolling_upgrade: false

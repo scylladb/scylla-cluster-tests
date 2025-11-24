@@ -368,7 +368,9 @@ This ensures:
 When adding new configuration options:
 1. Update `sdcm/sct_config.py` with the new parameter
 2. Add documentation to the parameter definition
-3. Update defaults in `defaults/*.yaml` if needed
+3. **REQUIRED**: Add default values in `defaults/test_default.yaml` or relevant backend-specific files in `defaults/` (e.g., `aws_config.yaml`, `gce_config.yaml`, etc.)
+   - Every configuration option in `sct_config.py` MUST have a corresponding default value
+   - This ensures consistent behavior and prevents `None` values when parameters are not explicitly set
 4. The pre-commit hook will automatically update `docs/configuration_options.md`
 
 ### Testing Strategy

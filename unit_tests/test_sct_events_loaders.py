@@ -23,7 +23,8 @@ from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.loaders import \
     GeminiStressEvent, CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent, NdBenchStressEvent, CDCReaderStressEvent, \
     KclStressEvent, CassandraStressLogEvent, ScyllaBenchLogEvent, GeminiStressLogEvent, \
-    CS_ERROR_EVENTS, CS_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
+    CS_ERROR_EVENTS, CS_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS, \
+    SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, SCYLLA_BENCH_NORMAL_EVENTS
 
 
 class TestGeminiEvent(unittest.TestCase):
@@ -443,22 +444,36 @@ class TestCassandraStressLogEvent(unittest.TestCase):
                        expected_type='ShardAwareDriver',
                        expected_severity=Severity.NORMAL)
 
-    def test_cs_normal_rack_awarnes_event(self):
-        self.get_event(line="Using provided rack name '1a' for RackAwareRoundRobinPolicy (if this is incorrect, please provide the correct "
-                            "rack name with RackAwareRoundRobinPolicy constructor",
+
+class TestScyllaBenchLogEvent(unittest.TestCase):
+    @staticmethod
+    def get_event(line, expected_type, expected_severity):
+        for pattern, event in chain(SCYLLA_BENCH_NORMAL_EVENTS_PATTERNS, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS):
+            if pattern.search(line):
+                event.add_info(node='self.node', line=line, line_number=1).dont_publish()
+                assert event.type == expected_type, \
+                    f'Unexpected event.type {event.type}. Expected "{expected_type}"'
+                assert event.severity == expected_severity, \
+                    f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
+                return
+
+        raise ValueError(f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
+                         f"expected severity is {expected_severity}")
+
+    def test_scylla_bench_normal_rack_awarness_event(self):
+        self.get_event(line="[2025-11-01 04:15:03.653] Using provided rack name 'RACK0' for RackAwareRoundRobinPolicy",
                        expected_type='RackAwarePolicy',
                        expected_severity=Severity.NORMAL)
 
-
-class TestScyllaBenchLogEvent(unittest.TestCase):
     def test_known_scylla_bench_errors(self):
         self.assertTrue(issubclass(ScyllaBenchLogEvent.ConsistencyError, ScyllaBenchLogEvent))
         self.assertTrue(issubclass(ScyllaBenchLogEvent.DataValidationError, ScyllaBenchLogEvent))
         self.assertTrue(issubclass(ScyllaBenchLogEvent.ParseDistributionError, ScyllaBenchLogEvent))
+        self.assertTrue(issubclass(ScyllaBenchLogEvent.RackAwarePolicy, ScyllaBenchLogEvent))
 
-    def test_scylla_bench_error_events_list(self):
+    def test_scylla_bench_all_events_list(self):
         self.assertSetEqual(set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)),
-                            {ev.type for ev in SCYLLA_BENCH_ERROR_EVENTS})
+                            {ev.type for ev in chain(SCYLLA_BENCH_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS)})
 
 
 class TestGeminiLogEvent(unittest.TestCase):
