@@ -43,49 +43,6 @@ def load_matrix_config(matrix_file: str) -> Dict:
     return data
 
 
-def get_cron_config_from_matrix(matrix_file: str) -> str:
-    """
-    Extract cron configuration from matrix YAML file and format for Jenkins.
-    
-    Args:
-        matrix_file: Path to the matrix YAML file
-    
-    Returns:
-        Formatted cron string for Jenkins parameterizedCron trigger
-        Example: '00 6 * * 6 %scylla_version=master:latest;labels_selector=master-weekly'
-    """
-    matrix = load_matrix_config(matrix_file)
-    
-    # Get cron triggers from matrix, default to empty list
-    cron_triggers = matrix.get('cron_triggers', [])
-    
-    if not cron_triggers:
-        return ''
-    
-    # Build cron strings
-    cron_lines = []
-    for trigger in cron_triggers:
-        schedule = trigger.get('schedule', '')
-        params = trigger.get('params', {})
-        
-        if not schedule:
-            continue
-        
-        # Build parameter string
-        param_parts = []
-        for key, value in params.items():
-            param_parts.append(f"{key}={value}")
-        
-        if param_parts:
-            cron_line = f"{schedule} %{';'.join(param_parts)}"
-        else:
-            cron_line = schedule
-        
-        cron_lines.append(cron_line)
-    
-    return '\n'.join(cron_lines)
-
-
 def determine_job_folder(scylla_version: str, explicit_folder: Optional[str]) -> str:
     """
     Determine job folder based on scylla_version.
