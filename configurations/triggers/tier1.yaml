@@ -1,11 +1,21 @@
 # Tier1 Test Matrix Definition
 # This file defines all tier1 tests with their configurations
-# Used by: sct.py trigger-tier1 --matrix tier1.yaml
+# Used by: sct.py trigger-matrix --matrix configurations/triggers/tier1.yaml
 #
 # Version Filtering:
 # - By default, all jobs run on all Scylla versions
 # - Use 'exclude_versions' to specify versions where a job should NOT run
 # - If 'exclude_versions' is not specified or empty, the job runs on all versions
+
+# Cron trigger configuration for automated runs
+# Format: standard cron syntax with parameterized values after %
+# Multiple cron schedules can be defined, one per line
+cron_triggers:
+  - schedule: '00 6 * * 6'  # Saturdays at 6:00 AM UTC
+    params:
+      scylla_version: 'master:latest'
+      labels_selector: 'master-weekly'
+      requested_by_user: 'timtimb0t'
 
 jobs:
   # AWS Tests

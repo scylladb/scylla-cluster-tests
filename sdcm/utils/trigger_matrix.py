@@ -28,7 +28,7 @@ def aws_arch_to_vm_arch(arch: AwsArchType) -> VmArch:
     return VmArch.X86
 
 
-def load_matrix_comf(matrix_file: str) -> Dict:
+def load_matrix_config(matrix_file: str) -> Dict:
     """Load tier1 matrix from YAML file."""
     matrix_path = Path(matrix_file)
     if not matrix_path.exists():
@@ -41,6 +41,49 @@ def load_matrix_comf(matrix_file: str) -> Dict:
         raise ValueError("Matrix file must contain 'jobs' key")
 
     return data
+
+
+def get_cron_config_from_matrix(matrix_file: str) -> str:
+    """
+    Extract cron configuration from matrix YAML file and format for Jenkins.
+    
+    Args:
+        matrix_file: Path to the matrix YAML file
+    
+    Returns:
+        Formatted cron string for Jenkins parameterizedCron trigger
+        Example: '00 6 * * 6 %scylla_version=master:latest;labels_selector=master-weekly'
+    """
+    matrix = load_matrix_config(matrix_file)
+    
+    # Get cron triggers from matrix, default to empty list
+    cron_triggers = matrix.get('cron_triggers', [])
+    
+    if not cron_triggers:
+        return ''
+    
+    # Build cron strings
+    cron_lines = []
+    for trigger in cron_triggers:
+        schedule = trigger.get('schedule', '')
+        params = trigger.get('params', {})
+        
+        if not schedule:
+            continue
+        
+        # Build parameter string
+        param_parts = []
+        for key, value in params.items():
+            param_parts.append(f"{key}={value}")
+        
+        if param_parts:
+            cron_line = f"{schedule} %{';'.join(param_parts)}"
+        else:
+            cron_line = schedule
+        
+        cron_lines.append(cron_line)
+    
+    return '\n'.join(cron_lines)
 
 
 def determine_job_folder(scylla_version: str, explicit_folder: Optional[str]) -> str:
@@ -698,7 +741,7 @@ def trigger_matrix_jobs(matrix_file: str, scylla_version: Optional[str], job_fol
         stress_duration: Stress duration to override the default test duration
     """
     click.echo(f"Loading matrix from: {matrix_file}")
-    matrix = load_matrix_comf(matrix_file)
+    matrix = load_matrix_config(matrix_file)
 
     # If scylla_version is not provided, try to infer it or default to 'master'
     version_to_use = scylla_version or 'master'

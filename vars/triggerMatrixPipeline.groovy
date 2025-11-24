@@ -1,8 +1,16 @@
 // Tier1 Parallel Pipeline (Simplified)
 // This pipeline now delegates to Python logic for better testability and reusability
-// Matrix definition is in configurations/triggers/tier1.yaml
+// Matrix definition and cron triggers are in configurations/triggers/tier1.yaml
 def call(Map pipelineParams = [:]) {
     def builder = getJenkinsLabels("aws", "eu-west-1")
+    
+    // Get matrix file from params or use default
+    def matrixFile = pipelineParams.get('matrix_file', 'configurations/triggers/tier1.yaml')
+    
+    // Get cron configuration - can be overridden via pipelineParams
+    // Otherwise, uses the cron_triggers defined in the matrix file
+    def cronConfig = pipelineParams.get('parameterizedCron', '')
+    
     pipeline {
         agent {
             label {
@@ -17,7 +25,7 @@ def call(Map pipelineParams = [:]) {
         }
 
         parameters {
-            string(name: 'matrix_file', defaultValue: "${pipelineParams.get('matrix_file', 'configurations/triggers/tier1.yaml')}", description: 'Path to the matrix configuration file')
+            string(name: 'matrix_file', defaultValue: "${matrixFile}", description: 'Path to the matrix configuration file')
             string(name: 'scylla_version', defaultValue: '', description: 'Scylla version to test')
             string(name: 'scylla_repo', defaultValue: '', description: 'Scylla repo URL')
             string(name: 'backend', defaultValue: '', description: 'Backend to use (e.g., aws, gce)')
@@ -33,7 +41,7 @@ def call(Map pipelineParams = [:]) {
         }
         triggers {
             parameterizedCron (
-                "${pipelineParams.get('parameterizedCron')}"
+                "${cronConfig}"
             )
         }
 

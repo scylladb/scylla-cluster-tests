@@ -2237,36 +2237,9 @@ def trigger_matrix(matrix, scylla_version, job_folder, scylla_repo, scylla_ami_i
     """
     Trigger matrix of test jobs from YAML matrix definition.
 
-    This command reads the tier1 matrix from a YAML file, applies parameters,
-    and triggers matching Jenkins jobs.
-
     Examples:
-        # Trigger for master version
         ./sct.py trigger-matrix --scylla-version master --labels-selector master-weekly
-
-        # Trigger for release branch
-        ./sct.py trigger-matrix --scylla-version 2025.4
-
-        # Trigger only AWS jobs
-        ./sct.py trigger-matrix --scylla-version master --backend aws
-
-        # Trigger with ARM64 architecture
-        ./sct.py trigger-matrix --scylla-version master --arch arm64
-
-        # Trigger with specific AMI (scylla_version optional)
-        ./sct.py trigger-matrix --scylla-ami-id ami-12345678
-
-        # Trigger with specific Azure image (scylla_version optional)
-        ./sct.py trigger-matrix --azure-image-db /subscriptions/.../images/scylla-image
-
-        # Trigger with specific GCE image (scylla_version optional)
-        ./sct.py trigger-matrix --gce-image-db https://www.googleapis.com/.../images/scylla-image
-
-        # Skip specific jobs
-        ./sct.py trigger-matrix --scylla-version 2025.4 --skip-jobs "job1,job2"
-
-        # Dry run to see what would be triggered
-        ./sct.py trigger-matrix --scylla-version master --dry-run
+        ./sct.py trigger-matrix --scylla-version 2025.4 --skip-jobs "job1,job2" --dry-run
     """
     from sdcm.utils.trigger_matrix import trigger_matrix_jobs
 
