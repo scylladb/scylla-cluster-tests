@@ -26,6 +26,7 @@ from google.cloud import compute_v1
 from google.cloud.compute_v1 import Firewall
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.gce_utils import wait_for_extended_operation
 
 
 LOGGER = logging.getLogger(__name__)
@@ -263,8 +264,8 @@ class GceRegion:
             network=self.SCT_NETWORK_NAME,
             project=self.project,
             networks_remove_peering_request_resource=compute_v1.NetworksRemovePeeringRequest(name=peering_name))
-        self.network_client.remove_peering(request=remove_request)
-        time.sleep(3)  # wait a bit for the operation to propagate
+        operation = self.network_client.remove_peering(request=remove_request)
+        wait_for_extended_operation(operation, f"Remove peering {peering_name}", timeout=120)
 
         final_status = self.get_peering_status(peering_name)
         if final_status:
