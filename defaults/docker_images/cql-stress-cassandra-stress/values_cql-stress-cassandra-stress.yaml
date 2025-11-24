@@ -1,2 +1,2 @@
 cql-stress-cassandra-stress:
-  image: scylladb/cql-stress:0.2.4
+  image: scylladb/cql-stress:0.2.5
