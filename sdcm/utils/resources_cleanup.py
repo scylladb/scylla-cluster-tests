@@ -14,12 +14,14 @@
 from __future__ import absolute_import, annotations
 import logging
 import os
+import time
 import ipaddress
 from typing import Optional
 from unittest.mock import MagicMock
 
 from botocore.exceptions import ClientError
 import boto3
+import google.api_core.exceptions
 from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
@@ -674,8 +676,24 @@ def clean_inactive_peerings_gce(config: dict, regions=None, dry_run=False) -> No
             LOGGER.info("Removing inactive peering %s to %s Scylla Cloud project, in region %s",
                         peering.name, peer_project, region_name)
             if not dry_run:
-                gce_region.cleanup_vpc_peering_connection(peering.name)
-                cleaned_peerings.append(peering.name)
+                # retry with exponential backoff if another peering operation is in progress
+                max_retries, retry_delay = 5, 3
+                for attempt in range(max_retries):
+                    try:
+                        gce_region.cleanup_vpc_peering_connection(peering.name)
+                        cleaned_peerings.append(peering.name)
+                        break
+                    except google.api_core.exceptions.BadRequest as exc:
+                        if "peering operation in progress" in str(exc).lower() and attempt < max_retries - 1:
+                            LOGGER.warning(
+                                "Peering operation is in progress, waiting %s seconds before retry (attempt %s/%s)",
+                                retry_delay, attempt + 1, max_retries)
+                            time.sleep(retry_delay)
+                            retry_delay *= 2
+                        else:
+                            LOGGER.error("Failed to remove peering %s after %s attempts: %s",
+                                         peering.name, attempt + 1, exc)
+                            raise
 
         if cleaned_peerings:
             LOGGER.info("Cleaned %s inactive peerings in region %s", cleaned_peerings, region_name)
