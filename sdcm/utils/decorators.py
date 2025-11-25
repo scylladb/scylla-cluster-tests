@@ -198,14 +198,14 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
-    from sdcm.utils import latency
+    from sdcm.utils import latency  # noqa: PLC0415
 
     def wrapper(func):
 
         @wraps(func)
         def wrapped(*args, **kwargs):  # noqa: PLR0914
-            from sdcm.tester import ClusterTester
-            from sdcm.nemesis import Nemesis
+            from sdcm.tester import ClusterTester  # noqa: PLC0415
+            from sdcm.nemesis import Nemesis  # noqa: PLC0415
             start = time.time()
             # If the decorator is applied dynamically, "self" argument is not transferred  via "args" and may be found in bounded function
             _self = getattr(func, "__self__", None) or args[0]
@@ -465,7 +465,7 @@ def optional_stage(stage_names: str | list[str]):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # making import here, to work around circular import issue
-            from sdcm.cluster import TestConfig
+            from sdcm.cluster import TestConfig  # noqa: PLC0415
             skip_test_stages = TestConfig().tester_obj().skip_test_stages
             skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
 

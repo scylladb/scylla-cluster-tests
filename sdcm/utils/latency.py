@@ -155,12 +155,12 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
                 for workload, results in interval.items():
                     interval[workload]["color"] = {}
                     if results["percentile_90"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_90"]:
-                        interval[workload]["color"].update({"percentile_90": "red"})
+                        results["color"].update({"percentile_90": "red"})
                     else:
-                        interval[workload]["color"].update({"percentile_90": ""})
+                        results["color"].update({"percentile_90": ""})
                     if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
-                        interval[workload]["color"].update({"percentile_99": "red"})
+                        results["color"].update({"percentile_99": "red"})
                     else:
-                        interval[workload]["color"].update({"percentile_99": ""})
+                        results["color"].update({"percentile_99": ""})
 
     return result_stats

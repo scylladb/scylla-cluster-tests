@@ -13,7 +13,6 @@
 
 import logging
 import itertools
-import unittest
 import unittest.mock
 from collections import namedtuple
 

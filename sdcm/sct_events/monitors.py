@@ -56,5 +56,7 @@ class PrometheusAlertManagerEvent(ContinuousEvent):
                                "state={0.state} fingerprint={0.fingerprint} labels={0.labels}"
         return fmt
 
+    __hash__ = False
+
     def __eq__(self, other):
         return all(getattr(self, name, None) == getattr(other, name, None) for name in self._eq_attrs)
