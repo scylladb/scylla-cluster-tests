@@ -9,8 +9,6 @@ from typing import NamedTuple
 
 import github
 import github.Auth
-import github.Issue
-import github.Label
 from jira import JIRA
 
 from sdcm.keystore import KeyStore
