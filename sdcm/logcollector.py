@@ -180,18 +180,18 @@ class BaseMonitoringEntity(BaseLogEntity):
     @staticmethod
     def get_monitoring_stack(backend):
         if backend == 'aws':
-            from sdcm.cluster_aws import MonitorSetAWS
+            from sdcm.cluster_aws import MonitorSetAWS  # noqa: PLC0415
             return MonitorSetAWS
         elif backend == 'docker':
-            from sdcm.cluster_docker import MonitorSetDocker
+            from sdcm.cluster_docker import MonitorSetDocker  # noqa: PLC0415
             return MonitorSetDocker
         elif backend == 'gce':
-            from sdcm.cluster_gce import MonitorSetGCE
+            from sdcm.cluster_gce import MonitorSetGCE  # noqa: PLC0415
             return MonitorSetGCE
         elif backend == 'baremetal':
-            from sdcm.cluster_baremetal import MonitorSetPhysical
+            from sdcm.cluster_baremetal import MonitorSetPhysical  # noqa: PLC0415
             return MonitorSetPhysical
-        from sdcm.cluster import BaseMonitorSet
+        from sdcm.cluster import BaseMonitorSet  # noqa: PLC0415
         return BaseMonitorSet
 
     def get_monitoring_version(self, node):
@@ -376,7 +376,7 @@ class PrometheusSnapshots(BaseMonitoringEntity):
     def get_prometheus_snapshot_remote(self, node) -> Optional[str]:
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
-        except (PrometheusSnapshotErrorException, Exception) as details:
+        except (PrometheusSnapshotErrorException, Exception) as details:  # noqa: BLE001
             LOGGER.warning("Create prometheus snapshot failed %s.\nUse prometheus data directory", details)
             node.remoter.run('docker stop aprom', ignore_status=True)
             snapshot_dir = self.monitoring_data_dir
@@ -1537,7 +1537,7 @@ class Collector:
 
     def find_and_append_cloud_manager_instance_to_collecting_nodes(self):
         try:
-            from cluster_cloud import get_manager_instance_by_cluster_id
+            from cluster_cloud import get_manager_instance_by_cluster_id  # noqa: PLC0415
         except ImportError:
             LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
             return
