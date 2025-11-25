@@ -233,8 +233,10 @@ class TestMBM(unittest.TestCase):
         self.assertFalse(report_results)
 
     def test_main_help_message(self):
+        env = os.environ.copy()
+        env['PYTHONWARNINGS'] = 'ignore::FutureWarning:google.api_core._python_version_support'
         with subprocess.Popen(['./microbenchmarking.py', '--help'], cwd=self.cwd,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) as ps:
             stdout, stderr = ps.communicate()
             self.assertEqual(ps.returncode, 0)
             self.assertIn(b'usage: microbenchmarking.py [-h] Modes ...', stdout)
@@ -242,10 +244,12 @@ class TestMBM(unittest.TestCase):
 
     def test_help_parameter_for_exclude(self):
         msg = b'usage: microbenchmarking.py exclude [-h]'
+        env = os.environ.copy()
+        env['PYTHONWARNINGS'] = 'ignore::FutureWarning:google.api_core._python_version_support'
         with subprocess.Popen(['./microbenchmarking.py', 'exclude', '--help'],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as ps:
+                              stderr=subprocess.PIPE, env=env) as ps:
             stdout, stderr = ps.communicate()
             self.assertEqual(ps.returncode, 0)
             self.assertIn(msg, stdout)
@@ -253,11 +257,12 @@ class TestMBM(unittest.TestCase):
 
     def test_help_parameter_for_check(self):
         msg = b"""usage: microbenchmarking.py check [-h] [--update-db]"""
-
+        env = os.environ.copy()
+        env['PYTHONWARNINGS'] = 'ignore::FutureWarning:google.api_core._python_version_support'
         with subprocess.Popen(['./microbenchmarking.py', 'check', '--help'],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as ps:
+                              stderr=subprocess.PIPE, env=env) as ps:
 
             stdout, stderr = ps.communicate()
             self.assertEqual(ps.returncode, 0)
@@ -267,6 +272,8 @@ class TestMBM(unittest.TestCase):
     def test_execute_mbm_from_cli(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+        env = os.environ.copy()
+        env['PYTHONWARNINGS'] = 'ignore::FutureWarning:google.api_core._python_version_support'
         with subprocess.Popen(['./microbenchmarking.py', 'check',
                                '--results-path', result_path,
                                '--email-recipients', 'alex.bykov@scylladb.com',
@@ -275,7 +282,7 @@ class TestMBM(unittest.TestCase):
                                "--es-index", self.es_index],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as ps:
+                              stderr=subprocess.PIPE, env=env) as ps:
             stdout, _ = ps.communicate()
             print(_)
             print(stdout)
