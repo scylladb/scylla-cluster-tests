@@ -69,7 +69,7 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
         is_target = current_node.print_node_running_nemesis(node.ip_address)
         message = f"Current node {current_node}. Found nulls in system.peers for " \
                   f"node {node}{is_target} with status {gossip_info.get(node, {}).get('status', 'n/a')} : " \
-                  f"{peers_details[node]}"
+                  f"{node_info}"
 
         # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
         LOGGER.debug("Print all columns from system.peers for peer %s", node)
