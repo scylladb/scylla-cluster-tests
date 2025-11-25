@@ -19,7 +19,6 @@ from typing import Optional
 import googleapiclient.errors
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
-import google
 import google.api_core.exceptions
 from google.cloud import storage
 from google.cloud import compute_v1
