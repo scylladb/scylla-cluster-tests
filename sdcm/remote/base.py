@@ -48,6 +48,26 @@ class RetryableNetworkException(Exception):
         super().__init__(*args)
 
 
+class RetryMixin:
+    """Mixin class that provides retry logic for command runners"""
+    exception_retryable = (RetryableNetworkException,)
+    default_run_retry = 3
+
+    def _get_retry_params(self, retry: int = 1) -> dict:
+        if retry == 0:
+            # won't retry on any case
+            allowed_exceptions = tuple()
+            retry = 1
+        elif retry == 1:
+            # only retry 3 times on network exception
+            allowed_exceptions = (RetryableNetworkException,)
+            retry = self.default_run_retry
+        else:
+            # retry times that user wants on any exception
+            allowed_exceptions = (Exception,)
+        return {'n': retry, 'sleep_time': 5, 'allowed_exceptions': allowed_exceptions}
+
+
 class CommandRunner(metaclass=ABCMeta):
     _connection = None
 

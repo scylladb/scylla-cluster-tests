@@ -1044,6 +1044,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.test_config.set_test_id(self.params.get('test_id') or uuid4())
         self.test_config.set_test_name(self.id())
         self.test_config.set_tester_obj(self)
+
         RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
 
         self._profile_factory = None
@@ -1108,6 +1109,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.test_config.configure_vector(self.localhost)
         if self.params.get("cluster_backend") == 'xcloud':
             self.test_config.configure_xcloud_connectivity(self.localhost, self.params)
+
+        self.test_config.ensure_agent_api_key()
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         self.alternator = alternator.api.Alternator(sct_params=self.params)

@@ -240,6 +240,11 @@ def provision_resources(backend, test_name: str, config: str):
     else:
         click.echo("No need provision logging service")
 
+    agent_config = params.get('agent')
+    if agent_config.get('enabled') and agent_config.get('binary_url'):
+        click.echo("Generate SCT agent API key")
+        test_config.generate_and_save_agent_api_key()
+
     click.echo(f"Provision {backend} cloud resources")
     try:
         if backend == "aws":
@@ -922,7 +927,7 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
 def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[str, ...],
                         target_arch: AwsArchType | None, output_format: str):
     """Find equivalent AMIs in different regions or architectures based on tags."""
-    from sdcm.utils.common import find_equivalent_ami
+    from sdcm.utils.common import find_equivalent_ami  # noqa: PLC0415
 
     add_file_logger()
 
@@ -2157,7 +2162,7 @@ def hdr_investigate(test_id: str, stress_tool: str, stress_operation: str, throt
        hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
        --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
     """
-    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval  # noqa: PLC0415
     stress_operation = stress_operation.upper()
 
     try:

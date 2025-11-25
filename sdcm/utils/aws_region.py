@@ -562,6 +562,13 @@ class AwsRegion:
                         "IpProtocol": "tcp",
                         "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Vector Store REST API for ALL'}],
                         "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Vector Store REST API for ALL'}]
+                    },
+                    {
+                        "FromPort": 15000,
+                        "ToPort": 15000,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow SCT agent REST API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow SCT agent REST API for ALL'}]
                     }
                 ]
             )
