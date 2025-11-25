@@ -92,7 +92,7 @@ class SlaPerUserTest(LongevityTest):
         for role, shares in test_users.items():
             for scheduler_group, sg_shares in scheduler_shares.items():
                 if shares[0] in sg_shares:
-                    test_users[role].append(scheduler_group)
+                    shares.append(scheduler_group)
                     break
         return test_users
 
