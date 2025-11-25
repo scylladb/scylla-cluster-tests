@@ -202,11 +202,8 @@ def get_data_dir_path(*args):
     return os.path.abspath(data_dir)
 
 
-def get_sct_root_path():
-    import sdcm
-    sdcm_path = os.path.realpath(sdcm.__path__[0])
-    sct_root_dir = os.path.join(sdcm_path, "..")
-    return os.path.abspath(sct_root_dir)
+def get_sct_root_path() -> Path:
+    return Path(__file__).parent.parent.parent.absolute()
 
 
 def find_file_under_sct_dir(filename: str, sub_folder: str = None):
@@ -2652,7 +2649,7 @@ def skip_optional_stage(stage_names: str | list[str]) -> bool:
     :return: bool
     """
     # making import here, to work around circular import issue
-    from sdcm.cluster import TestConfig
+    from sdcm.cluster import TestConfig  # noqa: PLC0415
     stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
     skip_test_stages = TestConfig().tester_obj().skip_test_stages
     skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]

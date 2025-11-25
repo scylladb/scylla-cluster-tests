@@ -1264,6 +1264,9 @@ class HelmValues:
     def as_dict(self):
         return self._data
 
+    def __hash__(self):
+        return hash(frozenset(self._data.items()))
+
     def __eq__(self, other: Union['HelmValues', dict]):
         if isinstance(other, HelmValues):
             return self._data == other._data

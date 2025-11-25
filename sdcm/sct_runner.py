@@ -71,6 +71,7 @@ from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_lo
 from sdcm.utils.context_managers import environment
 from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
 if TYPE_CHECKING:
 
@@ -194,8 +195,6 @@ class SctRunner(ABC):
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
-
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
 
