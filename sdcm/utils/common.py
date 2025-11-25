@@ -205,11 +205,8 @@ def get_data_dir_path(*args):
     return os.path.abspath(data_dir)
 
 
-def get_sct_root_path():
-    import sdcm
-    sdcm_path = os.path.realpath(sdcm.__path__[0])
-    sct_root_dir = os.path.join(sdcm_path, "..")
-    return os.path.abspath(sct_root_dir)
+def get_sct_root_path() -> Path:
+    return Path(__file__).parent.parent.parent.absolute()
 
 
 def find_file_under_sct_dir(filename: str, sub_folder: str = None):

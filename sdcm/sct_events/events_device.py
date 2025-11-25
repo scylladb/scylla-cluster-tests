@@ -22,6 +22,10 @@ from pathlib import Path
 from functools import cached_property, partial
 from uuid import UUID
 
+from sdcm.sct_events.base import max_severity
+from sdcm.sct_events.system import SystemEvent
+from sdcm.sct_events.filters import BaseFilter
+
 import zmq
 
 from sdcm.sct_events.events_processes import \
@@ -141,10 +145,6 @@ class EventsDevice(multiprocessing.Process):
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
-        from sdcm.sct_events.base import max_severity
-        from sdcm.sct_events.system import SystemEvent
-        from sdcm.sct_events.filters import BaseFilter
-
         filters: Dict[UUID, BaseFilter] = {}
         filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
