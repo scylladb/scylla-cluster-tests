@@ -49,6 +49,20 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
 
 
 def configure_vector_target_script(host: str, port: int) -> str:
+    """Prepare vector configuration script with client-side log filtering.
+
+    Configures vector to filter verbose logs before sending them to SCT, reducing memory pressure
+    on database nodes and network resources usage.
+
+    Filter Pipeline:
+        journald > filter_audit > filter_system_services > filter_verbose_scylla > filter_suppress_warnings > sct-runner
+
+    Filters:
+        - filter_audit: remove audit logs
+        - filter_system_services: remove unnecessary system services logs
+        - filter_verbose_scylla: remove compaction/repair/streaming scylla logs
+        - filter_suppress_warnings: remove Severity.SUPPRESS events
+    """
     return dedent("""
         echo "
         sources:
@@ -64,11 +78,47 @@ def configure_vector_target_script(host: str, port: int) -> str:
                 type: filter
                 condition: |
                     !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? \\"default\\", \\"AUDIT\\")
+
+            filter_system_services:
+                inputs:
+                    - filter_audit
+                type: filter
+                condition: |
+                    identifier = to_string(.SYSLOG_IDENTIFIER) ?? \\"\\"
+                    identifier != \\"sshd\\" &&
+                    identifier != \\"systemd\\" &&
+                    identifier != \\"systemd-logind\\" &&
+                    identifier != \\"sudo\\" &&
+                    identifier != \\"dhclient\\"
+
+            filter_verbose_scylla:
+                inputs:
+                    - filter_system_services
+                type: filter
+                condition: |
+                    message = to_string(.message) ?? \\"\\"
+                    !contains(message, \\"] compaction - [Compact\\") &&
+                    !contains(message, \\"] table - Done with off-strategy compaction\\") &&
+                    !contains(message, \\"] table - Starting off-strategy compaction\\") &&
+                    !contains(message, \\"] repair - Repair\\") &&
+                    !contains(message, \\"repair id [id=\\") &&
+                    !contains(message, \\"] stream_session - [Stream\\") &&
+                    !contains(message, \\"] sstable - Rebuilding bloom filter\\") &&
+                    !contains(message, \\"] storage_proxy - Exception when communicating with\\")
+
+            filter_suppress_warnings:
+                inputs:
+                    - filter_verbose_scylla
+                type: filter
+                condition: |
+                    message = to_string(.message) ?? \\"\\"
+                    !(match(message, r'^WARNING.*\\[shard.*\\]') || match(message, r'^!.*WARNING.*\\[shard.*\\]'))
+
         sinks:
             sct-runner:
                 type: vector
                 inputs:
-                    - filter_audit
+                    - filter_suppress_warnings
                 address: {host}:{port}
                 healthcheck: false
             prometheus:
