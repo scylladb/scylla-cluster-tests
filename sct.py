@@ -120,7 +120,8 @@ from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from utils.mocks.aws_mock import AwsMock
 from sdcm.utils.docker_utils import get_ip_address_of_container
-
+from unit_tests.nemesis.fake_cluster import FakeTester
+from sdcm.logcollector import Collector
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -1253,7 +1254,6 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     add_file_logger()
 
-    from sdcm.logcollector import Collector
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1746,11 +1746,6 @@ def get_nemesis_list(backend, config):
     hydra nemesis-list
 
     """
-
-    # NOTE: this import messes up logging for the test, since it's importing tester.py
-    # directly down the line
-    from unit_tests.nemesis.fake_cluster import FakeTester
-
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
 
