@@ -280,6 +280,7 @@ function run_in_docker () {
         --env GIT_BRANCH \
         --env CHANGE_TARGET \
         --env PYTHONFAULTHANDLER=yes \
+        --env PYTHONWARNINGS="ignore::FutureWarning:google.api_core._python_version_support" \
         --env TERM \
         --net=host \
         --ulimit core=-1 \
