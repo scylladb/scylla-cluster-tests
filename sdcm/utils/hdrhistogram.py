@@ -1,23 +1,20 @@
-import concurrent
 import glob
 import os.path
 import time
 import logging
-import multiprocessing
 import traceback
 from typing import Any
 from dataclasses import asdict, dataclass, make_dataclass
-from concurrent.futures.process import ProcessPoolExecutor
 
 from hdrh.histogram import HdrHistogram
 from hdrh.log import HistogramLogReader
 
+from sdcm.utils.decorators import log_run_info
+
 LOGGER = logging.getLogger(__file__)
 
-PROCESS_LIMIT = multiprocessing.cpu_count()
 TIME_INTERVAL = 600
 PERCENTILES = [50, 90, 95, 99, 99.9, 99.99, 99.999]
-FUTURE_RESULT_TIMEOUT = 60  # seconds
 
 
 def make_hdrhistogram_summary(
@@ -131,6 +128,7 @@ class _HdrRangeHistogramBuilder:
         self.hdrh_files_pattern = hdr_file_pattern
         self.absolute_time = True
 
+    @log_run_info("HdrHistogram Summary Builder")
     def build_histogram_summary(self, path: str) -> list[dict[str, dict[str, int]]]:
         """
         Build Range Histogram Summary from provided hdr logs files path
@@ -138,15 +136,13 @@ class _HdrRangeHistogramBuilder:
 
         LOGGER.debug(f'Building histogram summary for {path} with tags {self.hdr_tags}')
         try:
-            with ProcessPoolExecutor(max_workers=len(self.hdr_tags)) as executor:
-                futures = [
-                    executor.submit(self.build_histogram_summary_by_tag, path, tag) for tag in self.hdr_tags]
-                scan_results = {}
-                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
-                    result = future.result()
-                    LOGGER.debug(f"Got result for {e} future for tag {self.hdr_tags[e]}")
-                    if result:
-                        scan_results.update(result)
+            scan_results = {}
+            for tag in self.hdr_tags:
+                LOGGER.debug(f"Get result for tag {tag}")
+                summary = self.build_histogram_summary_by_tag(path, tag)
+                LOGGER.debug(f"Summary for tag {tag}: {summary}")
+                if summary:
+                    scan_results.update(summary)
             return [scan_results]
         except Exception as e:
             LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
@@ -154,6 +150,7 @@ class _HdrRangeHistogramBuilder:
         finally:
             LOGGER.debug(f'Finished building histogram summary for {path} with tags {self.hdr_tags}')
 
+    @log_run_info("HdrHistogram Summary Builder with Interval")
     def build_histograms_summary_with_interval(self, path: str,
                                                interval=TIME_INTERVAL) -> list[dict[str, dict[str, int]]]:
         """
@@ -169,36 +166,30 @@ class _HdrRangeHistogramBuilder:
             else:
                 window_step = interval or TIME_INTERVAL
 
-            futures = []
             interval_num = 0
             start_intervals = range(start_ts, end_ts, window_step)
             LOGGER.debug(
                 f'Building histogram summary for {path} with tags {self.hdr_tags} and intervals {len(start_intervals)}')
 
-            max_workers = len(start_intervals)*len(self.hdr_tags)
-            max_workers = PROCESS_LIMIT if max_workers > PROCESS_LIMIT else max_workers
+            results = {}
+            for start_interval in start_intervals:
+                end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
+                for hdr_tag in self.hdr_tags:
+                    summary_with_interval_by_tag = self._build_histograms_summary_with_interval_by_tag(path, hdr_tag, start_interval,
+                                                                                                       end_interval, interval_num)
+                    LOGGER.debug(
+                        f"Got result for tag {hdr_tag} and interval #{interval_num}: {summary_with_interval_by_tag}")
+                    if summary_with_interval_by_tag:
+                        if summary_with_interval_by_tag["interval_num"] not in results:
+                            results[summary_with_interval_by_tag["interval_num"]] = {}
+                        results[summary_with_interval_by_tag["interval_num"]].update(
+                            summary_with_interval_by_tag["result"])
+                        LOGGER.debug("Updated results for interval_num=%s",
+                                     summary_with_interval_by_tag.get("interval_num"))
+                interval_num += 1
 
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                for start_interval in start_intervals:
-                    end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
-                    for hdr_tag in self.hdr_tags:
-                        futures.append(executor.submit(self._build_histograms_summary_with_interval_by_tag,
-                                                       path, hdr_tag, start_interval, end_interval, interval_num))
-                    LOGGER.debug(
-                        f"Submitted future for tags {self.hdr_tags} and interval {interval_num} out of {len(start_intervals)}")
-                    interval_num += 1
-                results = {}
-                for e, future in enumerate(concurrent.futures.as_completed(futures, timeout=120)):
-                    res = future.result(timeout=FUTURE_RESULT_TIMEOUT)  # Will raise TimeoutError after 60 seconds
-                    LOGGER.debug(
-                        f"Got result for {e} future for tag {self.hdr_tags[e % len(self.hdr_tags)]} and interval {e // len(self.hdr_tags)}")
-                    if res:
-                        LOGGER.debug("Got result for future: interval_num=%s, result_keys=%s", res.get("interval_num"),
-                                     list(res.get("result", {}).keys()))
-                        if res["interval_num"] not in results:
-                            results[res["interval_num"]] = {}
-                        results[res["interval_num"]].update(res["result"])
-                        LOGGER.debug("Updated results for future: interval_num=%s", res.get("interval_num"))
+                LOGGER.debug(
+                    f"Processing interval {interval_num} out of {len(start_intervals)} for tags {self.hdr_tags}")
 
             LOGGER.debug("Finalised results for path %s", path)
             keys = list(results.keys())
@@ -210,9 +201,6 @@ class _HdrRangeHistogramBuilder:
                 summary.append(results[key])
                 LOGGER.debug("Added results for key %s", key)
             return summary
-        except TimeoutError:
-            LOGGER.error(f"TimeoutError getting future result for {path} with tags {self.hdr_tags}")
-            raise
         except Exception as e:
             LOGGER.error(f"Error building histogram summary for {path} with tags {self.hdr_tags}: {e}")
             raise
