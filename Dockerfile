@@ -38,8 +38,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN uv sync --frozen
 
 FROM python:$PYTHON_IMAGE_TAG
-ARG KUBECTL_VERSION=1.27.3
-ARG EKSCTL_VERSION=0.165.0
+ARG KUBECTL_VERSION=1.34.2
+ARG EKSCTL_VERSION=0.218.0
 ARG HELM_VERSION=3.12.2
 ENV PYTHONWARNINGS="ignore:unclosed ignore::SyntaxWarning" \
     PYTHONFAULTHANDLER=1 \
