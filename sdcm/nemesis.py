@@ -129,7 +129,7 @@ from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperi
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
-from sdcm.utils.nemesis_utils.indexes import (get_random_column_name, create_index,
+from sdcm.utils.nemesis_utils.indexes import (ViewFinishedBuildingException, get_random_column_name, create_index,
                                               wait_for_index_to_be_built, verify_query_by_index_works,
                                               drop_index, wait_for_view_to_be_built, drop_materialized_view,
                                               is_cf_a_view, create_materialized_view_for_random_column, wait_materialized_view_building_tasks_started)
@@ -5679,6 +5679,10 @@ class Nemesis(NemesisFlags):
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                     wait_materialized_view_building_tasks_started(session, ks_name, view_name)
+                except ViewFinishedBuildingException:
+                    drop_materialized_view(session, ks_name, view_name)
+                    raise UnsupportedNemesis(
+                        f"Skip nemesis because view {ks_name}.{view_name} has already finished building")
                 except Exception as error:  # pylint: disable=broad-except
                     self.log.error('Failed creating a materialized view: %s', error)
                     raise

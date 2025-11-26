@@ -224,6 +224,10 @@ def create_materialized_view_for_random_column(session, keyspace_name, base_tabl
                                  mv_columns=[column] + primary_key_columns)
 
 
+class ViewFinishedBuildingException(Exception):
+    """Exception raised when a materialized view has finished building."""
+
+
 def wait_materialized_view_building_tasks_started(session, ks_name, view_name, timeout=600):
     """
     Waits for materialized view building tasks to start within a specified timeout period.
@@ -243,7 +247,7 @@ def wait_materialized_view_building_tasks_started(session, ks_name, view_name, t
         AssertionError: If the specified materialized view is not found in the system schema.
         TimeoutError: If the building tasks do not start within the specified timeout period.
     """
-    LOGGER.info(f"waiting {timeout} seconds build tasks started")
+    LOGGER.info(f"waiting {timeout} seconds for view {ks_name}.{view_name} to start building")
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
@@ -254,7 +258,12 @@ def wait_materialized_view_building_tasks_started(session, ks_name, view_name, t
                 f"select * from system.view_building_tasks where key = 'view_building' and view_id = {row.id} ALLOW FILTERING;"))
             if len(result) > 0:
                 return
+            if session.execute(f"SELECT * FROM system.built_views WHERE keyspace_name='{ks_name}' AND view_name='{view_name}'"):
+                raise ViewFinishedBuildingException(f"View {ks_name}.{view_name} has already finished building.")
+        except ViewFinishedBuildingException:
+            raise
         except:
             continue
         time.sleep(15)
-    raise TimeoutError(f"Timeout error ({timeout} seconds) while waiting building tasks started")
+    raise TimeoutError(
+        f"Timeout error ({timeout} seconds) while waiting for view {ks_name}.{view_name} to start building")
