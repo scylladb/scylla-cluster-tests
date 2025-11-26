@@ -460,7 +460,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         endpoint = cluster["endpoint"]
         eks_client = boto3.client('eks', region_name=self.region_name)
 
-        sts_client = botocore.session.get_session().create_client("sts", region_name=region)
+        sts_client = botocore.session.get_session().create_client("sts", region_name=self.region_name)
         url = sts_client.generate_presigned_url("get_caller_identity", Params={}, ExpiresIn=60)
         token = "k8s-aws-v1." + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
