@@ -150,6 +150,7 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
 from sdcm.utils.nemesis_utils.indexes import (
+    ViewFinishedBuildingException,
     get_random_column_name,
     create_index,
     wait_for_index_to_be_built,
@@ -6212,6 +6213,11 @@ class Nemesis(NemesisFlags):
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                     wait_materialized_view_building_tasks_started(session, ks_name, view_name)
+                except ViewFinishedBuildingException:
+                    drop_materialized_view(session, ks_name, view_name)
+                    raise UnsupportedNemesis(
+                        f"Skip nemesis because view {ks_name}.{view_name} has already finished building"
+                    )
                 except Exception as error:  # pylint: disable=broad-except
                     self.log.error("Failed creating a materialized view: %s", error)
                     raise
