@@ -466,7 +466,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
         configuration = client.Configuration()
         configuration.host = endpoint
-        configuration.verify_ssl = True
+        # TODO: Enable TLS verification after the uv/TLS issue is solved
+        configuration.verify_ssl = False
         configuration.ssl_ca_cert = None
         configuration.api_key = {"authorization": f"Bearer {token}"}
         configuration.ssl_ca_cert_data = base64.b64decode(cluster["certificateAuthority"]["data"]).decode()
