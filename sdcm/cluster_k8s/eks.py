@@ -59,7 +59,7 @@ SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
 
-ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
+ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2023_ARM_64_STANDARD', 'x86_64': 'AL2023_x86_64_STANDARD'}
 
 
 def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
