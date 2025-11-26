@@ -1,0 +1,16 @@
+# Define load ops for steps
+# # For debugging, you can set a specific thread count for each step (per load).
+## The value of perf_gradual_threads[load] must be either:
+##   - a single-element list or integer (applied to all throttle steps)
+##   - a list with the same length as perf_gradual_throttle_steps[load] (one thread count per step).
+perf_gradual_threads: {"read": 1, "mixed": 2, "write": 3} # not used by latte
+perf_gradual_throttle_steps: {
+  "read": ['100000', '150000', '180000', 'unthrottled'],
+  "mixed": ['100000', '150000', '180000', 'unthrottled'],
+  "write": ['100000', '150000', '180000', 'unthrottled']
+}  # where every value is in ops
+perf_gradual_step_duration: {
+  "read": '30m',
+  "write": None,
+  "mixed": '30m'
+}
