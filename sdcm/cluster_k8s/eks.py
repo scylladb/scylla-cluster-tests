@@ -184,7 +184,7 @@ class EksNodePool(CloudK8sNodePool):
             ssh_key_pair_name: str = None,
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
-            image_type: Literal['AL2_x86_64', 'AL2_x86_64_GPU', 'AL2_ARM_64'] = None,
+            image_type: Literal['AL2023_x86_64_STANDARD', 'AL2023_ARM_64_STANDARD'] = None,
             disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"] = "gp3",
             k8s_version: str = None,
             is_deployed: bool = False,
@@ -193,7 +193,7 @@ class EksNodePool(CloudK8sNodePool):
         if not image_type:
             current_arch = get_arch_from_instance_type(
                 instance_type=instance_type, region_name=k8s_cluster.region_name)
-            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2_x86_64")
+            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2023_x86_64_STANDARD")
         super().__init__(
             k8s_cluster=k8s_cluster,
             name=name,
