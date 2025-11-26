@@ -494,7 +494,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         }
 
         try:
-            core_client.create_namespaced_config_map("kube-system", auth_configmap)
+            core_client.create_namespaced_config_map("kube-system", aws_auth_cm)
 
         except Exception as e:
             self.log.error(f"Error while creating aws-auth ConfigMap: {e}")
