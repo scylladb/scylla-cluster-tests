@@ -1,13 +1,13 @@
 #! /bin/bash
 
 OUT=0
-SCT_AMI_ID_DB_SCYLLA=ami-1234 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,3dcs,5dcs,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,jepsen,repair-based-operations,add-new-dc,baremetal'
+SCT_AMI_ID_DB_SCYLLA=ami-1234 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,3dcs,5dcs,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,custom-d3,jepsen,repair-based-operations,add-new-dc,baremetal'
 OUT=$(($OUT + $?))
 
 SCT_AZURE_IMAGE_DB=image SCT_AZURE_REGION_NAME="eastus" ./sct.py lint-yamls --backend azure -i azure
 OUT=$(($OUT + $?))
 
-SCT_GCE_IMAGE_DB=image SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,jepsen' -e 'multi-dc,multiDC,docker,azure,5dcs'
+SCT_GCE_IMAGE_DB=image SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,custom-d3,jepsen' -e 'multi-dc,multiDC,docker,azure,5dcs'
 OUT=$(($OUT + $?))
 
 echo "multi dc yamls with 2 regions"
