@@ -14,6 +14,8 @@ import base64
 import os
 import time
 import pprint
+import yaml
+from kubernetes import client, config
 from textwrap import dedent
 from threading import Lock
 from typing import List, Dict, Literal, ParamSpec, TypeVar
@@ -21,6 +23,7 @@ from functools import cached_property
 from collections.abc import Callable
 
 import boto3
+import botocore.session
 import tenacity
 from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
     LaunchTemplateEbsBlockDeviceRequestTypeDef, RequestLaunchTemplateDataTypeDef, \
@@ -452,6 +455,50 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Version: {self.eks_cluster_version}"
 
+    def add_k8s_admin_principal(self):
+        cluster = self.cluster_info
+        endpoint = cluster["endpoint"]
+        eks_client = boto3.client('eks', region_name=self.region_name)
+
+        sts_client = botocore.session.get_session().create_client("sts", region_name=region)
+        url = sts_client.generate_presigned_url("get_caller_identity", Params={}, ExpiresIn=60)
+        token = "k8s-aws-v1." + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+
+        configuration = client.Configuration()
+        configuration.host = endpoint
+        configuration.verify_ssl = True
+        configuration.ssl_ca_cert = None
+        configuration.api_key = {"authorization": f"Bearer {token}"}
+        configuration.ssl_ca_cert_data = base64.b64decode(cluster["certificateAuthority"]["data"]).decode()
+
+        core_client = client.CoreV1Api(client.ApiClient(configuration))
+
+        aws_auth_cm = {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {"name": "aws-auth", "namespace": "kube-system"},
+            "data": {
+                "mapUsers": yaml.dump([
+                    {
+                        "userarn": "arn:aws:iam::797456418907:role/DeveloperAccessRole",
+                        "username": "dev",
+                        "groups": ["system:masters"]
+                    },
+                    {
+                        "userarn": "arn:aws:iam::797456418907:role/DevOpsAccessRole",
+                        "username": "devops",
+                        "groups": ["system:masters"]
+                    }
+                ])
+            }
+        }
+
+        try:
+            core_client.create_namespaced_config_map("kube-system", auth_configmap)
+
+        except Exception as e:
+            self.log.error(f"Error while creating aws-auth ConfigMap: {e}")
+
     def create_token_update_thread(self):
         return EksTokenUpdateThread(
             aws_cmd=f'aws eks --region {self.region_name} get-token --cluster-name {self.short_cluster_name}',
@@ -468,6 +515,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.create_eks_cluster()
         self.log.info("Patch kubectl config")
         self.patch_kubectl_config()
+        self.log.info("Allow SCT roles to connect and manage cluster")
+        self.add_k8s_admin_principal()
         self.log.info("Create storage class")
         self.create_ebs_storge_class()
 
