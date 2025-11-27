@@ -123,7 +123,7 @@ class RemoteDocker(BaseNode):
         src_path = Path(src)
         if src_path.is_dir():
             remote_temp = self.node.remoter.run("mktemp -d", verbose=kwargs.get('verbose')).stdout.strip()
-            remote_tempfile = f"{remote_temp}/{src_path.name}"
+            remote_tempfile = str(Path(remote_temp) / src_path.name)
         else:
             remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get('verbose')).stdout.strip()
         result = self.node.remoter.send_files(src, remote_tempfile, **kwargs)
