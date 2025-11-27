@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import logging
-import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -21,8 +20,19 @@ from botocore.exceptions import ClientError
 import boto3
 
 from sdcm.exceptions import CapacityReservationError
+<<<<<<< HEAD
 from sdcm.utils.common import all_aws_regions, ParallelObject
 from sdcm.utils.get_username import get_username
+||||||| parent of 5c2e9861a (feature(cloud-monitoring): add billing project tracking for cost attribution)
+from sdcm.utils.common import all_aws_regions
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.get_username import get_username
+=======
+from sdcm.test_config import TestConfig
+from sdcm.utils.common import all_aws_regions
+from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.aws_utils import tags_as_ec2_tags
+>>>>>>> 5c2e9861a (feature(cloud-monitoring): add billing project tracking for cost attribution)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -212,14 +222,7 @@ class SCTCapacityReservation:
                 EndDateType="limited",
                 EndDate=datetime.utcnow() + timedelta(minutes=duration),
                 TagSpecifications=[
-                    {
-                        "ResourceType": "capacity-reservation",
-                        "Tags": [
-                            {"Key": "test_id", "Value": test_id},
-                            {"Key": "RunByUser", "Value": get_username()},
-                            {"Key": "JenkinsJobTag", "Value": os.environ.get("BUILD_TAG")},
-                        ],
-                    },
+                    {"ResourceType": "capacity-reservation", "Tags": tags_as_ec2_tags(TestConfig().common_tags())},
                 ],
                 **additional_params,
             )
