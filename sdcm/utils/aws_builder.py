@@ -143,6 +143,7 @@ class AwsBuilder:
                         "Tags": [
                             {"Key": "Name", "Value": self.launch_template_name},
                             {"Key": "RunByUser", "Value": "QA"},
+                            {"Key": "billing_project", "Value": "sct-builders"},
                         ],
                     },
                 ],
@@ -234,6 +235,7 @@ class AwsBuilder:
                     {"Key": "Name", "Value": "sct-jenkins-builder-asg", "PropagateAtLaunch": True},
                     {"Key": "NodeType", "Value": "builder", "PropagateAtLaunch": True},
                     {"Key": "RunByUser", "Value": "qa", "PropagateAtLaunch": True},
+                    {"Key": "billing_project", "Value": "sct-builders", "PropagateAtLaunch": True},
                     {"Key": "keep", "Value": "alive", "PropagateAtLaunch": True},
                     {"Key": "keep_action", "Value": "terminate", "PropagateAtLaunch": True},
                 ],
