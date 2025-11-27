@@ -17,7 +17,6 @@ import logging
 import re
 import time
 from functools import cached_property
-from types import SimpleNamespace
 from typing import Any
 import functools
 from pathlib import Path
@@ -383,11 +382,6 @@ class CloudNode(cluster.BaseNode):
     @cached_property
     def cql_address(self):
         return self._private_ip if self.parent_cluster.vpc_peering_enabled else self._public_ip
-
-    @cached_property
-    def raft(self):
-        """Override BaseNode.raft property to return a dummy raft object for PoC purposes"""
-        return SimpleNamespace(is_enabled=True, is_ready=lambda: True)
 
     @property
     def scylla_shards(self) -> int:
@@ -1275,10 +1269,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.debug(
             "Skip validating seeds on Scylla Cloud, pending until approach to SSHing/accessing nodes is developed"
         )
-
-    def start_nemesis(self, interval=None, cycles_count: int = -1):
-        # TODO: Enable nemesis start for Scylla Cloud
-        self.log.info("Skip starting nemesis on Scylla Cloud")
 
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via Scylla Cloud API that nodes are in ACTIVE/NORMAL state"""
