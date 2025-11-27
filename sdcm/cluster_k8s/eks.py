@@ -112,6 +112,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
         # NOTE: It should have at least 5 vCPU to be able to hold all the pods
         num_nodes=params.get('k8s_n_auxiliary_nodes'),
         instance_type=params.get('k8s_instance_type_auxiliary'),
+        instance_profile_arn=params.get('eks_instance_profile_arn'),
         disk_size=40,
         role_arn=k8s_cluster.nodegroup_role_arn,
         k8s_cluster=k8s_cluster))
