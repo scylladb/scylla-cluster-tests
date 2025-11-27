@@ -16,7 +16,7 @@ import socket
 import time
 import logging
 from functools import cached_property
-from typing import List, Dict, get_args
+from typing import List, Dict, get_args, TYPE_CHECKING
 
 import boto3
 import botocore
@@ -26,11 +26,13 @@ from mypy_boto3_ec2.literals import ArchitectureTypeType
 
 from sdcm.provision.network_configuration import ssh_connection_ip_type, network_interfaces_count
 from sdcm.utils.decorators import retrying
-from sdcm.utils.aws_region import AwsRegion
+
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 
+if TYPE_CHECKING:
+    from sdcm.utils.aws_region import AwsRegion
 LOGGER = logging.getLogger(__name__)
 AwsArchType = ArchitectureTypeType
 
@@ -328,6 +330,8 @@ class EC2NetworkConfiguration:
 
     @property
     def subnets_per_region(self) -> dict:
+        from sdcm.utils.aws_region import AwsRegion  # noqa: PLC0415
+
         ec2_subnet_ids = {}
         for region in self.regions:
             aws_region = AwsRegion(region_name=region)
@@ -349,7 +353,7 @@ class EC2NetworkConfiguration:
         #  [[['subnet-085db77751694e2a6', 'subnet-03d8900174e00a73d'], ['subnet-084b1d12f9974e61f', 'subnet-094ed7c7c3bddd441']]]
         return [list(azs.values()) for azs in self.subnets_per_region.values()]
 
-    def subnets_per_availability_zone(self, region: str, aws_region: AwsRegion, availability_zone: str) -> list:
+    def subnets_per_availability_zone(self, region: str, aws_region: "AwsRegion", availability_zone: str) -> list:
         region_subnets = []
         for index in range(self.network_interfaces_count):
             sct_subnet = aws_region.sct_subnet(region_az=region + availability_zone, subnet_index=index)
@@ -360,6 +364,8 @@ class EC2NetworkConfiguration:
 
     @property
     def security_groups(self):
+        from sdcm.utils.aws_region import AwsRegion  # noqa: PLC0415
+
         ec2_security_group_ids = []
         for region in self.regions:
             ec2_security_group_ids.append(
@@ -367,7 +373,7 @@ class EC2NetworkConfiguration:
             )
         return ec2_security_group_ids
 
-    def region_security_groups(self, region: str, aws_region: AwsRegion):
+    def region_security_groups(self, region: str, aws_region: "AwsRegion"):
         security_groups = []
         sct_sg = aws_region.sct_security_group
         assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
@@ -400,6 +406,8 @@ def get_common_params(
 
 
 def get_ec2_network_configuration(regions: list[str], availability_zones: list[str], params: dict):
+    from sdcm.utils.aws_region import AwsRegion  # noqa: PLC0415
+
     ec2_security_group_ids = []
     ec2_subnet_ids = []
     for region in regions:
