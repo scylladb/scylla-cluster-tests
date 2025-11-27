@@ -456,46 +456,22 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         return f"{type(self).__name__} {self.name} | Version: {self.eks_cluster_version}"
 
     def add_k8s_admin_principal(self):
-        cluster = self.cluster_info
-        endpoint = cluster["endpoint"]
-        eks_client = boto3.client('eks', region_name=self.region_name)
-
-        sts_client = botocore.session.get_session().create_client("sts", region_name=self.region_name)
-        url = sts_client.generate_presigned_url("get_caller_identity", Params={}, ExpiresIn=60)
-        token = "k8s-aws-v1." + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
-
-        configuration = client.Configuration()
-        configuration.host = endpoint
-        # TODO: Enable TLS verification after the uv/TLS issue is solved
-        configuration.verify_ssl = False
-        configuration.ssl_ca_cert = None
-        configuration.api_key = {"authorization": f"Bearer {token}"}
-        configuration.ssl_ca_cert_data = base64.b64decode(cluster["certificateAuthority"]["data"]).decode()
-
-        core_client = client.CoreV1Api(client.ApiClient(configuration))
-
-        aws_auth_cm = {
-            "apiVersion": "v1",
-            "kind": "ConfigMap",
-            "metadata": {"name": "aws-auth", "namespace": "kube-system"},
-            "data": {
-                "mapUsers": yaml.dump([
-                    {
-                        "userarn": "arn:aws:iam::797456418907:role/DeveloperAccessRole",
-                        "username": "dev",
-                        "groups": ["system:masters"]
-                    },
-                    {
-                        "userarn": "arn:aws:iam::797456418907:role/DevOpsAccessRole",
-                        "username": "devops",
-                        "groups": ["system:masters"]
-                    }
-                ])
-            }
-        }
+        eks = boto3.client('eks', region_name=self.region_name)
+        admin_principals = ['arn:aws:iam::797456418907:role/DeveloperAccessRole',
+                            'arn:aws:iam::797456418907:role/DevOpsAccessRole']
 
         try:
-            core_client.create_namespaced_config_map("kube-system", aws_auth_cm)
+            for principal in admin_principals:
+                eks.create_access_entry(
+                    clusterName=self.short_cluster_name,
+                    principalArn=principal,
+                )
+                eks.associate_access_policy(
+                    clusterName=self.short_cluster_name,
+                    principalArn=principal,
+                    policyArn="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy",
+                    accessScope={'type': 'cluster'}
+                )
 
         except Exception as e:
             self.log.error(f"Error while creating aws-auth ConfigMap: {e}")
