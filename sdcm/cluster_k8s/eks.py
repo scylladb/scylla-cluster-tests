@@ -86,6 +86,7 @@ def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
         credentials=credentials,
         ec2_role_arn=params.get("eks_role_arn"),
         nodegroup_role_arn=params.get("eks_nodegroup_role_arn"),
+        instance_profile_arn=params.get("eks_instance_profile_arn"),
         service_ipv4_cidr=params.get("eks_service_ipv4_cidr"),
         vpc_cni_version=params.get("eks_vpc_cni_version"),
         user_prefix=params.get("user_prefix"),
@@ -121,6 +122,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
         num_nodes=params.get("n_db_nodes"),
         instance_type=params.get('instance_type_db'),
         role_arn=params.get('eks_nodegroup_role_arn'),
+        instance_profile_arn=params.get('eks_instance_profile_arn'),
         disk_size=params.get('root_disk_size_db'),
         k8s_cluster=k8s_cluster)
     k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
@@ -132,6 +134,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             num_nodes=params.get("n_loaders"),
             instance_type=params.get("instance_type_loader"),
             role_arn=params.get('eks_nodegroup_role_arn'),
+            instance_profile_arn=params.get('eks_instance_profile_arn'),
             disk_size=params.get('root_disk_size_monitor'),
             labels={
                 "scylla.scylladb.com/node-type": "scylla"
@@ -144,6 +147,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
             instance_type=params.get("k8s_instance_type_monitor") or params.get("instance_type_monitor"),
             role_arn=params.get('eks_nodegroup_role_arn'),
+            instance_profile_arn=params.get('eks_instance_profile_arn'),
             disk_size=params.get('root_disk_size_monitor'),
             k8s_cluster=k8s_cluster))
     k8s_cluster.wait_all_node_pools_to_be_ready()
@@ -181,6 +185,7 @@ class EksNodePool(CloudK8sNodePool):
             disk_size: int,
             instance_type: str,
             role_arn: str,
+            instance_profile_arn: str,
             labels: dict = None,
             security_group_ids: List[str] = None,
             ec2_subnet_ids: List[str] = None,
@@ -209,6 +214,7 @@ class EksNodePool(CloudK8sNodePool):
             is_deployed=is_deployed,
         )
         self.role_arn = role_arn
+        self.instance_profile_arn = instance_profile_arn
         self.ec2_subnet_ids = self.k8s_cluster.ec2_subnet_ids if ec2_subnet_ids is None else ec2_subnet_ids
         self.ssh_key_pair_name = os.path.basename(
             self.k8s_cluster.credentials[0].key_pair_name) if ssh_key_pair_name is None else ssh_key_pair_name
@@ -245,6 +251,7 @@ class EksNodePool(CloudK8sNodePool):
             KeyName=self.ssh_key_pair_name,
             EbsOptimized=False,
             BlockDeviceMappings=[root_disk_def],
+            IamInstanceProfile={'Arn': self.instance_profile_arn},
         )
         if self.user_data:
             launch_template['UserData'] = base64.b64encode(self.user_data.encode('utf-8')).decode("ascii")
@@ -726,6 +733,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                 num_nodes=self.params.get("n_db_nodes"),
                 instance_type=self.params.get('instance_type_db'),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
+                instance_profile_arn=params.get('eks_instance_profile_arn'),
                 disk_size=self.params.get('root_disk_size_db'),
                 k8s_cluster=self)
             self.deploy_node_pool(new_scylla_pool, wait_till_ready=True)

@@ -966,6 +966,9 @@ class SCTConfiguration(dict):
         dict(name="eks_nodegroup_role_arn", env="SCT_EKS_NODEGROUP_ROLE_ARN", type=str,
              help=""),
 
+        dict(name="eks_instance_profile_arn", env="SCT_EKS_INSTANCE_PROFILE_ARN", type=str,
+             help=""),
+
         # k8s-gke options
         dict(name="gke_cluster_version", env="SCT_GKE_CLUSTER_VERSION", type=str,
              help=""),
@@ -1948,7 +1951,7 @@ class SCTConfiguration(dict):
                     'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
                     'k8s_scylla_cluster_name', 'k8s_loader_cluster_name',
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
-                    'eks_cluster_version', 'eks_nodegroup_role_arn'],
+                    'eks_cluster_version', 'eks_nodegroup_role_arn', 'eks_instance_profile_arn'],
 
         'xcloud': ['user_prefix', 'xcloud_provider', 'scylla_version'],
     }

@@ -1760,6 +1760,14 @@ Supported: eastus
 
 **type:** str (appendable)
 
+## **eks_instance_profile_arn** / SCT_EKS_INSTANCE_PROFILE_ARN
+
+
+
+**default:** N/A
+
+**type:** str (appendable)
+
 
 ## **gke_cluster_version** / SCT_GKE_CLUSTER_VERSION
 
