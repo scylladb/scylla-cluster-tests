@@ -149,11 +149,12 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
     k8s_cluster.wait_all_node_pools_to_be_ready()
 
     # TODO: think if we need to pin version, or select base on k8s version
+    k8s_cluster.create_ebs_csi_driver_serviceaccount()
     k8s_cluster.eks_client.create_addon(
         clusterName=k8s_cluster.short_cluster_name,
         addonName='aws-ebs-csi-driver',
     )
-    k8s_cluster.configure_ebs_csi_driver()
+    k8s_cluster.deploy_ebs_csi_driver()
 
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     if params.get("k8s_enable_sni"):
@@ -522,11 +523,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def ebs_csi_driver_status(self) -> str:
         return self.ebs_csi_driver_info['status']
 
-    def configure_ebs_csi_driver(self):
+    def create_ebs_csi_driver_serviceaccount(self):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
 
-        wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
-                 text='Waiting till aws-ebs-csi-driver become operational')
         LOCALRUNNER.run(
             f'eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve')
         LOCALRUNNER.run(f'eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system '
@@ -535,6 +534,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                         f'--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} '
                         f'--tags {tags} --override-existing-serviceaccounts')
 
+    def deploy_ebs_csi_driver(self):
+        wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
+                 text='Waiting till aws-ebs-csi-driver become operational')
         self.kubectl("rollout restart deployment ebs-csi-controller", namespace="kube-system")
 
     def tune_network(self):
