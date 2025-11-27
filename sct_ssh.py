@@ -325,6 +325,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     test_id = tags.get("test_id")
     node_name = tags.get("node_name")
     node_type = tags.get("node_type")
+    billing_project = tags.get("billing_project")
     tags = {}
     if user:
         tags.update({"RunByUser": user})
@@ -334,6 +335,8 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         tags.update({"Name": node_name})
     if node_type:
         tags.update({"NodeType": node_type})
+    if billing_project:
+        tags.update({"billing_project": billing_project})
 
     backends = backends or ["aws", "gce"]
     aws_vms = []
