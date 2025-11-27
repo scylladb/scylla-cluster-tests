@@ -65,7 +65,6 @@ from sdcm.utils.context_managers import environment
 from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
-from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
@@ -1554,11 +1553,7 @@ class Collector:
 
     @cached_property
     def tags(self):
-        return {
-            "RunByUser": get_username(),
-            "TestId": self.test_id,
-            "keep_action": "terminate",
-        }
+        return TestConfig().common_tags()
 
     @property
     def sct_result_dir(self):
