@@ -120,7 +120,12 @@ class RemoteDocker(BaseNode):
         return self.node.remoter.run(f"{self.sudo_needed} docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
     def send_files(self, src, dst, **kwargs):
-        remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get('verbose')).stdout.strip()
+        src_path = Path(src)
+        if src_path.is_dir():
+            remote_temp = self.node.remoter.run("mktemp -d", verbose=kwargs.get('verbose')).stdout.strip()
+            remote_tempfile = f"{remote_temp}/{src_path.name}"
+        else:
+            remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get('verbose')).stdout.strip()
         result = self.node.remoter.send_files(src, remote_tempfile, **kwargs)
         result &= self.run(f'mkdir -p {Path(dst).parent}', ignore_status=True, verbose=kwargs.get('verbose')).ok
         result &= self.node.remoter.run(f"{self.sudo_needed} docker cp {remote_tempfile} {self.docker_id}:{dst}",
