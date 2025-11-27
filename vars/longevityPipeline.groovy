@@ -19,6 +19,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
@@ -178,6 +179,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+                   description: 'Billing project for the test run',
+                   name: 'billing_project')
             string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
                    description: 'jobs to compare performance results with, for example if running in staging, '
                                 + 'we still can compare with official jobs',

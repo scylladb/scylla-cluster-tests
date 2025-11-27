@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import logging
-import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -21,9 +20,10 @@ from botocore.exceptions import ClientError
 import boto3
 
 from sdcm.exceptions import CapacityReservationError
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import all_aws_regions
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.get_username import get_username
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 
 LOGGER = logging.getLogger(__name__)
 
@@ -217,21 +217,7 @@ class SCTCapacityReservation:
                 TagSpecifications=[
                     {
                         'ResourceType': 'capacity-reservation',
-                        'Tags': [
-                            {
-                                'Key': 'test_id',
-                                'Value': test_id
-                            },
-                            {
-                                'Key': 'RunByUser',
-                                'Value': get_username()
-                            },
-                            {
-                                'Key': 'JenkinsJobTag',
-                                'Value': os.environ.get('BUILD_TAG')
-                            }
-
-                        ]
+                        'Tags': tags_as_ec2_tags(TestConfig().common_tags())
                     },
                 ],
                 **additional_params
