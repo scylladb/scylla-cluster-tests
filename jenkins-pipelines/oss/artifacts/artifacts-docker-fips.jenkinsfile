@@ -1,3 +1,14 @@
+/** jobDescription
+
+    Artifacts test for Docker container with FIPS mode enabled.
+    Validates Scylla Docker image build with FIPS 140-2 compliance, configuration, and basic functionality.
+    Verifies FIPS-compliant cryptographic operations and container integrity.
+
+    This test is part of the artifacts suite.
+
+    Labels: artifacts, docker, fips, security, installation
+*/
+
 #! groovy
 
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43

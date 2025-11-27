@@ -1,5 +1,15 @@
 #! groovy
 
+/** jobDescription
+    Artifacts verification test for CentOS 9 on ARM64 architecture with 1-node cluster.
+    Validates Scylla installation from artifacts on CentOS Stream 9 running on ARM instances.
+    Uses NoOpMonkey (no disruptions during test).
+    30-minute test focused on ensuring proper package installation and basic cluster functionality.
+    This test is part of the artifacts verification suite.
+
+    Labels: artifacts, centos, centos-9, arm, arm64, aws, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifacts installation test for Rocky Linux 8 with non-root offline install on GCE.
+    Single-node cluster provisioned using spot instances with fallback to on-demand.
+    Validates Scylla installation from artifacts on Rocky 8 distribution.
+    This test is part of the artifacts suite to verify installation procedures.
+
+    Labels: artifacts, installation, gce, rocky-8, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

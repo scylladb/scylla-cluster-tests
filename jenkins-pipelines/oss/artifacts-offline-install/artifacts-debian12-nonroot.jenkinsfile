@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact installation test for Debian 12 (Bookworm) on GCE with nonroot offline installation.
+    Tests installation from packages on a single-node cluster without loaders or monitoring.
+    Uses spot instances with fallback to on-demand provisioning.
+    This test is part of the artifacts suite for validating package installations across different distros.
+
+    Labels: artifacts, installation, debian, debian-12, bookworm, gce, non-root, offline-install
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 

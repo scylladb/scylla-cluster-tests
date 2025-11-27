@@ -1,5 +1,14 @@
 #! groovy
 
+/** jobDescription
+    Artifact test for Debian 11 (Bullseye) package installation and validation on GCE.
+    Tests non-root offline installation using a single-node cluster with local SSD storage.
+    Validates package installation on Debian 11 without running stress workload.
+    This test is part of the artifacts suite for distribution package validation.
+
+    Labels: artifacts, installation, gce, debian, debian-11, bullseye, offline-install, non-root
+*/
+
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
