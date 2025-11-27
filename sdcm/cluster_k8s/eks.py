@@ -414,6 +414,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                     '0.0.0.0/0',
                 ]
             },
+            accessConfig={
+                'authenticationMode': 'API_AND_CONFIG_MAP'
+            },
             kubernetesNetworkConfig={
                 'serviceIpv4Cidr': self.service_ipv4_cidr
             },
@@ -465,6 +468,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                 eks.create_access_entry(
                     clusterName=self.short_cluster_name,
                     principalArn=principal,
+                    type='STANDARD'
                 )
                 eks.associate_access_policy(
                     clusterName=self.short_cluster_name,
@@ -474,7 +478,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                 )
 
         except Exception as e:
-            self.log.error(f"Error while creating aws-auth ConfigMap: {e}")
+            self.log.error(f"Error while adding cluster admin principals: {e}")
 
     def create_token_update_thread(self):
         return EksTokenUpdateThread(
