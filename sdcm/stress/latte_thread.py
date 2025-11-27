@@ -107,7 +107,8 @@ class LatteStressThread(DockerBasedStressThread):
             self.SCHEMA_CMD_CALL_COUNTER[script_name] = 0
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
-            cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
+            if src_file.is_file():
+                cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
 
         ssl_config = ''
         if self.params['client_encrypt']:
