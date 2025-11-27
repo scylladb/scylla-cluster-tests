@@ -672,6 +672,15 @@ test id to filter by
 **type:** str (appendable)
 
 
+## **billing_project** / SCT_BILLING_PROJECT
+
+Billing project for the test run. Used for cost tracking and reporting
+
+**default:** N/A
+
+**type:** str (appendable)
+
+
 ## **db_nodes_shards_selection** / SCT_NODES_SHARDS_SELECTION
 
 How to select number of shards of Scylla. Expected values: default/random.<br>Default value: 'default'.<br>In case of random option - Scylla will start with different (random) shards on every node of the cluster
