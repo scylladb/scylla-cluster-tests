@@ -367,6 +367,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                  service_ipv4_cidr,
                  vpc_cni_version,
                  nodegroup_role_arn,
+                 instance_profile_arn,
                  params=None,
                  cluster_uuid=None,
                  region_name=None
