@@ -14,6 +14,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
             SCT_ENABLE_ARGUS_REPORT = "1"
+            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             string(defaultValue: '',
@@ -59,6 +60,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+                   description: 'Billing project for the test run',
+                   name: 'billing_project')
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
