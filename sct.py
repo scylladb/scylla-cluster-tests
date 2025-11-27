@@ -346,6 +346,7 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
 @cli.command("clean-resources", help="clean tagged instances in both clouds (AWS/GCE)")
 @click.option("--post-behavior", is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option("--user", type=str, help="user name to filter instances by")
+@click.option("--billing-project", type=str, help="billing project to filter instances by")
 @sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--logdir", type=str, help="directory with test run")
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
@@ -357,7 +358,7 @@ def clean_aws_kms_aliases(ctx, regions, time_delta_h, dry_run):
     help="Include SCT runner instances in cleanup (requires --user or --test-id to avoid accidental deletion of all SCT runners)",
 )
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend, clean_runners):
+def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, dry_run, backend, clean_runners):
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -391,13 +392,17 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
         )
         ctx.exit(1)
 
-    user_param = {"RunByUser": user} if user else {}
-    if user or test_id:
+    user_param = {}
+    if user:
+        user_param["RunByUser"] = user
+    if billing_project:
+        user_param["billing_project"] = billing_project
+    if user or test_id or billing_project:
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
 
-    if not post_behavior and user and not test_id and not logdir:
+    if not post_behavior and user and not test_id and not logdir and not billing_project:
         click.echo(f"Clean all resources belong to user `{user}'")
         user_param["CreatedBy"] = "SCT"
         params = (user_param,)
@@ -409,16 +414,18 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
             click.echo(f"Latest TestId in {logdir} is {latest_test_id}")
             test_id = (latest_test_id,)
 
-        if not test_id:
+        if not test_id and not user_param:
             click.echo(clean_resources.get_help(ctx))
             return
 
         if post_behavior:
-            click.echo(f"Clean resources according to post behavior for following Test IDs: {test_id}")
+            click.echo(
+                f"Clean resources according to post behavior for filters: {user_param} and Test IDs: {test_id or 'N/A'}"
+            )
         else:
-            click.echo(f"Clean all resources for following Test IDs: {test_id}")
+            click.echo(f"Clean all resources for filters: {user_param} and Test IDs: {test_id or 'N/A'}")
 
-        params = ({"TestId": tid, **user_param} for tid in test_id)
+        params = ({"TestId": tid, **user_param} for tid in (test_id or (None,)))
 
     if backend is None:
         if os.environ.get("SCT_CLUSTER_BACKEND", None) is None:
@@ -437,25 +444,27 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
         click.echo("Make a dry-run")
 
     for param in params:
-        clean_func(param, dry_run=dry_run)
-        click.echo(f"Cleanup for the {param} resources has been finished")
+        effective_param = {k: v for k, v in (param or {}).items() if v is not None}
+        clean_func(effective_param, dry_run=dry_run)
+        click.echo(f"Cleanup for the {effective_param} resources has been finished")
 
         if clean_runners:
-            click.echo(f"Cleaning SCT runners for {param}...")
+            click.echo(f"Cleaning SCT runners for {effective_param}...")
             clean_sct_runners(
                 test_status="",
                 test_runner_ip=None,
                 backend=backend,
-                user=param.get("RunByUser"),
-                test_id=param.get("TestId"),
+                user=effective_param.get("RunByUser"),
+                test_id=effective_param.get("TestId"),
                 dry_run=dry_run,
                 force=True,
             )
-            click.echo(f"SCT runner cleanup for {param} has been finished")
+            click.echo(f"SCT runner cleanup for {effective_param} has been finished")
 
 
 @cli.command("list-resources", help="list tagged instances in cloud (AWS/GCE/Azure/XCloud)")
 @click.option("--user", type=str, help="user name to filter instances by")
+@click.option("--billing-project", type=str, help="billing project to filter instances by")
 @click.option("--get-all", is_flag=True, default=False, help="All resources")
 @click.option("--get-all-running", is_flag=True, default=False, help="All running resources")
 @sct_option("--test-id", "test_id", help="test id to filter by")
@@ -477,28 +486,30 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
     help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab, staging, and prod",
 )
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
+def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915
     add_file_logger()
 
     params = {}
 
     if user:
         params["RunByUser"] = user
+    if billing_project:
+        params["billing_project"] = billing_project
     if test_id:
         params["TestId"] = test_id
-    if all([not get_all, not get_all_running, not user, not test_id]):
+    if all([not get_all, not get_all_running, not user, not test_id, not billing_project]):
         click.echo(list_resources.get_help(ctx))
         sys.exit(1)
 
-    if get_all_running or user:
+    if get_all_running or user or billing_project:
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
 
     if get_all_running:
-        table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"]
+        table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "billing_project", "LaunchTime"]
     else:
-        table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "LaunchTime"]
+        table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "billing_project", "LaunchTime"]
 
     def list_resources_on_aws():
         click.secho("Checking AWS EC2...", fg="green")
@@ -513,6 +524,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                 name = tags.get("Name", "N/A")
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
                     [
                         name,
@@ -520,6 +532,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         instance.get("PublicIpAddress", "N/A") if get_all_running else instance["State"]["Name"],
                         test_id,
                         run_by_user,
+                        billing_project,
                         instance["LaunchTime"].ctime(),
                     ]
                 )
@@ -530,15 +543,25 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking AWS Elastic IPs...", fg="green")
         elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
         if elastic_ips_aws:
-            aws_table = PrettyTable(["AllocationId", "PublicIP", "TestId", "RunByUser", "InstanceId (attached to)"])
+            aws_table = PrettyTable(
+                ["AllocationId", "PublicIP", "TestId", "RunByUser", "billing_project", "InstanceId (attached to)"]
+            )
             aws_table.align = "l"
             aws_table.sortby = "AllocationId"
             for eip in elastic_ips_aws:
                 tags = aws_tags_to_dict(eip.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 aws_table.add_row(
-                    [eip["AllocationId"], eip["PublicIp"], test_id, run_by_user, eip.get("InstanceId", "N/A")]
+                    [
+                        eip["AllocationId"],
+                        eip["PublicIp"],
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        eip.get("InstanceId", "N/A"),
+                    ]
                 )
             click.echo(aws_table.get_string(title="EIPs used on AWS"))
         else:
@@ -547,15 +570,16 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking AWS Security Groups...", fg="green")
         security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
         if security_groups:
-            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
             aws_table.align = "l"
             aws_table.sortby = "Id"
             for group in security_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row([name, group["GroupId"], test_id, run_by_user])
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
             click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No security groups found for selected filters in AWS!", fg="yellow")
@@ -563,15 +587,16 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking AWS Placement Groups...", fg="green")
         placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
         if placement_groups:
-            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser", "billing_project"])
             aws_table.align = "l"
             aws_table.sortby = "Id"
             for group in placement_groups:
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 name = tags.get("Name", "N/A")
-                aws_table.add_row([name, group["GroupId"], test_id, run_by_user])
+                aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
             click.echo(aws_table.get_string(title="SGs used on AWS"))
         else:
             click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
@@ -596,6 +621,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                                 public_ips if get_all_running else instance.status,
                                 tags.get("TestId", "N/A") if tags else "N/A",
                                 tags.get("RunByUser", "N/A") if tags else "N/A",
+                                tags.get("billing_project", "N/A") if tags else "N/A",
                                 instance.creation_timestamp,
                             ]
                         )
@@ -607,7 +633,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking EKS...", fg="green")
         eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
         if eks_clusters:
-            eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "CreateTime"])
+            eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "billing_project", "CreateTime"])
             eks_table.align = "l"
             eks_table.sortby = "CreateTime"
             for cluster in eks_clusters:
@@ -618,6 +644,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         tags.get("TestId", "N/A") if tags else "N/A",
                         cluster.region_name,
                         tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
                         cluster.create_time,
                     ]
                 )
@@ -628,13 +655,14 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking AWS Load Balancers...", fg="green")
         load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
         if load_balancers:
-            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
             aws_table.align = "l"
             aws_table.sortby = "Name"
             for elb in load_balancers:
                 tags = aws_tags_to_dict(elb.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = elb["ResourceARN"].split(":")
                 aws_table.add_row(
                     [
@@ -642,6 +670,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         region,
                         test_id,
                         run_by_user,
+                        billing_project,
                     ]
                 )
             click.echo(aws_table.get_string(title="ELBs used on AWS"))
@@ -651,13 +680,14 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking AWS Cloudformation Stacks ...", fg="green")
         cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
         if cfn_stacks:
-            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser", "billing_project"])
             aws_table.align = "l"
             aws_table.sortby = "Name"
             for stack in cfn_stacks:
                 tags = aws_tags_to_dict(stack.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
                 _, _, _, region, _, name = stack["ResourceARN"].split(":")
                 aws_table.add_row(
                     [
@@ -665,6 +695,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         region,
                         test_id,
                         run_by_user,
+                        billing_project,
                     ]
                 )
             click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
@@ -675,7 +706,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         click.secho("Checking GKE...", fg="green")
         gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
         if gke_clusters:
-            gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "CreateTime"])
+            gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "billing_project", "CreateTime"])
             gke_table.align = "l"
             gke_table.sortby = "CreateTime"
             for cluster in gke_clusters:
@@ -686,6 +717,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                         cluster.zone,
                         tags.get("TestId", "N/A") if tags else "N/A",
                         tags.get("RunByUser", "N/A") if tags else "N/A",
+                        tags.get("billing_project", "N/A") if tags else "N/A",
                         cluster.cluster_info["createTime"],
                     ]
                 )
@@ -702,7 +734,15 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         if any(docker_resources.values()):
             if docker_resources.get("containers"):
                 docker_table = PrettyTable(
-                    ["Name", "Builder", "Public IP" if get_all_running else "Status", "TestId", "RunByUser", "Created"]
+                    [
+                        "Name",
+                        "Builder",
+                        "Public IP" if get_all_running else "Status",
+                        "TestId",
+                        "RunByUser",
+                        "billing_project",
+                        "Created",
+                    ]
                 )
                 docker_table.align = "l"
                 docker_table.sortby = "Created"
@@ -716,12 +756,13 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                                 get_ip_address_of_container(container) if get_all_running else container.status,
                                 container.labels.get("TestId", "N/A"),
                                 container.labels.get("RunByUser", "N/A"),
+                                container.labels.get("billing_project", "N/A"),
                                 container.attrs.get("Created", "N/A"),
                             ]
                         )
                 click.echo(docker_table.get_string(title="Containers used on Docker"))
             if docker_resources.get("images"):
-                docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "Created"])
+                docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "billing_project", "Created"])
                 docker_table.align = "l"
                 docker_table.sortby = "Created"
                 for builder_name, docker_images in docker_resources["images"].items():
@@ -734,6 +775,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                                     builder_name,
                                     image.labels.get("TestId", "N/A"),
                                     image.labels.get("RunByUser", "N/A"),
+                                    image.labels.get("billing_project", "N/A"),
                                     image.attrs.get("Created", "N/A"),
                                 ]
                             )
@@ -746,10 +788,15 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
         instances: List[VmInstance] = []
         for provisioner in AzureProvisioner.discover_regions(params.get("TestId", "")):
             instances += provisioner.list_instances()
-        if user:
-            instances = [inst for inst in instances if inst.tags.get("RunByUser") == user]
+        # Filter by user and billing_project using params dict values
+        if params.get("RunByUser"):
+            instances = [inst for inst in instances if inst.tags.get("RunByUser") == params["RunByUser"]]
+        if params.get("billing_project"):
+            instances = [inst for inst in instances if inst.tags.get("billing_project") == params["billing_project"]]
         if instances:
-            azure_table = PrettyTable(["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"])
+            azure_table = PrettyTable(
+                ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "billing_project", "LaunchTime"]
+            )
             azure_table.align = "l"
             azure_table.sortby = "RunByUser"
 
@@ -760,8 +807,17 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                 tags = instance.tags
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
+                billing_project_value = tags.get("billing_project", "N/A")
                 azure_table.add_row(
-                    [instance.name, instance.region, instance.public_ip_address, test_id, run_by_user, creation_time]
+                    [
+                        instance.name,
+                        instance.region,
+                        instance.public_ip_address,
+                        test_id,
+                        run_by_user,
+                        billing_project_value,
+                        creation_time,
+                    ]
                 )
             click.echo(azure_table.get_string(title="Instances used on Azure"))
         else:
@@ -803,7 +859,16 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
 
                     if filtered_clusters:
                         xcloud_table = PrettyTable(
-                            ["Name", "Environment", "Status", "Provider", "TestId", "RunByUser", "CreatedAt"]
+                            [
+                                "Name",
+                                "Environment",
+                                "Status",
+                                "Provider",
+                                "TestId",
+                                "RunByUser",
+                                "billing_project",
+                                "CreatedAt",
+                            ]
                         )
                         xcloud_table.align = "l"
                         xcloud_table.sortby = "CreatedAt"
@@ -819,6 +884,8 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                             # TODO: Extract cluster_user from cluster name once naming convention includes username,
                             #       or from cluster tags/metadata when API provides user information.
                             cluster_user = "N/A"
+                            # TODO: Extract billing_project from cluster tags/metadata when API provides it.
+                            cluster_billing_project = "N/A"
 
                             xcloud_table.add_row(
                                 [
@@ -828,6 +895,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
                                     cloud_provider,
                                     short_test_id,
                                     cluster_user,
+                                    cluster_billing_project,
                                     created_at,
                                 ]
                             )
@@ -1660,7 +1728,10 @@ def run_pytest(target, backend, config, logdir):
     default="",
     help="User or instance owner. Applicable for last-7-days-* reports",
 )
-def cloud_usage_report(emails, report_type, user):
+@click.option(
+    "--billing-project", required=False, type=str, default="", help="Billing project tag filter (currently not applied)"
+)
+def cloud_usage_report(emails, report_type, user, billing_project):
     add_file_logger()
 
     email_list = emails.split(",")
@@ -2139,11 +2210,13 @@ def set_runner_tags(runner_ip, tags):
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
 @click.option("-b", "--backend", type=click.Choice(SCTConfiguration.available_backends), help="Specific backend to use")
 @click.option("--user", type=str, help="user name to filter instances by")
+@click.option("--billing-project", type=str, help="billing project to filter instances by")
 @sct_option("--test-id", "test_id", help="test id to filter by. Could be used multiple times", multiple=True)
 @click.option("--dry-run", is_flag=True, default=False, help="dry run")
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
-def clean_runner_instances(runner_ip, test_status, backend, user, test_id, dry_run, force):
+def clean_runner_instances(runner_ip, test_status, backend, user, billing_project, test_id, dry_run, force):
     add_file_logger()
+    # Note: clean_sct_runners does not currently support billing_project; option accepted for CLI parity.
     clean_sct_runners(
         test_runner_ip=runner_ip,
         test_status=test_status,

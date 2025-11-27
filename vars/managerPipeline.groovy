@@ -49,6 +49,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
+            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
@@ -170,6 +171,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+                   description: 'Billing project for the test run',
+                   name: 'billing_project')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                  description: (
                      """Extra environment variables to be set in the test environment, uses the java Properties File Format.
