@@ -106,6 +106,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+                   description: 'Billing project for the test run',
+                   name: 'billing_project')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
@@ -257,7 +260,8 @@ def call(Map pipelineParams) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",
-                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",]) {
+                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",
+                                             "SCT_BILLING_PROJECT=${env.SCT_BILLING_PROJECT ?: ''}",]) {
                                         stage("Checkout for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 timeout(time: 5, unit: 'MINUTES') {

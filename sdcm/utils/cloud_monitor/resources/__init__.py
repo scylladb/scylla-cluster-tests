@@ -20,6 +20,7 @@ class CloudInstance:
         create_time,
         keep,
         project="N/A",
+        billing_project="N/A",
     ):
         self.cloud = cloud
         self.name = name
@@ -32,6 +33,7 @@ class CloudInstance:
         self.create_time = create_time
         self.keep = keep  # keep alive
         self.project = project
+        self.billing_project = billing_project
 
         try:
             self.price = self.pricing.get_instance_price(

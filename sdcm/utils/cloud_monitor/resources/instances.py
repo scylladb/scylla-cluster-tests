@@ -33,6 +33,7 @@ class AWSInstance(CloudInstance):
             owner=self.get_owner(),
             create_time=instance["LaunchTime"],
             keep=self._tags.get("keep", ""),
+            billing_project=self._tags.get("billing_project", NA) if self._tags else NA,
         )
 
     @property
@@ -84,6 +85,7 @@ class GCEInstance(CloudInstance):
             create_time=datetime.fromisoformat(instance.creation_timestamp),
             keep=self.get_keep_alive_gce_instance(instance),
             project=instance.self_link.split("/")[6],
+            billing_project=tags.get("billing_project", NA) if tags else NA,
         )
 
     @property
@@ -124,6 +126,7 @@ class AzureInstance(CloudInstance):
             create_time=creation_time,
             keep=tags.get("keep", ""),
             project=resource_group,
+            billing_project=tags.get("billing_project", NA) if tags else NA,
         )
 
     @staticmethod
