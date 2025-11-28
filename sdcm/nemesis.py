@@ -3010,7 +3010,7 @@ class Nemesis(NemesisFlags):
             all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
             if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = random.choice(list(all_snapshots_per_region.keys()))
+                snapshot_tag = "sm_20250910103721UTC"
             else:
                 oss_snapshots = [snapshot_key for snapshot_key, snapshot_value in all_snapshots_per_region.items() if
                                  snapshot_value['scylla_product'] == "oss"]
@@ -3121,7 +3121,8 @@ class Nemesis(NemesisFlags):
         try:
             restore_task = mgr_cluster.create_restore_task(restore_data=True,
                                                            location_list=location_list,
-                                                           snapshot_tag=chosen_snapshot_tag)
+                                                           snapshot_tag=chosen_snapshot_tag,
+                                                           dc_mapping="eu-west-1=eu-west-1")
             restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
             assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
 
