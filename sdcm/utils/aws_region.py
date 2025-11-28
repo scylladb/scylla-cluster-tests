@@ -516,6 +516,13 @@ class AwsRegion:
                                         'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}]
                     },
                     {
+                        "FromPort": 15000,
+                        "ToPort": 15000,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Vector log transport for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Vector log transport for ALL'}]
+                    },
+                    {
                         "IpProtocol": "-1",
                         "IpRanges": [{'CidrIp': '172.0.0.0/11',
                                       'Description': 'Allow traffic from Scylla Cloud lab while VPC peering for ALL'}],
