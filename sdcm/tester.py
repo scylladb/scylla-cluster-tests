@@ -4290,7 +4290,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             "shard_awareness_driver": self.is_shard_awareness_driver,
             "rack_aware_policy": self.is_rack_aware_policy,
             "restore_monitor_job_base_link": restore_monitor_job_base_link,
-            "relocatable_pkg": get_relocatable_pkg_url(scylla_version),
+            "relocatable_pkg": get_relocatable_pkg_url(scylla_version) or "",
         }
 
     def get_test_results(self, source, severity=None):
