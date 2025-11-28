@@ -532,7 +532,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                         f'--cluster {self.short_cluster_name} '
                         f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
                         f'--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} '
-                        f'--tags {tags} --override-existing-serviceaccounts')
+                        f'--tags {tags} --role-only --override-existing-serviceaccounts')
 
         self.kubectl("rollout restart deployment ebs-csi-controller", namespace="kube-system")
 
