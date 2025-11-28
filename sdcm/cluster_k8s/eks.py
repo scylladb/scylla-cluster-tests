@@ -531,7 +531,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                         f'--cluster {self.short_cluster_name} '
                         f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
                         f'--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} '
-                        f'--tags {tags} --override-existing-serviceaccounts')
+                        f'--tags {tags} --role-only --override-existing-serviceaccounts')
 
     def deploy_ebs_csi_driver(self):
         wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
