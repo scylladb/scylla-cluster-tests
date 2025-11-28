@@ -11,8 +11,8 @@ from sdcm.utils.version_utils import (
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
-    get_branched_repo,
     get_git_tag_from_helm_chart_version,
+    get_relocatable_pkg_url,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
     is_enterprise,
@@ -725,44 +725,19 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
 @pytest.mark.need_network
 @pytest.mark.integration
 @pytest.mark.parametrize(
-    "scylla_version,distro,expected_repo",
-    (
-        ("master:latest", "centos", "unstable/scylla/master/rpm/centos/latest/scylla.repo"),
-        ("branch-2025.3:latest", "centos", "unstable/scylla/branch-2025.3/rpm/centos/latest/scylla.repo"),
-        (
-            "branch-2025.3:latest",
-            "ubuntu",
-            "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list",
+    "scylla_version, expected_result",
+    [
+        pytest.param(
+            "2025.1.10 with build-id 6facdbdabc830d767b848ff2f47b418350f96a72",
+            "https://downloads.scylladb.com/unstable/scylla/branch-2025.1/relocatable/2025-11-21T14:15:54Z/scylla-unified-2025.1.10-0.20251121.cb1f72dc8134.aarch64.tar.gz",
+            id="valid build-id for 2025.1.10",
         ),
-        (
-            "branch-2025.3:latest",
-            "debian",
-            "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list",
-        ),
-        ("branch-2025.2:latest", "centos", "unstable/scylla/branch-2025.2/rpm/centos/latest/scylla.repo"),
-        ("branch-2025.1:latest", "centos", "unstable/scylla/branch-2025.1/rpm/centos/latest/scylla.repo"),
-        ("branch-6.2:latest", "centos", "unstable/scylla/branch-6.2/rpm/centos/latest/scylla.repo"),
-        ("branch-6.1:latest", "centos", "unstable/scylla/branch-6.1/rpm/centos/latest/scylla.repo"),
-        ("branch-6.0:latest", "centos", "unstable/scylla/branch-6.0/rpm/centos/latest/scylla.repo"),
-        ("enterprise:latest", "centos", "unstable/scylla-enterprise/enterprise/rpm/centos/latest/scylla.repo"),
-        (
-            "enterprise-2024.2:latest",
-            "centos",
-            "unstable/scylla-enterprise/enterprise-2024.2/rpm/centos/latest/scylla.repo",
-        ),
-        (
-            "enterprise-2024.2:latest",
-            "ubuntu",
-            "unstable/scylla-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list",
-        ),
-        (
-            "enterprise-2024.1:latest",
-            "debian",
-            "unstable/scylla-enterprise/enterprise-2024.1/deb/unified/latest/scylladb-2024.1/scylla.list",
-        ),
-    ),
+        pytest.param("6.2.0", None, id="version without build-id"),
+        pytest.param("", None, id="empty version string"),
+        pytest.param("6.2.0 with build-id 000", None, id="invalid_build-id"),
+    ],
 )
-def test_get_branched_repo(scylla_version, distro, expected_repo):
-    expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
-    actual_repo = get_branched_repo(scylla_version, distro)
-    assert actual_repo == expected_template.format(expected_repo)
+def test_get_relocatable_pkg_url(scylla_version, expected_result):
+    """Test get_relocatable_pkg_url with a valid build-id from staging backtrace service."""
+    result = get_relocatable_pkg_url(scylla_version)
+    assert result == expected_result
