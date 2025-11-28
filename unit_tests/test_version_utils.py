@@ -13,6 +13,7 @@ from sdcm.utils.version_utils import (
     get_branch_version_for_multiple_repositories,
     get_branched_repo,
     get_git_tag_from_helm_chart_version,
+    get_relocatable_pkg_url,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
     is_enterprise,
@@ -775,6 +776,27 @@ def test_parse_full_version_tag(version_tag, expected_base, expected_build, expe
     assert tag.date == expected_date
     assert tag.commit_id == expected_commit
     assert tag.full_tag == version_tag
+
+
+@pytest.mark.need_network
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "scylla_version, expected_result",
+    [
+        pytest.param(
+            "2025.1.10 with build-id 6facdbdabc830d767b848ff2f47b418350f96a72",
+            "https://downloads.scylladb.com/unstable/scylla/branch-2025.1/relocatable/2025-11-21T14:15:54Z/scylla-unified-2025.1.10-0.20251121.cb1f72dc8134.aarch64.tar.gz",
+            id="valid build-id for 2025.1.10",
+        ),
+        pytest.param("6.2.0", None, id="version without build-id"),
+        pytest.param("", None, id="empty version string"),
+        pytest.param("6.2.0 with build-id 000", None, id="invalid_build-id"),
+    ],
+)
+def test_get_relocatable_pkg_url(scylla_version, expected_result):
+    """Test get_relocatable_pkg_url with a valid build-id from staging backtrace service."""
+    result = get_relocatable_pkg_url(scylla_version)
+    assert result == expected_result
 
 
 @pytest.mark.parametrize(
