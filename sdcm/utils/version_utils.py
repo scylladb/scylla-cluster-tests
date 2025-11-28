@@ -30,7 +30,6 @@ from botocore import UNSIGNED
 from botocore.client import Config
 from sdcm.utils.repo_parser import Parser
 
-from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
@@ -762,16 +761,21 @@ class scylla_versions:
         return inner
 
 
-def get_relocatable_pkg_url(scylla_version: str) -> str:
-    relocatable_pkg = ""
+def get_relocatable_pkg_url(scylla_version: str) -> str | None:
+    relocatable_pkg = None
     if scylla_version and "build-id" in scylla_version:
         try:
             scylla_build_id = scylla_version.split("build-id")[-1].split()[0]
-            get_pkgs_cmd = (
-                f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
+            response = requests.get(
+                "https://api.backtrace.scylladb.com/api/search/build_id",
+                params={"build_id": scylla_build_id},
+                timeout=10,
             )
-            res = LOCALRUNNER.run(get_pkgs_cmd)
-            relocatable_pkg = re.findall(rf"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
+            assert response.status_code == 200
+            result = response.json()["build_data"]["reloc_url"]
+            if not result.startswith("http"):
+                result = f"https://{result}"
+            return result
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
