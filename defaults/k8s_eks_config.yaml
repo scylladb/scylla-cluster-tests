@@ -16,7 +16,7 @@ eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-N
 # NOTE: https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html
 eks_vpc_cni_version: 'v1.20.4-eksbuild.1'
 
-scylla_version: '6.2.3'
+scylla_version: '2025.1.10'
 k8s_cert_manager_version: '1.19.1'
 
 k8s_deploy_monitoring: false
