@@ -1924,18 +1924,18 @@ class Nemesis(NemesisFlags):
             self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts)
 
     def repair_nodetool_rebuild(self):
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=60):
             self.target_node.run_nodetool('rebuild', long_running=True, retry=0)
 
     def nodetool_cleanup_on_all_nodes_parallel(self):
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
-            with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
+            with adaptive_timeout(Operations.CLEANUP, node, timeout=60):
                 node.run_nodetool(sub_cmd="cleanup", long_running=True, retry=0)
 
         parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(
-            32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
+            32, len(self.cluster.nodes)), timeout=300)
         with self.action_log_scope("Cleanup all nodes in parallel"):
             parallel_objects.run(_nodetool_cleanup)
 
