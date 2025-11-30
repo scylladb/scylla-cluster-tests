@@ -563,6 +563,7 @@ class AWSNode(cluster.BaseNode):
         self._ec2_service: EC2ServiceResource = ec2_service
         self.eip_allocation_id = None
         self._aws_metadata_token = {"token": "", "expires": 0}
+        self.kernel_panic_checker = None
         ssh_login_info = {"hostname": None, "user": ami_username, "key_file": credentials.key_file}
         super().__init__(
             name=f"{node_prefix}-{self.node_index}",
@@ -661,6 +662,13 @@ class AWSNode(cluster.BaseNode):
         for tag in self._instance.tags:
             if tag["Key"] == "ZeroTokenNode" and tag["Value"] == "True":
                 self._is_zero_token_node = True
+
+        # Start kernel panic monitoring
+        self.kernel_panic_checker = AWSKernelPanicChecker(
+            node=self, instance_id=self._instance.id, region=self._ec2_service.meta.client.meta.region_name
+        )
+        self.kernel_panic_checker.start()
+        LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.id)
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
@@ -969,6 +977,13 @@ class AWSNode(cluster.BaseNode):
                 raise
 
     def destroy(self):
+        # Stop kernel panic monitoring
+        if self.kernel_panic_checker:
+            LOGGER.info("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
+
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate()
@@ -1426,3 +1441,74 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
         )
         node.init()
         return node
+
+
+import threading
+from sdcm.sct_events.system import KernelPanicEvent
+
+CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
+
+
+class AWSKernelPanicChecker(threading.Thread):
+    """Monitor AWS EC2 instance for kernel panics via console output and instance status."""
+
+    def __init__(self, node, instance_id, region="us-east-1"):
+        super().__init__()
+        self.node = node
+        self.instance_id = instance_id
+        self.region = region
+        self.ec2 = boto3.client("ec2", region_name=region)
+        self._stop_event = threading.Event()
+        self._panic_detected = False
+        self.daemon = True
+
+    def run(self):
+        while not self._stop_event.is_set():
+            try:
+                statuses = self.ec2.describe_instance_status(InstanceIds=[self.instance_id], IncludeAllInstances=True)
+                for inst in statuses.get("InstanceStatuses", []):
+                    status = inst["InstanceStatus"]["Status"]
+                    if status != "ok":
+                        LOGGER.info("[AWS] %s: instance status = %s", self.instance_id, status)
+
+                # Check console output for panic
+                console = self.ec2.get_console_output(InstanceId=self.instance_id, Latest=True)
+                output = console.get("Output", "")
+                output_lower = output.lower()
+                if ("kernel panic" in output_lower or "not syncing" in output_lower) and not self._panic_detected:
+                    self._panic_detected = True
+
+                    # Extract the kernel panic line(s)
+                    panic_lines = []
+                    for line in output.splitlines():
+                        line_lower = line.lower()
+                        if "kernel panic" in line_lower or "not syncing" in line_lower:
+                            panic_lines.append(line.strip())
+
+                    panic_text = (
+                        " | ".join(panic_lines) if panic_lines else "Kernel panic detected (see full output below)"
+                    )
+                    message = f"Kernel panic detected in console log for instance {self.instance_id}: {panic_text}"
+
+                    # Log the full console output to sct.log
+                    LOGGER.error("[AWS] %s", message)
+                    LOGGER.error("[AWS] Full console output for %s:\n%s", self.instance_id, output)
+
+                    KernelPanicEvent(node=self.node, message=message).publish()
+                    # Stop checking after panic is detected and event is raised
+                    self._stop_event.set()
+
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error("[AWS] Error checking %s: %s", self.instance_id, exc)
+            self._stop_event.wait(CHECK_INTERVAL_SECONDS)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+        self.join()

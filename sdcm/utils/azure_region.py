@@ -325,6 +325,12 @@ class AzureRegion:
                 "hardware_profile": {
                     "vm_size": vm_size,
                 },
+                "diagnostics_profile": {
+                    "boot_diagnostics": {
+                        "enabled": True,
+                        "storage_uri": None,  # None triggers Managed Storage
+                    }
+                },
                 "storage_profile": {
                     "image_reference": image,
                     "os_disk": {

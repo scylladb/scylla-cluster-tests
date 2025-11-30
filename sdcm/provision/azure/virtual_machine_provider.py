@@ -76,6 +76,12 @@ class VirtualMachineProvider:
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
                 "tags": tags,
+                "diagnostics_profile": {
+                    "boot_diagnostics": {
+                        "enabled": True,
+                        "storage_uri": None,  # None triggers Managed Storage
+                    }
+                },
                 "hardware_profile": {
                     "vm_size": definition.type,
                 },

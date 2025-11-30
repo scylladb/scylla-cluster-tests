@@ -15,6 +15,8 @@ import os
 import re
 import time
 import logging
+import threading
+import datetime
 from typing import Dict, Any, ParamSpec, TypeVar
 from textwrap import dedent
 from functools import cached_property, cache
@@ -42,11 +44,12 @@ from sdcm.utils.gce_utils import (
 )
 from sdcm.wait import exponential_retry
 from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent, KernelPanicEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import resolve_ip_to_dns
+from sdcm.utils.gce_utils import get_gce_compute_instances_client
 
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
@@ -92,6 +95,7 @@ class GCENode(cluster.BaseNode):
         self._gce_service = gce_service
         self._gce_logging_client = GceLoggingClient(instance_name=name, zone=self.zone)
         self._last_logs_fetch_time = 0.0
+        self.kernel_panic_checker = None
         ssh_login_info = {
             "hostname": None,
             "user": gce_image_username,
@@ -123,6 +127,11 @@ class GCENode(cluster.BaseNode):
         time.sleep(10)
 
         super().init()
+
+        # Start kernel panic monitoring
+        self.kernel_panic_checker = GCPKernelPanicChecker(node=self, zone=self.zone, instance_name=self._instance.name)
+        self.kernel_panic_checker.start()
+        LOGGER.info("Started kernel panic monitoring for node %s (instance: %s)", self.name, self._instance.name)
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
@@ -240,6 +249,13 @@ class GCENode(cluster.BaseNode):
             self.log.exception("Instance doesn't exist, skip destroy")
 
     def destroy(self):
+        # Stop kernel panic monitoring
+        if self.kernel_panic_checker:
+            LOGGER.info("Stopping kernel panic monitoring for node %s", self.name)
+            self.kernel_panic_checker.stop()
+            self.kernel_panic_checker.join(timeout=5)
+            self.kernel_panic_checker = None
+
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance_wait_safe(self._safe_destroy)
@@ -740,3 +756,82 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
             gce_region_names=gce_datacenter,
             add_nodes=add_nodes,
         )
+
+
+CHECK_INTERVAL_SECONDS = 30  # Check every 30 seconds
+
+
+class GCPKernelPanicChecker(threading.Thread):
+    """Monitor GCE instance for kernel panics via serial port output and instance status."""
+
+    def __init__(self, node, zone, instance_name):
+        super().__init__()
+        self.node = node
+        self.client, info = get_gce_compute_instances_client()
+
+        self.project_id = info["project_id"]
+        self.zone = zone
+        self.instance_name = instance_name
+        self._stop_event = threading.Event()
+        self._panic_detected = False
+        self.daemon = True
+
+    def run(self):
+        while not self._stop_event.is_set():
+            try:
+                # Fetch instance details
+                instance = self.client.get(project=self.project_id, zone=self.zone, instance=self.instance_name)
+                status = instance.status.name if hasattr(instance.status, "name") else instance.status
+                LOGGER.debug("[GCP] %s: status = %s", self.instance_name, status)
+                if status not in ("RUNNING", "PROVISIONING", "STAGING"):
+                    LOGGER.info(
+                        "[%s] [GCP] %s: status = %s", datetime.datetime.now(datetime.UTC), self.instance_name, status
+                    )
+
+                # Fetch serial port output (port 1)
+                serial_output = self.client.get_serial_port_output(
+                    project=self.project_id, zone=self.zone, instance=self.instance_name
+                )
+                output_lower = serial_output.contents.lower()
+                if ("kernel panic" in output_lower or "not syncing" in output_lower) and not self._panic_detected:
+                    self._panic_detected = True
+
+                    # Extract the kernel panic line(s)
+                    panic_lines = []
+                    for line in serial_output.contents.splitlines():
+                        line_lower = line.lower()
+                        if "kernel panic" in line_lower or "not syncing" in line_lower:
+                            panic_lines.append(line.strip())
+
+                    panic_text = (
+                        " | ".join(panic_lines) if panic_lines else "Kernel panic detected (see full output below)"
+                    )
+                    message = f"Kernel panic detected in serial output for instance {self.instance_name} in zone {self.zone}: {panic_text}"
+
+                    # Log the full serial output to sct.log
+                    LOGGER.error("[GCP] %s", message)
+                    LOGGER.error(
+                        "[GCP] Full serial port output for %s:\n%s",
+                        self.instance_name,
+                        serial_output.contents,
+                    )
+
+                    KernelPanicEvent(node=self.node, message=message).publish()
+                    # Stop checking after panic is detected and event is raised
+                    self._stop_event.set()
+
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error("[GCP] Error checking %s: %s", self.instance_name, exc)
+
+            self._stop_event.wait(CHECK_INTERVAL_SECONDS)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+        self.join()
