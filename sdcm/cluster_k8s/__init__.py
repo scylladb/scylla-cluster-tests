@@ -62,6 +62,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sct_events.database import ScyllaYamlUpdateEvent
 import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
@@ -1703,9 +1704,39 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 scylla_config_map[filename] = new_data_as_str
             self.scylla_restart_required = True
 
-    def remote_scylla_yaml(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
-        return self.manage_file_in_scylla_config_map(
-            filename='scylla.yaml', namespace=namespace)
+    @contextlib.contextmanager
+    def remote_scylla_yaml(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager[ScyllaYaml]:
+        """Update scylla.yaml using ConfigMap resource
+
+        Returns a ScyllaYaml object with no default values, matching base cluster implementation.
+        """
+        with self.scylla_config_map(namespace=namespace) as scylla_config_map:
+            old_data = yaml.safe_load(scylla_config_map.get('scylla.yaml', "")) or {}
+            # Create ScyllaYaml object with no defaults (model_construct bypasses validation and defaults)
+            new_scylla_yaml = ScyllaYaml.model_construct(**old_data)
+            old_scylla_yaml = new_scylla_yaml.model_copy()
+            yield new_scylla_yaml
+
+            # Compute diff and update if changed
+            diff = old_scylla_yaml.diff(new_scylla_yaml)
+            if not diff:
+                ScyllaYamlUpdateEvent(node_name=str(self),
+                                      message=f"ScyllaYaml has not been changed on {self}").publish()
+                return
+
+            # Convert to dict and update config map
+            new_data_dict = new_scylla_yaml.model_dump(
+                exclude_none=True, exclude_unset=True, exclude_defaults=True,
+            )
+
+            if not new_data_dict:
+                scylla_config_map.pop('scylla.yaml', None)
+            else:
+                scylla_config_map['scylla.yaml'] = yaml.safe_dump(new_data_dict)
+
+            ScyllaYamlUpdateEvent(node_name=str(self), message=f"ScyllaYaml has been changed on {self}. "
+                                  f"Diff: {diff}").publish()
+            self.scylla_restart_required = True
 
     def remote_cassandra_rackdc_properties(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
         return self.manage_file_in_scylla_config_map(
@@ -1718,16 +1749,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         with self.remote_scylla_yaml(namespace=namespace) as scylla_yml:
             # Process cluster params
             if self.params.get("experimental_features"):
-                scylla_yml["experimental_features"] = self.params.get("experimental_features")
+                scylla_yml.experimental_features = self.params.get("experimental_features")
             if self.params.get("hinted_handoff"):
-                scylla_yml["hinted_handoff_enabled"] = self.params.get(
-                    "hinted_handoff").lower() in ("enabled", "true")
+                scylla_yml.hinted_handoff_enabled = self.params.get("hinted_handoff").lower()
             if self.params.get("endpoint_snitch"):
-                scylla_yml["endpoint_snitch"] = self.params.get("endpoint_snitch")
+                scylla_yml.endpoint_snitch = self.params.get("endpoint_snitch")
 
             # Process method kwargs
             if kwargs.get("murmur3_partitioner_ignore_msb_bits"):
-                scylla_yml["murmur3_partitioner_ignore_msb_bits"] = int(
+                scylla_yml.murmur3_partitioner_ignore_msb_bits = int(
                     kwargs.pop("murmur3_partitioner_ignore_msb_bits"))
 
             self.log.info("K8S SCYLLA_YAML: %s", scylla_yml)
@@ -2066,7 +2096,7 @@ class BaseScyllaPodContainer(BasePodContainer):
     def actual_cassandra_rackdc_properties(self) -> ContextManager:
         return super().remote_cassandra_rackdc_properties()
 
-    def remote_scylla_yaml(self) -> ContextManager:
+    def remote_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         """
         Scylla Operator handles 'scylla.yaml' file updates using ConfigMap resource
         and we don't need to update it on each node separately.
@@ -2172,7 +2202,7 @@ class BaseScyllaPodContainer(BasePodContainer):
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         self.stop_scylla()
         with self.remote_scylla_yaml() as scylla_yml:
-            scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
+            scylla_yml.murmur3_partitioner_ignore_msb_bits = murmur3_partitioner_ignore_msb_bits
         self.soft_reboot()
         search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
         self.wait_db_up(timeout=self.pod_readiness_timeout * 60)
@@ -2672,7 +2702,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def scylla_config_map(self, dc_idx: int = 0) -> ContextManager:
         return self.k8s_clusters[dc_idx].scylla_config_map()
 
-    def remote_scylla_yaml(self, dc_idx: int = 0) -> ContextManager:
+    def remote_scylla_yaml(self, dc_idx: int = 0) -> ContextManager[ScyllaYaml]:
         return self.k8s_clusters[dc_idx].remote_scylla_yaml()
 
     def remote_cassandra_rackdc_properties(self, dc_idx: int = 0) -> ContextManager:
