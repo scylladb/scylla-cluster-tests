@@ -280,14 +280,7 @@ class EksNodePool(CloudK8sNodePool):
             'capacityType': self.provision_type.upper(),
             'version': self.k8s_version
         }
-        # TODO: Appears to be an unused statement, a candidate for deletion
-        # if self.is_launch_template_required:
         node_pool_config['launchTemplate'] = {'name': self.launch_template_name}
-        # else:
-        #     node_pool_config['diskSize'] = self.disk_size
-        #     node_pool_config['remoteAccess'] = {
-        #         'ec2SshKey': self.ssh_key_pair_name,
-        #     }
         return node_pool_config
 
     def deploy(self) -> None:
