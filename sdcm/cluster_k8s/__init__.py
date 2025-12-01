@@ -2169,7 +2169,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             '''))
         k8s_node_name = self.node_name
         self.k8s_cluster.kubectl(
-            f'drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-local-data')
+            f'drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-emptydir-data')
         time.sleep(5)
         self.k8s_cluster.kubectl(f'uncordon {k8s_node_name}')
 

@@ -125,7 +125,7 @@ spec:
             fi
 
             echo "Change kubelet config and restart it's service"
-            kubectl drain $NODE --force --ignore-daemonsets --delete-local-data --grace-period=60
+            kubectl drain $NODE --force --ignore-daemonsets --delete-emptydir-data --grace-period=60
             awk 'NR==2{print "  \"cpuManagerPolicy\": \"static\","}1' $HOSTFS$KUBELET_CONFIG_PATH > \
                 tmp-kubelet-config.json && cat tmp-kubelet-config.json > $HOSTFS$KUBELET_CONFIG_PATH
             rm $HOSTFS/var/lib/kubelet/cpu_manager_state
