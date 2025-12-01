@@ -16,8 +16,8 @@ from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import list_logs_by_test_id, S3Storage, remove_files, get_free_port
 from sdcm.utils.decorators import retrying
 
-from sdcm.logcollector import GrafanaEntity, MonitoringStack  # noqa: PLC0415
-from sdcm.db_stats import PrometheusDBStats  # noqa: PLC0415
+from sdcm.logcollector import GrafanaEntity, MonitoringStack
+from sdcm.db_stats import PrometheusDBStats
 
 LOGGER = logging.getLogger(name='monitoringstack')
 
