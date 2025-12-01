@@ -1,9 +1,15 @@
 test_duration: 500
+
+pre_create_keyspace: [
+  "CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
+  "CREATE TABLE keyspace1.standard1 (key blob PRIMARY KEY, C1 blob, C2 blob, C3 blob, C4 blob) WITH default_time_to_live = 0 AND compaction = { 'class': 'IncrementalCompactionStrategy'} AND compression = {} AND speculative_retry = 'NONE';",
+]
+
 prepare_write_cmd: [
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=162500002..325000002",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=325000003..487500003",
-    "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=487500004..650000004"
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=1..162500001",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=162500002..325000002",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=325000003..487500003",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=487500004..650000004"
 ]
 
 stress_cmd_w:  [
@@ -14,18 +20,18 @@ stress_cmd_w:  [
 ]
 
 stress_cmd_r: [
-  "cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
-  "cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
-  "cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
-  "cassandra-stress read  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=1..5000000",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=5000001..10000000",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=10000001..15000000",
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=15000001..20000000"
 ]
 
-stress_cmd_cache_warmup: [
-  "cassandra-stress read  cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
-  "cassandra-stress read  cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
-  "cassandra-stress read  cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
-  "cassandra-stress read  cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
-]
+#stress_cmd_cache_warmup: [
+#  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -pop seq=1..5000000",
+#  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -pop seq=5000001..10000000",
+#  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -pop seq=10000001..15000000",
+#  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -pop seq=15000001..20000000"
+#]
 
 stress_cmd_m: [
   "cassandra-stress mixed  cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",

@@ -1,0 +1,2 @@
+append_scylla_yaml:
+  sstable_format: 'ms'
