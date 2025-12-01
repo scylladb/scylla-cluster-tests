@@ -89,7 +89,7 @@ spec:
           - name: HOSTFS
             value: /mnt/hostfs
           - name: KUBELET_CONFIG_PATH
-            value: /etc/kubernetes/kubelet/kubelet-config.json
+            value: /etc/kubernetes/kubelet/config.json
         securityContext:
           privileged: true
           runAsUser: 0
@@ -226,7 +226,7 @@ spec:
           - name: HOSTFS
             value: /mnt/hostfs
           - name: KUBELET_CONFIG_PATH
-            value: /etc/kubernetes/kubelet/kubelet-config.json
+            value: /etc/kubernetes/kubelet/config.json
         securityContext:
           privileged: true
           runAsUser: 0
