@@ -51,7 +51,7 @@ from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip, check_ena_express_support
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
@@ -240,6 +240,20 @@ class AWSCluster(cluster.BaseCluster):
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
         interfaces_amount = network_interfaces_count(self.params)
         interfaces = []
+        if check_ena_express_support(
+            instance_type=instance_type or self._ec2_instance_type, region_name=self.region_names[dc_idx]
+        ):
+            ena_conf = {
+                "EnaSrdSpecification": {
+                    "EnaSrdEnabled": True,
+                    "EnaSrdUdpSpecification": {
+                        "EnaSrdUdpEnabled": True  # Set to False if UDP acceleration isn't needed
+                    },
+                }
+            }
+        else:
+            ena_conf = {}
+
         for i in range(interfaces_amount):
             LOGGER.debug(
                 "SubnetId: %s, dc_idx: %s, az index: %s, interface index: %s", self._ec2_subnet_id, dc_idx, az_idx, i
@@ -249,6 +263,7 @@ class AWSCluster(cluster.BaseCluster):
                     "DeviceIndex": i,
                     "SubnetId": self._ec2_subnet_id[dc_idx][az_idx][i],
                     "Groups": self._ec2_security_group_ids[dc_idx],
+                    **ena_conf,
                 }
             )
         self.log.debug("interfaces: '%s' - to create_instances", interfaces)

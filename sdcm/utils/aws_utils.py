@@ -648,3 +648,21 @@ class AwsIAM:
         self.iam_client.create_policy_version(
             PolicyArn=policy_arn, PolicyDocument=json.dumps(policy_document), SetAsDefault=True
         )
+
+
+def check_ena_express_support(instance_type: str, region_name: str) -> bool:
+    ec2 = boto3.client("ec2", region_name=region_name)
+
+    response = ec2.describe_instance_types(InstanceTypes=[instance_type])
+
+    # Check if instance type exists
+    if not response["InstanceTypes"]:
+        LOGGER.error(f"Error: Instance type {instance_type} not found.")
+        return False
+
+    # Navigate the JSON response
+    # Path: InstanceTypes -> [0] -> NetworkInfo -> EnaSrdSupported
+    network_info = response["InstanceTypes"][0].get("NetworkInfo", {})
+    is_supported = network_info.get("EnaSrdSupported", False)
+
+    return is_supported

@@ -23,6 +23,7 @@ class AWSNetworkInterfaces(BaseModel):
     DeviceIndex: int
     SubnetId: str
     Groups: List[str]
+    EnaSrdSpecification: Optional[dict] = None
 
 
 class AWSInstanceProfile(BaseModel):
