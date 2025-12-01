@@ -2050,6 +2050,16 @@ class BaseScyllaPodContainer(BasePodContainer):
 
     parent_cluster: ScyllaPodCluster
 
+    def __str__(self):
+        # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
+        #  to here
+        return 'Node %s [%s | %s%s]%s' % (
+            self.name,
+            self.public_ip_address,
+            self.private_ip_address,
+            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self._dc_info_str())
+
     def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         return super().remote_scylla_yaml()
 
