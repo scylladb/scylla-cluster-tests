@@ -19,7 +19,7 @@ seeds_num: 2
 instance_type_db: 'i4i.2xlarge'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 16
-azure_instance_type_db: 'Standard_L8s_v3'
+azure_instance_type_db: 'Standard_L16s_v3'
 root_disk_size_runner: 120
 
 instance_type_loader: 'c6i.4xlarge'
