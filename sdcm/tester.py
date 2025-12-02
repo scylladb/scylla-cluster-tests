@@ -3896,8 +3896,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "collector": MonitorLogCollector,
                      "logname": "monitoring_log", },
                     {"name": "siren_manager",
-                     "nodes": (self.db_cluster and hasattr(self.db_cluster, 'manager_instance')
-                               and self.db_cluster.manager_instance),
+                     "nodes": self.db_cluster and (
+                         [self.db_cluster.scylla_manager_node] if self.params.get('cluster_backend') == 'xcloud'
+                         else self.db_cluster.manager_instance),
                      "collector": SirenManagerLogCollector,
                      "logname": "monitoring_log", },
                     {"name": "vector_store",
