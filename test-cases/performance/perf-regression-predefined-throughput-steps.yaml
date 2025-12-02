@@ -1,15 +1,12 @@
-test_duration: 500
+test_duration: 120
 
 pre_create_keyspace: [
   "CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
-  "CREATE TABLE keyspace1.standard1 (key blob PRIMARY KEY, C1 blob, C2 blob, C3 blob, C4 blob) WITH default_time_to_live = 0 AND compaction = { 'class': 'IncrementalCompactionStrategy'} AND compression = {} AND speculative_retry = 'NONE';",
+  "CREATE TABLE keyspace1.standard1 (key blob PRIMARY KEY, c0 blob, c1 blob, c2 blob, c3 blob) WITH default_time_to_live = 0 AND compaction = { 'class': 'IncrementalCompactionStrategy'} AND compression = {} AND speculative_retry = 'NONE';",
 ]
 
 prepare_write_cmd: [
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=1..162500001",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=162500002..325000002",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=325000003..487500003",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=487500004..650000004"
+  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(insert=1)' cl=ALL n=162500001 -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -pop seq=1..5000000",
 ]
 
 stress_cmd_w:  [
@@ -21,9 +18,6 @@ stress_cmd_w:  [
 
 stress_cmd_r: [
   "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=1..5000000",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=5000001..10000000",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=10000001..15000000",
-  "cassandra-stress user profile=/tmp/aa-profile.yaml 'ops(read=1)' cl=QUORUM duration=$duration -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -pop seq=15000001..20000000"
 ]
 
 #stress_cmd_cache_warmup: [
@@ -43,10 +37,10 @@ stress_cmd_m: [
 round_robin: true
 
 n_db_nodes: 3
-n_loaders: 4
+n_loaders: 1
 
-instance_type_db: 'i4i.4xlarge'
-instance_type_loader: 'c7i.8xlarge'
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c7i.2xlarge'
 instance_type_monitor: 't3.small'
 use_capacity_reservation: true
 nemesis_add_node_cnt: 0

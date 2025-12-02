@@ -9,10 +9,10 @@ table: standard1
 table_definition: |
   CREATE TABLE IF NOT EXISTS keyspace1.standard1 (
     key blob PRIMARY KEY,
-    C1 blob,
-    C2 blob,
-    C3 blob,
-    C4 blob
+    c0 blob,
+    c1 blob,
+    c2 blob,
+    c3 blob
   ) WITH default_time_to_live = 0
     AND compaction = {'class': 'IncrementalCompactionStrategy'}
     AND compression = {}
@@ -21,13 +21,13 @@ table_definition: |
 columnspec:
   - name: key
     size: fixed(8)   # match built-in key size
-  - name: C1
+  - name: c0
     size: fixed(256)
-  - name: C2
+  - name: c1
     size: fixed(256)
-  - name: C3
+  - name: c2
     size: fixed(256)
-  - name: C4
+  - name: c3
     size: fixed(256)
 
 insert:
@@ -36,8 +36,8 @@ insert:
 
 queries:
   insert:
-    cql: INSERT INTO keyspace1.standard1 (key, C1, C2, C3, C4) VALUES (?, ?, ?, ?, ?);
+    cql: INSERT INTO keyspace1.standard1 (key, c0, c1, c2, c3) VALUES (?, ?, ?, ?, ?);
     fields: samerow
   read:
-    cql: SELECT key, C1, C2, C3, C4 FROM keyspace1.standard1 WHERE key = ? BYPASS CACHE;
+    cql: SELECT * FROM keyspace1.standard1 WHERE key = ?;
     fields: samerow
