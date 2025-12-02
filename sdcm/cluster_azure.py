@@ -478,7 +478,7 @@ class AzureKernelPanicChecker(threading.Thread):
                                 # Stop checking after panic is detected and event is raised
                                 self._stop_event.set()
                 except Exception as exc:  # noqa: BLE001
-                    LOGGER.debug("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
+                    LOGGER.warning("[Azure] Error retrieving boot diagnostics for %s: %s", self.vm_name, exc)
 
             except Exception as exc:  # noqa: BLE001
                 LOGGER.exception("[Azure] Error checking %s: %s", self.vm_name, exc)
