@@ -222,11 +222,6 @@ class EksNodePool(CloudK8sNodePool):
         return f'sct-{self.k8s_cluster.short_cluster_name}-{self.name}'
 
     @property
-    def is_launch_template_required(self) -> bool:
-        # NOTE: use launch template to be able to specify the `gp3` disk type by default
-        return True
-
-    @property
     def _launch_template_cfg(self) -> dict:
         root_ebs_block_device_params = {
             "DeleteOnTermination": True,
@@ -281,29 +276,23 @@ class EksNodePool(CloudK8sNodePool):
             'capacityType': self.provision_type.upper(),
             'version': self.k8s_version
         }
-        if self.is_launch_template_required:
-            node_pool_config['launchTemplate'] = {'name': self.launch_template_name}
-        else:
-            node_pool_config['diskSize'] = self.disk_size
-            node_pool_config['remoteAccess'] = {
-                'ec2SshKey': self.ssh_key_pair_name,
-            }
+        node_pool_config['launchTemplate'] = {'name': self.launch_template_name}
         return node_pool_config
 
     def deploy(self) -> None:
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
-        if self.is_launch_template_required:
-            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
-            create_launch_template_args = {
-                "LaunchTemplateName": self.launch_template_name,
-                "LaunchTemplateData": self._launch_template_cfg,
-            }
-            if self.tags:
-                create_launch_template_args["TagSpecifications"] = [LaunchTemplateTagSpecificationRequestTypeDef(
-                    ResourceType="launch-template",
-                    Tags=tags_as_ec2_tags(self.tags),
-                )]
-            self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
+        self.k8s_cluster.log.info("Deploy launch template %s with the configuration %s", self.launch_template_name,
+                                  str(self._node_group_cfg))
+        create_launch_template_args = {
+            "LaunchTemplateName": self.launch_template_name,
+            "LaunchTemplateData": self._launch_template_cfg,
+        }
+        if self.tags:
+            create_launch_template_args["TagSpecifications"] = [LaunchTemplateTagSpecificationRequestTypeDef(
+                ResourceType="launch-template",
+                Tags=tags_as_ec2_tags(self.tags),
+            )]
+        self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
         self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         self.is_deployed = True
 
