@@ -1793,8 +1793,8 @@ class SCTConfiguration(dict):
                         else:
                             ami = get_scylla_ami_versions(version=oracle_scylla_version,
                                                           region_name=region, arch=aws_arch)[0]
-                    except Exception as ex:
-                        raise ValueError(f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} "
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
 
                     self.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s",
