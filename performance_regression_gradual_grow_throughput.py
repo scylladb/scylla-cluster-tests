@@ -32,6 +32,7 @@ class Workload:
     drop_keyspace: bool
     wait_no_compactions: bool
     step_duration: str
+    prepare_schema: bool
 
     def __post_init__(self):
         if isinstance(self.num_threads, int):
@@ -91,7 +92,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                             preload_data=True,
                             drop_keyspace=False,
                             wait_no_compactions=True,
-                            step_duration=self.step_duration(workload_type))
+                            step_duration=self.step_duration(workload_type),
+                            prepare_schema=False)
         self._base_test_workflow(workload=workload,
                                  test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
 
@@ -111,7 +113,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                             preload_data=False,
                             drop_keyspace=True,
                             wait_no_compactions=False,
-                            step_duration=self.step_duration(workload_type))
+                            step_duration=self.step_duration(workload_type),
+                            prepare_schema=True)
         self._base_test_workflow(workload=workload,
                                  test_name="test_write_gradual_increase_load (100% writes)")
 
@@ -131,7 +134,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                             preload_data=True,
                             drop_keyspace=False,
                             wait_no_compactions=True,
-                            step_duration=self.step_duration(workload_type))
+                            step_duration=self.step_duration(workload_type),
+                            prepare_schema=False)
         self._base_test_workflow(workload=workload,
                                  test_name="test_read_gradual_increase_load (100% reads)")
 
@@ -151,7 +155,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                             preload_data=True,
                             drop_keyspace=False,
                             wait_no_compactions=True,
-                            step_duration=self.step_duration(workload_type))
+                            step_duration=self.step_duration(workload_type),
+                            prepare_schema=False)
         self._base_test_workflow(workload=workload,
                                  test_name="test_read_disk_only_gradual_increase_load (100% reads from disk)")
 
@@ -209,6 +214,27 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.get_stress_results(queue=stress, store_results=False)
 
         self.log.info("Dataset has been populated")
+
+    def prepare_schema(self, workload: Workload):
+        if workload.prepare_schema and (prepare_stress_cmd := self.params.get('prepare_stress_cmd')):
+            self.log.info("Preparing schema using command: %s", prepare_stress_cmd)
+            params = {
+                'stress_cmd': prepare_stress_cmd,
+                'round_robin': True,
+                "stats_aggregate_cmds": False
+            }
+            try:
+                stress_result = self.run_stress_thread(**params)
+                self.get_stress_results(queue=stress_result, store_results=False)
+            except Exception as exc:  # noqa: BLE001
+                self.log.error("Failed to prepare schema using command: %s. Exception: %s",
+                               prepare_stress_cmd, exc)
+                raise
+
+            self.log.info("Schema has been prepared")
+            if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
+                self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
+                self._run_cql_commands(post_prepare_cql_cmds)
 
     def check_latency_during_steps(self, step):
         with open(self.latency_results_file, encoding="utf-8") as file:
@@ -324,6 +350,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
         for throttle_step, num_threads, current_throttle_step in zip(workload.throttle_steps, workload.num_threads, sequential_steps):
+            self.prepare_schema(workload=workload)
+
             self.log.info("Run cs command with rate: %s Kops; threads: %s; step name: %s", throttle_step, num_threads,
                           current_throttle_step)
             if throttle_step == "unthrottled":
