@@ -1032,6 +1032,8 @@ class SirenManagerLogCollector(LogCollector):
         FileLog(name="scylla_manager.log",
                 command="sudo journalctl -u scylla-manager.service --no-tail",
                 search_locally=True),
+        CommandLog(name='scylla.yaml',
+                   command=f'cat {SCYLLA_YAML_PATH}'),
     ]
     cluster_log_type = "siren-manager-set"
     cluster_dir_prefix = "siren-manager-set"
@@ -1808,6 +1810,14 @@ class Collector:
                         self.vector_store_set, "xcloud_connect_get_vs_ssh_address")
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("Failed to add Vector Store nodes for log collection: %s", exc)
+
+        try:
+            manager_node_data = {"id": f"manager-{cluster_id}"}
+            self._add_xcloud_node_to_collecting_set(
+                cluster_id, manager_node_data, "manager",
+                self.siren_manager_set, "xcloud_connect_get_manager_ssh_address")
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Failed to add Manager node for log collection: %s", exc)
 
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
