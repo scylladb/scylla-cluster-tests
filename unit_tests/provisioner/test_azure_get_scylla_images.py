@@ -53,24 +53,30 @@ def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
 
 
 def generate_images_json_file():
-    """generates azure_images_list.json based on real Azure images for unit tests purposes. """
+    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.images.list_by_resource_group(
         resource_group_name=resource_group,
     )
-    with open(Path(__file__).parent / "test_data" / resource_group / "azure_images_list.json", "w", encoding="utf-8") as images_file:
+    with open(
+        Path(__file__).parent / "test_data" / resource_group / "azure_images_list.json", "w", encoding="utf-8"
+    ) as images_file:
         serialized_images = [image.serialize() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))
 
 
 def generate_gallery_images_json_file(gallery_name="scylladb_dev", image_name="master"):
-    """generates azure_images_list.json based on real Azure images for unit tests purposes. """
+    """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
         resource_group_name=resource_group,
         gallery_name=gallery_name,
         gallery_image_name=image_name,
     )
-    with open(Path(__file__).parent / "test_data" / resource_group / f"{gallery_name}_{image_name}_gallery_images_list.json", "w", encoding="utf-8") as images_file:
+    with open(
+        Path(__file__).parent / "test_data" / resource_group / f"{gallery_name}_{image_name}_gallery_images_list.json",
+        "w",
+        encoding="utf-8",
+    ) as images_file:
         serialized_images = [image.serialize() | {"name": image.name} for image in images]
         images_file.write(json.dumps(serialized_images, indent=2))

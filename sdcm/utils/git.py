@@ -1,6 +1,7 @@
 """
 Simple git wrappers that provide useful information about current repository
 """
+
 import subprocess
 import logging
 from typing import TypedDict
@@ -8,8 +9,9 @@ from typing import TypedDict
 LOGGER = logging.getLogger(__name__)
 
 
-GitStatus = TypedDict('GitStatus', {'branch.oid': str, 'branch.head': str,
-                      'branch.upstream': str | None, 'upstream.url': str | None})
+GitStatus = TypedDict(
+    "GitStatus", {"branch.oid": str, "branch.head": str, "branch.upstream": str | None, "upstream.url": str | None}
+)
 
 
 def get_git_commit_id() -> str:
@@ -31,15 +33,15 @@ def get_git_current_branch() -> str:
 
 
 def get_git_status_info() -> GitStatus:
-
     try:
         #    Example output:
         #    # branch.oid 0748e3a512b7e698bc4b2e3e8ec8d46d0b3244ae
         #    # branch.head add-argus-branch-tracking
         #    # branch.upstream origin/add-argus-branch-tracking
         #    # branch.ab +0 -0
-        status_proc = subprocess.run(args=["git", "status", "-b", "--porcelain=v2",
-                                     ".nothing"], check=True, capture_output=True)
+        status_proc = subprocess.run(
+            args=["git", "status", "-b", "--porcelain=v2", ".nothing"], check=True, capture_output=True
+        )
         output = status_proc.stdout.decode(encoding="utf-8").strip()
         git_status: GitStatus = {}
         for line in (line for line in output.split("\n") if line.startswith("#")):
@@ -79,7 +81,8 @@ def get_git_status_info() -> GitStatus:
         #    Example output:
         #    gh:k0machi/scylla-cluster-tests
         origin_proc = subprocess.run(
-            args=["git", "config", "--get", f"remote.{remote}.url"], check=True, capture_output=True)
+            args=["git", "config", "--get", f"remote.{remote}.url"], check=True, capture_output=True
+        )
         output = origin_proc.stdout.decode(encoding="utf-8").strip()
         git_status["upstream.url"] = output.strip()
 
@@ -90,12 +93,11 @@ def get_git_status_info() -> GitStatus:
 
 
 def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_root=True, branch=None):
-
     try:
         LOGGER.debug("Cloning from %s...", repo_url)
         rm_cmd = f"rm -rf ./{repo_url.split('/')[-1].split('.')[0]}"
         remoter.sudo(rm_cmd, ignore_status=False)
-        branch = f'--branch {branch}' if branch else ''
+        branch = f"--branch {branch}" if branch else ""
         clone_cmd = f"git clone {branch} {repo_url} {destination_dir_name}"
         if clone_as_root:
             remoter.sudo(clone_cmd)

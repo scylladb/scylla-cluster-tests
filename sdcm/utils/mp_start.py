@@ -27,12 +27,14 @@ def ensure_start_method(preferred: Optional[str] = None) -> None:
     """
     requested = preferred or _DEF_POSIX_METHOD
 
-    if os.name == 'posix':
+    if os.name == "posix":
         multiprocessing.set_start_method(requested, force=True)
         LOGGER.info("Multiprocessing start method forcibly changed to %s", requested)
     else:
-        LOGGER.warning("Multiprocessing start method not changed on non-POSIX platform; using default %s, SCT event system isn't gonna work",
-                       multiprocessing.get_start_method())
+        LOGGER.warning(
+            "Multiprocessing start method not changed on non-POSIX platform; using default %s, SCT event system isn't gonna work",
+            multiprocessing.get_start_method(),
+        )
 
 
 __all__ = ["ensure_start_method"]
