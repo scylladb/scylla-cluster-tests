@@ -4,9 +4,8 @@ from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
 
 class LargePartitionLongevityTest(LongevityTest):
-
     def test_large_partition_longevity(self):
-        compaction_strategy = self.params.get('compaction_strategy')
+        compaction_strategy = self.params.get("compaction_strategy")
         self.pre_create_large_partitions_schema(compaction_strategy=compaction_strategy)
         self.test_custom_time()
 

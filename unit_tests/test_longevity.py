@@ -33,8 +33,22 @@ def test_test_user_batch_custom_time(params):
             # and break other tests
             return threading.Event()
 
+<<<<<<< HEAD
         def _pre_create_templated_user_schema(self, *args, **kwargs):
             pass
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+@pytest.mark.sct_config(files='test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml')
+class DummyLongevityTest(LongevityTest):
+    __test__ = True
+    test_custom_time = None
+    test_batch_custom_time = None
+=======
+@pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
+class DummyLongevityTest(LongevityTest):
+    __test__ = True
+    test_custom_time = None
+    test_batch_custom_time = None
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
         def init_resources(self):
             pass
@@ -48,6 +62,7 @@ def test_test_user_batch_custom_time(params):
                 m.parse_results.return_value = ([], {})
                 stress_queue.append(m)
 
+<<<<<<< HEAD
     test = DummyLongevityTest()
     test.setUp()
     node = DummyNode(name='test_node',
@@ -60,3 +75,84 @@ def test_test_user_batch_custom_time(params):
     test.db_cluster = node.parent_cluster
     test.monitors = MagicMock()
     test.test_user_batch_custom_time()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def argus_finalize_test_run(self):
+        pass
+
+    def start_argus_heartbeat_thread(self):
+        # prevent from heartbeat thread to start
+        # because it can be left running after the test
+        # and break other tests
+        return threading.Event()
+
+    def _pre_create_templated_user_schema(self, *args, **kwargs):
+        pass
+
+    def init_resources(self):
+        node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+        node.parent_cluster = DummyDbCluster([node], params=self.params)
+        node.parent_cluster.nemesis_termination_event = threading.Event()
+        node.parent_cluster.nemesis = []
+        node.parent_cluster.nemesis_threads = []
+        self.db_cluster = node.parent_cluster
+        self.monitors = NoMonitorSet()
+        self.timeout_thread = self._init_test_timeout_thread()
+
+    def init_nodes(self, db_cluster):
+        pass
+
+    def argus_collect_manager_version(self):
+        pass
+
+    def argus_get_scylla_version(self):
+        pass
+
+    def argus_collect_packages(self):
+        pass
+
+    def _run_all_stress_cmds(self, stress_queue, params):
+        for _ in range(len(params['stress_cmd'])):
+            m = MagicMock()
+            m.parse_results.return_value = ([], {})
+            stress_queue.append(m)
+=======
+    def argus_finalize_test_run(self):
+        pass
+
+    def start_argus_heartbeat_thread(self):
+        # prevent from heartbeat thread to start
+        # because it can be left running after the test
+        # and break other tests
+        return threading.Event()
+
+    def _pre_create_templated_user_schema(self, *args, **kwargs):
+        pass
+
+    def init_resources(self):
+        node = DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+        node.parent_cluster = DummyDbCluster([node], params=self.params)
+        node.parent_cluster.nemesis_termination_event = threading.Event()
+        node.parent_cluster.nemesis = []
+        node.parent_cluster.nemesis_threads = []
+        self.db_cluster = node.parent_cluster
+        self.monitors = NoMonitorSet()
+        self.timeout_thread = self._init_test_timeout_thread()
+
+    def init_nodes(self, db_cluster):
+        pass
+
+    def argus_collect_manager_version(self):
+        pass
+
+    def argus_get_scylla_version(self):
+        pass
+
+    def argus_collect_packages(self):
+        pass
+
+    def _run_all_stress_cmds(self, stress_queue, params):
+        for _ in range(len(params["stress_cmd"])):
+            m = MagicMock()
+            m.parse_results.return_value = ([], {})
+            stress_queue.append(m)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

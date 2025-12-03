@@ -54,8 +54,8 @@ class VirtualNetworkProvider:
                 "zones": [self._az] if self._az else [],
                 "address_space": {
                     "address_prefixes": ["10.0.0.0/16"],
-                }
-            }
+                },
+            },
         ).wait()
         vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, name)
         LOGGER.info("Provisioned vnet %s in the %s resource group", vnet.name, self._resource_group_name)

@@ -39,14 +39,21 @@ class DummyRemote:
         return True
 
     @staticmethod
+<<<<<<< HEAD
     def receive_files(src, dst):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def receive_files(src, dst,  *_, **__):
+=======
+    def receive_files(src, dst, *_, **__):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         shutil.copy(src, dst)
         return True
 
 
 class LocalNode(BaseNode):
-
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1):
+    def __init__(
+        self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, node_index=1
+    ):
         super().__init__(name, parent_cluster)
         self.node_index = node_index
         self.remoter = LocalCmdRunner()
@@ -87,11 +94,10 @@ class LocalNode(BaseNode):
 
     @property
     def ssl_conf_dir(self):
-        return Path(get_data_dir_path('ssl_conf'))
+        return Path(get_data_dir_path("ssl_conf"))
 
 
 class LocalLoaderSetDummy(BaseCluster):
-
     def __init__(self, nodes=None, params=None):
         self.name = "LocalLoaderSetDummy"
         self.params = params or {}
@@ -113,7 +119,6 @@ class LocalLoaderSetDummy(BaseCluster):
 
 
 class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
-
     def __init__(self, params=None):
         self.name = "LocalScyllaClusterDummy"
         self.params = params or {}
