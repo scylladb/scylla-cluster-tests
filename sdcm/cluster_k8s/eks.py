@@ -25,6 +25,7 @@ import tenacity
 from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
     LaunchTemplateEbsBlockDeviceRequestTypeDef, RequestLaunchTemplateDataTypeDef, \
     LaunchTemplateTagSpecificationRequestTypeDef
+from botocore.exceptions import ClientError
 
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
@@ -401,6 +402,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                     '0.0.0.0/0',
                 ]
             },
+            accessConfig={
+                'authenticationMode': 'API_AND_CONFIG_MAP'
+            },
             kubernetesNetworkConfig={
                 'serviceIpv4Cidr': self.service_ipv4_cidr
             },
@@ -445,6 +449,29 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Version: {self.eks_cluster_version}"
 
+    def add_k8s_admin_principal(self):
+        eks = boto3.client('eks', region_name=self.region_name)
+        admin_principals = self.params.get('eks_admin_arn')
+
+        try:
+            for principal in admin_principals:
+                eks.create_access_entry(
+                    clusterName=self.short_cluster_name,
+                    principalArn=principal,
+                    type='STANDARD'
+                )
+                eks.associate_access_policy(
+                    clusterName=self.short_cluster_name,
+                    principalArn=principal,
+                    policyArn="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy",
+                    accessScope={'type': 'cluster'}
+                )
+
+        except ClientError as e:
+            err_code = e.response["Error"]["Code"]
+            err_message = e.response["Error"]["Message"]
+            self.log.error(f"Error while adding cluster admin principals: [{err_code}] {err_message}")
+
     def create_token_update_thread(self):
         return EksTokenUpdateThread(
             aws_cmd=f'aws eks --region {self.region_name} get-token --cluster-name {self.short_cluster_name}',
@@ -461,6 +488,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.create_eks_cluster()
         self.log.info("Patch kubectl config")
         self.patch_kubectl_config()
+        self.log.info("Allow SCT roles to connect and manage cluster")
+        self.add_k8s_admin_principal()
         self.log.info("Create storage class")
         self.create_ebs_storge_class()
 
