@@ -17,15 +17,16 @@ from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class BaseStressEvent(ContinuousEvent, abstract=True):
-
     @classmethod
-    def add_stress_subevents(cls,
-                             failure: Optional[Severity] = None,
-                             error: Optional[Severity] = None,
-                             timeout: Optional[Severity] = None,
-                             start: Optional[Severity] = Severity.NORMAL,
-                             finish: Optional[Severity] = Severity.NORMAL,
-                             warning: Optional[Severity] = None) -> None:
+    def add_stress_subevents(
+        cls,
+        failure: Optional[Severity] = None,
+        error: Optional[Severity] = None,
+        timeout: Optional[Severity] = None,
+        start: Optional[Severity] = Severity.NORMAL,
+        finish: Optional[Severity] = Severity.NORMAL,
+        warning: Optional[Severity] = None,
+    ) -> None:
         if failure is not None:
             cls.add_subevent_type("failure", severity=failure)
         if error is not None:
@@ -47,19 +48,19 @@ class StressEventProtocol(SctEventProtocol, Protocol):
     errors: Optional[List[str]]
 
     @property
-    def errors_formatted(self):
-        ...
+    def errors_formatted(self): ...
 
 
 class StressEvent(BaseStressEvent, abstract=True):
-
-    def __init__(self,
-                 node: Any,
-                 stress_cmd: Optional[str] = None,
-                 log_file_name: Optional[str] = None,
-                 errors: Optional[List[str]] = None,
-                 severity: Severity = Severity.NORMAL,
-                 publish_event: bool = True):
+    def __init__(
+        self,
+        node: Any,
+        stress_cmd: Optional[str] = None,
+        log_file_name: Optional[str] = None,
+        errors: Optional[List[str]] = None,
+        severity: Severity = Severity.NORMAL,
+        publish_event: bool = True,
+    ):
         self.node = str(node)
         self.stress_cmd = stress_cmd
         self.log_file_name = log_file_name

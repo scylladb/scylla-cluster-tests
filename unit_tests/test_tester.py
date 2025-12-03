@@ -31,9 +31,9 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 class FakeSCTConfiguration(SCTConfiguration):
     def _load_environment_variables(self):
         return {
-            'config_files': ['test-cases/PR-provision-test-docker.yaml'],
-            'cluster_backend': 'docker',
-            'run_commit_log_check_thread': False
+            "config_files": ["test-cases/PR-provision-test-docker.yaml"],
+            "cluster_backend": "docker",
+            "run_commit_log_check_thread": False,
         }
 
 
@@ -49,7 +49,7 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
     def _init_params(self):
         self.params = FakeSCTConfiguration()
 
-    @pytest.fixture(autouse=True, name='setup_logging')
+    @pytest.fixture(autouse=True, name="setup_logging")
     def fixture_setup_logging(self, tmp_path):
         self._init_logging(tmp_path / self.__class__.__name__)
         self.kafka_cluster = None
@@ -66,7 +66,7 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
 
     def _init_logging(self, logdir):
         self.log = logging.getLogger(self.__class__.__name__)
-        self.actions_log = get_action_logger('tester')
+        self.actions_log = get_action_logger("tester")
         self.logdir = logdir
 
     def init_resources(self, loader_info=None, db_info=None, monitor_info=None):
@@ -120,7 +120,7 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
     def save_schema(self):
         pass
 
-    @pytest.fixture(autouse=True, name='event_system')
+    @pytest.fixture(autouse=True, name="event_system")
     def fixture_event_system(self, setup_logging):
         self.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
         yield
@@ -135,9 +135,9 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
         with capsys.disabled():
             print(f"\nEVENT_SUMMARY: {self.event_summary}")
             print(f"TEST_STATUS: {self.final_event.test_status}")
-            for i, error in enumerate(self.events['ERROR']):
+            for i, error in enumerate(self.events["ERROR"]):
                 print(f"ERROR {i}: {filter_message.search(error).group(0)}")
-            for i, error in enumerate(self.events['CRITICAL']):
+            for i, error in enumerate(self.events["CRITICAL"]):
                 print(f"CRITICAL {i}: {filter_message.search(error).group(0)}")
 
     def finalize_teardown(self):
@@ -145,14 +145,13 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
 
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
+        with self.subTest("SUBTEST1"):
             # This wont create error in events
-            raise ValueError('Subtest1 failed')
-        with self.subTest('SUBTEST2'):
-            raise ValueError('Subtest2 failed')
-        raise ValueError('Main test also failed')
+            raise ValueError("Subtest1 failed")
+        with self.subTest("SUBTEST2"):
+            raise ValueError("Subtest2 failed")
+        raise ValueError("Main test also failed")
 
     @silence()
     def save_email_data(self):
@@ -160,13 +159,12 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
 
 
 class CriticalErrorNotCaughtTest(ClusterTesterForTests):
-
     def test(self):
         try:
             ClusterHealthValidatorEvent.NodeStatus(
-                node='node-1',
-                message='Failed by some reason',
-                error='Reason to fail',
+                node="node-1",
+                message="Failed by some reason",
+                error="Reason to fail",
                 severity=Severity.CRITICAL,
             ).publish()
             end_time = time.time() + 2
@@ -177,14 +175,13 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
 
 
 class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
+        with self.subTest("SUBTEST1"):
             # This wont create error in events
-            assert False, 'Subtest1 failed'
-        with self.subTest('SUBTEST2'):
-            assert False, 'Subtest2 failed'
-        assert False, 'Main test also failed'
+            assert False, "Subtest1 failed"
+        with self.subTest("SUBTEST2"):
+            assert False, "Subtest2 failed"
+        assert False, "Main test also failed"
 
     @silence()
     def save_email_data(self):
@@ -192,7 +189,6 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
 
 
 class TeardownFailsTest(ClusterTesterForTests):
-
     def test(self):
         pass
 
@@ -202,85 +198,101 @@ class TeardownFailsTest(ClusterTesterForTests):
 
 
 class SetupFailsTest(ClusterTesterForTests):
-
     def prepare_kms_host(self):
-        raise RuntimeError('prepare_kms_host failed')
+        raise RuntimeError("prepare_kms_host failed")
 
     def test(self):
         pass
 
 
 class TestErrorTest(ClusterTesterForTests):
-
     def test(self):
         TestFrameworkEvent(
-            source=self.__class__.__name__,
-            source_method='test',
-            message="Something went wrong"
+            source=self.__class__.__name__, source_method="test", message="Something went wrong"
         ).publish()
 
 
 class SuccessTest(ClusterTesterForTests):
-
     def test(self):
         pass
 
 
 class SubtestsSuccessTest(ClusterTesterForTests):
-
     def test(self):
-        with self.subTest('SUBTEST1'):
+        with self.subTest("SUBTEST1"):
             pass
-        with self.subTest('SUBTEST2'):
+        with self.subTest("SUBTEST2"):
             pass
 
 
-@pytest.mark.parametrize("test_class, results, outcomes", [
-    pytest.param(TeardownFailsTest, {"passed": 1}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-        "TEST_STATUS: FAILED",
-        "ERROR 0: save_email_data (silenced)"
-    ], id="TeardownFailsTest"),
-    pytest.param(SubtestsSuccessTest, {"passed": 1, "subtests": 2}, [
-        "EVENT_SUMMARY: {'NORMAL': 2}",
-        "TEST_STATUS: SUCCESS"
-    ], id="SubtestsSuccessTest"),
-    pytest.param(SuccessTest, {"passed": 1}, [
-        "EVENT_SUMMARY: {'NORMAL': 2}",
-        "TEST_STATUS: SUCCESS"
-    ], id="SuccessTest"),
-    pytest.param(TestErrorTest, {"passed": 1}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-        "TEST_STATUS: FAILED",
-        "ERROR 0: Something went wrong"
-    ], id="TestErrorTest"),
-    pytest.param(SetupFailsTest, {"failed": 1}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-        "TEST_STATUS: FAILED",
-        "ERROR 0: prepare_kms_host failed"
-    ], id="SetupFailsTest"),
-    pytest.param(CriticalErrorNotCaughtTest, {"passed": 1}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'CRITICAL': 1}",
-        "TEST_STATUS: FAILED",
-        "CRITICAL 0: Reason to fail",
-    ], id="CriticalErrorNotCaughtTest"),
-    pytest.param(SubtestAndTeardownFailsTest, {"failed": 3}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-        "TEST_STATUS: FAILED",
-        "ERROR 0: save_email_data (silenced)",
-        "E           ValueError: Subtest1 failed",
-        "E           ValueError: Subtest2 failed",
-        "E       ValueError: Main test also failed"
-    ], id="SubtestAndTeardownFailsTest"),
-    pytest.param(SubtestAssertAndTeardownFailsTest, {"failed": 3}, [
-        "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
-        "TEST_STATUS: FAILED",
-        "ERROR 0: save_email_data (silenced)",
-        "E           AssertionError: Subtest1 failed",
-        "E           AssertionError: Subtest2 failed",
-        "E       AssertionError: Main test also failed",
-    ], id="SubtestAssertAndTeardownFailsTest"),
-])
+@pytest.mark.parametrize(
+    "test_class, results, outcomes",
+    [
+        pytest.param(
+            TeardownFailsTest,
+            {"passed": 1},
+            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: save_email_data (silenced)"],
+            id="TeardownFailsTest",
+        ),
+        pytest.param(
+            SubtestsSuccessTest,
+            {"passed": 1, "subtests": 2},
+            ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"],
+            id="SubtestsSuccessTest",
+        ),
+        pytest.param(
+            SuccessTest, {"passed": 1}, ["EVENT_SUMMARY: {'NORMAL': 2}", "TEST_STATUS: SUCCESS"], id="SuccessTest"
+        ),
+        pytest.param(
+            TestErrorTest,
+            {"passed": 1},
+            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: Something went wrong"],
+            id="TestErrorTest",
+        ),
+        pytest.param(
+            SetupFailsTest,
+            {"failed": 1},
+            ["EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}", "TEST_STATUS: FAILED", "ERROR 0: prepare_kms_host failed"],
+            id="SetupFailsTest",
+        ),
+        pytest.param(
+            CriticalErrorNotCaughtTest,
+            {"passed": 1},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'CRITICAL': 1}",
+                "TEST_STATUS: FAILED",
+                "CRITICAL 0: Reason to fail",
+            ],
+            id="CriticalErrorNotCaughtTest",
+        ),
+        pytest.param(
+            SubtestAndTeardownFailsTest,
+            {"failed": 3},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: save_email_data (silenced)",
+                "E           ValueError: Subtest1 failed",
+                "E           ValueError: Subtest2 failed",
+                "E       ValueError: Main test also failed",
+            ],
+            id="SubtestAndTeardownFailsTest",
+        ),
+        pytest.param(
+            SubtestAssertAndTeardownFailsTest,
+            {"failed": 3},
+            [
+                "EVENT_SUMMARY: {'NORMAL': 2, 'ERROR': 1}",
+                "TEST_STATUS: FAILED",
+                "ERROR 0: save_email_data (silenced)",
+                "E           AssertionError: Subtest1 failed",
+                "E           AssertionError: Subtest2 failed",
+                "E       AssertionError: Main test also failed",
+            ],
+            id="SubtestAssertAndTeardownFailsTest",
+        ),
+    ],
+)
 def test_tester_subclass(pytester, test_class, results, outcomes):
     # Create a pytest file with the test class. We cannot just use the class directly
     # because it would not be collected. If we made it collectable it would be run as part of standard test run as well.
@@ -290,7 +302,17 @@ def test_tester_subclass(pytester, test_class, results, outcomes):
         from unit_tests.test_tester import {test_class.__name__}
         {test_class.__name__}.__test__ = True
     """)
+<<<<<<< HEAD
     result = pytester.runpytest_inprocess()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    # cause of https://github.com/pytest-dev/pytest/issues/13905
+    # we need to run with extra flag -q, so subtest summary output is shown
+    result = pytester.runpytest_inprocess('-q')
+=======
+    # cause of https://github.com/pytest-dev/pytest/issues/13905
+    # we need to run with extra flag -q, so subtest summary output is shown
+    result = pytester.runpytest_inprocess("-q")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     summary = result.parseoutcomes()
     for status, count in results.items():
         assert status in summary, f"Status '{status}' not found in results"

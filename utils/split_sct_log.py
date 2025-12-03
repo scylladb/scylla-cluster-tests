@@ -36,8 +36,7 @@ with open(input_dir / "sct.log", "r", encoding="utf-8") as sct_log:
     idx = 0
     line = sct_log.readline()
     time = get_time(line)
-    part_file = open(input_dir / "parts" / f"{idx:03d}_{time}_start.log", "w",
-                     encoding="utf-8")
+    part_file = open(input_dir / "parts" / f"{idx:03d}_{time}_start.log", "w", encoding="utf-8")
     part_file.write(line)
     for line in sct_log.readlines():
         if ">>>>>Started random_disrupt_method" in line:
@@ -46,7 +45,6 @@ with open(input_dir / "sct.log", "r", encoding="utf-8") as sct_log:
             print(f"processing nemesis: {name[:-1]}...")
             time = get_time(line)
             part_file.close()
-            part_file = open(
-                input_dir / "parts" / f"{idx:03d}_{time}_{name[:-1]}.log", "w", encoding="utf-8")
+            part_file = open(input_dir / "parts" / f"{idx:03d}_{time}_{name[:-1]}.log", "w", encoding="utf-8")
         part_file.write(line)
     part_file.close()
