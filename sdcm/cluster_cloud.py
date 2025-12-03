@@ -305,15 +305,18 @@ class CloudNode(cluster.BaseNode):
         localhost = TestConfig().tester_obj().localhost
         return localhost.xcloud_connect_supported(self.parent_cluster.params)
 
-    def _init_remoter(self, ssh_login_info):
+    def _get_ssh_address(self, localhost) -> dict:
+        return localhost.xcloud_connect_get_ssh_address(node=self)
+
+    def _init_remoter(self, ssh_login_info=None):
         localhost = TestConfig().tester_obj().localhost
         if localhost.xcloud_connect_supported(self.parent_cluster.params):
-            ssh_login_info = localhost.xcloud_connect_get_ssh_address(node=self)
+            ssh_login_info = self._get_ssh_address(localhost)
             # hardcode the fabric implementation for now, as it the only one we support right now
             self.remoter = RemoteCmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
-            self.log.warning("XCloud connectivity is not supported, SSH remoter is not initialized")
+            self.log.warning(f"XCloud connectivity is not supported, {self.node_type} SSH remoter is not initialized")
 
     @xcloud_super_if_supported
     def wait_ssh_up(self, verbose=True, timeout=500):
@@ -420,6 +423,13 @@ class CloudVSNode(CloudNode):
             rack=rack
         )
 
+    def _get_ssh_address(self, localhost) -> dict:
+        return localhost.xcloud_connect_get_vs_ssh_address(node=self)
+
+    @property
+    def node_type(self) -> str:
+        return "vector-store"
+
 
 class CloudManagerNode(CloudNode):
     """A Scylla Manager node running on Scylla Cloud"""
@@ -450,15 +460,8 @@ class CloudManagerNode(CloudNode):
             dc_idx=dc_idx,
             rack=rack)
 
-    def _init_remoter(self, ssh_login_info=None):
-        localhost = TestConfig().tester_obj().localhost
-        if localhost.xcloud_connect_supported(self.parent_cluster.params):
-            sdm_env = self.parent_cluster.params.cloud_env_credentials.get("sdm_environment")
-            ssh_login_info = localhost.xcloud_connect_get_manager_ssh_address(
-                cluster_id=self._cluster_id, sdm_environment=sdm_env)
-            self.remoter = RemoteCmdRunner(**ssh_login_info)
-        else:
-            self.log.warning("XCloud connectivity is not supported, Manager node SSH remoter is not initialized")
+    def _get_ssh_address(self, localhost) -> dict:
+        return localhost.xcloud_connect_get_manager_ssh_address(node=self)
 
     @property
     def node_type(self) -> str:
