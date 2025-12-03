@@ -33,15 +33,17 @@ pytestmark = [
 
 @pytest.fixture(scope="function", name="alternator_api")
 def fixture_alternator_api(params):
-    params.update(dict(
-        dynamodb_primarykey_type="HASH_AND_RANGE",
-        alternator_use_dns_routing=True,
-        alternator_port=ALTERNATOR_PORT,
-        alternator_enforce_authorization=True,
-        alternator_access_key_id='alternator',
-        alternator_secret_access_key='password',
-        docker_network='ycsb_net',
-    ))
+    params.update(
+        dict(
+            dynamodb_primarykey_type="HASH_AND_RANGE",
+            alternator_use_dns_routing=True,
+            alternator_port=ALTERNATOR_PORT,
+            alternator_enforce_authorization=True,
+            alternator_access_key_id="alternator",
+            alternator_secret_access_key="password",
+            docker_network="ycsb_net",
+        )
+    )
 
     def create_endpoint_url(node):
         if running_in_docker():
@@ -51,9 +53,7 @@ def fixture_alternator_api(params):
             endpoint_url = f"http://{address}"
         return endpoint_url
 
-    alternator_api = alternator.api.Alternator(
-        sct_params=params
-    )
+    alternator_api = alternator.api.Alternator(sct_params=params)
 
     alternator_api.create_endpoint_url = create_endpoint_url
 
@@ -68,17 +68,18 @@ def fixture_cql_driver(docker_scylla):
         address = docker_scylla.get_port("9042")
     node_ip, port = address.split(":")
     port = int(port)
-    return Cluster([node_ip], port=port,
-                   auth_provider=PlainTextAuthProvider(username='cassandra', password='cassandra'))
+    return Cluster(
+        [node_ip], port=port, auth_provider=PlainTextAuthProvider(username="cassandra", password="cassandra")
+    )
 
 
 @pytest.fixture(scope="function")
 def create_table(docker_scylla, cql_driver, alternator_api, params):
-
     with cql_driver.connect() as session:
-        session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
-                        (params.get('alternator_access_key_id'),
-                         params.get('alternator_secret_access_key')))
+        session.execute(
+            "CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
+            (params.get("alternator_access_key_id"), params.get("alternator_secret_access_key")),
+        )
 
     setattr(docker_scylla, "name", "mock-node")
     alternator_api.create_table(node=docker_scylla, table_name=alternator.consts.TABLE_NAME)
@@ -86,7 +87,6 @@ def create_table(docker_scylla, cql_driver, alternator_api, params):
 
 @pytest.fixture(scope="function")
 def create_cql_ks_and_table(cql_driver):
-
     session = cql_driver.connect()
     session.execute(
         """create keyspace ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"""
@@ -108,7 +108,7 @@ def create_cql_ks_and_table(cql_driver):
 
 
 @pytest.mark.usefixtures("create_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
+@pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -148,16 +148,13 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
 
 @pytest.mark.usefixtures("create_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
-def test_02_dynamodb_api_dataintegrity(
-    request, docker_scylla, prom_address, events, params
-):
+@pytest.mark.docker_scylla_args(docker_network="ycsb_net")
+def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
     # 2. do write without dataintegrity=true
     cmd = (
-        "bin/ycsb load dynamodb -P workloads/workloada -threads 5 "
-        "-p recordcount=50 -p fieldcount=1 -p fieldlength=100"
+        "bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=50 -p fieldcount=1 -p fieldlength=100"
     )
     ycsb_thread1 = YcsbStressThread(
         loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
@@ -212,8 +209,14 @@ def test_02_dynamodb_api_dataintegrity(
 
 
 @pytest.mark.usefixtures("create_cql_ks_and_table")
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
+@pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_03_cql(request, docker_scylla, prom_address, params):
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    params['docker_network'] = "ycsb_net"
+=======
+    params["docker_network"] = "ycsb_net"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
@@ -221,7 +224,18 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         f"-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s"
     )
     ycsb_thread = YcsbStressThread(
+<<<<<<< HEAD
         loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params, cluster_tester=MagicMock(),
+=======
+        loader_set,
+        cmd,
+        node_list=[docker_scylla],
+        timeout=30,
+        params=params,
+        cluster_tester=MagicMock(),
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     )
 
     def cleanup_thread():
@@ -242,7 +256,21 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         assert all(float(i) > 0 for i in matches), output
 
     check_metrics()
+<<<<<<< HEAD
     ycsb_thread.get_results()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    results, _ = ycsb_thread.parse_results()
+
+    assert float(results[0]['latency 99th percentile']) > 0
+    assert float(results[0]['latency mean']) > 0
+    assert float(results[0]['op rate']) > 0
+=======
+    results, _ = ycsb_thread.parse_results()
+
+    assert float(results[0]["latency 99th percentile"]) > 0
+    assert float(results[0]["latency mean"]) > 0
+    assert float(results[0]["op rate"]) > 0
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
 @pytest.mark.usefixtures("create_table")
@@ -268,5 +296,6 @@ def test_04_insert_new_data(docker_scylla, alternator_api):
         schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA,
     )
     data = alternator_api.scan_table(node=docker_scylla)
-    assert {row[schema_keys[0]]: row[schema_keys[1]]
-            for row in new_items} == {row[schema_keys[0]]: row[schema_keys[1]] for row in data}
+    assert {row[schema_keys[0]]: row[schema_keys[1]] for row in new_items} == {
+        row[schema_keys[0]]: row[schema_keys[1]] for row in data
+    }

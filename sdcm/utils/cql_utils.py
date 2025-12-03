@@ -23,7 +23,59 @@ def cql_quote_if_needed(identifier: str) -> str:
 
     https://cassandra.apache.org/doc/stable/cassandra/cql/definitions.html#identifiers
     """
+<<<<<<< HEAD
     identifier_regex = re.compile(r'^[^0-9][a-z0-9_]+$')
     if not identifier_regex.match(identifier):
         return f'"{identifier}"'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    identifier_regex = re.compile(r'^[a-z][a-z0-9_]*$')
+    if identifier_regex.match(identifier):
+        return identifier
+    return f'"{identifier}"'
+
+
+def cql_unquote_if_needed(identifier: str):
+    """
+    This function only removes the quotes if both the first and last characters
+    of the cql_response are double quotes. This ensures that any quotes inside the
+    cql_response remain intact.
+
+    For example:
+      - '"5gb_sizetiered_6_1"' becomes '5gb_sizetiered_6_1'
+      - '5gb_sizetiered_6_1' remains unchanged.
+
+    Args:
+        identifier (str): Raw CQL response that might be quoted.
+
+    Returns:
+        str: The unquoted identifier if the outer quotes are present, otherwise the original response.
+    """
+    if identifier and len(identifier) >= 2 and identifier.startswith('"') and identifier.endswith('"'):
+        return identifier[1:-1]
+=======
+    identifier_regex = re.compile(r"^[a-z][a-z0-9_]*$")
+    if identifier_regex.match(identifier):
+        return identifier
+    return f'"{identifier}"'
+
+
+def cql_unquote_if_needed(identifier: str):
+    """
+    This function only removes the quotes if both the first and last characters
+    of the cql_response are double quotes. This ensures that any quotes inside the
+    cql_response remain intact.
+
+    For example:
+      - '"5gb_sizetiered_6_1"' becomes '5gb_sizetiered_6_1'
+      - '5gb_sizetiered_6_1' remains unchanged.
+
+    Args:
+        identifier (str): Raw CQL response that might be quoted.
+
+    Returns:
+        str: The unquoted identifier if the outer quotes are present, otherwise the original response.
+    """
+    if identifier and len(identifier) >= 2 and identifier.startswith('"') and identifier.endswith('"'):
+        return identifier[1:-1]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     return identifier

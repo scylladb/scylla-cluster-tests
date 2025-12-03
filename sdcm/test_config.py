@@ -31,7 +31,15 @@ class TestConfig(metaclass=Singleton):
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
     SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
+<<<<<<< HEAD
     IP_SSH_CONNECTIONS = 'private'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    VECTOR_SSH_TUNNEL_LOCAL_PORT = 5001
+    IP_SSH_CONNECTIONS = 'private'
+=======
+    VECTOR_SSH_TUNNEL_LOCAL_PORT = 5001
+    IP_SSH_CONNECTIONS = "private"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
@@ -49,7 +57,7 @@ class TestConfig(metaclass=Singleton):
     _test_id = None
     _test_name = None
     _logdir = None
-    _latency_results_file_name = 'latency_results.json'
+    _latency_results_file_name = "latency_results.json"
     _latency_results_file_path = None
     _tester_obj = None
     _argus_client: ArgusSCTClient | MagicMock = MagicMock()
@@ -106,14 +114,14 @@ class TestConfig(metaclass=Singleton):
     def logdir(cls) -> str:
         if not cls._logdir:
             cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
-            os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
+            os.environ["_SCT_TEST_LOGDIR"] = cls._logdir
         return cls._logdir
 
     @classmethod
     def latency_results_file(cls):
         if not cls._latency_results_file_path:
             cls._latency_results_file_path = os.path.join(cls._logdir, cls._latency_results_file_name)
-            with open(cls._latency_results_file_path, 'w', encoding="utf-8"):
+            with open(cls._latency_results_file_path, "w", encoding="utf-8"):
                 pass
         return cls._latency_results_file_path
 
@@ -146,15 +154,15 @@ class TestConfig(metaclass=Singleton):
         cls.REUSE_CLUSTER = val
 
     @classmethod
-    def keep_cluster(cls, node_type, val='destroy'):
+    def keep_cluster(cls, node_type, val="destroy"):
         if "db_nodes" in node_type:
-            cls.KEEP_ALIVE_DB_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_DB_NODES = bool(val == "keep")
         elif "loader_nodes" in node_type:
-            cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_LOADER_NODES = bool(val == "keep")
         elif "monitor_nodes" in node_type:
-            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
+            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == "keep")
         elif "dedicated_host" in node_type:
-            cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == 'keep')
+            cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == "keep")
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:  # noqa: PLR0911
@@ -176,14 +184,16 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def common_tags(cls) -> Dict[str, str]:
-        job_name = os.environ.get('JOB_NAME')
-        tags = dict(RunByUser=get_username(),
-                    TestName=str(cls.test_name()),
-                    TestId=str(cls.test_id()),
-                    version=job_name.split('/', 1)[0] if job_name else "unknown",
-                    CreatedBy="SCT")
+        job_name = os.environ.get("JOB_NAME")
+        tags = dict(
+            RunByUser=get_username(),
+            TestName=str(cls.test_name()),
+            TestId=str(cls.test_id()),
+            version=job_name.split("/", 1)[0] if job_name else "unknown",
+            CreatedBy="SCT",
+        )
 
-        build_tag = os.environ.get('BUILD_TAG')
+        build_tag = os.environ.get("BUILD_TAG")
         if build_tag:
             tags["JenkinsJobTag"] = build_tag
 
@@ -194,12 +204,12 @@ class TestConfig(metaclass=Singleton):
     def configure_ldap(cls, node, use_ssl=False):
         ContainerManager.run_container(node, "ldap")
         if use_ssl:
-            port = node.ldap_ports['ldap_ssl_port']
+            port = node.ldap_ports["ldap_ssl_port"]
         else:
-            port = node.ldap_ports['ldap_port']
+            port = node.ldap_ports["ldap_port"]
         address = get_my_ip()
         cls.LDAP_ADDRESS = (address, port)
-        if ContainerManager.get_container(node, 'ldap').exec_run("timeout 30s container/tool/wait-process")[0] != 0:
+        if ContainerManager.get_container(node, "ldap").exec_run("timeout 30s container/tool/wait-process")[0] != 0:
             raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
 
     @classmethod
@@ -210,8 +220,11 @@ class TestConfig(metaclass=Singleton):
         if syslog_logdir == current_logdir:
             LOGGER.debug("Syslog docker is running on the same directory where SCT is running")
             return
-        LOGGER.debug("Syslog docker is running on the another directory. Linking it's directory %s to %s",
-                     syslog_logdir, current_logdir)
+        LOGGER.debug(
+            "Syslog docker is running on the another directory. Linking it's directory %s to %s",
+            syslog_logdir,
+            current_logdir,
+        )
         current_logdir = Path(current_logdir) / "hosts"
         docker_logdir = Path(syslog_logdir) / "hosts"
         if current_logdir.exists():
@@ -234,7 +247,15 @@ class TestConfig(metaclass=Singleton):
             host_port = None
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
+<<<<<<< HEAD
             logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
+            test_config=cls(),
+=======
+            logs_transport=cls._tester_obj.params.get("logs_transport") if cls._tester_obj else "syslog-ng",
+            test_config=cls(),
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         ).to_string()
 
     @classmethod
@@ -262,7 +283,13 @@ class TestConfig(metaclass=Singleton):
 
     @classmethod
     def init_argus_client(cls, params: dict, test_id: str | None = None):
+<<<<<<< HEAD
         if params.get("enable_argus"):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if params.get("enable_argus") and get_job_name() != 'local_run':
+=======
+        if params.get("enable_argus") and get_job_name() != "local_run":
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             LOGGER.info("Initializing Argus connection...")
             try:
                 cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
@@ -277,7 +304,7 @@ class TestConfig(metaclass=Singleton):
 
         TestFrameworkEvent(
             source=cls.__name__,
-            source_method='init_argus_client',
+            source_method="init_argus_client",
             message="Argus is disabled by configuration",
             severity=Severity.WARNING,
         ).publish_or_dump()

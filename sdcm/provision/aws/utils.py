@@ -37,8 +37,15 @@ from mypy_boto3_ec2.type_defs import (
     TagSpecificationTypeDef,
 )
 
-from sdcm.provision.aws.constants import SPOT_REQUEST_TIMEOUT, SPOT_REQUEST_WAITING_TIME, STATUS_FULFILLED, \
-    SPOT_STATUS_UNEXPECTED_ERROR, SPOT_PRICE_TOO_LOW, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
+from sdcm.provision.aws.constants import (
+    SPOT_REQUEST_TIMEOUT,
+    SPOT_REQUEST_WAITING_TIME,
+    STATUS_FULFILLED,
+    SPOT_STATUS_UNEXPECTED_ERROR,
+    SPOT_PRICE_TOO_LOW,
+    FLEET_LIMIT_EXCEEDED_ERROR,
+    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+)
 from sdcm.provision.common.provisioner import TagsType
 
 
@@ -66,21 +73,21 @@ class GlobalDictOfInstances(dict, metaclass=Singleton):
 
 class Ec2ServicesDict(GlobalDictOfInstances):
     def _create_instance(self, item: str) -> EC2ServiceResource:
-        return boto3.session.Session(region_name=item).resource('ec2')
+        return boto3.session.Session(region_name=item).resource("ec2")
 
     __getitem__: Callable[[str], EC2ServiceResource]
 
 
 class Ec2ClientsDict(GlobalDictOfInstances):
     def _create_instance(self, item: str) -> EC2Client:
-        return boto3.client(service_name='ec2', region_name=item)
+        return boto3.client(service_name="ec2", region_name=item)
 
     __getitem__: Callable[[str], EC2Client]
 
 
 class Ec2ServiceResourcesDict(GlobalDictOfInstances):
     def _create_instance(self, item: str) -> EC2ServiceResource:
-        return boto3.resource('ec2', region_name=item)
+        return boto3.resource("ec2", region_name=item)
 
     __getitem__: Callable[[str], EC2ServiceResource]
 
@@ -92,30 +99,32 @@ ec2_resources = Ec2ServiceResourcesDict()
 
 def get_subnet_info(region_name: str, subnet_id: str):
     resp = ec2_clients[region_name].describe_subnets(SubnetIds=[subnet_id])
-    return [subnet for subnet in resp['Subnets'] if subnet['SubnetId'] == subnet_id][0]
+    return [subnet for subnet in resp["Subnets"] if subnet["SubnetId"] == subnet_id][0]
 
 
 def convert_tags_to_aws_format(tags: TagsType) -> List[Dict[str, str]]:
-    return [{'Key': str(name), 'Value': str(value)} for name, value in tags.items()]
+    return [{"Key": str(name), "Value": str(value)} for name, value in tags.items()]
 
 
 def convert_tags_to_filters(tags: TagsType) -> List[Dict[str, str]]:
-    return [{'Name': 'tag:{}'.format(name), 'Values': value if isinstance(
-        value, list) else [value]} for name, value in tags.items()]
+    return [
+        {"Name": "tag:{}".format(name), "Values": value if isinstance(value, list) else [value]}
+        for name, value in tags.items()
+    ]
 
 
 def find_instance_descriptions_by_tags(region_name: str, tags: TagsType) -> List[InstanceTypeDef]:
     client: EC2Client = ec2_clients[region_name]
     response = client.describe_instances(Filters=convert_tags_to_filters(tags))
-    return [instance for reservation in response['Reservations'] for instance in reservation['Instances']]
+    return [instance for reservation in response["Reservations"] for instance in reservation["Instances"]]
 
 
 def find_instances_by_tags(region_name: str, tags: TagsType, states: List[str] = None) -> List[Instance]:
     instances = []
     for instance_description in find_instance_descriptions_by_tags(region_name=region_name, tags=tags):
-        if states and instance_description['State']['Name'] not in states:
+        if states and instance_description["State"]["Name"] not in states:
             continue
-        instances.append(find_instance_by_id(region_name=region_name, instance_id=instance_description['InstanceId']))
+        instances.append(find_instance_by_id(region_name=region_name, instance_id=instance_description["InstanceId"]))
     return instances
 
 
@@ -127,27 +136,30 @@ def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsT
     end_time = time.perf_counter() + 20
     while end_time > time.perf_counter():
         with contextlib.suppress(ClientError):
-            ec2_clients[region_name].create_tags(
-                Resources=instance_ids,
-                Tags=convert_tags_to_aws_format(tags))
+            ec2_clients[region_name].create_tags(Resources=instance_ids, Tags=convert_tags_to_aws_format(tags))
             return True
     return False
 
 
 def wait_for_provision_request_done(
-        region_name: str, request_ids: List[str], is_fleet: bool,
-        timeout: float = SPOT_REQUEST_TIMEOUT,
-        wait_interval: float = SPOT_REQUEST_WAITING_TIME):
+    region_name: str,
+    request_ids: List[str],
+    is_fleet: bool,
+    timeout: float = SPOT_REQUEST_TIMEOUT,
+    wait_interval: float = SPOT_REQUEST_WAITING_TIME,
+):
     waiting_time = 0
     provisioned_instance_ids = []
     while not provisioned_instance_ids and waiting_time < timeout:
         time.sleep(wait_interval)
         if is_fleet:
             provisioned_instance_ids = get_provisioned_fleet_instance_ids(
-                region_name=region_name, request_ids=request_ids)
+                region_name=region_name, request_ids=request_ids
+            )
         else:
             provisioned_instance_ids = get_provisioned_spot_instance_ids(
-                region_name=region_name, request_ids=request_ids)
+                region_name=region_name, request_ids=request_ids
+            )
         if provisioned_instance_ids is None:
             break
         waiting_time += wait_interval
@@ -157,13 +169,43 @@ def wait_for_provision_request_done(
 def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
     try:
         resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
+<<<<<<< HEAD
     except Exception:  # noqa: BLE001
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot fleet requests in region %s for request IDs %s: %s",
+            region_name, request_ids, exc
+        )
+=======
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot fleet requests in region %s for request IDs %s: %s", region_name, request_ids, exc
+        )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         return []
+<<<<<<< HEAD
     for req in resp['SpotFleetRequestConfigs']:
         if req['SpotFleetRequestState'] == 'active' and req.get('ActivityStatus', None) == STATUS_FULFILLED:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    for req in resp['SpotFleetRequestConfigs']:
+        request_id = req.get('SpotFleetRequestId', 'unknown')
+        fleet_state = req.get('SpotFleetRequestState', 'unknown')
+        activity_status = req.get('ActivityStatus', None)
+
+        if fleet_state == 'active' and activity_status == STATUS_FULFILLED:
+=======
+    for req in resp["SpotFleetRequestConfigs"]:
+        request_id = req.get("SpotFleetRequestId", "unknown")
+        fleet_state = req.get("SpotFleetRequestState", "unknown")
+        activity_status = req.get("ActivityStatus", None)
+
+        if fleet_state == "active" and activity_status == STATUS_FULFILLED:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             continue
         if 'ActivityStatus' in req and req['ActivityStatus'] == SPOT_STATUS_UNEXPECTED_ERROR:
             current_time = datetime.datetime.now().timetuple()
+<<<<<<< HEAD
             search_start_time = datetime.datetime(
                 current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
             resp = ec2_clients[region_name].describe_spot_fleet_request_history(
@@ -175,14 +217,110 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
             for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 if error in errors:
                     return None
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            search_start_time = datetime.datetime(
+                current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
+            try:
+                history_resp = ec2_clients[region_name].describe_spot_fleet_request_history(
+                    SpotFleetRequestId=request_id,
+                    StartTime=search_start_time,
+                    MaxResults=10,
+                )
+                errors = [i['EventInformation']['EventSubType'] for i in history_resp['HistoryRecords']]
+                error_messages = [
+                    f"{i['EventType']}: {i['EventInformation'].get('EventDescription', 'No description')}"
+                    for i in history_resp['HistoryRecords']
+                ]
+
+                for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+                    if error in errors:
+                        LOGGER.error(
+                            "Critical spot fleet provisioning failure in region %s for fleet request %s: "
+                            "State='%s', ActivityStatus='%s', Error='%s'. "
+                            "Error history: %s. "
+                            "This request cannot be fulfilled and provisioning will not retry.",
+                            region_name, request_id, fleet_state, activity_status, error,
+                            "; ".join(error_messages)
+                        )
+                        return None
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error(
+                    "Failed to retrieve spot fleet request history for %s in region %s: %s",
+                    request_id, region_name, exc
+                )
+        LOGGER.warning(
+            "Spot fleet request not yet fulfilled in region %s for request %s: "
+            "State='%s', ActivityStatus='%s'",
+            region_name, request_id, fleet_state, activity_status
+        )
+=======
+            search_start_time = datetime.datetime(current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
+            try:
+                history_resp = ec2_clients[region_name].describe_spot_fleet_request_history(
+                    SpotFleetRequestId=request_id,
+                    StartTime=search_start_time,
+                    MaxResults=10,
+                )
+                errors = [i["EventInformation"]["EventSubType"] for i in history_resp["HistoryRecords"]]
+                error_messages = [
+                    f"{i['EventType']}: {i['EventInformation'].get('EventDescription', 'No description')}"
+                    for i in history_resp["HistoryRecords"]
+                ]
+
+                for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+                    if error in errors:
+                        LOGGER.error(
+                            "Critical spot fleet provisioning failure in region %s for fleet request %s: "
+                            "State='%s', ActivityStatus='%s', Error='%s'. "
+                            "Error history: %s. "
+                            "This request cannot be fulfilled and provisioning will not retry.",
+                            region_name,
+                            request_id,
+                            fleet_state,
+                            activity_status,
+                            error,
+                            "; ".join(error_messages),
+                        )
+                        return None
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.error(
+                    "Failed to retrieve spot fleet request history for %s in region %s: %s",
+                    request_id,
+                    region_name,
+                    exc,
+                )
+        LOGGER.warning(
+            "Spot fleet request not yet fulfilled in region %s for request %s: State='%s', ActivityStatus='%s'",
+            region_name,
+            request_id,
+            fleet_state,
+            activity_status,
+        )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         return []
     provisioned_instances = []
     for request_id in request_ids:
         try:
             resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
+<<<<<<< HEAD
         except Exception:  # noqa: BLE001
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error(
+                "Failed to describe spot fleet instances for fleet request %s in region %s: %s",
+                request_id, region_name, exc
+            )
+=======
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error(
+                "Failed to describe spot fleet instances for fleet request %s in region %s: %s",
+                request_id,
+                region_name,
+                exc,
+            )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             return None
-        provisioned_instances.extend([inst['InstanceId'] for inst in resp['ActiveInstances']])
+        provisioned_instances.extend([inst["InstanceId"] for inst in resp["ActiveInstances"]])
     return provisioned_instances
 
 
@@ -194,27 +332,102 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     """
     try:
         resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
+<<<<<<< HEAD
     except Exception:  # noqa: BLE001
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot instance requests in region %s for request IDs %s: %s",
+            region_name, request_ids, exc
+        )
+=======
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error(
+            "Failed to describe spot instance requests in region %s for request IDs %s: %s",
+            region_name,
+            request_ids,
+            exc,
+        )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         return []
     provisioned = []
+<<<<<<< HEAD
     for req in resp['SpotInstanceRequests']:
         if req['Status']['Code'] != STATUS_FULFILLED or req['State'] != 'active':
             if req['Status']['Code'] in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    for req in resp['SpotInstanceRequests']:
+        request_id = req.get('SpotInstanceRequestId', 'unknown')
+        status_code = req['Status']['Code']
+        status_message = req['Status'].get('Message', 'No message provided')
+        state = req['State']
+
+        if status_code != STATUS_FULFILLED or state != 'active':
+            if status_code in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+=======
+    for req in resp["SpotInstanceRequests"]:
+        request_id = req.get("SpotInstanceRequestId", "unknown")
+        status_code = req["Status"]["Code"]
+        status_message = req["Status"].get("Message", "No message provided")
+        state = req["State"]
+
+        if status_code != STATUS_FULFILLED or state != "active":
+            if status_code in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 # This code tells that query is not going to be fulfilled
                 # And we need to stop the cycle
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                LOGGER.error(
+                    "Critical spot provisioning failure in region %s for request %s: "
+                    "Status='%s', State='%s', Message='%s'. "
+                    "This request cannot be fulfilled and provisioning will not retry.",
+                    region_name, request_id, status_code, state, status_message
+                )
+=======
+                LOGGER.error(
+                    "Critical spot provisioning failure in region %s for request %s: "
+                    "Status='%s', State='%s', Message='%s'. "
+                    "This request cannot be fulfilled and provisioning will not retry.",
+                    region_name,
+                    request_id,
+                    status_code,
+                    state,
+                    status_message,
+                )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 return None
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            LOGGER.warning(
+                "Spot instance request not yet fulfilled in region %s for request %s: "
+                "Status='%s', State='%s', Message='%s'",
+                region_name, request_id, status_code, state, status_message
+            )
+=======
+            LOGGER.warning(
+                "Spot instance request not yet fulfilled in region %s for request %s: "
+                "Status='%s', State='%s', Message='%s'",
+                region_name,
+                request_id,
+                status_code,
+                state,
+                status_message,
+            )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             return []
-        provisioned.append(req['InstanceId'])
+        provisioned.append(req["InstanceId"])
     return provisioned
 
 
 def create_spot_fleet_instance_request(
-        region_name: str,
-        count: int,
-        price: float,
-        fleet_role: str,
-        instance_parameters: SpotFleetLaunchSpecificationTypeDef,
-        valid_until: datetime.datetime = None) -> str:
+    region_name: str,
+    count: int,
+    price: float,
+    fleet_role: str,
+    instance_parameters: SpotFleetLaunchSpecificationTypeDef,
+    valid_until: datetime.datetime = None,
+) -> str:
     params = SpotFleetRequestConfigDataTypeDef(
         LaunchSpecifications=[instance_parameters],
         IamFleetRole=fleet_role,
@@ -222,38 +435,38 @@ def create_spot_fleet_instance_request(
         TargetCapacity=count,
     )
     if valid_until:
-        params['ValidUntil'] = valid_until
+        params["ValidUntil"] = valid_until
     resp = ec2_clients[region_name].request_spot_fleet(DryRun=False, SpotFleetRequestConfig=params)
-    return resp['SpotFleetRequestId']
+    return resp["SpotFleetRequestId"]
 
 
 def create_spot_instance_request(
-        region_name: str,
-        count: int,
-        instance_parameters: RequestSpotLaunchSpecificationTypeDef,
-        full_availability_zone: str,
-        valid_until: datetime.datetime = None,
-        tag_specifications: Sequence[TagSpecificationTypeDef] = None
+    region_name: str,
+    count: int,
+    instance_parameters: RequestSpotLaunchSpecificationTypeDef,
+    full_availability_zone: str,
+    valid_until: datetime.datetime = None,
+    tag_specifications: Sequence[TagSpecificationTypeDef] = None,
 ) -> List[str]:
     params = {
-        'DryRun': False,
-        'InstanceCount': count,
-        'Type': 'one-time',
-        'LaunchSpecification': instance_parameters,
-        'AvailabilityZoneGroup': full_availability_zone,
-        'TagSpecifications': tag_specifications,
+        "DryRun": False,
+        "InstanceCount": count,
+        "Type": "one-time",
+        "LaunchSpecification": instance_parameters,
+        "AvailabilityZoneGroup": full_availability_zone,
+        "TagSpecifications": tag_specifications,
     }
     if valid_until:
-        params['ValidUntil'] = valid_until
+        params["ValidUntil"] = valid_until
     resp = ec2_clients[region_name].request_spot_instances(**params)
-    return [req['SpotInstanceRequestId'] for req in resp['SpotInstanceRequests']]
+    return [req["SpotInstanceRequestId"] for req in resp["SpotInstanceRequests"]]
 
 
 def sort_by_index(item: dict) -> str:
-    for tag in item['Tags']:
-        if tag['Key'] == 'NodeIndex':
-            return tag['Value']
-    return '0'
+    for tag in item["Tags"]:
+        if tag["Key"] == "NodeIndex":
+            return tag["Value"]
+    return "0"
 
 
 def network_config_ipv6_workaround_script():
@@ -367,17 +580,25 @@ def configure_eth1_script():
 
 
 def configure_set_preserve_hostname_script():
-    return 'grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 ' \
-           '|| echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg\n'
+    return (
+        'grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 '
+        '|| echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg\n'
+    )
 
 
 # -----AWS Placement Group section -----
 def create_cluster_placement_groups_aws(name: str, tags: dict, region=None, dry_run=False):
     ec2: EC2Client = ec2_clients[region]
     result = ec2.create_placement_group(
-        DryRun=dry_run, GroupName=name, Strategy='cluster',
-        TagSpecifications=[{
-            'ResourceType': 'placement-group',
-            "Tags": [{"Key": key, "Value": value} for key, value in tags.items()] +
-                    [{"Key": "Name", "Value": name}], }],)
+        DryRun=dry_run,
+        GroupName=name,
+        Strategy="cluster",
+        TagSpecifications=[
+            {
+                "ResourceType": "placement-group",
+                "Tags": [{"Key": key, "Value": value} for key, value in tags.items()]
+                + [{"Key": "Name", "Value": name}],
+            }
+        ],
+    )
     return result

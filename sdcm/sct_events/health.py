@@ -19,7 +19,6 @@ from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class ClusterHealthValidatorSubEvents(InformationalEvent, abstract=True):
-
     def __init__(self, node: str = None, message: str = None, error: str = None, severity: Severity = Severity.UNKNOWN):
         super().__init__(severity=severity)
         self.node = str(node) if node else ""
@@ -36,11 +35,9 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
     ScyllaCloudClusterServerDiagnostic: Type[SctEventProtocol]
     Group0TokenRingInconsistency: Type[SctEventProtocol]
 
-    def __init__(self,
-                 node=None,
-                 message: Optional[str] = None,
-                 error: Optional[str] = None,
-                 severity=Severity.NORMAL) -> None:
+    def __init__(
+        self, node=None, message: Optional[str] = None, error: Optional[str] = None, severity=Severity.NORMAL
+    ) -> None:
         self.node = str(node) if node else ""
         self.error = error if error else ""
         self.message = message if message else ""
@@ -53,31 +50,44 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
             message = message + ": type={0.type}"
         if self.node:
             message = message + " node={0.node}"
-        if self.severity in (Severity.NORMAL, Severity.WARNING, ):
+        if self.severity in (
+            Severity.NORMAL,
+            Severity.WARNING,
+        ):
             if self.message:
                 message = message + " message={0.message}"
             return message
-        elif self.severity in (Severity.ERROR, Severity.CRITICAL, ):
+        elif self.severity in (
+            Severity.ERROR,
+            Severity.CRITICAL,
+        ):
             if self.error:
                 message = message + " error={0.error}"
             return message
         return message
 
 
-ClusterHealthValidatorEvent.add_subevent_type("NodeStatus", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("ScyllaCloudClusterServerDiagnostic", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("Group0TokenRingInconsistency", severity=Severity.ERROR,
-                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "NodeStatus", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "NodePeersNulls", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "NodeSchemaVersion", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "NodesNemesis", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "MonitoringStatus", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "ScyllaCloudClusterServerDiagnostic", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
+ClusterHealthValidatorEvent.add_subevent_type(
+    "Group0TokenRingInconsistency", severity=Severity.ERROR, mixin=ClusterHealthValidatorSubEvents
+)
 
 
 class DataValidatorEvent(InformationalEvent, abstract=True):
@@ -86,10 +96,9 @@ class DataValidatorEvent(InformationalEvent, abstract=True):
     UpdatedRowsValidator: Type[SctEventProtocol]
     DeletedRowsValidator: Type[SctEventProtocol]
 
-    def __init__(self,
-                 message: Optional[str] = None,
-                 error: Optional[str] = None,
-                 severity: Severity = Severity.ERROR) -> None:
+    def __init__(
+        self, message: Optional[str] = None, error: Optional[str] = None, severity: Severity = Severity.ERROR
+    ) -> None:
         super().__init__(severity=severity)
 
         self.error = error if error else ""
@@ -97,9 +106,15 @@ class DataValidatorEvent(InformationalEvent, abstract=True):
 
     @property
     def msgfmt(self) -> str:
-        if self.severity in (Severity.NORMAL, Severity.WARNING, ):
+        if self.severity in (
+            Severity.NORMAL,
+            Severity.WARNING,
+        ):
             return super().msgfmt + ": type={0.type} message={0.message}"
-        elif self.severity in (Severity.ERROR, Severity.CRITICAL, ):
+        elif self.severity in (
+            Severity.ERROR,
+            Severity.CRITICAL,
+        ):
             return super().msgfmt + ": type={0.type} error={0.error}"
         return super().msgfmt
 

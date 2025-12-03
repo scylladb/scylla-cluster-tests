@@ -31,7 +31,15 @@ class DBCluster:
 
 
 def test_01_gemini_thread(request, docker_scylla, params):
+<<<<<<< HEAD
     loader_set = LocalLoaderSetDummy()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    params.update({'gemini_table_options': ['gc_grace_seconds=60']})
+    loader_set = LocalLoaderSetDummy(params=params)
+=======
+    params.update({"gemini_table_options": ["gc_grace_seconds=60"]})
+    loader_set = LocalLoaderSetDummy(params=params)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     test_cluster = DBCluster([docker_scylla])
     cmd = (
         "gemini -d --duration 1m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 "

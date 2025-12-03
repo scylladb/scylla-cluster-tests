@@ -21,15 +21,23 @@ from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, Se
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
 
+
 class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster
     """
+<<<<<<< HEAD
     node: Any = Field(as_dict=False)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    node: Any = Field(exclude=True)
+=======
+
+    node: Any = Field(exclude=True)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     @property
     def _seed_address(self) -> str:
-        return ','.join(self.node.parent_cluster.seed_nodes_addresses)
+        return ",".join(self.node.parent_cluster.seed_nodes_addresses)
 
     @property
     def _private_ip_address(self) -> str:
@@ -49,8 +57,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return None
         return [
             SeedProvider(
-                class_name='org.apache.cassandra.locator.SimpleSeedProvider',
-                parameters=[{'seeds': self._seed_address}]
+                class_name="org.apache.cassandra.locator.SimpleSeedProvider", parameters=[{"seeds": self._seed_address}]
             )
         ]
 
@@ -66,9 +73,9 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
-            return '0.0.0.0'
+            return "0.0.0.0"
         return self._private_ip_address
 
     @property
@@ -79,9 +86,9 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
-            return '0.0.0.0'
+            return "0.0.0.0"
         return self._private_ip_address
 
     @property
@@ -92,7 +99,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
             return self._private_ip_address
         if self._intra_node_comm_public:
@@ -107,7 +114,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        if self.params.get('extra_network_interface'):
+        if self.params.get("extra_network_interface"):
             # Scylla should be listening on all interfaces
             return self._private_ip_address
         if self._intra_node_comm_public:

@@ -36,12 +36,12 @@ class Retry(Exception):
 
 class retrying:
     """
-        Used as a decorator to retry function run that can possibly fail with allowed exceptions list
+    Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    def __init__(self, n=3, sleep_time=1,
-                 allowed_exceptions=(Exception,), message="", timeout=0,
-                 raise_on_exceeded=True):
+    def __init__(
+        self, n=3, sleep_time=1, allowed_exceptions=(Exception,), message="", timeout=0, raise_on_exceeded=True
+    ):
         if n:
             self.n = n  # number of times to retry
         else:
@@ -86,26 +86,26 @@ timeout = partial(retrying, n=0)
 
 def log_run_info(arg):
     """
-        Decorator that prints BEGIN before the function runs and END when function finished running.
-        Uses function name as a name of action or string that can be given to the decorator.
-        If the function is a method of a class object, the class name will be printed out.
+    Decorator that prints BEGIN before the function runs and END when function finished running.
+    Uses function name as a name of action or string that can be given to the decorator.
+    If the function is a method of a class object, the class name will be printed out.
 
-        Usage examples:
-            @log_run_info
-            def foo(x, y=1):
-                pass
-            In: foo(1)
-            Out:
-                BEGIN: foo
-                END: foo (ran 0.000164)s
+    Usage examples:
+        @log_run_info
+        def foo(x, y=1):
+            pass
+        In: foo(1)
+        Out:
+            BEGIN: foo
+            END: foo (ran 0.000164)s
 
-            @log_run_info("Execute nemesis")
-            def disrupt():
-                pass
-            In: disrupt()
-            Out:
-                BEGIN: Execute nemesis
-                END: Execute nemesis (ran 0.000271)s
+        @log_run_info("Execute nemesis")
+        def disrupt():
+            pass
+        In: disrupt()
+        Out:
+            BEGIN: Execute nemesis
+            END: Execute nemesis (ran 0.000271)s
     """
 
     def _inner(func, msg=None):
@@ -177,8 +177,22 @@ def _find_hdr_tags(*args):
     raise ValueError("Failed to find 'hdr_tags'")
 
 
+<<<<<<< HEAD
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
                                  cycle_name: Optional[str] = None, workload_type: Optional[str] = None):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
+                                 cycle_name: Optional[str] = None, workload_type: Optional[str] = None, row_name: Optional[str] = None):
+=======
+def latency_calculator_decorator(
+    original_function: Optional[Callable] = None,
+    *,
+    legend: Optional[str] = None,
+    cycle_name: Optional[str] = None,
+    workload_type: Optional[str] = None,
+    row_name: Optional[str] = None,
+):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -189,11 +203,19 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     from sdcm.utils import latency
 
     def wrapper(func):
-
         @wraps(func)
         def wrapped(*args, **kwargs):  # noqa: PLR0914
+<<<<<<< HEAD
             from sdcm.tester import ClusterTester
             from sdcm.nemesis import Nemesis
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            from sdcm.tester import ClusterTester  # noqa: PLC0415
+            from sdcm.nemesis import Nemesis  # noqa: PLC0415
+=======
+            from sdcm.tester import ClusterTester  # noqa: PLC0415
+            from sdcm.nemesis import Nemesis  # noqa: PLC0415
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             start = time.time()
             # If the decorator is applied dynamically, "self" argument is not transferred  via "args" and may be found in bounded function
             _self = getattr(func, "__self__", None) or args[0]
@@ -207,33 +229,58 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 monitoring_set = _self.monitoring_set
             else:
                 raise ValueError(
-                    f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'")
+                    f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'"
+                )
 
             # Keep for debug purposes
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
             func_name = cycle_name or func.__name__
-            with EventCounterContextManager(name=func.__name__,
-                                            event_type=(DatabaseLogEvent.REACTOR_STALLED, )) as counter:
-
+            with EventCounterContextManager(
+                name=func.__name__, event_type=(DatabaseLogEvent.REACTOR_STALLED,)
+            ) as counter:
                 res = func(*args, **kwargs)
                 reactor_stall_stats = counter.get_stats().copy()
             end_node_list = cluster.nodes[:]
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
-            test_name = tester.__repr__().split('testMethod=')[-1].split('>')[0]
+            test_name = tester.__repr__().split("testMethod=")[-1].split(">")[0]
             if not monitoring_set or not monitoring_set.nodes:
                 return res
             monitor = monitoring_set.nodes[0]
             screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
             if workload_type:
                 workload = workload_type
+<<<<<<< HEAD
             elif 'read' in test_name:
                 workload = 'read'
             elif 'write' in test_name:
                 workload = 'write'
             elif 'mixed' in test_name:
                 workload = 'mixed'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            elif 'read_disk_only' in test_name:
+                workload = 'read_disk_only'
+            elif 'read' in test_name:
+                workload = 'read'
+            elif 'write' in test_name:
+                workload = 'write'
+            elif 'mixed' in test_name:
+                workload = 'mixed'
+            elif tester.params.get('workload_name'):
+                workload = tester.params['workload_name']
+=======
+            elif "read_disk_only" in test_name:
+                workload = "read_disk_only"
+            elif "read" in test_name:
+                workload = "read"
+            elif "write" in test_name:
+                workload = "write"
+            elif "mixed" in test_name:
+                workload = "mixed"
+            elif tester.params.get("workload_name"):
+                workload = tester.params["workload_name"]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             else:
                 return res
 
@@ -243,13 +290,13 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             else:
                 with open(latency_results_file_path, encoding="utf-8") as file:
                     data = file.read().strip()
-                    latency_results = json.loads(data or '{}')
+                    latency_results = json.loads(data or "{}")
 
             if "steady" not in func_name.lower():
                 if func_name not in latency_results:
                     latency_results[func_name] = {"legend": legend or func_name}
-                if 'cycles' not in latency_results[func_name]:
-                    latency_results[func_name]['cycles'] = []
+                if "cycles" not in latency_results[func_name]:
+                    latency_results[func_name]["cycles"] = []
 
             result = latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
             result["screenshots"] = screenshots
@@ -263,8 +310,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 hdr_tags = []
             try:
                 result["hdr"] = tester.get_hdrhistogram_by_interval(
-                    hdr_tags=hdr_tags, stress_operation=workload,
-                    start_time=start, end_time=end)
+                    hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
+                )
                 LOGGER.debug("hdr: %s", result["hdr"])
             except Exception as err:  # noqa: BLE001
                 LOGGER.error("Failed to get hdrhistogram_by_interval error: %s", err)
@@ -272,8 +319,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
 
             try:
                 result["hdr_summary"] = tester.get_hdrhistogram(
-                    hdr_tags=hdr_tags, stress_operation=workload,
-                    start_time=start, end_time=end)
+                    hdr_tags=hdr_tags, stress_operation=workload, start_time=start, end_time=end
+                )
                 LOGGER.debug("HDR summary added to results: %s", result["hdr_summary"])
             except Exception as err:  # noqa: BLE001
                 LOGGER.error("Failed to get hdrhistogram error: %s", err)
@@ -287,8 +334,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             LOGGER.debug("Reactor stalls stats: %s", reactor_stall_stats)
             error_thresholds = tester.params.get("latency_decorator_error_thresholds")
             if "steady" in func_name.lower():
-                if 'Steady State' not in latency_results:
-                    latency_results['Steady State'] = result
+                if "Steady State" not in latency_results:
+                    latency_results["Steady State"] = result
                     send_result_to_argus(
                         argus_client=tester.test_config.argus_client(),
                         workload=workload,
@@ -300,7 +347,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         error_thresholds=error_thresholds,
                     )
             else:
-                latency_results[func_name]['cycles'].append(result)
+                latency_results[func_name]["cycles"].append(result)
                 LOGGER.debug("latency_results: %s", latency_results)
                 LOGGER.debug("Send to Argus")
                 send_result_to_argus(
@@ -308,7 +355,13 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     workload=workload,
                     name=f"{func_name}",
                     description=legend or "",
+<<<<<<< HEAD
                     cycle=len(latency_results[func_name]['cycles']),
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                    cycle=row_name or len(latency_results[func_name]['cycles']),
+=======
+                    cycle=row_name or len(latency_results[func_name]["cycles"]),
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                     result=result,
                     start_time=start,
                     error_thresholds=error_thresholds,
@@ -316,7 +369,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 LOGGER.debug("Saved in Argus")
 
             LOGGER.debug("Write results into file")
-            with open(latency_results_file_path, 'w', encoding="utf-8") as file:
+            with open(latency_results_file_path, "w", encoding="utf-8") as file:
                 json.dump(latency_results, file)
             LOGGER.debug("Results written into file")
 
@@ -330,8 +383,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     return wrapper
 
 
-class NoValue(Exception):
-    ...
+class NoValue(Exception): ...
 
 
 class optional_cached_property(cached_property):
@@ -362,14 +414,223 @@ def static_init(cls):
 
 def skip_on_capacity_issues(func: callable) -> callable:
     """
+<<<<<<< HEAD
     Decorator to skip nemesis that fail due to capacity issues
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    Decorator to skip nemesis that fail due to capacity issues.
+    Can be used with or without parameters:
+        @skip_on_capacity_issues
+        def foo(...): ...
+    or
+        @skip_on_capacity_issues(db_cluster=cluster)
+        def foo(...): ...
     """
+    def decorator(inner_func):
+        @wraps(inner_func)
+        def wrapper(*args, **kwargs):
+            cluster = db_cluster
+            # Try to get db_cluster from inner_func's bound instance if not provided
+            if cluster is None and args:
+                bound_self = getattr(inner_func, "__self__", None)
+                if bound_self and hasattr(bound_self, "nodes"):
+                    cluster = bound_self
+                else:
+                    for arg in args:
+                        if hasattr(arg, "nodes"):  # crude check for cluster-like object
+                            cluster = arg
+                            break
+            try:
+                return inner_func(*args, **kwargs)
+            except ClientError as ex:
+                if "InsufficientInstanceCapacity" in str(ex):
+                    if not check_cluster_layout(cluster):
+                        TestFrameworkEvent(
+                            source=inner_func.__name__,
+                            message=f"Test failed due to capacity issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                            severity=Severity.CRITICAL
+                        ).publish()
+                    else:
+                        raise UnsupportedNemesis("Capacity Issue") from ex
+                raise
+            except ServiceUnavailable as ex:
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                        severity=Severity.CRITICAL
+                    ).publish()
+                else:
+                    raise UnsupportedNemesis("Capacity Issue") from ex
+        return wrapper
+
+    if func is not None and callable(func):
+        return decorator(func)
+    return decorator
+
+
+def critical_on_capacity_issues(func: callable) -> callable:
+    """
+    Decorator to end the test with a critical event due to capacity issues
+    This should be used when a failure would leave the cluster in an inconsistent topology state
+=======
+    Decorator to skip nemesis that fail due to capacity issues.
+    Can be used with or without parameters:
+        @skip_on_capacity_issues
+        def foo(...): ...
+    or
+        @skip_on_capacity_issues(db_cluster=cluster)
+        def foo(...): ...
+    """
+
+    def decorator(inner_func):
+        @wraps(inner_func)
+        def wrapper(*args, **kwargs):
+            cluster = db_cluster
+            # Try to get db_cluster from inner_func's bound instance if not provided
+            if cluster is None and args:
+                bound_self = getattr(inner_func, "__self__", None)
+                if bound_self and hasattr(bound_self, "nodes"):
+                    cluster = bound_self
+                else:
+                    for arg in args:
+                        if hasattr(arg, "nodes"):  # crude check for cluster-like object
+                            cluster = arg
+                            break
+            try:
+                return inner_func(*args, **kwargs)
+            except ClientError as ex:
+                if "InsufficientInstanceCapacity" in str(ex):
+                    if not check_cluster_layout(cluster):
+                        TestFrameworkEvent(
+                            source=inner_func.__name__,
+                            message=f"Test failed due to capacity issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                            severity=Severity.CRITICAL,
+                        ).publish()
+                    else:
+                        raise UnsupportedNemesis("Capacity Issue") from ex
+                raise
+            except ServiceUnavailable as ex:
+                if not check_cluster_layout(cluster):
+                    TestFrameworkEvent(
+                        source=inner_func.__name__,
+                        message=f"Test failed due to service availability issues: {ex} cluster is unbalanced, continuing with test would yield unknown results",
+                        severity=Severity.CRITICAL,
+                    ).publish()
+                else:
+                    raise UnsupportedNemesis("Capacity Issue") from ex
+
+        return wrapper
+
+    if func is not None and callable(func):
+        return decorator(func)
+    return decorator
+
+
+def critical_on_capacity_issues(func: callable) -> callable:
+    """
+    Decorator to end the test with a critical event due to capacity issues
+    This should be used when a failure would leave the cluster in an inconsistent topology state
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
+    """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except ClientError as ex:
             if "InsufficientInstanceCapacity" in str(ex):
+<<<<<<< HEAD
                 raise UnsupportedNemesis("Capacity Issue") from ex
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                TestFrameworkEvent(source=func.__name__,
+                                   message=f"Test failed due to capacity issues: {ex} "
+                                   "cluster is probably unbalanced, continuing with test would yield unknown results",
+                                   severity=Severity.CRITICAL).publish()
+=======
+                TestFrameworkEvent(
+                    source=func.__name__,
+                    message=f"Test failed due to capacity issues: {ex} "
+                    "cluster is probably unbalanced, continuing with test would yield unknown results",
+                    severity=Severity.CRITICAL,
+                ).publish()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             raise
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        except ServiceUnavailable as ex:
+            TestFrameworkEvent(source=func.__name__,
+                               message=f"Test failed due to service availability issues: {ex} "
+                               "cluster is probably unbalanced, continuing with test would yield unknown results",
+                               severity=Severity.CRITICAL).publish()
+=======
+        except ServiceUnavailable as ex:
+            TestFrameworkEvent(
+                source=func.__name__,
+                message=f"Test failed due to service availability issues: {ex} "
+                "cluster is probably unbalanced, continuing with test would yield unknown results",
+                severity=Severity.CRITICAL,
+            ).publish()
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     return wrapper
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+
+def optional_stage(stage_names: str | list[str]):
+    """
+    Decorator skips the decorated functon if the provided test stage is set to be skipped in the test configuration
+    'skip_test_stages' parameter.
+    More details can be found in https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/faq.md
+
+    :param stage_names: str or list, name of the test stage(s)
+    """
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # making import here, to work around circular import issue
+            from sdcm.cluster import TestConfig  # noqa: PLC0415
+            skip_test_stages = TestConfig().tester_obj().skip_test_stages
+            skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+            if not skipped_stages:
+                return func(*args, **kwargs)
+            else:
+                skipped_stages_str = ', '.join(skipped_stages)
+                LOGGER.warning("'%s' is skipped as '%s' test stage(s) is disabled.", func.__name__, skipped_stages_str)
+        return wrapper
+    return decorator
+=======
+
+
+def optional_stage(stage_names: str | list[str]):
+    """
+    Decorator skips the decorated functon if the provided test stage is set to be skipped in the test configuration
+    'skip_test_stages' parameter.
+    More details can be found in https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/faq.md
+
+    :param stage_names: str or list, name of the test stage(s)
+    """
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # making import here, to work around circular import issue
+            from sdcm.cluster import TestConfig  # noqa: PLC0415
+
+            skip_test_stages = TestConfig().tester_obj().skip_test_stages
+            skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+            if not skipped_stages:
+                return func(*args, **kwargs)
+            else:
+                skipped_stages_str = ", ".join(skipped_stages)
+                LOGGER.warning("'%s' is skipped as '%s' test stage(s) is disabled.", func.__name__, skipped_stages_str)
+
+        return wrapper
+
+    return decorator
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

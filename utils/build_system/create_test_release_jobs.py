@@ -31,9 +31,9 @@ class JenkinsPipelines:
     def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):
         if not username and not password:
             creds = KeyStore().get_json("jenkins.json")
-            username, password = creds.get('username'), creds.get('password')
+            username, password = creds.get("username"), creds.get("password")
 
-        self.jenkins = jenkins.Jenkins('https://jenkins.scylladb.com', username=username, password=password)
+        self.jenkins = jenkins.Jenkins("https://jenkins.scylladb.com", username=username, password=password)
         self.base_sct_dir = Path(__file__).parent.parent.parent
         self.base_job_dir = base_job_dir
         self.sct_branch_name = sct_branch_name
@@ -46,11 +46,11 @@ class JenkinsPipelines:
         old_xml_data = self.jenkins.get_job_config(new_path)
         old_configuration = ET.fromstring(old_xml_data)
         new_configuration = ET.fromstring(xml_data)
-        for actions in old_configuration.findall('./actions'):
+        for actions in old_configuration.findall("./actions"):
             new_configuration.append(actions)
-        for properties in old_configuration.findall('./properties'):
+        for properties in old_configuration.findall("./properties"):
             new_configuration.append(properties)
-        self.jenkins.reconfig_job(new_path, ET.tostring(new_configuration).decode('utf-8'))
+        self.jenkins.reconfig_job(new_path, ET.tostring(new_configuration).decode("utf-8"))
 
     def create_directory(self, name: Path | str, display_name: str):
         try:
@@ -58,7 +58,7 @@ class JenkinsPipelines:
             new_path = str(Path(self.base_job_dir) / name)
 
             if self.jenkins.job_exists(new_path):
-                if str(name) in ['scylla-master', 'scylla-enterprise']:
+                if str(name) in ["scylla-master", "scylla-enterprise"]:
                     # we skip those folder, since they aren't created by SCT,
                     # and we don't want to risk overriding anything configured in them
                     return
@@ -70,21 +70,21 @@ class JenkinsPipelines:
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
-    def create_freestyle_job(self, xml_temple: Path | str, group_name: Path | str, job_name: str = None, template_context: dict = None):
+    def create_freestyle_job(
+        self, xml_temple: Path | str, group_name: Path | str, job_name: str = None, template_context: dict = None
+    ):
         xml_temple = Path(xml_temple)
         base_name = job_name or xml_temple.stem
 
         context = template_context if template_context else {}
-        context = {'sct_branch': self.sct_branch_name,
-                   'sct_repo': self.sct_repo,
-                   **context}
+        context = {"sct_branch": self.sct_branch_name, "sct_repo": self.sct_repo, **context}
         base_name = base_name % context
 
         if group_name and self.base_job_dir:
             group_name = "/" + str(group_name)
 
-        xml_data = xml_temple.read_text(encoding='utf-8') % context
-        job_name = f'{self.base_job_dir}{group_name}/{base_name}'
+        xml_data = xml_temple.read_text(encoding="utf-8") % context
+        job_name = f"{self.base_job_dir}{group_name}/{base_name}"
         try:
             if self.jenkins.job_exists(job_name):
                 LOGGER.info("%s is used to reconfig job", job_name)
@@ -95,18 +95,59 @@ class JenkinsPipelines:
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
+<<<<<<< HEAD
     def create_pipeline_job(self, jenkins_file: Path | str, group_name: Path | str, job_name: str = None, job_name_suffix="-test"):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def create_pipeline_job(self, jenkins_file: Path | str, group_name: Path | str, job_name: str = None, job_name_suffix="-test", defines: dict = None):
+=======
+    def create_pipeline_job(
+        self,
+        jenkins_file: Path | str,
+        group_name: Path | str,
+        job_name: str = None,
+        job_name_suffix="-test",
+        defines: dict = None,
+    ):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         jenkins_file = Path(jenkins_file)
         base_name = job_name or jenkins_file.stem
         sct_jenkinsfile = jenkins_file.relative_to(get_sct_root_path())
+<<<<<<< HEAD
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
                                        sct_description=sct_jenkinsfile,
                                        sct_repo=self.sct_repo,
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        text_description = self.get_job_description(jenkins_file)
+        if defines:
+            description = f"{text_description}\n\n### JobDefinitions\n{yaml.safe_dump(defines)}"
+        else:
+            description = sct_jenkinsfile
+
+        xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
+                                       sct_description=description,
+                                       sct_repo=self.sct_repo,
+                                       sct_branch_name=self.sct_branch_name,
+                                       sct_jenkinsfile=sct_jenkinsfile)
+=======
+        text_description = self.get_job_description(jenkins_file)
+        if defines:
+            description = f"{text_description}\n\n### JobDefinitions\n{yaml.safe_dump(defines)}"
+        else:
+            description = sct_jenkinsfile
+
+        xml_data = JOB_TEMPLATE % dict(
+            sct_display_name=f"{base_name}{job_name_suffix}",
+            sct_description=description,
+            sct_repo=self.sct_repo,
+            sct_branch_name=self.sct_branch_name,
+            sct_jenkinsfile=sct_jenkinsfile,
+        )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         if group_name and self.base_job_dir:
             group_name = "/" + str(group_name)
-        _job_name = f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}'
+        _job_name = f"{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}"
         try:
             if self.jenkins.job_exists(_job_name):
                 LOGGER.info("%s is used to reconfig job", _job_name)
@@ -133,6 +174,7 @@ class JenkinsPipelines:
         # wait while worker will be found
         def check_job_is_started(job_id):
             return self.jenkins.get_queue_item(job_id).get("executable")
+
         wait_for(check_job_is_started, step=5, text="Job is starting", timeout=120, throw_exc=True, job_id=job_id)
 
         LOGGER.info("First build finished")
@@ -144,29 +186,164 @@ class JenkinsPipelines:
         else:
             LOGGER.error(exc)
 
+<<<<<<< HEAD
     def create_job_tree(self, local_path: str | Path,
                         create_freestyle_jobs: bool = True,
                         create_pipelines_jobs: bool = True,
                         template_context: dict | None = None,
                         job_name_suffix: str = '-test'):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def load_defines(self, root: Path) -> dict[str, str]:
+        try:
+            content = (root / "_folder_definitions.yaml").open()
+        except FileNotFoundError:
+            return {}
+        defines = yaml.safe_load(content)
+        return defines
+
+    @staticmethod
+    def locate_job_overrides(job_name: str, overrides: dict[str, str]) -> dict[str, str]:
+        if full_match := overrides.get(job_name):
+            return full_match
+
+        for key in overrides:
+            if re.search(re.compile(key, re.IGNORECASE), job_name):
+                return overrides.get(key, {})
+
+        return {}
+
+    @staticmethod
+    def get_job_description(job_path: Path) -> str:
+        if not job_path.exists():
+            return ""
+
+        file = job_path.open()
+
+        description_lines: list[str] = []
+        reading = False
+        for line in file.readlines():
+            if re.match(r"\s*/\*\*\s*jobDescription", line):
+                reading = True
+                continue
+            if re.match(r"\s*\*/", line):
+                reading = False
+                break
+
+            if reading:
+                description_lines.append(line)
+
+        description = "\n".join(line.strip() for line in description_lines)
+
+        return description
+
+    def create_job_tree(self, local_path: str | Path,
+                        create_freestyle_jobs: bool = True,
+                        create_pipelines_jobs: bool = True,
+                        template_context: dict | None = None,
+                        job_name_suffix: str = '-test'):
+=======
+    def load_defines(self, root: Path) -> dict[str, str]:
+        try:
+            content = (root / "_folder_definitions.yaml").open()
+        except FileNotFoundError:
+            return {}
+        defines = yaml.safe_load(content)
+        return defines
+
+    @staticmethod
+    def locate_job_overrides(job_name: str, overrides: dict[str, str]) -> dict[str, str]:
+        if full_match := overrides.get(job_name):
+            return full_match
+
+        for key in overrides:
+            if re.search(re.compile(key, re.IGNORECASE), job_name):
+                return overrides.get(key, {})
+
+        return {}
+
+    @staticmethod
+    def get_job_description(job_path: Path) -> str:
+        if not job_path.exists():
+            return ""
+
+        file = job_path.open()
+
+        description_lines: list[str] = []
+        reading = False
+        for line in file.readlines():
+            if re.match(r"\s*/\*\*\s*jobDescription", line):
+                reading = True
+                continue
+            if re.match(r"\s*\*/", line):
+                reading = False
+                break
+
+            if reading:
+                description_lines.append(line)
+
+        description = "\n".join(line.strip() for line in description_lines)
+
+        return description
+
+    def create_job_tree(
+        self,
+        local_path: str | Path,
+        create_freestyle_jobs: bool = True,
+        create_pipelines_jobs: bool = True,
+        template_context: dict | None = None,
+        job_name_suffix: str = "-test",
+    ):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         for root, _, job_files in os.walk(local_path):
             jenkins_path = Path(root).relative_to(local_path)
 
             # get display names, if available
+<<<<<<< HEAD
             display_name = jenkins_path.name
             if '_display_name' in job_files:
                 display_name = (Path(root) / '_display_name').read_text().strip()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            display_name = defines.pop("folder-name", None) or jenkins_path.name
+            folder_description = defines.pop("folder-description", "")
+            if '_display_name' in job_files:
+                display_name = (Path(root) / '_display_name').read_text().strip()
+=======
+            display_name = defines.pop("folder-name", None) or jenkins_path.name
+            folder_description = defines.pop("folder-description", "")
+            if "_display_name" in job_files:
+                display_name = (Path(root) / "_display_name").read_text().strip()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
-            if str(jenkins_path) == '.':
-                jenkins_path = ''
-                display_name = self.base_job_dir.split('/')[-1]
+            if str(jenkins_path) == ".":
+                jenkins_path = ""
+                display_name = self.base_job_dir.split("/")[-1]
 
             if jenkins_path and display_name:
                 self.create_directory(jenkins_path, display_name=display_name)
 
             for job_file in job_files:
                 job_file = Path(root) / job_file  # noqa: PLW2901
+<<<<<<< HEAD
                 if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
                     self.create_pipeline_job(job_file, group_name=jenkins_path, job_name_suffix=job_name_suffix)
                 if (job_file.suffix == '.xml') and create_freestyle_jobs:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
+                    self.create_pipeline_job(
+                        job_file,
+                        group_name=jenkins_path,
+                        job_name_suffix=job_name_suffix,
+                        defines={**defines, **self.locate_job_overrides(job_file.stem, job_overrides)}
+                    )
+                if (job_file.suffix == '.xml') and create_freestyle_jobs:
+=======
+                if (job_file.suffix == ".jenkinsfile") and create_pipelines_jobs:
+                    self.create_pipeline_job(
+                        job_file,
+                        group_name=jenkins_path,
+                        job_name_suffix=job_name_suffix,
+                        defines={**defines, **self.locate_job_overrides(job_file.stem, job_overrides)},
+                    )
+                if (job_file.suffix == ".xml") and create_freestyle_jobs:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                     self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)

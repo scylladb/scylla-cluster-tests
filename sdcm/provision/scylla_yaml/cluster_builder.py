@@ -24,22 +24,33 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that stays persistent across the cluster
     """
+
     cluster_name: str
     test_config: Any = Field(as_dict=False)
     msldap_server_info: dict = Field(as_dict=False, default=None)
 
     @property
+<<<<<<< HEAD
     def hinted_handoff_enabled(self) -> Optional[str]:
         param_hinted_handoff = str(self.params.get('hinted_handoff')).lower()
         if param_hinted_handoff in ('enabled', 'true', '1'):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def hinted_handoff_enabled(self) -> Optional[bool]:
+        param_hinted_handoff = str(self.params.get('hinted_handoff')).lower()
+        if param_hinted_handoff in ('enabled', 'true', '1'):
+=======
+    def hinted_handoff_enabled(self) -> Optional[bool]:
+        param_hinted_handoff = str(self.params.get("hinted_handoff")).lower()
+        if param_hinted_handoff in ("enabled", "true", "1"):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             return True
-        if param_hinted_handoff in ('disabled', 'false', '0'):
+        if param_hinted_handoff in ("disabled", "false", "0"):
             return False
         return None
 
     @property
     def experimental_features(self) -> List[str]:
-        features = self.params.get('experimental_features')
+        features = self.params.get("experimental_features")
         if features is None:
             return []
         return features
@@ -52,38 +63,38 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def saslauthd_socket_path(self) -> Optional[str]:
-        if self._is_authenticator_valid and self.params.get('prepare_saslauthd'):
-            return '/run/saslauthd/mux'
+        if self._is_authenticator_valid and self.params.get("prepare_saslauthd"):
+            return "/run/saslauthd/mux"
         return None
 
     @property
     def authorizer(self) -> Optional[str]:
-        if self._authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
+        if self._authorizer in ["AllowAllAuthorizer", "CassandraAuthorizer"]:
             return self._authorizer
         return None
 
     @property
     def alternator_port(self) -> Optional[str]:
-        return self.params.get('alternator_port')
+        return self.params.get("alternator_port")
 
     @property
     def alternator_write_isolation(self) -> Optional[str]:
-        return "always_use_lwt" if self.params.get('alternator_port') else None
+        return "always_use_lwt" if self.params.get("alternator_port") else None
 
     @property
     def alternator_enforce_authorization(self) -> bool:
-        return bool(self.params.get('alternator_enforce_authorization'))
+        return bool(self.params.get("alternator_enforce_authorization"))
 
     @property
     def internode_compression(self) -> Optional[str]:
-        return self.params.get('internode_compression')
+        return self.params.get("internode_compression")
 
     @property
     def endpoint_snitch(self) -> Optional[str]:
         """
         Comes from get_endpoint_snitch
         """
-        if snitch := self.params.get('endpoint_snitch'):
+        if snitch := self.params.get("endpoint_snitch"):
             return snitch
         if self._multi_region:
             return self._default_endpoint_snitch
@@ -91,7 +102,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def ldap_attr_role(self) -> Optional[str]:
-        return 'cn' if self._is_ldap_authorization else None
+        return "cn" if self._is_ldap_authorization else None
 
     @property
     def ldap_bind_dn(self) -> Optional[str]:
@@ -103,7 +114,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def role_manager(self) -> Optional[str]:
-        return 'com.scylladb.auth.LDAPRoleManager' if self._is_ldap_authorization else None
+        return "com.scylladb.auth.LDAPRoleManager" if self._is_ldap_authorization else None
 
     @property
     def ldap_bind_passwd(self) -> Optional[str]:
@@ -117,60 +128,60 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     def ldap_url_template(self) -> Optional[str]:
         if self._is_msldap_authorization:
             server_port = self._ms_ldap_server_address_port
-            ldap_filter = 'member=CN={USER}'
+            ldap_filter = "member=CN={USER}"
         elif self._is_openldap_authorization:
             server_port = self._open_ldap_server_address_port
-            ldap_filter = 'uniqueMember=uid={USER},ou=Person'
+            ldap_filter = "uniqueMember=uid={USER},ou=Person"
         else:
             return None
-        return f'ldap://{server_port}/{self._ldap_base_dn}?cn?sub?({ldap_filter},{self._ldap_base_dn})'
+        return f"ldap://{server_port}/{self._ldap_base_dn}?cn?sub?({ldap_filter},{self._ldap_base_dn})"
 
     @property
     def _is_msldap_authorization(self):
-        return self._is_ldap_authorization and self.params.get('ldap_server_type') == LdapServerType.MS_AD
+        return self._is_ldap_authorization and self.params.get("ldap_server_type") == LdapServerType.MS_AD
 
     @property
     def _is_openldap_authorization(self):
-        return self._is_ldap_authorization and not self.params.get('ldap_server_type') == LdapServerType.MS_AD
+        return self._is_ldap_authorization and not self.params.get("ldap_server_type") == LdapServerType.MS_AD
 
     @property
     def _is_ldap_authorization(self):
-        return self.params.get('use_ldap_authorization')
+        return self.params.get("use_ldap_authorization")
 
     @property
     def _ldap_base_dn(self) -> str:
-        return 'dc=scylla-qa,dc=com'
+        return "dc=scylla-qa,dc=com"
 
     @property
     def _ms_ldap_base_dn(self) -> str:
-        return 'DC=scylla-qa,DC=com'
+        return "DC=scylla-qa,DC=com"
 
     @property
     def _ms_ldap_bind_dn(self) -> str:
-        return self._msldap_server_info['ldap_bind_dn']
+        return self._msldap_server_info["ldap_bind_dn"]
 
     @property
     def _ms_ldap_bind_passwd(self) -> str:
-        return self._msldap_server_info['admin_password']
+        return self._msldap_server_info["admin_password"]
 
     @property
     def _ms_ldap_server_address_port(self) -> str:
-        return f'{self._msldap_server_info["server_address"]}:389'
+        return f"{self._msldap_server_info['server_address']}:389"
 
     @property
     def _open_ldap_bind_dn(self) -> str:
-        return f'cn=admin,{self._ldap_base_dn}'
+        return f"cn=admin,{self._ldap_base_dn}"
 
     @property
     def _open_ldap_bind_passwd(self) -> str:
-        return 'scylla-0'
+        return "scylla-0"
 
     @property
     def _open_ldap_server_address_port(self) -> str:
-        if self.test_config.IP_SSH_CONNECTIONS == 'public':
+        if self.test_config.IP_SSH_CONNECTIONS == "public":
             # When connection goes public we run ssh tunnel on db-nodes side to access openldap server
             # that is why we pass address it in scylla config as '127.0.0.1:{LDAP_SSH_TUNNEL_LOCAL_PORT}'
-            return '127.0.0.1:' + str(LDAP_SSH_TUNNEL_LOCAL_PORT)
+            return "127.0.0.1:" + str(LDAP_SSH_TUNNEL_LOCAL_PORT)
         return self._openldap_server_address_port
 
     @cached_property
@@ -178,14 +189,15 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
         ldap_address = self.test_config.LDAP_ADDRESS
         if not ldap_address or not ldap_address[0] or not ldap_address[1]:
             raise RuntimeError("OPENLDAP has not been started")
-        return str(ldap_address[0]) + ':' + str(ldap_address[1])
+        return str(ldap_address[0]) + ":" + str(ldap_address[1])
 
     @cached_property
     def _msldap_server_info(self) -> dict:
         if not self.msldap_server_info:
-            raise RuntimeError('MSLDAP is configured, but not `msldap_server_info` is provided')
+            raise RuntimeError("MSLDAP is configured, but not `msldap_server_info` is provided")
         msldap_server_info_keys = set(self.msldap_server_info.keys())
-        if missing_keys := {'ldap_bind_dn', 'admin_password', 'server_address'} - msldap_server_info_keys:
-            raise RuntimeError("MSLDAP is configured, but `msldap_server_info` lack of following keys: "
-                               f"{','.join(missing_keys)}")
+        if missing_keys := {"ldap_bind_dn", "admin_password", "server_address"} - msldap_server_info_keys:
+            raise RuntimeError(
+                f"MSLDAP is configured, but `msldap_server_info` lack of following keys: {','.join(missing_keys)}"
+            )
         return self.msldap_server_info

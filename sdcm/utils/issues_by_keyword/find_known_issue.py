@@ -16,7 +16,6 @@ class MapKeywords(NamedTuple):
 
 
 class FindIssuePerBacktrace(metaclass=Singleton):
-
     MAPPING_FILE = Path(__file__).parent / "issue_by_keyword.yaml"
 
     def __init__(self):
