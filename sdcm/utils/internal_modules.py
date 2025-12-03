@@ -38,7 +38,10 @@ except ImportError:
         def xcloud_connect_get_ssh_address(self, node):
             raise NotImplementedError(not_supported_message)
 
-        def xcloud_connect_get_manager_ssh_address(self, cluster_id, sdm_environment):
+        def xcloud_connect_get_manager_ssh_address(self, node):
+            raise NotImplementedError(not_supported_message)
+
+        def xcloud_connect_get_vs_ssh_address(self, node):
             raise NotImplementedError(not_supported_message)
 
 __all__ = ["XCloudConnectivityContainerMixin"]
