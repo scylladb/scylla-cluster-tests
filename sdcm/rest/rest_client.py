@@ -24,9 +24,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RestClient:
-    def __init__(self,
-                 host: str,
-                 endpoint: str):
+    def __init__(self, host: str, endpoint: str):
         self._url_prefix = "http://"
         self._host = host
         self._endpoint = endpoint

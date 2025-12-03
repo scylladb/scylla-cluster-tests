@@ -24,9 +24,15 @@ from uuid import UUID
 
 import zmq
 
-from sdcm.sct_events.events_processes import \
-    EVENTS_MAIN_DEVICE_ID, StopEvent, EventsProcessesRegistry, \
-    start_events_process, get_events_process, verbose_suppress, suppress_interrupt
+from sdcm.sct_events.events_processes import (
+    EVENTS_MAIN_DEVICE_ID,
+    StopEvent,
+    EventsProcessesRegistry,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+    suppress_interrupt,
+)
 
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
@@ -138,6 +144,7 @@ class EventsDevice(multiprocessing.Process):
                 if sub.poll(timeout=self.sub_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
+<<<<<<< HEAD
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
@@ -145,6 +152,15 @@ class EventsDevice(multiprocessing.Process):
         from sdcm.sct_events.system import SystemEvent
         from sdcm.sct_events.filters import BaseFilter
 
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def outbound_events(self,
+                        stop_event: StopEvent,
+                        events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
+=======
+    def outbound_events(
+        self, stop_event: StopEvent, events_counter: multiprocessing.Value
+    ) -> Generator[Tuple[str, Any], None, None]:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         filters: Dict[UUID, BaseFilter] = {}
         filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
@@ -162,8 +178,9 @@ class EventsDevice(multiprocessing.Process):
                         LOGGER.debug("%s: delete filter with uuid=%s", self, obj.uuid)
                         filters.pop(obj.uuid, None)
                     elif obj.clear_filter and obj.expire_time and obj.uuid in filters:
-                        LOGGER.debug("%s: set expire_time to %s for filter with uuid=%s",
-                                     self, obj.expire_time, obj.uuid)
+                        LOGGER.debug(
+                            "%s: set expire_time to %s for filter with uuid=%s", self, obj.expire_time, obj.uuid
+                        )
                         filters[obj.uuid].expire_time = obj.expire_time
                     else:
                         LOGGER.debug("%s: add filter %s with uuid=%s", self, obj, obj.uuid)
@@ -181,6 +198,32 @@ class EventsDevice(multiprocessing.Process):
                     LOGGER.warning("Limit %s severity to %s as configured", obj, obj_max_severity)
                     obj.severity = obj_max_severity
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                # Log to actions.log (only non-filtered Error/Critical events)
+                if obj.severity.value > Severity.WARNING.value:
+                    event_type = obj.base
+                    if getattr(obj, 'type', None):
+                        event_type += f".{obj.type}"
+                    if getattr(obj, 'subtype', None):
+                        event_type += f".{obj.subtype}"
+                    ACTION_LOGGER.error(
+                        f"{event_type} {obj.severity.name} Event (id={obj.event_id}) on node: {getattr(obj, 'node', None)}"
+                    )
+
+=======
+                # Log to actions.log (only non-filtered Error/Critical events)
+                if obj.severity.value > Severity.WARNING.value:
+                    event_type = obj.base
+                    if getattr(obj, "type", None):
+                        event_type += f".{obj.type}"
+                    if getattr(obj, "subtype", None):
+                        event_type += f".{obj.subtype}"
+                    ACTION_LOGGER.error(
+                        f"{event_type} {obj.severity.name} Event (id={obj.event_id}) on node: {getattr(obj, 'node', None)}"
+                    )
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 yield obj.base, obj
 
     def is_alive(self) -> bool:
@@ -191,4 +234,8 @@ start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, 
 get_events_main_device = cast(Callable[..., EventsDevice], partial(get_events_process, EVENTS_MAIN_DEVICE_ID))
 
 
-__all__ = ("EventsDevice", "start_events_main_device", "get_events_main_device", )
+__all__ = (
+    "EventsDevice",
+    "start_events_main_device",
+    "get_events_main_device",
+)

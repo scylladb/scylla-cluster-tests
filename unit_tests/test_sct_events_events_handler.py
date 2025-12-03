@@ -24,7 +24,6 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
-
     @classmethod
     def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
@@ -34,7 +33,9 @@ class TestEventsHandler(unittest.TestCase, EventsUtilsMixin):
         cls.teardown_events_processes()
 
     def test_events_handler(self):
-        with unittest.mock.patch("sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True) as mock:
+        with unittest.mock.patch(
+            "sdcm.sct_events.handlers.schema_disagreement.SchemaDisagreementHandler.handle", spec=True
+        ) as mock:
             start_events_handler(_registry=self.events_processes_registry)
             events_handler = get_events_process(name=EVENTS_HANDLER_ID, _registry=self.events_processes_registry)
             time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)

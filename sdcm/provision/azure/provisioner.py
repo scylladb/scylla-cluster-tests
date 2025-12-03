@@ -27,7 +27,19 @@ from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
+<<<<<<< HEAD
 from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel, OperationPreemptedError
+=======
+from sdcm.provision.provisioner import (
+    Provisioner,
+    InstanceDefinition,
+    VmInstance,
+    PricingModel,
+    OperationPreemptedError,
+)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService
 
@@ -35,26 +47,53 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AzureProvisioner(Provisioner):
-    """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
+    """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA."""
 
+<<<<<<< HEAD
     def __init__(self, test_id: str, region: str, availability_zone: str,
                  azure_service: AzureService = AzureService(), **_):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def __init__(self, test_id: str, region: str, availability_zone: str,
+                 azure_service: AzureService = AzureService(), **config):
+=======
+    def __init__(
+        self, test_id: str, region: str, availability_zone: str, azure_service: AzureService = AzureService(), **config
+    ):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         availability_zone = self._convert_az_to_zone(availability_zone)
         super().__init__(test_id, region, availability_zone)
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        # NOTE: Enable Azure KMS by default, disable only if configured explicitly
+        self._enable_azure_kms = not config.get('enterprise_disable_kms')
+=======
+        # NOTE: Enable Azure KMS by default, disable only if configured explicitly
+        self._enable_azure_kms = not config.get("enterprise_disable_kms")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
         LOGGER.debug("getting resources for %s...", self._resource_group_name)
         self._rg_provider = ResourceGroupProvider(
-            self._resource_group_name, self._region, self._az, self._azure_service)
-        self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region,
-                                                                        self._azure_service)
+            self._resource_group_name, self._region, self._az, self._azure_service
+        )
+        self._network_sec_group_provider = NetworkSecurityGroupProvider(
+            self._resource_group_name, self._region, self._azure_service
+        )
         self._vnet_provider = VirtualNetworkProvider(
-            self._resource_group_name, self._region, self._az, self._azure_service)
+            self._resource_group_name, self._region, self._az, self._azure_service
+        )
         self._subnet_provider = SubnetProvider(self._resource_group_name, self._azure_service)
         self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._az, self._azure_service)
         self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
         self._vm_provider = VirtualMachineProvider(
+<<<<<<< HEAD
             self._resource_group_name, self._region, self._az, self._azure_service)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service)
+=======
+            self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service
+        )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         for v_m in self._vm_provider.list():
             try:
                 self._cache[v_m.name] = self._vm_to_instance(v_m)
@@ -86,8 +125,9 @@ class AzureProvisioner(Provisioner):
             return ""
 
     @classmethod
-    def discover_regions(cls, test_id: str = "", regions: list = None,
-                         azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
+    def discover_regions(
+        cls, test_id: str = "", regions: list = None, azure_service: AzureService = AzureService(), **kwargs
+    ) -> List["AzureProvisioner"]:
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
@@ -98,25 +138,31 @@ class AzureProvisioner(Provisioner):
             if rg.name.startswith("SCT-") and (rg.location in regions if regions else True)
         ]
         if test_id:
-            provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service)
-                                  for rg in all_resource_groups if test_id in rg.name]
+            provisioner_params = [
+                (test_id, rg.location, cls._get_az_from_name(rg), azure_service)
+                for rg in all_resource_groups
+                if test_id in rg.name
+            ]
         else:
             # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>-<az>
-            provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service) for rg in all_resource_groups
-                                  if (test_id := rg.name.split("SCT-")[-1][:36]) and len(test_id) == 36]
+            provisioner_params = [
+                (test_id, rg.location, cls._get_az_from_name(rg), azure_service)
+                for rg in all_resource_groups
+                if (test_id := rg.name.split("SCT-")[-1][:36]) and len(test_id) == 36
+            ]
         return [cls(*params) for params in provisioner_params]
 
-    def get_or_create_instance(self, definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
+    def get_or_create_instance(
+        self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT
+    ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition.
 
         Set definition.user_data to empty string when using specialized image."""
         return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
 
-    def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+    def get_or_create_instances(
+        self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT
+    ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
         provisioned_vm_instances = []
@@ -134,10 +180,46 @@ class AzureProvisioner(Provisioner):
         vnet_name = self._vnet_provider.get_or_create().name
         subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
         ip_addresses = self._ip_provider.get_or_create(instance_definitions=definitions_to_provision, version="IPV4")
+<<<<<<< HEAD
         nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses],
                                                 names=[definition.name for definition in definitions_to_provision])
         v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
                                                nic.id for nic in nics], pricing_model=pricing_model)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses],
+                                                names=[definition.name for definition in definitions_to_provision])
+        try:
+            v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
+                                                   nic.id for nic in nics], pricing_model=pricing_model)
+        except OperationPreemptedError:
+            # upon preemption error, need to recreate providers to rediscover resources as cache might be invalid.
+            self._ip_provider = IpAddressProvider(
+                self._resource_group_name, self._region, self._az, self._azure_service)
+            self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
+            self._vm_provider = VirtualMachineProvider(
+                self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service)
+            raise
+=======
+        nics = self._nic_provider.get_or_create(
+            subnet_id,
+            ip_addresses_ids=[address.id for address in ip_addresses],
+            names=[definition.name for definition in definitions_to_provision],
+        )
+        try:
+            v_ms = self._vm_provider.get_or_create(
+                definitions=definitions_to_provision, nics_ids=[nic.id for nic in nics], pricing_model=pricing_model
+            )
+        except OperationPreemptedError:
+            # upon preemption error, need to recreate providers to rediscover resources as cache might be invalid.
+            self._ip_provider = IpAddressProvider(
+                self._resource_group_name, self._region, self._az, self._azure_service
+            )
+            self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
+            self._vm_provider = VirtualMachineProvider(
+                self._resource_group_name, self._region, self._az, self._enable_azure_kms, self._azure_service
+            )
+            raise
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         for definition, v_m in zip(definitions, v_ms):
             instance = self._vm_to_instance(v_m)
             self._cache[definition.name] = instance
@@ -203,15 +285,29 @@ class AzureProvisioner(Provisioner):
         tags = v_m.tags.copy()
         ssh_user = tags.pop("ssh_user", "")
         ssh_key = tags.pop("ssh_key", "")
-        creation_time = datetime.fromisoformat(tags.pop("creation_time")).replace(
-            tzinfo=timezone.utc) if 'creation_time' in tags else None
+        creation_time = (
+            datetime.fromisoformat(tags.pop("creation_time")).replace(tzinfo=timezone.utc)
+            if "creation_time" in tags
+            else None
+        )
         image = str(v_m.storage_profile.image_reference)
         pricing_model = self._get_pricing_model(v_m)
         instance_type = v_m.hardware_profile.vm_size
 
-        return VmInstance(name=v_m.name, region=v_m.location, user_name=ssh_user, ssh_key_name=ssh_key, public_ip_address=pub_address,
-                          private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image, creation_time=creation_time, instance_type=instance_type, _provisioner=self)
+        return VmInstance(
+            name=v_m.name,
+            region=v_m.location,
+            user_name=ssh_user,
+            ssh_key_name=ssh_key,
+            public_ip_address=pub_address,
+            private_ip_address=priv_address,
+            tags=tags,
+            pricing_model=pricing_model,
+            image=image,
+            creation_time=creation_time,
+            instance_type=instance_type,
+            _provisioner=self,
+        )
 
     @staticmethod
     def _get_pricing_model(v_m: VirtualMachine) -> PricingModel:

@@ -95,14 +95,23 @@ from sdcm.utils.gce_utils import (
 )
 
 
-LOGGER = logging.getLogger('utils')
+LOGGER = logging.getLogger("utils")
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+CREATE_TABLE_REGEX = re.compile(
+    r'CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)')
+=======
+CREATE_TABLE_REGEX = re.compile(
+    r"CREATE\s+TABLE\s+(?P<keyspace>[^\s.]+)\.(?P<table>[^\s(]+)\s*\([^)]+\)(?P<options>[^;]*)"
+)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
-class KeyBasedLock():
+class KeyBasedLock:
     """Class designed for creating locks based on hashable keys."""
 
     def __init__(self):
@@ -122,7 +131,7 @@ def deprecation(message):
 
 def _remote_get_hash(remoter, file_path):
     try:
-        result = remoter.run('md5sum {}'.format(file_path), verbose=True)
+        result = remoter.run("md5sum {}".format(file_path), verbose=True)
         return result.stdout.strip().split()[0]
     except Exception as details:  # noqa: BLE001
         LOGGER.error(str(details))
@@ -130,9 +139,17 @@ def _remote_get_hash(remoter, file_path):
 
 
 def _remote_get_file(remoter, src, dst, user_agent=None):
-    cmd = 'curl -L {} -o {}'.format(src, dst)
+    cmd = "curl -L {} -o {}".format(src, dst)
     if user_agent:
+<<<<<<< HEAD
         cmd += ' --user-agent %s' % user_agent
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        cmd += ' --user-agent %s' % user_agent
+    cmd += f' && chmod 644 {dst}'
+=======
+        cmd += " --user-agent %s" % user_agent
+    cmd += f" && chmod 644 {dst}"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     return remoter.run(cmd, ignore_status=True)
 
 
@@ -143,12 +160,23 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     while retries > 0 and _remote_get_hash(remoter, dst) != hash_expected:
         _remote_get_file(remoter, src, dst, user_agent)
         retries -= 1
+<<<<<<< HEAD
     assert _remote_get_hash(remoter, dst) == hash_expected
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    assert _remote_get_hash(
+        remoter, dst) == hash_expected, f"Hash mismatch: src={src}, dst={dst}, expected_hash={hash_expected}"
+=======
+    assert _remote_get_hash(remoter, dst) == hash_expected, (
+        f"Hash mismatch: src={src}, dst={dst}, expected_hash={hash_expected}"
+    )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
 def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
-    query = f"select keyspace_name, view_name, base_table_name from system_schema.views " \
+    query = (
+        f"select keyspace_name, view_name, base_table_name from system_schema.views "
         f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
+    )
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     if not result:
@@ -158,8 +186,10 @@ def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
 
 
 def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -> list:
-    query = f"select view_name from system_schema.views " \
+    query = (
+        f"select view_name from system_schema.views "
         f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
+    )
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     views = []
@@ -170,8 +200,10 @@ def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -
 
 
 def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
-    query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
+    query = (
+        f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' "
         f"and table_name='{entity_name}'"
+    )
     LOGGER.debug("Run query: %s", query)
     result = session.execute(query)
     view_details = []
@@ -183,8 +215,9 @@ def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
 
 
 def generate_random_string(length):
-    return random.choice(string.ascii_uppercase) + ''.join(
-        random.choice(string.ascii_uppercase + string.digits) for x in range(length - 1))
+    return random.choice(string.ascii_uppercase) + "".join(
+        random.choice(string.ascii_uppercase + string.digits) for x in range(length - 1)
+    )
 
 
 def str_to_bool(bool_as_str: str) -> bool:
@@ -229,24 +262,35 @@ def find_file_under_sct_dir(filename: str, sub_folder: str = None):
 
 
 def verify_scylla_repo_file(content, is_rhel_like=True):
-    LOGGER.info('Verifying Scylla repo file')
+    LOGGER.info("Verifying Scylla repo file")
     if is_rhel_like:
-        body_prefix = ['#', '[scylla', 'name=', 'baseurl=', 'enabled=', 'gpgcheck=', 'type=',
-                       'skip_if_unavailable=', 'gpgkey=', 'repo_gpgcheck=', 'enabled_metadata=']
+        body_prefix = [
+            "#",
+            "[scylla",
+            "name=",
+            "baseurl=",
+            "enabled=",
+            "gpgcheck=",
+            "type=",
+            "skip_if_unavailable=",
+            "gpgkey=",
+            "repo_gpgcheck=",
+            "enabled_metadata=",
+        ]
     else:
-        body_prefix = ['#', 'deb']
-    for line in content.split('\n'):
+        body_prefix = ["#", "deb"]
+    for line in content.split("\n"):
         valid_prefix = False
         for prefix in body_prefix:
             if line.startswith(prefix) or not line.strip():
                 valid_prefix = True
                 break
         LOGGER.debug(line)
-        assert valid_prefix, 'Repository content has invalid line: {}'.format(line)
+        assert valid_prefix, "Repository content has invalid line: {}".format(line)
 
 
-class S3Storage():
-    bucket_name = 'cloudius-jenkins-test'
+class S3Storage:
+    bucket_name = "cloudius-jenkins-test"
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
     num_download_attempts = 5
@@ -258,7 +302,8 @@ class S3Storage():
         self.transfer_config = boto3.s3.transfer.TransferConfig(
             multipart_threshold=self.enable_multipart_threshold_size,
             multipart_chunksize=self.multipart_chunksize,
-            num_download_attempts=self.num_download_attempts)
+            num_download_attempts=self.num_download_attempts,
+        )
 
     def get_s3_fileojb(self, key):
         objects = []
@@ -266,27 +311,31 @@ class S3Storage():
             objects.append(obj)
         return objects
 
-    def search_by_path(self, path=''):
+    def search_by_path(self, path=""):
         files = []
         for obj in self._bucket.objects.filter(Prefix=path):
             files.append(obj.key)
         return files
 
-    def generate_url(self, file_path, dest_dir=''):
+    def generate_url(self, file_path, dest_dir=""):
         bucket_name = self.bucket_name
         file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(dest_dir=dest_dir,
-                                                                                      file_name=file_name,
-                                                                                      bucket_name=bucket_name)
+        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(
+            dest_dir=dest_dir, file_name=file_name, bucket_name=bucket_name
+        )
 
+<<<<<<< HEAD
     def upload_file(self, file_path, dest_dir=''):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def upload_file(self, file_path, dest_dir='', public=True):
+=======
+    def upload_file(self, file_path, dest_dir="", public=True):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         s3_url = self.generate_url(file_path, dest_dir)
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
             LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
-            self._bucket.upload_file(Filename=file_path,
-                                     Key=s3_obj,
-                                     Config=self.transfer_config)
+            self._bucket.upload_file(Filename=file_path, Key=s3_obj, Config=self.transfer_config)
             LOGGER.info("Uploaded to {0}".format(s3_url))
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
@@ -296,27 +345,52 @@ class S3Storage():
             return ""
 
     def set_public_access(self, key):
-        acl_obj: S3ServiceResource = boto3.resource('s3').ObjectAcl(self.bucket_name, key)
+        acl_obj: S3ServiceResource = boto3.resource("s3").ObjectAcl(self.bucket_name, key)
 
         grants = copy.deepcopy(acl_obj.grants)
         grantees = {
-            'Grantee': {
-                "Type": "Group",
-                "URI": "http://acs.amazonaws.com/groups/global/AllUsers"
-            },
-            'Permission': "READ"
+            "Grantee": {"Type": "Group", "URI": "http://acs.amazonaws.com/groups/global/AllUsers"},
+            "Permission": "READ",
         }
         grants.append(grantees)
-        acl_obj.put(ACL='', AccessControlPolicy={'Grants': grants, 'Owner': acl_obj.owner})
+        acl_obj.put(ACL="", AccessControlPolicy={"Grants": grants, "Owner": acl_obj.owner})
 
     def download_file(self, link, dst_dir):
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        """Download file from S3 bucket or Argus proxy link."""
+
+        if not self.s3_host_name_regex.match(link):
+            # get the actual s3 link from Argus first
+            creds = KeyStore().get_argus_rest_credentials()
+            headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
+
+            response = requests.head(link, allow_redirects=True, headers=headers)
+            link = response.history[-1].headers.get('location', link)
+            # remove query parameters from the link, we don't need them for S3 download
+            link = urljoin(link, urlparse(link).path)
+
+=======
+        """Download file from S3 bucket or Argus proxy link."""
+
+        if not self.s3_host_name_regex.match(link):
+            # get the actual s3 link from Argus first
+            creds = KeyStore().get_argus_rest_credentials()
+            headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
+
+            response = requests.head(link, allow_redirects=True, headers=headers)
+            link = response.history[-1].headers.get("location", link)
+            # remove query parameters from the link, we don't need them for S3 download
+            link = urljoin(link, urlparse(link).path)
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
         file_name = os.path.basename(key_name)
         try:
             LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
-            self._bucket.download_file(Key=key_name,
-                                       Filename=os.path.join(dst_dir, file_name),
-                                       Config=self.transfer_config)
+            self._bucket.download_file(
+                Key=key_name, Filename=os.path.join(dst_dir, file_name), Config=self.transfer_config
+            )
             LOGGER.info("Downloaded finished")
             return os.path.join(os.path.abspath(dst_dir), file_name)
 
@@ -326,10 +400,44 @@ class S3Storage():
 
 
 def list_logs_by_test_id(test_id):
+<<<<<<< HEAD
     log_types = ['db-cluster', 'monitor-set', 'loader-set', 'event', 'sct', 'jepsen-data', 'siren-manager-set',
                  'prometheus', 'grafana', 'kubernetes', 'job', 'monitoring_data_stack', 'output', 'error',
                  'summary', 'warning', 'critical', 'normal', 'debug', 'left_processes', 'email_data', 'corrupted-sstables',
                  'sstables']
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'event', 'sct', 'jepsen-data', 'siren-manager-set',
+                 'prometheus', 'grafana', 'kubernetes', 'job', 'monitoring_data_stack', 'output', 'error',
+                 'summary', 'warning', 'critical', 'normal', 'debug', 'left_processes', 'email_data', 'corrupted-sstables',
+                 'sstables', 'builder']
+=======
+    log_types = [
+        "db-cluster",
+        "monitor-set",
+        "loader-set",
+        "event",
+        "sct",
+        "jepsen-data",
+        "siren-manager-set",
+        "prometheus",
+        "grafana",
+        "kubernetes",
+        "job",
+        "monitoring_data_stack",
+        "output",
+        "error",
+        "summary",
+        "warning",
+        "critical",
+        "normal",
+        "debug",
+        "left_processes",
+        "email_data",
+        "corrupted-sstables",
+        "sstables",
+        "builder",
+    ]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     results = []
 
@@ -354,11 +462,28 @@ def list_logs_by_test_id(test_id):
     for log_file in log_files:
         for log_type in log_types:
             if log_type in log_file:
+<<<<<<< HEAD
                 results.append({"file_path": log_file,
                                 "type": log_type,
                                 "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file),
                                 "date": convert_to_date(log_file.split('/')[1])
                                 })
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                results.append({"file_path": log_file,
+                                "type": log_type,
+                                "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
+                                "date": convert_to_date(log_file.split('/')[1])
+                                })
+=======
+                results.append(
+                    {
+                        "file_path": log_file,
+                        "type": log_type,
+                        "link": create_proxy_argus_s3_url(log_file).format(test_id, log_file.split("/")[-1]),
+                        "date": convert_to_date(log_file.split("/")[1]),
+                    }
+                )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 break
     results = sorted(results, key=lambda x: x["date"])
 
@@ -366,14 +491,14 @@ def list_logs_by_test_id(test_id):
 
 
 def list_parallel_timelines_report_urls(test_id: str) -> list[str | None]:
-    name_to_search = 'parallel-timelines-report'
+    name_to_search = "parallel-timelines-report"
     available_logs_paths = S3Storage().search_by_path(path=test_id)
     report_path_list = [log_file_path for log_file_path in available_logs_paths if name_to_search in log_file_path]
     LOGGER.debug("Found saved report files:\n%s", ", ".join(report_path_list))
     # log_file_path looks like
     # 88605a0b-aa5a-4da9-bb58-5dd2a94c5350/20220109_092346/parallel-timelines-report-88605a0b.tar.gz
     # Perform reverse order sorting by date inside this path
-    report_path_list.sort(key=lambda x: x.split('/')[1], reverse=True)
+    report_path_list.sort(key=lambda x: x.split("/")[1], reverse=True)
     return [f"https://{S3Storage.bucket_name}.s3.amazonaws.com/{report_path}" for report_path in report_path_list]
 
 
@@ -383,26 +508,26 @@ def all_aws_regions(cached=False):
         # this list is used for setup of vpc peering, please don't remove or reshuffle it,
         # only add new regions at the bottom of it
         return [
-            'eu-north-1',
-            'ap-south-1',
-            'eu-west-3',
-            'eu-west-2',
-            'eu-west-1',
-            'ap-northeast-2',
-            'ap-northeast-1',
-            'sa-east-1',
-            'ca-central-1',
-            'ap-southeast-1',
-            'ap-southeast-2',
-            'eu-central-1',
-            'us-east-1',
-            'us-east-2',
-            'us-west-1',
-            'us-west-2',
+            "eu-north-1",
+            "ap-south-1",
+            "eu-west-3",
+            "eu-west-2",
+            "eu-west-1",
+            "ap-northeast-2",
+            "ap-northeast-1",
+            "sa-east-1",
+            "ca-central-1",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "eu-central-1",
+            "us-east-1",
+            "us-east-2",
+            "us-west-1",
+            "us-west-2",
         ]
     else:
-        client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
-        return [region['RegionName'] for region in client.describe_regions()['Regions']]
+        client: EC2Client = boto3.client("ec2", region_name=DEFAULT_AWS_REGION)
+        return [region["RegionName"] for region in client.describe_regions()["Regions"]]
 
 
 class ParallelObject:
@@ -626,7 +751,8 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
                 # since a bug in docker package https://github.com/docker-library/python/issues/517 that need
                 # to explicitly pass down the port for supporting ipv6
                 client = docker.DockerClient(
-                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22")
+                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22"
+                )
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
         except Exception:
@@ -640,7 +766,13 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
     if builder_name != "local" and getpass.getuser() != "jenkins":
         builders = [item["builder"] for item in list_builders(running=True)]
         if builder_name:
-            builders = {builder_name: builders[builder_name], } if builder_name in builders else {}
+            builders = (
+                {
+                    builder_name: builders[builder_name],
+                }
+                if builder_name in builders
+                else {}
+            )
         if builders:
             SSHAgent.start(verbose=verbose)
             SSHAgent.add_keys(set(b["key_file"] for b in builders), verbose)
@@ -652,11 +784,13 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
     return docker_clients
 
 
-def list_resources_docker(tags_dict: Optional[dict] = None,
-                          builder_name: Optional[str] = None,
-                          running: bool = False,
-                          group_as_builder: bool = False,
-                          verbose: bool = False) -> Dict[str, Union[list, dict]]:
+def list_resources_docker(
+    tags_dict: Optional[dict] = None,
+    builder_name: Optional[str] = None,
+    running: bool = False,
+    group_as_builder: bool = False,
+    verbose: bool = False,
+) -> Dict[str, Union[list, dict]]:
     log = LOGGER if verbose else Mock()
     filters = {}
 
@@ -717,7 +851,9 @@ def aws_tags_to_dict(tags_list):
     return tags_dict
 
 
-def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None):
+def list_instances_aws(
+    tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None
+):
     """
     list all instances with specific tags AWS
 
@@ -737,15 +873,17 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
-                              'Values': value if isinstance(value, list) else [value]}
-                             for key, value in tags_dict.items()]
+            custom_filter = [
+                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                for key, value in tags_dict.items()
+            ]
         response = client.describe_instances(Filters=custom_filter)
-        instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
-            'Instances']]
+        instances[region] = [
+            instance for reservation in response["Reservations"] for instance in reservation["Instances"]
+        ]
 
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(instances.keys())), len(aws_regions))
@@ -755,23 +893,25 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     for curr_region_name, per_region_instances in instances.items():
         if running:
             # Filter for running and pending instances
-            pending_instances = [i for i in per_region_instances if i['State']['Name'] == 'pending']
-            running_instances = [i for i in per_region_instances if i['State']['Name'] == 'running']
+            pending_instances = [i for i in per_region_instances if i["State"]["Name"] == "pending"]
+            running_instances = [i for i in per_region_instances if i["State"]["Name"] == "running"]
 
             # Wait for pending instances to become running
             if pending_instances:
-                client = boto3.client('ec2', region_name=curr_region_name)
-                waiter = client.get_waiter('instance_running')
-                instance_ids = [i['InstanceId'] for i in pending_instances]
+                client = boto3.client("ec2", region_name=curr_region_name)
+                waiter = client.get_waiter("instance_running")
+                instance_ids = [i["InstanceId"] for i in pending_instances]
                 try:
                     if verbose:
                         LOGGER.info(
-                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running")
-                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={'Delay': 15, 'MaxAttempts': 40})
+                            f"Waiting for {len(instance_ids)} pending instances in {curr_region_name} to become running"
+                        )
+                    waiter.wait(InstanceIds=instance_ids, WaiterConfig={"Delay": 15, "MaxAttempts": 40})
                     # Refresh instance data after waiting
                     response = client.describe_instances(InstanceIds=instance_ids)
-                    updated_instances = [instance for reservation in response['Reservations'] for instance in
-                                         reservation['Instances']]
+                    updated_instances = [
+                        instance for reservation in response["Reservations"] for instance in reservation["Instances"]
+                    ]
                     # Combine running and updated (now running) instances
                     instances[curr_region_name] = running_instances + updated_instances
                 except ClientError as e:
@@ -782,13 +922,16 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
             else:
                 instances[curr_region_name] = running_instances
         else:
-            instances[curr_region_name] = [i for i in per_region_instances if i['State']['Name'] != 'terminated']
+            instances[curr_region_name] = [i for i in per_region_instances if i["State"]["Name"] != "terminated"]
 
     if availability_zone is not None:
         # filter by availability zone (a, b, c, etc.)
         for curr_region_name, per_region_instances in instances.items():
-            instances[curr_region_name] = [i for i in per_region_instances
-                                           if i['Placement']['AvailabilityZone'] == curr_region_name + availability_zone]
+            instances[curr_region_name] = [
+                i
+                for i in per_region_instances
+                if i["Placement"]["AvailabilityZone"] == curr_region_name + availability_zone
+            ]
     if not group_as_region:
         instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
         total_items = len(instances)
@@ -819,19 +962,19 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
-                              'Values': value if isinstance(value, list) else [value]}
-                             for key, value in tags_dict.items()]
+            custom_filter = [
+                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                for key, value in tags_dict.items()
+            ]
         response = client.describe_addresses(Filters=custom_filter)
-        elastic_ips[region] = response['Addresses']
+        elastic_ips[region] = response["Addresses"]
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(elastic_ips.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
-        get_elastic_ips, ignore_exceptions=True)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_elastic_ips, ignore_exceptions=True)
 
     if not group_as_region:
         elastic_ips = list(itertools.chain(*list(elastic_ips.values())))  # flatten the list of lists
@@ -861,17 +1004,28 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client('ec2', region_name=region)
-        custom_filter = [{'Name': 'tag:{}'.format(key),
-                          'Values': value if isinstance(value, list) else [value]}
-                         for key, value in tags_dict.items() if key != 'NodeType']
+        client: EC2Client = boto3.client("ec2", region_name=region)
+        custom_filter = [
+            {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+            for key, value in tags_dict.items()
+            if key != "NodeType"
+        ]
         response = client.describe_security_groups(Filters=custom_filter)
-        security_groups[region] = response['SecurityGroups']
+        security_groups[region] = response["SecurityGroups"]
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(security_groups.keys())), len(aws_regions))
 
+<<<<<<< HEAD
     ParallelObject(aws_regions, timeout=100,  num_workers=len(aws_regions)
                    ).run(get_security_groups_ips, ignore_exceptions=True)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
+                   ).run(get_security_groups_ips, ignore_exceptions=True)
+=======
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
+        get_security_groups_ips, ignore_exceptions=True
+    )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     if not group_as_region:
         security_groups = list(itertools.chain(*list(security_groups.values())))  # flatten the list of lists
@@ -901,21 +1055,23 @@ def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False,
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        tagging = boto3.client('resourcegroupstaggingapi', region_name=region)
-        paginator = tagging.get_paginator('get_resources')
-        tag_filter = [{'Key': key, 'Values': [value]}
-                      for key, value in tags_dict.items() if key != 'NodeType']
+        tagging = boto3.client("resourcegroupstaggingapi", region_name=region)
+        paginator = tagging.get_paginator("get_resources")
+        tag_filter = [{"Key": key, "Values": [value]} for key, value in tags_dict.items() if key != "NodeType"]
 
         tag_mappings = itertools.chain.from_iterable(
-            page['ResourceTagMappingList']
-            for page in paginator.paginate(TagFilters=tag_filter, ResourceTypeFilters=['elasticloadbalancing:loadbalancer'])
+            page["ResourceTagMappingList"]
+            for page in paginator.paginate(
+                TagFilters=tag_filter, ResourceTypeFilters=["elasticloadbalancing:loadbalancer"]
+            )
         )
         load_balancers[region] = list(tag_mappings)
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(load_balancers.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
-                   ).run(get_load_balancers, ignore_exceptions=False)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
+        get_load_balancers, ignore_exceptions=False
+    )
 
     if not group_as_region:
         load_balancers = list(itertools.chain(*list(load_balancers.values())))  # flatten the list of lists
@@ -945,14 +1101,13 @@ def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        tagging = boto3.client('resourcegroupstaggingapi', region_name=region)
-        paginator = tagging.get_paginator('get_resources')
-        tag_filter = [{'Key': key, 'Values': [value]}
-                      for key, value in tags_dict.items() if key != 'NodeType']
+        tagging = boto3.client("resourcegroupstaggingapi", region_name=region)
+        paginator = tagging.get_paginator("get_resources")
+        tag_filter = [{"Key": key, "Values": [value]} for key, value in tags_dict.items() if key != "NodeType"]
 
         tag_mappings = itertools.chain.from_iterable(
-            page['ResourceTagMappingList']
-            for page in paginator.paginate(TagFilters=tag_filter, ResourceTypeFilters=['cloudformation:stack'])
+            page["ResourceTagMappingList"]
+            for page in paginator.paginate(TagFilters=tag_filter, ResourceTypeFilters=["cloudformation:stack"])
         )
         cloudformation_stacks[region] = list(tag_mappings)
         if verbose:
@@ -961,8 +1116,9 @@ def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region
     ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_stacks, ignore_exceptions=False)
 
     if not group_as_region:
-        cloudformation_stacks = list(itertools.chain(*list(cloudformation_stacks.values()))
-                                     )  # flatten the list of lists
+        cloudformation_stacks = list(
+            itertools.chain(*list(cloudformation_stacks.values()))
+        )  # flatten the list of lists
         total_items = cloudformation_stacks
     else:
         total_items = sum([len(value) for _, value in cloudformation_stacks.items()])
@@ -998,7 +1154,8 @@ def list_launch_templates_aws(tags_dict=None, regions=None, verbose=False):
             LOGGER.info("%s: done [%s/%s]", region, len(launch_templates), len(aws_regions))
 
     ParallelObject(aws_regions, timeout=120, num_workers=len(aws_regions)).run(
-        get_launch_templates, ignore_exceptions=False)
+        get_launch_templates, ignore_exceptions=False
+    )
 
     if verbose:
         total_items = sum([len(value) for value in launch_templates.values()])
@@ -1008,7 +1165,7 @@ def list_launch_templates_aws(tags_dict=None, regions=None, verbose=False):
 
 def get_all_gce_regions():
     region_client, info = get_gce_compute_regions_client()
-    all_gce_regions = [region_obj.name for region_obj in region_client.list(project=info['project_id'])]
+    all_gce_regions = [region_obj.name for region_obj in region_client.list(project=info["project_id"])]
     return all_gce_regions
 
 
@@ -1045,7 +1202,7 @@ def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInsta
     filtered_instances = []
 
     for instance in instances:
-        if 'Name' in tags_dict.keys() and tags_dict['Name'] == instance.name:
+        if "Name" in tags_dict.keys() and tags_dict["Name"] == instance.name:
             filtered_instances.append(instance)
             continue
 
@@ -1059,14 +1216,14 @@ def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInsta
     return filtered_instances
 
 
-def list_instances_gce(tags_dict: Optional[dict] = None,
-                       running: bool = False,
-                       verbose: bool = True) -> list[GceInstance]:
+def list_instances_gce(
+    tags_dict: Optional[dict] = None, running: bool = False, verbose: bool = True
+) -> list[GceInstance]:
     """List all instances with specific tags GCE."""
     instances_client, info = get_gce_compute_instances_client()
     if verbose:
         LOGGER.info("Going to get all instances from GCE")
-    all_gce_instances = instances_client.aggregated_list(project=info['project_id'])
+    all_gce_instances = instances_client.aggregated_list(project=info["project_id"])
     # filter instances by tags since google doesn't offer any filtering
     all_instances = []
     for _, response in all_gce_instances:
@@ -1078,9 +1235,15 @@ def list_instances_gce(tags_dict: Optional[dict] = None,
         instances = all_instances
 
     if running:
-        instances = [i for i in instances if i.status == 'RUNNING']
+        instances = [i for i in instances if i.status == "RUNNING"]
     else:
+<<<<<<< HEAD
         instances = [i for i in instances if not i.status == 'TERMINATED']
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        instances = [i for i in instances if not i.status != 'RUNNING']
+=======
+        instances = [i for i in instances if not i.status != "RUNNING"]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     if verbose:
         LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
@@ -1091,7 +1254,7 @@ def list_static_ips_gce(verbose=False):
     if verbose:
         LOGGER.info("Getting all GCE static IPs...")
     all_static_ips = []
-    for _, response in list(addresses_client.aggregated_list(project=info['project_id'])):
+    for _, response in list(addresses_client.aggregated_list(project=info["project_id"])):
         if response.addresses:
             all_static_ips.extend(response.addresses)
 
@@ -1109,8 +1272,9 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
     return clusters
 
 
-def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
-                      verbose: bool = False) -> List[EksClusterForCleaner]:
+def list_clusters_eks(
+    tags_dict: Optional[dict] = None, regions: list = None, verbose: bool = False
+) -> List[EksClusterForCleaner]:
     class EksCleaner:
         name = f"eks-cleaner-{uuid.uuid4()!s:.8}"
         _containers = {}
@@ -1124,7 +1288,7 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
             eks_clusters = []
             for aws_region in regions or all_aws_regions():
                 try:
-                    cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
+                    cluster_names = boto3.client("eks", region_name=aws_region).list_clusters()["clusters"]
                 except Exception as exc:  # noqa: BLE001
                     LOGGER.error("Failed to get list of EKS clusters in the '%s' region: %s", aws_region, exc)
                     return []
@@ -1146,30 +1310,65 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
     return clusters
 
 
-def filter_k8s_clusters_by_tags(tags_dict: dict, clusters: list[
-        Union["EksClusterForCleaner", "GkeClusterForCleaner"]]) -> list[  # noqa: F821
-            Union["EksClusterForCleaner", "GkeClusterForCleaner"]]:  # noqa: F821
+def filter_k8s_clusters_by_tags(
+    tags_dict: dict,
+    clusters: list[Union["EksClusterForCleaner", "GkeClusterForCleaner"]],  # noqa: F821
+) -> list[
+    Union["EksClusterForCleaner", "GkeClusterForCleaner"]  # noqa: F821
+]:
     if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return []
 
-    return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
-                              instances=clusters)
+    return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != "NodeType"}, instances=clusters)
 
 
+<<<<<<< HEAD
 @lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
     name_filter = "ScyllaDB *"
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def _get_ami_versions(
+        region_name: str,
+        arch: AwsArchType, version: str,
+        version_tag_name: str,
+        extra_filters: list | None = None,
+        version_processor_fn: Callable | None = None) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    version_filter = "*"
+    if version and version != "all":
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+=======
+def _get_ami_versions(
+    region_name: str,
+    arch: AwsArchType,
+    version: str,
+    version_tag_name: str,
+    extra_filters: list | None = None,
+    version_processor_fn: Callable | None = None,
+) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    version_filter = "*"
+    if version and version != "all":
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
+<<<<<<< HEAD
     if version and version != "all":
         name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}"
 
         if len(version.split('.')) < 3:
             # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
             name_filter = f"{name_filter}*"
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    version_filter = version_filter.replace('-', '?').replace('~', '?').replace('.rc', '?rc')
+=======
+    version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
-    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
+<<<<<<< HEAD
     for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
         images += client.images.filter(
@@ -1179,14 +1378,109 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
                 {'Name': 'architecture', 'Values': [arch]},
             ],
         )
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
+                             SCYLLA_AMI_OWNER_ID_LIST):
+        filters = [
+            {"Name": f"tag:{version_tag_name}", "Values": [version_filter]},
+            {'Name': 'architecture', 'Values': [arch]},
+        ]
+        if extra_filters:
+            filters.extend(extra_filters)
+
+        images += client.images.filter(Owners=[owner], Filters=filters)
+
+=======
+    for client, owner in zip(
+        (ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)), SCYLLA_AMI_OWNER_ID_LIST
+    ):
+        filters = [
+            {"Name": f"tag:{version_tag_name}", "Values": [version_filter]},
+            {"Name": "architecture", "Values": [arch]},
+        ]
+        if extra_filters:
+            filters.extend(extra_filters)
+
+        images += client.images.filter(Owners=[owner], Filters=filters)
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
+<<<<<<< HEAD
     images = [image for image in images if image.tags and 'debug' not in {
         i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
 
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    images = [image for image in images if image.tags and 'debug' not in {
+        i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
+=======
+    images = [
+        image
+        for image in images
+        if image.tags and "debug" not in {i["Key"]: i["Value"] for i in image.tags}.get("Name", "")
+    ]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     return images
 
 
 @lru_cache
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
+    """Get the list of all the formal scylla ami from specific region."""
+
+    def _process_enterprise_scylla_version(version: str) -> str:
+        base_version = version.replace('enterprise-', '')
+        return f"*{base_version}*" if len(version.split('.')) < 3 else f"*{base_version}-*"
+
+    extra_filters = [{'Name': 'tag:environment', 'Values': ['production']}]
+    return _get_ami_versions(
+        region_name=region_name,
+        arch=arch,
+        version=version,
+        version_tag_name='scylla_version',
+        extra_filters=extra_filters,
+        version_processor_fn=_process_enterprise_scylla_version)
+
+
+@lru_cache
+def get_vector_store_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
+    """Get the list of Vector Store AMIs from specific region."""
+    return _get_ami_versions(
+        region_name=region_name, arch=arch, version=version, version_tag_name='vector-store-version')
+
+
+@lru_cache
+=======
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", version: str = None) -> list[EC2Image]:
+    """Get the list of all the formal scylla ami from specific region."""
+
+    def _process_enterprise_scylla_version(version: str) -> str:
+        base_version = version.replace("enterprise-", "")
+        return f"*{base_version}*" if len(version.split(".")) < 3 else f"*{base_version}-*"
+
+    extra_filters = [{"Name": "tag:environment", "Values": ["production"]}]
+    return _get_ami_versions(
+        region_name=region_name,
+        arch=arch,
+        version=version,
+        version_tag_name="scylla_version",
+        extra_filters=extra_filters,
+        version_processor_fn=_process_enterprise_scylla_version,
+    )
+
+
+@lru_cache
+def get_vector_store_ami_versions(
+    region_name: str, arch: AwsArchType = "x86_64", version: str = None
+) -> list[EC2Image]:
+    """Get the list of Vector Store AMIs from specific region."""
+    return _get_ami_versions(
+        region_name=region_name, arch=arch, version=version, version_tag_name="vector-store-version"
+    )
+
+
+@lru_cache
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GceImage]:
     # Server-side resource filtering described in Google SDK reference docs:
     #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
@@ -1196,8 +1490,16 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
     filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
 
     if version and version != "all":
+<<<<<<< HEAD
         filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
         if 'rc' not in version and len(version.split('.')) < 3:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+        if 'rc' not in version and len(version.split('.')) < 3:
+=======
+        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+        if "rc" not in version and len(version.split(".")) < 3:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
             filters += "')"
@@ -1209,16 +1511,15 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
     )
 
 
-ScyllaProduct = Literal['scylla', 'scylla-enterprise']
+ScyllaProduct = Literal["scylla", "scylla-enterprise"]
 
 
-def get_latest_scylla_ami_release(region: str = 'eu-west-1',
-                                  product: ScyllaProduct = 'scylla') -> str:
+def get_latest_scylla_ami_release(region: str = "eu-west-1", product: ScyllaProduct = "scylla") -> str:
     """
-        Get the latest release, base on the formal AMIs published
+    Get the latest release, base on the formal AMIs published
     """
 
-    if product == 'scylla-enterprise':
+    if product == "scylla-enterprise":
         filter_regex = re.compile(r"(rc|dev)", flags=re.IGNORECASE)
         version_regex = re.compile(r"enterprise\s*(\d*\.\d*\.\d*)", flags=re.IGNORECASE)
     else:
@@ -1232,15 +1533,15 @@ def get_latest_scylla_ami_release(region: str = 'eu-west-1',
     return str(max(versions))
 
 
-def get_latest_scylla_release(product: Literal['scylla', 'scylla-enterprise']) -> str:
+def get_latest_scylla_release(product: Literal["scylla", "scylla-enterprise"]) -> str:
     """
     get latest advertised scylla version from the same service scylla_setup is getting it
     """
 
-    product = product.lstrip('scylla-')
-    url = 'https://repositories.scylladb.com/scylla/check_version?system={}'
+    product = product.lstrip("scylla-")
+    url = "https://repositories.scylladb.com/scylla/check_version?system={}"
     version = requests.get(url.format(product)).json()
-    return version['version']
+    return version["version"]
 
 
 def pid_exists(pid):
@@ -1270,14 +1571,14 @@ def safe_kill(pid, signal):
         return False
 
 
-class FileFollowerIterator():
+class FileFollowerIterator:
     def __init__(self, filename, thread_obj):
         self.filename = filename
         self.thread_obj = thread_obj
 
     def __iter__(self):
         with open(self.filename, encoding="utf-8") as input_file:
-            line = ''
+            line = ""
             poller = select.poll()
             registered = False
             while not self.thread_obj.stopped():
@@ -1286,17 +1587,17 @@ class FileFollowerIterator():
                     registered = True
                 if poller.poll(100):
                     line += input_file.readline()
-                if not line or not line.endswith('\n'):
+                if not line or not line.endswith("\n"):
                     time.sleep(0.1)
                     continue
                 poller.unregister(input_file)
                 registered = False
                 yield line
-                line = ''
+                line = ""
             yield line
 
 
-class FileFollowerThread():
+class FileFollowerThread:
     def __init__(self):
         self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self._stop_event = threading.Event()
@@ -1361,7 +1662,7 @@ class ScyllaCQLSession:
         self.cluster.shutdown()
 
 
-def get_free_port(address: str = '', ports_to_try: Iterable[int] = (0,)) -> int:
+def get_free_port(address: str = "", ports_to_try: Iterable[int] = (0,)) -> int:
     for port in ports_to_try:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
@@ -1397,29 +1698,70 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     """
     branch, build_id = scylla_version.split(":", 1)
     filters = [
-        {"Name": "tag:branch", "Values": [branch, ], },
-        {"Name": "architecture", "Values": [arch, ], },
-        {"Name": "tag:build_mode", "Values": ["release", ], },
+        {
+            "Name": "tag:branch",
+            "Values": [
+                branch,
+            ],
+        },
+        {
+            "Name": "architecture",
+            "Values": [
+                arch,
+            ],
+        },
+        {
+            "Name": "tag:build_mode",
+            "Values": [
+                "release",
+            ],
+        },
     ]
 
     LOGGER.info("Looking for AMIs match [%s]", scylla_version)
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
 
-    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
-                             SCYLLA_AMI_OWNER_ID_LIST):
-        if build_id not in ("latest", "all",):
+    for client, owner in zip(
+        (ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)), SCYLLA_AMI_OWNER_ID_LIST
+    ):
+        if build_id not in (
+            "latest",
+            "all",
+        ):
             images += [
-                client.images.filter(Owners=[owner],
-                                     Filters=filters + [{'Name': 'tag:build-id', 'Values': [build_id, ], }]),
-                client.images.filter(Owners=[owner],
-                                     Filters=filters + [{'Name': 'tag:build_id', 'Values': [build_id, ], }]),
+                client.images.filter(
+                    Owners=[owner],
+                    Filters=filters
+                    + [
+                        {
+                            "Name": "tag:build-id",
+                            "Values": [
+                                build_id,
+                            ],
+                        }
+                    ],
+                ),
+                client.images.filter(
+                    Owners=[owner],
+                    Filters=filters
+                    + [
+                        {
+                            "Name": "tag:build_id",
+                            "Values": [
+                                build_id,
+                            ],
+                        }
+                    ],
+                ),
             ]
         else:
-            images += [client.images.filter(Owners=[owner], Filters=filters), ]
+            images += [
+                client.images.filter(Owners=[owner], Filters=filters),
+            ]
 
     images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
-    images = [image for image in images if not (image.name.startswith('debug-') or '-debug-' in image.name)]
+    images = [image for image in images if not (image.name.startswith("debug-") or "-debug-" in image.name)]
 
     assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
 
@@ -1441,9 +1783,20 @@ def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
         return rows
 
     for ami in amis:
-        tags = {i['Key']: i['Value'] for i in ami.tags}
-        rows.append(["AWS", ami.name, ami.image_id, ami.creation_date, tags.get("Name"), tags.get(
-            'build-id', tags.get("build_id", r"N\A"))[:6], tags.get('arch'), tags.get('ScyllaVersion'), ami.owner_id])
+        tags = {i["Key"]: i["Value"] for i in ami.tags}
+        rows.append(
+            [
+                "AWS",
+                ami.name,
+                ami.image_id,
+                ami.creation_date,
+                tags.get("Name"),
+                tags.get("build-id", tags.get("build_id", r"N\A"))[:6],
+                tags.get("arch"),
+                tags.get("ScyllaVersion"),
+                ami.owner_id,
+            ]
+        )
 
     return rows
 
@@ -1457,7 +1810,10 @@ def get_ec2_image_name_tag(ami: EC2Image) -> str:
 
 
 @lru_cache
-def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -> str:
+def convert_name_to_ami_if_needed(
+    ami_id_param: str,
+    region_names: list[str],
+) -> str:
     """
     convert image name in ami_id param to ami_ids
     Firstly trying to find name in 'tag:Name' - for ScyllaDB images case
@@ -1493,32 +1849,255 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
     if len(param_values) == 1 and not param_values[0].startswith("ami-"):
         ami_mapping: dict[str, str] = OrderedDict()
         for region_name in region_names:
-            ec2_resource = boto3.resource('ec2', region_name=region_name)
-            for client, _ in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
-                                 SCYLLA_AMI_OWNER_ID_LIST):
+            ec2_resource = boto3.resource("ec2", region_name=region_name)
+            for client, _ in zip(
+                (ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)), SCYLLA_AMI_OWNER_ID_LIST
+            ):
                 for tag_name in ("tag:Name", "name"):
                     if images := sorted(
-                            client.images.filter(Filters=[{'Name': tag_name, 'Values': [param_values[0]]}]),
-                            key=lambda x: x.creation_date, reverse=True):
+                        client.images.filter(Filters=[{"Name": tag_name, "Values": [param_values[0]]}]),
+                        key=lambda x: x.creation_date,
+                        reverse=True,
+                    ):
                         ami_mapping[region_name] = images[0].image_id
                         break
                 else:
                     continue
         if not len(ami_mapping) == len(region_names):
-            raise ValueError(
-                f"Can't convert name '{ami_id_param}' to AMI_id, no image found in regions {region_names}")
+            raise ValueError(f"Can't convert name '{ami_id_param}' to AMI_id, no image found in regions {region_names}")
         return " ".join(ami_mapping.values())
     return ami_id_param
 
 
 def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) -> list[list[str]]:
-    return [["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
-            for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)]
+    return [
+        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
+        for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)
+    ]
 
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def find_equivalent_ami(
+        ami_id: str,
+        source_region: str,
+        target_regions: list[str] | None = None,
+        target_arch: AwsArchType | None = None) -> list[dict[str, str]]:
+    """
+    Find equivalent AMIs in different regions or architectures based on image tags.
+
+    :param ami_id: Source AMI ID to find equivalents for
+    :param source_region: AWS region where the source AMI is located
+    :param target_regions: List of target regions to search in (if None, searches in source region only)
+    :param target_arch: Target architecture (x86_64 or arm64). If None, uses same arch as source
+    :return: List of dictionaries containing equivalent AMI information
+    """
+    # Get the source AMI and its tags - try both default account and ScyllaDB images account
+    # Combine tags from both accounts if available
+    source_ami = None
+    source_tags = {}
+    source_arch = None
+
+    for ec2_resource in (boto3.resource('ec2', region_name=source_region),
+                         get_scylla_images_ec2_resource(region_name=source_region)):
+        try:
+            ami = ec2_resource.Image(ami_id)
+            ami.load()
+            # First successful load sets the source_ami and architecture
+            if source_ami is None:
+                source_ami = ami
+                source_arch = ami.architecture
+            # Combine tags from all accounts
+            if ami.tags:
+                for tag in ami.tags:
+                    source_tags[tag['Key']] = tag['Value']
+        except ClientError as exc:
+            LOGGER.debug("Failed to load AMI %s in region %s with current credentials: %s", ami_id, source_region, exc)
+            continue
+
+    if source_ami is None:
+        LOGGER.error("Failed to load AMI %s in region %s from any account", ami_id, source_region)
+        return []
+
+    if not source_tags:
+        LOGGER.warning("Source AMI %s has no tags, cannot find equivalents", ami_id)
+        return []
+
+    # Determine target architecture
+    search_arch = target_arch if target_arch else source_arch
+
+    # Determine regions to search
+    if target_regions is None:
+        search_regions = [source_region]
+    else:
+        search_regions = target_regions
+
+    # Use all tags from the source AMI for matching, except "Name" and "arch"
+    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ('Name', 'arch')]
+
+    if not matching_tags:
+        LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
+        return []
+
+    LOGGER.info("Searching for AMIs with tags: %s", matching_tags)
+    results = []
+    # Search for equivalent AMIs in target regions
+    for region in search_regions:
+        target_ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region)
+
+        # Search using ScyllaDB official image resources
+        for client, owner in zip((target_ec2_resource, get_scylla_images_ec2_resource(region_name=region)),
+                                 SCYLLA_AMI_OWNER_ID_LIST):
+            filters = [
+                {'Name': 'architecture', 'Values': [search_arch]},
+            ]
+
+            # Add tag filters based on what we found in source AMI
+            for tag_key, tag_value in matching_tags:
+                filters.append({'Name': f'tag:{tag_key}', 'Values': [tag_value]})
+
+            try:
+                images = list(client.images.filter(Owners=[owner], Filters=filters))
+
+                for image in images:
+                    image_tags = {tag['Key']: tag['Value'] for tag in (image.tags or [])}
+
+                    results.append({
+                        'region': region,
+                        'ami_id': image.image_id,
+                        'name': image.name,
+                        'architecture': image.architecture,
+                        'creation_date': image.creation_date,
+                        'name_tag': image_tags.get('Name', ''),
+                        'scylla_version': image_tags.get('scylla_version', ''),
+                        'build_id': image_tags.get('build-id', image_tags.get('build_id', '')),
+                        'owner_id': image.owner_id,
+                    })
+            except ClientError as exc:
+                LOGGER.warning("Failed to search for AMIs in region %s: %s", region, exc)
+                continue
+
+    # Sort by creation date (newest first)
+    results.sort(key=lambda x: x['creation_date'], reverse=True)
+
+    return results
+
+
+=======
+def find_equivalent_ami(
+    ami_id: str, source_region: str, target_regions: list[str] | None = None, target_arch: AwsArchType | None = None
+) -> list[dict[str, str]]:
+    """
+    Find equivalent AMIs in different regions or architectures based on image tags.
+
+    :param ami_id: Source AMI ID to find equivalents for
+    :param source_region: AWS region where the source AMI is located
+    :param target_regions: List of target regions to search in (if None, searches in source region only)
+    :param target_arch: Target architecture (x86_64 or arm64). If None, uses same arch as source
+    :return: List of dictionaries containing equivalent AMI information
+    """
+    # Get the source AMI and its tags - try both default account and ScyllaDB images account
+    # Combine tags from both accounts if available
+    source_ami = None
+    source_tags = {}
+    source_arch = None
+
+    for ec2_resource in (
+        boto3.resource("ec2", region_name=source_region),
+        get_scylla_images_ec2_resource(region_name=source_region),
+    ):
+        try:
+            ami = ec2_resource.Image(ami_id)
+            ami.load()
+            # First successful load sets the source_ami and architecture
+            if source_ami is None:
+                source_ami = ami
+                source_arch = ami.architecture
+            # Combine tags from all accounts
+            if ami.tags:
+                for tag in ami.tags:
+                    source_tags[tag["Key"]] = tag["Value"]
+        except ClientError as exc:
+            LOGGER.debug("Failed to load AMI %s in region %s with current credentials: %s", ami_id, source_region, exc)
+            continue
+
+    if source_ami is None:
+        LOGGER.error("Failed to load AMI %s in region %s from any account", ami_id, source_region)
+        return []
+
+    if not source_tags:
+        LOGGER.warning("Source AMI %s has no tags, cannot find equivalents", ami_id)
+        return []
+
+    # Determine target architecture
+    search_arch = target_arch if target_arch else source_arch
+
+    # Determine regions to search
+    if target_regions is None:
+        search_regions = [source_region]
+    else:
+        search_regions = target_regions
+
+    # Use all tags from the source AMI for matching, except "Name" and "arch"
+    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ("Name", "arch")]
+
+    if not matching_tags:
+        LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)
+        return []
+
+    LOGGER.info("Searching for AMIs with tags: %s", matching_tags)
+    results = []
+    # Search for equivalent AMIs in target regions
+    for region in search_regions:
+        target_ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region)
+
+        # Search using ScyllaDB official image resources
+        for client, owner in zip(
+            (target_ec2_resource, get_scylla_images_ec2_resource(region_name=region)), SCYLLA_AMI_OWNER_ID_LIST
+        ):
+            filters = [
+                {"Name": "architecture", "Values": [search_arch]},
+            ]
+
+            # Add tag filters based on what we found in source AMI
+            for tag_key, tag_value in matching_tags:
+                filters.append({"Name": f"tag:{tag_key}", "Values": [tag_value]})
+
+            try:
+                images = list(client.images.filter(Owners=[owner], Filters=filters))
+
+                for image in images:
+                    image_tags = {tag["Key"]: tag["Value"] for tag in (image.tags or [])}
+
+                    results.append(
+                        {
+                            "region": region,
+                            "ami_id": image.image_id,
+                            "name": image.name,
+                            "architecture": image.architecture,
+                            "creation_date": image.creation_date,
+                            "name_tag": image_tags.get("Name", ""),
+                            "scylla_version": image_tags.get("scylla_version", ""),
+                            "build_id": image_tags.get("build-id", image_tags.get("build_id", "")),
+                            "owner_id": image.owner_id,
+                        }
+                    )
+            except ClientError as exc:
+                LOGGER.warning("Failed to search for AMIs in region %s: %s", region, exc)
+                continue
+
+    # Sort by creation date (newest first)
+    results.sort(key=lambda x: x["creation_date"], reverse=True)
+
+    return results
+
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 def get_gce_images_versioned(version: str = None) -> list[list[str]]:
-    return [["GCE", image.name, image.self_link, image.creation_timestamp]
-            for image in get_scylla_gce_images_versions(version=version)]
+    return [
+        ["GCE", image.name, image.self_link, image.creation_timestamp]
+        for image in get_scylla_gce_images_versions(version=version)
+    ]
 
 
 def get_gce_images(branch: str, arch: AwsArchType) -> list:
@@ -1534,15 +2113,17 @@ def get_gce_images(branch: str, arch: AwsArchType) -> list:
         return rows
 
     for image in gce_images:
-        rows.append([
-            "GCE",
-            image.name,
-            image.self_link,
-            image.creation_timestamp,
-            image.labels.get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
-            image.labels.get("arch"),
-            image.labels.get("scylla_version")
-        ])
+        rows.append(
+            [
+                "GCE",
+                image.name,
+                image.self_link,
+                image.creation_timestamp,
+                image.labels.get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
+                image.labels.get("arch"),
+                image.labels.get("scylla_version"),
+            ]
+        )
 
     return rows
 
@@ -1557,9 +2138,8 @@ def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str
 
 
 def get_branched_gce_images(
-        scylla_version: str,
-        project: str = SCYLLA_GCE_IMAGES_PROJECT,
-        arch: AwsArchType = None) -> list[GceImage]:
+    scylla_version: str, project: str = SCYLLA_GCE_IMAGES_PROJECT, arch: AwsArchType = None
+) -> list[GceImage]:
     branch, build_id = scylla_version.split(":", 1)
 
     # Server-side resource filtering described in Google SDK reference docs:
@@ -1569,7 +2149,10 @@ def get_branched_gce_images(
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
     filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-.*)"
 
-    if build_id not in ("latest", "all",):
+    if build_id not in (
+        "latest",
+        "all",
+    ):
         # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
         filters += f"(name eq .+-build-{build_id})"  # use BUILD_ID from an image name for now
 
@@ -1594,7 +2177,7 @@ def get_branched_gce_images(
 @lru_cache()
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
     all_tags = get_ami_tags(ami_id, region_name)
-    if owner_id := all_tags.get('owner_id'):
+    if owner_id := all_tags.get("owner_id"):
         return owner_id in SCYLLA_AMI_OWNER_ID_LIST
     else:
         return False
@@ -1613,16 +2196,16 @@ def get_ami_tags(ami_id, region_name):
     new_test_image = scylla_images_ec2_resource.Image(ami_id)
     new_test_image.reload()
     if new_test_image and new_test_image.meta.data and new_test_image.tags:
-        res = {i['Key']: i['Value'] for i in new_test_image.tags}
-        res['owner_id'] = new_test_image.owner_id
+        res = {i["Key"]: i["Value"] for i in new_test_image.tags}
+        res["owner_id"] = new_test_image.owner_id
         return res
     else:
-        ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+        ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
         test_image = ec2_resource.Image(ami_id)
         test_image.reload()
         if test_image and test_image.meta.data and test_image.tags:
-            res = {i['Key']: i['Value'] for i in test_image.tags}
-            res['owner_id'] = test_image.owner_id
+            res = {i["Key"]: i["Value"] for i in test_image.tags}
+            res["owner_id"] = test_image.owner_id
             return res
         else:
             return {}
@@ -1667,20 +2250,19 @@ def remove_files(path):
             os.remove(path)
     except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during remove archived logs %s", details)
-        LOGGER.info("Remove temporary data manually: \"%s\"", path)
+        LOGGER.info('Remove temporary data manually: "%s"', path)
 
 
-def create_remote_storage_dir(node, path='') -> Optional[str, None]:
-    node_remote_dir = '/tmp'
+def create_remote_storage_dir(node, path="") -> Optional[str, None]:
+    node_remote_dir = "/tmp"
     if not path:
         path = node.name
     try:
         remote_dir = os.path.join(node_remote_dir, path)
-        result = node.remoter.run(f'mkdir -p {remote_dir}', ignore_status=True)
+        result = node.remoter.run(f"mkdir -p {remote_dir}", ignore_status=True)
 
         if result.exited > 0:
-            LOGGER.error(
-                'Remote storing folder not created.\n %s', result)
+            LOGGER.error("Remote storing folder not created.\n %s", result)
             remote_dir = node_remote_dir
 
     except Exception as details:  # noqa: BLE001
@@ -1693,10 +2275,10 @@ def create_remote_storage_dir(node, path='') -> Optional[str, None]:
 def format_timestamp(timestamp):
     try:
         # try convert seconds
-        return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
     except ValueError:
         # try convert miliseconds
-        return datetime.datetime.utcfromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.datetime.utcfromtimestamp(timestamp / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def wait_ami_available(client, ami_id):
@@ -1709,12 +2291,8 @@ def wait_ami_available(client, ami_id):
         client {boto3.EC2.Client} -- client of EC2 service
         ami_id {str} -- ami id to check availability
     """
-    waiter = client.get_waiter('image_available')
-    waiter.wait(ImageIds=[ami_id],
-                WaiterConfig={
-                    'Delay': 30,
-                    'MaxAttempts': 20}
-                )
+    waiter = client.get_waiter("image_available")
+    waiter.wait(ImageIds=[ami_id], WaiterConfig={"Delay": 30, "MaxAttempts": 20})
 
 
 # Make it mockable.
@@ -1730,26 +2308,26 @@ def s3_download_dir(bucket, path, target):
     :param target: the local directory to download the files to.
     """
 
-    client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
+    client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
 
     # Handle missing / at end of prefix
-    if not path.endswith('/'):
-        path += '/'
-    if path.startswith('/'):
+    if not path.endswith("/"):
+        path += "/"
+    if path.startswith("/"):
         path = path[1:]
     result = client.list_objects_v2(Bucket=bucket, Prefix=path)
     # Download each file individually
-    for key in result['Contents']:
+    for key in result["Contents"]:
         # Calculate relative path
-        rel_path = key['Key'][len(path):]
+        rel_path = key["Key"][len(path) :]
         # Skip paths ending in /
-        if not key['Key'].endswith('/'):
+        if not key["Key"].endswith("/"):
             local_file_path = os.path.join(target, rel_path)
             # Make sure directories exist
             local_file_dir = os.path.dirname(local_file_path)
             os.makedirs(local_file_dir, exist_ok=True)
-            LOGGER.info("Downloading %s from s3 to %s", key['Key'], local_file_path)
-            _s3_download_file(client, bucket, key['Key'], local_file_path)
+            LOGGER.info("Downloading %s from s3 to %s", key["Key"], local_file_path)
+            _s3_download_file(client, bucket, key["Key"], local_file_path)
 
 
 def gce_download_dir(bucket, path, target):
@@ -1762,16 +2340,16 @@ def gce_download_dir(bucket, path, target):
 
     storage_client, _ = get_gce_storage_client()
 
-    if not path.endswith('/'):
-        path += '/'
-    if path.startswith('/'):
+    if not path.endswith("/"):
+        path += "/"
+    if path.startswith("/"):
         path = path[1:]
     blobs = storage_client.list_blobs(bucket_or_name=bucket, prefix=path)
     for obj in blobs:
         obj: GceBlob
         if obj.name in [".", "..", path]:
             continue
-        rel_path = obj.name[len(path):]
+        rel_path = obj.name[len(path) :]
         local_file_path = os.path.join(target, rel_path)
 
         local_file_dir = os.path.dirname(local_file_path)
@@ -1791,9 +2369,20 @@ def download_dir_from_cloud(url):
         return url
 
     md5 = hashlib.md5()  # deepcode ignore insecureHash: can't change it
+<<<<<<< HEAD
     md5.update(url.encode('utf-8'))
     tmp_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    md5.update(url.encode('utf-8'))
+    if not dst_dir:
+        dst_dir = os.path.join('/tmp/download_from_cloud', md5.hexdigest())
+=======
+    md5.update(url.encode("utf-8"))
+    if not dst_dir:
+        dst_dir = os.path.join("/tmp/download_from_cloud", md5.hexdigest())
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     parsed = urlparse(url)
+<<<<<<< HEAD
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
     if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
         LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
@@ -1801,12 +2390,37 @@ def download_dir_from_cloud(url):
         s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
     elif url.startswith('gs://'):
         gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    LOGGER.info("Downloading [%s] to [%s]", url, dst_dir)
+    if os.path.isdir(dst_dir) and os.listdir(dst_dir) and skip_if_dst_dir_exists:
+        LOGGER.warning("[{}] already exists, skipping download".format(dst_dir))
+    elif url.startswith('s3://'):
+        s3_download_dir(parsed.hostname, parsed.path, dst_dir)
+    elif url.startswith('gs://'):
+        gce_download_dir(parsed.hostname, parsed.path, dst_dir)
+=======
+    LOGGER.info("Downloading [%s] to [%s]", url, dst_dir)
+    if os.path.isdir(dst_dir) and os.listdir(dst_dir) and skip_if_dst_dir_exists:
+        LOGGER.warning("[{}] already exists, skipping download".format(dst_dir))
+    elif url.startswith("s3://"):
+        s3_download_dir(parsed.hostname, parsed.path, dst_dir)
+    elif url.startswith("gs://"):
+        gce_download_dir(parsed.hostname, parsed.path, dst_dir)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     elif os.path.isdir(url):
         tmp_dir = url
     else:
         raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+<<<<<<< HEAD
     if not tmp_dir.endswith('/'):
         tmp_dir += '/'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    if not dst_dir.endswith('/'):
+        dst_dir += '/'
+=======
+    if not dst_dir.endswith("/"):
+        dst_dir += "/"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     LOGGER.info("Finished downloading [%s]", url)
     return tmp_dir
 
@@ -1821,17 +2435,17 @@ def filter_aws_instances_by_type(instances):
 
     for instance in instances:
         name = ""
-        for tag in instance['Tags']:
-            if tag['Key'] == 'Name':
-                name = tag['Value']
+        for tag in instance["Tags"]:
+            if tag["Key"] == "Name":
+                name = tag["Value"]
                 break
-        if 'db-node' in name:
+        if "db-node" in name:
             filtered_instances["db_nodes"].append(instance)
-        elif 'monitor-node' in name:
+        elif "monitor-node" in name:
             filtered_instances["monitor_nodes"].append(instance)
-        elif 'loader-node' in name:
+        elif "loader-node" in name:
             filtered_instances["loader_nodes"].append(instance)
-        elif '-k8s-' in name:
+        elif "-k8s-" in name:
             filtered_instances["kubernetes_nodes"].append(instance)
 
     return filtered_instances
@@ -1846,13 +2460,13 @@ def filter_gce_instances_by_type(instances):
     }
 
     for instance in instances:
-        if 'db-node' in instance.name:
+        if "db-node" in instance.name:
             filtered_instances["db_nodes"].append(instance)
-        elif 'monitor-node' in instance.name:
+        elif "monitor-node" in instance.name:
             filtered_instances["monitor_nodes"].append(instance)
-        elif 'loader-node' in instance.name:
+        elif "loader-node" in instance.name:
             filtered_instances["loader_nodes"].append(instance)
-        elif '-k8s-' in instance.name:
+        elif "-k8s-" in instance.name:
             filtered_instances["kubernetes_nodes"].append(instance)
 
     return filtered_instances
@@ -1873,7 +2487,7 @@ def filter_docker_containers_by_type(containers):
             filtered_containers["monitor_nodes"].append(container)
         elif "loader-node" in container.name:
             filtered_containers["loader_nodes"].append(container)
-        elif '-k8s-' in container.name:
+        elif "-k8s-" in container.name:
             filtered_containers["kubernetes_nodes"].append(container)
     return filtered_containers
 
@@ -1891,12 +2505,16 @@ def get_aws_builders(tags=None, running=True):
 
     for aws_builder in aws_builders:
         builder_name = [tag["Value"] for tag in aws_builder["Tags"] if tag["Key"] == "Name"][0]
-        builders.append({"builder": {
-            "public_ip": aws_builder.get("PublicIpAddress"),
-            "name": builder_name,
-            "user": "jenkins",
-            "key_file": os.path.expanduser(ssh_key_path)
-        }})
+        builders.append(
+            {
+                "builder": {
+                    "public_ip": aws_builder.get("PublicIpAddress"),
+                    "name": builder_name,
+                    "user": "jenkins",
+                    "key_file": os.path.expanduser(ssh_key_path),
+                }
+            }
+        )
 
     return builders
 
@@ -1908,12 +2526,16 @@ def get_gce_builders(tags=None, running=True):
     gce_builders = list_instances_gce(tags_dict=tags, running=running)
 
     for gce_builder in gce_builders:
-        builders.append({"builder": {
-            "public_ip": gce_public_addresses(gce_builder)[0],
-            "name": gce_builder.name,
-            "user": "scylla-test",
-            "key_file": os.path.expanduser(ssh_key_path)
-        }})
+        builders.append(
+            {
+                "builder": {
+                    "public_ip": gce_public_addresses(gce_builder)[0],
+                    "name": gce_builder.name,
+                    "user": "scylla-test",
+                    "key_file": os.path.expanduser(ssh_key_path),
+                }
+            }
+        )
 
     return builders
 
@@ -1934,21 +2556,21 @@ def get_builder_by_test_id(test_id):
 
     def search_test_id_on_builder(builder):
         remoter = RemoteCmdRunnerBase.create_remoter(
-            builder['public_ip'], user=builder["user"], key_file=builder["key_file"])
+            builder["public_ip"], user=builder["user"], key_file=builder["key_file"]
+        )
 
-        LOGGER.info('Search on %s', builder['name'])
-        result = remoter.run("find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder,
-                                                                                            test_id=test_id),
-                             ignore_status=True, verbose=False)
+        LOGGER.info("Search on %s", builder["name"])
+        result = remoter.run(
+            "find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder, test_id=test_id),
+            ignore_status=True,
+            verbose=False,
+        )
 
         if not result.exited and result.stdout:
             builder["remoter"] = remoter
             path = result.stdout.strip()
-            LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
-            return {
-                "builder": builder,
-                "path": os.path.dirname(path)
-            }
+            LOGGER.info("Builder name %s, ip %s, folder %s", builder["name"], builder["public_ip"], path)
+            return {"builder": builder, "path": os.path.dirname(path)}
         else:
             LOGGER.info("Nothing found")
             return None
@@ -1988,25 +2610,25 @@ def get_post_behavior_actions(config):
 
 def search_test_id_in_latest(logdir):
     test_id = None
-    result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
+    result = LocalCmdRunner().run("cat {0}/latest/test_id".format(logdir), ignore_status=True)
     if not result.exited and result.stdout:
         test_id = result.stdout.strip()
         LOGGER.info("Found latest test_id: {}".format(test_id))
         LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
     else:
-        LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
+        LOGGER.error("test_id not found. Exit code: %s; Error details %s", result.exited, result.stderr)
     return test_id
 
 
 def get_testrun_dir(base_dir, test_id=None):
     if not test_id:
         test_id = search_test_id_in_latest(base_dir)
-    LOGGER.info('Search dir with logs locally for test id: %s', test_id)
+    LOGGER.info("Search dir with logs locally for test id: %s", test_id)
     search_cmd = "find {base_dir} -name test_id | xargs grep -rl {test_id}".format(**locals())
     result = LocalCmdRunner().run(cmd=search_cmd, ignore_status=True)
     LOGGER.info("Search result %s", result)
     if result.exited == 0 and result.stdout:
-        found_dirs = result.stdout.strip().split('\n')
+        found_dirs = result.stdout.strip().split("\n")
         LOGGER.info(found_dirs)
         return os.path.dirname(found_dirs[0])
     LOGGER.info("No any dirs found locally for current test id")
@@ -2019,8 +2641,8 @@ def get_testrun_status(test_id=None, logdir=None, only_critical=False):
         return None
 
     status = ""
-    critical_log = os.path.join(testrun_dir, 'events_log/critical.log')
-    error_log = os.path.join(testrun_dir, 'events_log/error.log')
+    critical_log = os.path.join(testrun_dir, "events_log/critical.log")
+    error_log = os.path.join(testrun_dir, "events_log/error.log")
 
     if os.path.exists(critical_log):
         with open(critical_log, encoding="utf-8") as file:
@@ -2038,9 +2660,9 @@ def download_encrypt_keys():
     Download certificate files of encryption at-rest from S3 KeyStore
     """
     ks = KeyStore()
-    for pem_file in ['CA.pem', 'SCYLLADB.pem', 'hytrust-kmip-cacert.pem', 'hytrust-kmip-scylla.pem']:
-        if not os.path.exists('./data_dir/encrypt_conf/%s' % pem_file):
-            ks.download_file(pem_file, './data_dir/encrypt_conf/%s' % pem_file)
+    for pem_file in ["CA.pem", "SCYLLADB.pem", "hytrust-kmip-cacert.pem", "hytrust-kmip-scylla.pem"]:
+        if not os.path.exists("./data_dir/encrypt_conf/%s" % pem_file):
+            ks.download_file(pem_file, "./data_dir/encrypt_conf/%s" % pem_file)
 
 
 def normalize_ipv6_url(ip_address):
@@ -2074,6 +2696,7 @@ class PageFetcher:
     The first page is automatically retrieved, so an initial
     call to request_one is actually getting the *second* page!
     """
+
     pages = None
     error = None
     future = None
@@ -2092,10 +2715,7 @@ class PageFetcher:
         self.retrieved_empty_pages = 0
 
         self.future = future
-        self.future.add_callbacks(
-            callback=self.handle_page,
-            errback=self.handle_error
-        )
+        self.future.add_callbacks(callback=self.handle_page, errback=self.handle_error)
 
         # wait for the first page to arrive, otherwise we may call
         # future.has_more_pages too early, since it should only be
@@ -2158,11 +2778,12 @@ class PageFetcher:
 
         def error_message(msg):
             return "{}. Requested: {}; retrieved: {}; empty retrieved {}".format(
-                msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages)
+                msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages
+            )
 
         def missing_pages():
             pages = self.requested_pages - (self.retrieved_pages + self.retrieved_empty_pages)
-            assert pages >= 0, error_message('Retrieved too many pages')
+            assert pages >= 0, error_message("Retrieved too many pages")
             return pages
 
         missing = missing_pages()
@@ -2176,7 +2797,7 @@ class PageFetcher:
             # small wait so we don't need excess cpu to keep checking
             time.sleep(0.1)
 
-        raise RuntimeError(error_message('Requested pages were not delivered before timeout'))
+        raise RuntimeError(error_message("Requested pages were not delivered before timeout"))
 
     def pagecount(self):
         """
@@ -2224,7 +2845,7 @@ class PageFetcher:
 
 
 def reach_enospc_on_node(target_node):
-    no_space_log_reader = target_node.follow_system_log(patterns=['No space left on device'])
+    no_space_log_reader = target_node.follow_system_log(patterns=["No space left on device"])
 
     def approach_enospc():
         if bool(list(no_space_log_reader)):
@@ -2232,30 +2853,27 @@ def reach_enospc_on_node(target_node):
         result = target_node.remoter.run("df -al | grep '/var/lib/scylla'")
         free_space_size = int(result.stdout.split()[3])
         occupy_space_size = int(free_space_size * 90 / 100)
-        occupy_space_cmd = f'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'
-        LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+        occupy_space_cmd = f"fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}"
+        LOGGER.debug("Cost 90% free space on /var/lib/scylla/ by {}".format(occupy_space_cmd))
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
         except Exception as details:  # noqa: BLE001
             LOGGER.warning(str(details))
         return bool(list(no_space_log_reader))
 
-    wait.wait_for(func=approach_enospc,
-                  timeout=300,
-                  step=5,
-                  text='Wait for new ENOSPC error occurs in database',
-                  throw_exc=False
-                  )
+    wait.wait_for(
+        func=approach_enospc, timeout=300, step=5, text="Wait for new ENOSPC error occurs in database", throw_exc=False
+    )
 
 
 def clean_enospc_on_node(target_node, sleep_time):
-    LOGGER.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+    LOGGER.debug("Sleep {} seconds before releasing space to scylla".format(sleep_time))
     time.sleep(sleep_time)
 
-    LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
-    target_node.remoter.sudo('rm -rf /var/lib/scylla/occupy_90percent.*')
+    LOGGER.debug("Delete occupy_90percent file to release space to scylla-server")
+    target_node.remoter.sudo("rm -rf /var/lib/scylla/occupy_90percent.*")
 
-    LOGGER.debug('Sleep a while before restart scylla-server')
+    LOGGER.debug("Sleep a while before restart scylla-server")
     time.sleep(sleep_time / 2)
     target_node.restart_scylla_server()
     target_node.wait_db_up()
@@ -2277,7 +2895,7 @@ def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
     snapshots_content = defaultdict(list)
     SnapshotDetails = namedtuple("SnapshotDetails", ["keyspace_name", "table_name"])
     for line in listsnapshots_output.splitlines():
-        if line and not line.startswith('Snapshot') and not line.startswith('Total'):
+        if line and not line.startswith("Snapshot") and not line.startswith("Total"):
             line_splitted = line.split()
             snapshots_content[line_splitted[0]].append(SnapshotDetails(line_splitted[1], line_splitted[2]))
     return snapshots_content
@@ -2301,13 +2919,13 @@ def convert_metric_to_ms(metric: str) -> float:
         if not value:
             return 0
 
-        if units == 'hour':
+        if units == "hour":
             return float(value) * 3600 * 1000
-        elif units == 'min':
+        elif units == "min":
             return float(value) * 60 * 1000
-        elif units == 's':
+        elif units == "s":
             return float(value) * 1000
-        elif units == 'µs':
+        elif units == "µs":
             return float(value) / 1000
         else:
             return float(value)
@@ -2318,9 +2936,9 @@ def convert_metric_to_ms(metric: str) -> float:
         if found:
             parsed_values = found.groupdict()
             metric_converted = 0
-            metric_converted += _convert_to_ms('hour', parsed_values['hour'])
-            metric_converted += _convert_to_ms('min', parsed_values['min'])
-            metric_converted += _convert_to_ms(parsed_values['units'], parsed_values['sec'])
+            metric_converted += _convert_to_ms("hour", parsed_values["hour"])
+            metric_converted += _convert_to_ms("min", parsed_values["min"])
+            metric_converted += _convert_to_ms(parsed_values["units"], parsed_values["sec"])
         else:
             metric_converted = float(metric)
     except ValueError as ve:
@@ -2334,7 +2952,7 @@ def _shorten_alpha_sequences(value: str, max_alpha_chunk_size: int) -> str:
         return value
     is_alpha = value[0].isalpha()
     num = 0
-    output = ''
+    output = ""
     for char in value:
         if is_alpha == char.isalpha():
             if is_alpha and num >= max_alpha_chunk_size:
@@ -2350,16 +2968,16 @@ def _shorten_alpha_sequences(value: str, max_alpha_chunk_size: int) -> str:
 def _shorten_sequences_in_string(value: Union[str, List[str]], max_alpha_chunk_size: int) -> str:
     chunks = []
     if isinstance(value, str):
-        tmp = value.split('-')
+        tmp = value.split("-")
     else:
         tmp = value
     for chunk in tmp:
         chunks.append(_shorten_alpha_sequences(chunk, max_alpha_chunk_size))
-    return '-'.join(chunks)
+    return "-".join(chunks)
 
 
 def _string_max_chunk_size(value):
-    return max([len(chunk) for chunk in value.split('-')])
+    return max([len(chunk) for chunk in value.split("-")])
 
 
 def shorten_cluster_name(name: str, max_string_len: int):
@@ -2379,35 +2997,35 @@ def shorten_cluster_name(name: str, max_string_len: int):
         shorten name - lon-scy-ope-3h-gke-je-k8s-gke-cd86ad2b
     """
     max_alpha_chunk_size = _string_max_chunk_size(name)
-    last_chunk = name.split('-')[-1]
-    current = '-'.join(name.split('-')[0:-1])
+    last_chunk = name.split("-")[-1]
+    current = "-".join(name.split("-")[0:-1])
     last_chunk_len = len(last_chunk)
     while len(current) + last_chunk_len + 1 > max_string_len and max_alpha_chunk_size > 0:
-        current = _shorten_sequences_in_string(name.split('-')[0:-1], max_alpha_chunk_size)
+        current = _shorten_sequences_in_string(name.split("-")[0:-1], max_alpha_chunk_size)
         max_alpha_chunk_size -= 1
     if max_alpha_chunk_size == 0:
         return name
-    return '-'.join([current, last_chunk])
+    return "-".join([current, last_chunk])
 
 
 def download_from_github(repo: str, tag: str, dst_dir: str):
     """
     Downloads files from github via http to the dst_dir directory
     """
-    url = f'https://github.com/{repo}/archive/{tag}.zip'
+    url = f"https://github.com/{repo}/archive/{tag}.zip"
     resp = requests.get(url, allow_redirects=True)
     if not resp.ok:
         raise RuntimeError(f"Failed to download {url}, result: {resp.content}")
     os.makedirs(dst_dir, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmpdir:
-        with zipfile.ZipFile(io.BytesIO(resp.content), 'r') as zip_ref:
+        with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zip_ref:
             zip_ref.extractall(tmpdir)
         base_dir = os.path.join(tmpdir, os.listdir(tmpdir)[0])
         for file in os.listdir(base_dir):
             os.rename(os.path.join(base_dir, file), os.path.join(dst_dir, file))
 
 
-def walk_thru_data(data, path: str, separator: str = '/') -> Any:
+def walk_thru_data(data, path: str, separator: str = "/") -> Any:
     """Allows to get a value of an element in some data structure.
 
     Example from K8S API:
@@ -2432,7 +3050,7 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
             return None
         if not name:
             continue
-        if name[0] == '[' and name[-1] == ']':
+        if name[0] == "[" and name[-1] == "]":
             name = name[1:-1]  # noqa: PLW2901
         if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
@@ -2444,7 +3062,7 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
     return current_value
 
 
-def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=True):
+def update_authenticator(nodes, authenticator="AllowAllAuthenticator", restart=True):
     """
     Update the authenticator of nodes, restart the nodes to make the change effective
     """
@@ -2480,18 +3098,18 @@ def prepare_and_start_saslauthd_service(node):
             sudo adduser scylla sasl  # to avoid the permission issue of unit socket
         """)
     node.remoter.run('bash -cxe "%s"' % setup_script)
-    if node.parent_cluster.params.get('ldap_server_type') == LdapServerType.MS_AD:
+    if node.parent_cluster.params.get("ldap_server_type") == LdapServerType.MS_AD:
         conf = node.get_saslauthd_ms_ad_config()
     else:
         conf = node.get_saslauthd_config()
     for key in conf.keys():
         node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
     with node.remote_scylla_yaml() as scylla_yml:
-        scylla_yml.saslauthd_socket_path = '/run/saslauthd/mux'
-    node.remoter.sudo('systemctl restart saslauthd')
+        scylla_yml.saslauthd_socket_path = "/run/saslauthd/mux"
+    node.remoter.sudo("systemctl restart saslauthd")
 
 
-def change_default_password(node, user='cassandra', password='cassandra'):
+def change_default_password(node, user="cassandra", password="cassandra"):
     """
     Default password of Role `cassandra` is same as username, MS-AD doesn't allow the weak password.
     Here we change password of `cassandra`, then the cassandra user can smoothly work in switching Authenticator.
@@ -2513,6 +3131,7 @@ def make_threads_be_daemonic_by_default():
     threading.current_thread()._daemonic = True
 
 
+<<<<<<< HEAD
 def clear_out_all_exit_hooks():
     """
     Some thread-related code is using threading._register_atexit to hook to python program exit
@@ -2525,14 +3144,25 @@ def clear_out_all_exit_hooks():
 
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
                                         event_severity=Severity.ERROR, instance=None):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
+                                        event_severity=Severity.ERROR, instance=None):
+=======
+def validate_if_scylla_load_high_enough(
+    start_time, wait_cpu_utilization, prometheus_stats, event_severity=Severity.ERROR, instance=None
+):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     end_time = int(time.time())
-    scylla_load = prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time,
-                                                                  instance=instance)
+    scylla_load = prometheus_stats.get_scylla_reactor_utilization(
+        start_time=start_time, end_time=end_time, instance=instance
+    )
 
     if scylla_load < wait_cpu_utilization:
-        CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
-                              " The test results may be not correct.",
-                              severity=event_severity).publish()
+        CpuNotHighEnoughEvent(
+            message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
+            " The test results may be not correct.",
+            severity=event_severity,
+        ).publish()
         return False
 
     return True
@@ -2544,21 +3174,23 @@ class RemoteTemporaryFolder:
         self.folder_name = ""
 
     def __enter__(self):
-        result = self.node.remoter.run('mktemp -d')
+        result = self.node.remoter.run("mktemp -d")
         self.folder_name = result.stdout.strip()
         return self
 
     def __exit__(self, exit_type, value, _traceback):
         # remove the temporary folder as `sudo` to cover the case when the folder owner was changed during test
-        self.node.remoter.sudo(f'rm -rf {self.folder_name}')
+        self.node.remoter.sudo(f"rm -rf {self.folder_name}")
 
 
-duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s')
+duration_pattern = re.compile(r"(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s")
 
 
 def time_period_str_to_seconds(time_str: str) -> int:
     """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
-    return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
+    return sum(
+        [int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)]
+    )
 
 
 def sleep_for_percent_of_duration(duration: int, percent: int, min_duration: int, max_duration: int):
@@ -2574,7 +3206,7 @@ def get_keyspace_partition_ranges(node, keyspace: str):
     if not result.stdout:
         return None
 
-    ranges_as_list = re.findall(r'^\s*TokenRange\((.*)\)\s*$', result.stdout, re.MULTILINE)
+    ranges_as_list = re.findall(r"^\s*TokenRange\((.*)\)\s*$", result.stdout, re.MULTILINE)
     if not ranges_as_list:
         raise ValueError(f"No TokenRange() found in describering: {result.stdout}")
 
@@ -2586,8 +3218,8 @@ def keyspace_min_max_tokens(node, keyspace: str):
     if not ranges:
         return None, None
 
-    min_token = min([token['start_token'] for token in ranges])
-    max_token = max([token['end_token'] for token in ranges])
+    min_token = min([token["start_token"] for token in ranges])
+    max_token = max([token["end_token"] for token in ranges])
     return min_token, max_token
 
 
@@ -2598,18 +3230,24 @@ def describering_parsing(describering_output):
             res[attr] = attr_list[ind].strip()
         return res
 
-    found_attributes = re.findall(r'^\s*start_token:(-?\d+), end_token:(-?\d+), endpoints:\[([\d\., ]+)\], '
-                                  r'rpc_endpoints:\[([\d\., ]+)\], endpoint_details:\[(.*)\]\s*$',
-                                  describering_output, re.MULTILINE)
-    heads = ['start_token', 'end_token', 'endpoints', 'rpc_endpoints']
+    found_attributes = re.findall(
+        r"^\s*start_token:(-?\d+), end_token:(-?\d+), endpoints:\[([\d\., ]+)\], "
+        r"rpc_endpoints:\[([\d\., ]+)\], endpoint_details:\[(.*)\]\s*$",
+        describering_output,
+        re.MULTILINE,
+    )
+    heads = ["start_token", "end_token", "endpoints", "rpc_endpoints"]
     result = {}
     assert found_attributes, "Wrong format of token range: " + describering_output
     for index, attribute in enumerate(heads):
         attr_value = found_attributes[0][index].strip()
         result[attribute] = int(attr_value) if "token" in attribute else attr_value
-        result["details"] = [_list2dic(attr_list, ['host', 'datacenter', 'rack']) for attr_list in
-                             re.findall(r'EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?',
-                                        found_attributes[0][4])]
+        result["details"] = [
+            _list2dic(attr_list, ["host", "datacenter", "rack"])
+            for attr_list in re.findall(
+                r"EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?", found_attributes[0][4]
+            )
+        ]
     return result
 
 
@@ -2620,8 +3258,7 @@ def SoftTimeoutContext(timeout: int, operation: str):
     yield
     duration = time.time() - start_time
     if duration > timeout:
-        SoftTimeoutEvent(operation=operation, soft_timeout=timeout,
-                         duration=duration).publish_or_dump()
+        SoftTimeoutEvent(operation=operation, soft_timeout=timeout, duration=duration).publish_or_dump()
 
 
 def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[BaseException]):
@@ -2631,16 +3268,16 @@ def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[Bas
 
 def list_placement_groups_aws(tags_dict=None, region_name=None, available=False, group_as_region=False, verbose=False):
     """
-        list all placement groups with specific tags AWS
+    list all placement groups with specific tags AWS
 
-        :param tags_dict: key-value pairs used for filtering
-        :param region_name: name of the region to list
-        :param available: get all available placement groups
-        :param group_as_region: if True the results would be grouped into regions
-        :param verbose: if True will log progress information
+    :param tags_dict: key-value pairs used for filtering
+    :param region_name: name of the region to list
+    :param available: get all available placement groups
+    :param group_as_region: if True the results would be grouped into regions
+    :param verbose: if True will log progress information
 
-        :return: instances dict where region is a key
-        """
+    :return: instances dict where region is a key
+    """
     placement_groups = {}
     aws_regions = [region_name] if region_name else all_aws_regions()
 
@@ -2648,28 +3285,38 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
-        client: EC2Client = boto3.client('ec2', region_name=region)
+        client: EC2Client = boto3.client("ec2", region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
-                              'Values': value if isinstance(value, list) else [value]}
-                             for key, value in tags_dict.items()]
+            custom_filter = [
+                {"Name": "tag:{}".format(key), "Values": value if isinstance(value, list) else [value]}
+                for key, value in tags_dict.items()
+            ]
         response = client.describe_placement_groups(Filters=custom_filter)
-        placement_groups[region] = list(response['PlacementGroups'])
+        placement_groups[region] = list(response["PlacementGroups"])
 
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(placement_groups.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
-                   ).run(get_placement_groups, ignore_exceptions=True)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
+        get_placement_groups, ignore_exceptions=True
+    )
 
     for curr_region_name in placement_groups:  # noqa: PLC0206
         if available:
             placement_groups[curr_region_name] = [
-                i for i in placement_groups[curr_region_name] if i['State'] == 'available']
+                i for i in placement_groups[curr_region_name] if i["State"] == "available"
+            ]
         else:
+<<<<<<< HEAD
             placement_groups[curr_region_name] = [i for i in placement_groups[curr_region_name]
                                                   if not i['State'] == 'deleted']
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            placement_groups[curr_region_name] = [i for i in instances
+                                                  if not i['State'] == 'deleted']
+=======
+            placement_groups[curr_region_name] = [i for i in instances if not i["State"] == "deleted"]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     if not group_as_region:
         placement_groups = list(itertools.chain(*list(placement_groups.values())))  # flatten the list of lists
         total_items = len(placement_groups)
@@ -2682,6 +3329,51 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     return placement_groups
 
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def skip_optional_stage(stage_names: str | list[str]) -> bool:
+    """
+    Checks if the given test stage(s) is skipped for execution
+
+    :param stage_names: str or list, name of the test stage(s)
+    :return: bool
+    """
+    # making import here, to work around circular import issue
+    from sdcm.cluster import TestConfig  # noqa: PLC0415
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+    skip_test_stages = TestConfig().tester_obj().skip_test_stages
+    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+    if skipped_stages:
+        skipped_stages_str = ', '.join(skipped_stages)
+        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
+        return True
+    return False
+
+
+=======
+def skip_optional_stage(stage_names: str | list[str]) -> bool:
+    """
+    Checks if the given test stage(s) is skipped for execution
+
+    :param stage_names: str or list, name of the test stage(s)
+    :return: bool
+    """
+    # making import here, to work around circular import issue
+    from sdcm.cluster import TestConfig  # noqa: PLC0415
+
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+    skip_test_stages = TestConfig().tester_obj().skip_test_stages
+    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+    if skipped_stages:
+        skipped_stages_str = ", ".join(skipped_stages)
+        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
+        return True
+    return False
+
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 def parse_python_thread_command(cmd: str) -> dict:
     """
     Parses a command string into a dictionary of options
@@ -2701,17 +3393,17 @@ def parse_python_thread_command(cmd: str) -> dict:
         return options
 
     for token in tokens_iter:
-        if token.startswith('-'):
-            if '=' in token:
+        if token.startswith("-"):
+            if "=" in token:
                 # Option and value are in the same token ('-option=value')
-                option, value = token.split('=', 1)
-                option_name = option.lstrip('-')
+                option, value = token.split("=", 1)
+                option_name = option.lstrip("-")
                 options[option_name] = value
             else:
                 # Option without separator; may be followed by its value
-                option_name = token.lstrip('-')
+                option_name = token.lstrip("-")
                 next_token = next(tokens_iter, None)
-                if next_token and not next_token.startswith('-'):
+                if next_token and not next_token.startswith("-"):
                     # Next token is the value for the current option
                     options[option_name] = next_token
                 else:
@@ -2722,3 +3414,118 @@ def parse_python_thread_command(cmd: str) -> dict:
                         tokens_iter = iter([next_token] + list(tokens_iter))
 
     return options
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+
+def format_size(size_in_bytes):
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if size_in_bytes < 1024:
+            return f"{size_in_bytes:.2f} {unit}"
+        size_in_bytes /= 1024
+
+
+def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) -> list:
+    match stress_tool:
+        case "cassandra-stress":
+            suffix = "-rt" if throttled_load else "-st"
+            if stress_operation == "MIXED":
+                hdr_tags = [f"WRITE{suffix}", f"READ{suffix}"]
+            elif stress_operation == "READ":
+                hdr_tags = [f"READ{suffix}"]
+            elif stress_operation == "WRITE":
+                hdr_tags = [f"WRITE{suffix}"]
+            else:
+                raise ValueError(f"Unsupported stress_operation: {stress_operation}")
+        case "scylla-bench":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case "latte":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case _:
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+
+    return hdr_tags
+
+
+def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = None) -> str:
+    logs_links = list_logs_by_test_id(test_id)
+    tmp_dir = download_to or os.path.join('/tmp/', test_id)
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+    logs_file = ""
+    for log in logs_links:
+        if log["type"] == log_type:
+            logs_file = S3Storage().download_file(link=log["link"], dst_dir=tmp_dir)
+            LOGGER.debug("Downloaded %slog to %s", log_type, logs_file)
+
+    if not logs_file:
+        raise ValueError("%s not found in argus logs", log_type)
+
+    LOGGER.debug("Unpacking loader logs...")
+    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
+    hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
+    LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])
+    if not hdr_folder:
+        raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
+
+    return hdr_folder[test_id]
+=======
+
+
+def format_size(size_in_bytes):
+    for unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
+        if size_in_bytes < 1024:
+            return f"{size_in_bytes:.2f} {unit}"
+        size_in_bytes /= 1024
+
+
+def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) -> list:
+    match stress_tool:
+        case "cassandra-stress":
+            suffix = "-rt" if throttled_load else "-st"
+            if stress_operation == "MIXED":
+                hdr_tags = [f"WRITE{suffix}", f"READ{suffix}"]
+            elif stress_operation == "READ":
+                hdr_tags = [f"READ{suffix}"]
+            elif stress_operation == "WRITE":
+                hdr_tags = [f"WRITE{suffix}"]
+            else:
+                raise ValueError(f"Unsupported stress_operation: {stress_operation}")
+        case "scylla-bench":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case "latte":
+            # TODO: will be defined later
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+        case _:
+            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+
+    return hdr_tags
+
+
+def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = None) -> str:
+    logs_links = list_logs_by_test_id(test_id)
+    tmp_dir = download_to or os.path.join("/tmp/", test_id)
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+    logs_file = ""
+    for log in logs_links:
+        if log["type"] == log_type:
+            logs_file = S3Storage().download_file(link=log["link"], dst_dir=tmp_dir)
+            LOGGER.debug("Downloaded %slog to %s", log_type, logs_file)
+
+    if not logs_file:
+        raise ValueError("%s not found in argus logs", log_type)
+
+    LOGGER.debug("Unpacking loader logs...")
+    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
+
+    hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
+    LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])
+    if not hdr_folder:
+        raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
+
+    return hdr_folder[test_id]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

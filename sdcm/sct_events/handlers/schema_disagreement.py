@@ -45,8 +45,19 @@ class SchemaDisagreementHandler(EventHandler):
                 gossip_info = gossip_info or node.get_gossip_info()
                 peers_info = peers_info or node.get_peers_info()
                 try:
+<<<<<<< HEAD
                     link = upload_sstables_to_s3(node, keyspace='system_schema', test_id=tester_obj.test_id)
                     event.add_sstable_link(link)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                    link = upload_sstables_to_s3(node, keyspace='system_schema',
+                                                 test_id=tester_obj.test_id, public=False)
+                    event.add_sstable_link(create_proxy_argus_s3_url(link, True))
+=======
+                    link = upload_sstables_to_s3(
+                        node, keyspace="system_schema", test_id=tester_obj.test_id, public=False
+                    )
+                    event.add_sstable_link(create_proxy_argus_s3_url(link, True))
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 except Exception as exc:  # noqa: BLE001
                     LOGGER.error("failed to upload system_schema sstables for node %s: %s", node.name, exc)
             event.add_gossip_info(gossip_info)

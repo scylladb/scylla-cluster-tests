@@ -32,7 +32,14 @@ class CDCLogReaderThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.cdc-stresser"
 
     def __init__(self, *args, **kwargs):
+<<<<<<< HEAD
 
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+        self.termination_event = kwargs.pop("termination_event")
+=======
+        self.termination_event = kwargs.pop("termination_event")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         self.keyspace = kwargs.pop("keyspace_name")
         self.cdc_log_table = kwargs.pop("base_table_name") + CDC_LOGTABLE_SUFFIX
         self.batching = kwargs.pop("enable_batching")
@@ -45,6 +52,47 @@ class CDCLogReaderThread(DockerBasedStressThread):
                             -nodes {node_ips} -group-size {shards_per_node} \
                             -worker-id {worker_id} -worker-count {worker_count}"
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def run(self):
+        """
+        Overrides the base class's `run` method to customize how stress threads are spawned.
+        In the original `DockerBasedStressThread.run()`, each stress thread is submitted
+        by iterating directly over the loader objects  and then by indexing CPU cores or stress workers.
+        Here it specifically iterates over the loader indices
+        ensuring worker_id is in the valid range [0..worker_count - 1].
+        Previously, because loader indexing began at 1, the tool would fail with “worker id must be
+        from range [0..N-1].”
+        ref: https://github.com/scylladb/scylla-cluster-tests/issues/9819
+        """
+        self.configure_executer()
+        for loader_idx in range(len(self.loaders)):
+            for cpu_idx in range(self.stress_num):
+                self.results_futures += [self.executor.submit(self._run_stress,
+                                                              *(self.loaders[loader_idx], loader_idx, cpu_idx))]
+        return self
+
+=======
+    def run(self):
+        """
+        Overrides the base class's `run` method to customize how stress threads are spawned.
+        In the original `DockerBasedStressThread.run()`, each stress thread is submitted
+        by iterating directly over the loader objects  and then by indexing CPU cores or stress workers.
+        Here it specifically iterates over the loader indices
+        ensuring worker_id is in the valid range [0..worker_count - 1].
+        Previously, because loader indexing began at 1, the tool would fail with “worker id must be
+        from range [0..N-1].”
+        ref: https://github.com/scylladb/scylla-cluster-tests/issues/9819
+        """
+        self.configure_executer()
+        for loader_idx in range(len(self.loaders)):
+            for cpu_idx in range(self.stress_num):
+                self.results_futures += [
+                    self.executor.submit(self._run_stress, *(self.loaders[loader_idx], loader_idx, cpu_idx))
+                ]
+        return self
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def _run_stress(self, loader, loader_idx, cpu_idx):
         loader_node_logdir = Path(loader.logdir)
         if not loader_node_logdir.exists():
@@ -52,21 +100,23 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
         worker_count = self.max_workers
         worker_id = loader_idx * self.stress_num + cpu_idx
-        log_file_name = loader_node_logdir.joinpath(f'cdclogreader-l{loader_idx}-{worker_id}-{uuid.uuid4()}.log')
-        LOGGER.debug('cdc-stressor local log: %s', log_file_name)
+        log_file_name = loader_node_logdir.joinpath(f"cdclogreader-l{loader_idx}-{worker_id}-{uuid.uuid4()}.log")
+        LOGGER.debug("cdc-stressor local log: %s", log_file_name)
 
         self.build_stress_command(worker_id, worker_count)
 
         LOGGER.info(self.stress_cmd)
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name, extra_docker_opts=f"--network=host --label shell_marker={self.shell_marker}"
+        )
 
-        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'
+        node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}"
 
         CDCReaderStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         try:
             with cleanup_context:
+<<<<<<< HEAD
                 result = docker.run(cmd=node_cmd,
                                     timeout=self.timeout + self.shutdown_timeout,
                                     ignore_status=True,
@@ -78,11 +128,41 @@ class CDCLogReaderThread(DockerBasedStressThread):
                     CDCReaderStressEvent.error(node=loader,
                                                stress_cmd=self.stress_cmd,
                                                errors=result.stderr.split("\n")).publish()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                result = docker.run(cmd=node_cmd,
+                                    timeout=self.timeout + self.shutdown_timeout,
+                                    ignore_status=True,
+                                    log_file=log_file_name,
+                                    verbose=True,
+                                    retry=0
+                                    )
+                if not result.ok and not self.termination_event.is_set():
+                    CDCReaderStressEvent.error(node=loader,
+                                               stress_cmd=self.stress_cmd,
+                                               errors=result.stderr.split("\n")).publish()
+=======
+                result = docker.run(
+                    cmd=node_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    ignore_status=True,
+                    log_file=log_file_name,
+                    verbose=True,
+                    retry=0,
+                )
+                if not result.ok and not self.termination_event.is_set():
+                    CDCReaderStressEvent.error(
+                        node=loader, stress_cmd=self.stress_cmd, errors=result.stderr.split("\n")
+                    ).publish()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
                 return result
         except Exception as exc:  # noqa: BLE001
-            CDCReaderStressEvent.failure(node=loader,
-                                         stress_cmd=self.stress_cmd,
-                                         errors=[format_stress_cmd_error(exc), ]).publish()
+            CDCReaderStressEvent.failure(
+                node=loader,
+                stress_cmd=self.stress_cmd,
+                errors=[
+                    format_stress_cmd_error(exc),
+                ],
+            ).publish()
         finally:
             CDCReaderStressEvent.finish(node=loader, stress_cmd=self.stress_cmd).publish()
         return None

@@ -32,10 +32,30 @@ SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 
 class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
+<<<<<<< HEAD
     syslog_host_port: tuple[str, int] = None
     logs_transport: str = 'syslog-ng'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    syslog_host_port: tuple[str, int] | None = None
+    logs_transport: str = 'vector'
+=======
+    syslog_host_port: tuple[str, int] | None = None
+    logs_transport: str = "vector"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     configure_sshd: bool = True
+<<<<<<< HEAD
     hostname: str = ''
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    hostname: str = ''
+    log_file: str = ''
+    test_config: Any | None = None
+    install_docker: bool = False
+=======
+    hostname: str = ""
+    log_file: str = ""
+    test_config: Any | None = None
+    install_docker: bool = False
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -45,7 +65,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _wait_before_running_script() -> str:
-        return ''
+        return ""
 
     @staticmethod
     def _skip_if_already_run() -> str:
@@ -67,8 +87,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         return f"mkdir -p {CLOUD_INIT_SCRIPTS_PATH} && touch {CLOUD_INIT_SCRIPTS_PATH}/done"
 
     def _start_script(self) -> str:
-        script = '#!/bin/bash\n'
-        script += 'set -x\n'
+        script = "#!/bin/bash\n"
+        script += "set -x\n"
         script += self._wait_before_running_script()
         return script
 
@@ -84,21 +104,66 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 3. scylla image is running it in such mode that "echo -e" is not working
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
-        script = ''
+        script = ""
 
+<<<<<<< HEAD
         if self.logs_transport == 'syslog-ng':
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        script += configure_backoff_timeout()
+        if self.logs_transport == 'syslog-ng':
+=======
+        script += configure_backoff_timeout()
+        if self.logs_transport == "syslog-ng":
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             script += configure_syslogng_destination_conf(
                 host=self.syslog_host_port[0],
                 port=self.syslog_host_port[1],
+<<<<<<< HEAD
                 throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
         script += self._skip_if_already_run()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
+            script += self._skip_if_already_run_syslogng()
+        if self.logs_transport == "vector":
+            script += self._skip_if_already_run_vector()
+=======
+                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND,
+            )
+            script += self._skip_if_already_run_syslogng()
+        if self.logs_transport == "vector":
+            script += self._skip_if_already_run_vector()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         script += disable_daily_apt_triggers()
+<<<<<<< HEAD
         if self.logs_transport == 'syslog-ng':
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if self.logs_transport == 'syslog-ng':
+            script += update_repo_cache()
+=======
+        if self.logs_transport == "syslog-ng":
+            script += update_repo_cache()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             script += install_syslogng_service()
             script += configure_syslogng_target_script(hostname=self.hostname)
             script += restart_syslogng_service()
             script += install_syslogng_exporter()
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if self.logs_transport == 'vector':
+            script += update_repo_cache()
+            script += install_vector_service()
+            host, port = self.syslog_host_port
+            script += configure_vector_target_script(host=host, port=port)
+
+=======
+        if self.logs_transport == "vector":
+            script += update_repo_cache()
+            script += install_vector_service()
+            host, port = self.syslog_host_port
+            script += configure_vector_target_script(host=host, port=port)
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         if self.configure_sshd:
             script += configure_sshd_script()
             script += restart_sshd_service()

@@ -62,7 +62,21 @@ class GeminiStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
+<<<<<<< HEAD
     def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):
+=======
+    def __init__(
+        self,
+        test_cluster: BaseCluster | BaseScyllaCluster,
+        oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None,
+        loaders,
+        stress_cmd: str,
+        timeout=None,
+        params=None,
+    ):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -95,11 +109,45 @@ class GeminiStressThread(DockerBasedStressThread):
         if oracle_nodes:
             cmd += "--oracle-cluster={} ".format(oracle_nodes)
         if table_options:
+<<<<<<< HEAD
             cmd += " ".join([f"--table-options \"{table_opt}\"" for table_opt in table_options])
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            cmd += " ".join([f'--table-options="{table_opt}"' for table_opt in table_options])
+
+        stress_cmd = self.stress_cmd.replace("\n", " ").strip()
+
+        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if
+                              key not in stress_cmd) + " " + stress_cmd
+
+=======
+            cmd += " ".join([f'--table-options="{table_opt}"' for table_opt in table_options])
+
+        stress_cmd = self.stress_cmd.replace("\n", " ").strip()
+
+        cmd += (
+            " "
+            + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if key not in stress_cmd)
+            + " "
+            + stress_cmd
+        )
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         self.gemini_commands.append(cmd)
         return cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        for file_name in [self.gemini_result_file, self.gemini_test_statements_file, self.gemini_oracle_statements_file]:
+            loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
+=======
+        for file_name in [
+            self.gemini_result_file,
+            self.gemini_test_statements_file,
+            self.gemini_oracle_statements_file,
+        ]:
+            loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
         cpu_options = ""
         if self.stress_num > 1:
@@ -118,9 +166,33 @@ class GeminiStressThread(DockerBasedStressThread):
         LOGGER.debug('gemini local log: %s', log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
+<<<<<<< HEAD
         with cleanup_context, \
                 GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
                 GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        try:
+            prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
+            reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
+
+        with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+=======
+        try:
+            prefix, *_ = gemini_cmd.split("gemini", maxsplit=1)
+            reporter = GeminiVersionReporter(docker, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # noqa: BLE001
+            LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
+
+        with (
+            cleanup_context,
+            GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher,
+            GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event,
+        ):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             try:
                 publisher.event_id = gemini_stress_event.event_id
                 gemini_stress_event.log_file_name = log_file_name
@@ -148,6 +220,26 @@ class GeminiStressThread(DockerBasedStressThread):
             results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            local_gemini_test_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+            local_gemini_oracle_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+            docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
+            docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
+
+=======
+            local_gemini_test_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_test_statements_file)
+            )
+            local_gemini_oracle_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file)
+            )
+            docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
+            docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         return docker, result, local_gemini_result_file
 
     def get_gemini_results(self):
@@ -212,6 +304,6 @@ class GeminiStressThread(DockerBasedStressThread):
 
             split_idx = line.index(':')
             key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            value = line[split_idx + 1 :].split()[0]
             results[key] = int(value)
         return results

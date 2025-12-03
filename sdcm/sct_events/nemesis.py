@@ -17,11 +17,7 @@ from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class DisruptionEvent(ContinuousEvent):
-    def __init__(self,
-                 nemesis_name,
-                 node,
-                 severity=Severity.NORMAL,
-                 publish_event=True):
+    def __init__(self, nemesis_name, node, severity=Severity.NORMAL, publish_event=True):
         self.nemesis_name = nemesis_name
         self.node = str(node)
         self.duration = None
@@ -30,11 +26,11 @@ class DisruptionEvent(ContinuousEvent):
 
     @cached_property
     def subcontext_fields(self) -> list:
-        return ['event_id', 'base', 'nemesis_name', 'node', 'timestamp']
+        return ["event_id", "base", "nemesis_name", "node", "timestamp"]
 
     @cached_property
     def subcontext_fmt(self):
-        return {'nemesis_name': self.nemesis_name}
+        return {"nemesis_name": self.nemesis_name}
 
     @property
     def msgfmt(self) -> str:
