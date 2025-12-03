@@ -26,16 +26,16 @@ MIN_SCYLLA_VERSION_FOR_VS = "2025.4.0"
 # Node instance type limitations for Vector Search Beta on Scylla Cloud
 # Source: https://cloud.docs.scylladb.com/stable/vector-search/vector-search-clusters.html
 XCLOUD_VS_INSTANCE_TYPES = {
-    'aws': {
-        't4g.small': 175,
-        't4g.medium': 176,
-        'r7g.medium': 177,
+    "aws": {
+        "t4g.small": 175,
+        "t4g.medium": 176,
+        "r7g.medium": 177,
     },
-    'gce': {
-        'e2-small': 178,
-        'e2-medium': 179,
-        'n4-highmem-2': 180,
-    }
+    "gce": {
+        "e2-small": 178,
+        "e2-medium": 179,
+        "n4-highmem-2": 180,
+    },
 }
 
 
@@ -57,6 +57,6 @@ def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
     if not path.exists():
         raise ValueError(f"Scylla Cloud REST credentials file not found: {file_path}")
 
-    with path.open('r', encoding='utf-8') as creds_file:
+    with path.open("r", encoding="utf-8") as creds_file:
         creds = json.load(creds_file)
     return creds

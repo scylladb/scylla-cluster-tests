@@ -17,5 +17,13 @@ def get_scylla_manager_tool(manager_node, scylla_cluster=None) -> AnyManagerTool
     return ScyllaManagerToolNonRedhat(manager_node=manager_node)
 
 
-__all__ = ['ScyllaManagerError', 'TaskStatus', 'HostStatus', 'HostSsl', 'HostRestStatus',
-           'AnyManagerTool', 'AnyManagerCluster', 'get_scylla_manager_tool']
+__all__ = [
+    "ScyllaManagerError",
+    "TaskStatus",
+    "HostStatus",
+    "HostSsl",
+    "HostRestStatus",
+    "AnyManagerTool",
+    "AnyManagerCluster",
+    "get_scylla_manager_tool",
+]
