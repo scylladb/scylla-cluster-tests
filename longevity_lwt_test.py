@@ -28,7 +28,7 @@ from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
 class LWTLongevityTest(LongevityTest):
-    BASE_TABLE_PARTITION_KEYS = ['domain', 'published_date']
+    BASE_TABLE_PARTITION_KEYS = ["domain", "published_date"]
 
     def setUp(self):
         super().setUp()
@@ -39,7 +39,7 @@ class LWTLongevityTest(LongevityTest):
         # operations on system.paxos table.
         #
         # Decrease severity of this event during prepare.  Shouldn't impact on test result.
-        if not skip_optional_stage('prepare_write'):
+        if not skip_optional_stage("prepare_write"):
             with ignore_mutation_write_errors():
                 super().run_prepare_write_cmd()
 
@@ -57,20 +57,22 @@ class LWTLongevityTest(LongevityTest):
         if self.db_cluster.nemesis_count > 1:
             self.data_validator = MagicMock()
             self.data_validator.keyspace_name = None
-            DataValidatorEvent.DataValidator(severity=Severity.NORMAL,
-                                             message="Test runs with parallel nemesis. Data validator is disabled."
-                                             ).publish()
+            DataValidatorEvent.DataValidator(
+                severity=Severity.NORMAL, message="Test runs with parallel nemesis. Data validator is disabled."
+            ).publish()
         else:
-            self.data_validator = LongevityDataValidator(longevity_self_object=self,
-                                                         user_profile_name='c-s_lwt',
-                                                         base_table_partition_keys=self.BASE_TABLE_PARTITION_KEYS)
+            self.data_validator = LongevityDataValidator(
+                longevity_self_object=self,
+                user_profile_name="c-s_lwt",
+                base_table_partition_keys=self.BASE_TABLE_PARTITION_KEYS,
+            )
 
             self.data_validator.copy_immutable_expected_data()
             self.data_validator.copy_updated_expected_data()
             self.data_validator.save_count_rows_for_deletion()
 
         # Run nemesis during stress as it was stopped before copy expected data
-        if self.params.get('nemesis_during_prepare'):
+        if self.params.get("nemesis_during_prepare"):
             self.start_nemesis()
 
     def start_nemesis(self):
@@ -89,9 +91,9 @@ class LWTLongevityTest(LongevityTest):
     def validate_data(self):
         node = self.db_cluster.nodes[0]
         if not (keyspace := self.data_validator.keyspace_name):
-            DataValidatorEvent.DataValidator(severity=Severity.NORMAL,
-                                             message="Failed fo get keyspace name. Data validator is disabled."
-                                             ).publish()
+            DataValidatorEvent.DataValidator(
+                severity=Severity.NORMAL, message="Failed fo get keyspace name. Data validator is disabled."
+            ).publish()
             return
 
         with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:

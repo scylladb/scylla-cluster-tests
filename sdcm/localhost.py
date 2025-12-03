@@ -25,8 +25,23 @@ from sdcm.utils.vector_dev import VectorDevContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD
 class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin,
                 JavaContainerMixin, VectorDevContainerMixin):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin,
+                JavaContainerMixin, VectorDevContainerMixin, XCloudConnectivityContainerMixin):
+=======
+class LocalHost(
+    SyslogNGContainerMixin,
+    GcloudContainerMixin,
+    HelmContainerMixin,
+    LdapContainerMixin,
+    JavaContainerMixin,
+    VectorDevContainerMixin,
+    XCloudConnectivityContainerMixin,
+):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
@@ -37,8 +52,10 @@ class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin
 
     @property
     def ldap_ports(self) -> Optional[dict]:
-        return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
-                'ldap_ssl_port': ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT)}
+        return {
+            "ldap_port": ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
+            "ldap_ssl_port": ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT),
+        }
 
     def destroy(self) -> None:
         ContainerManager.destroy_all_containers(self)

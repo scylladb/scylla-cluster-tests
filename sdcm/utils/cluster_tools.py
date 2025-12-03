@@ -24,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def group_nodes_by_dc_idx(nodes: list[BaseNode]) -> dict[int, list[BaseNode]]:  # noqa: F821
-    """ Group nodes by dc_idx """
+    """Group nodes by dc_idx"""
     nodes_by_dc_idx = defaultdict(list)
     for node in nodes:
         nodes_by_dc_idx[node.dc_idx].append(node)
@@ -57,12 +57,85 @@ def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
             # Check if all racks have the same number of nodes
             if current_dc_config_count != len(nodes_in_dc):
                 LOGGER.debug(
-                    f"Datacenter {dc_idx=} rack distribution: {dict(racks)}, config count: {current_dc_config_count}, {len(nodes_in_dc)=}")
+                    f"Datacenter {dc_idx=} rack distribution: {dict(racks)}, config count: {current_dc_config_count}, {len(nodes_in_dc)=}"
+                )
                 return False
         return True
     elif capacity_errors_check_mode == "disabled":
         # If capacity errors check is disabled, we assume the cluster is balanced
         return True
     else:
+<<<<<<< HEAD
         raise ValueError(f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
                          "Supported modes are: 'per-initial_config', 'disabled'.")
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        raise ValueError(f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
+                         "Supported modes are: 'per-initial_config', 'disabled'.")
+
+
+# TODO: For the following functions, consider adding a "num_workers=len(cluster.data_nodes)" parameter to ParallelObject
+# to align the number of concurrent operations to cluster nodes number, since it can be higher that default workers number.
+def flush_nodes(cluster, keyspace: str):
+    LOGGER.debug("Run a flush on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {keyspace}", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+
+
+def major_compaction_nodes(cluster, keyspace: str, table: str):
+    LOGGER.debug("Run a major compaction on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="compact", args=f"{keyspace} {table}", ) for
+                node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=3000).call_objects()
+
+
+def clear_snapshot_nodes(cluster):
+    LOGGER.debug("Run a clear-snapshot command on cluster data nodes")
+    triggers = [partial(node.run_nodetool, sub_cmd="clearsnapshot", )
+                for node in cluster.data_nodes]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+=======
+        raise ValueError(
+            f"Unknown capacity_errors_check_mode: {capacity_errors_check_mode}. "
+            "Supported modes are: 'per-initial_config', 'disabled'."
+        )
+
+
+# TODO: For the following functions, consider adding a "num_workers=len(cluster.data_nodes)" parameter to ParallelObject
+# to align the number of concurrent operations to cluster nodes number, since it can be higher that default workers number.
+def flush_nodes(cluster, keyspace: str):
+    LOGGER.debug("Run a flush on cluster data nodes")
+    triggers = [
+        partial(
+            node.run_nodetool,
+            sub_cmd=f"flush -- {keyspace}",
+        )
+        for node in cluster.data_nodes
+    ]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+
+
+def major_compaction_nodes(cluster, keyspace: str, table: str):
+    LOGGER.debug("Run a major compaction on cluster data nodes")
+    triggers = [
+        partial(
+            node.run_nodetool,
+            sub_cmd="compact",
+            args=f"{keyspace} {table}",
+        )
+        for node in cluster.data_nodes
+    ]
+    ParallelObject(objects=triggers, timeout=3000).call_objects()
+
+
+def clear_snapshot_nodes(cluster):
+    LOGGER.debug("Run a clear-snapshot command on cluster data nodes")
+    triggers = [
+        partial(
+            node.run_nodetool,
+            sub_cmd="clearsnapshot",
+        )
+        for node in cluster.data_nodes
+    ]
+    ParallelObject(objects=triggers, timeout=1200).call_objects()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

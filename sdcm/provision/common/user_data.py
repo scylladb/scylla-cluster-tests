@@ -18,7 +18,7 @@ from typing import Literal
 from sdcm.provision.common.builders import AttrBuilder
 
 
-DataDeviceType = Literal['attached', 'instance_store']
+DataDeviceType = Literal["attached", "instance_store"]
 
 
 class RaidLevelType(int, Enum):
