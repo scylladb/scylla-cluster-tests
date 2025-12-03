@@ -23,7 +23,7 @@ def fixture_mock_calls():
     events_processes._EVENTS_PROCESSES = None
 
 
-@pytest.mark.sct_config(files='test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml')
+@pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
 class DummyLongevityTest(LongevityTest):
     __test__ = True
     test_custom_time = None
@@ -79,7 +79,7 @@ class DummyLongevityTest(LongevityTest):
         pass
 
     def _run_all_stress_cmds(self, stress_queue, params):
-        for _ in range(len(params['stress_cmd'])):
+        for _ in range(len(params["stress_cmd"])):
             m = MagicMock()
             m.parse_results.return_value = ([], {})
             stress_queue.append(m)

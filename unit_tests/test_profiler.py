@@ -25,13 +25,27 @@ import pytest
 
 from sdcm.utils.common import generate_random_string
 from sdcm.prometheus import PrometheusAlertManagerListener
-from unit_tests.lib.test_profiler.lib import LibMultiprocessingProcessCustomClass, LibProcessCustomClass, \
-    LibMultiprocessingProcessCustomClassWithRun, LibProcessCustomClassWithRun, LibThreadCustomClass, \
-    LibThreadCustomClassWithRun, LibThreadingThreadCustomClass, LibThreadingThreadCustomClassWithRun, LibThread, LibProcess
+from unit_tests.lib.test_profiler.lib import (
+    LibMultiprocessingProcessCustomClass,
+    LibProcessCustomClass,
+    LibMultiprocessingProcessCustomClassWithRun,
+    LibProcessCustomClassWithRun,
+    LibThreadCustomClass,
+    LibThreadCustomClassWithRun,
+    LibThreadingThreadCustomClass,
+    LibThreadingThreadCustomClassWithRun,
+    LibThread,
+    LibProcess,
+)
 
-from unit_tests.lib.test_profiler.lib2 import LibProfileableProcessCustomClass, \
-    LibProfileableProcessCustomClassWithRun, LibProfileableThreadCustomClass, LibProfileableThreadCustomClassWithRun, \
-    LibProfileableThread, LibProfileableProcess
+from unit_tests.lib.test_profiler.lib2 import (
+    LibProfileableProcessCustomClass,
+    LibProfileableProcessCustomClassWithRun,
+    LibProfileableThreadCustomClass,
+    LibProfileableThreadCustomClassWithRun,
+    LibProfileableThread,
+    LibProfileableProcess,
+)
 
 from sdcm.utils.profiler import ProfilerFactory, ProfileableProcess as pp, ProfileableThread as pt
 
@@ -112,8 +126,9 @@ class ProfileableProcessCustomClassWithRun(pp):
 
 @pytest.mark.skip("ProfilerFactory doesn't work from python 3.12 - see https://github.com/python/cpython/issues/110770")
 class TestProfileFactory(unittest.TestCase):
-    """ Test to illustrate profile factory usage """
-    tmpdir = os.path.join('/tmp', generate_random_string(10))
+    """Test to illustrate profile factory usage"""
+
+    tmpdir = os.path.join("/tmp", generate_random_string(10))
 
     def __init__(self, *args, **kwargs):
         self._subroutines = []
@@ -125,28 +140,28 @@ class TestProfileFactory(unittest.TestCase):
             return
         self.pr_factory.stop_and_dump()
         dirs_to_expect = [
-            'PrometheusAlertManagerListener',
-            'main',
+            "PrometheusAlertManagerListener",
+            "main",
         ]
         for sub in self._subroutines:
             dirs_to_expect.append(sub._name)
 
         not_found = []
         for directory in dirs_to_expect:
-            bin_path = os.path.join(self.tmpdir, directory, 'stats.bin')
-            txt_path = os.path.join(self.tmpdir, directory, 'stats.txt')
+            bin_path = os.path.join(self.tmpdir, directory, "stats.bin")
+            txt_path = os.path.join(self.tmpdir, directory, "stats.txt")
             for path in (bin_path, txt_path):
                 if not os.path.exists(path):
                     not_found.append(path)
-        bin_path = os.path.join(self.tmpdir, 'stats.bin')
-        txt_path = os.path.join(self.tmpdir, 'stats.txt')
+        bin_path = os.path.join(self.tmpdir, "stats.bin")
+        txt_path = os.path.join(self.tmpdir, "stats.txt")
         for path in (bin_path, txt_path):
             if not os.path.exists(path):
                 not_found.append(path)
         self._subroutines = []
         if self.pr_factory:
             self.pr_factory.deactivate()
-        assert not not_found, "Following files were not found:\n" + '\n'.join(not_found)
+        assert not not_found, "Following files were not found:\n" + "\n".join(not_found)
         if os.path.exists(self.tmpdir):
             shutil.rmtree(self.tmpdir)
 
@@ -156,7 +171,7 @@ class TestProfileFactory(unittest.TestCase):
         self._add_tests()
         for sub in self._subroutines:
             sub.start()
-        tmp = PrometheusAlertManagerListener('127.0.0.1')
+        tmp = PrometheusAlertManagerListener("127.0.0.1")
         tmp.start()
         function_sleep()
         function_while()
@@ -173,7 +188,7 @@ class TestProfileFactory(unittest.TestCase):
         self._add_tests()
         for sub in self._subroutines:
             sub.start()
-        tmp = PrometheusAlertManagerListener('127.0.0.1')
+        tmp = PrometheusAlertManagerListener("127.0.0.1")
         tmp.start()
         function_sleep()
         function_while()
@@ -190,126 +205,199 @@ class TestProfileFactory(unittest.TestCase):
         self._subroutines.append(Thread(target=thread_body, name="Thread.daemon", daemon=True))
         self._subroutines.append(LibThread(target=thread_body, name="lib.Thread.daemon", daemon=True))
         self._subroutines.append(ThreadCustomClass(target=thread_body, name="Thread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibThreadCustomClass(
-            target=thread_body, name="lib.Thread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(ThreadCustomClassWithRun(
-            target=thread_body, name="Thread.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibThreadCustomClassWithRun(
-            target=thread_body, name="lib.Thread.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(
+            LibThreadCustomClass(target=thread_body, name="lib.Thread.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            ThreadCustomClassWithRun(target=thread_body, name="Thread.CustomClassWithRun.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibThreadCustomClassWithRun(target=thread_body, name="lib.Thread.CustomClassWithRun.daemon", daemon=True)
+        )
 
-        self._subroutines.append(threading.Thread(target=thread_body, name='threading.Thread.daemon', daemon=True))
-        self._subroutines.append(ThreadingThreadCustomClass(
-            target=thread_body, name="threading.Thread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibThreadingThreadCustomClass(
-            target=thread_body, name="lib.threading.Thread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(ThreadingThreadCustomClassWithRun(
-            name="threading.Thread.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibThreadingThreadCustomClassWithRun(
-            name="lib.threading.Thread.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(threading.Thread(target=thread_body, name="threading.Thread.daemon", daemon=True))
+        self._subroutines.append(
+            ThreadingThreadCustomClass(target=thread_body, name="threading.Thread.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibThreadingThreadCustomClass(
+                target=thread_body, name="lib.threading.Thread.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            ThreadingThreadCustomClassWithRun(name="threading.Thread.CustomClassWithRun.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibThreadingThreadCustomClassWithRun(name="lib.threading.Thread.CustomClassWithRun.daemon", daemon=True)
+        )
 
-        self._subroutines.append(pt(target=thread_body, name='ProfilerableThread.daemon', daemon=True))
-        self._subroutines.append(LibProfileableThread(
-            target=thread_body, name='lib.ProfilerableThread.daemon', daemon=True))
-        self._subroutines.append(ProfileableThreadCustomClass(
-            target=thread_body, name="ProfilerableThread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibProfileableThreadCustomClass(
-            target=thread_body, name="lib.ProfilerableThread.CustomClass.daemon", daemon=True))
-        self._subroutines.append(ProfileableThreadCustomClassWithRun(
-            name="ProfilerableThread.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibProfileableThreadCustomClassWithRun(
-            name="lib.ProfilerableThread.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(pt(target=thread_body, name="ProfilerableThread.daemon", daemon=True))
+        self._subroutines.append(
+            LibProfileableThread(target=thread_body, name="lib.ProfilerableThread.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            ProfileableThreadCustomClass(target=thread_body, name="ProfilerableThread.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibProfileableThreadCustomClass(
+                target=thread_body, name="lib.ProfilerableThread.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            ProfileableThreadCustomClassWithRun(name="ProfilerableThread.CustomClassWithRun.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibProfileableThreadCustomClassWithRun(name="lib.ProfilerableThread.CustomClassWithRun.daemon", daemon=True)
+        )
 
         self._subroutines.append(Thread(target=thread_body, name="Thread", daemon=False))
         self._subroutines.append(LibThread(target=thread_body, name="lib.Thread", daemon=False))
         self._subroutines.append(ThreadCustomClass(target=thread_body, name="Thread.CustomClass", daemon=False))
         self._subroutines.append(LibThreadCustomClass(target=thread_body, name="lib.Thread.CustomClass", daemon=False))
-        self._subroutines.append(ThreadCustomClassWithRun(
-            target=thread_body, name="Thread.CustomClassWithRun", daemon=False))
-        self._subroutines.append(LibThreadCustomClassWithRun(
-            target=thread_body, name="lib.Thread.CustomClassWithRun", daemon=False))
+        self._subroutines.append(
+            ThreadCustomClassWithRun(target=thread_body, name="Thread.CustomClassWithRun", daemon=False)
+        )
+        self._subroutines.append(
+            LibThreadCustomClassWithRun(target=thread_body, name="lib.Thread.CustomClassWithRun", daemon=False)
+        )
 
-        self._subroutines.append(threading.Thread(target=thread_body, name='threading.Thread', daemon=False))
-        self._subroutines.append(LibThreadingThreadCustomClass(
-            target=thread_body, name="lib.ThreadingThread.CustomClass", daemon=False))
-        self._subroutines.append(LibThreadingThreadCustomClassWithRun(
-            name="lib.ThreadingThread.CustomClassWithRun", daemon=False))
+        self._subroutines.append(threading.Thread(target=thread_body, name="threading.Thread", daemon=False))
+        self._subroutines.append(
+            LibThreadingThreadCustomClass(target=thread_body, name="lib.ThreadingThread.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            LibThreadingThreadCustomClassWithRun(name="lib.ThreadingThread.CustomClassWithRun", daemon=False)
+        )
 
-        self._subroutines.append(pt(target=thread_body, name='ProfilerableThread.CustomClass', daemon=False))
-        self._subroutines.append(LibProfileableThread(
-            target=thread_body, name='lib.ProfilerableThread.CustomClass', daemon=False))
-        self._subroutines.append(ProfileableThreadCustomClass(
-            target=thread_body, name="ProfilerableThread.CustomClass", daemon=False))
-        self._subroutines.append(LibProfileableThreadCustomClass(
-            target=thread_body, name="lib.ProfilerableThread.CustomClass", daemon=False))
-        self._subroutines.append(ProfileableThreadCustomClassWithRun(
-            name="ProfilerableThread.CustomClassWithRun", daemon=False))
-        self._subroutines.append(LibProfileableThreadCustomClassWithRun(
-            name="lib.ProfilerableThread.CustomClassWithRun", daemon=False))
+        self._subroutines.append(pt(target=thread_body, name="ProfilerableThread.CustomClass", daemon=False))
+        self._subroutines.append(
+            LibProfileableThread(target=thread_body, name="lib.ProfilerableThread.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            ProfileableThreadCustomClass(target=thread_body, name="ProfilerableThread.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            LibProfileableThreadCustomClass(target=thread_body, name="lib.ProfilerableThread.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            ProfileableThreadCustomClassWithRun(name="ProfilerableThread.CustomClassWithRun", daemon=False)
+        )
+        self._subroutines.append(
+            LibProfileableThreadCustomClassWithRun(name="lib.ProfilerableThread.CustomClassWithRun", daemon=False)
+        )
 
         self._subroutines.append(Process(target=process_body, name="Process.daemon", daemon=True))
         self._subroutines.append(LibProcess(target=process_body, name="lib.Process.daemon", daemon=True))
-        self._subroutines.append(ProcessCustomClass(
-            target=process_body, name="Process.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibProcessCustomClass(
-            target=process_body, name="lib.Process.CustomClass.daemon", daemon=True))
-        self._subroutines.append(ProcessCustomClassWithRun(
-            target=process_body, name="Process.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibProcessCustomClassWithRun(
-            target=process_body, name="lib.Process.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(
+            ProcessCustomClass(target=process_body, name="Process.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibProcessCustomClass(target=process_body, name="lib.Process.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            ProcessCustomClassWithRun(target=process_body, name="Process.CustomClassWithRun.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibProcessCustomClassWithRun(target=process_body, name="lib.Process.CustomClassWithRun.daemon", daemon=True)
+        )
 
-        self._subroutines.append(multiprocessing.Process(
-            target=process_body, name='multiprocessing.Process.daemon', daemon=True))
-        self._subroutines.append(MultiprocessingProcessCustomClass(
-            target=process_body, name="multiprocessing.Process.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibMultiprocessingProcessCustomClass(
-            target=process_body, name="lib.multiprocessing.Process.CustomClass.daemon", daemon=True))
-        self._subroutines.append(MultiprocessingProcessCustomClassWithRun(
-            name="multiprocessing.Process.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibMultiprocessingProcessCustomClassWithRun(
-            name="lib.multiprocessing.Process.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(
+            multiprocessing.Process(target=process_body, name="multiprocessing.Process.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            MultiprocessingProcessCustomClass(
+                target=process_body, name="multiprocessing.Process.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            LibMultiprocessingProcessCustomClass(
+                target=process_body, name="lib.multiprocessing.Process.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            MultiprocessingProcessCustomClassWithRun(
+                name="multiprocessing.Process.CustomClassWithRun.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            LibMultiprocessingProcessCustomClassWithRun(
+                name="lib.multiprocessing.Process.CustomClassWithRun.daemon", daemon=True
+            )
+        )
 
-        self._subroutines.append(pp(target=thread_body, name='ProfilerableProcess.CustomClass.daemon', daemon=True))
-        self._subroutines.append(LibProfileableProcess(
-            target=process_body, name='lib.ProfilerableProcess.CustomClass.daemon', daemon=True))
-        self._subroutines.append(ProfileableProcessCustomClass(
-            target=process_body, name="ProfilerableProcess.CustomClass.daemon", daemon=True))
-        self._subroutines.append(LibProfileableProcessCustomClass(
-            target=process_body, name="lib.ProfilerableProcess.CustomClass.daemon", daemon=True))
-        self._subroutines.append(ProfileableProcessCustomClassWithRun(
-            name="ProfilerableProcess.CustomClassWithRun.daemon", daemon=True))
-        self._subroutines.append(LibProfileableProcessCustomClassWithRun(
-            name="lib.ProfilerableProcess.CustomClassWithRun.daemon", daemon=True))
+        self._subroutines.append(pp(target=thread_body, name="ProfilerableProcess.CustomClass.daemon", daemon=True))
+        self._subroutines.append(
+            LibProfileableProcess(target=process_body, name="lib.ProfilerableProcess.CustomClass.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            ProfileableProcessCustomClass(
+                target=process_body, name="ProfilerableProcess.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            LibProfileableProcessCustomClass(
+                target=process_body, name="lib.ProfilerableProcess.CustomClass.daemon", daemon=True
+            )
+        )
+        self._subroutines.append(
+            ProfileableProcessCustomClassWithRun(name="ProfilerableProcess.CustomClassWithRun.daemon", daemon=True)
+        )
+        self._subroutines.append(
+            LibProfileableProcessCustomClassWithRun(
+                name="lib.ProfilerableProcess.CustomClassWithRun.daemon", daemon=True
+            )
+        )
 
         self._subroutines.append(Process(target=thread_body, name="Process", daemon=False))
         self._subroutines.append(LibProcess(target=thread_body, name="lib.Process", daemon=False))
-        self._subroutines.append(ProcessCustomClass(
-            target=process_body, name="Process.CustomClass", daemon=False))
-        self._subroutines.append(LibProcessCustomClass(
-            target=process_body, name="lib.Process.CustomClass", daemon=False))
-        self._subroutines.append(ProcessCustomClassWithRun(
-            target=process_body, name="Process.CustomClassWithRun", daemon=False))
-        self._subroutines.append(LibProcessCustomClassWithRun(
-            target=process_body, name="lib.Process.CustomClassWithRun", daemon=False))
+        self._subroutines.append(ProcessCustomClass(target=process_body, name="Process.CustomClass", daemon=False))
+        self._subroutines.append(
+            LibProcessCustomClass(target=process_body, name="lib.Process.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            ProcessCustomClassWithRun(target=process_body, name="Process.CustomClassWithRun", daemon=False)
+        )
+        self._subroutines.append(
+            LibProcessCustomClassWithRun(target=process_body, name="lib.Process.CustomClassWithRun", daemon=False)
+        )
 
-        self._subroutines.append(multiprocessing.Process(
-            target=process_body, name='multiprocessing.Process', daemon=False))
-        self._subroutines.append(MultiprocessingProcessCustomClass(
-            target=process_body, name="MultiprocessingProcess.CustomClass", daemon=False))
-        self._subroutines.append(LibMultiprocessingProcessCustomClass(
-            target=process_body, name="lib.MultiprocessingProcess.CustomClass", daemon=False))
-        self._subroutines.append(MultiprocessingProcessCustomClassWithRun(
-            name="MultiprocessingProcess.CustomClassWithRun", daemon=False))
-        self._subroutines.append(LibMultiprocessingProcessCustomClassWithRun(
-            name="lib.MultiprocessingProcess.CustomClassWithRun", daemon=False))
+        self._subroutines.append(
+            multiprocessing.Process(target=process_body, name="multiprocessing.Process", daemon=False)
+        )
+        self._subroutines.append(
+            MultiprocessingProcessCustomClass(
+                target=process_body, name="MultiprocessingProcess.CustomClass", daemon=False
+            )
+        )
+        self._subroutines.append(
+            LibMultiprocessingProcessCustomClass(
+                target=process_body, name="lib.MultiprocessingProcess.CustomClass", daemon=False
+            )
+        )
+        self._subroutines.append(
+            MultiprocessingProcessCustomClassWithRun(name="MultiprocessingProcess.CustomClassWithRun", daemon=False)
+        )
+        self._subroutines.append(
+            LibMultiprocessingProcessCustomClassWithRun(
+                name="lib.MultiprocessingProcess.CustomClassWithRun", daemon=False
+            )
+        )
 
-        self._subroutines.append(pp(target=process_body, name='ProfilerableProcess.CustomClass', daemon=False))
-        self._subroutines.append(LibProfileableProcess(
-            target=process_body, name='lib.ProfilerableProcess.CustomClass', daemon=False))
-        self._subroutines.append(ProfileableProcessCustomClass(
-            target=process_body, name="ProfilerableProcess.CustomClass", daemon=False))
-        self._subroutines.append(LibProfileableProcessCustomClass(
-            target=process_body, name="lib.ProfilerableProcess.CustomClass", daemon=False))
-        self._subroutines.append(ProfileableProcessCustomClassWithRun(
-            name="ProfilerableProcess.CustomClassWithRun", daemon=False))
-        self._subroutines.append(LibProfileableProcessCustomClassWithRun(
-            name="lib.ProfilerableProcess.CustomClassWithRun", daemon=False))
+        self._subroutines.append(pp(target=process_body, name="ProfilerableProcess.CustomClass", daemon=False))
+        self._subroutines.append(
+            LibProfileableProcess(target=process_body, name="lib.ProfilerableProcess.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            ProfileableProcessCustomClass(target=process_body, name="ProfilerableProcess.CustomClass", daemon=False)
+        )
+        self._subroutines.append(
+            LibProfileableProcessCustomClass(
+                target=process_body, name="lib.ProfilerableProcess.CustomClass", daemon=False
+            )
+        )
+        self._subroutines.append(
+            ProfileableProcessCustomClassWithRun(name="ProfilerableProcess.CustomClassWithRun", daemon=False)
+        )
+        self._subroutines.append(
+            LibProfileableProcessCustomClassWithRun(name="lib.ProfilerableProcess.CustomClassWithRun", daemon=False)
+        )

@@ -10,7 +10,6 @@ from sdcm.utils.ldap import LdapServerType, LDAP_USERS, LDAP_PASSWORD, LdapUtils
 
 
 class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
-
     def test_add_remove_ldap_role_permission(self):
         """
         Test adding a new user with Ldap permissions,
@@ -30,35 +29,36 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         """
         node: BaseNode = self.db_cluster.nodes[0]
         stress_queue = []
-        background_write_cmd = self.params.get('stress_cmd')
+        background_write_cmd = self.params.get("stress_cmd")
         InfoEvent(message=f"Starting C-S stress load: {background_write_cmd}").publish()
         stress_queue.append(self.run_stress_thread(stress_cmd=background_write_cmd, round_robin=True))
 
         if not node.is_enterprise:
-            raise ValueError('Cluster is not enterprise. LDAP is supported only for enterprise. aborting.')
-        if self.params.get('use_ldap_authentication'):
-            raise ValueError('Skipping this test with use_ldap_authentication because of scylla-enterprise#2641')
-        if not self.params.get('use_ldap_authorization'):
-            raise ValueError('Cluster is not configured to run with LDAP authorization, aborting.')
-        if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
-            raise ValueError('Cluster is not configured to run with open LDAP authorization, aborting.')
-        superuser_role = 'superuser_role'
-        new_test_user = 'new_test_user'
-        ldap_keyspace = 'customer_ldap'
+            raise ValueError("Cluster is not enterprise. LDAP is supported only for enterprise. aborting.")
+        if self.params.get("use_ldap_authentication"):
+            raise ValueError("Skipping this test with use_ldap_authentication because of scylla-enterprise#2641")
+        if not self.params.get("use_ldap_authorization"):
+            raise ValueError("Cluster is not configured to run with LDAP authorization, aborting.")
+        if self.params.get("ldap_server_type") == LdapServerType.MS_AD:
+            raise ValueError("Cluster is not configured to run with open LDAP authorization, aborting.")
+        superuser_role = "superuser_role"
+        new_test_user = "new_test_user"
+        ldap_keyspace = "customer_ldap"
         InfoEvent(message="Create new user in Scylla").publish()
-        self.create_role_in_scylla(node=node, role_name=new_test_user, is_superuser=False,
-                                   is_login=True)
-        if self.params.get('prepare_saslauthd'):
+        self.create_role_in_scylla(node=node, role_name=new_test_user, is_superuser=False, is_login=True)
+        if self.params.get("prepare_saslauthd"):
             self.add_user_in_ldap(username=new_test_user)
         with pytest.raises(Unauthorized, match="has no CREATE permission"):
-            with self.db_cluster.cql_connection_patient(node=node, user=new_test_user, password=LDAP_PASSWORD) as session:
+            with self.db_cluster.cql_connection_patient(
+                node=node, user=new_test_user, password=LDAP_PASSWORD
+            ) as session:
                 session.execute(
                     f""" CREATE KEYSPACE IF NOT EXISTS {ldap_keyspace} WITH replication = {{'class': 'NetworkTopologyStrategy',
-                    'replication_factor': 1}} """)
+                    'replication_factor': 1}} """
+                )
 
         InfoEvent(message="Create a new super-user role in Scylla").publish()
-        self.create_role_in_scylla(node=node, role_name=superuser_role, is_superuser=True,
-                                   is_login=False)
+        self.create_role_in_scylla(node=node, role_name=superuser_role, is_superuser=True, is_login=False)
         self.db_cluster.wait_for_schema_agreement()
         InfoEvent(message="Create a new super-user role in Ldap, associated with the new user").publish()
 
@@ -69,10 +69,12 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         self.wait_verify_user_permissions(username=new_test_user, keyspace=ldap_keyspace)
 
         # Run a stress while new user permissions are removed
-        new_test_user_stress = f"cassandra-stress write no-warmup cl=QUORUM duration=10m -schema 'keyspace={ldap_keyspace} " \
-            f" replication(strategy=NetworkTopologyStrategy,replication_factor=3)'" \
-            f" -mode cql3 native user={new_test_user} password={LDAP_PASSWORD}" \
+        new_test_user_stress = (
+            f"cassandra-stress write no-warmup cl=QUORUM duration=10m -schema 'keyspace={ldap_keyspace} "
+            f" replication(strategy=NetworkTopologyStrategy,replication_factor=3)'"
+            f" -mode cql3 native user={new_test_user} password={LDAP_PASSWORD}"
             " -rate threads=2 -pop seq=1..1002003 -log interval=5"
+        )
         stress_queue.append(self.run_stress_thread(stress_cmd=new_test_user_stress, round_robin=True))
         InfoEvent(message="Let stress of new user run for few minutes before removing permissions").publish()
         time.sleep(120)
@@ -85,17 +87,18 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
 
         self.delete_ldap_role(ldap_role_name=superuser_role)
         with pytest.raises(Unauthorized):
-            with self.db_cluster.cql_connection_patient(node=node, user=new_test_user, password=LDAP_PASSWORD) as session:
+            with self.db_cluster.cql_connection_patient(
+                node=node, user=new_test_user, password=LDAP_PASSWORD
+            ) as session:
                 session.execute(""" DROP KEYSPACE IF EXISTS test_no_permission """)
         with self.db_cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
-
             session.execute(f""" DROP TABLE IF EXISTS {ldap_keyspace}.info """)
             session.execute(f""" DROP TABLE IF EXISTS {ldap_keyspace}.standard1 """)
             session.execute(f""" DROP KEYSPACE IF EXISTS {ldap_keyspace} """)
             session.execute(""" DROP KEYSPACE IF EXISTS test_no_permission """)
             session.execute(""" DROP KEYSPACE IF EXISTS test_permission_ks """)
             session.execute(f"DROP ROLE IF EXISTS {superuser_role}")
-            if self.params.get('prepare_saslauthd'):
+            if self.params.get("prepare_saslauthd"):
                 self.delete_ldap_user(ldap_user_name=new_test_user)
                 session.execute(f"ALTER ROLE {new_test_user} WITH login=false")
             session.execute(f"DROP ROLE IF EXISTS {new_test_user}")

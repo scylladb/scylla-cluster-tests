@@ -26,8 +26,9 @@ from typing import Text, NoReturn, Callable
 # ...
 #   -W [ --workdir ] arg                  The directory in which Scylla will put
 # ...
-SCYLLA_ARG = \
-    re.compile(r"^  (?:(?:(?P<short_arg>-\w) \[ (?P<long_arg>--[\w-]+) \])|(?P<arg>--[\w-]+))(?P<val> arg)?", re.M)
+SCYLLA_ARG = re.compile(
+    r"^  (?:(?:(?P<short_arg>-\w) \[ (?P<long_arg>--[\w-]+) \])|(?P<arg>--[\w-]+))(?P<val> arg)?", re.M
+)
 
 LOGGER = logging.getLogger(__name__)
 

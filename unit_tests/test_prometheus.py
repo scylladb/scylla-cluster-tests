@@ -22,25 +22,25 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
     interval = 0
 
     def __init__(self, artificial_alerts: list):
-        super().__init__('', interval=0)
+        super().__init__("", interval=0)
         self._artificial_alerts = artificial_alerts
         self._iter = -1
-        self._results = {'_publish_end_of_alerts': [], '_publish_new_alerts': []}
+        self._results = {"_publish_end_of_alerts": [], "_publish_new_alerts": []}
 
     def _get_alerts(self, active=True):
         self._iter += 1
         if self._iter < len(self._artificial_alerts):
-            return self._artificial_alerts[0:self._iter]
+            return self._artificial_alerts[0 : self._iter]
         if self._iter > len(self._artificial_alerts) * 2:
             self._stop_flag.set()
             return []
-        return self._artificial_alerts[self._iter - len(self._artificial_alerts):len(self._artificial_alerts)]
+        return self._artificial_alerts[self._iter - len(self._artificial_alerts) : len(self._artificial_alerts)]
 
     def _publish_end_of_alerts(self, alerts: dict):
-        self._results['_publish_end_of_alerts'].append(alerts)
+        self._results["_publish_end_of_alerts"].append(alerts)
 
     def _publish_new_alerts(self, alerts: dict):
-        self._results['_publish_new_alerts'].append(alerts)
+        self._results["_publish_new_alerts"].append(alerts)
 
     def get_result(self):
         return self._results
@@ -51,11 +51,14 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
 
 class PrometheusAlertManagerTest(unittest.TestCase):
     def test_alert_manager_listener_artificial_run(self):
-        with open(os.path.join(os.path.dirname(__file__),
-                               'test_data/test_prometheus/test_alert_manager_listener_artificial_run.yaml'),
-                  encoding="utf-8") as file:
+        with open(
+            os.path.join(
+                os.path.dirname(__file__), "test_data/test_prometheus/test_alert_manager_listener_artificial_run.yaml"
+            ),
+            encoding="utf-8",
+        ) as file:
             test_data = json.load(file)
-        listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data['post'])
+        listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data["post"])
         listener.start()
         result = listener.get_result()
-        self.assertEqual(result, test_data['expected'])
+        self.assertEqual(result, test_data["expected"])

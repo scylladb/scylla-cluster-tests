@@ -37,19 +37,20 @@ class HousekeepingDB:
 
     @classmethod
     def from_params(cls, params: dict) -> "HousekeepingDB":
-        return cls(host=params["housekeeping_db_host"],
-                   username=params["housekeeping_db_user"],
-                   password=params["housekeeping_db_password"])
+        return cls(
+            host=params["housekeeping_db_host"],
+            username=params["housekeeping_db_user"],
+            password=params["housekeeping_db_password"],
+        )
 
     @classmethod
     def from_keystore_creds(cls) -> "HousekeepingDB":
         return cls.from_params(KeyStore().get_housekeeping_db_credentials())
 
     def connect(self, db_name: str = DB_NAME) -> None:
-        self._connection = mysql.connector.connect(host=self.host,
-                                                   user=self.username,
-                                                   password=self.password,
-                                                   database=db_name)
+        self._connection = mysql.connector.connect(
+            host=self.host, user=self.username, password=self.password, database=db_name
+        )
         self._cursor = self._connection.cursor()
 
     def execute(self, query: str, args: Optional[Sequence[Any]] = None) -> Sequence[Row]:
@@ -76,5 +77,5 @@ class HousekeepingDB:
         return result[0] if result else None
 
     def get_new_records(self, query: str, args: Optional[Sequence[Any]] = None, last_id: int = 0) -> Sequence[Row]:
-        args = (tuple(args) if args else ()) + (last_id, )
+        args = (tuple(args) if args else ()) + (last_id,)
         return self.execute(query + " id > ", args)

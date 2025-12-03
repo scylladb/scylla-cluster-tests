@@ -122,17 +122,73 @@ def test_gather_properties(registry):
     class_properties, method_properties = registry.gather_properties()
 
     expected_class_properties = {
-        "CustomNemesisA": {"flag_a": True, "flag_b": False, "flag_c": False, "flag_d": False, "flag_true": False, "flag_common": True},
-        "CustomNemesisB": {"flag_a": False, "flag_b": True, "flag_c": False, "flag_d": False, "flag_true": True, "flag_common": True},
-        "CustomNemesisC": {"flag_a": True, "flag_b": False, "flag_c": True, "flag_d": False, "flag_true": False, "flag_common": True},
-        "CustomNemesisAD": {"flag_a": True, "flag_b": True, "flag_c": False, "flag_d": True, "flag_true": True, "flag_common": True},
+        "CustomNemesisA": {
+            "flag_a": True,
+            "flag_b": False,
+            "flag_c": False,
+            "flag_d": False,
+            "flag_true": False,
+            "flag_common": True,
+        },
+        "CustomNemesisB": {
+            "flag_a": False,
+            "flag_b": True,
+            "flag_c": False,
+            "flag_d": False,
+            "flag_true": True,
+            "flag_common": True,
+        },
+        "CustomNemesisC": {
+            "flag_a": True,
+            "flag_b": False,
+            "flag_c": True,
+            "flag_d": False,
+            "flag_true": False,
+            "flag_common": True,
+        },
+        "CustomNemesisAD": {
+            "flag_a": True,
+            "flag_b": True,
+            "flag_c": False,
+            "flag_d": True,
+            "flag_true": True,
+            "flag_common": True,
+        },
     }
 
     expected_method_properties = {
-        "disrupt_method_a": {"flag_a": True, "flag_b": False, "flag_c": False, "flag_d": False, "flag_true": False, "flag_common": True},
-        "disrupt_method_b": {"flag_a": False, "flag_b": True, "flag_c": False, "flag_d": False, "flag_true": True, "flag_common": True},
-        "disrupt_method_c": {"flag_a": True, "flag_b": False, "flag_c": True, "flag_d": False, "flag_true": False, "flag_common": True},
-        "disrupt_method_d": {"flag_a": True, "flag_b": True, "flag_c": False, "flag_d": True, "flag_true": True, "flag_common": True},
+        "disrupt_method_a": {
+            "flag_a": True,
+            "flag_b": False,
+            "flag_c": False,
+            "flag_d": False,
+            "flag_true": False,
+            "flag_common": True,
+        },
+        "disrupt_method_b": {
+            "flag_a": False,
+            "flag_b": True,
+            "flag_c": False,
+            "flag_d": False,
+            "flag_true": True,
+            "flag_common": True,
+        },
+        "disrupt_method_c": {
+            "flag_a": True,
+            "flag_b": False,
+            "flag_c": True,
+            "flag_d": False,
+            "flag_true": False,
+            "flag_common": True,
+        },
+        "disrupt_method_d": {
+            "flag_a": True,
+            "flag_b": True,
+            "flag_c": False,
+            "flag_d": True,
+            "flag_true": True,
+            "flag_common": True,
+        },
     }
 
     assert class_properties == expected_class_properties
