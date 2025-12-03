@@ -147,6 +147,7 @@ from sdcm.logcollector import (
     PythonSCTLogCollector,
     ScyllaLogCollector,
     SirenManagerLogCollector,
+    VectorStoreLogCollector,
 )
 from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
@@ -3929,6 +3930,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "prometheus_data": "",
                      "monitoring_stack": "",
                      "siren_manager": "",
+                     "vector_store_log": "",
                      }
         storage_dir = os.path.join(self.logdir, "collected_logs")
         os.makedirs(storage_dir, exist_ok=True)
@@ -3947,9 +3949,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                      "collector": MonitorLogCollector,
                      "logname": "monitoring_log", },
                     {"name": "siren_manager",
-                     "nodes": self.db_cluster and self.db_cluster.manager_instance,
+                     "nodes": (self.db_cluster and hasattr(self.db_cluster, 'manager_instance')
+                               and self.db_cluster.manager_instance),
                      "collector": SirenManagerLogCollector,
                      "logname": "monitoring_log", },
+                    {"name": "vector_store",
+                     "nodes": (self.db_cluster and hasattr(self.db_cluster, 'vs_nodes') and self.db_cluster.vs_nodes),
+                     "collector": VectorStoreLogCollector,
+                     "logname": "vector_store_log", },
                     {"name": "k8s_cluster_api",
                      "nodes": [],
                      "collector": KubernetesAPIServerLogCollector,
