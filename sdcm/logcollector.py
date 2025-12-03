@@ -1038,6 +1038,22 @@ class SirenManagerLogCollector(LogCollector):
     collect_timeout = 3600
 
 
+class VectorStoreLogCollector(LogCollector):
+    log_entities = [
+        FileLog(
+            name="system.log",
+            command="sudo journalctl --no-tail --no-pager",
+            search_locally=True),
+        FileLog(
+            name="vector_store.log",
+            command="sudo journalctl -u vector-store.service --no-tail",
+            search_locally=True),
+    ]
+    cluster_log_type = "vector-store-set"
+    cluster_dir_prefix = "vector-store-set"
+    collect_timeout = 3600
+
+
 class BaseSCTLogCollector(LogCollector):
     """logs for hydra test run
 
@@ -1490,6 +1506,7 @@ class Collector:
         self.db_cluster = []
         self.monitor_set = []
         self.siren_manager_set = []
+        self.vector_store_set = []
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
@@ -1510,6 +1527,7 @@ class Collector:
             LoaderLogCollector: self.loader_set,
             MonitorLogCollector: self.monitor_set,
             SirenManagerLogCollector: self.siren_manager_set,
+            VectorStoreLogCollector: self.vector_store_set,
             SSTablesCollector: self.db_cluster,
             JepsenLogCollector: self.loader_set,
             ParallelTimelinesReportCollector: self.pt_report_set,
@@ -1725,8 +1743,25 @@ class Collector:
                                                   global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
 
-    def get_xcloud_instances_by_testid(self):
+    def _add_xcloud_node_to_collecting_set(
+        self, cluster_id: str, node_data: dict, node_type: str, collecting_set: list, ssh_method_name: str
+    ) -> None:
+        node_id = node_data.get('id')
+        ssh_login_info = getattr(self.localhost, ssh_method_name)(
+            node=XCloudNodeMock(
+                _cluster_id=cluster_id,
+                _node_id=node_id,
+                parent_cluster=XCloudParentClusterMock(self.params))
+        )
 
+        collecting_set.append(
+            CollectingNode(
+                name=str(node_id),
+                ssh_login_info=ssh_login_info,
+                tags={**self.tags, "NodeType": node_type})
+        )
+
+    def get_xcloud_instances_by_testid(self):
         xcloud_provider = self.params.get('xcloud_provider')
         if xcloud_provider == 'aws':
             self.get_aws_instances_by_testid()
@@ -1734,7 +1769,7 @@ class Collector:
             self.get_gce_instances_by_testid()
 
         if not self.localhost.xcloud_connect_supported(self.params):
-            LOGGER.warning("X-Cloud connectivity is not supported, can't collect db logs")
+            LOGGER.warning("XCloud connectivity is not supported, can't collect db logs")
             return
 
         TestConfig().configure_xcloud_connectivity(self.localhost, self.params)
@@ -1755,21 +1790,24 @@ class Collector:
         else:
             LOGGER.info("No cluster found in Scylla Cloud account matching test_id: %s", self.test_id)
             return
-        LOGGER.info("Found matching cluster: %s, id: %s", cluster_name, cluster_id)
 
         cluster_nodes = api_client.get_cluster_nodes(account_id=account_id, cluster_id=cluster_id, enriched=True)
-
         for node_data in cluster_nodes:
-            parent_cluster_mock = XCloudParentClusterMock(self.params)
-            node_mock = XCloudNodeMock(
-                _cluster_id=cluster_id,
-                _node_id=node_data.get('id'),
-                parent_cluster=parent_cluster_mock
-            )
-            ssh_login_info = self.localhost.xcloud_connect_get_ssh_address(node=node_mock)
-            self.db_cluster.append(CollectingNode(name=str(node_data.get('id')),
-                                                  ssh_login_info=ssh_login_info,
-                                                  tags={**self.tags, "NodeType": "scylla-db", }))
+            self._add_xcloud_node_to_collecting_set(
+                cluster_id, node_data, "scylla-db", self.db_cluster, "xcloud_connect_get_ssh_address")
+
+        if self.params.get('n_vector_store_nodes') > 0:
+            try:
+                dc_id = cluster_data.get('dataCenters', [{}])[0].get('id')
+                vs_info = api_client.get_vector_search_nodes(account_id=account_id, cluster_id=cluster_id, dc_id=dc_id)
+                vs_node_list = [node for az in vs_info.get('availabilityZones', []) for node in az.get('nodes', [])]
+
+                for vs_node_data in vs_node_list:
+                    self._add_xcloud_node_to_collecting_set(
+                        cluster_id, vs_node_data, "vector-store",
+                        self.vector_store_set, "xcloud_connect_get_vs_ssh_address")
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Failed to add Vector Store nodes for log collection: %s", exc)
 
     def get_running_cluster_sets(self, backend):
         if backend in ("aws", "aws-siren", "k8s-eks"):
