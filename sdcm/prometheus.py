@@ -28,8 +28,8 @@ from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.net import get_my_ip
 
-START = 'start'
-STOP = 'stop'
+START = "start"
+STOP = "stop"
 
 
 LOGGER = logging.getLogger(__name__)
@@ -40,11 +40,11 @@ class _ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
     """Thread per request HTTP server."""
 
 
-def start_http_server(port, addr='', registry=prometheus_client.REGISTRY):
+def start_http_server(port, addr="", registry=prometheus_client.REGISTRY):
     """Starts an HTTP server for prometheus metrics as a daemon thread"""
     custom_metrics_handler = prometheus_client.MetricsHandler.factory(registry)
     httpd = _ThreadingSimpleServer((addr, port), custom_metrics_handler)
-    http_thread = threading.Thread(target=httpd.serve_forever, name='HttpServerThread', daemon=True)
+    http_thread = threading.Thread(target=httpd.serve_forever, name="HttpServerThread", daemon=True)
     http_thread.start()
     return httpd
 
@@ -55,19 +55,19 @@ def start_metrics_server():
     Occupied port 9389 for SCT
     """
     try:
-        LOGGER.debug('Try to start prometheus API server')
+        LOGGER.debug("Try to start prometheus API server")
         httpd = start_http_server(0)
         port = httpd.server_port
         ip = get_my_ip()
-        LOGGER.info('prometheus API server running on port: %s', port)
-        return '{}:{}'.format(ip, port)
+        LOGGER.info("prometheus API server running on port: %s", port)
+        return "{}:{}".format(ip, port)
     except Exception as ex:  # noqa: BLE001
-        LOGGER.error('Cannot start local http metrics server: %s', ex)
+        LOGGER.error("Cannot start local http metrics server: %s", ex)
 
     return None
 
 
-def nemesis_metrics_obj(metric_name_suffix=''):
+def nemesis_metrics_obj(metric_name_suffix=""):
     global NM_OBJ  # noqa: PLW0602
     if not NM_OBJ.get(metric_name_suffix):
         NM_OBJ[metric_name_suffix] = NemesisMetrics(metric_name_suffix)
@@ -78,27 +78,23 @@ class NemesisMetrics:
     # NOTE: make sure that the following attr is used in the grafana dashboard
     #       and as an expression like the following:
     #       {__name__=~'nemesis(.*)(?:gauge)(.*)'}
-    NAME_PREFIX = 'nemesis'
+    NAME_PREFIX = "nemesis"
 
-    def __init__(self, metric_name_suffix=''):
+    def __init__(self, metric_name_suffix=""):
         name = self.NAME_PREFIX
         if metric_name_suffix:
             name += f"_{metric_name_suffix.replace('-', '_')}"
         self._disrupt_counter = self.create_counter(
-            f"{name}_counter",
-            'Counter for nemesis disruption methods',
-            ['method', 'event'])
-        self._disrupt_gauge = self.create_gauge(
-            f"{name}_gauge",
-            'Gauge for nemesis disruption methods',
-            ['method'])
+            f"{name}_counter", "Counter for nemesis disruption methods", ["method", "event"]
+        )
+        self._disrupt_gauge = self.create_gauge(f"{name}_gauge", "Gauge for nemesis disruption methods", ["method"])
 
     @staticmethod
     def create_counter(name, desc, param_list):
         try:
             return prometheus_client.Counter(name, desc, param_list)
         except Exception as ex:  # noqa: BLE001
-            LOGGER.error('Cannot create metrics counter: %s', ex)
+            LOGGER.error("Cannot create metrics counter: %s", ex)
         return None
 
     @staticmethod
@@ -106,7 +102,7 @@ class NemesisMetrics:
         try:
             return prometheus_client.Gauge(name, desc, param_list)
         except Exception as ex:  # noqa: BLE001
-            LOGGER.error('Cannot create metrics gauge: %s', ex)
+            LOGGER.error("Cannot create metrics gauge: %s", ex)
         return None
 
     def event_start(self, disrupt):
@@ -114,18 +110,17 @@ class NemesisMetrics:
             self._disrupt_counter.labels(disrupt, START).inc()
             self._disrupt_gauge.labels(disrupt).inc()
         except Exception as ex:
-            LOGGER.exception('Cannot start metrics event: %s', ex)
+            LOGGER.exception("Cannot start metrics event: %s", ex)
 
     def event_stop(self, disrupt):
         try:
             self._disrupt_counter.labels(disrupt, STOP).inc()
             self._disrupt_gauge.labels(disrupt).dec()
         except Exception as ex:
-            LOGGER.exception('Cannot stop metrics event: %s', ex)
+            LOGGER.exception("Cannot stop metrics event: %s", ex)
 
 
 class PrometheusAlertManagerListener(threading.Thread):
-
     def __init__(self, ip, port=9093, interval=10, stop_flag: threading.Event = None):
         super().__init__(name=self.__class__.__name__, daemon=True)
         self._alert_manager_url = f"http://{ip}:{port}/api/v2"
@@ -137,7 +132,7 @@ class PrometheusAlertManagerListener(threading.Thread):
     @property
     def is_alert_manager_up(self):
         try:
-            return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()['cluster']['status'] == 'ready'
+            return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()["cluster"]["status"] == "ready"
         except Exception:  # noqa: BLE001
             return False
 
@@ -151,8 +146,9 @@ class PrometheusAlertManagerListener(threading.Thread):
         if self._stop_flag.is_set():
             LOGGER.warning("Prometheus Alert Manager was asked to stop.")
         else:
-            raise TimeoutError(f"Prometheus Alert Manager({self._alert_manager_url}) "
-                               f"did not get up for {self._timeout}s")
+            raise TimeoutError(
+                f"Prometheus Alert Manager({self._alert_manager_url}) did not get up for {self._timeout}s"
+            )
 
     @log_run_info
     def stop(self):
@@ -177,23 +173,21 @@ class PrometheusAlertManagerListener(threading.Thread):
         updated_dict = {}
         if all_alerts:
             for alert in all_alerts:
-                fingerprint = alert.get('fingerprint', None)
+                fingerprint = alert.get("fingerprint", None)
                 if not fingerprint:
                     continue
                 updated_dict[fingerprint] = alert
         for alert in alerts.values():
-            if not alert.get('endsAt', None):
-                alert['endsAt'] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
-            alert = updated_dict.get(alert['fingerprint'], alert)  # noqa: PLW2901
+            if not alert.get("endsAt", None):
+                alert["endsAt"] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
+            alert = updated_dict.get(alert["fingerprint"], alert)  # noqa: PLW2901
             labels = alert.get("labels") or {}
             alert_name = labels.get("alertname", "")
             node = labels.get("instance", "N/A")
 
-            continuous_hash = PrometheusAlertManagerEvent.get_continuous_hash_from_dict({
-                'node': node,
-                'starts_at': alert.get("startsAt"),
-                'alert_name': alert_name
-            })
+            continuous_hash = PrometheusAlertManagerEvent.get_continuous_hash_from_dict(
+                {"node": node, "starts_at": alert.get("startsAt"), "alert_name": alert_name}
+            )
 
             if begin_event := self.event_registry.find_continuous_events_by_hash(continuous_hash):
                 begin_event[-1].end_event()
@@ -214,11 +208,11 @@ class PrometheusAlertManagerListener(threading.Thread):
             alerts = self._get_alerts(active=True)
             if alerts is not None:
                 for alert in alerts:
-                    fingerprint = alert.get('fingerprint', None)
+                    fingerprint = alert.get("fingerprint", None)
                     if not fingerprint:
                         continue
-                    state = alert.get('status', {}).get('state', '')
-                    if state == 'suppressed':
+                    state = alert.get("status", {}).get("state", "")
+                    if state == "suppressed":
                         continue
                     existing[fingerprint] = alert
                     if fingerprint in just_left:
@@ -232,11 +226,13 @@ class PrometheusAlertManagerListener(threading.Thread):
             if delta > 0:
                 time.sleep(int(delta))
 
-    def silence(self,
-                alert_name: str,
-                duration: Optional[int] = None,
-                start: Optional[datetime.datetime] = None,
-                end: Optional[datetime.datetime] = None) -> str:
+    def silence(
+        self,
+        alert_name: str,
+        duration: Optional[int] = None,
+        start: Optional[datetime.datetime] = None,
+        end: Optional[datetime.datetime] = None,
+    ) -> str:
         """
         Silence an alert for a duration of time
 
@@ -253,24 +249,16 @@ class PrometheusAlertManagerListener(threading.Thread):
         if not end:
             end = start + datetime.timedelta(seconds=duration)
         silence_data = {
-            "matchers": [
-                {
-                    "name": "alertname",
-                    "value": alert_name,
-                    "isRegex": True
-                }
-            ],
+            "matchers": [{"name": "alertname", "value": alert_name, "isRegex": True}],
             "startsAt": start.isoformat("T") + "Z",
             "endsAt": end.isoformat("T") + "Z",
             "createdBy": "SCT",
             "comment": "Silence by SCT code",
-            "status": {
-                "state": "active"
-            }
+            "status": {"state": "active"},
         }
         res = requests.post(f"{self._alert_manager_url}/silences", timeout=3, json=silence_data)
         res.raise_for_status()
-        return res.json()['silenceID']
+        return res.json()["silenceID"]
 
     def delete_silence(self, silence_id: str) -> None:
         """
@@ -284,13 +272,14 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
-
-    def __init__(self,
-                 alert_manager: PrometheusAlertManagerListener,
-                 alert_name: str,
-                 duration: Optional[int] = None,
-                 start: Optional[datetime.datetime] = None,
-                 end: Optional[datetime.datetime] = None):
+    def __init__(
+        self,
+        alert_manager: PrometheusAlertManagerListener,
+        alert_name: str,
+        duration: Optional[int] = None,
+        start: Optional[datetime.datetime] = None,
+        end: Optional[datetime.datetime] = None,
+    ):
         self.alert_manager = alert_manager
         self.alert_name = alert_name
         self.duration = duration or 86400  # 24h

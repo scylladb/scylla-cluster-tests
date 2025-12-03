@@ -9,16 +9,15 @@ from concurrent.futures.thread import _python_exit
 from functools import wraps
 from typing import Iterable, Callable, List
 
-LOGGER = logging.getLogger('utils')
+LOGGER = logging.getLogger("utils")
 
 
 class ParallelObject:
     """
-        Run function in with supplied args in parallel using thread.
+    Run function in with supplied args in parallel using thread.
     """
 
-    def __init__(self, objects: Iterable, timeout: int = 6,
-                 num_workers: int = None, disable_logging: bool = False):
+    def __init__(self, objects: Iterable, timeout: int = 6, num_workers: int = None, disable_logging: bool = False):
         """Constructor for ParallelObject
 
         Build instances of Parallel object. Item of objects is used as parameter for
@@ -66,10 +65,11 @@ class ParallelObject:
                 fun_args = args
                 fun_kwargs = kwargs
                 fun_name = fun.__name__
-                LOGGER.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(thread_name=thread_name,
-                                                                                           fun_name=fun_name,
-                                                                                           fun_args=fun_args,
-                                                                                           fun_kwargs=fun_kwargs))
+                LOGGER.debug(
+                    "[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(
+                        thread_name=thread_name, fun_name=fun_name, fun_args=fun_args, fun_kwargs=fun_kwargs
+                    )
+                )
                 return_val = fun(*args, **kwargs)
                 LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
                 return return_val
@@ -142,9 +142,9 @@ class ParallelObject:
         atexit.unregister(_python_exit)
 
     @staticmethod
-    def run_named_tasks_in_parallel(tasks: dict[str, Callable],
-                                    timeout: int,
-                                    ignore_exceptions: bool = False) -> dict[str, ParallelObjectResult]:
+    def run_named_tasks_in_parallel(
+        tasks: dict[str, Callable], timeout: int, ignore_exceptions: bool = False
+    ) -> dict[str, ParallelObjectResult]:
         """
         Allows calling multiple Callables in parallel using Parallel
         Object. Returns a dict with the results. Will raise an exception
@@ -171,10 +171,9 @@ class ParallelObject:
         task_id_map = {str(id(task)): task_name for task_name, task in tasks.items()}
         results_map = {}
 
-        task_results = ParallelObject(
-            objects=tasks.values(),
-            timeout=timeout if timeout else None
-        ).call_objects(ignore_exceptions=ignore_exceptions)
+        task_results = ParallelObject(objects=tasks.values(), timeout=timeout if timeout else None).call_objects(
+            ignore_exceptions=ignore_exceptions
+        )
 
         for result in task_results:
             task_name = task_id_map.get(str(id(result.obj)))
@@ -206,5 +205,7 @@ class ParallelObjectException(Exception):
         ex_str = ""
         for res in self.results:
             if res.exc:
-                ex_str += f"{res.obj}:\n {''.join(traceback.format_exception(type(res.exc), res.exc, res.exc.__traceback__))}"
+                ex_str += (
+                    f"{res.obj}:\n {''.join(traceback.format_exception(type(res.exc), res.exc, res.exc.__traceback__))}"
+                )
         return ex_str

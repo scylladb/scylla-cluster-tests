@@ -12,16 +12,25 @@
 # Copyright (c) 2025 ScyllaDB
 from dataclasses import dataclass
 
+<<<<<<< HEAD
 from sdcm.provision.common.utils import configure_vector_target_script, install_vector_service
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+from sdcm.provision.common.utils import configure_vector_target_script, install_vector_service, configure_backoff_timeout
+=======
+from sdcm.provision.common.utils import (
+    configure_vector_target_script,
+    install_vector_service,
+    configure_backoff_timeout,
+)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
 @dataclass
 class VectorDevUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
-        return self.params.get('logs_transport') == 'vector'
+        return self.params.get("logs_transport") == "vector"
 
     @property
     def script_to_run(self) -> str:

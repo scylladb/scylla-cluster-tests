@@ -24,7 +24,7 @@ from .timings import NullableTiming
 
 
 class Session(LibSSH2Session):
-    """Custom SSH2 Session class with Lock in it, to make it thread safe where it is needed """
+    """Custom SSH2 Session class with Lock in it, to make it thread safe where it is needed"""
 
     # Libssh2 is currently not thread safe, we have work it around by having separete session for each thread
     #   but garbage collection part of the issue still not fixed
@@ -45,16 +45,19 @@ class Session(LibSSH2Session):
             directions = self.block_directions()
             if directions == 0:
                 return
-            readfds = (_socket,) \
-                if (directions & LIBSSH2_SESSION_BLOCK_INBOUND) else ()
-            writefds = (_socket,) \
-                if (directions & LIBSSH2_SESSION_BLOCK_OUTBOUND) else ()
+            readfds = (_socket,) if (directions & LIBSSH2_SESSION_BLOCK_INBOUND) else ()
+            writefds = (_socket,) if (directions & LIBSSH2_SESSION_BLOCK_OUTBOUND) else ()
             select(readfds, writefds, (), timeout)
         except (ValueError, SocketRecvError):  # under high load it can throw these errors, on next try it will be ok
             pass
 
-    def eagain(self, func, args=(), kwargs={},  # noqa: B006
-               timeout: NullableTiming = None) -> int:
+    def eagain(
+        self,
+        func,
+        args=(),
+        kwargs={},  # noqa: B006
+        timeout: NullableTiming = None,
+    ) -> int:
         """Running function followed by simple_select up until it return anything but `LIBSSH2_ERROR_EAGAIN`"""
         with self.lock:
             ret = func(*args, **kwargs)
