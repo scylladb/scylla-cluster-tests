@@ -26,19 +26,23 @@ logger = getLogger(__name__)
 
 
 def get_repo_urls(start_date: datetime, end_date: datetime, is_enterprise: bool = False):
-    bucket = 'downloads.scylladb.com'
+    bucket = "downloads.scylladb.com"
     logger.debug("getting repo urls for is_enterprise: %s date range: %s - %s", is_enterprise, start_date, end_date)
     if is_enterprise:
-        prefix = 'unstable/scylla-enterprise/enterprise/deb/unified/'
-        suffix = 'scylladb-enterprise/scylla.list'
+        prefix = "unstable/scylla-enterprise/enterprise/deb/unified/"
+        suffix = "scylladb-enterprise/scylla.list"
     else:
-        prefix = 'unstable/scylla/master/deb/unified/'
-        suffix = 'scylladb-master/scylla.list'
-    response = boto3.client('s3').list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter='/')
-    dates = [obj['Prefix'].rsplit('/', 2)[-2]
-             for obj in response.get("CommonPrefixes", []) if obj['Prefix'].endswith("Z/")]
-    repos = [f"https://{bucket}/{prefix}{date}/{suffix}" for date in dates if
-             start_date <= datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ') <= end_date]
+        prefix = "unstable/scylla/master/deb/unified/"
+        suffix = "scylladb-master/scylla.list"
+    response = boto3.client("s3").list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
+    dates = [
+        obj["Prefix"].rsplit("/", 2)[-2] for obj in response.get("CommonPrefixes", []) if obj["Prefix"].endswith("Z/")
+    ]
+    repos = [
+        f"https://{bucket}/{prefix}{date}/{suffix}"
+        for date in dates
+        if start_date <= datetime.strptime(date, "%Y-%m-%dT%H:%M:%SZ") <= end_date
+    ]
     repos = [repo for repo in repos if requests.head(repo).ok]  # filter out non-existing repos
     logger.debug("Repos to bisect: %s", repos)
     return repos
@@ -59,7 +63,7 @@ def bisect_test(test_func):
     @wraps(test_func)
     def wrapper(*args, **kwargs):  # noqa: PLR0914
         tester_obj = args[0]
-        start_date = tester_obj.params.get('bisect_start_date')
+        start_date = tester_obj.params.get("bisect_start_date")
         test_func(*args, **kwargs)
         if not start_date:
             # no bisect start date, no need to bisect
@@ -71,27 +75,27 @@ def bisect_test(test_func):
             node.stop_scylla()
             cluster._scylla_install(node)
 
-        end_date = tester_obj.params.get('bisect_end_date')
-        bisect_start_date = datetime.strptime(start_date, '%Y-%m-%d')
-        bisect_end_date = datetime.strptime(end_date, '%Y-%m-%d') if end_date else datetime.today()
+        end_date = tester_obj.params.get("bisect_end_date")
+        bisect_start_date = datetime.strptime(start_date, "%Y-%m-%d")
+        bisect_end_date = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.today()
         repo_urls = get_repo_urls(bisect_start_date, bisect_end_date, is_enterprise=cluster.nodes[0].is_enterprise)
 
         low, high = 0, len(repo_urls) - 1
-        last_good_version = 'unknown'
-        first_bad_version = 'unknown'
-        version = 'unknown'
+        last_good_version = "unknown"
+        first_bad_version = "unknown"
+        version = "unknown"
         while low <= high:
             tester_obj.stop_timeout_thread()
             tester_obj._init_test_timeout_thread()
             mid = (low + high) // 2
             repo_url = repo_urls[mid]
-            tester_obj.params['scylla_repo'] = repo_url
+            tester_obj.params["scylla_repo"] = repo_url
             logger.info("Updating binaries from repo: %s", repo_url)
             parallel_object = ParallelObject(cluster.nodes, num_workers=len(cluster.nodes), timeout=500)
             try:
                 parallel_object.run(update_binaries)
                 for idx, node in enumerate(cluster.nodes):
-                    logger.info('starting updated node: %s', node.name)
+                    logger.info("starting updated node: %s", node.name)
                     if idx == 0:  # make first node a seed to bootstrap it properly after full cluster cleanup
                         with node.remote_scylla_yaml() as scylla_yml:
                             current_seed_provider = scylla_yml.seed_provider
@@ -108,17 +112,18 @@ def bisect_test(test_func):
                         node.wait_db_up()
                     version = node.get_scylla_binary_version()
                     if not version:
-                        raise ValueError('failed to get version from node: ', node.name)
-                    logger.info('successfully updated binaries to version: %s', version)
+                        raise ValueError("failed to get version from node: ", node.name)
+                    logger.info("successfully updated binaries to version: %s", version)
 
             except Exception as exc:  # noqa: BLE001
-                logger.warning('error during upgrade: %s \n verifying next closest version.', exc)
+                logger.warning("error during upgrade: %s \n verifying next closest version.", exc)
                 del repo_urls[mid]
                 high -= 1
                 continue
 
-            TestFrameworkEvent(source="bisection", message=f"Updated Scylla binaries to: {version}",
-                               severity=Severity.WARNING).publish_or_dump()
+            TestFrameworkEvent(
+                source="bisection", message=f"Updated Scylla binaries to: {version}", severity=Severity.WARNING
+            ).publish_or_dump()
             test_func(*args, **kwargs)
             logger.info("Evaluating regression: %s >= %s", tester_obj.bisect_result_value, tester_obj.bisect_ref_value)
             if tester_obj.bisect_result_value >= tester_obj.bisect_ref_value:

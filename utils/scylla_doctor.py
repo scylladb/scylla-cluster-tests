@@ -56,18 +56,19 @@ class ScyllaDoctor:
 
     def locate_newest_scylla_doctor_package(self):
         s3 = boto3.client("s3")
-        packages = s3.list_objects(Bucket=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_NAME,
-                                   Prefix=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX,
-                                   MaxKeys=5000)
+        packages = s3.list_objects(
+            Bucket=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_NAME, Prefix=self.SCYLLA_DOCTOR_OFFLINE_BUCKET_PREFIX, MaxKeys=5000
+        )
         latest = next(
-            iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None)
+            iter(sorted(packages["Contents"], key=lambda package: package["LastModified"], reverse=True)), None
+        )
         return latest
 
     def download_scylla_doctor(self):
         if self.node.remoter.run("curl --version", ignore_status=True).ok:
             LOGGER.info("curl already installed, proceeding...")
         else:
-            self.node.install_package('curl')
+            self.node.install_package("curl")
         latest_package = self.locate_newest_scylla_doctor_package()
         if not latest_package:
             raise ScyllaDoctorException("Unable to find latest scylla-doctor package for offline install")
@@ -96,16 +97,25 @@ class ScyllaDoctor:
 
     def install_scylla_doctor(self):
         if self.node.parent_cluster.cluster_backend == "docker":
-            self.node.install_package('ethtool')
-            self.node.install_package('tar')
+            self.node.install_package("ethtool")
+            self.node.install_package("tar")
 
         if self.offline_install or self.node.parent_cluster.cluster_backend == "docker":
             self.download_scylla_doctor()
             if self.node.is_nonroot_install:
                 self.python3_path = self.find_local_python3_binary(self.current_dir)
+<<<<<<< HEAD
                 self.update_scylla_doctor_config(self.current_dir)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                self.update_scylla_doctor_config(
+                    self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS)
+=======
+                self.update_scylla_doctor_config(
+                    self.current_dir, additional_config=self.SCYLLA_DOCTOR_DISABLED_OFFLINE_COLLECTORS
+                )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         else:
-            self.node.install_package('scylla-doctor')
+            self.node.install_package("scylla-doctor")
 
     def argus_collect_sd_package(self):
         try:
@@ -116,9 +126,14 @@ class ScyllaDoctor:
             LOGGER.error("Unable to collect Scylla Doctor package version for Argus - skipping...", exc_info=True)
 
     def find_local_python3_binary(self, user_home: str):
-        if not (python3_path := self.node.remoter.run(f"ls {user_home}/scylladb/python3/bin/python3", verbose=False).stdout.strip()):
+        if not (
+            python3_path := self.node.remoter.run(
+                f"ls {user_home}/scylladb/python3/bin/python3", verbose=False
+            ).stdout.strip()
+        ):
             python3_path = self.node.remoter.run(
-                "for i in `find scylladb -name python3`;do [ -f $i ] && echo $i;done").stdout.strip()
+                "for i in `find scylladb -name python3`;do [ -f $i ] && echo $i;done"
+            ).stdout.strip()
         LOGGER.debug("Local python3 binary path: %s", python3_path)
         assert python3_path, f"Python3 binary is not found under local Scylla installation '{user_home}/scylladb'"
         return python3_path
@@ -134,16 +149,19 @@ class ScyllaDoctor:
         # Search for json file
         result = self.node.remoter.run(f"ls {json_name}", verbose=False)
         self.json_result_file = result.stdout.strip()
-        assert self.json_result_file, (f"Vitals result json file {json_name} has not been created. "
-                                       f"Scylla doctor version: {self.version}")
+        assert self.json_result_file, (
+            f"Vitals result json file {json_name} has not been created. Scylla doctor version: {self.version}"
+        )
 
         # Search for created scylla-logs tar.gz
         # Scylla Docker does not collect Scylla cluster logs - https://github.com/scylladb/field-engineering/issues/2288
         if self.node.parent_cluster.cluster_backend != "docker":
             result = self.node.remoter.run("ls scylla_logs_*.tar.gz", verbose=False)
             self.scylla_logs_file = result.stdout.strip()
-            assert self.scylla_logs_file, (f"Scylla log archive {self.scylla_logs_file} has not been created. "
-                                           f"Scylla doctor version: {self.version}")
+            assert self.scylla_logs_file, (
+                f"Scylla log archive {self.scylla_logs_file} has not been created. "
+                f"Scylla doctor version: {self.version}"
+            )
 
     def analyze_vitals(self):
         LOGGER.info("Analyze vitals")
@@ -156,10 +174,29 @@ class ScyllaDoctor:
             return True
 
         # https://github.com/scylladb/field-engineering/issues/2288
-        if (self.node.parent_cluster.cluster_backend == "docker" and
-                collector in ["StorageConfigurationCollector", "PerftuneSystemConfigurationCollector"]):
+        if self.node.parent_cluster.cluster_backend == "docker" and collector in [
+            "StorageConfigurationCollector",
+            "PerftuneSystemConfigurationCollector",
+        ]:
             return True
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if (self.node.distro.is_debian and self.offline_install and
+                collector in ["RAIDSetupCollector", "SysctlCollector"]):
+            # Debian does not have mdstat by default and sysctl is not found
+            return True
+
+=======
+        if (
+            self.node.distro.is_debian
+            and self.offline_install
+            and collector in ["RAIDSetupCollector", "SysctlCollector"]
+        ):
+            # Debian does not have mdstat by default and sysctl is not found
+            return True
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         # https://github.com/scylladb/scylladb/issues/18631
         # if self.node.distro.is_amazon2 and collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
         #    return True

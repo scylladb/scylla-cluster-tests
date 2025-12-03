@@ -29,12 +29,26 @@ def test_test_user_batch_custom_time(params, pytester):
             # clear the events processes registry after each test, so next test would be ableto start it fresh
             events_processes._EVENTS_PROCESSES = None
 
+<<<<<<< HEAD
         # TODO: find a way we can pick those fixture from something external to this generated file
         @pytest.fixture(scope="function", name="params")
         def fixture_params(request: pytest.FixtureRequest):
             if sct_config_marker := request.node.get_closest_marker("sct_config"):
                 config_files = sct_config_marker.kwargs.get('files')
                 os.environ['SCT_CONFIG_FILES'] = config_files
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+@pytest.mark.sct_config(files='test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml')
+class DummyLongevityTest(LongevityTest):
+    __test__ = True
+    test_custom_time = None
+    test_batch_custom_time = None
+=======
+@pytest.mark.sct_config(files="test-cases/features/elasticity/longevity-elasticity-many-small-tables.yaml")
+class DummyLongevityTest(LongevityTest):
+    __test__ = True
+    test_custom_time = None
+    test_batch_custom_time = None
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
             os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
             params = sct_config.SCTConfiguration()
@@ -80,6 +94,7 @@ def test_test_user_batch_custom_time(params, pytester):
             def _init_params(self):
                 pass
 
+<<<<<<< HEAD
             def save_email_data(self):
                 pass
 
@@ -130,3 +145,16 @@ def test_test_user_batch_custom_time(params, pytester):
         "test_test_user_batch_custom_time.py::DummyLongevityTest::test_user_batch_custom_time")
 
     result.assert_outcomes(passed=1)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def _run_all_stress_cmds(self, stress_queue, params):
+        for _ in range(len(params['stress_cmd'])):
+            m = MagicMock()
+            m.parse_results.return_value = ([], {})
+            stress_queue.append(m)
+=======
+    def _run_all_stress_cmds(self, stress_queue, params):
+        for _ in range(len(params["stress_cmd"])):
+            m = MagicMock()
+            m.parse_results.return_value = ([], {})
+            stress_queue.append(m)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

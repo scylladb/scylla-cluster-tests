@@ -27,8 +27,8 @@ class AlternatorApi(NamedTuple):
     client: DynamoDBClient
 
 
-TTL_ENABLED_SPECIFICATION = dict(AttributeName='ttl', Enabled=True)
-TTL_DISABLED_SPECIFICATION = dict(AttributeName='ttl', Enabled=False)
+TTL_ENABLED_SPECIFICATION = dict(AttributeName="ttl", Enabled=True)
+TTL_DISABLED_SPECIFICATION = dict(AttributeName="ttl", Enabled=False)
 
 
 class Alternator:
@@ -60,13 +60,12 @@ class Alternator:
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
         if endpoint_url not in self.alternator_apis:
-            aws_params = dict(endpoint_url=endpoint_url,
-                              region_name="None")
-            if self.params.get('alternator_enforce_authorization'):
+            aws_params = dict(endpoint_url=endpoint_url, region_name="None")
+            if self.params.get("alternator_enforce_authorization"):
                 aws_access_key_id = self.params.get("alternator_access_key_id")
                 aws_params.update(
                     aws_access_key_id=aws_access_key_id,
-                    aws_secret_access_key=self.get_salted_hash(node, username=aws_access_key_id)
+                    aws_secret_access_key=self.get_salted_hash(node, username=aws_access_key_id),
                 )
             # NOTE: add CA bundle info for HTTPS case
             env_vars = {}
@@ -76,42 +75,144 @@ class Alternator:
                 else:
                     LOGGER.warning("Alternator CA was not provided to the 'alternator' boto3 client.")
             with environment(**env_vars):
-                resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
-                client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
+                resource: DynamoDBServiceResource = boto3.resource("dynamodb", **aws_params)
+                client: DynamoDBClient = boto3.client("dynamodb", **aws_params)
                 self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
         return self.alternator_apis[endpoint_url]
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def set_credentials(self, node):
+        if self.params.get('alternator_enforce_authorization'):
+            with node.parent_cluster.cql_connection_patient(node) as session:
+                session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
+                                (self.params.get('alternator_access_key_id'),
+                                    self.params.get('alternator_secret_access_key')))
+
+    def get_credentials(self, node):
+        access_key_id = self.params.get('alternator_access_key_id')
+        if self.params.get('alternator_enforce_authorization'):
+            return (access_key_id, self.get_salted_hash(node=node, username=access_key_id))
+        else:
+            access_key = self.params.get('alternator_secret_access_key')
+            return (access_key_id, access_key) if access_key_id and access_key else None
+
+=======
+    def set_credentials(self, node):
+        if self.params.get("alternator_enforce_authorization"):
+            with node.parent_cluster.cql_connection_patient(node) as session:
+                session.execute(
+                    "CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
+                    (self.params.get("alternator_access_key_id"), self.params.get("alternator_secret_access_key")),
+                )
+
+    def get_credentials(self, node):
+        access_key_id = self.params.get("alternator_access_key_id")
+        if self.params.get("alternator_enforce_authorization"):
+            return (access_key_id, self.get_salted_hash(node=node, username=access_key_id))
+        else:
+            access_key = self.params.get("alternator_secret_access_key")
+            return (access_key_id, access_key) if access_key_id and access_key else None
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def set_write_isolation(self, node, isolation, table_name=consts.TABLE_NAME):
         dynamodb_api = self.get_dynamodb_api(node=node)
         isolation = isolation if not isinstance(isolation, enums.WriteIsolation) else isolation.value
-        got = dynamodb_api.client.describe_table(TableName=table_name)['Table']
-        arn = got['TableArn']
-        tags = [
-            {
-                'Key': 'system:write_isolation',
-                'Value': isolation
-            }
-        ]
+        got = dynamodb_api.client.describe_table(TableName=table_name)["Table"]
+        arn = got["TableArn"]
+        tags = [{"Key": "system:write_isolation", "Value": isolation}]
         dynamodb_api.client.tag_resource(ResourceArn=arn, Tags=tags)
 
+<<<<<<< HEAD
     def create_table(self, node,
                      schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
                      wait_until_table_exists=True, tablets_enabled: bool = False, **kwargs) -> Table:
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def create_table(self, node,
+                     schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
+                     wait_until_table_exists=True, tablets_enabled: bool = False, lsi: str = None, gsi: str = None,
+                     tags: dict[str, str] = None, **kwargs) -> Table:
+=======
+    def create_table(
+        self,
+        node,
+        schema=enums.YCSBSchemaTypes.HASH_AND_RANGE,
+        isolation=None,
+        table_name=consts.TABLE_NAME,
+        wait_until_table_exists=True,
+        tablets_enabled: bool = False,
+        lsi: str = None,
+        gsi: str = None,
+        tags: dict[str, str] = None,
+        **kwargs,
+    ) -> Table:
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         if isinstance(schema, enums.YCSBSchemaTypes):
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if lsi:
+            schema['LocalSecondaryIndexes'] = [
+                {
+                    'IndexName': lsi,
+                    'KeySchema': schema['KeySchema'],
+                    'Projection': {'ProjectionType': 'ALL'}
+                }
+            ]
+        if gsi:
+            schema['GlobalSecondaryIndexes'] = [
+                {
+                    'IndexName': gsi,
+                    'KeySchema': schema['KeySchema'],
+                    'Projection': {'ProjectionType': 'ALL'}
+                }
+            ]
+        tags_list = []
+        if tags:
+            tags_list.extend({'Key': k, 'Value': v} for k, v in tags.items())
+
+=======
+        if lsi:
+            schema["LocalSecondaryIndexes"] = [
+                {"IndexName": lsi, "KeySchema": schema["KeySchema"], "Projection": {"ProjectionType": "ALL"}}
+            ]
+        if gsi:
+            schema["GlobalSecondaryIndexes"] = [
+                {"IndexName": gsi, "KeySchema": schema["KeySchema"], "Projection": {"ProjectionType": "ALL"}}
+            ]
+        tags_list = []
+        if tags:
+            tags_list.extend({"Key": k, "Value": v} for k, v in tags.items())
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         dynamodb_api = self.get_dynamodb_api(node=node)
         # Tablets feature is currently supported by Alternator, but disabled by default (since LWT is not supported).
         # It should be explicitly requested by the specified tag.
         # TODO: the 'tablets_enabled' parameter might become un-needed once Alternator tablets default is switched to be enabled.
         # This might be dependant on tablets LWT support issue (scylladb/scylladb#18068)
         if tablets_enabled:
+<<<<<<< HEAD
             kwargs['Tags'] = [{'Key': 'experimental:initial_tablets', 'Value': '0'}]
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            tags_list.append({'Key': 'experimental:initial_tablets', 'Value': '0'})
+
+        if tags_list:
+            kwargs['Tags'] = tags_list
+
+=======
+            tags_list.append({"Key": "experimental:initial_tablets", "Value": "0"})
+
+        if tags_list:
+            kwargs["Tags"] = tags_list
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         LOGGER.debug("Creating a new table '{}' using node '{}'".format(table_name, node.name))
         table = dynamodb_api.resource.create_table(
-            TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
+            TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs
+        )
         if wait_until_table_exists:
-            waiter = dynamodb_api.client.get_waiter('table_exists')
+            waiter = dynamodb_api.client.get_waiter("table_exists")
             waiter.wait(TableName=table_name, WaiterConfig=dict(Delay=1, MaxAttempts=100))
 
         LOGGER.info("The table '{}' successfully created..".format(table_name))
@@ -122,6 +223,138 @@ class Alternator:
         LOGGER.debug("Table's schema and configuration are: {}".format(response))
         return table
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    def verify_tables_features(self, node, tables: dict = None, **kwargs):
+        if tables:
+            for table_name, schema in tables.items():
+                self.verify_table_features(node, table_name, schema=schema, **kwargs)
+
+    def verify_table_features(self, node, table_name=consts.TABLE_NAME, schema=enums.YCSBSchemaTypes.HASH_AND_RANGE,
+                              lsi: str = None, gsi: str = None, tags: dict[str, str] = None,
+                              wait_for_item_count: int = -1):
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        table = dynamodb_api.client.describe_table(TableName=table_name)["Table"]
+
+        if isinstance(schema, enums.YCSBSchemaTypes):
+            schema = schema.value
+        schema = schemas.ALTERNATOR_SCHEMAS[schema]
+        assert table['KeySchema'] == schema['KeySchema'], "Table KeySchema does not match expected"
+
+        table['Tags'] = dynamodb_api.client.list_tags_of_resource(ResourceArn=table['TableArn'])['Tags']
+        for key, value in (tags or {}).items():
+            assert {'Key': key, 'Value': value} in table['Tags'], f"Expected tag {key}:{value} to be present"
+
+        if gsi is not None:
+            gsis = {idx['IndexName']: idx for idx in table.get('GlobalSecondaryIndexes', [])}
+            assert gsi in gsis.keys(), f"Expected GSI {gsi} to be present"
+            assert gsis[gsi]['KeySchema'] == schema['KeySchema'], f"GSI {gsi} KeySchema does not match expected"
+
+        if lsi is not None:
+            lsis = {idx['IndexName']: idx for idx in table.get('LocalSecondaryIndexes', [])}
+            assert lsi in lsis.keys(), f"Expected LSI {lsi} to be present"
+            assert lsis[lsi]['KeySchema'] == schema['KeySchema'], f"LSI {lsi} KeySchema does not match expected"
+
+        if wait_for_item_count >= 0:
+            def repeat_scan_until_count(count, index=None, attempts=40):
+                for attempt in range(attempts):
+                    if attempt > 0:
+                        time.sleep(attempt)
+                    c = 0
+                    start_key = {}
+                    while start_key is not None:
+                        response = dynamodb_api.client.scan(TableName=table_name, IndexName=index, Select='COUNT', **start_key) \
+                            if index else dynamodb_api.client.scan(TableName=table_name, Select='COUNT', **start_key)
+                        start_key = {'ExclusiveStartKey': response.get(
+                            'LastEvaluatedKey')} if 'LastEvaluatedKey' in response else None
+                        c += response['Count']
+                    if c == count:
+                        return True
+                return False
+            assert repeat_scan_until_count(count=wait_for_item_count, attempts=1), \
+                f"Table {table_name} did not reach {wait_for_item_count} items within the expected time"
+            if gsi is not None:
+                assert repeat_scan_until_count(count=wait_for_item_count, index=gsi), \
+                    f"GSI {gsi} did not reach {wait_for_item_count} items within the expected time"
+            if lsi is not None:
+                assert repeat_scan_until_count(count=wait_for_item_count, index=lsi), \
+                    f"LSI {lsi} did not reach {wait_for_item_count} items within the expected time"
+
+=======
+    def verify_tables_features(self, node, tables: dict = None, **kwargs):
+        if tables:
+            for table_name, schema in tables.items():
+                self.verify_table_features(node, table_name, schema=schema, **kwargs)
+
+    def verify_table_features(
+        self,
+        node,
+        table_name=consts.TABLE_NAME,
+        schema=enums.YCSBSchemaTypes.HASH_AND_RANGE,
+        lsi: str = None,
+        gsi: str = None,
+        tags: dict[str, str] = None,
+        wait_for_item_count: int = -1,
+    ):
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        table = dynamodb_api.client.describe_table(TableName=table_name)["Table"]
+
+        if isinstance(schema, enums.YCSBSchemaTypes):
+            schema = schema.value
+        schema = schemas.ALTERNATOR_SCHEMAS[schema]
+        assert table["KeySchema"] == schema["KeySchema"], "Table KeySchema does not match expected"
+
+        table["Tags"] = dynamodb_api.client.list_tags_of_resource(ResourceArn=table["TableArn"])["Tags"]
+        for key, value in (tags or {}).items():
+            assert {"Key": key, "Value": value} in table["Tags"], f"Expected tag {key}:{value} to be present"
+
+        if gsi is not None:
+            gsis = {idx["IndexName"]: idx for idx in table.get("GlobalSecondaryIndexes", [])}
+            assert gsi in gsis.keys(), f"Expected GSI {gsi} to be present"
+            assert gsis[gsi]["KeySchema"] == schema["KeySchema"], f"GSI {gsi} KeySchema does not match expected"
+
+        if lsi is not None:
+            lsis = {idx["IndexName"]: idx for idx in table.get("LocalSecondaryIndexes", [])}
+            assert lsi in lsis.keys(), f"Expected LSI {lsi} to be present"
+            assert lsis[lsi]["KeySchema"] == schema["KeySchema"], f"LSI {lsi} KeySchema does not match expected"
+
+        if wait_for_item_count >= 0:
+
+            def repeat_scan_until_count(count, index=None, attempts=40):
+                for attempt in range(attempts):
+                    if attempt > 0:
+                        time.sleep(attempt)
+                    c = 0
+                    start_key = {}
+                    while start_key is not None:
+                        response = (
+                            dynamodb_api.client.scan(TableName=table_name, IndexName=index, Select="COUNT", **start_key)
+                            if index
+                            else dynamodb_api.client.scan(TableName=table_name, Select="COUNT", **start_key)
+                        )
+                        start_key = (
+                            {"ExclusiveStartKey": response.get("LastEvaluatedKey")}
+                            if "LastEvaluatedKey" in response
+                            else None
+                        )
+                        c += response["Count"]
+                    if c == count:
+                        return True
+                return False
+
+            assert repeat_scan_until_count(count=wait_for_item_count, attempts=1), (
+                f"Table {table_name} did not reach {wait_for_item_count} items within the expected time"
+            )
+            if gsi is not None:
+                assert repeat_scan_until_count(count=wait_for_item_count, index=gsi), (
+                    f"GSI {gsi} did not reach {wait_for_item_count} items within the expected time"
+                )
+            if lsi is not None:
+                assert repeat_scan_until_count(count=wait_for_item_count, index=lsi), (
+                    f"LSI {lsi} did not reach {wait_for_item_count} items within the expected time"
+                )
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def update_table_ttl(self, node, table_name, enabled: bool = True):
         dynamodb_api = self.get_dynamodb_api(node=node)
         ttl_specification = TTL_ENABLED_SPECIFICATION if enabled else TTL_DISABLED_SPECIFICATION
@@ -146,7 +379,7 @@ class Alternator:
             while still_running_while:
                 response = table.scan(**parallel_params, **kwargs)
                 result.extend(response["Items"])
-                still_running_while = 'LastEvaluatedKey' in response
+                still_running_while = "LastEvaluatedKey" in response
 
             LOGGER.debug("Founding the following items:\n{}".format(pformat(result)))
             return result
@@ -158,18 +391,23 @@ class Alternator:
             return list(chain(*scan_result)) if len(scan_result) > 1 else scan_result
         return _scan_table()
 
-    def batch_write_actions(self, node,
-                            table_name=consts.TABLE_NAME, new_items=None, delete_items=None,
-                            schema=schemas.HASH_SCHEMA):
+    def batch_write_actions(
+        self, node, table_name=consts.TABLE_NAME, new_items=None, delete_items=None, schema=schemas.HASH_SCHEMA
+    ):
         dynamodb_api = self.get_dynamodb_api(node=node)
         assert new_items or delete_items, "should pass new_items or delete_items, other it's a no-op"
         new_items, delete_items = new_items or [], delete_items or []
         if new_items:
-            LOGGER.debug("Adding new {} items to table '{}'.\n{}..".format(
-                len(new_items), table_name, pformat(new_items)))
+            LOGGER.debug(
+                "Adding new {} items to table '{}'.\n{}..".format(len(new_items), table_name, pformat(new_items))
+            )
         if delete_items:
-            LOGGER.debug("Deleting %s items from table '%s'.\nDeleted: %s..",
-                         len(delete_items), table_name, pformat(delete_items))
+            LOGGER.debug(
+                "Deleting %s items from table '%s'.\nDeleted: %s..",
+                len(delete_items),
+                table_name,
+                pformat(delete_items),
+            )
 
         table = dynamodb_api.resource.Table(name=table_name)
         with table.batch_writer() as batch:
@@ -189,8 +427,9 @@ class Alternator:
             dynamodb_api.client.describe_table(TableName=table_name)
         except dynamodb_api.client.exceptions.ResourceNotFoundException:
             is_table_exists = False
-        LOGGER.info("The table '{}'{} exists in endpoint {}..".format(
-            table_name, '' if is_table_exists else 'not', node.name))
+        LOGGER.info(
+            "The table '{}'{} exists in endpoint {}..".format(table_name, "" if is_table_exists else "not", node.name)
+        )
         return is_table_exists
 
     def delete_table(self, node, table_name: consts.TABLE_NAME, wait_until_table_removed=True):
@@ -198,7 +437,7 @@ class Alternator:
         table = dynamodb_api.resource.Table(name=table_name)
         table.delete()
         if wait_until_table_removed:
-            waiter = dynamodb_api.client.get_waiter('table_not_exists')
+            waiter = dynamodb_api.client.get_waiter("table_not_exists")
             waiter.wait(TableName=table_name)
             LOGGER.info("The '{}' table successfully removed".format(table_name))
         else:

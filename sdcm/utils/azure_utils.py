@@ -34,7 +34,6 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
-
     from typing import Optional, Callable, Iterator
 
     from azure.core.credentials import TokenCredential
@@ -51,7 +50,7 @@ API_VERSIONS = {
     "Microsoft.Network/networkSecurityGroups": "2021-02-01",
     "Microsoft.Network/publicIPAddresses": "2021-02-01",
     "Microsoft.Network/virtualNetworks": "2021-02-01",
-    'Microsoft.Network/virtualNetworks/subnets': "2021-02-01",
+    "Microsoft.Network/virtualNetworks/subnets": "2021-02-01",
     "Microsoft.Resources/resourceGroups": "2021-04-01",
 }
 
@@ -105,9 +104,10 @@ class AzureService(metaclass=Singleton):
 
     @cached_property
     def blob(self) -> BlobServiceClient:
-        return BlobServiceClient(account_url=self.blob_account_url,
-                                 credential=AzureNamedKeyCredential(name=self.blob_credentials['account'],
-                                                                    key=self.blob_credentials['key']))
+        return BlobServiceClient(
+            account_url=self.blob_account_url,
+            credential=AzureNamedKeyCredential(name=self.blob_credentials["account"], key=self.blob_credentials["key"]),
+        )
 
     @cached_property
     def subscription(self) -> SubscriptionClient:
@@ -126,6 +126,64 @@ class AzureService(metaclass=Singleton):
     def get_by_id(self) -> Callable:
         return self.resource.resources.get_by_id
 
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    @cached_property
+    def keyvault(self) -> KeyVaultManagementClient:
+        return KeyVaultManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+
+    def create_vault_key(self, vault_uri: str, key_name: str, key_size: int = 2048) -> str:
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        key = key_client.create_rsa_key(name=key_name, size=key_size)
+        return key.id
+
+    def get_vault_key(self, vault_uri: str, key_name: str):
+        try:
+            key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+            key = key_client.get_key(name=key_name)
+            return key
+        except ResourceNotFoundError:
+            return None
+
+    def rotate_vault_key(self, key_uri: str) -> str:
+        # Extract vault URI and key name from full key URI
+        # Format: https://vault-name.vault.azure.net/scylla-key-N
+        vault_uri = key_uri.split('scylla-key-')[0]
+        key_name = key_uri.split('/')[-1]
+
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        rotated_key = key_client.rotate_key(name=key_name)
+        return rotated_key.id
+
+=======
+    @cached_property
+    def keyvault(self) -> KeyVaultManagementClient:
+        return KeyVaultManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+
+    def create_vault_key(self, vault_uri: str, key_name: str, key_size: int = 2048) -> str:
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        key = key_client.create_rsa_key(name=key_name, size=key_size)
+        return key.id
+
+    def get_vault_key(self, vault_uri: str, key_name: str):
+        try:
+            key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+            key = key_client.get_key(name=key_name)
+            return key
+        except ResourceNotFoundError:
+            return None
+
+    def rotate_vault_key(self, key_uri: str) -> str:
+        # Extract vault URI and key name from full key URI
+        # Format: https://vault-name.vault.azure.net/scylla-key-N
+        vault_uri = key_uri.split("scylla-key-")[0]
+        key_name = key_uri.split("/")[-1]
+
+        key_client = KeyClient(vault_url=vault_uri, credential=self.credential)
+        rotated_key = key_client.rotate_key(name=key_name)
+        return rotated_key.id
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def _get_ip_configuration_dict(self, network_interface_id: str) -> dict:
         return self.get_by_id(
             resource_id=network_interface_id,
@@ -158,15 +216,19 @@ class AzureService(metaclass=Singleton):
         for disk in virtual_machine.storage_profile.data_disks:
             resources.append(self.get_by_id(resource_id=disk.id, api_version=API_VERSIONS["Microsoft.Compute/disks"]))
         for iface in virtual_machine.network_profile.network_interfaces:
-            resources.append(self.get_by_id(
-                resource_id=iface.id,
-                api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
-            ))
+            resources.append(
+                self.get_by_id(
+                    resource_id=iface.id,
+                    api_version=API_VERSIONS["Microsoft.Network/networkInterfaces"],
+                )
+            )
             if public_ip := self._get_ip_configuration_dict(network_interface_id=iface.id).get("publicIPAddress"):
-                resources.append(self.get_by_id(
-                    resource_id=public_ip["id"],
-                    api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
-                ))
+                resources.append(
+                    self.get_by_id(
+                        resource_id=public_ip["id"],
+                        api_version=API_VERSIONS["Microsoft.Network/publicIPAddresses"],
+                    )
+                )
         return resources
 
     def delete_resource(self, resource: Resource) -> None:
@@ -195,6 +257,7 @@ class AzureService(metaclass=Singleton):
 
         def paged_query() -> Iterator[list]:
             while True:
+<<<<<<< HEAD
                 response = self.resource_graph.resources(request)
                 yield response.data
                 if not response.skip_token:
@@ -203,13 +266,69 @@ class AzureService(metaclass=Singleton):
                     break
                 LOGGER.debug("get next page of query=%r", query)
                 request.options.skip_token = response.skip_token
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                try:
+                    response = self.resource_graph.resources(request)
+                    retry_count = 0  # Reset retry count on successful request
+                    yield response.data
+                    if not response.skip_token:
+                        # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/concepts/work-with-data#paging-results
+                        assert response.result_truncated == "false", "paging is not possible because you missed id column"
+                        break
+                    LOGGER.debug("get next page of query=%r", query)
+                    request.options.skip_token = response.skip_token
+                except HttpResponseError as e:
+                    if "RateLimiting" in str(e) and retry_count < max_retries:
+                        retry_count += 1
+                        # Exponential backoff with jitter: 2, 4, 8, 16, 32 seconds (with random jitter)
+                        delay = (base_delay ** retry_count) + random.uniform(0.5, 1.5)
+                        LOGGER.warning("Azure Resource Graph rate limiting encountered. "
+                                       "Retrying in %d seconds (attempt %d/%d). Query: %s",
+                                       delay, retry_count, max_retries, query)
+                        time.sleep(delay)
+                        continue
+                    else:
+                        # Re-raise if not rate limiting or max retries exceeded
+                        raise
+=======
+                try:
+                    response = self.resource_graph.resources(request)
+                    retry_count = 0  # Reset retry count on successful request
+                    yield response.data
+                    if not response.skip_token:
+                        # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/concepts/work-with-data#paging-results
+                        assert response.result_truncated == "false", (
+                            "paging is not possible because you missed id column"
+                        )
+                        break
+                    LOGGER.debug("get next page of query=%r", query)
+                    request.options.skip_token = response.skip_token
+                except HttpResponseError as e:
+                    if "RateLimiting" in str(e) and retry_count < max_retries:
+                        retry_count += 1
+                        # Exponential backoff with jitter: 2, 4, 8, 16, 32 seconds (with random jitter)
+                        delay = (base_delay**retry_count) + random.uniform(0.5, 1.5)
+                        LOGGER.warning(
+                            "Azure Resource Graph rate limiting encountered. "
+                            "Retrying in %d seconds (attempt %d/%d). Query: %s",
+                            delay,
+                            retry_count,
+                            max_retries,
+                            query,
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        # Re-raise if not rate limiting or max retries exceeded
+                        raise
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
         return chain.from_iterable(paged_query())
 
 
-def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
-                         running: bool = False,
-                         verbose: bool = False) -> list[VirtualMachine]:
+def list_instances_azure(
+    tags_dict: Optional[dict[str, str]] = None, running: bool = False, verbose: bool = False
+) -> list[VirtualMachine]:
     query_bits = [
         "Resources",
         "where resourceGroup startswith 'SCT-'",  # look in `SCT-*' resource groups only
@@ -225,7 +344,7 @@ def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
     if verbose:
         LOGGER.info("Going to list Azure instances")
     azure_service = AzureService()
-    res = azure_service.resource_graph_query(query=' | '.join(query_bits))
+    res = azure_service.resource_graph_query(query=" | ".join(query_bits))
     get_virtual_machine = azure_service.compute.virtual_machines.get
     instances = [get_virtual_machine(resource_group_name=vm["resourceGroup"], vm_name=vm["name"]) for vm in res]
     if verbose:
@@ -239,4 +358,6 @@ def azure_check_instance_type_available(instance_type: str, location: str) -> bo
     Check if instance type is available in the given location.
     """
     azure_service = AzureService()
-    return any(instance_type in size.name for size in azure_service.compute.virtual_machine_sizes.list(location=location))
+    return any(
+        instance_type in size.name for size in azure_service.compute.virtual_machine_sizes.list(location=location)
+    )
