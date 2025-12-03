@@ -59,7 +59,7 @@ def get_enabled_features(session: Session) -> list[str]:
 
 
 def is_consistent_cluster_management_feature_enabled(session: Session) -> bool:
-    """ Check whether raft consistent cluster management feature enabled
+    """Check whether raft consistent cluster management feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
 
@@ -67,16 +67,25 @@ def is_consistent_cluster_management_feature_enabled(session: Session) -> bool:
 
 
 def is_consistent_topology_changes_feature_enabled(session: Session) -> bool:
-    """ Check whether raft topology feature enabled
+    """Check whether raft topology feature enabled
     if you need from a specific node use `patient_exclusive_cql_connection` session
     """
 
     return CONSISTENT_TOPOLOGY_CHANGES_FEATURE in get_enabled_features(session)
 
 
+<<<<<<< HEAD
 def is_tablets_feature_enabled(node) -> bool:
     """ Check whether tablets enabled
     """
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+def is_tablets_feature_enabled(node: BaseNode) -> bool:
+    """ Check whether tablets enabled
+    """
+=======
+def is_tablets_feature_enabled(node: BaseNode) -> bool:
+    """Check whether tablets enabled"""
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     with node.remote_scylla_yaml() as scylla_yaml:
         # for backward compatibility of 2024.1 and earlier
         if "tablets" in scylla_yaml.experimental_features:
@@ -87,3 +96,27 @@ def is_tablets_feature_enabled(node) -> bool:
             return True
 
     return False
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+
+def is_group0_limited_voters_enabled(session: Session) -> bool:
+    """ Check whether feature group0 limited voters is enabled"""
+    return GROUP0_LIMITED_VOTERS in get_enabled_features(session)
+
+
+def is_views_with_tablets_enabled(session: Session) -> bool:
+    """ Check whether feature view with tablets is enabled"""
+    return VIEWS_WITH_TABLETS in get_enabled_features(session)
+=======
+
+
+def is_group0_limited_voters_enabled(session: Session) -> bool:
+    """Check whether feature group0 limited voters is enabled"""
+    return GROUP0_LIMITED_VOTERS in get_enabled_features(session)
+
+
+def is_views_with_tablets_enabled(session: Session) -> bool:
+    """Check whether feature view with tablets is enabled"""
+    return VIEWS_WITH_TABLETS in get_enabled_features(session)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)

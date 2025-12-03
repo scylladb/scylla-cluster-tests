@@ -6,6 +6,7 @@ test_scan_positive - positive scenario
 test_scan_negative_operation_timed_out - getting operation_timed_out in scan execution
 test_scan_negative_exception - getting operation_timed_out in scan execution (with and without nemesis)
 """
+
 from pathlib import Path
 import os
 from threading import Event
@@ -23,35 +24,48 @@ from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams, Promet
 
 def mock_retrying_decorator(*args, **kwargs):
     """Decorate by doing nothing."""
-    return retrying(1, 1, allowed_exceptions=(Retry, ))
+    return retrying(1, 1, allowed_exceptions=(Retry,))
 
 
 with patch('sdcm.utils.decorators.retrying', mock_retrying_decorator):
     reload(sdcm.scan_operation_thread)
 
 DEFAULT_PARAMS = {
+<<<<<<< HEAD
     'termination_event': Event(),
     'user': 'sla_role_name',
     'user_password': 'sla_role_password',
     'duration': 10,
     'interval': 0,
     'validate_data': True
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    "termination_event": Event(),
+    "user": "sla_role_name",
+    "user_password": "sla_role_password",
+    "duration": 10,
+    "interval": 0,
+    "validate_data": True
+=======
+    "termination_event": Event(),
+    "user": "sla_role_name",
+    "user_password": "sla_role_password",
+    "duration": 10,
+    "interval": 0,
+    "validate_data": True,
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 }
 
 
 class DBCluster(DummyDbCluster):
-
     def __init__(self, connection_mock, nodes, params):
         super().__init__(nodes, params=params)
         self.connection_mock = connection_mock
         self.params = {'nemesis_seed': 1}
 
     def get_non_system_ks_cf_list(*args, **kwargs):
-
         return ["test", "a.b"]
 
     def cql_connection_patient(self, *args, **kwargs):
-
         return self.connection_mock
 
 
@@ -75,21 +89,27 @@ def mock_get_partition_keys():
 
 @pytest.fixture(scope='module')
 def node():
+<<<<<<< HEAD
     return DummyNode(name='test_node',
                      parent_cluster=None,
                      ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    return DummyNode(name="test_node",
+                     parent_cluster=None,
+                     ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+=======
+    return DummyNode(name="test_node", parent_cluster=None, ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
 class MockCqlConnectionPatient(MagicMock):
     def execute_async(*args, **kwargs):
-
         class MockFuture:
-
             has_more_pages = False
 
             def add_callbacks(self, callback, errback):
-
                 callback([MagicMock()])
+
         return MockFuture()
 
     events = ["Dispatching forward_request to 1 endpoints"]
@@ -110,6 +130,7 @@ def new_cluster(node):
 
             def __getitem__(self, item):
                 return self
+
         return Monitors()
 
     db_cluster.test_config.tester_obj = tester_obj
@@ -118,6 +139,7 @@ def new_cluster(node):
 
 @pytest.mark.parametrize("mode", ['table', 'partition', 'aggregate'])
 def test_scan_positive(mode, events, cluster):
+<<<<<<< HEAD
     default_params = ThreadParams(
         db_cluster=cluster,
         ks_cf='a.b',
@@ -126,6 +148,20 @@ def test_scan_positive(mode, events, cluster):
     )
     with patch.object(PrometheusDBStats, '__init__', return_value=None):
         with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '2']]}]):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    default_params = ThreadParams(
+        db_cluster=cluster,
+        ks_cf="a.b",
+        mode=mode,
+        **DEFAULT_PARAMS
+    )
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "2"]]}]):
+=======
+    default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode=mode, **DEFAULT_PARAMS)
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "2"]]}]):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
                 ScanOperationThread(default_params)._run_next_operation()
             all_events = get_event_log_file(events)
@@ -136,6 +172,7 @@ def test_scan_positive(mode, events, cluster):
 
 
 def test_negative_prometheus_validation_error(events, cluster):
+<<<<<<< HEAD
     default_params = ThreadParams(
         db_cluster=cluster,
         ks_cf='a.b',
@@ -144,14 +181,47 @@ def test_negative_prometheus_validation_error(events, cluster):
     )
     with patch.object(PrometheusDBStats, '__init__', return_value=None):
         with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '1']]}]):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    default_params = ThreadParams(
+        db_cluster=cluster,
+        ks_cf="a.b",
+        mode="aggregate",
+        **DEFAULT_PARAMS
+    )
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "1"]]}]):
+=======
+    default_params = ThreadParams(db_cluster=cluster, ks_cf="a.b", mode="aggregate", **DEFAULT_PARAMS)
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "1"]]}]):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
             with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=30):
                 ScanOperationThread(default_params)._run_next_operation()
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
+<<<<<<< HEAD
             assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[
                 1] and "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            severity = "Severity.ERROR"
+            if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21578", TestConfig().tester_obj().params):
+                severity = "Severity.WARNING"
+            assert severity in all_events[1] and "period_type=end" in all_events[
+                1] and "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
+=======
+            severity = "Severity.ERROR"
+            if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21578", TestConfig().tester_obj().params):
+                severity = "Severity.WARNING"
+            assert (
+                severity in all_events[1]
+                and "period_type=end" in all_events[1]
+                and "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered"
+                in all_events[1]
+            )
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
+<<<<<<< HEAD
 class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
     def execute(*args, **kwargs):
         raise OperationTimedOut("timeout")
@@ -169,14 +239,57 @@ class ExecuteAsyncOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPat
 def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock, events, node):
     if execute_mock == 'execute_async':
         connection = ExecuteAsyncOperationTimedOutMockCqlConnectionPatient()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+@pytest.mark.parametrize("exception", [ReadTimeout("Operation timed out"), Exception("Host has been marked down or removed"), OperationTimedOut("timeout")])
+@pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
+def test_scan_negative_execution_errors(mode, exception, events, node):
+
+    if mode == "partition":
+        class Connection(MockCqlConnectionPatient):
+            def execute_async(*args, **kwargs):
+
+                raise exception
+=======
+@pytest.mark.parametrize(
+    "exception",
+    [
+        ReadTimeout("Operation timed out"),
+        Exception("Host has been marked down or removed"),
+        OperationTimedOut("timeout"),
+    ],
+)
+@pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
+def test_scan_negative_execution_errors(mode, exception, events, node):
+    if mode == "partition":
+
+        class Connection(MockCqlConnectionPatient):
+            def execute_async(*args, **kwargs):
+                raise exception
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     else:
+<<<<<<< HEAD
         connection = ExecuteOperationTimedOutMockCqlConnectionPatient()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        class Connection(MockCqlConnectionPatient):
+            def execute(*args, **kwargs):
+
+                raise exception
+    connection = Connection()
+=======
+
+        class Connection(MockCqlConnectionPatient):
+            def execute(*args, **kwargs):
+                raise exception
+
+    connection = Connection()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
     default_params = ThreadParams(
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode=mode,
+<<<<<<< HEAD
         full_scan_aggregates_operation_limit=timeout,
         full_scan_operation_limit=timeout,
         **DEFAULT_PARAMS
@@ -217,8 +330,13 @@ def test_scan_negative_read_timedout(execute_mock, expected_message, events, nod
         ks_cf='a.b',
         mode='aggregate',
         full_scan_aggregates_operation_limit=60*30,
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        full_scan_aggregates_operation_limit=60*30,
+=======
+        full_scan_aggregates_operation_limit=60 * 30,
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         full_scan_operation_limit=300,
-        **DEFAULT_PARAMS
+        **DEFAULT_PARAMS,
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
         ScanOperationThread(default_params)._run_next_operation()
@@ -230,22 +348,36 @@ def test_scan_negative_read_timedout(execute_mock, expected_message, events, nod
 
 class ExecuteExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
     def execute(*args, **kwargs):
-
         raise Exception("Exception")
 
 
 class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
     def execute_async(*args, **kwargs):
-
         raise Exception("Exception")
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize(("running_nemesis", 'severity'), [[True, 'WARNING'], [False, 'ERROR']])
 @pytest.mark.parametrize(('mode', 'execute_mock'), [
     ['partition', 'execute_async'],
     ['aggregate', 'execute'],
     ['table', 'execute']])
 def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, events, node):
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+@pytest.mark.parametrize(("running_nemesis", "severity"), [[True, "WARNING"], [False, "ERROR"]])
+@pytest.mark.parametrize(("mode", "execute_mock"), [
+    ["partition", "execute_async"],
+    ["aggregate", "execute"],
+    ["table", "execute"]])
+def test_scan_negative_running_nemesis(mode, severity, running_nemesis, execute_mock, events, node):
+
+=======
+@pytest.mark.parametrize(("running_nemesis", "severity"), [[True, "WARNING"], [False, "ERROR"]])
+@pytest.mark.parametrize(
+    ("mode", "execute_mock"), [["partition", "execute_async"], ["aggregate", "execute"], ["table", "execute"]]
+)
+def test_scan_negative_running_nemesis(mode, severity, running_nemesis, execute_mock, events, node):
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     if running_nemesis:
         node.running_nemesis = MagicMock()
     else:
@@ -256,12 +388,23 @@ def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, 
         connection = ExecuteExceptionMockCqlConnectionPatient()
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
+<<<<<<< HEAD
     default_params = ThreadParams(
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode=mode,
         ** DEFAULT_PARAMS
     )
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    default_params = ThreadParams(
+        db_cluster=db_cluster,
+        ks_cf="a.b",
+        mode=mode,
+        ** DEFAULT_PARAMS
+    )
+=======
+    default_params = ThreadParams(db_cluster=db_cluster, ks_cf="a.b", mode=mode, **DEFAULT_PARAMS)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
         ScanOperationThread(default_params)._run_next_operation()
     all_events = get_event_log_file(events)

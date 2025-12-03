@@ -8,6 +8,7 @@ from unit_tests.test_cluster import DummyDbCluster, DummyNode, DummyRemote
 log = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD
 class Node(DummyNode):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -48,16 +49,29 @@ def test_01_test_python_driver_serverless_connectivity(params):
     pytest.param(True, marks=pytest.mark.docker_scylla_args(ssl=True), id='encrypted'),
     pytest.param(False, marks=pytest.mark.docker_scylla_args(ssl=False), id='clear')
 ])
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+@pytest.mark.integration
+@pytest.mark.parametrize('encrypted', [
+    pytest.param(True, marks=pytest.mark.docker_scylla_args(ssl=True), id='encrypted'),
+    pytest.param(False, marks=pytest.mark.docker_scylla_args(ssl=False), id='clear')
+])
+=======
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "encrypted",
+    [
+        pytest.param(True, marks=pytest.mark.docker_scylla_args(ssl=True), id="encrypted"),
+        pytest.param(False, marks=pytest.mark.docker_scylla_args(ssl=False), id="clear"),
+    ],
+)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 def test_02_test_python_driver(docker_scylla, params, encrypted):
-
-    params['client_encrypt'] = encrypted
+    params["client_encrypt"] = encrypted
     node = docker_scylla
     db_cluster = DummyDbCluster(nodes=[node], params=params)
     node.parent_cluster = db_cluster
 
-    for func in [db_cluster.cql_connection_patient,
-                 db_cluster.cql_connection_patient_exclusive]:
-
+    for func in [db_cluster.cql_connection_patient, db_cluster.cql_connection_patient_exclusive]:
         with func(node) as session:
             for host in session.cluster.metadata.all_hosts():
                 log.debug(host)

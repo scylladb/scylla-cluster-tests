@@ -24,7 +24,6 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 class MultilineMessagesFormatter(logging.Formatter):
-
     def format(self, record):
         """
         This is mostly the same as logging.Formatter.format except for the splitlines() thing.
@@ -34,14 +33,11 @@ class MultilineMessagesFormatter(logging.Formatter):
         record.message = record.getMessage()
         if self.usesTime():
             record.asctime = self.formatTime(record, self.datefmt)
-        if '\n' in record.message:
+        if "\n" in record.message:
             splitted = record.message.splitlines()
             output = self._fmt % dict(record.__dict__, message=splitted.pop(0))
-            output += '\n'
-            output += '\n'.join(
-                self._fmt % dict(record.__dict__, message=line)
-                for line in splitted
-            )
+            output += "\n"
+            output += "\n".join(self._fmt % dict(record.__dict__, message=line) for line in splitted)
         else:
             output = self._fmt % record.__dict__
 
@@ -51,24 +47,25 @@ class MultilineMessagesFormatter(logging.Formatter):
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            output += ' ' + self._fmt % record.__dict__ + '\n'
+            output += " " + self._fmt % record.__dict__ + "\n"
             try:
-                output += '\n'.join(
+                output += "\n".join(
                     self._fmt % dict(record.__dict__, message=line)
                     for index, line in enumerate(record.exc_text.splitlines())
                 )
             except UnicodeError:
-                output += '\n'.join(
+                output += "\n".join(
                     self._fmt % dict(record.__dict__, message=line)
-                    for index, line
-                    in enumerate(record.exc_text.decode(sys.getfilesystemencoding(), 'replace').splitlines())
+                    for index, line in enumerate(
+                        record.exc_text.decode(sys.getfilesystemencoding(), "replace").splitlines()
+                    )
                 )
         return output
 
 
 class FilterRemote(logging.Filter):
     def filter(self, record):
-        return not record.name == 'sdcm.remote'
+        return not record.name == "sdcm.remote"
 
 
 def replace_vars(obj, variables, obj_type=None):
@@ -96,8 +93,9 @@ def replace_vars(obj, variables, obj_type=None):
     return obj
 
 
-def configure_logging(exception_handler=None,
-                      formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None):
+def configure_logging(
+    exception_handler=None, formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None
+):
     urllib3.disable_warnings()
     warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
@@ -105,33 +103,39 @@ def configure_logging(exception_handler=None,
         sys.excepthook = exception_handler
     if formatters is None:
         formatters = {
-            'default': {
-                '()': MultilineMessagesFormatter,
-                'format': '< t:%(asctime)s f:%(filename)-15s l:%(lineno)-4s c:%(name)-20s p:%(levelname)-5s > %(message)s'
+            "default": {
+                "()": MultilineMessagesFormatter,
+                "format": "< t:%(asctime)s f:%(filename)-15s l:%(lineno)-4s c:%(name)-20s p:%(levelname)-5s > %(message)s",
             },
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            'action_logger': {
+                '()': JSONLFormatter,
+                'format': '%(message)s'
+            }
+=======
+            "action_logger": {"()": JSONLFormatter, "format": "%(message)s"},
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         }
     if filters is None:
-        filters = {
-            'filter_remote': {
-                '()': FilterRemote
-            }
-        }
+        filters = {"filter_remote": {"()": FilterRemote}}
     if handlers is None:
         handlers = {
-            'console': {
-                'level': 'INFO',
-                'formatter': 'default',
-                'class': 'logging.StreamHandler',
-                'stream': 'ext://sys.stdout',  # Default is stderr
-                'filters': ['filter_remote']
+            "console": {
+                "level": "INFO",
+                "formatter": "default",
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",  # Default is stderr
+                "filters": ["filter_remote"],
             },
-            'outfile': {
-                'level': 'DEBUG',
-                'class': 'logging.FileHandler',
-                'filename': '{log_dir}/sct.log',
-                'mode': 'a',
-                'formatter': 'default',
+            "outfile": {
+                "level": "DEBUG",
+                "class": "logging.FileHandler",
+                "filename": "{log_dir}/sct.log",
+                "mode": "a",
+                "formatter": "default",
             },
+<<<<<<< HEAD
             'argus': {
                 'level': 'DEBUG',
                 'class': 'logging.FileHandler',
@@ -139,14 +143,46 @@ def configure_logging(exception_handler=None,
                 'mode': 'a',
                 'formatter': 'default',
             }
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            'argus': {
+                'level': 'DEBUG',
+                'class': 'logging.FileHandler',
+                'filename': '{log_dir}/argus.log',
+                'mode': 'a',
+                'formatter': 'default',
+            },
+            'actions': {
+                'level': 'INFO',
+                'class': 'logging.FileHandler',
+                'filename': '{log_dir}/actions.log',
+                'mode': 'a',
+                'formatter': 'action_logger',
+            }
+=======
+            "argus": {
+                "level": "DEBUG",
+                "class": "logging.FileHandler",
+                "filename": "{log_dir}/argus.log",
+                "mode": "a",
+                "formatter": "default",
+            },
+            "actions": {
+                "level": "INFO",
+                "class": "logging.FileHandler",
+                "filename": "{log_dir}/actions.log",
+                "mode": "a",
+                "formatter": "action_logger",
+            },
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         }
     if loggers is None:
         loggers = {
-            '': {  # root logger
-                'handlers': ['console', 'outfile'],
-                'level': 'DEBUG',
-                'propagate': True
+            "": {  # root logger
+                "handlers": ["console", "outfile"],
+                "level": "DEBUG",
+                "propagate": True,
             },
+<<<<<<< HEAD
             'botocore': {
                 'level': 'CRITICAL'
             },
@@ -184,32 +220,83 @@ def configure_logging(exception_handler=None,
                 'handlers': ['argus'],
                 'level': 'DEBUG',
                 'propagate': False
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+            'botocore': {
+                'level': 'CRITICAL'
             },
+            'boto3': {
+                'level': 'CRITICAL'
+            },
+            's3transfer': {
+                'level': 'CRITICAL'
+            },
+            'multiprocessing': {
+                'level': 'DEBUG',
+                'propagate': True,
+            },
+            'paramiko.transport': {
+                'level': 'CRITICAL'
+            },
+            'cassandra.connection': {
+                'level': 'INFO'
+            },
+            'invoke': {
+                'level': 'CRITICAL'
+            },
+            'anyconfig': {
+                'level': 'ERROR'
+            },
+            'urllib3.connectionpool': {
+                'level': 'INFO'
+            },
+            'argus': {
+                'handlers': ['argus'],
+                'level': 'DEBUG',
+                'propagate': False
+            },
+            'action_logger': {
+                'handlers': ['actions'],
+                'level': 'INFO',
+                'propagate': False
+            },
+            'sdcm.argus_test_run': {
+                'handlers': ['argus'],
+                'level': 'DEBUG',
+                'propagate': False
+=======
+            "botocore": {"level": "CRITICAL"},
+            "boto3": {"level": "CRITICAL"},
+            "s3transfer": {"level": "CRITICAL"},
+            "multiprocessing": {
+                "level": "DEBUG",
+                "propagate": True,
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
+            },
+            "paramiko.transport": {"level": "CRITICAL"},
+            "cassandra.connection": {"level": "INFO"},
+            "invoke": {"level": "CRITICAL"},
+            "anyconfig": {"level": "ERROR"},
+            "urllib3.connectionpool": {"level": "INFO"},
+            "argus": {"handlers": ["argus"], "level": "DEBUG", "propagate": False},
+            "action_logger": {"handlers": ["actions"], "level": "INFO", "propagate": False},
+            "sdcm.argus_test_run": {"handlers": ["argus"], "level": "DEBUG", "propagate": False},
         }
     if config is None:
         config = {
-            'version': 1,
-            'disable_existing_loggers': False,
-            'formatters': formatters,
-            'filters': filters,
-            'handlers': handlers,
-            'loggers': loggers
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": formatters,
+            "filters": filters,
+            "handlers": handlers,
+            "loggers": loggers,
         }
     logging.config.dictConfig(replace_vars(config, variables))
 
 
 def disable_loggers_during_startup():
     loggers = {
-        'botocore': {
-            'level': 'CRITICAL'
-        },
-        'boto3': {
-            'level': 'CRITICAL'
-        },
+        "botocore": {"level": "CRITICAL"},
+        "boto3": {"level": "CRITICAL"},
     }
-    config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'loggers': loggers
-    }
+    config = {"version": 1, "disable_existing_loggers": False, "loggers": loggers}
     logging.config.dictConfig(config)

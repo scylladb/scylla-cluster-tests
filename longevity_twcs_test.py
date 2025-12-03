@@ -24,6 +24,7 @@ class TWCSLongevityTest(LongevityTest):
                     'compaction_window_unit': 'MINUTES'}}""")
 
     def run_prepare_write_cmd(self):
+<<<<<<< HEAD
         self.create_tables_for_scylla_bench()
         if self.params.get("prepare_write_cmd"):
             # run_prepare_write_cmd executes run_post_prepare_cql_cmds
@@ -32,9 +33,30 @@ class TWCSLongevityTest(LongevityTest):
                 super().run_prepare_write_cmd()
         else:
             self.run_post_prepare_cql_cmds()
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        if not skip_optional_stage('prepare_write'):
+            self.create_tables_for_scylla_bench()
+            if self.params.get("prepare_write_cmd"):
+                # run_prepare_write_cmd executes run_post_prepare_cql_cmds
+                # it doesn't need to call run_post_prepare_cql_cmds twice.
+                with ignore_mutation_write_errors():
+                    super().run_prepare_write_cmd()
+            else:
+                self.run_post_prepare_cql_cmds()
+=======
+        if not skip_optional_stage("prepare_write"):
+            self.create_tables_for_scylla_bench()
+            if self.params.get("prepare_write_cmd"):
+                # run_prepare_write_cmd executes run_post_prepare_cql_cmds
+                # it doesn't need to call run_post_prepare_cql_cmds twice.
+                with ignore_mutation_write_errors():
+                    super().run_prepare_write_cmd()
+            else:
+                self.run_post_prepare_cql_cmds()
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
         # Run nemesis during stress as it was stopped before copy expected data
-        if self.params.get('nemesis_during_prepare'):
+        if self.params.get("nemesis_during_prepare"):
             self.db_cluster.start_nemesis()
 
     def test_twcs_longevity(self):

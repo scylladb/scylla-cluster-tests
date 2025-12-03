@@ -58,21 +58,21 @@ class SyslogNGContainerMixin:
         }
         username = getpass.getuser()
         return {
-            'image': SYSLOG_NG_IMAGE,
-            'name': f"{self.name}-syslogng",
-            'auto_remove': True,
-            'ports': {f"{SYSLOGNG_PORT}/tcp": None},
-            'volumes': volumes,
-            'environment': {
-                'PUID': getpwnam(username).pw_uid,
-                'PGID': getpwnam(username).pw_gid,
-            }
+            "image": SYSLOG_NG_IMAGE,
+            "name": f"{self.name}-syslogng",
+            "auto_remove": True,
+            "ports": {f"{SYSLOGNG_PORT}/tcp": None},
+            "volumes": volumes,
+            "environment": {
+                "PUID": getpwnam(username).pw_uid,
+                "PGID": getpwnam(username).pw_gid,
+            },
         }
 
 
 def generate_syslogng_conf_file():
     conf_fd, conf_path = mkstemp(prefix="syslog-ng", suffix=".conf")
-    with os.fdopen(conf_fd, 'w') as file_obj:
+    with os.fdopen(conf_fd, "w") as file_obj:
         file_obj.write(SYSLOG_CONF.format(port=SYSLOGNG_PORT))
     LOGGER.debug("syslog-ng conf file created in '%s'", conf_path)
     return conf_path
