@@ -112,8 +112,14 @@ authenticator_password: ''
 
 # gemini defaults
 n_test_oracle_db_nodes: 1
+<<<<<<< HEAD
 gemini_seed: 0
 oracle_scylla_version: '2021.1.23'
+||||||| parent of d20cd5caa (fix(test_default.yaml): bump oracle_scylla_version to 2024.1)
+oracle_scylla_version: '2022.1.14'
+=======
+oracle_scylla_version: '2024.1'
+>>>>>>> d20cd5caa (fix(test_default.yaml): bump oracle_scylla_version to 2024.1)
 append_scylla_args_oracle: '--enable-cache false'
 
 # cassandra-stress defaults
