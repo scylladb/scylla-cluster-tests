@@ -6,7 +6,13 @@ from pydantic import Field, BaseModel, Extra
 class ConnectorConfiguration(BaseModel):
     # general options
     connector_class: str = Field(alias="connector.class")
+<<<<<<< HEAD
     topics: Optional[str]
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    topics: Optional[str] = ''
+=======
+    topics: Optional[str] = ""
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     # scylla-cdc-source-connector options
     # see https://github.com/scylladb/scylla-cdc-source-connector?tab=readme-ov-file#configuration

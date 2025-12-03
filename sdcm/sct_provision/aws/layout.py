@@ -14,19 +14,38 @@
 from functools import cached_property
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+<<<<<<< HEAD
 from sdcm.sct_provision.aws.cluster import (
     OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.sct_provision.aws.cluster import (
+    OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup)
+=======
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
+from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
 
 
-class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
-
+class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend="aws"):
     @cached_property
     def _test_config(self):
         return TestConfig()
 
     def provision(self):
+<<<<<<< HEAD
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+        use_scylla_cloud = (self._params.get('cluster_backend') == 'xcloud' or
+                            self._params.get('xcloud_provisioning_mode'))
+
+=======
+        use_scylla_cloud = self._params.get("cluster_backend") == "xcloud" or self._params.get(
+            "xcloud_provisioning_mode"
+        )
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
         if self.placement_group:
             self.placement_group.provision()
         SCTCapacityReservation.reserve(self._params)
