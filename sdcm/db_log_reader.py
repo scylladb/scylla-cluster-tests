@@ -36,36 +36,35 @@ LOG_LINE_MAX_PROCESSING_SIZE = 1024 * 5
 
 
 class DbLogReader(Process):
-
     EXCLUDE_FROM_LOGGING = [
-        ' | sshd[',
-        ' | systemd:',
-        ' | systemd-logind:',
-        ' | sudo:',
-        ' | dhclient[',
-
+        " | sshd[",
+        " | systemd:",
+        " | systemd-logind:",
+        " | sudo:",
+        " | dhclient[",
         # Remove compactions, repair and steaming logs from being logged, we are getting to many of them
-        '] compaction - [Compact',
-        '] table - Done with off-strategy compaction for',
-        '] table - Starting off-strategy compaction for',
-        '] repair - Repair',
-        'repair id [id=',
-        '] stream_session - [Stream ',
-        '] storage_proxy - Exception when communicating with',
+        "] compaction - [Compact",
+        "] table - Done with off-strategy compaction for",
+        "] table - Starting off-strategy compaction for",
+        "] repair - Repair",
+        "repair id [id=",
+        "] stream_session - [Stream ",
+        "] storage_proxy - Exception when communicating with",
     ]
 
-    BUILD_ID_REGEX = re.compile(r'build-id\s(.*?)\sstarting\s\.\.\.')
+    BUILD_ID_REGEX = re.compile(r"build-id\s(.*?)\sstarting\s\.\.\.")
 
-    def __init__(self,
-                 system_log: str,
-                 remoter: CommandRunner,
-                 node_name: str,
-                 system_event_patterns: list,
-                 decoding_queue: Optional[Queue],
-                 log_lines: bool,
-                 backtrace_stall_decoding: bool = True,
-                 backtrace_decoding_disable_regex: Optional[str] = None,
-                 ):
+    def __init__(
+        self,
+        system_log: str,
+        remoter: CommandRunner,
+        node_name: str,
+        system_event_patterns: list,
+        decoding_queue: Optional[Queue],
+        log_lines: bool,
+        backtrace_stall_decoding: bool = True,
+        backtrace_decoding_disable_regex: Optional[str] = None,
+    ):
         self._system_log = system_log
         self._system_event_patterns = system_event_patterns
         self._decoding_queue = decoding_queue
@@ -106,8 +105,9 @@ class DbLogReader(Process):
 
         # Check if event type matches the disable regex
         if self._disable_regex_compiled and self._disable_regex_compiled.match(event.type):
-            LOGGER.debug("Skipping backtrace decoding for event type '%s' (matches backtrace_decoding_disable_regex)",
-                         event.type)
+            LOGGER.debug(
+                "Skipping backtrace decoding for event type '%s' (matches backtrace_decoding_disable_regex)", event.type
+            )
             return True
 
         return False
@@ -130,14 +130,14 @@ class DbLogReader(Process):
                     line = line[:LOG_LINE_MAX_PROCESSING_SIZE]  # noqa: PLW2901
 
                 # Postpone processing line with no ending in case if half of line is written to the disc
-                if line[-1] == '\n' or self._skipped_end_line > 20:
+                if line[-1] == "\n" or self._skipped_end_line > 20:
                     self._skipped_end_line = 0
                 else:
                     self._skipped_end_line += 1
                     continue
                 try:
                     json_log = None
-                    if line[0] == '{':
+                    if line[0] == "{":
                         try:
                             json_log = json.loads(line)
                         except Exception:  # noqa: BLE001
@@ -168,15 +168,15 @@ class DbLogReader(Process):
                         # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
                         splitted_line = re.split("backtrace:|report: at", line, flags=re.IGNORECASE)
                         for trace_line in splitted_line[1].split():
-                            if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
+                            if trace_line.startswith("0x") or "scylladb/lib" in trace_line:
                                 one_line_backtrace.append(trace_line)
 
                     elif (match := BACKTRACE_RE.search(line)) and backtraces:
                         data = match.groupdict()
-                        if data['other_bt']:
-                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                        if data['scylla_bt']:
-                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
+                        if data["other_bt"]:
+                            backtraces[-1]["backtrace"] += [data["other_bt"].strip()]
+                        if data["scylla_bt"]:
+                            backtraces[-1]["backtrace"] += [data["scylla_bt"].strip()]
 
                     # for each line, if it matches a continuous event pattern,
                     # call the appropriate function with the class tied to that pattern
@@ -200,10 +200,11 @@ class DbLogReader(Process):
                         continue
 
                     if one_line_backtrace and backtraces:
-                        backtraces[-1]['backtrace'] = one_line_backtrace
+                        backtraces[-1]["backtrace"] = one_line_backtrace
                 except Exception:
-                    LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
-                                     index, self._system_log, line)
+                    LOGGER.exception(
+                        "Processing of %s line of %s failed, line content:\n%s", index, self._system_log, line
+                    )
 
             if index:
                 self._last_line_no = index
@@ -211,8 +212,8 @@ class DbLogReader(Process):
 
         traces_count = 0
         for backtrace in backtraces:
-            backtrace['event'].raw_backtrace = "\n".join(backtrace['backtrace'])
-            if backtrace['backtrace']:
+            backtrace["event"].raw_backtrace = "\n".join(backtrace["backtrace"])
+            if backtrace["backtrace"]:
                 traces_count += 1
 
         # support interlaced reactor stalled
@@ -232,11 +233,13 @@ class DbLogReader(Process):
                 continue
 
             try:
-                self._decoding_queue.put({
-                    "node": self._node_name,
-                    "build_id": self._build_id,
-                    "event": event,
-                })
+                self._decoding_queue.put(
+                    {
+                        "node": self._node_name,
+                        "build_id": self._build_id,
+                        "event": event,
+                    }
+                )
             except Exception:
                 event.publish()
                 raise
@@ -246,9 +249,14 @@ class DbLogReader(Process):
         """
         Keep reporting new events from db log, every 30 seconds.
         """
-        LOGGER.debug('Logging for node %s is started with following configuration:\nsystem_log=%s'
-                     '\nlog_lines=%s\ndecoding_queue=%s',
-                     self._node_name, self._system_log, self._log_lines, self._decoding_queue is not None)
+        LOGGER.debug(
+            "Logging for node %s is started with following configuration:\nsystem_log=%s"
+            "\nlog_lines=%s\ndecoding_queue=%s",
+            self._node_name,
+            self._system_log,
+            self._log_lines,
+            self._decoding_queue is not None,
+        )
         make_threads_be_daemonic_by_default()
         while not self._terminate_event.wait(0.1):
             try:
@@ -263,16 +271,18 @@ class DbLogReader(Process):
         # If the error is within 10 lines and the last isn't backtrace type, the backtrace would be
         # appended to the previous error.
         try:
-            if (self._last_error and
-                    backtrace['event'].line_number <= self._last_error.line_number + 20
-                    and not self._last_error.type == 'BACKTRACE'
-                    and backtrace['event'].type == 'BACKTRACE'):
-                self._last_error.raw_backtrace = "\n".join(backtrace['backtrace'])
-                backtrace['event'].dont_publish()
+            if (
+                self._last_error
+                and backtrace["event"].line_number <= self._last_error.line_number + 20
+                and not self._last_error.type == "BACKTRACE"
+                and backtrace["event"].type == "BACKTRACE"
+            ):
+                self._last_error.raw_backtrace = "\n".join(backtrace["backtrace"])
+                backtrace["event"].dont_publish()
                 return False
             return True
         finally:
-            self._last_error = backtrace['event']
+            self._last_error = backtrace["event"]
 
     def get_scylla_build_id(self) -> str | None:
         return self._build_id

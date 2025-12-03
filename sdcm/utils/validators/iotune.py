@@ -37,7 +37,7 @@ class IOTuneValidator:
             "deviation_pct": {},
             "active": {},
             "preset": {},
-            "limits":  {},
+            "limits": {},
         }
 
     def validate(self):
@@ -57,9 +57,11 @@ class IOTuneValidator:
         preset_disk = next(iter(self.preset_io_properties.get("disks", [])), None)
         if not preset_disk:
             LOGGER.error("Unable to continue - node should have io_properties.yaml, but it doesn't.")
-            TestFrameworkEvent(source="send_iotune_results_to_argus",
-                               message="Unable to continue - node should have io_properties.yaml, but it doesn't.",
-                               severity=Severity.ERROR).publish()
+            TestFrameworkEvent(
+                source="send_iotune_results_to_argus",
+                message="Unable to continue - node should have io_properties.yaml, but it doesn't.",
+                severity=Severity.ERROR,
+            ).publish()
             raise IOTuneException("Unable to continue - node should have io_properties.yaml, but it doesn't.")
 
         return self.node_io_properties
@@ -67,8 +69,8 @@ class IOTuneValidator:
     @staticmethod
     def _bottom_limit(metric_val, threshold=0.15):
         """
-            Determine disk metric deviation threshold and
-            use that as fixed limit
+        Determine disk metric deviation threshold and
+        use that as fixed limit
         """
         return metric_val * threshold
 
@@ -77,13 +79,15 @@ class IOTuneValidator:
         tested_disk = deepcopy(next(iter(self.node_io_properties.get("disks", []))))
         tested_mountpoint = tested_disk.pop("mountpoint")
         if tested_mountpoint != preset_disk["mountpoint"]:
-            LOGGER.error("Disks differ - probably a mistake: %s vs %s",
-                         tested_mountpoint, preset_disk["mountpoint"])
-            TestFrameworkEvent(source=self.__class__.__name__,
-                               message=f"Disks differ - probably a mistake: {tested_mountpoint} vs {preset_disk['mountpoint']}",
-                               severity=Severity.ERROR).publish()
+            LOGGER.error("Disks differ - probably a mistake: %s vs %s", tested_mountpoint, preset_disk["mountpoint"])
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                message=f"Disks differ - probably a mistake: {tested_mountpoint} vs {preset_disk['mountpoint']}",
+                severity=Severity.ERROR,
+            ).publish()
             raise IOTuneException(
-                f"Disks differ - probably a mistake: {tested_mountpoint} vs {preset_disk['mountpoint']}")
+                f"Disks differ - probably a mistake: {tested_mountpoint} vs {preset_disk['mountpoint']}"
+            )
 
         self.results["mountpoint"] = tested_mountpoint
         for key, value in tested_disk.items():
@@ -98,5 +102,6 @@ class IOTuneValidator:
     def _format_results_to_console(self):
         LOGGER.info("Disk performance values validation - testing %s", self.results["mountpoint"])
         for key, val in self.results["active"].items():
-            LOGGER.info("[%s] %s: %s (%.0f%%)", self.results["mountpoint"],
-                        key, val, self.results["deviation_pct"][key])
+            LOGGER.info(
+                "[%s] %s: %s (%.0f%%)", self.results["mountpoint"], key, val, self.results["deviation_pct"][key]
+            )

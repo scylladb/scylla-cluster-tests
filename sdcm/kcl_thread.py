@@ -32,7 +32,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class KclStressThread(DockerBasedStressThread):
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.kcl"
 
     def run(self):
@@ -42,24 +41,26 @@ class KclStressThread(DockerBasedStressThread):
         return _self
 
     def build_stress_cmd(self):
-        if hasattr(self.node_list[0], 'parent_cluster'):
+        if hasattr(self.node_list[0], "parent_cluster"):
             target_address = self.node_list[0].parent_cluster.get_node().ip_address
         else:
             target_address = self.node_list[0].ip_address
-        stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} " \
-            f"-e http://{target_address}:{self.params.get('alternator_port')} \'"
+        stress_cmd = (
+            f"./gradlew run --args=' {self.stress_cmd.replace('hydra-kcl', '')} "
+            f"-e http://{target_address}:{self.params.get('alternator_port')} '"
+        )
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name, extra_docker_opts=f"--label shell_marker={self.shell_marker}"
+        )
         stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'kcl-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('kcl-stress local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, "kcl-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
+        LOGGER.debug("kcl-stress local log: %s", log_file_name)
 
         LOGGER.debug("'running: %s", stress_cmd)
 
@@ -68,7 +69,7 @@ class KclStressThread(DockerBasedStressThread):
         else:
             node_cmd = stress_cmd
 
-        node_cmd = 'cd /hydra-kcl && {}'.format(node_cmd)
+        node_cmd = "cd /hydra-kcl && {}".format(node_cmd)
 
         KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
@@ -76,18 +77,21 @@ class KclStressThread(DockerBasedStressThread):
         kcl_finish_event = kcl_failure_event = None
         try:
             with cleanup_context:
-                result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + self.shutdown_timeout,
-                                    log_file=log_file_name,
-                                    retry=0,
-                                    )
+                result = docker.run(
+                    cmd=node_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name,
+                    retry=0,
+                )
         except Exception as exc:
             errors_str = format_stress_cmd_error(exc)
             kcl_failure_event = KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,
                 log_file_name=log_file_name,
-                errors=[errors_str, ],
+                errors=[
+                    errors_str,
+                ],
             )
             kcl_failure_event.publish()
             raise
@@ -116,37 +120,40 @@ class CompareTablesSizesThread(DockerBasedStressThread):
 
     @cached_property
     def _options(self) -> Dict[str, str]:
-        return dict(item.strip().split("=") for item in self.stress_cmd.replace('table_compare', '').strip().split(";"))
+        return dict(item.strip().split("=") for item in self.stress_cmd.replace("table_compare", "").strip().split(";"))
 
     @property
     def _interval(self) -> int:
-        return int(self._options.get('interval', 20))
+        return int(self._options.get("interval", 20))
 
     @property
     def _timeout(self) -> int:
-        return int(self._options.get('timeout', 28800))
+        return int(self._options.get("timeout", 28800))
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         KclStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
         try:
-            src_table = self._options.get('src_table')
-            dst_table = self._options.get('dst_table')
+            src_table = self._options.get("src_table")
+            dst_table = self._options.get("dst_table")
             end_time = time.time() + self._timeout
 
             cluster = self.node_list[0].parent_cluster
             nemesis_node_allocator = cluster.test_config.tester_obj().nemesis_allocator
 
             while not self._stop_event.is_set():
-                with nemesis_node_allocator.run_nemesis(nemesis_label="Compare tables size by cf-stats",
-                                                        node_list=self.node_list) as node:
-                    node.run_nodetool('flush')
+                with nemesis_node_allocator.run_nemesis(
+                    nemesis_label="Compare tables size by cf-stats", node_list=self.node_list
+                ) as node:
+                    node.run_nodetool("flush")
 
-                    dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
-                    src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
+                    dst_size = node.get_cfstats(dst_table)["Number of partitions (estimate)"]
+                    src_size = node.get_cfstats(src_table)["Number of partitions (estimate)"]
 
-                status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
+                status = (
+                    f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
+                )
                 LOGGER.info(status)
-                InfoEvent(f'[{time.time()}/{end_time}] {status}').publish()
+                InfoEvent(f"[{time.time()}/{end_time}] {status}").publish()
 
                 if src_size == 0:
                     continue
@@ -160,7 +167,10 @@ class CompareTablesSizesThread(DockerBasedStressThread):
             KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,
-                errors=[format_stress_cmd_error(exc), ]).publish()
+                errors=[
+                    format_stress_cmd_error(exc),
+                ],
+            ).publish()
             raise
         finally:
             KclStressEvent.finish(node=loader).publish()
