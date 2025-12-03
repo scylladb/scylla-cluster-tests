@@ -27,7 +27,7 @@ def should_keep(creation_time, keep_hours):
 
 
 def get_keep_hours(instance_metadata, default=DEFAULT_KEEP_HOURS):
-    keep = instance_metadata.get('keep', "").lower() if instance_metadata else None
+    keep = instance_metadata.get("keep", "").lower() if instance_metadata else None
     if keep == "alive":
         return -1
     try:
@@ -46,35 +46,43 @@ def clean_gce_instances(instances_client, project_id, dry_run):
             if "keep-alive" in instance.tags.items:
                 instance_metadata.update({"keep": "alive"})
             if should_keep(vm_creation_time, get_keep_hours(instance_metadata)):
-                LOGGER.info("keeping instance %s, keep: %s, creation time: %s ", instance.name,
-                            instance_metadata.get('keep', 'not set'), vm_creation_time)
+                LOGGER.info(
+                    "keeping instance %s, keep: %s, creation time: %s ",
+                    instance.name,
+                    instance_metadata.get("keep", "not set"),
+                    vm_creation_time,
+                )
                 continue
-            if instance_metadata.get('keep_action', 'terminate') in ('terminate', ''):  # terminate by default if not set
+            if instance_metadata.get("keep_action", "terminate") in (
+                "terminate",
+                "",
+            ):  # terminate by default if not set
                 if not dry_run:
                     LOGGER.info("terminating instance %s, creation time: %s", instance.name, vm_creation_time)
                     try:
-                        res = instances_client.delete(instance=instance.name,
-                                                      project=project_id,
-                                                      zone=instance.zone.split('/')[-1])
+                        res = instances_client.delete(
+                            instance=instance.name, project=project_id, zone=instance.zone.split("/")[-1]
+                        )
                         res.done()
                         LOGGER.info("%s terminated", instance.name)
-                        update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'terminate')
+                        update_argus_resource_status(instance_metadata.get("TestId", ""), instance.name, "terminate")
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while terminating instance %s: %s", instance.name, exc)
                 else:
-                    LOGGER.info("dry run: would terminate instance %s, creation time: %s",
-                                instance.name, vm_creation_time)
+                    LOGGER.info(
+                        "dry run: would terminate instance %s, creation time: %s", instance.name, vm_creation_time
+                    )
 
-            elif instance.status == 'RUNNING':  # stop the rest, only running instances
+            elif instance.status == "RUNNING":  # stop the rest, only running instances
                 if not dry_run:
                     LOGGER.info("stopping instance %s, creation time: %s", instance.name, vm_creation_time)
                     try:
-                        res = instances_client.stop(instance=instance.name,
-                                                    project=project_id,
-                                                    zone=instance.zone.split('/')[-1])
+                        res = instances_client.stop(
+                            instance=instance.name, project=project_id, zone=instance.zone.split("/")[-1]
+                        )
                         res.done()
                         LOGGER.info("%s stopped", instance.name)
-                        update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'stop')
+                        update_argus_resource_status(instance_metadata.get("TestId", ""), instance.name, "stop")
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.error("error while stopping instance %s: %s", instance.name, exc)
                 else:
@@ -82,13 +90,19 @@ def clean_gce_instances(instances_client, project_id, dry_run):
 
 
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser('gce_cleanup')
-    arg_parser.add_argument("--duration", type=int,
-                            help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', str(DEFAULT_KEEP_HOURS)))
-    arg_parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction,
-                            help="do not stop or terminate anything",
-                            default=os.environ.get('DRY_RUN'))
+    arg_parser = argparse.ArgumentParser("gce_cleanup")
+    arg_parser.add_argument(
+        "--duration",
+        type=int,
+        help="duration to keep non-tagged instances running in hours",
+        default=os.environ.get("DURATION", str(DEFAULT_KEEP_HOURS)),
+    )
+    arg_parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        help="do not stop or terminate anything",
+        default=os.environ.get("DRY_RUN"),
+    )
 
     args = arg_parser.parse_args()
 
@@ -101,4 +115,4 @@ if __name__ == "__main__":
     for project in SUPPORTED_PROJECTS:
         with environment(SCT_GCE_PROJECT=project):
             client, info = get_gce_compute_instances_client()
-            clean_gce_instances(instances_client=client, project_id=info['project_id'], dry_run=is_dry_run)
+            clean_gce_instances(instances_client=client, project_id=info["project_id"], dry_run=is_dry_run)

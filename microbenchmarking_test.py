@@ -18,6 +18,7 @@ from sdcm.utils.microbenchmarking.perf_simple_query_reporter import PerfSimpleQu
 
 
 class PerfSimpleQueryTest(ClusterTester):
+<<<<<<< HEAD
     @teardown_on_exception
     @log_run_info
     def setUp(self):
@@ -26,22 +27,41 @@ class PerfSimpleQueryTest(ClusterTester):
         if es_index := self.params.get("custom_es_index"):
             self._test_index = es_index
 
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+=======
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
     def test_perf_simple_query(self):
-        perf_simple_query_extra_command = self.params.get('perf_simple_query_extra_command') or ""
+        perf_simple_query_extra_command = self.params.get("perf_simple_query_extra_command") or ""
         result = self.db_cluster.nodes[0].remoter.run(
-            f"scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G {perf_simple_query_extra_command}")
+            f"scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G {perf_simple_query_extra_command}"
+        )
         if result.ok:
             output = self.db_cluster.nodes[0].remoter.run("cat perf-simple-query-result.txt").stdout
             results = json.loads(output)
             self.create_test_stats(
-                specific_tested_stats={"perf_simple_query_result": results},
-                doc_id_with_timestamp=True)
+                specific_tested_stats={"perf_simple_query_result": results}, doc_id_with_timestamp=True
+            )
             if self.create_stats:
-                is_gce = self.params.get('cluster_backend') == 'gce'
+                is_gce = self.params.get("cluster_backend") == "gce"
                 PerfSimpleQueryAnalyzer(self._test_index).check_regression(
+<<<<<<< HEAD
                     self._test_id, is_gce=is_gce,
                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
             send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+                    self._test_id, is_gce=is_gce,
+                    extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
+
+            error_thresholds = self.params.get("latency_decorator_error_thresholds")
+            send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results, error_thresholds)
+=======
+                    self._test_id, is_gce=is_gce, extra_jobs_to_compare=self.params.get("perf_extra_jobs_to_compare")
+                )
+
+            error_thresholds = self.params.get("latency_decorator_error_thresholds")
+            send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results, error_thresholds)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     def update_test_with_errors(self):
         self.log.info("update_test_with_errors: Suppress writing errors to ES")
