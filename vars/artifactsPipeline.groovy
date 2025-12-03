@@ -242,7 +242,9 @@ def call(Map pipelineParams) {
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
                                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                    fi
 
                                                     echo "start test ......."
                                                     ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
