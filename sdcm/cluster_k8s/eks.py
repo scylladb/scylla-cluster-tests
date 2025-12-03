@@ -453,8 +453,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
     def add_k8s_admin_principal(self):
         eks = boto3.client('eks', region_name=self.region_name)
-        admin_principals = ['arn:aws:iam::797456418907:role/DeveloperAccessRole',
-                            'arn:aws:iam::797456418907:role/DevOpsAccessRole']
+        admin_principals = self.params.get('eks_admin_arn')
 
         try:
             for principal in admin_principals:

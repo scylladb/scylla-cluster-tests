@@ -1742,6 +1742,14 @@ Supported: eastus
 
 **type:** str (appendable)
 
+## **eks_admin_arn** / SCT_EKS_ADMIN_ARN
+
+These roles are added by default to all SCT EKS cluster access lists as EKSAdmin (including assumed roles)
+
+**default:** N/A
+
+**type:** str_or_list_or_eval (appendable)
+
 
 ## **eks_cluster_version** / SCT_EKS_CLUSTER_VERSION
 
