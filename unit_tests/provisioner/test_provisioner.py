@@ -26,7 +26,6 @@ from sdcm.provision.user_data import UserDataObject
 
 
 class PrintingTestUserDataObject(UserDataObject):
-
     @property
     def script_to_run(self) -> str:
         return """echo OK
@@ -53,19 +52,19 @@ def image_type(backend):
     return "test-image-type"
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def test_id():
     return f"{str(uuid.uuid4())}"
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def region(backend):
     if backend == "azure":
         return "eastus"
     return "some-region"
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def definition(image_id, image_type):
     return InstanceDefinition(
         name="test-vm-1",
@@ -73,13 +72,13 @@ def definition(image_id, image_type):
         type=image_type,
         user_name="tester",
         ssh_key=KeyStore().get_ec2_ssh_key_pair(),
-        tags={'test-tag': 'test_value'},
+        tags={"test-tag": "test_value"},
         user_data=[PrintingTestUserDataObject()],
         use_public_ip=True,
     )
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def provisioner_params(test_id, region, azure_service):
     return {"test_id": test_id, "region": region, "availability_zone": "a", "azure_service": azure_service}
 
@@ -103,12 +102,13 @@ def test_can_provision_scylla_vm(region, definition, provisioner, backend, provi
     assert v_m == provisioner.list_instances()[0]
 
     v_m_2 = provisioner.get_or_create_instance(definition)
-    assert v_m is v_m_2, 'provisioner should not not recreate vm with the same name'
+    assert v_m is v_m_2, "provisioner should not not recreate vm with the same name"
 
     provisioner = provisioner_factory.create_provisioner(backend=backend, **provisioner_params)
     v_m._provisioner = provisioner
-    assert v_m == provisioner.list_instances(
-    )[0], 'provisioner with the same params should rediscover created resources'
+    assert v_m == provisioner.list_instances()[0], (
+        "provisioner with the same params should rediscover created resources"
+    )
 
 
 def test_can_discover_regions(test_id, region, backend, provisioner_params):
@@ -134,8 +134,9 @@ def test_can_add_tags(provisioner, definition, backend, provisioner_params):
 
 
 def test_can_run_command(provisioner, definition, backend, provisioner_params):
-    assert provisioner.get_or_create_instance(definition).run_command(
-        'echo "hello instance"').stdout == "hello instance\n"
+    assert (
+        provisioner.get_or_create_instance(definition).run_command('echo "hello instance"').stdout == "hello instance\n"
+    )
 
     # validate real tags change
     provisioner = provisioner_factory.create_provisioner(backend=backend, **provisioner_params)

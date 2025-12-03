@@ -16,15 +16,73 @@ DEFAULT_BACKEND = "aws"
 LOGGER = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD:sdcm/utils/nemesis.py
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
+def generate_nemesis_yaml(file_opener=open):
+    """Generates both nemesis.yaml and nemesis_classes.yml"""
+    registry = NemesisRegistry(Nemesis, NemesisFlags, COMPLEX_NEMESIS)
+    class_properties, method_properties = registry.gather_properties()
+    sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
+    with file_opener(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
+        yaml.dump(sorted_dict, outfile1, default_flow_style=False)
+
+    with file_opener(sct_abs_path('data_dir/nemesis_classes.yml'), 'w', encoding="utf-8") as outfile2:
+        yaml.dump(sorted(class_properties.keys()), outfile2, default_flow_style=False)
+
+
+=======
+def generate_nemesis_yaml(file_opener=open):
+    """Generates both nemesis.yaml and nemesis_classes.yml"""
+    registry = NemesisRegistry(Nemesis, NemesisFlags, COMPLEX_NEMESIS)
+    class_properties, method_properties = registry.gather_properties()
+    sorted_dict = dict(sorted(method_properties.items(), key=lambda d: d[0]))
+    with file_opener(sct_abs_path("data_dir/nemesis.yml"), "w", encoding="utf-8") as outfile1:
+        yaml.dump(sorted_dict, outfile1, default_flow_style=False)
+
+    with file_opener(sct_abs_path("data_dir/nemesis_classes.yml"), "w", encoding="utf-8") as outfile2:
+        yaml.dump(sorted(class_properties.keys()), outfile2, default_flow_style=False)
+
+
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
 class NemesisJobGenerator:
+<<<<<<< HEAD:sdcm/utils/nemesis.py
     BACKEND_TO_REGION = {
         "aws": "eu-west-1",
         "gce": "us-east1",
         "azure": "eastus",
         "docker": "eu-west-1"
     }
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
+    """Generates Config files and pipelines for all nemesis"""
+    BACKEND_TO_REGION = {
+        "aws": "eu-west-1",
+        "gce": "us-east1",
+        "azure": "eastus",
+        "docker": "eu-west-1"
+    }
+=======
+    """Generates Config files and pipelines for all nemesis"""
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
 
+<<<<<<< HEAD:sdcm/utils/nemesis.py
     def __init__(self, base_job: str = None, base_dir: str | Path = Path("."), backend: str = None) -> 'NemesisJobGenerator':
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
+    BACKEND_CONFIGS = {
+        "docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]
+    }
+
+    def __init__(self, file_opener=open, base_job: str = None, base_dir: str | Path = Path("../.."), backends: list[str] = None):
+        self.file_opener = file_opener
+=======
+    BACKEND_TO_REGION = {"aws": "eu-west-1", "gce": "us-east1", "azure": "eastus", "docker": "eu-west-1"}
+
+    BACKEND_CONFIGS = {"docker": ["configurations/nemesis/additional_configs/docker_backend.yaml"]}
+
+    def __init__(
+        self, file_opener=open, base_job: str = None, base_dir: str | Path = Path("../.."), backends: list[str] = None
+    ):
+        self.file_opener = file_opener
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
         self.base_dir = base_dir if isinstance(base_dir, Path) else Path(base_dir)
         self.verify_env()
         self.nemesis_class_list = self.load_nemesis_class_list()
@@ -77,8 +135,7 @@ class NemesisJobGenerator:
     def create_test_cases_from_template(self):
         for cls in self.nemesis_class_list:
             new_config_name = f"{cls}.yaml"
-            nemesis_config_body = Template(self.nemesis_config_template_content).render(
-                {"nemesis_class": cls})
+            nemesis_config_body = Template(self.nemesis_config_template_content).render({"nemesis_class": cls})
             target_config = self.nemesis_test_config_dir / new_config_name
             if target_config.exists():
                 handle = target_config.open("r+")
@@ -112,6 +169,7 @@ class NemesisJobGenerator:
         pipeline_files = []
         backend_config = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(self.backend, [])
         for cls in self.nemesis_class_list:
+<<<<<<< HEAD:sdcm/utils/nemesis.py
             additional_configs = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(cls, [])
             additional_params = config.NEMESIS_ADDITIONAL_PIPELINE_PARAMS.get(cls, {})
             config_name = [
@@ -136,20 +194,81 @@ class NemesisJobGenerator:
             pipeline_files.append(job_path)
 
         return pipeline_files
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
+            clazz = globals()[cls]
+            additional_configs = clazz.additional_configs or []
+            additional_params = clazz.additional_params or {}
+            for backend in self.backends:
+                backend_config = self.BACKEND_CONFIGS.get(backend, [])
+                config_name = [
+                    str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
+                    str(self.nemesis_test_config_dir / f"{cls}.yaml"),
+                    *backend_config,
+                    *additional_configs,
+                ]
+                job_file_name = f"{self.base_job}-{cls}-{backend}.jenkinsfile"
+                nemesis_job_groovy_source = Template(self.nemesis_job_template).render(
+                    {
+                        "params": {
+                            "backend": backend,
+                            "region": self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
+                            "test_name": 'longevity_test.LongevityTest.test_custom_time',
+                            "test_config": config_name,
+                            **additional_params,
+                        }
+
+                    })
+                job_path = self.base_nemesis_job_dir / job_file_name
+                with self.file_opener(job_path, "w") as file:
+                    file.write(nemesis_job_groovy_source + "\n")
+=======
+            clazz = globals()[cls]
+            additional_configs = clazz.additional_configs or []
+            additional_params = clazz.additional_params or {}
+            for backend in self.backends:
+                backend_config = self.BACKEND_CONFIGS.get(backend, [])
+                config_name = [
+                    str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
+                    str(self.nemesis_test_config_dir / f"{cls}.yaml"),
+                    *backend_config,
+                    *additional_configs,
+                ]
+                job_file_name = f"{self.base_job}-{cls}-{backend}.jenkinsfile"
+                nemesis_job_groovy_source = Template(self.nemesis_job_template).render(
+                    {
+                        "params": {
+                            "backend": backend,
+                            "region": self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
+                            "test_name": "longevity_test.LongevityTest.test_custom_time",
+                            "test_config": config_name,
+                            **additional_params,
+                        }
+                    }
+                )
+                job_path = self.base_nemesis_job_dir / job_file_name
+                with self.file_opener(job_path, "w") as file:
+                    file.write(nemesis_job_groovy_source + "\n")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
 
     def render_base_job_config(self, params: dict | None = None):
         params = params if params else {}
         base_config_body = Template(self.nemesis_base_config_file_template).render(params)
+<<<<<<< HEAD:sdcm/utils/nemesis.py
         with (self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml").open(mode="w") as file:
             file.write(base_config_body + '\n')
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
+        with self.file_opener(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml", "w") as file:
+            file.write(base_config_body + '\n')
+=======
+        with self.file_opener(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml", "w") as file:
+            file.write(base_config_body + "\n")
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff):sdcm/utils/nemesis_generation.py
 
         LOGGER.info("Rendered base config:\n\n%s\n\n", self.nemesis_base_config_file_template)
 
     def verify_env(self):
-        assert self.template_path.exists(), \
-            "Nemesis template directory is missing, cannot continue"
-        assert self.nemesis_class_list_path.exists(), \
-            "Nemesis class list is not generated, cannot continue"
+        assert self.template_path.exists(), "Nemesis template directory is missing, cannot continue"
+        assert self.nemesis_class_list_path.exists(), "Nemesis class list is not generated, cannot continue"
 
         if not self.nemesis_test_config_dir.exists():
             self.nemesis_test_config_dir.mkdir()

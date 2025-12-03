@@ -20,6 +20,7 @@ OptionalType = type(Union[str, None])
 
 
 class AttrBuilder(BaseModel):
+<<<<<<< HEAD
     @classmethod
     def get_properties(cls):
         return [prop for prop in dir(cls) if isinstance(getattr(cls, prop), property) and prop[0] != '_']
@@ -31,6 +32,12 @@ class AttrBuilder(BaseModel):
             if not field.field_info.extra.get('as_dict', True):
                 exclude_fields.append(field_name)
         return set(exclude_fields)
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+=======
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
     def dict(
         self,

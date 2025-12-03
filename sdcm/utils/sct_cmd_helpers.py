@@ -68,6 +68,6 @@ def add_file_logger(level: int = logging.DEBUG) -> None:
     handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
     handler.setLevel(level)
 
-    logger = getattr(__main__, 'LOGGER')
+    logger = getattr(__main__, "LOGGER")
     if logger:
         logger.addHandler(handler)

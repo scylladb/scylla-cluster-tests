@@ -17,9 +17,15 @@ from enum import Enum
 from sdcm.provision.common.builders import AttrBuilder
 
 
+<<<<<<< HEAD
 class DataDeviceType(str, Enum):
     ATTACHED = 'attached'
     INSTANCE_STORE = 'instance_store'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+DataDeviceType = Literal['attached', 'instance_store']
+=======
+DataDeviceType = Literal["attached", "instance_store"]
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
 class RaidLevelType(int, Enum):

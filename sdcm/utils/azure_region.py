@@ -27,7 +27,6 @@ from azure.mgmt.compute.models import TargetRegion
 from sdcm.utils.azure_utils import AzureService
 
 if TYPE_CHECKING:
-
     from typing import Optional
 
     from azure.mgmt.compute.models import Gallery, GalleryImageVersion, VirtualMachine
@@ -140,8 +139,9 @@ class AzureRegion:
         if self.azure_service.resource.resource_groups.check_existence(
             resource_group_name=self.sct_resource_group_name,
         ):
-            LOGGER.info("Resource group `%s' already exists in region `%s'",
-                        self.sct_resource_group_name, self.region_name)
+            LOGGER.info(
+                "Resource group `%s' already exists in region `%s'", self.sct_resource_group_name, self.region_name
+            )
             return
         self.azure_service.resource.resource_groups.create_or_update(
             resource_group_name=self.sct_resource_group_name,
@@ -163,7 +163,8 @@ class AzureRegion:
         self.azure_service.compute.galleries.begin_create_or_update(
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
-            gallery=self.common_parameters(location=self.sct_gallery_location, tags=tags) | {
+            gallery=self.common_parameters(location=self.sct_gallery_location, tags=tags)
+            | {
                 "description": "Shared Image Gallery for SCT",
             },
         ).wait()
@@ -178,24 +179,30 @@ class AzureRegion:
     def create_sct_network_security_group(self, tags: Optional[dict] = None) -> None:
         LOGGER.info("Going to create SCT network security group...")
         with suppress(ResourceNotFoundError):
-            LOGGER.info("Network security group `%s' already exists in resource group `%s'",
-                        self.sct_network_security_group.name, self.sct_resource_group_name)
+            LOGGER.info(
+                "Network security group `%s' already exists in resource group `%s'",
+                self.sct_network_security_group.name,
+                self.sct_resource_group_name,
+            )
             return
         self.azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             network_security_group_name=self.sct_network_security_group_name,
-            parameters=self.common_parameters(tags=tags) | {
-                "security_rules": [{
-                    "name": "SSH",
-                    "protocol": "TCP",
-                    "source_port_range": "*",
-                    "destination_port_range": "22",
-                    "source_address_prefix": "*",
-                    "destination_address_prefix": "*",
-                    "access": "Allow",
-                    "priority": 300,
-                    "direction": "Inbound",
-                }],
+            parameters=self.common_parameters(tags=tags)
+            | {
+                "security_rules": [
+                    {
+                        "name": "SSH",
+                        "protocol": "TCP",
+                        "source_port_range": "*",
+                        "destination_port_range": "22",
+                        "source_address_prefix": "*",
+                        "destination_address_prefix": "*",
+                        "access": "Allow",
+                        "priority": 300,
+                        "direction": "Inbound",
+                    }
+                ],
             },
         ).wait()
 
@@ -209,17 +216,21 @@ class AzureRegion:
     def create_sct_virtual_network(self, tags: Optional[dict] = None) -> None:
         LOGGER.info("Going to create SCT virtual network...")
         with suppress(ResourceNotFoundError):
-            LOGGER.info("Virtual network `%s' already exists in resource group `%s'",
-                        self.sct_virtual_network.name, self.sct_resource_group_name)
+            LOGGER.info(
+                "Virtual network `%s' already exists in resource group `%s'",
+                self.sct_virtual_network.name,
+                self.sct_resource_group_name,
+            )
             return
         self.azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             virtual_network_name=self.sct_virtual_network_name,
-            parameters=self.common_parameters(tags=tags) | {
+            parameters=self.common_parameters(tags=tags)
+            | {
                 "address_space": {
                     "address_prefixes": ["10.0.0.0/16"],
                 }
-            }
+            },
         ).wait()
 
     @cached_property
@@ -233,8 +244,9 @@ class AzureRegion:
     def create_sct_subnet(self) -> None:
         LOGGER.info("Going to create SCT subnet...")
         with suppress(ResourceNotFoundError):
-            LOGGER.info("Subnet `%s' already exists in network `%s'",
-                        self.sct_subnet.name, self.sct_virtual_network_name)
+            LOGGER.info(
+                "Subnet `%s' already exists in network `%s'", self.sct_subnet.name, self.sct_virtual_network_name
+            )
             return
         self.azure_service.network.subnets.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
@@ -248,13 +260,12 @@ class AzureRegion:
             },
         ).wait()
 
-    def create_public_ip_address(self,
-                                 public_ip_address_name: str,
-                                 tags: Optional[dict] = None) -> PublicIPAddress:
+    def create_public_ip_address(self, public_ip_address_name: str, tags: Optional[dict] = None) -> PublicIPAddress:
         return self.azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             public_ip_address_name=public_ip_address_name,
-            parameters=self.common_parameters(tags=tags) | {
+            parameters=self.common_parameters(tags=tags)
+            | {
                 "sku": {
                     "name": "Standard",
                 },
@@ -263,17 +274,18 @@ class AzureRegion:
             },
         ).result()
 
-    def create_network_interface(self,
-                                 network_interface_name: str,
-                                 tags: Optional[dict] = None,
-                                 create_public_ip_address: bool = True) -> NetworkInterface:
+    def create_network_interface(
+        self, network_interface_name: str, tags: Optional[dict] = None, create_public_ip_address: bool = True
+    ) -> NetworkInterface:
         parameters = self.common_parameters(tags=tags) | {
-            "ip_configurations": [{
-                "name": f"{network_interface_name}-{self.IP_CONFIGURATION_NAME_SUFFIX}",
-                "subnet": {
-                    "id": self.sct_subnet.id,
-                },
-            }],
+            "ip_configurations": [
+                {
+                    "name": f"{network_interface_name}-{self.IP_CONFIGURATION_NAME_SUFFIX}",
+                    "subnet": {
+                        "id": self.sct_subnet.id,
+                    },
+                }
+            ],
             "enable_accelerated_networking": True,
         }
         if create_public_ip_address:
@@ -289,24 +301,27 @@ class AzureRegion:
             parameters=parameters,
         ).result()
 
-    def create_virtual_machine(self,
-                               vm_name: str,
-                               vm_size: str,
-                               image: dict[str, str],
-                               os_state: AzureOsState = AzureOsState.GENERALIZED,
-                               computer_name: Optional[str] = None,
-                               admin_username: Optional[str] = None,
-                               admin_public_key: Optional[str] = None,
-                               disk_size: Optional[int] = None,
-                               tags: Optional[dict] = None,
-                               create_public_ip_address: bool = True,
-                               spot: bool = False) -> VirtualMachine:
+    def create_virtual_machine(
+        self,
+        vm_name: str,
+        vm_size: str,
+        image: dict[str, str],
+        os_state: AzureOsState = AzureOsState.GENERALIZED,
+        computer_name: Optional[str] = None,
+        admin_username: Optional[str] = None,
+        admin_public_key: Optional[str] = None,
+        disk_size: Optional[int] = None,
+        tags: Optional[dict] = None,
+        create_public_ip_address: bool = True,
+        spot: bool = False,
+    ) -> VirtualMachine:
         if os_state is AzureOsState.GENERALIZED:
             assert admin_username and admin_public_key, "Need to provide login and public key for generalized image"
         return self.azure_service.compute.virtual_machines.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             vm_name=vm_name,
-            parameters=self.common_parameters(tags=tags) | {
+            parameters=self.common_parameters(tags=tags)
+            | {
                 "hardware_profile": {
                     "vm_size": vm_size,
                 },
@@ -320,41 +335,60 @@ class AzureRegion:
                         "managed_disk": {
                             "storage_account_type": "StandardSSD_LRS",  # SSD
                         },
-                    } | ({} if disk_size is None else {
-                        "disk_size_gb": disk_size,
-                    }),
+                    }
+                    | (
+                        {}
+                        if disk_size is None
+                        else {
+                            "disk_size_gb": disk_size,
+                        }
+                    ),
                 },
                 "network_profile": {
-                    "network_interfaces": [{
-                        "id": self.create_network_interface(
-                            network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
-                            tags=tags,
-                            create_public_ip_address=create_public_ip_address,
-                        ).id,
-                    }],
+                    "network_interfaces": [
+                        {
+                            "id": self.create_network_interface(
+                                network_interface_name=f"{vm_name}-{self.NETWORK_INTERFACE_NAME_SUFFIX}",
+                                tags=tags,
+                                create_public_ip_address=create_public_ip_address,
+                            ).id,
+                        }
+                    ],
                 },
-            } | ({} if os_state is AzureOsState.SPECIALIZED else {
-                "os_profile": {
-                    "computer_name": computer_name or vm_name.replace(".", "-"),
-                    "admin_username": admin_username,
-                    "admin_password": binascii.hexlify(os.urandom(20)).decode(),
-                    "linux_configuration": {
-                        "disable_password_authentication": True,
-                        "ssh": {
-                            "public_keys": [{
-                                "path": f"/home/{admin_username}/.ssh/authorized_keys",
-                                "key_data": admin_public_key,
-                            }],
+            }
+            | (
+                {}
+                if os_state is AzureOsState.SPECIALIZED
+                else {
+                    "os_profile": {
+                        "computer_name": computer_name or vm_name.replace(".", "-"),
+                        "admin_username": admin_username,
+                        "admin_password": binascii.hexlify(os.urandom(20)).decode(),
+                        "linux_configuration": {
+                            "disable_password_authentication": True,
+                            "ssh": {
+                                "public_keys": [
+                                    {
+                                        "path": f"/home/{admin_username}/.ssh/authorized_keys",
+                                        "key_data": admin_public_key,
+                                    }
+                                ],
+                            },
                         },
                     },
-                },
-            }) | ({} if not spot else {
-                "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
-                "eviction_policy": "Deallocate",  # can be "Deallocate" or "Delete"
-                "billing_profile": {
-                    "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
-                },
-            }),
+                }
+            )
+            | (
+                {}
+                if not spot
+                else {
+                    "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
+                    "eviction_policy": "Deallocate",  # can be "Deallocate" or "Delete"
+                    "billing_profile": {
+                        "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
+                    },
+                }
+            ),
         ).result()
 
     def deallocate_virtual_machine(self, vm_name: str) -> None:
@@ -363,24 +397,25 @@ class AzureRegion:
             vm_name=vm_name,
         ).wait()
 
-    def create_gallery_image(self,
-                             gallery_image_name: str,
-                             os_state: AzureOsState,
-                             tags: Optional[dict] = None) -> None:
+    def create_gallery_image(
+        self, gallery_image_name: str, os_state: AzureOsState, tags: Optional[dict] = None
+    ) -> None:
         with suppress(ResourceNotFoundError):
             gallery_image = self.azure_service.compute.gallery_images.get(
                 resource_group_name=self.sct_gallery_resource_group_name,
                 gallery_name=self.sct_gallery_name,
                 gallery_image_name=gallery_image_name,
             )
-            LOGGER.info("Gallery image `%s' already exists in the gallery `%s'",
-                        gallery_image.name, self.sct_gallery_name)
+            LOGGER.info(
+                "Gallery image `%s' already exists in the gallery `%s'", gallery_image.name, self.sct_gallery_name
+            )
             return
         self.azure_service.compute.gallery_images.begin_create_or_update(
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
             gallery_image_name=gallery_image_name,
-            gallery_image=self.common_parameters(location=self.sct_gallery_location, tags=tags) | {
+            gallery_image=self.common_parameters(location=self.sct_gallery_location, tags=tags)
+            | {
                 "hyper_v_generation": "V2",
                 "identifier": {
                     "publisher": "ScyllaDB",
@@ -392,9 +427,9 @@ class AzureRegion:
             },
         ).wait()
 
-    def get_gallery_image_version(self,
-                                  gallery_image_name: str,
-                                  gallery_image_version_name: str) -> GalleryImageVersion:
+    def get_gallery_image_version(
+        self, gallery_image_name: str, gallery_image_version_name: str
+    ) -> GalleryImageVersion:
         return self.azure_service.compute.gallery_image_versions.get(
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
@@ -402,29 +437,25 @@ class AzureRegion:
             gallery_image_version_name=gallery_image_version_name,
         )
 
-    def create_gallery_image_version(self,
-                                     gallery_image_name: str,
-                                     gallery_image_version_name: str,
-                                     source_id: str,
-                                     tags: Optional[dict] = None) -> None:
+    def create_gallery_image_version(
+        self, gallery_image_name: str, gallery_image_version_name: str, source_id: str, tags: Optional[dict] = None
+    ) -> None:
         self.azure_service.compute.gallery_image_versions.begin_create_or_update(
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
             gallery_image_name=gallery_image_name,
             gallery_image_version_name=gallery_image_version_name,
-            gallery_image_version=self.common_parameters(location=self.sct_gallery_location, tags=tags) | {
+            gallery_image_version=self.common_parameters(location=self.sct_gallery_location, tags=tags)
+            | {
                 "storage_profile": {
-                    "source": {
-                        "virtual_machine_id": source_id
-                    },
+                    "source": {"virtual_machine_id": source_id},
                 },
             },
         ).wait()
 
-    def append_target_region_to_image_version(self,
-                                              gallery_image_name: str,
-                                              gallery_image_version_name: str,
-                                              region_name: str) -> None:
+    def append_target_region_to_image_version(
+        self, gallery_image_name: str, gallery_image_version_name: str, region_name: str
+    ) -> None:
         gallery_image_version = self.get_gallery_image_version(
             gallery_image_name=gallery_image_name,
             gallery_image_version_name=gallery_image_version_name,
