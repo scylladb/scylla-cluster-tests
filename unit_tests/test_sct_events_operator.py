@@ -24,8 +24,10 @@ class TestOperatorEvents(unittest.TestCase):
     maxDiff = None
 
     def test_scylla_operator_log_event_tls_handshake_error(self):
-        log_record = "I0628 15:53:02.269804       1 operator/operator.go:133] http: " \
-                     "TLS handshake error from 172.17.0.1:50882: EOF"
+        log_record = (
+            "I0628 15:53:02.269804       1 operator/operator.go:133] http: "
+            "TLS handshake error from 172.17.0.1:50882: EOF"
+        )
         event = ScyllaOperatorLogEvent.TLS_HANDSHAKE_ERROR()
         pattern = re.compile(event.regex, re.IGNORECASE)
 
@@ -36,22 +38,27 @@ class TestOperatorEvents(unittest.TestCase):
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         expected_timestamp = datetime.datetime(
-            year=datetime.datetime.now().year, month=6, day=28, hour=15, minute=53, second=2,
-            microsecond=269804, tzinfo=datetime.timezone.utc).timestamp()
+            year=datetime.datetime.now().year,
+            month=6,
+            day=28,
+            hour=15,
+            minute=53,
+            second=2,
+            microsecond=269804,
+            tzinfo=datetime.timezone.utc,
+        ).timestamp()
         assert event.timestamp == expected_timestamp
         self.assertEqual(
-            '(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time '
-            'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=TLS_HANDSHAKE_ERROR regex=TLS handshake error '
-            'from .* node=N/A\n'
-            'I0628 15:53:02.269804       1 operator/operator.go:133] http: TLS handshake error from 172.17.0.1:50882: '
-            'EOF',
+            "(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time "
+            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=TLS_HANDSHAKE_ERROR regex=TLS handshake error "
+            "from .* node=N/A\n"
+            "I0628 15:53:02.269804       1 operator/operator.go:133] http: TLS handshake error from 172.17.0.1:50882: "
+            "EOF",
             str(event),
         )
 
     def test_scylla_operator_log_event_operator_started_info(self):
-        log_record = (
-            "I0628 16:07:43.572294       1 scyllacluster/controller.go:203] \"Starting controller\" controller=\"ScyllaCluster\""
-        )
+        log_record = 'I0628 16:07:43.572294       1 scyllacluster/controller.go:203] "Starting controller" controller="ScyllaCluster"'
         event = ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO()
         pattern = re.compile(event.regex, re.IGNORECASE)
 
@@ -62,11 +69,18 @@ class TestOperatorEvents(unittest.TestCase):
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         expected_timestamp = datetime.datetime(
-            year=datetime.datetime.now().year, month=6, day=28, hour=16, minute=7, second=43,
-            microsecond=572294, tzinfo=datetime.timezone.utc).timestamp()
+            year=datetime.datetime.now().year,
+            month=6,
+            day=28,
+            hour=16,
+            minute=7,
+            second=43,
+            microsecond=572294,
+            tzinfo=datetime.timezone.utc,
+        ).timestamp()
         assert event.timestamp == expected_timestamp
         self.assertEqual(
-            '(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time '
+            "(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time "
             'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=OPERATOR_STARTED_INFO regex="Starting controller" '
             'controller="ScyllaCluster" node=N/A\n'
             'I0628 16:07:43.572294       1 scyllacluster/controller.go:203] "Starting controller" '
@@ -89,10 +103,10 @@ class TestOperatorEvents(unittest.TestCase):
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         self.assertEqual(
-            '(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time '
-            'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=WRONG_SCHEDULED_PODS '
-            'regex=Not allowed pods are scheduled on Scylla node found node=N/A\n'
-            'I0830 12:35:39              Not allowed pods are scheduled on Scylla node found: kube-proxy-7kjnf '
-            '(ip-10-0-1-200.eu-north-1.compute.internal node)',
+            "(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time "
+            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=WRONG_SCHEDULED_PODS "
+            "regex=Not allowed pods are scheduled on Scylla node found node=N/A\n"
+            "I0830 12:35:39              Not allowed pods are scheduled on Scylla node found: kube-proxy-7kjnf "
+            "(ip-10-0-1-200.eu-north-1.compute.internal node)",
             str(event),
         )

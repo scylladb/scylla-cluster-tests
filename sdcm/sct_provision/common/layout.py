@@ -22,13 +22,13 @@ class SCTProvisionLayout:
 
     def __init_subclass__(cls, cluster_backend: str = None):
         if cluster_backend is None:
-            raise RuntimeError('Please init class with `cluster_backend` property')
+            raise RuntimeError("Please init class with `cluster_backend` property")
         cls._cluster_backend_mapping[cluster_backend] = cls
 
     def __new__(cls, params: SCTConfiguration):
-        backend = params.get('cluster_backend')
+        backend = params.get("cluster_backend")
         try:
-            importlib.import_module(cls.__module__.replace('.common.', f'.{backend}.'), package=None)
+            importlib.import_module(cls.__module__.replace(".common.", f".{backend}."), package=None)
         except ModuleNotFoundError:
             pass
         target_class = cls._cluster_backend_mapping.get(backend, SCTProvisionLayout)
@@ -39,7 +39,7 @@ class SCTProvisionLayout:
 
     @property
     def _provision_another_scylla_cluster(self):
-        return self._params.get('db_type') == 'mixed_scylla'
+        return self._params.get("db_type") == "mixed_scylla"
 
     @property
     def db_cluster(self):
@@ -64,5 +64,5 @@ class SCTProvisionLayout:
 def create_sct_configuration(test_name: str):
     sct_configuration = init_and_verify_sct_config()
     TestConfig().set_test_name(test_name)
-    TestConfig().set_test_id_only(sct_configuration.get('test_id'))
+    TestConfig().set_test_id_only(sct_configuration.get("test_id"))
     return sct_configuration

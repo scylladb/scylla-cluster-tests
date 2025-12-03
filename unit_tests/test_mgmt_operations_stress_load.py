@@ -7,19 +7,16 @@ def test_generate_load_handles_list_of_commands():
     # correctly to _run_all_stress_cmds without causing AttributeError
 
     # Simulate the list handling logic from the fixed code
-    stress_cmd = [
-        "cassandra-stress write cl=QUORUM duration=1m",
-        "cassandra-stress read cl=QUORUM duration=30s"
-    ]
+    stress_cmd = ["cassandra-stress write cl=QUORUM duration=1m", "cassandra-stress read cl=QUORUM duration=30s"]
 
     # The fix ensures that when stress_cmd is a list, it's passed as-is to _run_all_stress_cmds
     # Previously this would fail when run_stress_thread tried to call .startswith() on the list
-    params = {'stress_cmd': stress_cmd, 'keyspace_name': 'test_ks', 'round_robin': False}
+    params = {"stress_cmd": stress_cmd, "keyspace_name": "test_ks", "round_robin": False}
 
     # Verify the params dict contains the list (not causing AttributeError)
-    assert params['stress_cmd'] == stress_cmd
-    assert isinstance(params['stress_cmd'], list)
-    assert len(params['stress_cmd']) == 2
+    assert params["stress_cmd"] == stress_cmd
+    assert isinstance(params["stress_cmd"], list)
+    assert len(params["stress_cmd"]) == 2
 
 
 def test_generate_load_handles_single_command():
@@ -27,17 +24,17 @@ def test_generate_load_handles_single_command():
     stress_cmd = "cassandra-stress write cl=QUORUM duration=1m"
 
     # The fix ensures single string commands also work
-    params = {'stress_cmd': stress_cmd, 'keyspace_name': 'test_ks', 'round_robin': False}
+    params = {"stress_cmd": stress_cmd, "keyspace_name": "test_ks", "round_robin": False}
 
-    assert params['stress_cmd'] == stress_cmd
-    assert isinstance(params['stress_cmd'], str)
+    assert params["stress_cmd"] == stress_cmd
+    assert isinstance(params["stress_cmd"], str)
 
 
 def test_generate_background_read_load_replaces_placeholder_in_list():
     """Test that generate_background_read_load replaces placeholder in each command of a list."""
     stress_cmds = [
         "cassandra-stress read -rate threads=<THROTTLE_PLACE_HOLDER>",
-        "cassandra-stress mixed -rate threads=<THROTTLE_PLACE_HOLDER>"
+        "cassandra-stress mixed -rate threads=<THROTTLE_PLACE_HOLDER>",
     ]
 
     throttle_value = 21999  # Example calculated value

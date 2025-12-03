@@ -17,7 +17,7 @@ from sdcm.wait import wait_for
 
 
 class RaftUpgradeProcedure(RemoteCurlClient):
-    """ Raft upgrade procedure to enable consistent topology changes.
+    """Raft upgrade procedure to enable consistent topology changes.
     The procedure should be run only once after all nodes had been upgraded
     Doc:
     https://opensource.docs.scylladb.com/stable/upgrade/upgrade-opensource/upgrade-guide-from-5.4-to-6.0/enable-consistent-topology.html
@@ -33,10 +33,14 @@ class RaftUpgradeProcedure(RemoteCurlClient):
         return self.run_remoter_curl(method="POST", path=path, params=None, timeout=30).stdout.strip()
 
     def get_upgrade_procedure_status(self) -> str:
-        """ rest api return json string"""
+        """rest api return json string"""
         path = "raft_topology/upgrade"
         return json.loads(self.run_remoter_curl(method="GET", path=path, params=None, timeout=30).stdout.strip())
 
     def wait_upgrade_procedure_done(self):
-        wait_for(lambda: self.get_upgrade_procedure_status().lower() == "done",
-                 step=5, text="Check raft upgrade procedure state", timeout=60)
+        wait_for(
+            lambda: self.get_upgrade_procedure_status().lower() == "done",
+            step=5,
+            text="Check raft upgrade procedure state",
+            timeout=60,
+        )

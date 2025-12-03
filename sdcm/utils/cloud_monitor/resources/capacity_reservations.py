@@ -27,26 +27,22 @@ def get_active_capacity_reservations() -> list[CapacityReservation]:
     try:
         for region in all_aws_regions():
             LOGGER.info("Getting AWS Capacity Reservations in %s...", region)
-            client = boto3.client('ec2', region_name=region)
-            response = client.describe_capacity_reservations(
-                Filters=[
-                    {
-                        'Name': 'state',
-                        'Values': ['active']
-                    }]
-            )
-            for cr in response['CapacityReservations']:
-                user = next((tag['Value'] for tag in cr.get('Tags', []) if tag['Key'] == 'RunByUser'), 'N/A')
-                reservations.append(CapacityReservation(
-                    id=cr["CapacityReservationId"],
-                    instance_type=cr["InstanceType"],
-                    region=cr["AvailabilityZone"],
-                    capacity_total=cr["TotalInstanceCount"],
-                    capacity_available=cr["AvailableInstanceCount"],
-                    start_time=cr["StartDate"],
-                    user=user,
-                    is_unused=cr["AvailableInstanceCount"] == cr["TotalInstanceCount"]
-                ))
+            client = boto3.client("ec2", region_name=region)
+            response = client.describe_capacity_reservations(Filters=[{"Name": "state", "Values": ["active"]}])
+            for cr in response["CapacityReservations"]:
+                user = next((tag["Value"] for tag in cr.get("Tags", []) if tag["Key"] == "RunByUser"), "N/A")
+                reservations.append(
+                    CapacityReservation(
+                        id=cr["CapacityReservationId"],
+                        instance_type=cr["InstanceType"],
+                        region=cr["AvailabilityZone"],
+                        capacity_total=cr["TotalInstanceCount"],
+                        capacity_available=cr["AvailableInstanceCount"],
+                        start_time=cr["StartDate"],
+                        user=user,
+                        is_unused=cr["AvailableInstanceCount"] == cr["TotalInstanceCount"],
+                    )
+                )
         LOGGER.info("Found total %d active capacity reservations", len(reservations))
     except Exception as e:  # noqa: BLE001
         LOGGER.error("Failed to get capacity reservations: %s", e)

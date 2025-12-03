@@ -9,9 +9,11 @@ def create_scylla_bench_table_query(compaction_strategy=None):
     :return: cql create table query for scylla-bench
     """
 
-    compaction_strategy_option = "AND compaction = {{'class': '{}'}};".format(
-        compaction_strategy) if compaction_strategy else ""
-    scylla_bench_table_query = """
+    compaction_strategy_option = (
+        "AND compaction = {{'class': '{}'}};".format(compaction_strategy) if compaction_strategy else ""
+    )
+    scylla_bench_table_query = (
+        """
                     CREATE TABLE IF NOT EXISTS scylla_bench.test (
                     pk bigint,
                     ck bigint,
@@ -32,5 +34,7 @@ def create_scylla_bench_table_query(compaction_strategy=None):
                     AND min_index_interval = 128
                     AND read_repair_chance = 0.0
                     AND speculative_retry = 'NONE'
-                    """ + compaction_strategy_option
+                    """
+        + compaction_strategy_option
+    )
     return scylla_bench_table_query

@@ -30,22 +30,26 @@ class ProvisionPlan(BaseModel):
         return self.__class__.__name__
 
     def provision_instances(
-            self,
-            instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
-            node_count: int,
-            node_tags: List[TagsType],
-            node_names: List[str],
+        self,
+        instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
+        node_count: int,
+        node_tags: List[TagsType],
+        node_names: List[str],
     ):
         for provision_parameters in self.provision_steps:
             if instances := self.provisioner.provision(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters,
-                    count=node_count,
-                    tags=node_tags,
-                    names=node_names,
+                provision_parameters=provision_parameters,
+                instance_parameters=instance_parameters,
+                count=node_count,
+                tags=node_tags,
+                names=node_names,
             ):
-                LOGGER.info('%s: Instances has been provisioned using "%s":\n%s', self.name,
-                            provision_parameters.name, instances)
+                LOGGER.info(
+                    '%s: Instances has been provisioned using "%s":\n%s',
+                    self.name,
+                    provision_parameters.name,
+                    instances,
+                )
                 return instances
             else:
                 LOGGER.error('%s: Failed to provision instances using "%s"', self.name, provision_parameters.name)
