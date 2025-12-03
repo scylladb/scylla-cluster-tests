@@ -40,7 +40,7 @@ class VectorStoreNodeMixin:
     @cached_property
     def vector_store_uri(self) -> str:
         """Get Vector Store URI"""
-        ip = self.public_ip_address if self.test_config.IP_SSH_CONNECTIONS == 'public' else self.private_ip_address
+        ip = self.public_ip_address if self.test_config.IP_SSH_CONNECTIONS == "public" else self.private_ip_address
         return f"http://{ip}:{self.parent_cluster.params.get('vector_store_port')}"
 
     @property
@@ -48,8 +48,10 @@ class VectorStoreNodeMixin:
         """Get Scylla URI"""
         scylla_uri = "127.0.0.1:9042"
         if self.parent_cluster.scylla_cluster:
-            scylla_uri = (f"{self.parent_cluster.scylla_cluster.nodes[0].ip_address}:"
-                          f"{self.parent_cluster.params.get('vector_store_scylla_port')}")
+            scylla_uri = (
+                f"{self.parent_cluster.scylla_cluster.nodes[0].ip_address}:"
+                f"{self.parent_cluster.params.get('vector_store_scylla_port')}"
+            )
         return scylla_uri
 
 

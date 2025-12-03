@@ -10,15 +10,15 @@ from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.keystore import KeyStore
 
 DRY_RUN = False
-ENVIRONMENTS = ['lab', 'staging']
+ENVIRONMENTS = ["lab", "staging"]
 
-KEEP_HOURS_PATTERN = re.compile(r'-keep-(\d+)h$')
+KEEP_HOURS_PATTERN = re.compile(r"-keep-(\d+)h$")
 
 
 def should_delete_cluster(cluster: dict, now: datetime.datetime) -> tuple[bool, str]:
     """Determine if a ScyllaDB Cloud cluster should be deleted based on name and creation time"""
-    cluster_name = cluster.get('clusterName', 'Unknown')
-    created_at_str = cluster.get('createdAt')
+    cluster_name = cluster.get("clusterName", "Unknown")
+    created_at_str = cluster.get("createdAt")
 
     match = KEEP_HOURS_PATTERN.search(cluster_name)
     keep_hours = int(match.group(1)) if match else None
@@ -26,7 +26,7 @@ def should_delete_cluster(cluster: dict, now: datetime.datetime) -> tuple[bool, 
     if keep_hours is None:
         return False, "No keep suffix in name (likely the manually created cluster)"
 
-    created_at = datetime.datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+    created_at = datetime.datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
     age_hours = (now - created_at).total_seconds() / 3600.0
 
     if age_hours > keep_hours:
@@ -35,12 +35,14 @@ def should_delete_cluster(cluster: dict, now: datetime.datetime) -> tuple[bool, 
 
 
 def print_cluster(cluster: dict, msg: str):
-    print(f"Cluster {cluster.get('clusterName')} (ID: {cluster.get('id')}) created at {cluster.get('createdAt')}: {msg}")
+    print(
+        f"Cluster {cluster.get('clusterName')} (ID: {cluster.get('id')}) created at {cluster.get('createdAt')}: {msg}"
+    )
 
 
 def delete_cluster(cluster: dict, api_client: ScyllaCloudAPIClient, account_id: int):
-    cluster_name = cluster.get('clusterName')
-    cluster_id = cluster.get('id')
+    cluster_name = cluster.get("clusterName")
+    cluster_id = cluster.get("id")
 
     try:
         if not DRY_RUN:
@@ -57,8 +59,8 @@ def clean_clusters_for_environment(environment: str) -> tuple[int, int, int]:
 
     try:
         credentials = KeyStore().get_cloud_rest_credentials(environment)
-        api_client = ScyllaCloudAPIClient(api_url=credentials['base_url'], auth_token=credentials['api_token'])
-        account_id = api_client.get_account_details().get('accountId')
+        api_client = ScyllaCloudAPIClient(api_url=credentials["base_url"], auth_token=credentials["api_token"])
+        account_id = api_client.get_account_details().get("accountId")
     except Exception as exc:  # noqa: BLE001
         print(f"Failed to initialize API client for '{environment}' environment: {exc}")
         return 0, 0, 0
@@ -70,7 +72,8 @@ def clean_clusters_for_environment(environment: str) -> tuple[int, int, int]:
     deleted_clusters, kept_clusters = 0, 0
     for cluster in clusters:
         cluster_details = api_client.get_cluster_details(
-            account_id=account_id, cluster_id=cluster.get('id'), enriched=True)
+            account_id=account_id, cluster_id=cluster.get("id"), enriched=True
+        )
         should_delete, reason = should_delete_cluster(cluster_details, now)
 
         print_cluster(cluster_details, f"{'DELETING' if should_delete else 'KEEPING'} - {reason}")
@@ -86,16 +89,20 @@ def clean_clusters_for_environment(environment: str) -> tuple[int, int, int]:
 
 
 if __name__ == "__main__":
-    arg_parser = argparse.ArgumentParser(
-        'xcloud_cleanup', description='Clean up expired ScyllaDB Cloud test clusters')
+    arg_parser = argparse.ArgumentParser("xcloud_cleanup", description="Clean up expired ScyllaDB Cloud test clusters")
     arg_parser.add_argument(
-        "--environments", type=str, nargs='+',
+        "--environments",
+        type=str,
+        nargs="+",
         help=f"ScyllaDB Cloud environments to clean (default: {ENVIRONMENTS})",
-        default=ENVIRONMENTS)
+        default=ENVIRONMENTS,
+    )
     arg_parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Do not delete anything, just print what would be deleted",
-        default=os.environ.get('DRY_RUN'))
+        default=os.environ.get("DRY_RUN"),
+    )
 
     arguments = arg_parser.parse_args()
     DRY_RUN = bool(arguments.dry_run)
@@ -109,9 +116,9 @@ if __name__ == "__main__":
         deleted += d
         kept += k
 
-    print(f"\n{'='*40}")
+    print(f"\n{'=' * 40}")
     print("OVERALL SUMMARY:")
     print(f"  Total clusters checked: {total}")
     print(f"  Clusters deleted: {deleted}")
     print(f"  Clusters kept: {kept}")
-    print(f"{'='*40}")
+    print(f"{'=' * 40}")

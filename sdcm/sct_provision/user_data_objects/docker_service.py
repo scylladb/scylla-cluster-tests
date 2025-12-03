@@ -18,7 +18,6 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 @dataclass
 class DockerUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
         return self.node_type == "loader"

@@ -40,11 +40,10 @@ def fixture_kafka_cluster(tmp_path_factory, params):
     kafka.stop()
 
 
-@pytest.mark.docker_scylla_args(docker_network="kafka-stack-docker-compose_default",
-                                image="scylladb/scylla-nightly:latest")
-@pytest.mark.sct_config(
-    files="unit_tests/test_data/kafka_connectors/scylla-cdc-source-connector.yaml"
+@pytest.mark.docker_scylla_args(
+    docker_network="kafka-stack-docker-compose_default", image="scylladb/scylla-nightly:latest"
 )
+@pytest.mark.sct_config(files="unit_tests/test_data/kafka_connectors/scylla-cdc-source-connector.yaml")
 @pytest.mark.skip("https://github.com/scylladb/scylla-cluster-tests/issues/11628")
 def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, params, events):
     """
@@ -53,7 +52,7 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
     - from GitHub release url
     """
 
-    params['kafka_backend'] = 'localstack'
+    params["kafka_backend"] = "localstack"
 
     disable_tablets = ""
     if SkipPerIssues("scylladb/scylladb#16317", params):
@@ -63,25 +62,19 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
         f"{{'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 }} {disable_tablets};"
     )
     docker_scylla.run_cqlsh(
-        'CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, '
+        "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, "
         '"C0" blob, "C1" blob, "C2" blob, "C3" blob, "C4" blob) WITH  '
         "cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}"
     )
     docker_scylla.parent_cluster.nodes = [docker_scylla]
     connector_config = params.get("kafka_connectors")[0]
-    kafka_cluster.create_connector(
-        db_cluster=docker_scylla.parent_cluster, connector_config=connector_config
-    )
+    kafka_cluster.create_connector(db_cluster=docker_scylla.parent_cluster, connector_config=connector_config)
 
     loader_set = LocalLoaderSetDummy(params=params)
 
-    cmd = (
-        """cassandra-stress write cl=ONE n=500 -mode cql3 native -rate threads=10 """
-    )
+    cmd = """cassandra-stress write cl=ONE n=500 -mode cql3 native -rate threads=10 """
 
-    cs_thread = CassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
     request.addfinalizer(lambda: cs_thread.kill())
 
     cs_thread.run()
@@ -96,9 +89,7 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
 
 
 @pytest.mark.docker_scylla_args(docker_network="kafka-stack-docker-compose_default")
-@pytest.mark.sct_config(
-    files="unit_tests/test_data/kafka_connectors/kafka-connect-scylladb.yaml"
-)
+@pytest.mark.sct_config(files="unit_tests/test_data/kafka_connectors/kafka-connect-scylladb.yaml")
 def test_02_kafka_scylla_sink_connector(docker_scylla, kafka_cluster, params):
     """
     setup kafka with kafka-connect-scylladb with docker based scylla node
@@ -114,6 +105,4 @@ def test_02_kafka_scylla_sink_connector(docker_scylla, kafka_cluster, params):
 
     docker_scylla.parent_cluster.nodes = [docker_scylla]
     for connector_config in params.get("kafka_connectors"):
-        kafka_cluster.create_connector(
-            db_cluster=docker_scylla.parent_cluster, connector_config=connector_config
-        )
+        kafka_cluster.create_connector(db_cluster=docker_scylla.parent_cluster, connector_config=connector_config)

@@ -31,44 +31,64 @@ def ssh_docker_server(tmp_path_factory):
     ssh_key_path = tmp_path / "id_ed25519"
     ssh_pub_path = tmp_path / "id_ed25519.pub"
     # Generate SSH key pair
-    subprocess.run([
-        "ssh-keygen", "-t", "ed25519", "-f", str(ssh_key_path), "-N", ""
-    ], check=True)
+    subprocess.run(["ssh-keygen", "-t", "ed25519", "-f", str(ssh_key_path), "-N", ""], check=True)
     # Start SSH server in Docker
     container_name = f"test-ssh-server-{os.getpid()}"
     cmd = [
-        "docker", "run", "-d",
-        "--name", container_name,
-        "-p", f"{SSH_PORT}",
-        "-e", f"USER_NAME={SSH_USER}",
-        "-e", f"PUBLIC_KEY={pathlib.Path(ssh_pub_path).read_text().strip()}",
-        SSH_IMAGE
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "-p",
+        f"{SSH_PORT}",
+        "-e",
+        f"USER_NAME={SSH_USER}",
+        "-e",
+        f"PUBLIC_KEY={pathlib.Path(ssh_pub_path).read_text().strip()}",
+        SSH_IMAGE,
     ]
     # Print docker run output for debugging
-    logging.info('Running docker run command: %s', ' '.join(cmd))
+    logging.info("Running docker run command: %s", " ".join(cmd))
     docker_run_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    logging.info('docker run stdout: %s', docker_run_result.stdout.decode())
-    logging.info('docker run stderr: %s', docker_run_result.stderr.decode())
+    logging.info("docker run stdout: %s", docker_run_result.stdout.decode())
+    logging.info("docker run stderr: %s", docker_run_result.stderr.decode())
     if docker_run_result.returncode != 0:
         pytest.skip(f"Docker run failed: {docker_run_result.stderr.decode()}")
 
     # Get the container's IP address on the docker bridge network
     inspect_cmd = [
-        "docker", "inspect", "-f",
+        "docker",
+        "inspect",
+        "-f",
         "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-        container_name
+        container_name,
     ]
     docker_address = subprocess.run(inspect_cmd, check=True, stdout=subprocess.PIPE).stdout.decode().strip()
     # Wait for SSH to be up
     for _ in range(20):
         try:
-            output = subprocess.run([
-                "ssh", "-i", str(ssh_key_path),
-                "-o", "IdentitiesOnly=yes",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "StrictHostKeyChecking=no",
-                f"{SSH_USER}@{docker_address}", "-p", str(SSH_PORT), "echo", "ok"
-            ], check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            output = subprocess.run(
+                [
+                    "ssh",
+                    "-i",
+                    str(ssh_key_path),
+                    "-o",
+                    "IdentitiesOnly=yes",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"{SSH_USER}@{docker_address}",
+                    "-p",
+                    str(SSH_PORT),
+                    "echo",
+                    "ok",
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             logging.info(output.stdout.decode().strip())
             logging.info(output.stderr.decode().strip())
             if output.returncode == 0:
@@ -79,13 +99,17 @@ def ssh_docker_server(tmp_path_factory):
     else:
         subprocess.run(["docker", "rm", "-f", container_name], check=False)
         pytest.skip("SSH server did not start in time")
-    yield {
-        "hostname": docker_address,
-        "user": SSH_USER,
-        "key_file": str(ssh_key_path),
-        "port": SSH_PORT,
-        "ssh_options": "-o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
-    }, container_name, tmp_path
+    yield (
+        {
+            "hostname": docker_address,
+            "user": SSH_USER,
+            "key_file": str(ssh_key_path),
+            "port": SSH_PORT,
+            "ssh_options": "-o IdentitiesOnly=yes -o StrictHostKeyChecking=no",
+        },
+        container_name,
+        tmp_path,
+    )
     subprocess.run(["docker", "rm", "-f", container_name], check=False)
 
 
@@ -117,16 +141,11 @@ def test_upload_remote_files_directly_to_s3(ssh_docker_server, s3_test_key):
         for _ in range(total_size // chunk_size):
             f.write(secrets.token_bytes(chunk_size))
     # Copy file to container
-    subprocess.run([
-        "docker", "cp", str(test_file), f"{container_name}:/tmp/testfile.bin"
-    ], check=True)
+    subprocess.run(["docker", "cp", str(test_file), f"{container_name}:/tmp/testfile.bin"], check=True)
     # Run the upload
     s3_key = s3_test_key
     link = upload_remote_files_directly_to_s3(
-        ssh_info=ssh_info,
-        files=["/tmp/testfile.bin"],
-        s3_bucket=TEST_S3_BUCKET,
-        s3_key=s3_key
+        ssh_info=ssh_info, files=["/tmp/testfile.bin"], s3_bucket=TEST_S3_BUCKET, s3_key=s3_key
     )
     assert link, "No S3 link returned"
     # Download and check file from S3
