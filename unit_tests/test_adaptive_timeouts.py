@@ -28,30 +28,26 @@ from unit_tests.test_cluster import DummyDbCluster
 LOGGER = logging.getLogger(__name__)
 
 
-class FakeNode():
-
+class FakeNode:
     def __init__(self, name: str, remoter):
         self.name = name
         self.remoter = remoter
         self.scylla_version_detailed = "2042.1.12-0.20220620.e23889f17"
         params = SCTConfiguration()
-        params['n_db_nodes'] = 1
+        params["n_db_nodes"] = 1
         self.parent_cluster = DummyDbCluster(nodes=[self], params=params)
 
 
 class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
-
     def __init__(self):
         self._data = {}
 
-    def store(self, metrics: dict[str, Any], operation: str, duration: int, timeout: int,
-              timeout_occurred: bool) -> None:
-        metrics.update({
-            "operation": operation,
-            "duration": duration,
-            "timeout": timeout,
-            "timeout_occurred": timeout_occurred
-        })
+    def store(
+        self, metrics: dict[str, Any], operation: str, duration: int, timeout: int, timeout_occurred: bool
+    ) -> None:
+        metrics.update(
+            {"operation": operation, "duration": duration, "timeout": timeout, "timeout_occurred": timeout_occurred}
+        )
         key = str(uuid.uuid4())
         self._data[key] = metrics
 
@@ -124,14 +120,16 @@ def adaptive_timeout_store():
 
 @pytest.fixture(autouse=True)
 def mock_tablets_feature():
-    with mock.patch('sdcm.utils.adaptive_timeouts.is_tablets_feature_enabled') as mock_feature:
+    with mock.patch("sdcm.utils.adaptive_timeouts.is_tablets_feature_enabled") as mock_feature:
         mock_feature.return_value = False
         yield mock_feature
 
 
-@mock.patch('sdcm.sct_events.base.SctEvent.publish_or_dump')
+@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node, adaptive_timeout_store):
-    with adaptive_timeout(operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=0.1, stats_storage=adaptive_timeout_store) as timeout:
+    with adaptive_timeout(
+        operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=0.1, stats_storage=adaptive_timeout_store
+    ) as timeout:
         assert timeout == 0.1
         time.sleep(0.2)
     publish_or_dump.assert_called_once()
@@ -144,9 +142,11 @@ def test_soft_timeout_is_raised_when_timeout_reached(publish_or_dump, fake_node,
     assert metrics[0]["shards_count"] == 3
 
 
-@mock.patch('sdcm.sct_events.base.SctEvent.publish_or_dump')
+@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fake_node, adaptive_timeout_store):
-    with adaptive_timeout(operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=1, stats_storage=adaptive_timeout_store) as timeout:
+    with adaptive_timeout(
+        operation=Operations.SOFT_TIMEOUT, node=fake_node, timeout=1, stats_storage=adaptive_timeout_store
+    ) as timeout:
         assert timeout == 1
         time.sleep(0.2)
     publish_or_dump.assert_not_called()
@@ -154,21 +154,25 @@ def test_soft_timeout_is_not_raised_when_timeout_not_reached(publish_or_dump, fa
     assert MemoryAdaptiveTimeoutStore().get(operation="SOFT_TIMEOUT", timeout_occurred=False)
 
 
-@mock.patch('sdcm.sct_events.base.SctEvent.publish_or_dump')
+@mock.patch("sdcm.sct_events.base.SctEvent.publish_or_dump")
 def test_decommission_timeout_is_calculated_and_stored(publish_or_dump, fake_node, adaptive_timeout_store):
-    with adaptive_timeout(operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store) as timeout:
+    with adaptive_timeout(
+        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
+    ) as timeout:
         assert timeout == 7200  # based on data size
     publish_or_dump.assert_not_called()
     assert MemoryAdaptiveTimeoutStore().get(operation=Operations.DECOMMISSION.name, timeout_occurred=False)
 
 
-@mock.patch('sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump')
-@mock.patch('sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump')
-def test_tablets_decommission_uses_predefined_timeouts(hard_timeout_mock, soft_timeout_mock,
-                                                       fake_node, adaptive_timeout_store, mock_tablets_feature):
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_decommission_uses_predefined_timeouts(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
     mock_tablets_feature.return_value = True
-    with adaptive_timeout(operation=Operations.DECOMMISSION, node=fake_node,
-                          stats_storage=adaptive_timeout_store) as timeout:
+    with adaptive_timeout(
+        operation=Operations.DECOMMISSION, node=fake_node, stats_storage=adaptive_timeout_store
+    ) as timeout:
         assert timeout == TABLETS_HARD_TIMEOUT
 
     soft_timeout_mock.assert_not_called()
@@ -177,13 +181,15 @@ def test_tablets_decommission_uses_predefined_timeouts(hard_timeout_mock, soft_t
     assert metrics[0].get("tablets_enabled") is True
 
 
-@mock.patch('sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump')
-@mock.patch('sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump')
-def test_tablets_new_node_uses_predefined_timeouts(hard_timeout_mock, soft_timeout_mock,
-                                                   fake_node, adaptive_timeout_store, mock_tablets_feature):
+@mock.patch("sdcm.sct_events.system.SoftTimeoutEvent.publish_or_dump")
+@mock.patch("sdcm.sct_events.system.HardTimeoutEvent.publish_or_dump")
+def test_tablets_new_node_uses_predefined_timeouts(
+    hard_timeout_mock, soft_timeout_mock, fake_node, adaptive_timeout_store, mock_tablets_feature
+):
     mock_tablets_feature.return_value = True
-    with adaptive_timeout(operation=Operations.NEW_NODE, node=fake_node, stats_storage=adaptive_timeout_store,
-                          timeout=9999) as timeout:
+    with adaptive_timeout(
+        operation=Operations.NEW_NODE, node=fake_node, stats_storage=adaptive_timeout_store, timeout=9999
+    ) as timeout:
         assert timeout == TABLETS_HARD_TIMEOUT
 
     soft_timeout_mock.assert_not_called()
