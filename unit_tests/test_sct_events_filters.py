@@ -58,23 +58,21 @@ class TestDbEventsFilter(unittest.TestCase):
         self.assertFalse(db_events_filter.eval_filter(event3))
 
     def test_eval_filter_type_with_regex_line(self):
-        regex = re.compile(r".*raft_topology - drain rpc failed, proceed to fence "
-                           r"old writes:.*connection is closed")
+        regex = re.compile(
+            r".*raft_topology - drain rpc failed, proceed to fence "
+            r"old writes:.*connection is closed"
+        )
         db_events_filter = DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line=regex)
         event1 = DatabaseLogEvent.RUNTIME_ERROR().add_info(
             node="node1",
             line="raft_topology - drain rpc failed, proceed to fence old writes: connection is closed",
-            line_number=1
+            line_number=1,
         )
-        event2 = event1.clone().add_info(
-            node="node2",
-            line="unrelated log entry",
-            line_number=1
-        )
+        event2 = event1.clone().add_info(node="node2", line="unrelated log entry", line_number=1)
         event3 = DatabaseLogEvent.NO_SPACE_ERROR().add_info(
             node="node1",
             line="raft_topology - drain rpc failed, proceed to fence old writes: connection is closed",
-            line_number=1
+            line_number=1,
         )
         self.assertTrue(db_events_filter.eval_filter(event1))
         self.assertFalse(db_events_filter.eval_filter(event2))
@@ -97,8 +95,7 @@ class TestEventsFilter(unittest.TestCase):
 
     def test_regex_string(self):
         db_events_filter = EventsFilter(regex="lalala")
-        self.assertEqual(db_events_filter._regex,
-                         re.compile("lalala", re.MULTILINE | re.DOTALL))
+        self.assertEqual(db_events_filter._regex, re.compile("lalala", re.MULTILINE | re.DOTALL))
         self.assertEqual(db_events_filter._regex.pattern, "lalala")
         self.assertEqual(db_events_filter.regex, "lalala")
         self.assertEqual(db_events_filter, pickle.loads(pickle.dumps(db_events_filter)))

@@ -23,17 +23,17 @@ SPOT_REQUEST_TIMEOUT = 300
 SPOT_REQUEST_WAITING_TIME = 5
 # How much time we wait before getting status of spot/fleet request
 
-STATUS_FULFILLED = 'fulfilled'
+STATUS_FULFILLED = "fulfilled"
 # Spot request status that is signaling that it has been processed and fulfilled
 
-SPOT_STATUS_UNEXPECTED_ERROR = 'error'
+SPOT_STATUS_UNEXPECTED_ERROR = "error"
 # Spot activity status that is signaling that something wrong happened while spot request is being processed
 
-SPOT_PRICE_TOO_LOW = 'price-too-low'
+SPOT_PRICE_TOO_LOW = "price-too-low"
 # Spot request status that is signaling that it won't be processed because price you want is too low
 
-FLEET_LIMIT_EXCEEDED_ERROR = 'spotInstanceCountLimitExceeded'
+FLEET_LIMIT_EXCEEDED_ERROR = "spotInstanceCountLimitExceeded"
 # Spot request event type that is signaling that it won't be processed due to the reaching AWS spot instance limit
 
-SPOT_CAPACITY_NOT_AVAILABLE_ERROR = 'capacity-not-available'
+SPOT_CAPACITY_NOT_AVAILABLE_ERROR = "capacity-not-available"
 # Spot request event type that is signaling that it won't be processed due to the lack of resources on AWS side

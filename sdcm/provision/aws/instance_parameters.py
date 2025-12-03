@@ -31,7 +31,7 @@ class AWSInstanceProfile(BaseModel):
 
 
 class AWSDiskMappingEbsInfo(BaseModel):
-    VolumeType: Literal['standard', 'io1', 'io2', 'gp2', 'sc1', 'st1', 'gp3']
+    VolumeType: Literal["standard", "io1", "io2", "gp2", "sc1", "st1", "gp3"]
     VolumeSize: int
     VirtualName: str = None
     DeleteOnTermination: bool = None
@@ -50,12 +50,19 @@ class AWSDiskMapping(BaseModel):
 
 class AWSPlacementInfo(BaseModel):
     AvailabilityZone: str
+<<<<<<< HEAD
     GroupName: str = None
     Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
+||||||| parent of e29892926 (improvement(treewide): Reformat using ruff)
+    GroupName: str | None = None
+    Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
+=======
+    GroupName: str | None = None
+    Tenancy: Literal["default", "dedicated", "host"] = "default"
+>>>>>>> e29892926 (improvement(treewide): Reformat using ruff)
 
 
 class AWSInstanceParams(InstanceParamsBase):
-
     ImageId: str
     KeyName: str
     InstanceType: str
@@ -91,6 +98,6 @@ class AWSInstanceParams(InstanceParamsBase):
             exclude_none=exclude_none,
         )
         if encode_user_data:
-            if user_data := dict_data.get('UserData'):
-                dict_data['UserData'] = base64.b64encode(user_data.encode('ascii')).decode("ascii")
+            if user_data := dict_data.get("UserData"):
+                dict_data["UserData"] = base64.b64encode(user_data.encode("ascii")).decode("ascii")
         return dict_data
