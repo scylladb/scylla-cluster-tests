@@ -5439,6 +5439,8 @@ class Nemesis(NemesisFlags):
                     self.cluster.decommission(new_node, timeout=decommission_timeout)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
+        self.target_node.log_message(message="Identified bottleneck(s): CPU", level="error")
+
         with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
             self.actions_log.info("Executed nodetool disablebinary")
             self.target_node.run_nodetool("statusbinary")
