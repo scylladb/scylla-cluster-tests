@@ -5,7 +5,6 @@ const KEYSPACE = latte::param!("keyspace", "vdb_bench");
 const TABLE = latte::param!("table", "vdb_bench_collection");
 const INDEX = latte::param!("index", "vdb_bench_collection_vector_idx");
 const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
-const TABLETS_ENABLED = latte::param!("tablets_enabled", false);
 
 const ANN_LIMIT = latte::param!("ann_limit", 10);
 const MIN_RECALL_THRESHOLD = latte::param!("min_recall_threshold", 0.9);
@@ -32,7 +31,7 @@ const P_STMT = #{
 
 pub async fn schema(db) {
     db.execute(`CREATE KEYSPACE IF NOT EXISTS ${KEYSPACE} WITH REPLICATION = {
-        'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'} AND durable_writes = true AND tablets = {'enabled': ${TABLETS_ENABLED}}`).await?;
+        'class': 'NetworkTopologyStrategy', 'replication_factor': '${REPLICATION_FACTOR}'} AND durable_writes = true`).await?;
 
     db.execute(`CREATE TABLE IF NOT EXISTS ${KEYSPACE}.${TABLE} (
         id int,
