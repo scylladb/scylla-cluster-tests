@@ -1844,8 +1844,6 @@ def create_runner_image(cloud_provider, region, availability_zone):
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
                            test_id, test_name, duration, restore_monitor=False, restored_test_id="", address_pool=None):
 
-    if cloud_provider == "aws":
-        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)

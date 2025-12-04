@@ -2655,7 +2655,6 @@ class SCTConfiguration(dict):
             self._validate_docker_backend_parameters()
         if backend == 'xcloud':
             self._validate_cloud_backend_parameters()
-
         self._verify_data_volume_configuration(backend)
 
         if self.get('n_db_nodes'):
