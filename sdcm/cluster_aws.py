@@ -40,6 +40,7 @@ from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetwork
     network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
+from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
@@ -1174,6 +1175,8 @@ class VectorStoreAWSNode(VectorStoreNodeMixin, AWSNode):
         self.remoter.run(f"echo '{env_content}' | sudo tee /home/ubuntu/vector-store/.env > /dev/null", verbose=True)
         self.remoter.run(
             f"sudo chown {self.parent_cluster.params.get('ami_vector_store_user')}: /home/ubuntu/vector-store/.env", verbose=True)
+        VectorStoreVersionReporter(self.remoter, "/opt/vector-store/vector-store",
+                                   self.test_config.argus_client()).report()
 
 
 class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
