@@ -24,7 +24,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region', 'us-east1')}",
                description: 'Region value',
                name: 'region')
-            string(defaultValue: "a",
+            string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
 
@@ -172,6 +172,9 @@ def call(Map pipelineParams) {
 
                                 export SCT_CONFIG_FILES=${params.test_config}
                                 export SCT_COLLECT_LOGS=false
+                                if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                fi
 
                                 if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
                                     export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
