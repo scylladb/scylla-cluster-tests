@@ -2435,7 +2435,6 @@ class SCTConfiguration(dict):
             self._check_multi_region_params(backend)
         if backend == 'docker':
             self._validate_docker_backend_parameters()
-
         self._verify_data_volume_configuration(backend)
 
         if self.get('n_db_nodes'):

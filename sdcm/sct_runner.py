@@ -467,6 +467,11 @@ class AwsSctRunner(SctRunner):
     LONGTERM_TEST_INSTANCE_TYPE = "m7i-flex.xlarge"  # 4 vcpus, 16G
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration | None = None):
+        availability_zone = availability_zone or params.get("availability_zone")
+        assert availability_zone, "Availability zone is required for AWS"
+        availability_zone = availability_zone.split(',')[0]  # in case multiple AZs are given, take the first one
+        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
+
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         if region_name.endswith(tuple(string.ascii_lowercase)):
             region_name = region_name[:-1]
@@ -794,7 +799,11 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str,  params: SCTConfiguration | None = None):
-        availability_zone = params.get("availability_zone") or random_zone(region_name)
+        availability_zone = availability_zone or params.get("availability_zone") or random_zone(region_name)
+        assert availability_zone, "Availability zone is required for GCE"
+        availability_zone = availability_zone.split(',')[0]  # in case multiple AZs are given, take the first one
+        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
+
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.gce_region = region_name
         self.gce_source_region = self.SOURCE_IMAGE_REGION
