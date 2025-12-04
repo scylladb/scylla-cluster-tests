@@ -2435,7 +2435,16 @@ class SCTConfiguration(dict):
             self._check_multi_region_params(backend)
         if backend == 'docker':
             self._validate_docker_backend_parameters()
+<<<<<<< HEAD
 
+||||||| parent of 57d23ec87 (fix(pipeline): remove default availability zone)
+        if backend == 'xcloud':
+            self._validate_cloud_backend_parameters()
+
+=======
+        if backend == 'xcloud':
+            self._validate_cloud_backend_parameters()
+>>>>>>> 57d23ec87 (fix(pipeline): remove default availability zone)
         self._verify_data_volume_configuration(backend)
 
         if self.get('n_db_nodes'):
