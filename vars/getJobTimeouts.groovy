@@ -18,6 +18,11 @@ List<Integer> call(Map params, String region){
     if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
         export SCT_AZURE_REGION_NAME=${groovy.json.JsonOutput.toJson(params.azure_region_name)}
     fi
+
+    if [[ "${params.backend}" == "xcloud" ]] ; then
+        export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+        export SCT_XCLOUD_ENV="${params.xcloud_env}"
+    fi
     ./docker/env/hydra.sh output-conf -b "${params.backend}"
     """
     def testData = sh(script: cmd, returnStdout: true).trim()

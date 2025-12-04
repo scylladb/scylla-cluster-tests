@@ -42,6 +42,11 @@ def call(Map params, Integer test_duration, String region) {
         export SCT_CLUSTER_BACKEND="${params.backend}"
         export SCT_CONFIG_FILES=${test_config}
 
+        if [[ "${params.backend}" == "xcloud" ]] ; then
+            export SCT_XCLOUD_PROVIDER="${params.xcloud_provider}"
+            export SCT_XCLOUD_ENV="${params.xcloud_env}"
+        fi
+
         if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
             export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
         fi
