@@ -173,7 +173,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         checkoutQaInternal(params)
-                        sh ''' ./docker/env/hydra.sh bash ./utils/lint_test_cases.sh '''
+                        sh ''' ./docker/env/hydra.sh lint-yamls --run '''
                     }
                 }
             }
