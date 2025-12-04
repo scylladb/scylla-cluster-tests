@@ -71,7 +71,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "a",
+            string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
 
