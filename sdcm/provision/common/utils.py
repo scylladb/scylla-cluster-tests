@@ -385,6 +385,30 @@ def configure_syslogng_file_source(log_file: str) -> str:
     """)
 
 
+def install_vector_from_local_pkg(pkg_path: str) -> str:
+    """Install Vector from a local .deb package"""
+    return dedent(f"""\
+        dpkg -i {pkg_path}
+
+{update_repo_cache()}
+        for n in 1 2 3; do
+            DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef -o DPkg::Lock::Timeout=300 -y vector || true
+            if dpkg-query --show vector ; then
+                break
+            fi
+            sleep $(backoff $n)
+        done
+
+        if ! dpkg-query --show vector ; then
+            echo "ERROR: Failed to install vector package"
+            exit 1
+        fi
+
+        systemctl enable vector
+        systemctl start vector
+    """)
+
+
 def install_docker_service():
     return dedent("""\
         # Install Docker
