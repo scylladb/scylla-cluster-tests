@@ -23,7 +23,7 @@ ami_id_db_oracle: ''
 
 ami_id_vector_store: ''
 ami_vector_store_user: 'ubuntu'
-instance_type_vector_store: 't4g.small'
+instance_type_vector_store: 't4g.medium'
 
 use_preinstalled_scylla: true
 
