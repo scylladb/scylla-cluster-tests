@@ -289,7 +289,9 @@ def call(Map pipelineParams) {
                                                         export SCT_CLIENT_ENCRYPT=${params.use_client_encryption}
                                                         export SCT_USE_PREPARED_LOADERS=${params.use_prepared_loaders}
 
-                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                        if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                            export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                        fi
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
