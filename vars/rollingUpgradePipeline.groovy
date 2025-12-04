@@ -32,7 +32,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "a",
+            string(defaultValue: "",
                description: 'Availability zone',
                name: 'availability_zone')
 
