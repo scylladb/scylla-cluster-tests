@@ -192,6 +192,13 @@ class TestConfig(metaclass=Singleton):
         if build_tag:
             tags["JenkinsJobTag"] = build_tag
 
+        # Add BillingProject tag if available
+        if cls._tester_obj:
+            billing_project = cls._tester_obj.params.get('billing_project')
+            if billing_project:
+                tags["BillingProject"] = billing_project
+        else:
+            tags["BillingProject"] = os.environ.get('SCT_BILLING_PROJECT', '')
         return tags
 
     @classmethod
