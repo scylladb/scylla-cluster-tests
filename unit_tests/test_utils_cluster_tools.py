@@ -17,12 +17,14 @@ def test_nodes_grouped_by_dc_idx_are_correctly_grouped():
 
 def test_check_cluster_layout():
     """Test that a cluster that matches the initial configuration."""
-    db_cluster = MagicMock(nodes=[
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack2"),
-        MagicMock(dc_idx=0, rack="rack2"),
-    ])
+    db_cluster = MagicMock(
+        nodes=[
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack2"),
+            MagicMock(dc_idx=0, rack="rack2"),
+        ]
+    )
     db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "4"}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
@@ -30,12 +32,14 @@ def test_check_cluster_layout():
 
 def test_check_cluster_layout_on_two_dcs():
     """Test that a cluster with two datacenters is matching initial configuration."""
-    db_cluster = MagicMock(nodes=[
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack2"),
-        MagicMock(dc_idx=1, rack="rack1"),
-        MagicMock(dc_idx=1, rack="rack2"),
-    ])
+    db_cluster = MagicMock(
+        nodes=[
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack2"),
+            MagicMock(dc_idx=1, rack="rack1"),
+            MagicMock(dc_idx=1, rack="rack2"),
+        ]
+    )
     db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "2 2"}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
@@ -44,11 +48,13 @@ def test_check_cluster_layout_on_two_dcs():
 def test_check_cluster_layout_unbalanced_racks():
     """Test that a cluster that does match configuration returns True. even if racks are unbalanced."""
 
-    db_cluster = MagicMock(nodes=[
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack2"),
-    ])
+    db_cluster = MagicMock(
+        nodes=[
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack2"),
+        ]
+    )
     db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "3"}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
@@ -56,15 +62,17 @@ def test_check_cluster_layout_unbalanced_racks():
 
 def test_check_cluster_layout_unbalanced_on_two_dcs():
     """Test that a cluster that doesn't match configuration across two datacenters returns False."""
-    db_cluster = MagicMock(nodes=[
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack1"),
-        MagicMock(dc_idx=0, rack="rack2"),
-        MagicMock(dc_idx=0, rack="rack2"),
-        MagicMock(dc_idx=1, rack="rack1"),
-        MagicMock(dc_idx=1, rack="rack1"),
-        MagicMock(dc_idx=1, rack="rack2"),
-    ])
+    db_cluster = MagicMock(
+        nodes=[
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack1"),
+            MagicMock(dc_idx=0, rack="rack2"),
+            MagicMock(dc_idx=0, rack="rack2"),
+            MagicMock(dc_idx=1, rack="rack1"),
+            MagicMock(dc_idx=1, rack="rack1"),
+            MagicMock(dc_idx=1, rack="rack2"),
+        ]
+    )
     db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "4 4"}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is False

@@ -23,27 +23,38 @@ class MockLongevityTest:
     params: sct_config.SCTConfiguration
 
 
-@pytest.mark.sct_config(files='unit_tests/test_data/test_data_validator/lwt-basic-3h.yaml')
+@pytest.mark.sct_config(files="unit_tests/test_data/test_data_validator/lwt-basic-3h.yaml")
 def test_view_names_for_updated_data(params):
-    data_validator = LongevityDataValidator(longevity_self_object=MockLongevityTest(params=params),
-                                            user_profile_name='c-s_lwt',
-                                            base_table_partition_keys=['domain', 'published_date'])
+    data_validator = LongevityDataValidator(
+        longevity_self_object=MockLongevityTest(params=params),
+        user_profile_name="c-s_lwt",
+        base_table_partition_keys=["domain", "published_date"],
+    )
     data_validator._validate_updated_per_view = [True, True]
     views_list = data_validator.list_of_view_names_for_update_test()
-    assert views_list == [('blogposts_update_one_column_lwt_indicator',
-                           'blogposts_update_one_column_lwt_indicator_after_update',
-                           'blogposts_update_one_column_lwt_indicator_expect', True),
-                          ('blogposts_update_2_columns_lwt_indicator',
-                           'blogposts_update_2_columns_lwt_indicator_after_update',
-                           'blogposts_update_2_columns_lwt_indicator_expect', True)]
+    assert views_list == [
+        (
+            "blogposts_update_one_column_lwt_indicator",
+            "blogposts_update_one_column_lwt_indicator_after_update",
+            "blogposts_update_one_column_lwt_indicator_expect",
+            True,
+        ),
+        (
+            "blogposts_update_2_columns_lwt_indicator",
+            "blogposts_update_2_columns_lwt_indicator_after_update",
+            "blogposts_update_2_columns_lwt_indicator_expect",
+            True,
+        ),
+    ]
 
 
-@pytest.mark.sct_config(files='unit_tests/test_data/test_data_validator/no-validation-views-lwt-basic-3h.yaml')
+@pytest.mark.sct_config(files="unit_tests/test_data/test_data_validator/no-validation-views-lwt-basic-3h.yaml")
 def test_view_names_for_updated_data_not_found(params):
-
-    data_validator = LongevityDataValidator(longevity_self_object=MockLongevityTest(params=params),
-                                            user_profile_name='c-s_lwt',
-                                            base_table_partition_keys=['domain', 'published_date'])
+    data_validator = LongevityDataValidator(
+        longevity_self_object=MockLongevityTest(params=params),
+        user_profile_name="c-s_lwt",
+        base_table_partition_keys=["domain", "published_date"],
+    )
     data_validator._validate_updated_per_view = [True, True]
     views_list = data_validator.list_of_view_names_for_update_test()
     assert views_list == []

@@ -13,8 +13,8 @@ PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 @dataclass
 class Node:
     running_nemesis = None
-    public_ip_address: str = '127.0.0.1'
-    name: str = 'Node1'
+    public_ip_address: str = "127.0.0.1"
+    name: str = "Node1"
 
     @property
     def scylla_shards(self):

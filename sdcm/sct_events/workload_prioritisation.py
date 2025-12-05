@@ -25,9 +25,7 @@ class WorkloadPrioritisationEvent(InformationalEvent, abstract=True):
     SlaTestResult: Type[SctEventProtocol]
     EmptyPrometheusData: Type[SctEventProtocol]
 
-    def __init__(self,
-                 message: Optional[str] = None,
-                 severity=Severity.ERROR) -> None:
+    def __init__(self, message: Optional[str] = None, severity=Severity.ERROR) -> None:
         super().__init__(severity=severity)
         self.message = message if message else ""
 

@@ -26,8 +26,15 @@ from sdcm.utils.internal_modules import XCloudConnectivityContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin,
-                JavaContainerMixin, VectorDevContainerMixin, XCloudConnectivityContainerMixin):
+class LocalHost(
+    SyslogNGContainerMixin,
+    GcloudContainerMixin,
+    HelmContainerMixin,
+    LdapContainerMixin,
+    JavaContainerMixin,
+    VectorDevContainerMixin,
+    XCloudConnectivityContainerMixin,
+):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
@@ -38,8 +45,10 @@ class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin
 
     @property
     def ldap_ports(self) -> Optional[dict]:
-        return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
-                'ldap_ssl_port': ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT)}
+        return {
+            "ldap_port": ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
+            "ldap_ssl_port": ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT),
+        }
 
     def destroy(self) -> None:
         ContainerManager.destroy_all_containers(self)

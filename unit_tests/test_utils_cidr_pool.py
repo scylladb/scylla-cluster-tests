@@ -68,7 +68,7 @@ def test_generate_next_cidr_invalid_subnet_config():
         CidrPoolManager(cidr_base="192.168.1.0/24", subnet_size=16)._generate_next_cidr(set())
 
 
-@patch('sdcm.utils.cidr_pool.AwsRegion')
+@patch("sdcm.utils.cidr_pool.AwsRegion")
 def test_get_available_cidr_aws(mock_aws_region):
     mock_region_instance = Mock()
     mock_region_instance.get_vpc_peering_routes.return_value = ["172.31.1.0/24", "172.31.2.0/24"]
@@ -87,7 +87,7 @@ def test_get_available_cidr_aws(mock_aws_region):
     mock_region_instance.get_vpc_peering_routes.assert_called_once()
 
 
-@patch('sdcm.utils.cidr_pool.GceRegion')
+@patch("sdcm.utils.cidr_pool.GceRegion")
 def test_get_available_cidr_gce(mock_gce_region):
     mock_region_instance = Mock()
     mock_region_instance.get_peering_routes.return_value = ["172.31.3.0/24", "172.31.4.0/24"]
@@ -106,14 +106,14 @@ def test_get_available_cidr_gce(mock_gce_region):
     mock_region_instance.get_peering_routes.assert_called_once()
 
 
-@patch('sdcm.utils.cidr_pool.AwsRegion')
+@patch("sdcm.utils.cidr_pool.AwsRegion")
 def test_no_available_cidrs_to_get(mock_aws_region):
     mock_region_instance = Mock()
     mock_region_instance.get_vpc_peering_routes.return_value = []
     mock_aws_region.return_value = mock_region_instance
 
     manager = CidrPoolManager(cidr_base="192.168.0.0/30", subnet_size=32)
-    with patch.object(manager, '_generate_next_cidr', return_value=None):
+    with patch.object(manager, "_generate_next_cidr", return_value=None):
         with pytest.raises(CidrAllocationError) as exc_info:
             manager.get_available_cidr("aws", "us-east-1")
 
