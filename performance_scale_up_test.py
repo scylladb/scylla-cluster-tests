@@ -5,7 +5,6 @@ from sdcm.tester import ClusterTester
 
 
 class ScaleUpTest(ClusterTester):
-
     ingest_time = 0
     rebuild_duration = 0
 
@@ -18,18 +17,19 @@ class ScaleUpTest(ClusterTester):
         3. Publish results
         """
         # run a write workload
-        base_cmd_w = self.params.get('stress_cmd_w')
+        base_cmd_w = self.params.get("stress_cmd_w")
         self.run_fstrim_on_all_db_nodes()
         stress_queue = []
         if not isinstance(base_cmd_w, list) and len(base_cmd_w) != len(self.loaders.nodes):
             raise AssertionError("stress_cmd_w should be a list of commands and be equal to number of loaders")
         for stress_cmd in base_cmd_w:
-            stress_queue.append(self.run_stress_thread(
-                stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True))
+            stress_queue.append(
+                self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True)
+            )
         results = []
         for stress in stress_queue:
             results.append(self.get_stress_results(queue=stress, store_results=False)[0])
-        result = max(results, key=lambda x: x['total operation time'])["total operation time"]
+        result = max(results, key=lambda x: x["total operation time"])["total operation time"]
         self.ingest_time = result
         self.log.info("Write workload finished with time: %s", result)
         self.wait_no_compactions_running(n=90, sleep_time=60)
@@ -60,9 +60,11 @@ class ScaleUpTest(ClusterTester):
         except Exception as error:
             self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
 
-        email_data.update({
-            "ingest_time": self.ingest_time,
-            "rebuild_duration": self.rebuild_duration,
-            "subject": f"Scale up test results - {email_data['scylla_instance_type']}",
-        })
+        email_data.update(
+            {
+                "ingest_time": self.ingest_time,
+                "rebuild_duration": self.rebuild_duration,
+                "subject": f"Scale up test results - {email_data['scylla_instance_type']}",
+            }
+        )
         return email_data
