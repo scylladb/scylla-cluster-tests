@@ -48,20 +48,21 @@ class LatteStatsPublisher(FileFollowerThread):
         gauge_name = self.gauge_name(self.operation)
         if gauge_name not in self.METRICS:
             metrics = nemesis_metrics_obj()
-            self.METRICS[gauge_name] = metrics.create_gauge(gauge_name,
-                                                            'Gauge for latte metrics',
-                                                            ['instance', 'loader_idx', 'uuid', 'type'])
+            self.METRICS[gauge_name] = metrics.create_gauge(
+                gauge_name, "Gauge for latte metrics", ["instance", "loader_idx", "uuid", "type"]
+            )
 
     @staticmethod
     def gauge_name(operation):
-        return 'sct_latte_%s_gauge' % operation.replace('-', '_')
+        return "sct_latte_%s_gauge" % operation.replace("-", "_")
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]
         metric.labels(self.loader_node.ip_address, self.loader_idx, self.uuid, name).set(value)
 
     def run(self):
-        regex = re.compile(r"""
+        regex = re.compile(
+            r"""
         \s*(?P<secoands>\d*\.\d*)
         \s*(?P<ops>\d*)
         \s*(?P<reqs>\d*)
@@ -74,7 +75,9 @@ class LatteStatsPublisher(FileFollowerThread):
         \s*(?P<p99>\d*\.\d*)
         \s*(?P<p999>\d*\.\d*)
         \s*(?P<max>\d*\.\d*)\s*
-        """, re.VERBOSE)
+        """,
+            re.VERBOSE,
+        )
 
         while not self.stopped():
             exists = os.path.isfile(self.latte_log_filename)
@@ -97,47 +100,48 @@ class LatteStatsPublisher(FileFollowerThread):
 
 
 class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
     def build_stress_cmd(self, cmd_runner):
         hosts = " ".join([i.cql_address for i in self.node_list])
 
         # extract the script so we know which files to mount into the docker image
-        script_name_regx = re.compile(r'([/\w-]*\.rn)')
+        script_name_regx = re.compile(r"([/\w-]*\.rn)")
         script_name = script_name_regx.search(self.stress_cmd).group(0)
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
             cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
 
-        ssl_config = ''
-        if self.params['client_encrypt']:
-            ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))
+        ssl_config = ""
+        if self.params["client_encrypt"]:
+            ssl_conf_dir = Path(get_data_dir_path("ssl_conf", "client"))
             for ssl_file in ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
-                    cmd_runner.send_files(str(ssl_file),
-                                          str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
-                                          verbose=True)
-            ssl_config += (' --ssl --ssl-ca /etc/scylla/ssl_conf/client/catest.pem '
-                           '--ssl-cert /etc/scylla/ssl_conf/client/test.crt '
-                           '--ssl-key /etc/scylla/ssl_conf/client/test.key')
+                    cmd_runner.send_files(
+                        str(ssl_file), str(Path("/etc/scylla/ssl_conf/client") / ssl_file.name), verbose=True
+                    )
+            ssl_config += (
+                " --ssl --ssl-ca /etc/scylla/ssl_conf/client/catest.pem "
+                "--ssl-cert /etc/scylla/ssl_conf/client/test.crt "
+                "--ssl-key /etc/scylla/ssl_conf/client/test.key"
+            )
 
         cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} -- {hosts}',
+            cmd=f"latte schema {script_name} {ssl_config} -- {hosts}",
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} -q -- {hosts} '
+        stress_cmd = f"{self.stress_cmd} {ssl_config} -q -- {hosts} "
 
         return stress_cmd
 
     @staticmethod
     def function_name(stress_cmd):
-        function_name_regex = re.compile(r'.*--function\s*(.*?\S)\s')
+        function_name_regex = re.compile(r".*--function\s*(.*?\S)\s")
         if match := function_name_regex.match(stress_cmd):
             return match.group(1)
         else:
-            return 'read'
+            return "read"
 
     @staticmethod
     def parse_final_output(result):
@@ -148,24 +152,22 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         :param result: output of latte stats
         :return: dict
         """
-        ops_regex = re.compile(r'\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s')
-        latency_99_regex = re.compile(r'\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s')
+        ops_regex = re.compile(r"\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s")
+        latency_99_regex = re.compile(r"\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s")
         latency_mean_regex = re.compile(
-            r'\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
+            r"\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)"
+        )
 
-        output = {'latency 99th percentile': 0,
-                  'latency mean': 0,
-                  'op rate': 0
-                  }
+        output = {"latency 99th percentile": 0, "latency mean": 0, "op rate": 0}
         for line in result.stdout.split("SUMMARY STATS")[-1].splitlines():
             if match := ops_regex.match(line):
-                output['op rate'] = match.groupdict()['op_rate']
+                output["op rate"] = match.groupdict()["op_rate"]
                 continue
             if match := latency_99_regex.match(line):
-                output['latency 99th percentile'] = float(match.groupdict()['latency_99th_percentile'])
+                output["latency 99th percentile"] = float(match.groupdict()["latency_99th_percentile"])
                 continue
             if match := latency_mean_regex.match(line):
-                output['latency mean'] = float(match.groupdict()['latency_mean'])
+                output["latency mean"] = float(match.groupdict()["latency_mean"])
                 continue
 
         # output back to strings
@@ -178,28 +180,30 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                    extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}')
+        cmd_runner = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name, extra_docker_opts=f"{cpu_options} --label shell_marker={self.shell_marker}"
+        )
         stress_cmd = self.build_stress_cmd(cmd_runner)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'latte-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('latter-stress local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, "latte-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
+        LOGGER.debug("latter-stress local log: %s", log_file_name)
 
         LOGGER.debug("running: %s", stress_cmd)
 
         operation = self.function_name(stress_cmd)
 
         result = {}
-        with cleanup_context, \
-                LatteStatsPublisher(loader, loader_idx, latte_log_filename=log_file_name,
-                                    operation=operation), \
-                LatteStressEvent(node=loader,
-                                 stress_cmd=stress_cmd,
-                                 log_file_name=log_file_name,
-                                 ) as latte_stress_event:
+        with (
+            cleanup_context,
+            LatteStatsPublisher(loader, loader_idx, latte_log_filename=log_file_name, operation=operation),
+            LatteStressEvent(
+                node=loader,
+                stress_cmd=stress_cmd,
+                log_file_name=log_file_name,
+            ) as latte_stress_event,
+        ):
             try:
                 result = cmd_runner.run(
                     cmd=stress_cmd,

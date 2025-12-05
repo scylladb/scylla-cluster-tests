@@ -1,20 +1,43 @@
 import random
 
 
-__ALL__ = ['CQLTypeBuilder', 'ALL_COLUMN_TYPES', 'NOT_EMBEDDABLE_COLUMN_TYPES', 'COLLECTION_COLUMN_TYPES']
+__ALL__ = ["CQLTypeBuilder", "ALL_COLUMN_TYPES", "NOT_EMBEDDABLE_COLUMN_TYPES", "COLLECTION_COLUMN_TYPES"]
 
 
-ALL_COLUMN_TYPES = ['ascii', 'blob', 'counter', 'decimal', 'duration', 'int', 'map', 'smallint', 'time',
-                    'timeuuid', 'uuid', 'varint', 'bigint', 'boolean', 'date', 'double', 'float', 'inet', 'list', 'set',
-                    'text', 'timestamp', 'tinyint', 'varchar']
-NOT_EMBEDDABLE_COLUMN_TYPES = ['duration', 'counter']
-COLLECTION_COLUMN_TYPES = ['set', 'list', 'map']
+ALL_COLUMN_TYPES = [
+    "ascii",
+    "blob",
+    "counter",
+    "decimal",
+    "duration",
+    "int",
+    "map",
+    "smallint",
+    "time",
+    "timeuuid",
+    "uuid",
+    "varint",
+    "bigint",
+    "boolean",
+    "date",
+    "double",
+    "float",
+    "inet",
+    "list",
+    "set",
+    "text",
+    "timestamp",
+    "tinyint",
+    "varchar",
+]
+NOT_EMBEDDABLE_COLUMN_TYPES = ["duration", "counter"]
+COLLECTION_COLUMN_TYPES = ["set", "list", "map"]
 
 
 class CQLTypeBuilder:
     _registered_classes = {}
 
-    def __new__(cls, self_type, *args, **kwargs) -> 'CQLColumnType':
+    def __new__(cls, self_type, *args, **kwargs) -> "CQLColumnType":
         return cls._create_instance(self_type, *args, **kwargs)
 
     @classmethod
@@ -33,14 +56,17 @@ class CQLTypeBuilder:
         return target_class(self_type, *args, **kwargs)
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
-                   allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False) -> 'CQLColumnType':
+    def get_random(  # pylint: disable=too-many-arguments
+        cls,
+        already_created_info: dict,
+        avoid_types: list = None,
+        allow_levels: int = 1,
+        allowed_types: list = None,
+        forget_on_exhaust=False,
+    ) -> "CQLColumnType":
         return CQLColumnType.get_random(
-            already_created_info,
-            avoid_types,
-            allow_levels,
-            allowed_types,
-            forget_on_exhaust=forget_on_exhaust)
+            already_created_info, avoid_types, allow_levels, allowed_types, forget_on_exhaust=forget_on_exhaust
+        )
 
 
 class CQLColumnType:
@@ -71,8 +97,14 @@ class CQLColumnType:
         return [e for e in allowed_types if e not in excluded_types]
 
     @classmethod
-    def get_random(cls, already_created_info: dict, avoid_types: list = None,  # pylint: disable=too-many-arguments
-                   allow_levels: int = 1, allowed_types: list = None, forget_on_exhaust=False):
+    def get_random(  # pylint: disable=too-many-arguments
+        cls,
+        already_created_info: dict,
+        avoid_types: list = None,
+        allow_levels: int = 1,
+        allowed_types: list = None,
+        forget_on_exhaust=False,
+    ):
         """
         Randomly generates CQLColumnType instance
         Arguments:
@@ -87,14 +119,19 @@ class CQLColumnType:
         """
         # pylint: disable=protected-access
         while True:
-            calculated_available_types = cls._get_available_variants(already_created_info, avoid_types, allowed_types,
-                                                                     allow_levels)
+            calculated_available_types = cls._get_available_variants(
+                already_created_info, avoid_types, allowed_types, allow_levels
+            )
             while calculated_available_types:
                 self_type = random.choice(calculated_available_types)
                 self_bucket = already_created_info.get(self_type, {})
                 instance = CQLTypeBuilder._create_instance(self_type)
-                if instance._get_random_embedded(self_bucket, avoid_types, allow_levels,  # pylint: disable=protected-access
-                                                 allowed_types):
+                if instance._get_random_embedded(
+                    self_bucket,
+                    avoid_types,
+                    allow_levels,  # pylint: disable=protected-access
+                    allowed_types,
+                ):
                     return instance
                 #  It could reach this point only if collection type ran out of choice for subtypes
                 #  Remove current collection type from types choice
@@ -103,8 +140,13 @@ class CQLColumnType:
                 return None
             already_created_info.clear()
 
-    def _get_random_embedded(self,  # pylint: disable=no-self-use
-                             already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):  # pylint: disable=unused-argument
+    def _get_random_embedded(  # pylint: disable=no-self-use
+        self,
+        already_created_info: dict,
+        avoid_types: list,
+        allow_levels: int,
+        allowed_types: list,
+    ):  # pylint: disable=unused-argument
         return True
 
     def remember_variant(self, stored_variants):
@@ -127,7 +169,7 @@ class CQLColumnType:
 
 
 class CQLColumnTypeMap(CQLColumnType):
-    self_type = 'map'
+    self_type = "map"
     # pylint: disable=unused-argument
 
     def __new__(cls, self_type=None, key_type=None, value_type=None):
@@ -140,24 +182,26 @@ class CQLColumnTypeMap(CQLColumnType):
 
     def __str__(self):
         if self.key_type.self_type in COLLECTION_COLUMN_TYPES:
-            key_type = f'frozen<{self.key_type.__str__()}>'
+            key_type = f"frozen<{self.key_type.__str__()}>"
         else:
             key_type = self.key_type.__str__()
         if self.value_type.self_type in COLLECTION_COLUMN_TYPES:
-            value_type = f'frozen<{self.value_type.__str__()}>'
+            value_type = f"frozen<{self.value_type.__str__()}>"
         else:
             value_type = self.value_type.__str__()
-        return f'{self.self_type}<{key_type},{value_type}>'
+        return f"{self.self_type}<{key_type},{value_type}>"
 
-    def _get_random_embedded(self, already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):
+    def _get_random_embedded(
+        self, already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list
+    ):
         if avoid_types:
             tmp = list(set(avoid_types.copy() + NOT_EMBEDDABLE_COLUMN_TYPES))
         else:
             tmp = NOT_EMBEDDABLE_COLUMN_TYPES
-        self.key_type = self.get_random(already_created_info.get('key_type', {}), tmp, allow_levels - 1,
-                                        allowed_types)
-        self.value_type = self.get_random(already_created_info.get('value_type', {}), tmp, allow_levels - 1,
-                                          allowed_types)
+        self.key_type = self.get_random(already_created_info.get("key_type", {}), tmp, allow_levels - 1, allowed_types)
+        self.value_type = self.get_random(
+            already_created_info.get("value_type", {}), tmp, allow_levels - 1, allowed_types
+        )
         if self.key_type is None or self.value_type is None:
             return False
         return True
@@ -169,12 +213,12 @@ class CQLColumnTypeMap(CQLColumnType):
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             self_bucket = stored_variants[self.self_type] = {}
-        key_type_bucket = self_bucket.get('key_type', None)
+        key_type_bucket = self_bucket.get("key_type", None)
         if key_type_bucket is None:
-            key_type_bucket = self_bucket['key_type'] = {}
-        value_type_bucket = self_bucket.get('value_type', None)
+            key_type_bucket = self_bucket["key_type"] = {}
+        value_type_bucket = self_bucket.get("value_type", None)
         if value_type_bucket is None:
-            value_type_bucket = self_bucket['value_type'] = {}
+            value_type_bucket = self_bucket["value_type"] = {}
         self.key_type.remember_variant(key_type_bucket)
         self.value_type.remember_variant(value_type_bucket)
 
@@ -187,18 +231,18 @@ class CQLColumnTypeMap(CQLColumnType):
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             return
-        self.key_type.forget_variant(self_bucket.get('key_type', None))
-        if self_bucket.get('key_type', None) == {}:
-            del self_bucket['key_type']
-        self.value_type.forget_variant(self_bucket.get('value_type', None))
-        if self_bucket.get('value_type', None) == {}:
-            del self_bucket['value_type']
+        self.key_type.forget_variant(self_bucket.get("key_type", None))
+        if self_bucket.get("key_type", None) == {}:
+            del self_bucket["key_type"]
+        self.value_type.forget_variant(self_bucket.get("value_type", None))
+        if self_bucket.get("value_type", None) == {}:
+            del self_bucket["value_type"]
         if stored_variants.get(self.self_type, None) == {}:
             del stored_variants[self.self_type]
 
 
 class CQLColumnTypeList(CQLColumnType):
-    self_type = 'list'
+    self_type = "list"
 
     def __new__(cls, self_type=None, element_type=None):  # pylint: disable=unused-argument
         return super().__new__(cls)
@@ -209,18 +253,21 @@ class CQLColumnTypeList(CQLColumnType):
 
     def __str__(self):
         if self.element_type.self_type in COLLECTION_COLUMN_TYPES:
-            element_type = f'frozen<{self.element_type.__str__()}>'
+            element_type = f"frozen<{self.element_type.__str__()}>"
         else:
             element_type = self.element_type.__str__()
-        return f'{self.self_type}<{element_type}>'
+        return f"{self.self_type}<{element_type}>"
 
-    def _get_random_embedded(self, already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list):
+    def _get_random_embedded(
+        self, already_created_info: dict, avoid_types: list, allow_levels: int, allowed_types: list
+    ):
         if avoid_types:
             tmp = list(set(avoid_types.copy() + NOT_EMBEDDABLE_COLUMN_TYPES))
         else:
             tmp = NOT_EMBEDDABLE_COLUMN_TYPES
-        self.element_type = self.get_random(already_created_info.get('element_type', {}), tmp, allow_levels - 1,
-                                            allowed_types)
+        self.element_type = self.get_random(
+            already_created_info.get("element_type", {}), tmp, allow_levels - 1, allowed_types
+        )
         if self.element_type is None:
             return False
         return True
@@ -232,9 +279,9 @@ class CQLColumnTypeList(CQLColumnType):
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             self_bucket = stored_variants[self.self_type] = {}
-        element_type_bucket = self_bucket.get('element_type', None)
+        element_type_bucket = self_bucket.get("element_type", None)
         if element_type_bucket is None:
-            element_type_bucket = self_bucket['element_type'] = {}
+            element_type_bucket = self_bucket["element_type"] = {}
         self.element_type.remember_variant(element_type_bucket)
 
     def forget_variant(self, stored_variants):
@@ -246,12 +293,12 @@ class CQLColumnTypeList(CQLColumnType):
         self_bucket = stored_variants.get(self.self_type, None)
         if self_bucket is None:
             return
-        self.element_type.forget_variant(self_bucket.get('element_type', None))
-        if self_bucket.get('element_type', None) == {}:
-            del self_bucket['element_type']
+        self.element_type.forget_variant(self_bucket.get("element_type", None))
+        if self_bucket.get("element_type", None) == {}:
+            del self_bucket["element_type"]
         if stored_variants.get(self.self_type, None) == {}:
             del stored_variants[self.self_type]
 
 
 class FieldTypeSetDefinition(CQLColumnTypeList):
-    self_type = 'set'
+    self_type = "set"

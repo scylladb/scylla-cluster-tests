@@ -50,8 +50,8 @@ class ContinuousEventsRegistry(metaclass=Singleton):
             self.hashed_continuous_events[event.continuous_hash] = hash_bucket
         elif hash_bucket:
             LOGGER.error(
-                'Continues event %s with hash %s (%s) is not suppose to have duplicates, '
-                'while there is another event with same hash - %s',
+                "Continues event %s with hash %s (%s) is not suppose to have duplicates, "
+                "while there is another event with same hash - %s",
                 hash_bucket[-1],
                 event.continuous_hash,
                 event.continuous_hash_dict,
@@ -71,8 +71,9 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         return self.hashed_continuous_events.get(continuous_hash, []).copy()
 
     def find_running_disruption_events(self):
-        running_nemesis_events = [event[0] for event in self.hashed_continuous_events.values()
-                                  if event and event[0].base == "DisruptionEvent"]
+        running_nemesis_events = [
+            event[0] for event in self.hashed_continuous_events.values() if event and event[0].base == "DisruptionEvent"
+        ]
         return running_nemesis_events
 
 
@@ -81,12 +82,10 @@ class ContinuousEvent(SctEvent, abstract=True):
     # Event filter does not create object of the class (not initialize it), so "_duration" attribute should
     # exist without initialization
     _duration: Optional[int] = None
-    continuous_hash_fields: tuple[str] = ('event_id',)
+    continuous_hash_fields: tuple[str] = ("event_id",)
     log_file_name: str = None
 
-    def __init__(self,
-                 severity: Severity = Severity.UNKNOWN,
-                 publish_event: bool = True, errors: list[str] = None):
+    def __init__(self, severity: Severity = Severity.UNKNOWN, publish_event: bool = True, errors: list[str] = None):
         super().__init__(severity=severity)
         self.errors = errors if errors else []
         self.publish_event = publish_event
@@ -109,8 +108,9 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     @property
     def continuous_hash_tuple(self) -> tuple[Any | None]:
-        return (self.__class__.__name__,) + \
-            tuple(getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields)
+        return (self.__class__.__name__,) + tuple(
+            getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields
+        )
 
     @property
     def continuous_hash_dict(self) -> dict[str, str]:
@@ -160,7 +160,7 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     @property
     def duration_formatted(self):
-        duration = ''
+        duration = ""
         if self.duration is None:
             return duration
 

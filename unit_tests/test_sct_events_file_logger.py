@@ -17,8 +17,13 @@ import unittest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
-from sdcm.sct_events.file_logger import \
-    EventsFileLogger, start_events_logger, get_events_logger, get_events_grouped_by_category, get_logger_event_summary
+from sdcm.sct_events.file_logger import (
+    EventsFileLogger,
+    start_events_logger,
+    get_events_logger,
+    get_events_grouped_by_category,
+    get_logger_event_summary,
+)
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -73,11 +78,16 @@ class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
         self.assertEqual(self.events_main_device.events_counter, self.file_logger.events_counter)
 
         summary = get_logger_event_summary(_registry=self.events_processes_registry)
-        self.assertDictEqual(summary, {Severity.NORMAL.name: 1,
-                                       Severity.WARNING.name: 2,
-                                       Severity.ERROR.name: 3,
-                                       Severity.CRITICAL.name: 4,
-                                       Severity.DEBUG.name: 5, })
+        self.assertDictEqual(
+            summary,
+            {
+                Severity.NORMAL.name: 1,
+                Severity.WARNING.name: 2,
+                Severity.ERROR.name: 3,
+                Severity.CRITICAL.name: 4,
+                Severity.DEBUG.name: 5,
+            },
+        )
 
         grouped = get_events_grouped_by_category(_registry=self.events_processes_registry)
         self.assertEqual(len(grouped[Severity.NORMAL.name]), 1)
