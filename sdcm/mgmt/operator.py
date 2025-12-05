@@ -290,6 +290,11 @@ class OperatorManagerCluster(ManagerCluster):
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
                                             fail_fast=None, intensity=None, parallel=None,
                                             name=None) -> ScyllaOperatorRepairTask:
+
+        # TODO: add support for the "ignore_down_hosts" manager parameter
+        #       when following scylla-operator bug gets fixed:
+        #       https://github.com/scylladb/scylla-operator/issues/2730
+
         if name is None:
             name = self._pick_original_name(
                 'default-repair-task-name', [so_task.name for so_task in self.operator_repair_tasks])
