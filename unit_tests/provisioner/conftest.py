@@ -27,7 +27,7 @@ from unit_tests.provisioner.fake_azure_service import FakeAzureService  # pylint
 
 @pytest.fixture(scope="session")
 def azure_service(tmp_path_factory) -> AzureService:  # pylint: disable=no-self-use
-    run_on_real_azure = False   # make it True to test with real Azure
+    run_on_real_azure = False  # make it True to test with real Azure
     if run_on_real_azure:
         # When true this becomes e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)
         return AzureService()
@@ -45,10 +45,20 @@ def fallback_on_demand():
 
 @pytest.fixture
 def params():
-    EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
-                            "SCT_N_DB_NODES",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE"])
+    EnvConfig = namedtuple(
+        "EnvConfig",
+        [
+            "SCT_CLUSTER_BACKEND",
+            "SCT_TEST_ID",
+            "SCT_CONFIG_FILES",
+            "SCT_AZURE_REGION_NAME",
+            "SCT_N_DB_NODES",
+            "SCT_AZURE_IMAGE_DB",
+            "SCT_N_LOADERS",
+            "SCT_N_MONITORS_NODES",
+            "SCT_AVAILABILITY_ZONE",
+        ],
+    )
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"{str(uuid.uuid4())}",
@@ -56,10 +66,10 @@ def params():
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
-                           "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
+        "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
         SCT_N_LOADERS="2 0",
         SCT_N_MONITORS_NODES="1",
-        SCT_AVAILABILITY_ZONE="a"
+        SCT_AVAILABILITY_ZONE="a",
     )
     os.environ.update(env_config._asdict())
     return SCTConfiguration()

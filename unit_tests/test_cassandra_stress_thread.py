@@ -22,8 +22,8 @@ pytestmark = [
 
 
 def test_01_cassandra_stress(request, docker_scylla, params):
-    params['cs_debug'] = True
-    params['use_hdr_cs_histogram'] = True
+    params["cs_debug"] = True
+    params["use_hdr_cs_histogram"] = True
 
     loader_set = LocalLoaderSetDummy()
 
@@ -33,9 +33,7 @@ def test_01_cassandra_stress(request, docker_scylla, params):
         """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
     )
 
-    cs_thread = CassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()
@@ -60,9 +58,7 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
         "cl=ONE duration=1m -mode cql3 native -rate threads=1"
     )
 
-    cs_thread = CassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()
@@ -81,7 +77,6 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
 
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
-
     loader_set = LocalLoaderSetDummy()
 
     cmd = (
@@ -124,9 +119,7 @@ def test_03_cassandra_stress_multi_region(request, docker_scylla, params):
         """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
     )
 
-    cs_thread = CassandraStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
-    )
+    cs_thread = CassandraStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params)
 
     def cleanup_thread():
         cs_thread.kill()

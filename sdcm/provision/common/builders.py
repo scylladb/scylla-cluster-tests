@@ -22,27 +22,27 @@ OptionalType = type(Union[str, None])
 class AttrBuilder(BaseModel):
     @classmethod
     def get_properties(cls):
-        return [prop for prop in dir(cls) if isinstance(getattr(cls, prop), property) and prop[0] != '_']
+        return [prop for prop in dir(cls) if isinstance(getattr(cls, prop), property) and prop[0] != "_"]
 
     @property
     def _exclude_by_default(self):
         exclude_fields = []
         for field_name, field in self.__fields__.items():
-            if not field.field_info.extra.get('as_dict', True):
+            if not field.field_info.extra.get("as_dict", True):
                 exclude_fields.append(field_name)
         return set(exclude_fields)
 
     def dict(
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: Union["MappingIntStrAny", "AbstractSetIntStr"] = None,
+        exclude: Union["MappingIntStrAny", "AbstractSetIntStr"] = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
-    ) -> 'DictStrAny':
+    ) -> "DictStrAny":
         """
         Pydantic does not treat properties as fields, so you can't get their values when call dict
         This function is to enable property extraction
@@ -56,7 +56,7 @@ class AttrBuilder(BaseModel):
             skip_defaults=skip_defaults,
             exclude_unset=exclude_unset,
             exclude_defaults=exclude_defaults,
-            exclude_none=exclude_none
+            exclude_none=exclude_none,
         )
         props = self.get_properties()
         if include:

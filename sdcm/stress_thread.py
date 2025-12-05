@@ -31,7 +31,12 @@ from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
-from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS, HDRFileMissed
+from sdcm.sct_events.loaders import (
+    CassandraStressEvent,
+    CS_ERROR_EVENTS_PATTERNS,
+    CS_NORMAL_EVENTS_PATTERNS,
+    HDRFileMissed,
+)
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.remote_logger import SSHLoggerBase
@@ -112,20 +117,29 @@ class CSHDRFileLogger(SSHLoggerBase):
         if os.path.exists(self._target_log_file):
             return
 
-        LOGGER.debug("'%s' file is not found on the runner. Try to find it on the loader %s",
-                     self._target_log_file, self._node.name)
-        HDRFileMissed(message=f"'{self._remote_log_file}' HDR file was not copied to the runner from loader",
-                      severity=Severity.WARNING).publish()
+        LOGGER.debug(
+            "'%s' file is not found on the runner. Try to find it on the loader %s",
+            self._target_log_file,
+            self._node.name,
+        )
+        HDRFileMissed(
+            message=f"'{self._remote_log_file}' HDR file was not copied to the runner from loader",
+            severity=Severity.WARNING,
+        ).publish()
         result = self._node.remoter.run(f"test -f {self._remote_log_file}", ignore_status=True)
         if not result.ok:
-            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
-                          severity=Severity.ERROR).publish()
+            HDRFileMissed(
+                message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
+                severity=Severity.ERROR,
+            ).publish()
         try:
             LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
             self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
         except Exception:  # noqa: BLE001 # pylint: disable=broad-except
-            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
-                          severity=Severity.ERROR).publish()
+            HDRFileMissed(
+                message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
+                severity=Severity.ERROR,
+            ).publish()
 
     # @raise_event_on_failure
     def _journal_thread(self) -> None:
@@ -161,14 +175,34 @@ class CSHDRFileLogger(SSHLoggerBase):
 
 
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
-    DOCKER_IMAGE_PARAM_NAME = 'stress_image.cassandra-stress'
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.cassandra-stress"
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
-                 profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
-                 params=None):
-        super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
-                         stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
-                         round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params)
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        loader_set,
+        stress_cmd,
+        timeout,
+        stress_num=1,
+        keyspace_num=1,
+        keyspace_name="",
+        compaction_strategy="",
+        profile=None,
+        node_list=None,
+        round_robin=False,
+        client_encrypt=False,
+        stop_test_on_failure=True,
+        params=None,
+    ):
+        super().__init__(  # pylint: disable=too-many-arguments
+            loader_set=loader_set,
+            stress_cmd=stress_cmd,
+            timeout=timeout,
+            stress_num=stress_num,
+            node_list=node_list,
+            round_robin=round_robin,
+            stop_test_on_failure=stop_test_on_failure,
+            params=params,
+        )
         self.keyspace_num = keyspace_num
         self.keyspace_name = keyspace_name
         self.profile = profile
@@ -181,36 +215,39 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if "no-warmup" not in stress_cmd:
             # add no-warmup to stress_cmd if it's not there. See issue #5767
-            stress_cmd = re.sub(r'(cassandra-stress [\w]+)', r'\1 no-warmup', stress_cmd)
+            stress_cmd = re.sub(r"(cassandra-stress [\w]+)", r"\1 no-warmup", stress_cmd)
 
         # When using cassandra-stress with "user profile" the profile yaml should be provided
-        if 'profile' in stress_cmd and not self.profile:
+        if "profile" in stress_cmd and not self.profile:
             # support of using -profile in sct test-case yaml, assumes they exists data_dir
             # TODO: move those profile to their own directory
             cs_profile, profile = get_profile_content(stress_cmd)
-            keyspace_name = profile['keyspace']
+            keyspace_name = profile["keyspace"]
             self.profile = cs_profile
             self.keyspace_name = keyspace_name
 
         if self.keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
-        elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
+        elif "keyspace=" not in stress_cmd:  # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
 
         if self.compaction_strategy and "compaction(" not in stress_cmd:
             stress_cmd = stress_cmd.replace(" -schema ", f" -schema 'compaction(strategy={self.compaction_strategy})' ")
 
         credentials = self.loader_set.get_db_auth()
-        if credentials and 'user=' not in stress_cmd:
+        if credentials and "user=" not in stress_cmd:
             # put the credentials into the right place into -mode section
-            stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
-        if self.client_encrypt and 'transport' not in stress_cmd:
-            stress_cmd += \
+            stress_cmd = re.sub(r"(-mode.*?)-", r"\1 user={} password={} -".format(*credentials), stress_cmd)
+        if self.client_encrypt and "transport" not in stress_cmd:
+            stress_cmd += (
                 " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
+            )
 
-        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
+        if (
+            connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file
+        ) and "-node" not in stress_cmd:
             stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
-        elif self.node_list and '-node' not in stress_cmd:
+        elif self.node_list and "-node" not in stress_cmd:
             stress_cmd += " -node "
             if self.loader_set.test_config.MULTI_REGION:
                 # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
@@ -219,23 +256,27 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 if loader_dc := datacenter_name_per_region.get(loader.region):
                     stress_cmd += f"datacenter={loader_dc} "
                 else:
-                    LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
-                                 loader.region, datacenter_name_per_region)
+                    LOGGER.error(
+                        "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                        loader.region,
+                        datacenter_name_per_region,
+                    )
 
             # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
             rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
             node_list = self.node_list
-            if len(set(rack_names.values())) > 1 and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
+            if len(set(rack_names.values())) > 1 and "rack" in self._get_available_suboptions(cmd_runner, "-node"):
                 if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
                     stress_cmd += f"rack={loader_rack} "
-                    node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(
-                        db_nodes=self.node_list).get((str(loader.region), str(loader.rack)))
+                    node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(db_nodes=self.node_list).get(
+                        (str(loader.region), str(loader.rack))
+                    )
 
             node_ip_list = [n.cql_address for n in node_list]
 
             stress_cmd += ",".join(node_ip_list)
-        if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
-            stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
+        if "skip-unsupported-columns" in self._get_available_suboptions(cmd_runner, "-errors"):
+            stress_cmd = self._add_errors_option(stress_cmd, ["skip-unsupported-columns"])
         return stress_cmd
 
     @staticmethod
@@ -244,27 +285,27 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         Add suboption to -errors option, if such suboption is there, does not add or change it
         """
         to_add = list(to_add)
-        current_error_option = next((option for option in stress_cmd.split(' -') if option.startswith('errors ')), None)
+        current_error_option = next((option for option in stress_cmd.split(" -") if option.startswith("errors ")), None)
         if current_error_option is None:
             return f"{stress_cmd} -errors {' '.join(to_add)}"
         current_error_suboptions = current_error_option.split()[1:]
-        new_error_suboptions = \
-            list({suboption.split('=', 1)[0]: suboption for suboption in to_add + current_error_suboptions}.values())
+        new_error_suboptions = list(
+            {suboption.split("=", 1)[0]: suboption for suboption in to_add + current_error_suboptions}.values()
+        )
         if len(new_error_suboptions) == len(current_error_suboptions):
             return stress_cmd
-        return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
+        return stress_cmd.replace(current_error_option, "errors " + " ".join(new_error_suboptions))
 
     def _get_available_suboptions(self, loader, option, _cache={}):  # pylint: disable=dangerous-default-value
         if cached_value := _cache.get(option):
             return cached_value
         try:
             result = loader.run(
-                cmd=f'cassandra-stress help {option} | grep "^Usage:"',
-                timeout=self.timeout,
-                ignore_status=True).stdout
+                cmd=f'cassandra-stress help {option} | grep "^Usage:"', timeout=self.timeout, ignore_status=True
+            ).stdout
         except Exception:  # pylint: disable=broad-except
             return []
-        findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
+        findings = re.findall(r" *\[([\w-]+?)[=?]*] *", result)
         _cache[option] = findings
         return findings
 
@@ -272,7 +313,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # pylint: disable=dangerous-default-value
         if not (node.is_kubernetes() or node.name in _cache):
             cmd_runner.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
-            _cache[node.name] = 'done'
+            _cache[node.name] = "done"
 
     @staticmethod
     def _add_hdr_log_option(stress_cmd: str, hdr_log_name: str) -> str:
@@ -284,7 +325,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 else:
                     if replacing_hdr_file := re.search(r"hdrfile=(.*?)\s", cs_log_option):
                         stress_cmd = stress_cmd.replace(
-                            f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}")
+                            f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}"
+                        )
         else:
             stress_cmd += f" -log hdrfile={hdr_log_name} interval=10s"
 
@@ -306,9 +348,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         stress_cmd_opt = self.stress_cmd.split("cassandra-stress", 1)[1].split(None, 1)[0]
 
         log_id = self._build_log_file_id(loader_idx, cpu_idx, keyspace_idx)
-        log_file_name = \
-            os.path.join(loader.logdir, f'cassandra-stress-{stress_cmd_opt}-{log_id}.log')
-        LOGGER.debug('cassandra-stress local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, f"cassandra-stress-{stress_cmd_opt}-{log_id}.log")
+        LOGGER.debug("cassandra-stress local log: %s", log_file_name)
         remote_hdr_file_name = f"cs-hdr-{stress_cmd_opt}-{log_id}.hdr"
         LOGGER.debug("cassandra-stress remote HDR log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
@@ -325,41 +366,45 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner_name = loader.ip_address
 
             cpu_options = ""
-            cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                        command_line="-c 'tail -f /dev/null'",
-                                                        extra_docker_opts=f'{cpu_options} '
-                                                        '--network=host '
-                                                        '--security-opt seccomp=unconfined '
-                                                        f'--label shell_marker={self.shell_marker}'
-                                                        f' --entrypoint /bin/bash'
-                                                        f' -w /'
-                                                        f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
+            cmd_runner = cleanup_context = RemoteDocker(
+                loader,
+                self.docker_image_name,
+                command_line="-c 'tail -f /dev/null'",
+                extra_docker_opts=f"{cpu_options} "
+                "--network=host "
+                "--security-opt seccomp=unconfined "
+                f"--label shell_marker={self.shell_marker}"
+                f" --entrypoint /bin/bash"
+                f" -w /"
+                f" -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}",
+            )
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
-        if self.params.get('cs_debug'):
-            cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
-                                  '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
+        if self.params.get("cs_debug"):
+            cmd_runner.send_files(
+                get_data_dir_path("logback-tools-debug.xml"), "/etc/scylla/cassandra/logback-tools.xml", delete_dst=True
+            )
         if self.profile:
-            loader_profile_path = os.path.join('/tmp', os.path.basename(self.profile))
+            loader_profile_path = os.path.join("/tmp", os.path.basename(self.profile))
             with open(self.profile, encoding="utf-8") as profile_file:
-                LOGGER.info('Profile content:\n%s', profile_file.read())
+                LOGGER.info("Profile content:\n%s", profile_file.read())
             cmd_runner.send_files(self.profile, loader_profile_path, delete_dst=True)
-            if 'scylla-qa-internal' in self.profile:
-                LOGGER.info("Replace profile path %s in c-s command with actual %s",
-                            self.profile, loader_profile_path)
+            if "scylla-qa-internal" in self.profile:
+                LOGGER.info("Replace profile path %s in c-s command with actual %s", self.profile, loader_profile_path)
                 stress_cmd = replace_scylla_qa_internal_path(stress_cmd, loader_profile_path)
 
         if self.client_encrypt:
-            ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))
+            ssl_conf_dir = Path(get_data_dir_path("ssl_conf", "client"))
             for ssl_file in ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
-                    cmd_runner.send_files(str(ssl_file),
-                                          str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
-                                          verbose=True)
+                    cmd_runner.send_files(
+                        str(ssl_file), str(Path("/etc/scylla/ssl_conf/client") / ssl_file.name), verbose=True
+                    )
 
         if connection_bundle_file := self.connection_bundle_file:
-            cmd_runner.send_files(str(connection_bundle_file),
-                                  self.target_connection_bundle_file, delete_dst=True, verbose=True)
+            cmd_runner.send_files(
+                str(connection_bundle_file), self.target_connection_bundle_file, delete_dst=True, verbose=True
+            )
 
         if self.params.get("use_hdr_cs_histogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
@@ -371,41 +416,52 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         else:
             hdr_logger_context = contextlib.nullcontext()
 
-        LOGGER.info('Stress command:\n%s', stress_cmd)
+        LOGGER.info("Stress command:\n%s", stress_cmd)
 
-        tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
+        tag = f"TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}"
 
         if self.stress_num > 1:
-            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}'
+            node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}"
         else:
-            node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
-        node_cmd = f'echo {tag}; {node_cmd}'
+            node_cmd = f"STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}"
+        node_cmd = f"echo {tag}; {node_cmd}"
 
         result = None
         self._disable_logging_for_cs(loader, cmd_runner)
         try:
-            prefix,  *_ = stress_cmd.split("cassandra-stress", maxsplit=1)
+            prefix, *_ = stress_cmd.split("cassandra-stress", maxsplit=1)
             reporter = CassandraStressVersionReporter(
-                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
+                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client()
+            )
             reporter.report()
         except Exception:  # pylint: disable=broad-except
             LOGGER.info("Failed to collect cassandra-stress version information", exc_info=True)
-        with cleanup_context, \
-                CassandraStressExporter(instance_name=cmd_runner_name,
-                                        metrics=nemesis_metrics_obj(),
-                                        stress_operation=stress_cmd_opt,
-                                        stress_log_filename=log_file_name,
-                                        loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name,
-                                               stop_test_on_failure=self.stop_test_on_failure) as publisher, \
-                CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
-                                     log_file_name=log_file_name) as cs_stress_event, \
-                CassandraStressHDRExporter(instance_name=cmd_runner_name,
-                                           metrics=nemesis_metrics_obj(),
-                                           stress_operation=stress_cmd_opt,
-                                           stress_log_filename=local_hdr_file_name,
-                                           loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                hdr_logger_context:
+        with (
+            cleanup_context,
+            CassandraStressExporter(
+                instance_name=cmd_runner_name,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=stress_cmd_opt,
+                stress_log_filename=log_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            CassandraStressEventsPublisher(
+                node=loader, cs_log_filename=log_file_name, stop_test_on_failure=self.stop_test_on_failure
+            ) as publisher,
+            CassandraStressEvent(
+                node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name
+            ) as cs_stress_event,
+            CassandraStressHDRExporter(
+                instance_name=cmd_runner_name,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=stress_cmd_opt,
+                stress_log_filename=local_hdr_file_name,
+                loader_idx=loader_idx,
+                cpu_idx=cpu_idx,
+            ),
+            hdr_logger_context,
+        ):
             publisher.event_id = cs_stress_event.event_id
             try:
                 with SoftTimeoutContext(timeout=self.soft_timeout, operation="cassandra-stress"):
@@ -421,8 +477,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             loader_idx = loader.node_index
             for cpu_idx in range(self.stress_num):
                 for ks_idx in range(1, self.keyspace_num + 1):
-                    self.results_futures += [self.executor.submit(self._run_cs_stress,
-                                                                  *(loader, loader_idx, cpu_idx, ks_idx))]
+                    self.results_futures += [
+                        self.executor.submit(self._run_cs_stress, *(loader, loader_idx, cpu_idx, ks_idx))
+                    ]
                     if loader_idx == 0 and cpu_idx == 0 and self.max_workers > 1:
                         # Wait for first stress thread to create the schema, before spawning new stress threads
                         time.sleep(30)
@@ -466,14 +523,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             if node_cs_res:
                 cs_summary.append(node_cs_res)
             for line in lines:
-                if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
+                if "java.io.IOException" in line:
+                    errors += ["%s: %s" % (node, line.strip())]
 
         return cs_summary, errors
 
 
-stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')
-stress_cmd_get_warmup_pattern = re.compile(r' [-]{0,2}warmup[\s=]+([\d]+[hms]+)')
+stress_cmd_get_duration_pattern = re.compile(r" [-]{0,2}duration[\s=]+([\d]+[hms]+)")
+stress_cmd_get_warmup_pattern = re.compile(r" [-]{0,2}warmup[\s=]+([\d]+[hms]+)")
 
 
 def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:

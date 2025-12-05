@@ -46,7 +46,6 @@ from sdcm.utils.decorators import timeout as timeout_decor, retrying
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 from sdcm.wait import wait_for
 
-
 KUBECTL_BIN = "kubectl"
 HELM_IMAGE = "alpine/helm:3.8.0"
 
@@ -57,38 +56,38 @@ K8S_CONFIGS_PATH_SCT = sct_abs_path("sdcm/k8s_configs")
 JSON_PATCH_TYPE = "application/json-patch+json"
 
 LOGGER = logging.getLogger(__name__)
-K8S_MEM_CPU_RE = re.compile('^([0-9]+)([a-zA-Z]*)$')
+K8S_MEM_CPU_RE = re.compile("^([0-9]+)([a-zA-Z]*)$")
 K8S_MEM_CONVERSION_MAP = {
-    'e': lambda x: x * 1073741824,
-    'p': lambda x: x * 1048576,
-    't': lambda x: x * 1024,
-    'g': lambda x: x,
-    'm': lambda x: x / 1024,
-    'k': lambda x: x / 1048576,
-    '': lambda x: x,
+    "e": lambda x: x * 1073741824,
+    "p": lambda x: x * 1048576,
+    "t": lambda x: x * 1024,
+    "g": lambda x: x,
+    "m": lambda x: x / 1024,
+    "k": lambda x: x / 1048576,
+    "": lambda x: x,
 }
 K8S_CPU_CONVERSION_MAP = {
-    'm': lambda x: x / 1000,
-    '': lambda x: x,
+    "m": lambda x: x / 1000,
+    "": lambda x: x,
 }
 
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
 
 class ApiLimiterClient(k8s.client.ApiClient):
-    _api_rate_limiter: 'ApiCallRateLimiter' = None
+    _api_rate_limiter: "ApiCallRateLimiter" = None
 
     def call_api(self, *args, **kwargs):  # pylint: disable=signature-differs
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
         return super().call_api(*args, **kwargs)
 
-    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+    def bind_api_limiter(self, instance: "ApiCallRateLimiter"):
         self._api_rate_limiter = instance
 
 
 class ApiLimiterRetry(Retry):
-    _api_rate_limiter: 'ApiCallRateLimiter' = None
+    _api_rate_limiter: "ApiCallRateLimiter" = None
 
     def sleep(self, *args, **kwargs):  # pylint: disable=signature-differs
         super().sleep(*args, **kwargs)
@@ -101,7 +100,7 @@ class ApiLimiterRetry(Retry):
             ApiLimiterRetry.bind_api_limiter(result, self._api_rate_limiter)
         return result
 
-    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+    def bind_api_limiter(self, instance: "ApiCallRateLimiter"):
         self._api_rate_limiter = instance
 
 
@@ -143,13 +142,13 @@ class ApiCallRateLimiter(threading.Thread):
             raise queue.Full
 
     def _api_test(self, kluster):  # pylint: disable=no-self-use
-        logging.getLogger('urllib3.connectionpool').disabled = True
+        logging.getLogger("urllib3.connectionpool").disabled = True
         try:
             KubernetesOps.core_v1_api(
                 KubernetesOps.api_client(KubernetesOps.create_k8s_configuration(kluster))
             ).list_pod_for_all_namespaces(watch=False)
         finally:
-            logging.getLogger('urllib3.connectionpool').disabled = False
+            logging.getLogger("urllib3.connectionpool").disabled = False
 
     def wait_till_api_become_not_operational(self, kluster, num_requests=10, max_waiting_time=360):
         wait_for(
@@ -157,7 +156,7 @@ class ApiCallRateLimiter(threading.Thread):
             timeout=max_waiting_time,
             kluster=kluster,
             num_requests=num_requests,
-            throw_exc=False
+            throw_exc=False,
         )
 
     def wait_till_api_become_stable(self, kluster, num_requests=20, max_waiting_time=1200):
@@ -166,7 +165,7 @@ class ApiCallRateLimiter(threading.Thread):
             timeout=max_waiting_time,
             kluster=kluster,
             num_requests=num_requests,
-            throw_exc=True
+            throw_exc=True,
         )
 
     def check_if_api_stable(self, kluster, num_requests=20):
@@ -189,8 +188,7 @@ class ApiCallRateLimiter(threading.Thread):
         self.join()
 
     def run(self) -> None:
-        LOGGER.info("k8s API call rate limiter started: rate_limit=%s, queue_size=%s",
-                    self.rate_limit, self.queue_size)
+        LOGGER.info("k8s API call rate limiter started: rate_limit=%s, queue_size=%s", self.rate_limit, self.queue_size)
         self.running.set()
         while self.running.is_set():
             if self._lock.get_value() == 0:
@@ -227,15 +225,13 @@ class CordonNodes:
 
 
 class KubernetesOps:  # pylint: disable=too-many-public-methods
-
     @staticmethod
     def create_k8s_configuration(kluster) -> k8s.client.Configuration:
         k8s_configuration = k8s.client.Configuration()
         if kluster.k8s_server_url:
             k8s_configuration.host = kluster.k8s_server_url
         else:
-            k8s.config.load_kube_config(
-                config_file=kluster.kube_config_path, client_configuration=k8s_configuration)
+            k8s.config.load_kube_config(config_file=kluster.kube_config_path, client_configuration=k8s_configuration)
         return k8s_configuration
 
     @classmethod
@@ -289,9 +285,8 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         cmd = [KUBECTL_BIN]
         if getattr(kluster, "kube_config_path", None) is not None:
             cmd.append(f"--kubeconfig={kluster.kube_config_path}")
-        if sct_test_logdir := os.environ.get('_SCT_TEST_LOGDIR'):
-            cmd.append(
-                f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}--{kluster.short_cluster_name}")
+        if sct_test_logdir := os.environ.get("_SCT_TEST_LOGDIR"):
+            cmd.append(f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}--{kluster.short_cluster_name}")
         if not ignore_k8s_server_url and getattr(kluster, "k8s_server_url", None) is not None:
             cmd.append(f"--server={kluster.k8s_server_url}")
         if namespace:
@@ -300,58 +295,78 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         return " ".join(cmd)
 
     @classmethod
-    def kubectl(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False, verbose: bool = True):
+    def kubectl(
+        cls,
+        kluster,
+        *command,
+        namespace: Optional[str] = None,
+        timeout: int = KUBECTL_TIMEOUT,
+        remoter: Optional["KubernetesCmdRunner"] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+    ):
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
         return remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def kubectl_multi_cmd(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                          remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
-                          verbose: bool = True):
-        total_command = ' '.join(command)
+    def kubectl_multi_cmd(
+        cls,
+        kluster,
+        *command,
+        namespace: Optional[str] = None,
+        timeout: int = KUBECTL_TIMEOUT,
+        remoter: Optional["KubernetesCmdRunner"] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+    ):
+        total_command = " ".join(command)
         final_command = []
-        for cmd in total_command.split(' '):
-            if cmd == 'kubectl':
-                final_command.append(
-                    cls.kubectl_cmd(kluster, namespace=namespace, ignore_k8s_server_url=bool(remoter)))
+        for cmd in total_command.split(" "):
+            if cmd == "kubectl":
+                final_command.append(cls.kubectl_cmd(kluster, namespace=namespace, ignore_k8s_server_url=bool(remoter)))
             else:
                 final_command.append(cmd)
         if remoter is None:
             remoter = LOCALRUNNER
-        final_command = ' '.join(final_command)
+        final_command = " ".join(final_command)
         return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals,too-many-branches
-                   timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
-                   modifiers: List[Callable] = None, server_side=False):
+    def apply_file(  # pylint: disable=too-many-locals,too-many-branches
+        cls,
+        kluster,
+        config_path,
+        namespace=None,
+        timeout=KUBECTL_TIMEOUT,
+        environ=None,
+        envsubst=True,
+        modifiers: List[Callable] = None,
+        server_side=False,
+    ):
         if environ:
-            environ_str = (' '.join([f'{name}="{value}"' for name, value in environ.items()])) + ' '
+            environ_str = (" ".join([f'{name}="{value}"' for name, value in environ.items()])) + " "
         else:
-            environ_str = ''
+            environ_str = ""
         server_side_arg = "--server-side" if server_side else ""
 
         config_paths = []
         if os.path.isdir(config_path):
             for root, _, subfiles in os.walk(config_path):
                 for subfile in subfiles:
-                    if not subfile.endswith('yaml'):
+                    if not subfile.endswith("yaml"):
                         continue
                     config_paths.append(os.path.join(root, subfile))
         else:
             config_paths.append(config_path)
 
         for current_config_path in sorted(config_paths):
-            LOGGER.debug("Processing '%s' file.", current_config_path,
-                         extra={'prefix': kluster.region_name})
-            with NamedTemporaryFile(mode='tw') as temp_file:
+            LOGGER.debug("Processing '%s' file.", current_config_path, extra={"prefix": kluster.region_name})
+            with NamedTemporaryFile(mode="tw") as temp_file:
                 resulted_content = []
                 if envsubst:
-                    data = LOCALRUNNER.run(
-                        f'{environ_str}envsubst<{current_config_path}', verbose=False).stdout
+                    data = LOCALRUNNER.run(f"{environ_str}envsubst<{current_config_path}", verbose=False).stdout
                 else:
                     with open(current_config_path, encoding="utf-8") as config_file_stream:
                         data = config_file_stream.read()
@@ -368,10 +383,11 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 @retrying(n=0, sleep_time=5, timeout=timeout, allowed_exceptions=RuntimeError)
                 def run_kubectl(file_name):
                     try:
-                        cls.kubectl(kluster, "apply", server_side_arg, "-f", file_name,
-                                    namespace=namespace, timeout=timeout)
+                        cls.kubectl(
+                            kluster, "apply", server_side_arg, "-f", file_name, namespace=namespace, timeout=timeout
+                        )
                     except invoke.exceptions.UnexpectedExit as exc:
-                        if 'did you specify the right host or port' in exc.result.stderr:
+                        if "did you specify the right host or port" in exc.result.stderr:
                             raise RuntimeError(str(exc)) from None
                         raise
 
@@ -385,10 +401,17 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         cls.kubectl(kluster, *command, timeout=timeout)
 
     @classmethod
-    def expose_pod_ports(cls, kluster, pod_name, ports, labels=None, selector=None, namespace=None, timeout=KUBECTL_TIMEOUT):
-        command = ["expose pod", pod_name, "--type=LoadBalancer",
-                   "--port", ",".join(map(str, ports)),
-                   f"--name={pod_name}-loadbalancer", ]
+    def expose_pod_ports(
+        cls, kluster, pod_name, ports, labels=None, selector=None, namespace=None, timeout=KUBECTL_TIMEOUT
+    ):
+        command = [
+            "expose pod",
+            pod_name,
+            "--type=LoadBalancer",
+            "--port",
+            ",".join(map(str, ports)),
+            f"--name={pod_name}-loadbalancer",
+        ]
         if labels:
             command.extend(("--labels", labels))
         if selector:
@@ -404,94 +427,118 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         for user in config["users"]:
             if kluster.short_cluster_name not in user["name"]:
                 continue
-            for auth_type in ['exec', 'auth-provider']:
+            for auth_type in ["exec", "auth-provider"]:
                 if auth_type in user["user"]:
                     return auth_type, user["user"][auth_type]
         return None, None
 
     @classmethod
     def patch_kubectl_auth_config(cls, config, auth_type, cmd: str, args: list):
-        if auth_type == 'exec':
-            config['command'] = cmd
-            config['args'] = args
-        elif auth_type == 'auth-provider':
-            config['config']['cmd-args'] = ' '.join(args)
-            config['config']['cmd-path'] = cmd
+        if auth_type == "exec":
+            config["command"] = cmd
+            config["args"] = args
+        elif auth_type == "auth-provider":
+            config["config"]["cmd-args"] = " ".join(args)
+            config["config"]["cmd-path"] = cmd
         else:
-            raise ValueError(f'Unknown auth-type {auth_type}')
+            raise ValueError(f"Unknown auth-type {auth_type}")
 
     @staticmethod
-    def wait_for_pods_with_condition(kluster, condition: str, total_pods: Union[int, Callable],
-                                     timeout: float, namespace: str,
-                                     selector: str = '',
-                                     sleep_between_retries: int = 10):
-        assert isinstance(total_pods, (int, float)) or callable(total_pods), (
-            "total_pods should be number or callable")
+    def wait_for_pods_with_condition(
+        kluster,
+        condition: str,
+        total_pods: Union[int, Callable],
+        timeout: float,
+        namespace: str,
+        selector: str = "",
+        sleep_between_retries: int = 10,
+    ):
+        assert isinstance(total_pods, (int, float)) or callable(total_pods), "total_pods should be number or callable"
         waiter_message = (
             f"{kluster.region_name}: Wait for the '{total_pods}' pod(s) "
-            f"from the '{namespace}' namespace with '{condition}' condition to be true...")
+            f"from the '{namespace}' namespace with '{condition}' condition to be true..."
+        )
 
         @timeout_decor(message=waiter_message, timeout=timeout * 60, sleep_time=sleep_between_retries)
         def wait_for_condition(kluster, condition, total_pods, timeout, namespace, selector):
             # To make it more informative in worst case scenario made it repeat 5 times, by readiness_timeout // 5
             if selector:
-                selector = selector if selector.startswith("--selector=") else f'--selector={selector}'
+                selector = selector if selector.startswith("--selector=") else f"--selector={selector}"
             result = kluster.kubectl(
                 f"wait {selector} --timeout={timeout // 5}m --all --for={condition} pod",
                 namespace=namespace,
-                timeout=timeout * 60 // 5 + 10)
-            count = result.stdout.count('condition met')
+                timeout=timeout * 60 // 5 + 10,
+            )
+            count = result.stdout.count("condition met")
             if isinstance(total_pods, (int, float)):
                 if total_pods != count:
-                    raise RuntimeError('Not all pods reported')
+                    raise RuntimeError("Not all pods reported")
             elif callable(total_pods):
                 if not total_pods(count):
-                    raise RuntimeError('Not all pods reported')
+                    raise RuntimeError("Not all pods reported")
             else:
                 raise ValueError(f"total_pods should be number or callable and not {type(total_pods)}")
 
         wait_for_condition(kluster, condition, total_pods, timeout, namespace, selector)
 
     @staticmethod
-    def wait_for_pods_readiness(kluster, total_pods: Union[int, Callable], readiness_timeout: float,
-                                namespace: str, selector: str = '',
-                                sleep_between_retries: int = 10):
-        KubernetesOps.wait_for_pods_with_condition(kluster, condition='condition=Ready',
-                                                   total_pods=total_pods,
-                                                   timeout=readiness_timeout,
-                                                   namespace=namespace,
-                                                   selector=selector,
-                                                   sleep_between_retries=sleep_between_retries)
+    def wait_for_pods_readiness(
+        kluster,
+        total_pods: Union[int, Callable],
+        readiness_timeout: float,
+        namespace: str,
+        selector: str = "",
+        sleep_between_retries: int = 10,
+    ):
+        KubernetesOps.wait_for_pods_with_condition(
+            kluster,
+            condition="condition=Ready",
+            total_pods=total_pods,
+            timeout=readiness_timeout,
+            namespace=namespace,
+            selector=selector,
+            sleep_between_retries=sleep_between_retries,
+        )
 
     @staticmethod
-    def wait_for_pods_running(kluster, total_pods: Union[int, Callable], timeout: float,
-                              namespace: str, selector: str = '',
-                              sleep_between_retries: int = 10):
-        KubernetesOps.wait_for_pods_with_condition(kluster, condition="jsonpath='{.status.phase}'=Running",
-                                                   total_pods=total_pods,
-                                                   timeout=timeout,
-                                                   namespace=namespace,
-                                                   selector=selector,
-                                                   sleep_between_retries=sleep_between_retries)
+    def wait_for_pods_running(
+        kluster,
+        total_pods: Union[int, Callable],
+        timeout: float,
+        namespace: str,
+        selector: str = "",
+        sleep_between_retries: int = 10,
+    ):
+        KubernetesOps.wait_for_pods_with_condition(
+            kluster,
+            condition="jsonpath='{.status.phase}'=Running",
+            total_pods=total_pods,
+            timeout=timeout,
+            namespace=namespace,
+            selector=selector,
+            sleep_between_retries=sleep_between_retries,
+        )
 
     @staticmethod
-    def wait_for_pod_readiness(kluster, pod_name: str, namespace: str,
-                               pod_readiness_timeout_minutes: int):
+    def wait_for_pod_readiness(kluster, pod_name: str, namespace: str, pod_readiness_timeout_minutes: int):
         timeout = pod_readiness_timeout_minutes or 5
 
         def _wait_for_pod_readiness():
             result = kluster.kubectl(
                 f"wait --timeout={timeout // 3}m --for=condition=Ready pod {pod_name}",
                 namespace=namespace,
-                timeout=timeout // 3 * 60 + 10)
-            if result.stdout.count('condition met') != 1:
+                timeout=timeout // 3 * 60 + 10,
+            )
+            if result.stdout.count("condition met") != 1:
                 raise RuntimeError(f"'{pod_name}' pod is not ready")
             return True
 
-        wait_for(_wait_for_pod_readiness,
-                 text=f"Wait for {pod_name} pod to be ready...",
-                 timeout=timeout * 60,
-                 throw_exc=True)
+        wait_for(
+            _wait_for_pod_readiness,
+            text=f"Wait for {pod_name} pod to be ready...",
+            timeout=timeout * 60,
+            throw_exc=True,
+        )
 
     @staticmethod
     def patch_kube_config(kluster, static_token_path, kube_config_path: str = None) -> None:
@@ -502,8 +549,8 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         if kube_config_path is None:
             kube_config_path = kluster.kube_config_path
         LOGGER.debug(
-            "Patch %s to use file token %s", kube_config_path, static_token_path,
-            extra={'prefix': kluster.region_name})
+            "Patch %s to use file token %s", kube_config_path, static_token_path, extra={"prefix": kluster.region_name}
+        )
 
         with open(kube_config_path, encoding="utf-8") as kube_config:
             data = yaml.safe_load(kube_config)
@@ -516,18 +563,28 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         with open(kube_config_path, "w", encoding="utf-8") as kube_config:
             yaml.safe_dump(data, kube_config)
 
-        LOGGER.debug('Patched kubectl config at %s with static kubectl token from %s',
-                     kube_config_path, static_token_path, extra={'prefix': kluster.region_name})
+        LOGGER.debug(
+            "Patched kubectl config at %s with static kubectl token from %s",
+            kube_config_path,
+            static_token_path,
+            extra={"prefix": kluster.region_name},
+        )
 
     @classmethod
-    def watch_events(cls, k8s_core_v1_api: k8s.client.CoreV1Api, name: str = None, namespace: str = None,
-                     timeout: int = None):
-        field_selector = f'involvedObject.name={name}' if name is not None else None
+    def watch_events(
+        cls, k8s_core_v1_api: k8s.client.CoreV1Api, name: str = None, namespace: str = None, timeout: int = None
+    ):
+        field_selector = f"involvedObject.name={name}" if name is not None else None
         if namespace is None:
-            return k8s.watch.Watch().stream(k8s_core_v1_api.list_event_for_all_namespaces,
-                                            field_selector=field_selector, timeout_seconds=timeout)
-        return k8s.watch.Watch().stream(k8s_core_v1_api.list_namespaced_event, namespace=namespace,
-                                        field_selector=field_selector, timeout_seconds=timeout)
+            return k8s.watch.Watch().stream(
+                k8s_core_v1_api.list_event_for_all_namespaces, field_selector=field_selector, timeout_seconds=timeout
+            )
+        return k8s.watch.Watch().stream(
+            k8s_core_v1_api.list_namespaced_event,
+            namespace=namespace,
+            field_selector=field_selector,
+            timeout_seconds=timeout,
+        )
 
     @classmethod
     def gather_k8s_logs_by_operator(cls, kluster, logdir_path=None):
@@ -538,14 +595,16 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         operator_image = kluster.get_operator_image()
         LOCALRUNNER.run(
             f"timeout -v 15m docker cp $(docker create --name mustgather {operator_image}):"
-            f"/usr/bin/scylla-operator {operator_bin_path} && docker rm mustgather")
+            f"/usr/bin/scylla-operator {operator_bin_path} && docker rm mustgather"
+        )
         LOCALRUNNER.run(f"chmod +x {operator_bin_path}")
         gather_logs_cmd = (
-            f'{operator_bin_path} must-gather --all-resources --loglevel=2'
-            f' --dest-dir="{logdir_path}/must-gather" --kubeconfig={kubeconfig}')
+            f"{operator_bin_path} must-gather --all-resources --loglevel=2"
+            f' --dest-dir="{logdir_path}/must-gather" --kubeconfig={kubeconfig}'
+        )
         LOGGER.info(
-            "K8S-LOGS: START running 'must-gather' scylla-operator command",
-            extra={'prefix': kluster.region_name})
+            "K8S-LOGS: START running 'must-gather' scylla-operator command", extra={"prefix": kluster.region_name}
+        )
         try:
             # NOTE: We should create the 'must-gather' dir ourselves to avoid following error:
             #   Error: destination directory "%logdir_path%/must-gather" doesn't exist
@@ -555,18 +614,21 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             LOCALRUNNER.run(gather_logs_cmd)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning(
-                "Failed to run scylla-operator's 'must gather' command: %s", exc,
-                extra={'prefix': kluster.region_name})
+                "Failed to run scylla-operator's 'must gather' command: %s", exc, extra={"prefix": kluster.region_name}
+            )
         else:
             LOGGER.info(
-                "K8S-LOGS: END running 'must-gather' scylla-operator command",
-                extra={'prefix': kluster.region_name})
+                "K8S-LOGS: END running 'must-gather' scylla-operator command", extra={"prefix": kluster.region_name}
+            )
         try:
             LOCALRUNNER.run(f"rm {operator_bin_path}")
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning(
                 "Failed to delete the the scylla-operator binary located at '%s': %s",
-                operator_bin_path, exc, extra={'prefix': kluster.region_name})
+                operator_bin_path,
+                exc,
+                extra={"prefix": kluster.region_name},
+            )
 
     @classmethod
     def gather_k8s_logs(cls, logdir_path, kubectl=None, namespaces=None) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -585,34 +647,30 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             cluster_wide_resource_types = ("namespaces", "nodes", "persistentvolumes")
         else:
             cluster_wide_resource_types = kubectl(
-                "api-resources --namespaced=false --verbs=list -o name").stdout.split()
+                "api-resources --namespaced=false --verbs=list -o name"
+            ).stdout.split()
         for resource_type in cluster_wide_resource_types:
             for output_format in ("yaml", "wide"):
                 logfile = logdir / cluster_scope_dir / f"{resource_type}.{output_format}"
                 kubectl(f"get {resource_type} -o {output_format} > {logfile}", ignore_status=True)
-        kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}",
-                timeout=600, ignore_status=True)
+        kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}", timeout=600, ignore_status=True)
 
         if not namespaces:
             # Read all the namespaces from already saved file
-            with open(logdir / cluster_scope_dir / "namespaces.wide",
-                      mode="r", encoding="utf-8") as namespaces_file:
+            with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r", encoding="utf-8") as namespaces_file:
                 # Reverse order of namespaces because preferred ones are there
                 namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
         elif isinstance(namespaces, str):
             namespaces = [namespaces]
 
         # Gather namespace-scoped resources info
-        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s",
-                    ', '.join(namespaces))
+        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s", ", ".join(namespaces))
         namespace_scope_dir = "namespace-scoped-resources"
         os.makedirs(logdir / namespace_scope_dir, exist_ok=True)
-        for resource_type in kubectl(
-                "api-resources --namespaced=true --verbs=get,list -o name").stdout.split():
+        for resource_type in kubectl("api-resources --namespaced=true --verbs=get,list -o name").stdout.split():
             LOGGER.info("K8S-LOGS: gathering '%s' resources", resource_type)
             logfile = logdir / namespace_scope_dir / f"{resource_type}.{output_format}"
-            resources_wide = kubectl(
-                f"get {resource_type} -A -o wide 2>&1 | tee {logfile}", ignore_status=True).stdout
+            resources_wide = kubectl(f"get {resource_type} -A -o wide 2>&1 | tee {logfile}", ignore_status=True).stdout
             if resource_type.startswith("events"):
                 # NOTE: skip both kinds on 'events' available in k8s
                 continue
@@ -620,9 +678,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 if not re.search(f"\n{namespace} ", resources_wide):
                     # NOTE: move to the next namespace because such resources are absent here
                     continue
-                LOGGER.info(
-                    "K8S-LOGS: gathering '%s' resources in the '%s' namespace",
-                    resource_type, namespace)
+                LOGGER.info("K8S-LOGS: gathering '%s' resources in the '%s' namespace", resource_type, namespace)
                 resource_dir = logdir / namespace_scope_dir / namespace / resource_type
                 os.makedirs(resource_dir, exist_ok=True)
                 for res in resources_wide.split("\n"):
@@ -631,13 +687,12 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                     res = res.split()[1]
                     logfile = resource_dir / f"{res}.yaml"
                     res_stdout = kubectl(
-                        f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}",
-                        namespace=namespace).stdout
+                        f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}", namespace=namespace
+                    ).stdout
                     if resource_type != "pods":
                         continue
                     try:
-                        container_names = [
-                            c["name"] for c in yaml.safe_load(res_stdout)["spec"]["containers"]]
+                        container_names = [c["name"] for c in yaml.safe_load(res_stdout)["spec"]["containers"]]
                     except KeyError:
                         # NOTE: pod could be in 'deleting' state during 'list' command
                         # and be absent during 'get' command. So, just skip it.
@@ -646,27 +701,34 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                     for container_name in container_names:
                         logfile = resource_dir / res / f"{container_name}"
                         # NOTE: ignore status because it may fail when pod is not ready/running
-                        kubectl(f"logs pod/{res} -c={container_name} > {logfile}.log",
-                                namespace=namespace, ignore_status=True)
-                        kubectl(f"logs pod/{res} -c={container_name} --previous=true > "
-                                f"{logfile}-previous.log",
-                                namespace=namespace, ignore_status=True)
+                        kubectl(
+                            f"logs pod/{res} -c={container_name} > {logfile}.log",
+                            namespace=namespace,
+                            ignore_status=True,
+                        )
+                        kubectl(
+                            f"logs pod/{res} -c={container_name} --previous=true > {logfile}-previous.log",
+                            namespace=namespace,
+                            ignore_status=True,
+                        )
 
                         # NOTE: pick up Scylla container-specific files
-                        if container_name != 'scylla':
+                        if container_name != "scylla":
                             continue
                         scylla_container_files_to_copy = (
-                            ('/var/lib/scylla/io_properties.yaml', logfile / 'io_properties.yaml'),
-                            ('/etc/scylla.d/', logfile / 'etc-scylla-d'),
-                            ('/etc/scylla/', logfile / 'etc-scylla'),
+                            ("/var/lib/scylla/io_properties.yaml", logfile / "io_properties.yaml"),
+                            ("/etc/scylla.d/", logfile / "etc-scylla-d"),
+                            ("/etc/scylla/", logfile / "etc-scylla"),
                         )
                         for src_path, dst_path in scylla_container_files_to_copy:
-                            kubectl(f"cp {res}:{src_path} {dst_path} -c {container_name}",
-                                    namespace=namespace, ignore_status=True)
+                            kubectl(
+                                f"cp {res}:{src_path} {dst_path} -c {container_name}",
+                                namespace=namespace,
+                                ignore_status=True,
+                            )
 
 
-class HelmException(Exception):
-    ...
+class HelmException(Exception): ...
 
 
 class HelmContainerMixin:
@@ -675,41 +737,50 @@ class HelmContainerMixin:
         volumes = {
             user_home: {"bind": user_home, "mode": "rw"},
             sct_abs_path(""): {"bind": sct_abs_path(""), "mode": "ro"},
-            '/tmp': {"bind": "/tmp", "mode": "rw"},
+            "/tmp": {"bind": "/tmp", "mode": "rw"},
         }
-        return dict(image=HELM_IMAGE,
-                    entrypoint="/bin/cat",
-                    tty=True,
-                    name=f"{self.name}-helm",
-                    network_mode="host",
-                    volumes=volumes,
-                    environment={},
-                    )
+        return dict(
+            image=HELM_IMAGE,
+            entrypoint="/bin/cat",
+            tty=True,
+            name=f"{self.name}-helm",
+            network_mode="host",
+            volumes=volumes,
+            environment={},
+        )
 
     @cached_property
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
-        cmd = [
-            f"HELM_CONFIG_HOME={kluster.helm_dir_path}",
-            "helm",
-            f"--kubeconfig={kluster.kube_config_path}"
-        ]
+    def helm(  # pylint: disable=no-self-use
+        self, kluster, *command: str, namespace: Optional[str] = None, values: "HelmValues" = None, prepend_command=None
+    ) -> str:
+        cmd = [f"HELM_CONFIG_HOME={kluster.helm_dir_path}", "helm", f"--kubeconfig={kluster.kube_config_path}"]
         if prepend_command:
             if isinstance(prepend_command, list):
                 cmd = prepend_command + cmd
             else:
                 raise TypeError("'prepend_cmd' param expected to be 'list'")
         if kluster.k8s_server_url:
-            cmd.extend(("--kube-apiserver", kluster.k8s_server_url, ))
+            cmd.extend(
+                (
+                    "--kube-apiserver",
+                    kluster.k8s_server_url,
+                )
+            )
         if namespace:
-            cmd.extend(("--namespace", namespace, ))
+            cmd.extend(
+                (
+                    "--namespace",
+                    namespace,
+                )
+            )
         values_file = None
         cmd.extend(command)
 
         if values:
-            helm_values_file = NamedTemporaryFile(mode='tw')  # pylint: disable=consider-using-with
+            helm_values_file = NamedTemporaryFile(mode="tw")  # pylint: disable=consider-using-with
             helm_values_file.write(yaml.safe_dump(values.as_dict()))
             helm_values_file.flush()
             cmd.extend(("-f", helm_values_file.name))
@@ -717,7 +788,7 @@ class HelmContainerMixin:
 
         cmd = " ".join(cmd)
 
-        LOGGER.debug("Execute `%s'", cmd, extra={'prefix': kluster.region_name})
+        LOGGER.debug("Execute `%s'", cmd, extra={"prefix": kluster.region_name})
         try:
             result = LOCALRUNNER.run(cmd)
             output = result.stdout.strip()
@@ -728,18 +799,20 @@ class HelmContainerMixin:
             if values_file:
                 values_file.close()
 
-    def _helm_install_or_upgrade(self,
-                                 operation_type: str,
-                                 kluster,
-                                 target_chart_name: str,
-                                 source_chart_name: str,
-                                 version: str = "",
-                                 use_devel: bool = False,
-                                 debug: bool = True,
-                                 values: 'HelmValues' = None,
-                                 namespace: Optional[str] = None,
-                                 atomic: bool = False,
-                                 timeout: Optional[str] = None) -> str:
+    def _helm_install_or_upgrade(
+        self,
+        operation_type: str,
+        kluster,
+        target_chart_name: str,
+        source_chart_name: str,
+        version: str = "",
+        use_devel: bool = False,
+        debug: bool = True,
+        values: "HelmValues" = None,
+        namespace: Optional[str] = None,
+        atomic: bool = False,
+        timeout: Optional[str] = None,
+    ) -> str:
         command = [operation_type, target_chart_name, source_chart_name]
         prepend_command = []
         if version:
@@ -756,13 +829,7 @@ class HelmContainerMixin:
         if timeout is not None:
             # timeout in Go duration format
             command.extend(("--timeout", timeout))
-        return self.helm(
-            kluster,
-            *command,
-            prepend_command=prepend_command,
-            namespace=namespace,
-            values=values
-        )
+        return self.helm(kluster, *command, prepend_command=prepend_command, namespace=namespace, values=values)
 
     helm_install = partialmethod(_helm_install_or_upgrade, "install")
     helm_upgrade = partialmethod(_helm_install_or_upgrade, "upgrade")
@@ -783,9 +850,9 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
                 self._get_token_and_save_to_temporary_location()
                 self._check_token_validity_in_temporary_location()
                 self._replace_active_token_by_token_from_temporary_location()
-                LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
+                LOGGER.debug("Cloud token has been updated and stored at %s", self._kubectl_token_path)
             except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.debug('Failed to update cloud token: %s', exc)
+                LOGGER.debug("Failed to update cloud token: %s", exc)
                 wait_time = 5
             else:
                 wait_time = self.update_period
@@ -801,7 +868,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
             if os.path.exists(self._temporary_token_path):
                 os.unlink(self._temporary_token_path)
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.debug('Failed to cleanup temporary token: %s', exc)
+            LOGGER.debug("Failed to cleanup temporary token: %s", exc)
 
     def _check_token_validity_in_temporary_location(self):
         with open(self._temporary_token_path, encoding="utf-8") as gcloud_config_file:
@@ -809,7 +876,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
 
     def _get_token_and_save_to_temporary_location(self):
         token = self.get_token()
-        with open(self._temporary_token_path, 'w+', encoding="utf-8") as gcloud_config_file:
+        with open(self._temporary_token_path, "w+", encoding="utf-8") as gcloud_config_file:
             gcloud_config_file.write(token)
             gcloud_config_file.flush()
 
@@ -867,9 +934,9 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         self.mapper_dict = mapper_dict
         self.watcher = None
         self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
-        self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_kluster.region_name})
+        self.log = SDCMAdapter(LOGGER, extra={"prefix": k8s_kluster.region_name})
 
-    @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
+    @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError,))
     def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value
         try:
             now = time.time()
@@ -884,7 +951,8 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                 watch=True,
                 async_req=False,
                 _request_timeout=self.READ_REQUEST_TIMEOUT,
-                _preload_content=False)
+                _preload_content=False,
+            )
         except k8s.client.rest.ApiException as exc:
             self.log.warning("'_open_stream()': failed to open stream:\n%s", exc)
             # NOTE: following is workaround for the error 401 which may happen due to
@@ -892,8 +960,11 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
             raise ConnectionError(str(exc)) from None
 
-    @retrying(n=3600, sleep_time=1,  allowed_exceptions=(
-        ProtocolError, IncompleteRead, ReadTimeoutError, TimeoutError, ValueError))
+    @retrying(
+        n=3600,
+        sleep_time=1,
+        allowed_exceptions=(ProtocolError, IncompleteRead, ReadTimeoutError, TimeoutError, ValueError),
+    )
     def _read_stream(self) -> Iterator[str]:
         while not self._termination_event.wait(0.01):
             if not self.watcher or self.watcher.closed:
@@ -903,7 +974,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
 
     # NOTE: we want it to run and retry always.
     #       If it crashes then whole test run will become a mess.
-    @retrying(n=987654, sleep_time=10, allowed_exceptions=(Exception, ))
+    @retrying(n=987654, sleep_time=10, allowed_exceptions=(Exception,))
     def run(self) -> None:
         while not self._termination_event.wait(0.01):
             try:
@@ -917,7 +988,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
     def stop(self, timeout=None) -> None:
         self.log.warning("Stopping Scylla pods IP change tracker thread")
         self._termination_event.set()
-        if hasattr(self.watcher, 'close') and not self.watcher.closed:
+        if hasattr(self.watcher, "close") and not self.watcher.closed:
             self.watcher.close()
         self.join(timeout)
 
@@ -945,47 +1016,49 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         try:
             self.log.debug("Processing following line: %s", line)
             data = yaml.safe_load(line) or {}
-            metadata = data.get('object', {}).get('metadata', {})
-            namespace = metadata.get('namespace')
+            metadata = data.get("object", {}).get("metadata", {})
+            namespace = metadata.get("namespace")
             if not namespace:
                 raise KeyError("Cannot find 'namespace' in the line: %s" % line)
             if namespace not in self.mapper_dict:
                 self.mapper_dict[namespace] = {}
             # NOTE: following condition allows to skip processing of all the
             #       load-balancer/headless endpoints that do not refer to any Scylla pod.
-            labels = metadata.get('labels', {})
+            labels = metadata.get("labels", {})
             if not all((key in labels.keys() for key in self.SCYLLA_PODS_EXPECTED_LABEL_KEYS)):
                 return None
 
-            if name := metadata.get('name'):
+            if name := metadata.get("name"):
                 if name not in self.mapper_dict[namespace]:
                     self.mapper_dict[namespace][name] = {}
-                if 'current_ip' not in self.mapper_dict[namespace][name]:
-                    self.mapper_dict[namespace][name]['current_ip'] = None
-                if 'old_ips' not in self.mapper_dict[namespace][name]:
-                    self.mapper_dict[namespace][name]['old_ips'] = []
-            for subset in data.get('object', {}).get('subsets', []):
-                for address in subset.get('addresses', []):
-                    current_ip_address = address['ip']
-                    if current_ip_address == self.mapper_dict[namespace][name]['current_ip']:
+                if "current_ip" not in self.mapper_dict[namespace][name]:
+                    self.mapper_dict[namespace][name]["current_ip"] = None
+                if "old_ips" not in self.mapper_dict[namespace][name]:
+                    self.mapper_dict[namespace][name]["old_ips"] = []
+            for subset in data.get("object", {}).get("subsets", []):
+                for address in subset.get("addresses", []):
+                    current_ip_address = address["ip"]
+                    if current_ip_address == self.mapper_dict[namespace][name]["current_ip"]:
                         continue
-                    old_ip_candidate = self.mapper_dict[namespace][name]['current_ip']
-                    self.mapper_dict[namespace][name]['current_ip'] = current_ip_address
+                    old_ip_candidate = self.mapper_dict[namespace][name]["current_ip"]
+                    self.mapper_dict[namespace][name]["current_ip"] = current_ip_address
                     if not old_ip_candidate:
                         break
-                    self.mapper_dict[namespace][name]['old_ips'].append(old_ip_candidate)
+                    self.mapper_dict[namespace][name]["old_ips"].append(old_ip_candidate)
                     self.log.info(
-                        "'%s/%s' node has changed it's pod IP address from '%s' to '%s'. "
-                        "All old IPs: %s",
-                        namespace, name, old_ip_candidate, current_ip_address,
-                        ', '.join(self.mapper_dict[namespace][name]['old_ips']))
+                        "'%s/%s' node has changed it's pod IP address from '%s' to '%s'. All old IPs: %s",
+                        namespace,
+                        name,
+                        old_ip_candidate,
+                        current_ip_address,
+                        ", ".join(self.mapper_dict[namespace][name]["old_ips"]),
+                    )
                     self._call_callbacks(namespace, name)
                     break
                 else:
                     break
         except Exception as exc:  # pylint: disable=broad-except
-            self.log.warning(
-                "Failed to parse following line: %s\nerr: %s", line, exc)
+            self.log.warning("Failed to parse following line: %s\nerr: %s", line, exc)
 
     def _call_callbacks(self, namespace: str, pod_name: str) -> None:
         # TODO: run callbacks in parallel on per-namespace basis and serially inside a
@@ -997,7 +1070,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             args = callback[1]
             kwargs = {} | callback[2]
             if add_pod_name_as_kwarg:
-                kwargs['pod_name'] = pod_name
+                kwargs["pod_name"] = pod_name
             self.log.debug("Calling '%s' callback %s", func.__name__, suffix)
             try:
                 func(*args, **kwargs)
@@ -1005,21 +1078,25 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                 self.log.warning("Callback call failed %s: %s", suffix, str(exc))
 
         data = self.mapper_dict.get(namespace, {})
-        for dict_key in (pod_name, '__each__'):
-            callbacks = data.get(dict_key, {}).get('callbacks', [])
-            if dict_key == '__each__':
+        for dict_key in (pod_name, "__each__"):
+            callbacks = data.get(dict_key, {}).get("callbacks", [])
+            if dict_key == "__each__":
                 # NOTE: when 'add_pod_name_as_kwarg' is True it means
                 #       we run a pod-specific function
                 #       and it also means we should run it before namespace-specific ones.
                 callbacks = sorted(callbacks, key=lambda c: c[-1], reverse=True)
             for callback in callbacks:
                 process_callback(
-                    callback=callback[:-1], namespace=namespace, pod_name=pod_name,
-                    add_pod_name_as_kwarg=callback[-1])
+                    callback=callback[:-1], namespace=namespace, pod_name=pod_name, add_pod_name_as_kwarg=callback[-1]
+                )
 
-    def register_callbacks(self, callbacks: Union[Callable, list[Callable]],
-                           namespace: str, pod_name: str = '__each__',
-                           add_pod_name_as_kwarg: bool = False) -> None:
+    def register_callbacks(
+        self,
+        callbacks: Union[Callable, list[Callable]],
+        namespace: str,
+        pod_name: str = "__each__",
+        add_pod_name_as_kwarg: bool = False,
+    ) -> None:
         """Register callbacks to be called after a Scylla pod IP change.
 
         Callbacks may be of the following types:
@@ -1052,9 +1129,8 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         """
         if not callbacks:
             self.log.warning(
-                "No callbacks are provided. Nothing to register. "
-                "namespace='%s', pod_name='%s'",
-                namespace, pod_name)
+                "No callbacks are provided. Nothing to register. namespace='%s', pod_name='%s'", namespace, pod_name
+            )
             return
         elif callable(callbacks):
             callbacks = [callbacks]
@@ -1062,50 +1138,52 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         if namespace not in self.mapper_dict:
             self.mapper_dict[namespace] = {}
         if not pod_name:
-            pod_name = '__each__'
+            pod_name = "__each__"
         if pod_name not in self.mapper_dict[namespace]:
-            self.mapper_dict[namespace][pod_name] = {'callbacks': []}
+            self.mapper_dict[namespace][pod_name] = {"callbacks": []}
 
         for callback in callbacks:
             if callable(callback):
                 callback = [callback, [], {}]
-            if (isinstance(callback, (tuple, list))
-                    and len(callback) == 3
-                    and callable(callback[0])
-                    and isinstance(callback[1], (tuple, list))
-                    and isinstance(callback[2], dict)):
-                self.mapper_dict[namespace][pod_name]['callbacks'].append(
-                    (callback[0], callback[1], callback[2], add_pod_name_as_kwarg))
+            if (
+                isinstance(callback, (tuple, list))
+                and len(callback) == 3
+                and callable(callback[0])
+                and isinstance(callback[1], (tuple, list))
+                and isinstance(callback[2], dict)
+            ):
+                self.mapper_dict[namespace][pod_name]["callbacks"].append(
+                    (callback[0], callback[1], callback[2], add_pod_name_as_kwarg)
+                )
             else:
-                self.log.warning(
-                    "Unexpected type (%s) of the callback: %s. Skipping", type(callback), callback)
+                self.log.warning("Unexpected type (%s) of the callback: %s. Skipping", type(callback), callback)
 
 
 def convert_cpu_units_to_k8s_value(cpu: Union[float, int]) -> str:
     if isinstance(cpu, float):
         if not cpu.is_integer():
-            return f'{int(cpu * 1000)}m'
-    return f'{int(cpu)}'
+            return f"{int(cpu * 1000)}m"
+    return f"{int(cpu)}"
 
 
 def convert_memory_units_to_k8s_value(memory: Union[float, int]) -> str:
     if isinstance(memory, float):
         if not memory.is_integer():
-            return f'{int(memory * 1024)}Mi'
-    return f'{int(memory)}Gi'
+            return f"{int(memory * 1024)}Mi"
+    return f"{int(memory)}Gi"
 
 
 def convert_memory_value_from_k8s_to_units(memory: str) -> float:
     match = K8S_MEM_CPU_RE.match(memory).groups()
     if len(match) == 1:
         value = int(match[0])
-        units = 'gb'
+        units = "gb"
     else:
         value = int(match[0])
-        units = match[1].lower().rstrip('ib')
+        units = match[1].lower().rstrip("ib")
     convertor = K8S_MEM_CONVERSION_MAP.get(units)
     if convertor is None:
-        raise ValueError(f'Unknown memory units {units}')
+        raise ValueError(f"Unknown memory units {units}")
     return float(convertor(value))
 
 
@@ -1113,97 +1191,105 @@ def convert_cpu_value_from_k8s_to_units(cpu: str) -> float:
     match = K8S_MEM_CPU_RE.match(cpu).groups()
     if len(match) == 1:
         value = float(match[0])
-        units = ''
+        units = ""
     else:
         value = float(match[0])
         units = match[1].lower()
     convertor = K8S_CPU_CONVERSION_MAP.get(units)
     if convertor is None:
-        raise ValueError(f'Unknown cpu units {units}')
+        raise ValueError(f"Unknown cpu units {units}")
     return float(convertor(value))
 
 
 def add_pool_node_affinity(value, pool_label_name, pool_name):
-    value['nodeAffinity'] = node_affinity = value.get('nodeAffinity', {})
-    node_affinity['requiredDuringSchedulingIgnoredDuringExecution'] = required_during = (
-        node_affinity.get('requiredDuringSchedulingIgnoredDuringExecution', {}))
-    required_during['nodeSelectorTerms'] = node_selectors = required_during.get(
-        'nodeSelectorTerms', [])
+    value["nodeAffinity"] = node_affinity = value.get("nodeAffinity", {})
+    node_affinity["requiredDuringSchedulingIgnoredDuringExecution"] = required_during = node_affinity.get(
+        "requiredDuringSchedulingIgnoredDuringExecution", {}
+    )
+    required_during["nodeSelectorTerms"] = node_selectors = required_during.get("nodeSelectorTerms", [])
 
     for node_selector in node_selectors:
-        if 'matchExpressions' not in node_selector:
+        if "matchExpressions" not in node_selector:
             continue
-        for match_expression in node_selector['matchExpressions']:
-            if match_expression['key'] != pool_label_name:
+        for match_expression in node_selector["matchExpressions"]:
+            if match_expression["key"] != pool_label_name:
                 continue
-            if pool_name not in match_expression['values']:
-                match_expression['values'].append(pool_name)
+            if pool_name not in match_expression["values"]:
+                match_expression["values"].append(pool_name)
             break
         else:
             continue
         break
     else:
-        node_selectors.append({'matchExpressions': [{
-            'operator': 'In',
-            'key': pool_label_name,
-            'values': [pool_name],
-        }]})
+        node_selectors.append(
+            {
+                "matchExpressions": [
+                    {
+                        "operator": "In",
+                        "key": pool_label_name,
+                        "values": [pool_name],
+                    }
+                ]
+            }
+        )
 
     return value
 
 
 def get_preferred_pod_anti_affinity_values(name: str) -> dict:
-    return {"podAntiAffinity": {"preferredDuringSchedulingIgnoredDuringExecution": [{
-        "weight": 1,
-        "podAffinityTerm": {
-            "topologyKey": "kubernetes.io/hostname",
-            "labelSelector": {"matchLabels": {
-                "app.kubernetes.io/name": name,
-                "app.kubernetes.io/instance": name,
-            }},
-        },
-    }]}}
+    return {
+        "podAntiAffinity": {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+                {
+                    "weight": 1,
+                    "podAffinityTerm": {
+                        "topologyKey": "kubernetes.io/hostname",
+                        "labelSelector": {
+                            "matchLabels": {
+                                "app.kubernetes.io/name": name,
+                                "app.kubernetes.io/instance": name,
+                            }
+                        },
+                    },
+                }
+            ]
+        }
+    }
 
 
 def get_helm_pool_affinity_values(pool_label_name, pool_name):
-    return {'affinity': add_pool_node_affinity({}, pool_label_name, pool_name)}
+    return {"affinity": add_pool_node_affinity({}, pool_label_name, pool_name)}
 
 
 def get_pool_affinity_modifiers(pool_label_name, pool_name):
     def add_pod_owner_pool_affinity(obj):
-        if obj['kind'] in ('StatefulSet', 'DaemonSet', 'Deployment', 'Job'):
-            obj['spec']['template']['spec']['affinity'] = add_pool_node_affinity(
-                obj['spec']['template']['spec'].get('affinity', {}),
-                pool_label_name,
-                pool_name)
+        if obj["kind"] in ("StatefulSet", "DaemonSet", "Deployment", "Job"):
+            obj["spec"]["template"]["spec"]["affinity"] = add_pool_node_affinity(
+                obj["spec"]["template"]["spec"].get("affinity", {}), pool_label_name, pool_name
+            )
 
     def add_pod_pool_affinity(obj):
-        if obj['kind'] == 'Pod':
-            obj['spec']['affinity'] = add_pool_node_affinity(
-                obj['spec'].get('affinity', {}),
-                pool_label_name,
-                pool_name)
+        if obj["kind"] == "Pod":
+            obj["spec"]["affinity"] = add_pool_node_affinity(
+                obj["spec"].get("affinity", {}), pool_label_name, pool_name
+            )
 
     def add_scylla_cluster_pool_affinity(obj):
-        if obj['kind'] == 'ScyllaCluster':
-            for rack in obj['spec']['datacenter']['racks']:
-                rack['placement'] = add_pool_node_affinity(
-                    rack.get('placement', {}),
-                    pool_label_name,
-                    pool_name)
+        if obj["kind"] == "ScyllaCluster":
+            for rack in obj["spec"]["datacenter"]["racks"]:
+                rack["placement"] = add_pool_node_affinity(rack.get("placement", {}), pool_label_name, pool_name)
 
     def add_node_config_pool_affinity(obj):
-        if obj['kind'] == 'NodeConfig':
-            obj['spec']['placement']['affinity'] = add_pool_node_affinity(
-                obj['spec']['placement'].get('affinity', {}),
-                pool_label_name,
-                pool_name)
+        if obj["kind"] == "NodeConfig":
+            obj["spec"]["placement"]["affinity"] = add_pool_node_affinity(
+                obj["spec"]["placement"].get("affinity", {}), pool_label_name, pool_name
+            )
 
     def add_scylla_cluster_monitoring_pool_affinity(obj):
-        if obj['kind'] == 'ScyllaDBMonitoring':
+        if obj["kind"] == "ScyllaDBMonitoring":
             node_affinity = add_pool_node_affinity({}, pool_label_name, pool_name)
-            obj['spec']['components']['prometheus']['placement'] = node_affinity
-            obj['spec']['components']['grafana']['placement'] = node_affinity
+            obj["spec"]["components"]["prometheus"]["placement"] = node_affinity
+            obj["spec"]["components"]["grafana"]["placement"] = node_affinity
 
     return [
         add_pod_owner_pool_affinity,
@@ -1245,16 +1331,16 @@ class HelmValues:
         self._merge_dicts(self._data, patch_d)
 
     def delete(self, path):
-        path = path.split('.')
+        path = path.split(".")
         last = path.pop()
-        parent = '.'.join(path)
+        parent = ".".join(path)
         if not parent:
             parent = self._data
         else:
             parent = self.get(parent)
         if parent is None:
             return
-        if last[0] == '[' and last[-1] == ']':
+        if last[0] == "[" and last[-1] == "]":
             last = int(last[1:-1])
         try:
             del parent[last]
@@ -1264,7 +1350,7 @@ class HelmValues:
     def as_dict(self):
         return self._data
 
-    def __eq__(self, other: Union['HelmValues', dict]):
+    def __eq__(self, other: Union["HelmValues", dict]):
         if isinstance(other, HelmValues):
             return self._data == other._data
         return self._data == other

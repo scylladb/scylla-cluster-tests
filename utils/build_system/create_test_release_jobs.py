@@ -26,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 
 class JenkinsPipelines:
     def __init__(self, username, password, base_job_dir, sct_branch_name, sct_repo):  # pylint: disable=too-many-arguments
-        self.jenkins = jenkins.Jenkins('https://jenkins.scylladb.com', username=username, password=password)
+        self.jenkins = jenkins.Jenkins("https://jenkins.scylladb.com", username=username, password=password)
         self.base_sct_dir = Path(__file__).parent.parent.parent
         self.base_job_dir = base_job_dir
         self.sct_branch_name = sct_branch_name
@@ -35,7 +35,7 @@ class JenkinsPipelines:
     def create_directory(self, name, display_name):
         try:
             dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name)
-            self.jenkins.create_job(f'{self.base_job_dir}/{name}', dir_xml_data)
+            self.jenkins.create_job(f"{self.base_job_dir}/{name}", dir_xml_data)
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
@@ -43,17 +43,18 @@ class JenkinsPipelines:
         base_name = job_name or Path(jenkins_file).stem
         sct_jenkinsfile = jenkins_file.split("scylla-cluster-tests/")[-1]
         LOGGER.info("%s is used to create job", sct_jenkinsfile)
-        xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
-                                       sct_description=sct_jenkinsfile,
-                                       sct_repo=self.sct_repo,
-                                       sct_branch_name=self.sct_branch_name,
-                                       sct_jenkinsfile=sct_jenkinsfile)
+        xml_data = JOB_TEMPLATE % dict(
+            sct_display_name=f"{base_name}{job_name_suffix}",
+            sct_description=sct_jenkinsfile,
+            sct_repo=self.sct_repo,
+            sct_branch_name=self.sct_branch_name,
+            sct_jenkinsfile=sct_jenkinsfile,
+        )
         try:
             if group_name:
                 group_name = "/" + group_name
-            self.jenkins.create_job(
-                f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}', xml_data)
-            self.build_job_and_wait_completion(f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}')
+            self.jenkins.create_job(f"{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}", xml_data)
+            self.build_job_and_wait_completion(f"{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}")
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
@@ -71,6 +72,7 @@ class JenkinsPipelines:
         # wait while worker will be found
         def check_job_is_started(job_id):
             return self.jenkins.get_queue_item(job_id).get("executable")
+
         wait_for(check_job_is_started, step=5, text="Job is starting", timeout=120, throw_exc=True, job_id=job_id)
 
         LOGGER.info("First build finished")

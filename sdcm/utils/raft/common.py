@@ -7,8 +7,12 @@ from functools import partial
 from sdcm.exceptions import BootstrapStreamErrorFailure
 from sdcm.cluster import BaseNode, BaseScyllaCluster, BaseMonitorSet
 from sdcm.wait import wait_for
-from sdcm.sct_events.group_common_events import decorate_with_context, \
-    ignore_stream_mutation_fragments_errors, ignore_ycsb_connection_refused, ignore_raft_transport_failing
+from sdcm.sct_events.group_common_events import (
+    decorate_with_context,
+    ignore_stream_mutation_fragments_errors,
+    ignore_ycsb_connection_refused,
+    ignore_raft_transport_failing,
+)
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
 
@@ -54,7 +58,7 @@ class NodeBootstrapAbortManager:
 
     @property
     def host_id_searcher(self) -> Iterable[str]:
-        return self.bootstrap_node.follow_system_log(patterns=['Setting local host id to'])
+        return self.bootstrap_node.follow_system_log(patterns=["Setting local host id to"])
 
     def _set_wait_stop_event(self):
         if not self.bootstrap_node.stop_wait_db_up_event.is_set():
@@ -76,11 +80,14 @@ class NodeBootstrapAbortManager:
         LOGGER.debug("Stop bootstrap process after log message: '%s'", log_message)
         log_follower = self.bootstrap_node.follow_system_log(patterns=[log_message])
         try:
-            wait_for(func=lambda: list(log_follower), step=5,
-                     text="Waiting log message to stop scylla...",
-                     timeout=timeout,
-                     throw_exc=True,
-                     stop_event=self.bootstrap_node.stop_wait_db_up_event)
+            wait_for(
+                func=lambda: list(log_follower),
+                step=5,
+                text="Waiting log message to stop scylla...",
+                timeout=timeout,
+                throw_exc=True,
+                stop_event=self.bootstrap_node.stop_wait_db_up_event,
+            )
             abort_action()
             LOGGER.info("Scylla was stopped successfully on node %s", self.bootstrap_node.name)
         except Exception as exc:  # pylint: disable=broad-except
@@ -103,28 +110,44 @@ class NodeBootstrapAbortManager:
         if node_host_ids:
             for host_id in node_host_ids:
                 self.verification_node.run_nodetool(
-                    f"removenode {host_id}", ignore_status=True, retry=3, warning_event_on_exception=True)
+                    f"removenode {host_id}", ignore_status=True, retry=3, warning_event_on_exception=True
+                )
 
-        assert self.verification_node.raft.is_cluster_topology_consistent(), \
+        assert self.verification_node.raft.is_cluster_topology_consistent(), (
             "Group0, Token Ring and number of node in cluster are differs. Check logs"
+        )
         self.verification_node.parent_cluster.check_nodes_up_and_normal()
         LOGGER.info("Failed bootstrapped node %s was removed. Cluster is in initial state", self.bootstrap_node.name)
 
-    def run_bootstrap_and_abort_with_action(self, terminate_pattern, abort_action: Callable, abort_action_timeout: int = 300):
-        watcher = partial(self._abort_bootstrap,
-                          abort_action=abort_action,
-                          log_message=terminate_pattern.log_message,
-                          timeout=self.INSTANCE_START_TIMEOUT + terminate_pattern.timeout + abort_action_timeout)
+    def run_bootstrap_and_abort_with_action(
+        self, terminate_pattern, abort_action: Callable, abort_action_timeout: int = 300
+    ):
+        watcher = partial(
+            self._abort_bootstrap,
+            abort_action=abort_action,
+            log_message=terminate_pattern.log_message,
+            timeout=self.INSTANCE_START_TIMEOUT + terminate_pattern.timeout + abort_action_timeout,
+        )
 
-        wait_operations_timeout = (self.SUCCESS_BOOTSTRAP_TIMEOUT + self.INSTANCE_START_TIMEOUT
-                                   + terminate_pattern.timeout + abort_action_timeout)
-        with ignore_stream_mutation_fragments_errors(), ignore_raft_transport_failing(), contextlib.ExitStack() as stack:
-            for expected_start_failed_context in self.verification_node.raft.get_severity_change_filters_scylla_start_failed(
-                    terminate_pattern.timeout):
+        wait_operations_timeout = (
+            self.SUCCESS_BOOTSTRAP_TIMEOUT
+            + self.INSTANCE_START_TIMEOUT
+            + terminate_pattern.timeout
+            + abort_action_timeout
+        )
+        with (
+            ignore_stream_mutation_fragments_errors(),
+            ignore_raft_transport_failing(),
+            contextlib.ExitStack() as stack,
+        ):
+            for (
+                expected_start_failed_context
+            ) in self.verification_node.raft.get_severity_change_filters_scylla_start_failed(terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             try:
-                ParallelObject(objects=[self._start_bootstrap, watcher],
-                               timeout=wait_operations_timeout).call_objects(ignore_exceptions=True)
+                ParallelObject(objects=[self._start_bootstrap, watcher], timeout=wait_operations_timeout).call_objects(
+                    ignore_exceptions=True
+                )
             finally:
                 self._set_wait_stop_event()
 
@@ -143,12 +166,17 @@ class NodeBootstrapAbortManager:
                 self.verification_node.raft.clean_group0_garbage(raise_exception=True)
                 LOGGER.debug("Clean old scylla data and restart scylla service")
                 self.bootstrap_node.clean_scylla_data()
-            with ignore_raft_transport_failing(), \
-                    adaptive_timeout(operation=Operations.NEW_NODE, node=self.verification_node, timeout=3600) as bootstrap_timeout:
+            with (
+                ignore_raft_transport_failing(),
+                adaptive_timeout(
+                    operation=Operations.NEW_NODE, node=self.verification_node, timeout=3600
+                ) as bootstrap_timeout,
+            ):
                 self.bootstrap_node.start_scylla_server(verify_up_timeout=bootstrap_timeout, verify_down=True)
                 self.bootstrap_node.start_scylla_jmx()
             self.db_cluster.check_nodes_up_and_normal(
-                nodes=[self.bootstrap_node], verification_node=self.verification_node)
+                nodes=[self.bootstrap_node], verification_node=self.verification_node
+            )
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.error("Scylla service restart failed: %s", exc)
             self.clean_unbootstrapped_node()

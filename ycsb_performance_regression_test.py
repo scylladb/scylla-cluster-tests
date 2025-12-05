@@ -33,18 +33,18 @@ class YcsbWorkload:
 
 class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
     ycsb_workloads: list[YcsbWorkload] = [
-        YcsbWorkload(name="workloada", detailed_name="Update Heavy (50/50 read/write ratio)",
-                     sub_type="mixed"),
-        YcsbWorkload(name="workloadb", detailed_name="Read Mostly (95/5 read/write ratio)",
-                     sub_type="mostly_read"),
-        YcsbWorkload(name="workloadc", detailed_name="Read Only (100/0 read/write ratio)",
-                     sub_type="read"),
-        YcsbWorkload(name="workloadd", detailed_name="Read Latest (95/0/5 read/update/insert ratio)",
-                     sub_type="read_latest"),
-        YcsbWorkload(name="workloade", detailed_name="Short Range (95/5 scan/insert ratio)",
-                     sub_type="short_range"),
-        YcsbWorkload(name="workloadf", detailed_name="Read-Modify-Write (50/50 read/read-modify-write ratio)",
-                     sub_type="read_write_modify"),
+        YcsbWorkload(name="workloada", detailed_name="Update Heavy (50/50 read/write ratio)", sub_type="mixed"),
+        YcsbWorkload(name="workloadb", detailed_name="Read Mostly (95/5 read/write ratio)", sub_type="mostly_read"),
+        YcsbWorkload(name="workloadc", detailed_name="Read Only (100/0 read/write ratio)", sub_type="read"),
+        YcsbWorkload(
+            name="workloadd", detailed_name="Read Latest (95/0/5 read/update/insert ratio)", sub_type="read_latest"
+        ),
+        YcsbWorkload(name="workloade", detailed_name="Short Range (95/5 scan/insert ratio)", sub_type="short_range"),
+        YcsbWorkload(
+            name="workloadf",
+            detailed_name="Read-Modify-Write (50/50 read/read-modify-write ratio)",
+            sub_type="read_write_modify",
+        ),
     ]
     records_size: int = 1_000_000
 
@@ -53,32 +53,34 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         self._create_prepare_cmds(self.ycsb_workloads[0])
 
     def _create_prepare_cmds(self, workload: YcsbWorkload):
-        self.params['prepare_write_cmd'] = [
+        self.params["prepare_write_cmd"] = [
             "bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load scylla -s"
             f" -P workloads/{workload.name}"
             f" -p recordcount={self.records_size}"
             f" -p insertcount={self.records_size}"
             f" {cmd}"
-            for cmd in self.params['prepare_write_cmd']
+            for cmd in self.params["prepare_write_cmd"]
         ]
 
     def _create_stress_cmd(self, workload: YcsbWorkload):
-        cmd = f"bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run scylla -s -P workloads/{workload.name}" \
-              f" -p recordcount={self.records_size}" \
-              f" -p operationcount={self.records_size}" \
-              f" {self.params['stress_cmd']}"
+        cmd = (
+            f"bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run scylla -s -P workloads/{workload.name}"
+            f" -p recordcount={self.records_size}"
+            f" -p operationcount={self.records_size}"
+            f" {self.params['stress_cmd']}"
+        )
         return cmd
 
     def run_pre_create_keyspace(self):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            for cmd in self.params.get('pre_create_keyspace'):
+            for cmd in self.params.get("pre_create_keyspace"):
                 session.execute(cmd)
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False)
         if nemesis:
-            interval = self.params.get('nemesis_interval')
+            interval = self.params.get("nemesis_interval")
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval)
@@ -110,16 +112,16 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
 
 
 class YCSBPerformanceRegression1MRecordsTest(BaseYCSBPerformanceRegressionTest):
-    records_size: int = 10 ** 6  # create database with 1M records
+    records_size: int = 10**6  # create database with 1M records
 
 
 class YCSBPerformanceRegression10MRecordsTest(BaseYCSBPerformanceRegressionTest):
-    records_size: int = 10 ** 7  # create database with 10M records
+    records_size: int = 10**7  # create database with 10M records
 
 
 class YCSBPerformanceRegression100MRecordsTest(BaseYCSBPerformanceRegressionTest):
-    records_size: int = 10 ** 8  # create database with 100M records
+    records_size: int = 10**8  # create database with 100M records
 
 
 class YCSBPerformanceRegression1BRecordsTest(BaseYCSBPerformanceRegressionTest):
-    records_size: int = 10 ** 9  # create database with 1 billion records
+    records_size: int = 10**9  # create database with 1 billion records

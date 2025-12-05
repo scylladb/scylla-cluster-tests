@@ -24,9 +24,10 @@ import yaml
 from cassandra import AlreadyExists, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
-from sdcm.sct_events.group_common_events import \
-    ignore_large_collection_warning, \
-    ignore_max_memory_for_unlimited_query_soft_limit
+from sdcm.sct_events.group_common_events import (
+    ignore_large_collection_warning,
+    ignore_max_memory_for_unlimited_query_soft_limit,
+)
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -47,24 +48,24 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         # This ignores large_data warning messages "Writing large collection" for large collections to prevent
         # creating SCT Events from these warnings.
         # During large collections test thousands of warnings are being created.
-        self.validate_large_collections = self.params.get('validate_large_collections')
+        self.validate_large_collections = self.params.get("validate_large_collections")
         if self.validate_large_collections:
             self.stack = contextlib.ExitStack()
             self.stack.enter_context(ignore_large_collection_warning())
             self.stack.enter_context(ignore_max_memory_for_unlimited_query_soft_limit())
 
-    default_params = {'timeout': 650000}
+    default_params = {"timeout": 650000}
 
     def _get_tombstone_gc_verification_params(self) -> dict:
         params = {}
-        if tombstone_params := self.params.get('run_tombstone_gc_verification'):
+        if tombstone_params := self.params.get("run_tombstone_gc_verification"):
             params = json.loads(tombstone_params)
-            self.log.info('Tombstone GC verification params are: %s', params)
+            self.log.info("Tombstone GC verification params are: %s", params)
         return params
 
     def _get_scan_operation_params(self) -> list[ThreadParams]:
         params = self.params.get("run_fullscan")
-        self.log.info('Scan operation params are: %s', params)
+        self.log.info("Scan operation params are: %s", params)
 
         sla_role_name, sla_role_password = None, None
         if fullscan_role := getattr(self, "fullscan_role", None):
@@ -73,34 +74,39 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         scan_operation_params_list = []
         for item in params:
             item_dict = json.loads(item)
-            scan_operation_params_list.append(ThreadParams(
-                db_cluster=self.db_cluster,
-                termination_event=self.db_cluster.nemesis_termination_event,
-                user=sla_role_name,
-                user_password=sla_role_password,
-                duration=self.get_duration(item_dict.get("duration")),
-                **item_dict
-            ))
+            scan_operation_params_list.append(
+                ThreadParams(
+                    db_cluster=self.db_cluster,
+                    termination_event=self.db_cluster.nemesis_termination_event,
+                    user=sla_role_name,
+                    user_password=sla_role_password,
+                    duration=self.get_duration(item_dict.get("duration")),
+                    **item_dict,
+                )
+            )
 
-            self.log.info('Scan operation scan_operation_params_list are: %s', scan_operation_params_list)
+            self.log.info("Scan operation scan_operation_params_list are: %s", scan_operation_params_list)
         return scan_operation_params_list
 
     def run_pre_create_schema(self):
-        pre_create_schema = self.params.get('pre_create_schema')
-        keyspace_num = self.params.get('keyspace_num')
+        pre_create_schema = self.params.get("pre_create_schema")
+        keyspace_num = self.params.get("keyspace_num")
         if pre_create_schema:
-            self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
-                'scylla_encryption_options'))
+            self._pre_create_schema(
+                keyspace_num, scylla_encryption_options=self.params.get("scylla_encryption_options")
+            )
 
     def run_pre_create_keyspace(self):
-        if self.params.get('pre_create_keyspace'):
+        if self.params.get("pre_create_keyspace"):
             self._pre_create_keyspace()
 
-    def _run_validate_large_collections_in_system(self, node, table='table_with_large_collection'):
+    def _run_validate_large_collections_in_system(self, node, table="table_with_large_collection"):
         self.log.info("Verifying large collections in system tables on node: {}".format(node))
         with self.db_cluster.cql_connection_exclusive(node=node) as session:
-            query = "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'" \
-                    f" AND table_name='{table}' ALLOW FILTERING"
+            query = (
+                "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'"
+                f" AND table_name='{table}' ALLOW FILTERING"
+            )
             statement = SimpleStatement(query, fetch_size=10)
             data = list(session.execute(statement))
             if not data:
@@ -119,13 +125,12 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         """
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
-                                    tester_obj=self)
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
         stress_queue = []
 
         # prepare write workload
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        keyspace_num = self.params.get('keyspace_num')
+        prepare_write_cmd = self.params.get("prepare_write_cmd")
+        keyspace_num = self.params.get("keyspace_num")
 
         self.pre_create_alternator_tables()
 
@@ -135,8 +140,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if scan_operation_params := self._get_scan_operation_params():
             for scan_param in scan_operation_params:
                 self.log.info("Starting fullscan operation thread with the following params: %s", scan_param)
-                self.run_fullscan_thread(fullscan_params=scan_param,
-                                         thread_name=str(scan_operation_params.index(scan_param)))
+                self.run_fullscan_thread(
+                    fullscan_params=scan_param, thread_name=str(scan_operation_params.index(scan_param))
+                )
 
         if tombstone_gc_verification_params := self._get_tombstone_gc_verification_params():
             self.run_tombstone_gc_verification_thread(**tombstone_gc_verification_params)
@@ -144,8 +150,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_prepare_write_cmd()
 
         # Grow cluster to target size if requested
-        if cluster_target_size := self.params.get('cluster_target_size'):
-            add_node_cnt = self.params.get('add_node_cnt')
+        if cluster_target_size := self.params.get("cluster_target_size"):
+            add_node_cnt = self.params.get("add_node_cnt")
             node_cnt = len(self.db_cluster.nodes)
 
             InfoEvent(message=f"Starting to grow cluster from {node_cnt} to {cluster_target_size}").publish()
@@ -166,35 +172,36 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if self.partitions_attrs and self.partitions_attrs.validate_partitions:
             self.partitions_attrs.collect_initial_partitions_info()
 
-        stress_cmd = self.params.get('stress_cmd')
+        stress_cmd = self.params.get("stress_cmd")
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
 
-        customer_profiles = self.params.get('cs_user_profiles')
+        customer_profiles = self.params.get("cs_user_profiles")
         if customer_profiles:
-            cs_duration = self.params.get('cs_duration')
+            cs_duration = self.params.get("cs_duration")
             for cs_profile in customer_profiles:
-                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
-                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
-                profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
+                assert os.path.exists(cs_profile), "File not found: {}".format(cs_profile)
+                self.log.debug("Run stress test with user profile {}, duration {}".format(cs_profile, cs_duration))
+                profile_dst = os.path.join("/tmp", os.path.basename(cs_profile))
                 with open(cs_profile, encoding="utf-8") as pconf:
                     cont = pconf.readlines()
                     user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
-                        'user_profile_table_count')
+                        "user_profile_table_count"
+                    )
                     for _ in range(user_profile_table_count):
-                        for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
-                            stress_cmd = (cmd.format(profile_dst, cs_duration))
-                            params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
-                            self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                        for cmd in [line.lstrip("#").strip() for line in cont if line.find("cassandra-stress") > 0]:
+                            stress_cmd = cmd.format(profile_dst, cs_duration)
+                            params = {"stress_cmd": stress_cmd, "profile": cs_profile}
+                            self.log.debug("Stress cmd: {}".format(stress_cmd))
                             self._run_all_stress_cmds(stress_queue, params)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
-        if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
+        if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
             self.db_cluster.wait_total_space_used_per_node(keyspace=None)
             self.db_cluster.start_nemesis()
 
-        stress_read_cmd = self.params.get('stress_read_cmd')
+        stress_read_cmd = self.params.get("stress_read_cmd")
         if stress_read_cmd:
-            params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_read_cmd}
+            params = {"keyspace_num": keyspace_num, "stress_cmd": stress_read_cmd}
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
@@ -225,19 +232,17 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         """
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 
-        total_stress = self.params.get('keyspace_num')  # In future it may be 1 keyspace but multiple tables in it.
-        batch_size = self.params.get('batch_size')
+        total_stress = self.params.get("keyspace_num")  # In future it may be 1 keyspace but multiple tables in it.
+        batch_size = self.params.get("batch_size")
 
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get("prepare_write_cmd")
         if prepare_write_cmd:
-            self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size,
-                                        stress_cmd=prepare_write_cmd)
+            self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size, stress_cmd=prepare_write_cmd)
 
         self.db_cluster.start_nemesis()
 
-        stress_cmd = self.params.get('stress_cmd')
-        self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
-                                    stress_cmd=stress_cmd)
+        stress_cmd = self.params.get("stress_cmd")
+        self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size, stress_cmd=stress_cmd)
 
     def test_user_batch_custom_time(self):
         """
@@ -258,15 +263,15 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 
-        batch_size = self.params.get('batch_size')
+        batch_size = self.params.get("batch_size")
 
-        if not self.params.get('reuse_cluster'):
+        if not self.params.get("reuse_cluster"):
             self._pre_create_templated_user_schema()
 
             # Start new nodes
             # we are starting this test case with only one db to make creating of the tables quicker
             # gossip with multiple node cluster make this painfully slower
-            add_node_cnt = self.params.get('add_node_cnt')
+            add_node_cnt = self.params.get("add_node_cnt")
 
             for _ in range(add_node_cnt):
                 new_nodes = self.db_cluster.add_nodes(count=1, enable_auto_bootstrap=True)
@@ -277,26 +282,28 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         stress_params_list = []
 
-        customer_profiles = self.params.get('cs_user_profiles')
+        customer_profiles = self.params.get("cs_user_profiles")
 
         templated_table_counter = itertools.count()
 
         if customer_profiles:
-            cs_duration = self.params.get('cs_duration')
-            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters)))
+            cs_duration = self.params.get("cs_duration")
+            duration = int(cs_duration.translate(str.maketrans("", "", string.ascii_letters)))
 
             for cs_profile in customer_profiles:
-                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
-                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+                assert os.path.exists(cs_profile), "File not found: {}".format(cs_profile)
+                self.log.debug("Run stress test with user profile {}, duration {}".format(cs_profile, cs_duration))
 
-                user_profile_table_count = self.params.get('user_profile_table_count')  # pylint: disable=invalid-name
+                user_profile_table_count = self.params.get("user_profile_table_count")  # pylint: disable=invalid-name
 
                 for _ in range(user_profile_table_count):
-                    stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
-                                                                                   cs_profile)
+                    stress_params_list += self.create_templated_user_stress_params(
+                        next(templated_table_counter), cs_profile
+                    )
 
-            self._run_user_stress_in_batches(batch_size=batch_size,
-                                             stress_params_list=stress_params_list, duration=duration)
+            self._run_user_stress_in_batches(
+                batch_size=batch_size, stress_params_list=stress_params_list, duration=duration
+            )
 
     def _run_user_stress_in_batches(self, batch_size, stress_params_list, duration):
         """
@@ -312,26 +319,26 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
             for i in range(0, len(_list), chunk_size):
-                yield _list[i:i + chunk_size], i, i+chunk_size, len(_list) + i * 2
+                yield _list[i : i + chunk_size], i, i + chunk_size, len(_list) + i * 2
 
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
-
             stress_queue = []
             batch_params = dict(duration=duration, round_robin=True, stress_cmd=[])
 
             # add few stress threads with tables that weren't pre-created
-            customer_profiles = self.params.get('cs_user_profiles')
+            customer_profiles = self.params.get("cs_user_profiles")
             for cs_profile in customer_profiles:
                 # for now we'll leave to just one fresh table, to kick schema update
                 num_of_newly_created_tables = 1
-                self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
-                                                       batch_end=extra_tables_idx+num_of_newly_created_tables)
+                self._pre_create_templated_user_schema(
+                    batch_start=extra_tables_idx, batch_end=extra_tables_idx + num_of_newly_created_tables
+                )
                 for i in range(num_of_newly_created_tables):
                     batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)
 
             nodes_ips = self.all_node_ips_for_stress_command
             for params in batch:
-                batch_params['stress_cmd'] += [params['stress_cmd'] + nodes_ips]
+                batch_params["stress_cmd"] += [params["stress_cmd"] + nodes_ips]
 
             self._run_all_stress_cmds(stress_queue, params=batch_params)
             for stress in stress_queue:
@@ -339,11 +346,12 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
         stress_queue = []
-        pre_create_schema = self.params.get('pre_create_schema')
+        pre_create_schema = self.params.get("pre_create_schema")
 
         if pre_create_schema:
-            self._pre_create_schema(keyspace_num=total_stress,
-                                    scylla_encryption_options=self.params.get('scylla_encryption_options'))
+            self._pre_create_schema(
+                keyspace_num=total_stress, scylla_encryption_options=self.params.get("scylla_encryption_options")
+            )
 
         num_of_batches = int(total_stress / batch_size)
         for batch in range(0, num_of_batches):
@@ -352,34 +360,40 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 if not isinstance(stress_cmd, list):
                     stress_cmd = [stress_cmd]
                 stress_cmds_with_all_ips = [cmd + self.all_node_ips_for_stress_command for cmd in stress_cmd]
-                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmds_with_all_ips,
-                                                                'keyspace_name': keyspace_name, 'round_robin': True})
+                self._run_all_stress_cmds(
+                    stress_queue,
+                    params={
+                        "stress_cmd": stress_cmds_with_all_ips,
+                        "keyspace_name": keyspace_name,
+                        "round_robin": True,
+                    },
+                )
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
 
     @property
     def all_node_ips_for_stress_command(self):
-        return f' -node {",".join([n.cql_address for n in self.db_cluster.nodes])}'
+        return f" -node {','.join([n.cql_address for n in self.db_cluster.nodes])}"
 
     @staticmethod
     def _get_columns_num_of_single_stress(single_stress_cmd):
-        if '-col' not in single_stress_cmd:
+        if "-col" not in single_stress_cmd:
             return None
         col_num = None
         params_list = single_stress_cmd.split()
         col_params_list = []
-        for param in params_list[params_list.index('-col')+1:]:
+        for param in params_list[params_list.index("-col") + 1 :]:
             col_params_list.append(param.strip("'"))
             if param.endswith("'"):
                 break
         for param in col_params_list:
-            if param.startswith('n='):
-                col_num = int(re.findall(r'\b\d+\b', param)[0])
+            if param.startswith("n="):
+                col_num = int(re.findall(r"\b\d+\b", param)[0])
                 break
         return col_num
 
     def _get_prepare_write_cmd_columns_num(self):
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get("prepare_write_cmd")
         if not prepare_write_cmd:
             return None
         if isinstance(prepare_write_cmd, str):
@@ -392,35 +406,45 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         cassandra-stress.
         """
 
-        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
-        compaction_strategy = self.params.get('compaction_strategy')
-        sstable_size = self.params.get('sstable_size')
-        for i in range(1, keyspace_num+1):
-            keyspace_name = 'keyspace{}'.format(i)
+        self.log.debug("Pre Creating Schema for c-s with {} keyspaces".format(keyspace_num))
+        compaction_strategy = self.params.get("compaction_strategy")
+        sstable_size = self.params.get("sstable_size")
+        for i in range(1, keyspace_num + 1):
+            keyspace_name = "keyspace{}".format(i)
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-            self.log.debug('{} Created'.format(keyspace_name))
+            self.log.debug("{} Created".format(keyspace_name))
             col_num = self._get_prepare_write_cmd_columns_num() or 5
             columns = {}
             for col_idx in range(col_num):
-                cs_key = '"C'+str(col_idx)+'"'
-                columns[cs_key] = 'blob'
-            self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
-                              columns=columns,
-                              scylla_encryption_options=scylla_encryption_options,
-                              compaction=compaction_strategy, sstable_size=sstable_size)
+                cs_key = '"C' + str(col_idx) + '"'
+                columns[cs_key] = "blob"
+            self.create_table(
+                name="standard1",
+                keyspace_name=keyspace_name,
+                key_type="blob",
+                read_repair=0.0,
+                columns=columns,
+                scylla_encryption_options=scylla_encryption_options,
+                compaction=compaction_strategy,
+                sstable_size=sstable_size,
+            )
 
     def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
         # pylint: disable=too-many-locals
-        user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
-            'user_profile_table_count') or 0
-        cs_user_profiles = self.params.get('cs_user_profiles')
+        user_profile_table_count = (
+            self.params.get(  # pylint: disable=invalid-name
+                "user_profile_table_count"
+            )
+            or 0
+        )
+        cs_user_profiles = self.params.get("cs_user_profiles")
         # read user-profile
         for profile_file in cs_user_profiles:
             with open(profile_file, encoding="utf-8") as fobj:
                 profile_yaml = yaml.safe_load(fobj)
-            keyspace_definition = profile_yaml['keyspace_definition']
-            keyspace_name = profile_yaml['keyspace']
-            table_template = string.Template(profile_yaml['table_definition'])
+            keyspace_definition = profile_yaml["keyspace_definition"]
+            keyspace_name = profile_yaml["keyspace"]
+            table_template = string.Template(profile_yaml["table_definition"])
 
             with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
                 # since we are using connection while nemesis is running (and we have more then 5000 tables in this
@@ -435,22 +459,22 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                     table_range = range(batch_start, batch_end)
                 else:
                     table_range = range(user_profile_table_count)
-                self.log.debug('Pre Creating Schema for c-s with {} user tables'.format(user_profile_table_count))
+                self.log.debug("Pre Creating Schema for c-s with {} user tables".format(user_profile_table_count))
                 for i in table_range:
-                    table_name = 'table{}'.format(i)
+                    table_name = "table{}".format(i)
                     query = table_template.substitute(table_name=table_name)
                     try:
                         session.execute(query)
                     except AlreadyExists:
-                        self.log.debug('table [{}] exists'.format(table_name))
-                    self.log.debug('{} Created'.format(table_name))
+                        self.log.debug("table [{}] exists".format(table_name))
+                    self.log.debug("{} Created".format(table_name))
 
-                    for definition in profile_yaml.get('extra_definitions', []):
+                    for definition in profile_yaml.get("extra_definitions", []):
                         query = string.Template(definition).substitute(table_name=table_name)
                         try:
                             session.execute(query)
                         except (AlreadyExists, InvalidRequest) as exc:
-                            self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
+                            self.log.debug("extra definition for [{}] exists [{}]".format(table_name, str(exc)))
 
     def _flush_all_nodes(self):
         """
@@ -471,28 +495,34 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
 
         try:
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
-                self.start_time) if self.monitors else {}
+            grafana_dataset = (
+                self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
+            )
         except Exception as error:  # pylint: disable=broad-except
-            self.log.exception("Error in gathering Grafana screenshots and snapshots. Error:\n%s",
-                               error, exc_info=error)
+            self.log.exception(
+                "Error in gathering Grafana screenshots and snapshots. Error:\n%s", error, exc_info=error
+            )
 
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         # If cluster was not created, not need to collect nemesis stats - they do not exist
         nemeses_stats = self.get_nemesises_stats() if self.db_cluster else {}
 
-        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "node_benchmarks": benchmarks_results,
-                           "nemesis_details": nemeses_stats,
-                           "nemesis_name": self.params.get("nemesis_class_name"),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
+        email_data.update(
+            {
+                "grafana_screenshots": grafana_dataset.get("screenshots", []),
+                "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                "node_benchmarks": benchmarks_results,
+                "nemesis_details": nemeses_stats,
+                "nemesis_name": self.params.get("nemesis_class_name"),
+                "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+            }
+        )
         return email_data
 
     def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         params_list = []
-        cs_duration = self.params.get('cs_duration')
+        cs_duration = self.params.get("cs_duration")
 
         with open(cs_profile, encoding="utf-8") as pconf:
             cont = pconf.readlines()
@@ -501,7 +531,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             prefix, suffix = os.path.splitext(os.path.basename(cs_profile))
             table_name = "table%s" % idx
 
-            with tempfile.NamedTemporaryFile(mode='w+', prefix=prefix, suffix=suffix, delete=False, encoding='utf-8') as file_obj:
+            with tempfile.NamedTemporaryFile(
+                mode="w+", prefix=prefix, suffix=suffix, delete=False, encoding="utf-8"
+            ) as file_obj:
                 output = template.substitute(table_name=table_name)
                 file_obj.write(output)
                 profile_dst = file_obj.name
@@ -509,10 +541,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # collect stress command from the comment in the end of the profile yaml
             # example:
             # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
-            for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
-                stress_cmd = (cmd.format(profile_dst, cs_duration))
-                params = {'stress_cmd': stress_cmd, 'profile': profile_dst}
-                self.log.debug('Stress cmd: {}'.format(stress_cmd))
+            for cmd in [line.lstrip("#").strip() for line in cont if line.find("cassandra-stress") > 0]:
+                stress_cmd = cmd.format(profile_dst, cs_duration)
+                params = {"stress_cmd": stress_cmd, "profile": profile_dst}
+                self.log.debug("Stress cmd: {}".format(stress_cmd))
                 params_list.append(params)
 
         return params_list

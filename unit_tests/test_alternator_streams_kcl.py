@@ -27,9 +27,7 @@ pytestmark = [
 
 
 @pytest.mark.skip("test isn't yet fully working")
-def test_01_kcl_with_ycsb(
-    request, docker_scylla, events, params
-):  # pylint: disable=too-many-locals
+def test_01_kcl_with_ycsb(request, docker_scylla, events, params):  # pylint: disable=too-many-locals
     params.update(TEST_PARAMS)
     loader_set = LocalLoaderSetDummy()
     num_of_keys = 1000
@@ -38,14 +36,10 @@ def test_01_kcl_with_ycsb(
         f"bin/ycsb load dynamodb  -P workloads/workloada -p recordcount={num_of_keys} -p dataintegrity=true "
         f"-p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5"
     )
-    ycsb_thread = YcsbStressThread(
-        loader_set, ycsb_cmd, node_list=[docker_scylla], timeout=600, params=params
-    )
+    ycsb_thread = YcsbStressThread(loader_set, ycsb_cmd, node_list=[docker_scylla], timeout=600, params=params)
 
     kcl_cmd = f"hydra-kcl -t usertable -k {num_of_keys}"
-    kcl_thread = KclStressThread(
-        loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=params
-    )
+    kcl_thread = KclStressThread(loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=params)
     stress_cmd = (
         'table_compare interval=20; src_table="alternator_usertable".usertable; '
         'dst_table="alternator_usertable-dest"."usertable-dest"'
@@ -90,9 +84,7 @@ def test_01_kcl_with_ycsb(
         f"-p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5 -p dataintegrity=true "
         f"-p operationcount={num_of_keys}"
     )
-    ycsb_thread2 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params
-    )
+    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params)
 
     def cleanup_thread2():
         ycsb_thread2.kill()

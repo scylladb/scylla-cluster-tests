@@ -53,11 +53,11 @@ class DockerClient(docker.DockerClient):
     def __call__(self, cmd, timeout=10):
         deprecation("consider to use Docker Python module instead of using Docker CLI commands")
 
-        res = LOCALRUNNER.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout)
+        res = LOCALRUNNER.run("docker {}".format(cmd), ignore_status=True, timeout=timeout)
         if res.exit_status:
-            if 'No such container:' in res.stderr:
+            if "No such container:" in res.stderr:
                 raise NotFound(res.stderr)
-            raise DockerException('command: {}, error: {}, output: {}'.format(cmd, res.stderr, res.stdout))
+            raise DockerException("command: {}, error: {}, output: {}".format(cmd, res.stderr, res.stdout))
         return res
 
 
@@ -68,7 +68,7 @@ class _Name(SimpleNamespace):
     # pylint: disable=too-few-public-methods
 
     def __init__(self, name: Optional[str]) -> None:
-        family, *member = (None, ) if name is None else name.split(":", 1)
+        family, *member = (None,) if name is None else name.split(":", 1)
         super().__init__(full=name, family=family, member=member[0] if member else None, member_as_args=tuple(member))
 
     def __str__(self) -> str:
@@ -159,11 +159,13 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return cls._get_attr_for_name(instance, name, "docker_client", default=cls.default_docker_client)
 
     @staticmethod
-    def _get_attr_for_name(instance: INodeWithContainerManager,
-                           name: _Name,
-                           attr: str,
-                           default: Optional[Any] = None,
-                           name_only_lookup: bool = False) -> Optional[Any]:
+    def _get_attr_for_name(
+        instance: INodeWithContainerManager,
+        name: _Name,
+        attr: str,
+        default: Optional[Any] = None,
+        name_only_lookup: bool = False,
+    ) -> Optional[Any]:
         attr_candidate_list = []
 
         # Try to get attribute value for container family.
@@ -184,7 +186,9 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return default
 
     @classmethod
-    def get_container(cls, instance: INodeWithContainerManager, name, raise_not_found_exc: bool = True) -> Optional[Container]:
+    def get_container(
+        cls, instance: INodeWithContainerManager, name, raise_not_found_exc: bool = True
+    ) -> Optional[Container]:
         assert name is not None, "None is not allowed as a container name"
 
         container = instance._containers.get(name)
@@ -197,8 +201,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
                 LOGGER.warning("Container failed to refresh, checking docker connection...")
                 docker_client = cls.get_docker_client(instance)
                 docker_client.ping()
-                LOGGER.info("Docker version: %s\nActive containers: %s", docker_client.version(),
-                            [c.name for c in docker_client.containers.list()])
+                LOGGER.info(
+                    "Docker version: %s\nActive containers: %s",
+                    docker_client.version(),
+                    [c.name for c in docker_client.containers.list()],
+                )
                 container = docker_client.containers.get(name)
                 LOGGER.debug("Found container %s, reloading...", container)
                 container.reload()
@@ -211,8 +218,10 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         container = cls.get_container(instance, name, raise_not_found_exc=False)
         if container is None:
             name = _Name(name)
-            run_args = {"detach": True,
-                        "labels": instance.tags, }
+            run_args = {
+                "detach": True,
+                "labels": instance.tags,
+            }
             if image_tag := cls._get_container_image_tag(instance, name):
                 run_args["image"] = image_tag
             run_args.update(getattr(instance, f"{name.family}_container_run_args", cls._run_args)(**extra_run_args))
@@ -223,16 +232,19 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
                 container = docker_client.containers.get(run_args.get("name"))
                 LOGGER.debug("Found container %s, re-use it and re-run", container)
                 container.start()
-            except (NotFound, NullResource, ):
+            except (
+                NotFound,
+                NullResource,
+            ):
                 if run_args.pop("pull", None):
                     docker_client.images.pull(*image_tag.split(":", maxsplit=1))
                 container = docker_client.containers.run(**run_args)
             instance._containers[name.full] = container
             LOGGER.debug("Container %s started.", container)
-        elif container.status != 'running':
+        elif container.status != "running":
             LOGGER.warning("Re-run container %s", container)
             container.start()
-            LOGGER.debug('Container %s status %s', container, container.status)
+            LOGGER.debug("Container %s status %s", container, container.status)
         else:
             LOGGER.debug("Container %s is running already.", container)
         return container
@@ -287,12 +299,14 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             cls.set_container_keep_alive(instance, name)
 
     @classmethod
-    def ssh_copy_id(cls,  # pylint: disable=too-many-arguments
-                    instance: INodeWithContainerManager,
-                    name: str,
-                    user: str,
-                    key_file: str,
-                    comment: str = "test@local") -> None:
+    def ssh_copy_id(  # pylint: disable=too-many-arguments
+        cls,
+        instance: INodeWithContainerManager,
+        name: str,
+        user: str,
+        key_file: str,
+        comment: str = "test@local",
+    ) -> None:
         container = cls.get_container(instance, name)
         pub_key, key_type = pub_key_from_private_key_file(key_file)
         shell_command = f"umask 077 && echo '{key_type} {pub_key} {comment}' >> ~/.ssh/authorized_keys"
@@ -301,17 +315,18 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
 
     @classmethod
-    @retrying(n=20, sleep_time=2, allowed_exceptions=(Retry, ))
+    @retrying(n=20, sleep_time=2, allowed_exceptions=(Retry,))
     def wait_for_status(cls, instance: INodeWithContainerManager, name: str, status: str) -> None:
         if cls.get_container(instance, name).status != status:
             raise Retry
 
     @classmethod
-    @retrying(n=10, sleep_time=1, allowed_exceptions=(Retry, ))
+    @retrying(n=10, sleep_time=1, allowed_exceptions=(Retry,))
     def get_ip_address(cls, instance: INodeWithContainerManager, name: str) -> str:
-        if docker_network := instance.parent_cluster.params.get('docker_network'):
-            ip_address = cls.get_container(
-                instance, name).attrs["NetworkSettings"]["Networks"][docker_network]["IPAddress"]
+        if docker_network := instance.parent_cluster.params.get("docker_network"):
+            ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["Networks"][docker_network][
+                "IPAddress"
+            ]
         else:
             ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
         if not ip_address:
@@ -323,32 +338,43 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         container = cls.get_container(instance, name)
         try:
             return int(container.ports[f"{port}/tcp"][0]["HostPort"])
-        except (IndexError, KeyError, ):
+        except (
+            IndexError,
+            KeyError,
+        ):
             return None
 
     @classmethod
-    def get_host_volume_path(cls, instance: INodeWithContainerManager, container_name: str, path_in_container: str) -> str:
+    def get_host_volume_path(
+        cls, instance: INodeWithContainerManager, container_name: str, path_in_container: str
+    ) -> str:
         """
-            Return directory on the host that is mounted into the container to path `path_in_container`
+        Return directory on the host that is mounted into the container to path `path_in_container`
         """
         container = cls.get_container(instance, container_name, raise_not_found_exc=False)
         if not container:
-            return ''
-        for mount in container.attrs.get('Mounts', []):
-            if mount.get('Destination') == path_in_container:
-                return mount.get('Source', '')
-        return ''
+            return ""
+        for mount in container.attrs.get("Mounts", []):
+            if mount.get("Destination") == path_in_container:
+                return mount.get("Source", "")
+        return ""
 
     @classmethod
     def get_environ(cls, instance: INodeWithContainerManager, name: str) -> dict:
         container = cls.get_container(instance, name)
 
         def normalize(key: Any, value: Any = None) -> Tuple[Any, Any]:
-            return (key, value, )
+            return (
+                key,
+                value,
+            )
+
         return dict(normalize(*(item.split("=", 1))) for item in container.attrs["Config"]["Env"])
 
     @classmethod
-    def register_container(cls, instance: INodeWithContainerManager, name: str, container: Container, replace: bool = False) -> None:
+    def register_container(
+        cls, instance: INodeWithContainerManager, name: str, container: Container, replace: bool = False
+    ) -> None:
         assert name is not None, "None is not allowed as a container name"
 
         if container in instance._containers.values():
@@ -389,21 +415,26 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
 
         dockerfile_args = cls._get_container_image_dockerfile_args(instance, name)
 
-        assert dockerfile_args is not None, \
+        assert dockerfile_args is not None, (
             f"Please, define Dockerfile opts property in your class for `{name}' container."
+        )
 
-        build_args = dict(rm=True,  # Remove intermediate containers.
-                          pull=True,  # Update source image.
-                          labels=instance.tags)
+        build_args = dict(
+            rm=True,  # Remove intermediate containers.
+            pull=True,  # Update source image.
+            labels=instance.tags,
+        )
         build_args.update(
-            getattr(instance, f"{name.family}_container_image_build_args", cls._build_args)(**extra_build_args))
+            getattr(instance, f"{name.family}_container_image_build_args", cls._build_args)(**extra_build_args)
+        )
 
         LOGGER.debug("Build arguments for Docker image `%s':\n%s,", image_tag, pformat(build_args, indent=8))
         try:
             image, logs = docker_client.images.build(tag=image_tag, **dockerfile_args, **build_args)
         except BuildError as docker_build_error:
-            LOGGER.critical("Build log:\n%s",
-                            "\n".join(item['stream'] for item in docker_build_error.build_log if "stream" in item))
+            LOGGER.critical(
+                "Build log:\n%s", "\n".join(item["stream"] for item in docker_build_error.build_log if "stream" in item)
+            )
             raise
 
         LOGGER.debug(">>> Build log for Docker image `%s': >>>", image_tag)
@@ -429,7 +460,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     @classmethod
     def get_containers_by_prefix(cls, prefix: str, docker_client: DockerClient = None) -> List[Container]:
         docker_client = docker_client or cls.default_docker_client
-        return docker_client.containers.list(all=True, filters={"name": f'{prefix}*'})
+        return docker_client.containers.list(all=True, filters={"name": f"{prefix}*"})
 
     @classmethod
     def get_container_name_by_id(cls, c_id: str, docker_client: DockerClient = None) -> str:
@@ -446,19 +477,13 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
 
 
 def running_in_docker():
-    path = '/proc/self/cgroup'
+    path = "/proc/self/cgroup"
     with open(path, encoding="utf-8") as cgroup:
-        return (
-            os.path.exists('/.dockerenv') or
-            os.path.isfile(path) and any('docker' in line for line in cgroup)
-        )
+        return os.path.exists("/.dockerenv") or os.path.isfile(path) and any("docker" in line for line in cgroup)
 
 
 def get_docker_bridge_gateway(remoter):
-    result = remoter.run(
-        "docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge",
-        ignore_status=True
-    )
+    result = remoter.run("docker inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' bridge", ignore_status=True)
     if result.exit_status != 0 or not result.stdout:
         return None
     address = result.stdout.splitlines()[0]
@@ -485,7 +510,7 @@ def docker_hub_login(remoter: CommandRunner) -> None:
     if "Podman Engine" in remoter.run("docker version", ignore_status=True).stdout:
         remoter.log.info("When Podman daemon is used we don't login")
         return
-    if not os.environ.get('JENKINS_URL'):
+    if not os.environ.get("JENKINS_URL"):
         remoter.log.debug("not in jenkins, skipping login to docker hub")
         return
     docker_hub_creds = get_docker_hub_credentials()

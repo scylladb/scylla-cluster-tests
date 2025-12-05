@@ -7,6 +7,7 @@ from typing import Any
 from pathlib import Path
 
 from sdcm.es import ES
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
@@ -19,8 +20,12 @@ def create_index(index_name: str, mappings: dict, **kwargs):
     es_client = ES()
     doc_type = kwargs.get("doc_type")
     es_client.indices.create(index=index_name)
-    es_client.indices.put_mapping(index=index_name, doc_type=doc_type, body=mappings,  # pylint: disable=unexpected-keyword-arg
-                                  include_type_name=True)
+    es_client.indices.put_mapping(  # pylint: disable=unexpected-keyword-arg
+        index=index_name,
+        doc_type=doc_type,
+        body=mappings,
+        include_type_name=True,
+    )
 
 
 def get_mapping(mapping_filepath: str) -> Any:

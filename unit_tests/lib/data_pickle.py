@@ -30,8 +30,7 @@ def is_builtin(obj):
 
 def _init_invoke_result(instance_type, children):
     return False, instance_type(
-        connection=None,
-        **{attr_name: children.get(attr_name, None) for attr_name in ['stderr', 'stdout', 'exited']}
+        connection=None, **{attr_name: children.get(attr_name, None) for attr_name in ["stderr", "stdout", "exited"]}
     )
 
 
@@ -41,40 +40,35 @@ class PicklerAction(enum.Enum):
 
 class Pickler:
     class_info = {
-        'fabric.runners.Result': {
-            'init_args': {
-                'stderr': PicklerAction.PASSTHROUGH,
-                'stdout': PicklerAction.PASSTHROUGH,
-                'exited': PicklerAction.PASSTHROUGH,
-                'connection': None
+        "fabric.runners.Result": {
+            "init_args": {
+                "stderr": PicklerAction.PASSTHROUGH,
+                "stdout": PicklerAction.PASSTHROUGH,
+                "exited": PicklerAction.PASSTHROUGH,
+                "connection": None,
             },
-            'instance_attrs': {
-                'exit_status': PicklerAction.PASSTHROUGH
-            }
+            "instance_attrs": {"exit_status": PicklerAction.PASSTHROUGH},
         },
-        'sdcm.coredump.CoreDumpInfo': {
-            'init_args': {
-                'process_retry': 0,
-                'node': None,
-                '*': PicklerAction.PASSTHROUGH,
+        "sdcm.coredump.CoreDumpInfo": {
+            "init_args": {
+                "process_retry": 0,
+                "node": None,
+                "*": PicklerAction.PASSTHROUGH,
             },
-            'instance_attrs': {
-                'event_timestamp': None,
-            }
+            "instance_attrs": {
+                "event_timestamp": None,
+            },
         },
-        'invoke.exceptions.UnexpectedExit': {
-            'init_args': {
-                'result': PicklerAction.PASSTHROUGH,
-                'reason': PicklerAction.PASSTHROUGH
-            }
-        }
+        "invoke.exceptions.UnexpectedExit": {
+            "init_args": {"result": PicklerAction.PASSTHROUGH, "reason": PicklerAction.PASSTHROUGH}
+        },
     }
 
     @staticmethod
     def get_class_path(instance_class):
         if is_builtin(instance_class):
-            return f'{instance_class.__name__}'
-        return f'{instance_class.__module__}.{instance_class.__name__}'
+            return f"{instance_class.__name__}"
+        return f"{instance_class.__module__}.{instance_class.__name__}"
 
     @staticmethod
     def import_and_return(path):
@@ -82,9 +76,10 @@ class Pickler:
         tclass = global_vars.get(path, None)
         if tclass is not None:
             return tclass
-        paths = path.split('.')
-        global_vars[path] = lib = getattr(__import__(
-            '.'.join(paths[0:-1]), globals(), locals(), fromlist=[paths[-1]], level=0), paths[-1])
+        paths = path.split(".")
+        global_vars[path] = lib = getattr(
+            __import__(".".join(paths[0:-1]), globals(), locals(), fromlist=[paths[-1]], level=0), paths[-1]
+        )
         return lib
 
     @classmethod
@@ -94,21 +89,19 @@ class Pickler:
             return None
         if attr_type is None:
             output = {}
-            output.update(info.get('init_args', {}))
-            output.update(info.get('instance_attrs', {}))
+            output.update(info.get("init_args", {}))
+            output.update(info.get("instance_attrs", {}))
             return output
         return info.get(attr_type, None)
 
     @classmethod
     def _to_data_object(cls, obj):
         instance_class = cls.get_class_path(type(obj))
-        result = {
-            '__instance__': instance_class
-        }
+        result = {"__instance__": instance_class}
         attribute_action = cls._get_attrs_by_class(instance_class)
         if attribute_action is None:
             attribute_action = {}
-        default_action = attribute_action.get('*', DefaultValue)
+        default_action = attribute_action.get("*", DefaultValue)
         for attr_name, attr_value in obj.__dict__.items():
             attr_action = attribute_action.get(attr_name, default_action)
             if not isinstance(attr_action, PicklerAction):
@@ -141,7 +134,7 @@ class Pickler:
         if isinstance(obj, tuple):
             return tuple(cls._to_data_list(obj))
         if isinstance(obj, type):
-            return {'__class__': obj.__name__}
+            return {"__class__": obj.__name__}
         return cls._to_data_object(obj)
 
     @classmethod
@@ -160,7 +153,7 @@ class Pickler:
         if not action_map:
             raise RuntimeError("Unknown class, please, add this class to 'class_info'")
 
-        default_action = action_map.get('*', default_action)
+        default_action = action_map.get("*", default_action)
         if not isinstance(obj, dict):
             obj = obj.__dict__
         for attr_name, attr_value in obj.items():
@@ -169,24 +162,26 @@ class Pickler:
                 yield attr_name, cls.from_data(attr_value)
                 continue
         for attr_name, attr_action in action_map.items():
-            if attr_name != '*' and not isinstance(attr_action, PicklerAction):
+            if attr_name != "*" and not isinstance(attr_action, PicklerAction):
                 yield attr_name, attr_action
 
     @classmethod
     def _from_data_dict(cls, obj: dict) -> dict:
         obj = obj.copy()
-        tmp = obj.pop('__class__', None)
+        tmp = obj.pop("__class__", None)
         if tmp is not None:
             return globals()[tmp]
-        instance_type = obj.pop('__instance__', None)
+        instance_type = obj.pop("__instance__", None)
         if instance_type is None:
             return {attr_name: cls.from_data(attr_value) for attr_name, attr_value in obj.items()}
         init_args = {}
-        for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, 'init_args', None):
+        for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, "init_args", None):
             init_args[attr_name] = attr_value
         instance_class = cls.import_and_return(instance_type)
         instance = instance_class(**init_args)
-        for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, 'init_args', PicklerAction.PASSTHROUGH):
+        for attr_name, attr_value in cls._from_data_iterate_attrs(
+            instance_type, obj, "init_args", PicklerAction.PASSTHROUGH
+        ):
             setattr(instance, attr_name, attr_value)
         return instance
 
@@ -209,9 +204,7 @@ class Pickler:
 
     @classmethod
     def save_to_file(cls, filepath, data):
-        with open(filepath, 'w', encoding="utf-8") as file:
+        with open(filepath, "w", encoding="utf-8") as file:
             return json.dump(cls.to_data(data), file)
 
-    _init_by_type = {
-        'fabric.runners.Result': _init_invoke_result
-    }
+    _init_by_type = {"fabric.runners.Result": _init_invoke_result}

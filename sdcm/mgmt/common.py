@@ -30,16 +30,16 @@ def get_distro_name(distro_object: Distro) -> str:
 def duration_to_timedelta(duration_string):
     total_seconds = 0
     if "d" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('d')]) * 86400
-        duration_string = duration_string[duration_string.find('d') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("d")]) * 86400
+        duration_string = duration_string[duration_string.find("d") + 1 :]
     if "h" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('h')]) * 3600
-        duration_string = duration_string[duration_string.find('h') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("h")]) * 3600
+        duration_string = duration_string[duration_string.find("h") + 1 :]
     if "m" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('m')]) * 60
-        duration_string = duration_string[duration_string.find('m') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("m")]) * 60
+        duration_string = duration_string[duration_string.find("m") + 1 :]
     if "s" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('s')])
+        total_seconds += int(duration_string[: duration_string.find("s")])
     return datetime.timedelta(seconds=total_seconds)
 
 

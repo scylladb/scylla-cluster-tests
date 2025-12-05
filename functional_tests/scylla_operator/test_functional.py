@@ -33,12 +33,7 @@ from cassandra.cluster import (  # pylint: disable=no-name-in-module
 )
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from sdcm.cluster_k8s import (
-    ScyllaPodCluster,
-    SCYLLA_NAMESPACE,
-    SCYLLA_MANAGER_NAMESPACE,
-    SCYLLA_OPERATOR_NAMESPACE
-)
+from sdcm.cluster_k8s import ScyllaPodCluster, SCYLLA_NAMESPACE, SCYLLA_MANAGER_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import ParallelObject
@@ -75,24 +70,26 @@ def test_single_operator_image_tag_is_everywhere(db_cluster):
 
     # NOTE: operator's image is used in many places. So, walk through all of the related namespaces
     for namespace in (SCYLLA_NAMESPACE, SCYLLA_MANAGER_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE):
-        pods = yaml.safe_load(db_cluster.k8s_cluster.kubectl(
-            "get pods -o yaml", namespace=namespace).stdout)["items"]
+        pods = yaml.safe_load(db_cluster.k8s_cluster.kubectl("get pods -o yaml", namespace=namespace).stdout)["items"]
         for pod in pods:
             for container_type in ("c", "initC"):
                 for container in pod.get("status", {}).get(f"{container_type}ontainerStatuses", []):
                     image = container["image"].split("/")[-1]
                     if image.startswith("scylla-operator:") and image.split(":")[-1] != expected_operator_tag:
-                        pods_with_wrong_image_tags.append({
-                            "namespace": namespace,
-                            "pod_name": pod["metadata"]["name"],
-                            "container_name": container["name"],
-                            "image": image,
-                        })
+                        pods_with_wrong_image_tags.append(
+                            {
+                                "namespace": namespace,
+                                "pod_name": pod["metadata"]["name"],
+                                "container_name": container["name"],
+                                "image": image,
+                            }
+                        )
 
     assert not pods_with_wrong_image_tags, (
         f"Found pods that have unexpected scylla-operator image tags.\n"
         f"Expected is '{expected_operator_tag}'.\n"
-        f"Pods: {yaml.safe_dump(pods_with_wrong_image_tags, indent=2)}")
+        f"Pods: {yaml.safe_dump(pods_with_wrong_image_tags, indent=2)}"
+    )
 
 
 @pytest.mark.required_operator("v1.11.0")
@@ -103,38 +100,43 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
     Combining is done by using 'externalSeeds' config option and single 'cluster name' value.
     Only PodIPs are used for the connectivity.
     """
-    cluster_name, target_chart_name, namespace = ("t-podip-quasi-multidc", ) * 3
-    target_chart_name2, namespace2 = (f"{cluster_name}-2", ) * 2
+    cluster_name, target_chart_name, namespace = ("t-podip-quasi-multidc",) * 3
+    target_chart_name2, namespace2 = (f"{cluster_name}-2",) * 2
     dc_name, dc_name2 = (f"quasi-dc-{i}" for i in range(1, 3))
     k8s_cluster, kubectl = db_cluster.k8s_cluster, db_cluster.k8s_cluster.kubectl
     operator_version = k8s_cluster.scylla_operator_chart_version
     need_to_collect_logs = True
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_quasi_multidc_db_cluster')}"
-    values = HelmValues({
-        'exposeOptions': {
-            'nodeService': {'type': 'Headless'},
-            'broadcastOptions': {key: {'type': 'PodIP'} for key in ('nodes', 'clients')},
-        },
-        'developerMode': True,
-        'fullnameOverride': cluster_name,
-        'scyllaImage': {
-            'repository': k8s_cluster.params.get('docker_image'),
-            'tag': k8s_cluster.params.get('scylla_version'),
-        },
-        'agentImage': {'tag': k8s_cluster.params.get('scylla_mgmt_agent_version')},
-        'serviceAccount': {'create': True, 'annotations': {}, 'name': f"{cluster_name}-member"},
-        'serviceMonitor': {'create': False},
-        'sysctls': ["fs.aio-max-nr=300000000"],
-        'datacenter': dc_name,
-        'racks': [{
-            'name': k8s_cluster.rack_name,
-            'members': 3, 'storage': {'capacity': '2Gi'},
-            'resources': {
-                'requests': {'cpu': '200m', 'memory': "200Mi"},
-                'limits': {'cpu': '500m', 'memory': "400Mi"},
-            }
-        }]
-    })
+    values = HelmValues(
+        {
+            "exposeOptions": {
+                "nodeService": {"type": "Headless"},
+                "broadcastOptions": {key: {"type": "PodIP"} for key in ("nodes", "clients")},
+            },
+            "developerMode": True,
+            "fullnameOverride": cluster_name,
+            "scyllaImage": {
+                "repository": k8s_cluster.params.get("docker_image"),
+                "tag": k8s_cluster.params.get("scylla_version"),
+            },
+            "agentImage": {"tag": k8s_cluster.params.get("scylla_mgmt_agent_version")},
+            "serviceAccount": {"create": True, "annotations": {}, "name": f"{cluster_name}-member"},
+            "serviceMonitor": {"create": False},
+            "sysctls": ["fs.aio-max-nr=300000000"],
+            "datacenter": dc_name,
+            "racks": [
+                {
+                    "name": k8s_cluster.rack_name,
+                    "members": 3,
+                    "storage": {"capacity": "2Gi"},
+                    "resources": {
+                        "requests": {"cpu": "200m", "memory": "200Mi"},
+                        "limits": {"cpu": "500m", "memory": "400Mi"},
+                    },
+                }
+            ],
+        }
+    )
 
     k8s_cluster.create_namespace(namespace=namespace)
     k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
@@ -143,7 +145,8 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
         pod_names_and_ips = kubectl(
             "get pods --no-headers -o=custom-columns=':.metadata.name,:.status.podIP'"
             f" -l scylla/cluster={cluster_name},app.kubernetes.io/name=scylla",
-            namespace=namespace).stdout.split("\n")
+            namespace=namespace,
+        ).stdout.split("\n")
         pod_names_and_ips = [row.strip() for row in pod_names_and_ips if row.strip()]
         assert pod_names_and_ips
         assert len(pod_names_and_ips) == 3
@@ -154,21 +157,29 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
             assert pod_ip not in ("", "None"), "Pod IPs were expected to be set"
         return pod_data
 
-    log.info('Deploy first ScyllaCluster')
+    log.info("Deploy first ScyllaCluster")
     try:
-        log.debug(k8s_cluster.helm_install(
-            target_chart_name=target_chart_name, source_chart_name="scylla-operator/scylla",
-            version=operator_version, use_devel=True, values=values, namespace=namespace))
+        log.debug(
+            k8s_cluster.helm_install(
+                target_chart_name=target_chart_name,
+                source_chart_name="scylla-operator/scylla",
+                version=operator_version,
+                use_devel=True,
+                values=values,
+                namespace=namespace,
+            )
+        )
         k8s_cluster.kubectl_wait("--all --for=condition=Ready pod", namespace=namespace, timeout=1200)
 
         # NOTE: check that Scylla services are headless - no IPs are set
         svc_ips = kubectl(
             "get svc --no-headers -o=custom-columns=':.spec.clusterIP'"
             f" -l scylla/cluster={cluster_name} -l scylla-operator.scylladb.com/scylla-service-type=member",
-            namespace=namespace).stdout.split()
+            namespace=namespace,
+        ).stdout.split()
         assert svc_ips
         assert len(svc_ips) == 3
-        assert all(svc_ip in ('', 'None') for svc_ip in svc_ips), "SVC IPs were expected to be absent"
+        assert all(svc_ip in ("", "None") for svc_ip in svc_ips), "SVC IPs were expected to be absent"
 
         # NOTE: read Scylla pods IPs
         pods_data = get_pod_names_and_ips(cluster_name=cluster_name, namespace=namespace)
@@ -176,14 +187,20 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
             k8s_cluster.create_namespace(namespace=namespace2)
             k8s_cluster.create_scylla_manager_agent_config(namespace=namespace2)
 
-            log.info('Deploy second ScyllaCluster')
+            log.info("Deploy second ScyllaCluster")
             values.set("datacenter", dc_name2)
             values.set("externalSeeds", list(pods_data[namespace].values()))
-            log.debug(k8s_cluster.helm_install(
-                target_chart_name=target_chart_name2, source_chart_name="scylla-operator/scylla",
-                version=operator_version, use_devel=True, values=values, namespace=namespace2))
-            k8s_cluster.kubectl_wait(
-                "--all --for=condition=Ready pod", namespace=namespace2, timeout=1200)
+            log.debug(
+                k8s_cluster.helm_install(
+                    target_chart_name=target_chart_name2,
+                    source_chart_name="scylla-operator/scylla",
+                    version=operator_version,
+                    use_devel=True,
+                    values=values,
+                    namespace=namespace2,
+                )
+            )
+            k8s_cluster.kubectl_wait("--all --for=condition=Ready pod", namespace=namespace2, timeout=1200)
             pods_data |= get_pod_names_and_ips(cluster_name=cluster_name, namespace=namespace2)
             ip_to_dc_map = {}
             for current_namespace in pods_data.keys():
@@ -194,9 +211,11 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
             for current_namespace in pods_data.keys():
                 for pod_name, pod_ip in pods_data[current_namespace].items():
                     cqlsh_cmd = "SELECT JSON peer, data_center, rack, rpc_address FROM system.peers;"
-                    cqlsh_results = kubectl(
-                        f"exec {pod_name} -- /bin/cqlsh -e \"{cqlsh_cmd}\"",
-                        namespace=current_namespace).stdout.split("---\n")[-1].split("\n")
+                    cqlsh_results = (
+                        kubectl(f'exec {pod_name} -- /bin/cqlsh -e "{cqlsh_cmd}"', namespace=current_namespace)
+                        .stdout.split("---\n")[-1]
+                        .split("\n")
+                    )
                     table_rows = [yaml.safe_load(row) for row in cqlsh_results if "{" in row]
                     assert len(table_rows) == 5, "Expected 5 peers"
                     for row in table_rows:
@@ -208,16 +227,14 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
             need_to_collect_logs = False
         finally:
             if need_to_collect_logs:
-                KubernetesOps.gather_k8s_logs(
-                    logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
+                KubernetesOps.gather_k8s_logs(logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
                 need_to_collect_logs = False
             k8s_cluster.helm(f"uninstall {target_chart_name2} --timeout 120s", namespace=namespace2)
             kubectl(f"delete namespace {namespace2}", ignore_status=True, timeout=120)
 
     finally:
         if need_to_collect_logs:
-            KubernetesOps.gather_k8s_logs(
-                logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
+            KubernetesOps.gather_k8s_logs(logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
         k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
         try:
             kubectl(f"delete namespace {namespace}", ignore_status=True, timeout=120)
@@ -235,38 +252,38 @@ def test_cassandra_rackdc(db_cluster, cassandra_rackdc_properties):
     with cassandra_rackdc_properties() as props:
         config_map_props = props
     with db_cluster.nodes[0].actual_cassandra_rackdc_properties() as props:
-        original_prefer_local = props.get('prefer_local')
+        original_prefer_local = props.get("prefer_local")
 
     log.info("configMap's cassandra-rackdc.properties = %s", config_map_props)
 
-    if original_prefer_local == 'false':
-        new_prefer_local = 'true'
-    elif original_prefer_local == 'true':
-        new_prefer_local = 'false'
+    if original_prefer_local == "false":
+        new_prefer_local = "true"
+    elif original_prefer_local == "true":
+        new_prefer_local = "false"
     else:
         assert False, f"cassandra-rackdc.properties have unexpected prefer_local value: {original_prefer_local}"
 
     with cassandra_rackdc_properties() as props:
-        props['prefer_local'] = new_prefer_local
+        props["prefer_local"] = new_prefer_local
     db_cluster.restart_scylla()
     for node in db_cluster.nodes:
         with node.actual_cassandra_rackdc_properties() as props:
-            assert props.get('prefer_local') == new_prefer_local
+            assert props.get("prefer_local") == new_prefer_local
     # NOTE: check nodes states from all the nodes, because it is possible to have it be inconsistent
     for node in db_cluster.nodes:
         db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
     with cassandra_rackdc_properties() as props:
-        assert new_prefer_local == props.get('prefer_local')
-        if 'prefer_local' not in config_map_props:
-            props.pop('prefer_local', None)
+        assert new_prefer_local == props.get("prefer_local")
+        if "prefer_local" not in config_map_props:
+            props.pop("prefer_local", None)
         else:
-            props['prefer_local'] = config_map_props['prefer_local']
+            props["prefer_local"] = config_map_props["prefer_local"]
     db_cluster.restart_scylla()
     # NOTE: check nodes states from all the nodes, because it is possible to have it be inconsistent
     for node in db_cluster.nodes:
         with node.actual_cassandra_rackdc_properties() as props:
-            assert props.get('prefer_local') == original_prefer_local
+            assert props.get("prefer_local") == original_prefer_local
     for node in db_cluster.nodes:
         db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
@@ -282,15 +299,18 @@ def test_rolling_restart_cluster(db_cluster):
     new_force_redeployment_reason = db_cluster.get_scylla_cluster_value("/spec/forceRedeploymentReason")
 
     assert old_force_redeployment_reason != new_force_redeployment_reason, (
-        f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'")
+        f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'"
+    )
 
     # check iotune isn't called after restart
     pods_name_and_status = get_pods_and_statuses(db_cluster, namespace=db_cluster.namespace)
     for pod_name_and_status in pods_name_and_status:
-        scylla_log = db_cluster.k8s_cluster.kubectl(f"logs {pod_name_and_status['name']} "
-                                                    f"-c scylla", namespace=db_cluster.namespace)
-        assert "scylla_io_setup" not in scylla_log.stdout, \
+        scylla_log = db_cluster.k8s_cluster.kubectl(
+            f"logs {pod_name_and_status['name']} -c scylla", namespace=db_cluster.namespace
+        )
+        assert "scylla_io_setup" not in scylla_log.stdout, (
             f"iotune was run after reboot on {pod_name_and_status['name']}"
+        )
 
 
 @pytest.mark.required_operator("v1.10.0")
@@ -299,9 +319,10 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
     k8s_cluster = db_cluster.k8s_cluster
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_add_new_node_and_check_old_nodes_are_cleaned_up')}"
     for node in db_cluster.nodes:
-        for keyspace in db_cluster.nodes[0].run_cqlsh('describe keyspaces').stdout.split():
-            log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(patterns=[
-                f"api - force_keyspace_cleanup: keyspace={keyspace} "])
+        for keyspace in db_cluster.nodes[0].run_cqlsh("describe keyspaces").stdout.split():
+            log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(
+                patterns=[f"api - force_keyspace_cleanup: keyspace={keyspace} "]
+            )
 
     def wait_for_cleanup_logs(log_follower_name, log_follower, db_cluster):
         db_rf = len(db_cluster.nodes)
@@ -311,7 +332,8 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
             current_ks_name = f"ks_db_log_population_{int(time.time())}"
             cql_create_ks_cmd = (
                 f"CREATE KEYSPACE IF NOT EXISTS {current_ks_name}"
-                f" WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor' : {db_rf}}}")
+                f" WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor' : {db_rf}}}"
+            )
             try:
                 db_cluster.nodes[0].run_cqlsh(cmd=cql_create_ks_cmd, timeout=60)
                 time.sleep(4)
@@ -341,7 +363,8 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
         stop_ks_creation = True
         if need_to_collect_logs:
             KubernetesOps.gather_k8s_logs(
-                logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[SCYLLA_NAMESPACE])
+                logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[SCYLLA_NAMESPACE]
+            )
         for new_node in new_nodes:
             db_cluster.decommission(new_node)
 
@@ -358,12 +381,14 @@ def _scylla_cluster_monitoring_ckecks(db_cluster: ScyllaPodCluster, monitoring_t
     try:
         # NOTE: deploy ScyllaDBMonitoring of the requested type
         k8s_cluster.deploy_scylla_cluster_monitoring(
-            cluster_name=cluster_name, namespace=namespace, monitoring_type=monitoring_type)
+            cluster_name=cluster_name, namespace=namespace, monitoring_type=monitoring_type
+        )
 
         # NOTE: add SCT dashboard to the Grafana service
         api_call_return_code = k8s_cluster.register_sct_grafana_dashboard(
-            cluster_name=cluster_name, namespace=namespace)
-        assert api_call_return_code == '200', "SCT dashboard upload failed"
+            cluster_name=cluster_name, namespace=namespace
+        )
+        assert api_call_return_code == "200", "SCT dashboard upload failed"
 
         is_passed = db_cluster.check_kubernetes_monitoring_health()
         assert is_passed, "K8S monitoring health checks have failed"
@@ -393,9 +418,7 @@ def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", (
-    "3.2.5",
-))
+@pytest.mark.parametrize("manager_version", ("3.2.5",))
 def test_mgmt_repair(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
@@ -404,8 +427,9 @@ def test_mgmt_repair(db_cluster, manager_version):
     mgr_task = mgr_cluster.create_repair_task()
     assert mgr_task, "Failed to create repair task"
     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-    assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-        mgr_task.id, str(mgr_task.status))
+    assert task_final_status == TaskStatus.DONE, "Task: {} final status is: {}.".format(
+        mgr_task.id, str(mgr_task.status)
+    )
 
     mgr_cluster.delete_task(task=mgr_task)
 
@@ -419,17 +443,19 @@ def test_mgmt_repair(db_cluster, manager_version):
 #         invalid character '\\x1f' looking for beginning of value
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
-@pytest.mark.parametrize("manager_version", (
-    "3.2.5",
-))
+@pytest.mark.parametrize("manager_version", ("3.2.5",))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
 
     # Run manager backup operation
     mgr_cluster = db_cluster.get_cluster_manager()
-    backup_bucket_location = db_cluster.params.get('backup_bucket_location')
+    backup_bucket_location = db_cluster.params.get("backup_bucket_location")
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
-    mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+    mgr_task = mgr_cluster.create_backup_task(
+        location_list=[
+            bucket_name,
+        ]
+    )
     assert mgr_task, "Failed to create backup task"
     status = mgr_task.wait_and_get_final_status(timeout=7200, step=5, only_final=True)
     assert TaskStatus.DONE == status
@@ -455,7 +481,7 @@ def test_drain_kubernetes_node_then_wait_and_replace_scylla_node(db_cluster):
     target_node.drain_k8s_node()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     old_uid = target_node.k8s_pod_uid
-    log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
+    log.info("Mark %s (uid=%s) to be replaced", target_node, old_uid)
     target_node.mark_to_be_replaced()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     target_node.wait_for_pod_readiness()
@@ -481,11 +507,14 @@ def test_listen_address(db_cluster):
     """
     all_errors = []
     for node in db_cluster.nodes:
-        result = node.remoter.run("ps aux | grep docker-entrypoint.py | grep -Po '\\-\\-listen-address=[^ ]+' | "
-                                  "sed -r 's/--listen-address[= ]([^ ]+)/\\1/'", ignore_status=True)
+        result = node.remoter.run(
+            "ps aux | grep docker-entrypoint.py | grep -Po '\\-\\-listen-address=[^ ]+' | "
+            "sed -r 's/--listen-address[= ]([^ ]+)/\\1/'",
+            ignore_status=True,
+        )
         # Check in command line first
         if result.ok:
-            if result.stdout.strip() != '0.0.0.0':
+            if result.stdout.strip() != "0.0.0.0":
                 all_errors.append(f"Node {node.name} has wrong listen-address argument {result.stdout}")
             continue
         # If no --listen-address in command line then proceed with scylla.yaml
@@ -493,7 +522,7 @@ def test_listen_address(db_cluster):
             listen_address = scylla_yaml.listen_address
             if not listen_address:
                 all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
-            elif listen_address != '0.0.0.0':
+            elif listen_address != "0.0.0.0":
                 all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
 
     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
@@ -506,36 +535,36 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
     # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
     log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
     cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
-    values = HelmValues({
-        'nameOverride': '',
-        'fullnameOverride': cluster_name,
-        'scyllaImage': {
-            'repository': db_cluster.k8s_cluster.params.get('docker_image'),
-            'tag': db_cluster.k8s_cluster.params.get('scylla_version'),
-        },
-        'agentImage': {
-            'repository': 'scylladb/scylla-manager-agent',
-            'tag': db_cluster.k8s_cluster.params.get('scylla_mgmt_agent_version'),
-        },
-        'serviceAccount': {
-            'create': True,
-            'annotations': {},
-            'name': f"{cluster_name}-member"
-        },
-        'developerMode': True,
-        'sysctls': ["fs.aio-max-nr=1048576"],
-        'serviceMonitor': {'create': False},
-        'datacenter': db_cluster.k8s_cluster.region_name,
-        'racks': [{
-            'name': db_cluster.k8s_cluster.rack_name,
-            'members': 1,
-            'storage': {},
-            'resources': {
-                'limits': {'cpu': 1, 'memory': "200Mi"},
-                'requests': {'cpu': 1, 'memory': "200Mi"},
+    values = HelmValues(
+        {
+            "nameOverride": "",
+            "fullnameOverride": cluster_name,
+            "scyllaImage": {
+                "repository": db_cluster.k8s_cluster.params.get("docker_image"),
+                "tag": db_cluster.k8s_cluster.params.get("scylla_version"),
             },
-        }]
-    })
+            "agentImage": {
+                "repository": "scylladb/scylla-manager-agent",
+                "tag": db_cluster.k8s_cluster.params.get("scylla_mgmt_agent_version"),
+            },
+            "serviceAccount": {"create": True, "annotations": {}, "name": f"{cluster_name}-member"},
+            "developerMode": True,
+            "sysctls": ["fs.aio-max-nr=1048576"],
+            "serviceMonitor": {"create": False},
+            "datacenter": db_cluster.k8s_cluster.region_name,
+            "racks": [
+                {
+                    "name": db_cluster.k8s_cluster.rack_name,
+                    "members": 1,
+                    "storage": {},
+                    "resources": {
+                        "limits": {"cpu": 1, "memory": "200Mi"},
+                        "requests": {"cpu": 1, "memory": "200Mi"},
+                    },
+                }
+            ],
+        }
+    )
     db_cluster.k8s_cluster.create_namespace(namespace=namespace)
     db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
@@ -543,7 +572,8 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
         version=db_cluster.k8s_cluster.scylla_operator_chart_version,
         use_devel=True,
         values=values,
-        namespace=namespace)
+        namespace=namespace,
+    )
     try:
         db_cluster.k8s_cluster.wait_till_cluster_is_operational()
 
@@ -551,12 +581,13 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
         #       So, sleep for some time and make sure that it is absent.
         time.sleep(30)
         invalid_cluster_sts = db_cluster.k8s_cluster.kubectl(
-            f"get sts -n {namespace} -l scylla/cluster={cluster_name}",
-            ignore_status=True)
-        assert 'No resources found' in invalid_cluster_sts.stderr, (
+            f"get sts -n {namespace} -l scylla/cluster={cluster_name}", ignore_status=True
+        )
+        assert "No resources found" in invalid_cluster_sts.stderr, (
             f"Expected {cluster_name} not to have statefulset created.\n"
             f"stdout: {invalid_cluster_sts.stdout}\n"
-            f"stderr: {invalid_cluster_sts.stderr}")
+            f"stderr: {invalid_cluster_sts.stderr}"
+        )
 
         # NOTE: Any change to the working ScyllaCluster going to trigger rollout.
         #       And rollout is enough for us to make sure that operator still works
@@ -564,12 +595,11 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
         #       ScyllaCluster CRD.
         db_cluster.restart_scylla()
     finally:
-        db_cluster.k8s_cluster.helm(
-            f"uninstall {target_chart_name}", namespace=namespace)
+        db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name}", namespace=namespace)
 
 
 def test_orphaned_services_after_shrink_cluster(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+    """Issue https://github.com/scylladb/scylla-operator/issues/514"""
     log.info("Add node to the rack 0")
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
     svc_name = new_node.name
@@ -579,8 +609,7 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
     log.info("Wait for deletion of the '%s' svc for just deleted pod", svc_name)
-    wait_for_resource_absence(
-        db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
+    wait_for_resource_absence(db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
@@ -589,7 +618,7 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
 #       - https://github.com/scylladb/scylladb/issues/14184
 @pytest.mark.requires_scylla_versions(("5.2.7", None), ("2023.1.1", None))
 def test_orphaned_services_multi_rack(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+    """Issue https://github.com/scylladb/scylla-operator/issues/514"""
     log.info("Add node to the rack 1")
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1)[0]
 
@@ -599,8 +628,7 @@ def test_orphaned_services_multi_rack(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
     log.info("Wait for deletion of the '%s' svc for just deleted pod", svc_name)
-    wait_for_resource_absence(
-        db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
+    wait_for_resource_absence(db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
@@ -608,7 +636,7 @@ def test_nodetool_drain(db_cluster):
     """Covers https://github.com/scylladb/scylla-enterprise/issues/2808"""
     target_node = random.choice(db_cluster.non_seed_nodes)
 
-    target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+    target_node.run_nodetool("drain", timeout=15 * 60, coredump_on_timeout=True)
     target_node.run_nodetool("status", ignore_status=True, warning_event_on_exception=(Exception,))
     target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
     target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -629,8 +657,7 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
     """
     sysctl_name = "fs.aio-max-nr"
     log.info("Get existing value of the '%s' sysctl", sysctl_name)
-    original_aio_max_nr_value = expected_aio_max_nr_value = get_scylla_sysctl_value(
-        db_cluster, sysctl_name)
+    original_aio_max_nr_value = expected_aio_max_nr_value = get_scylla_sysctl_value(db_cluster, sysctl_name)
     terminate_change_spec_thread, crd_update_errors = threading.Event(), []
 
     def change_cluster_spec() -> None:
@@ -643,8 +670,7 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
                 expected_aio_max_nr_value += 1
             except Exception as error:  # pylint: disable=broad-except
                 str_error = str(error)
-                log.debug("Change /spec/sysctls value to %d failed. Error: %s",
-                          expected_aio_max_nr_value, str_error)
+                log.debug("Change /spec/sysctls value to %d failed. Error: %s", expected_aio_max_nr_value, str_error)
                 crd_update_errors.append(str_error)
 
     log.info("Start update of the Scylla cluster sysctl specification")
@@ -652,23 +678,21 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
     change_cluster_spec_thread.start()
     change_cluster_spec_thread_stopped = False
 
-    patch_operator_replicas_cmd = (
-        """patch deployment scylla-operator -p '{"spec": {"replicas": %d}}'""")
+    patch_operator_replicas_cmd = """patch deployment scylla-operator -p '{"spec": {"replicas": %d}}'"""
     try:
         log.info("Bring down scylla-operator pods to avoid triggering of the Scylla pods rollout")
-        db_cluster.k8s_cluster.kubectl(
-            patch_operator_replicas_cmd % 0, namespace=SCYLLA_OPERATOR_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(patch_operator_replicas_cmd % 0, namespace=SCYLLA_OPERATOR_NAMESPACE)
         db_cluster.k8s_cluster.kubectl(
             "wait -l app.kubernetes.io/name=scylla-operator --for=delete pod",
-            namespace=SCYLLA_OPERATOR_NAMESPACE, timeout=300)
+            namespace=SCYLLA_OPERATOR_NAMESPACE,
+            timeout=300,
+        )
 
         log.info("Rollout webhook-server pods to verify that it's HA really works")
+        db_cluster.k8s_cluster.kubectl("rollout restart deployment webhook-server", namespace=SCYLLA_OPERATOR_NAMESPACE)
         db_cluster.k8s_cluster.kubectl(
-            "rollout restart deployment webhook-server",
-            namespace=SCYLLA_OPERATOR_NAMESPACE)
-        db_cluster.k8s_cluster.kubectl(
-            "rollout status deployment webhook-server --watch=true",
-            namespace=SCYLLA_OPERATOR_NAMESPACE)
+            "rollout status deployment webhook-server --watch=true", namespace=SCYLLA_OPERATOR_NAMESPACE
+        )
 
         log.info("Stop update of the Scylla cluster sysctl specification")
         terminate_change_spec_thread.set()
@@ -688,39 +712,44 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
         time.sleep(10)
 
         log.info("Bring back scylla-operator pods to life")
-        db_cluster.k8s_cluster.kubectl(
-            patch_operator_replicas_cmd % 2, namespace=SCYLLA_OPERATOR_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(patch_operator_replicas_cmd % 2, namespace=SCYLLA_OPERATOR_NAMESPACE)
         db_cluster.k8s_cluster.kubectl_wait(
             "--for=condition=Ready pod -l app.kubernetes.io/name=scylla-operator",
-            namespace=SCYLLA_OPERATOR_NAMESPACE, timeout=300)
+            namespace=SCYLLA_OPERATOR_NAMESPACE,
+            timeout=300,
+        )
 
     try:
         assert expected_aio_max_nr_value == current_aio_max_nr_value, (
             "Cluster specification has not been updated correctly. "
             f"Expected value for '{sysctl_name}' sysctl is {expected_aio_max_nr_value}, "
-            f"actual is {current_aio_max_nr_value}")
+            f"actual is {current_aio_max_nr_value}"
+        )
     finally:
-        assert not crd_update_errors, (
-            "Found following errors during webhook-server pods rollout restart: {}".format(
-                "\n".join(crd_update_errors)))
+        assert not crd_update_errors, "Found following errors during webhook-server pods rollout restart: {}".format(
+            "\n".join(crd_update_errors)
+        )
 
 
 @pytest.mark.readonly
 def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
-    scylla_operator_pods = get_pods_and_statuses(db_cluster=db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE,
-                                                 label='app.kubernetes.io/instance=scylla-operator')
+    scylla_operator_pods = get_pods_and_statuses(
+        db_cluster=db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE, label="app.kubernetes.io/instance=scylla-operator"
+    )
 
-    assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
+    assert len(scylla_operator_pods) == 2, f"Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}"
 
-    not_running_pods = ','.join(
-        [pods_info['name'] for pods_info in scylla_operator_pods if pods_info['status'] != 'Running'])
-    assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
+    not_running_pods = ",".join(
+        [pods_info["name"] for pods_info in scylla_operator_pods if pods_info["status"] != "Running"]
+    )
+    assert not not_running_pods, f"There are pods in state other than running: {not_running_pods}"
 
     # Cover https://github.com/scylladb/scylla-operator/issues/408:
     # Operator shouldn't run as StatefulSet, should be Deployment
-    pods = db_cluster.k8s_cluster.kubectl(f"get pods {scylla_operator_pods[0]['name']} -o yaml",
-                                          namespace=SCYLLA_OPERATOR_NAMESPACE)
-    for owner_reference in yaml.safe_load(pods.stdout)['metadata'].get('ownerReferences', []):
+    pods = db_cluster.k8s_cluster.kubectl(
+        f"get pods {scylla_operator_pods[0]['name']} -o yaml", namespace=SCYLLA_OPERATOR_NAMESPACE
+    )
+    for owner_reference in yaml.safe_load(pods.stdout)["metadata"].get("ownerReferences", []):
         assert owner_reference["kind"] == "ReplicaSet", (
             f"Expected 'ReplicaSet' kind as owner, but got '{owner_reference['Kind']}'"
         )
@@ -732,7 +761,8 @@ def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
         db_cluster=db_cluster,
         probe_type="startupProbe",
         selector="app.kubernetes.io/name=scylla",
-        container_name="scylla")
+        container_name="scylla",
+    )
     assert not pods, f"startupProbe is not found in the following pods: {pods}"
 
 
@@ -747,7 +777,8 @@ def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
         db_cluster=db_cluster,
         probe_type="readinessProbe",
         selector="app.kubernetes.io/name=scylla-manager",
-        container_name="scylla-manager")
+        container_name="scylla-manager",
+    )
     assert not pods, f"readinessProbe is not found in the following pods: {pods}"
 
 
@@ -767,10 +798,11 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
             if get_arch_from_instance_type(instance_type=instance_type_db, region_name=region_name) == "arm64":
                 pytest.skip(
                     "Scylla-manager default version must be 3.2.5 or greater."
-                    " See https://github.com/scylladb/scylla-operator/pull/1603")
+                    " See https://github.com/scylladb/scylla-operator/pull/1603"
+                )
 
     target_chart_name, namespace = ("t-default-values",) * 2
-    expected_capacity = '10Gi'
+    expected_capacity = "10Gi"
     need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_helm_with_default_values')}"
 
@@ -778,13 +810,15 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
 
     log.debug('Deploy cluster with default storage capacity (expected "%s")', expected_capacity)
-    log.debug(k8s_cluster.helm_install(
-        target_chart_name=target_chart_name,
-        source_chart_name="scylla-operator/scylla",
-        version=k8s_cluster.scylla_operator_chart_version,
-        use_devel=True,
-        namespace=namespace,
-    ))
+    log.debug(
+        k8s_cluster.helm_install(
+            target_chart_name=target_chart_name,
+            source_chart_name="scylla-operator/scylla",
+            version=k8s_cluster.scylla_operator_chart_version,
+            use_devel=True,
+            namespace=namespace,
+        )
+    )
 
     try:
         k8s_cluster.kubectl_wait(
@@ -797,34 +831,41 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
 
         assert len(pods_name_and_status) == 3, (
             f"Expected 3 pods to be created in {namespace} namespace "
-            f"but actually {len(pods_name_and_status)}: {pods_name_and_status}")
+            f"but actually {len(pods_name_and_status)}: {pods_name_and_status}"
+        )
 
         for pod_name_and_status in pods_name_and_status:
-            assert pod_name_and_status['status'] == PodStatuses.RUNNING.value, (
+            assert pod_name_and_status["status"] == PodStatuses.RUNNING.value, (
                 f"Expected '{PodStatuses.RUNNING.value}' status of pod '{pod_name_and_status['name']}' "
-                f"but actually it's {pod_name_and_status['status']}")
+                f"but actually it's {pod_name_and_status['status']}"
+            )
 
-            storage_capacity = get_pod_storage_capacity(db_cluster, namespace=namespace,
-                                                        pod_name=pod_name_and_status['name'],
-                                                        label="app.kubernetes.io/name=scylla")
-            assert storage_capacity[0]['capacity'] == expected_capacity, (
+            storage_capacity = get_pod_storage_capacity(
+                db_cluster,
+                namespace=namespace,
+                pod_name=pod_name_and_status["name"],
+                label="app.kubernetes.io/name=scylla",
+            )
+            assert storage_capacity[0]["capacity"] == expected_capacity, (
                 f"Expected capacity is {expected_capacity}, actual capacity of pod "
-                f"'{pod_name_and_status['name']}' is {storage_capacity[0]['capacity']}")
+                f"'{pod_name_and_status['name']}' is {storage_capacity[0]['capacity']}"
+            )
 
             scylla_version = k8s_cluster.kubectl(
-                f"exec {pod_name_and_status['name']} -c scylla -- scylla --version",
-                namespace=namespace)
+                f"exec {pod_name_and_status['name']} -c scylla -- scylla --version", namespace=namespace
+            )
             assert not scylla_version.stderr, (
-                f"Failed to get scylla version from {pod_name_and_status['name']}. Error: {scylla_version.stderr}")
+                f"Failed to get scylla version from {pod_name_and_status['name']}. Error: {scylla_version.stderr}"
+            )
             assert scylla_version.stdout, (
                 f"Failed to get scylla version from {pod_name_and_status['name']}. "
-                f"Output of command 'scylla --version' is empty")
+                f"Output of command 'scylla --version' is empty"
+            )
         need_to_collect_logs = False
 
     finally:
         if need_to_collect_logs:
-            KubernetesOps.gather_k8s_logs(
-                logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[namespace])
+            KubernetesOps.gather_k8s_logs(logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[namespace])
         k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
         k8s_cluster.kubectl(f"delete namespace {namespace}")
 
@@ -840,7 +881,7 @@ def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
         original_compression = dict(props).get(internode_compression_option_name)
 
     log.debug("Current compression is %s", original_compression)
-    values = ['dc', 'all', 'none']
+    values = ["dc", "all", "none"]
     values_to_toggle = list(filter(lambda value: value != original_compression, values))
     new_compression = random.choice(values_to_toggle)
 
@@ -874,13 +915,15 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
 
     assert isinstance(original_hinted_handoff, bool), (
         f"configMap scylla.yaml have unexpected '{hh_enabled_option_name}' type: {type(original_hinted_handoff)}. "
-        "Expected 'bool'")
+        "Expected 'bool'"
+    )
     new_hinted_handoff = not original_hinted_handoff
 
     if original_hinted_handoff_throttle_in_kb:
         assert isinstance(original_hinted_handoff_throttle_in_kb, int), (
             f"Node scylla.yaml have unexpected '{hh_throttle_option_name}' type: "
-            f"{type(original_hinted_handoff_throttle_in_kb)}. Expected 'int'")
+            f"{type(original_hinted_handoff_throttle_in_kb)}. Expected 'int'"
+        )
         new_hinted_handoff_throttle_in_kb = original_hinted_handoff_throttle_in_kb * 2
 
     with scylla_yaml() as props:
@@ -932,22 +975,27 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
 @pytest.mark.readonly
 def test_default_dns_policy(db_cluster: ScyllaPodCluster):
     expected_policy = "ClusterFirstWithHostNet"
-    pods = db_cluster.k8s_cluster.kubectl("get pods -l scylla/cluster="
-                                          f"{db_cluster.params.get('k8s_scylla_cluster_name')} -o yaml",
-                                          namespace=SCYLLA_NAMESPACE)
+    pods = db_cluster.k8s_cluster.kubectl(
+        f"get pods -l scylla/cluster={db_cluster.params.get('k8s_scylla_cluster_name')} -o yaml",
+        namespace=SCYLLA_NAMESPACE,
+    )
 
     pods_with_wrong_dns_policy = []
     for pod in yaml.safe_load(pods.stdout)["items"]:
         dns_policy = pod["spec"]["dnsPolicy"]
         if dns_policy != expected_policy:
-            pods_with_wrong_dns_policy.append({"pod_name": pod["metadata"]["name"],
-                                               "dnsPolicy": dns_policy,
-                                               })
+            pods_with_wrong_dns_policy.append(
+                {
+                    "pod_name": pod["metadata"]["name"],
+                    "dnsPolicy": dns_policy,
+                }
+            )
 
     assert not pods_with_wrong_dns_policy, (
         f"Found pods that have unexpected dnsPolicy.\n"
         f"Expected is '{expected_policy}'.\n"
-        f"Pods: {yaml.safe_dump(pods_with_wrong_dns_policy, indent=2)}")
+        f"Pods: {yaml.safe_dump(pods_with_wrong_dns_policy, indent=2)}"
+    )
 
 
 @pytest.mark.required_operator("v1.8.0")
@@ -957,20 +1005,23 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
 
     cluster_name = db_cluster.k8s_cluster.k8s_scylla_cluster_name
 
-    crt_filename = tmp_path / 'tls.crt'
-    key_filename = tmp_path / 'tls.key'
-    ca_filename = tmp_path / 'ca.crt'
+    crt_filename = tmp_path / "tls.crt"
+    key_filename = tmp_path / "tls.key"
+    ca_filename = tmp_path / "ca.crt"
 
-    crt_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.crt}}'",
-                                              namespace=db_cluster.namespace)
-    key_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.key}}'",
-                                              namespace=db_cluster.namespace)
-    ca_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-serving-ca -o jsonpath='{{.data.tls\.crt}}'",
-                                             namespace=db_cluster.namespace)
+    crt_data = db_cluster.k8s_cluster.kubectl(
+        rf"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.crt}}'", namespace=db_cluster.namespace
+    )
+    key_data = db_cluster.k8s_cluster.kubectl(
+        rf"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.key}}'", namespace=db_cluster.namespace
+    )
+    ca_data = db_cluster.k8s_cluster.kubectl(
+        rf"get secret/{cluster_name}-local-serving-ca -o jsonpath='{{.data.tls\.crt}}'", namespace=db_cluster.namespace
+    )
 
-    crt_filename.write_bytes(base64.decodebytes(bytes(crt_data.stdout.strip(), encoding='utf-8')))
-    key_filename.write_bytes(base64.decodebytes(bytes(key_data.stdout.strip(), encoding='utf-8')))
-    ca_filename.write_bytes(base64.decodebytes(bytes(ca_data.stdout.strip(), encoding='utf-8')))
+    crt_filename.write_bytes(base64.decodebytes(bytes(crt_data.stdout.strip(), encoding="utf-8")))
+    key_filename.write_bytes(base64.decodebytes(bytes(key_data.stdout.strip(), encoding="utf-8")))
+    ca_filename.write_bytes(base64.decodebytes(bytes(ca_data.stdout.strip(), encoding="utf-8")))
 
     for file in (crt_filename, key_filename, ca_filename):
         log.debug(file)
@@ -980,10 +1031,14 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
     # and we don't have the ip tracker thread in local-kind setup
     db_cluster.nodes[0].refresh_ip_address()
 
-    execution_profile = ExecutionProfile(load_balancing_policy=WhiteListRoundRobinPolicy([
-                                         db_cluster.nodes[0].cql_address]))
-    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
-                      execution_profiles={EXEC_PROFILE_DEFAULT: execution_profile})
+    execution_profile = ExecutionProfile(
+        load_balancing_policy=WhiteListRoundRobinPolicy([db_cluster.nodes[0].cql_address])
+    )
+    cluster = Cluster(
+        contact_points=[db_cluster.nodes[0].cql_address],
+        port=db_cluster.nodes[0].CQL_SSL_PORT,
+        execution_profiles={EXEC_PROFILE_DEFAULT: execution_profile},
+    )
     ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_SSLv23)
     ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED  # pylint: disable=no-member
 
@@ -1004,7 +1059,6 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
 @pytest.mark.required_operator("v1.8.0")
 @pytest.mark.requires_tls
 def test_cloud_bundle_connectivity_python(db_cluster: ScyllaPodCluster):
-
     assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
 
     with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
@@ -1017,7 +1071,6 @@ def test_cloud_bundle_connectivity_python(db_cluster: ScyllaPodCluster):
 @pytest.mark.required_operator("v1.8.0")
 @pytest.mark.requires_tls
 def test_cloud_bundle_connectivity_cassandra_stress(tester):
-
     assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
 
     cmd = (
@@ -1039,7 +1092,6 @@ def test_cloud_bundle_connectivity_cassandra_stress(tester):
 @pytest.mark.required_operator("v1.8.0")
 @pytest.mark.requires_tls
 def test_cloud_bundle_connectivity_scylla_bench(tester):
-
     assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
 
     cmd = (
@@ -1060,13 +1112,12 @@ def test_cloud_bundle_connectivity_scylla_bench(tester):
 @pytest.mark.required_operator("v1.8.0")
 @pytest.mark.requires_tls
 def test_cloud_bundle_connectivity_cqlsh(db_cluster: ScyllaPodCluster):
-
     assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
 
     res = db_cluster.nodes[0].run_cqlsh("SELECT * FROM system.local")
 
     assert not res.stderr
-    assert '(1 rows)' in res.stdout
+    assert "(1 rows)" in res.stdout
 
 
 def test_can_recover_from_fatal_pod_termination(db_cluster):
@@ -1074,7 +1125,8 @@ def test_can_recover_from_fatal_pod_termination(db_cluster):
     experiment = PodFailureExperiment(pod=target_node, duration="60s")
     experiment.start()
     db_cluster.k8s_cluster.kubectl(
-        f"wait --timeout=1m --for=condition=Ready=false pod {target_node.name} -n {db_cluster.namespace}")
+        f"wait --timeout=1m --for=condition=Ready=false pod {target_node.name} -n {db_cluster.namespace}"
+    )
     experiment.wait_until_finished()
     db_cluster.wait_for_nodes_up_and_normal(nodes=[target_node], verification_node=target_node)
 
@@ -1086,8 +1138,7 @@ def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
     target_node = db_cluster.nodes[0]
 
     # Calculate new value for the CPU cores dedicated for Scylla pods
-    current_cpus = convert_cpu_value_from_k8s_to_units(
-        db_cluster.k8s_cluster.scylla_cpu_limit)
+    current_cpus = convert_cpu_value_from_k8s_to_units(db_cluster.k8s_cluster.scylla_cpu_limit)
     new_cpus = current_cpus + 1 if current_cpus <= 1 else current_cpus - 1
     new_cpus = convert_cpu_units_to_k8s_value(new_cpus)
 

@@ -52,21 +52,27 @@ class RSyslogContainerMixin:  # pylint: disable=too-few-public-methods
         os.makedirs(logdir, exist_ok=True)
         LOGGER.info("rsyslog will store logs at %s", logdir)
 
-        volumes = {"/etc/passwd": {"bind": "/etc/passwd", "mode": "ro"},
-                   "/etc/group": {"bind": "/etc/group", "mode": "ro"},
-                   self.rsyslog_confpath: {"bind": "/etc/rsyslog.conf", "mode": "ro"},
-                   logdir: {"bind": "/logs"}, }
+        volumes = {
+            "/etc/passwd": {"bind": "/etc/passwd", "mode": "ro"},
+            "/etc/group": {"bind": "/etc/group", "mode": "ro"},
+            self.rsyslog_confpath: {"bind": "/etc/rsyslog.conf", "mode": "ro"},
+            logdir: {"bind": "/logs"},
+        }
 
-        return dict(image=RSYSLOG_IMAGE,
-                    name=f"{self.name}-rsyslog",
-                    auto_remove=True,
-                    ports={f"{RSYSLOG_PORT}/tcp": None, },
-                    volumes=volumes)
+        return dict(
+            image=RSYSLOG_IMAGE,
+            name=f"{self.name}-rsyslog",
+            auto_remove=True,
+            ports={
+                f"{RSYSLOG_PORT}/tcp": None,
+            },
+            volumes=volumes,
+        )
 
 
 def generate_rsyslog_conf_file():
     conf_fd, conf_path = mkstemp(prefix="sct-rsyslog", suffix=".conf")
-    with os.fdopen(conf_fd, 'w') as file_obj:
+    with os.fdopen(conf_fd, "w") as file_obj:
         file_obj.write(RSYSLOG_CONF.format(owner=getpass.getuser(), port=RSYSLOG_PORT))
     LOGGER.debug("rsyslog conf file created in '%s'", conf_path)
     return conf_path

@@ -15,7 +15,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ArgusError(Exception):
-
     def __init__(self, message: str, *args: list) -> None:
         self._message = message
         super().__init__(*args)
@@ -41,7 +40,8 @@ def get_argus_client(run_id: UUID | str) -> ArgusSCTClient:
         raise ArgusError("Malformed UUID provided")
     creds = KeyStore().get_argus_rest_credentials()
     argus_client = ArgusSCTClient(
-        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers"))
+        run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
+    )
 
     return argus_client
 

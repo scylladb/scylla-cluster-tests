@@ -50,8 +50,9 @@ class VirtualMachineProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
-                      ) -> List[VirtualMachine]:
+    def get_or_create(
+        self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
+    ) -> List[VirtualMachine]:
         # pylint: disable=too-many-locals
         v_ms = []
         pollers = []
@@ -60,11 +61,13 @@ class VirtualMachineProvider:
             if definition.name in self._cache:
                 v_ms.append(self._cache[definition.name])
                 continue
-            LOGGER.info(
-                "Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
+            LOGGER.info("Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
             LOGGER.info("Instance params: %s", definition)
-            tags = definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
-                                      "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds")}
+            tags = definition.tags | {
+                "ssh_user": definition.user_name,
+                "ssh_key": definition.ssh_key.name,
+                "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds"),
+            }
             tags = self._replace_null_value_from_tags_with_empty_string(tags)
             params = {
                 "location": self._region,
@@ -74,10 +77,7 @@ class VirtualMachineProvider:
                     "vm_size": definition.type,
                 },
                 "network_profile": {
-                    "network_interfaces": [{
-                        "id": nic_id,
-                        "properties": {"deleteOption": "Delete"}
-                    }],
+                    "network_interfaces": [{"id": nic_id, "properties": {"deleteOption": "Delete"}}],
                 },
             }
             if definition.user_data is None:
@@ -86,23 +86,30 @@ class VirtualMachineProvider:
             else:
                 builder = UserDataBuilder(user_data_objects=definition.user_data)
                 custom_data = builder.build_user_data_yaml()
-                os_profile = self._get_os_profile(computer_name=definition.name,
-                                                  admin_username=definition.user_name,
-                                                  admin_password=binascii.hexlify(os.urandom(20)).decode(),
-                                                  ssh_public_key=definition.ssh_key.public_key.decode(),
-                                                  custom_data=custom_data)
-                params.update({"user_data": base64.b64encode(
-                    builder.get_scylla_machine_image_json().encode('utf-8')).decode('latin-1')})
-            storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name,
-                                                               disk_size=definition.root_disk_size)
+                os_profile = self._get_os_profile(
+                    computer_name=definition.name,
+                    admin_username=definition.user_name,
+                    admin_password=binascii.hexlify(os.urandom(20)).decode(),
+                    ssh_public_key=definition.ssh_key.public_key.decode(),
+                    custom_data=custom_data,
+                )
+                params.update(
+                    {
+                        "user_data": base64.b64encode(builder.get_scylla_machine_image_json().encode("utf-8")).decode(
+                            "latin-1"
+                        )
+                    }
+                )
+            storage_profile = self._get_scylla_storage_profile(
+                image_id=definition.image_id, name=definition.name, disk_size=definition.root_disk_size
+            )
             params.update(os_profile)
             params.update(storage_profile)
             params.update(self._get_pricing_params(pricing_model))
             try:
                 poller = self._azure_service.compute.virtual_machines.begin_create_or_update(
-                    resource_group_name=self._resource_group_name,
-                    vm_name=definition.name,
-                    parameters=params)
+                    resource_group_name=self._resource_group_name, vm_name=definition.name, parameters=params
+                )
                 pollers.append((definition, poller))
             except AzureError as err:
                 LOGGER.error("Error when sending create vm request for VM %s: %s", definition.name, str(err))
@@ -111,7 +118,8 @@ class VirtualMachineProvider:
             try:
                 poller.wait()
                 v_m = self._azure_service.compute.virtual_machines.get(
-                    self._resource_group_name, definition.name, expand="instanceView")
+                    self._resource_group_name, definition.name, expand="instanceView"
+                )
                 if v_m.instance_view and v_m.instance_view.statuses:
                     statuses = ", ".join(
                         f"{status.code}: {status.display_status}" for status in v_m.instance_view.statuses
@@ -123,7 +131,7 @@ class VirtualMachineProvider:
                 v_ms.append(v_m)
             except ODataV4Error as err:
                 LOGGER.error("Error when waiting for VM %s: %s", definition.name, str(err))
-                if err.code == 'OperationPreempted':
+                if err.code == "OperationPreempted":
                     # pylint: disable=raise-missing-from
                     raise OperationPreemptedError(err)  # spot instance preemption, abort provision immediately
             except AzureError as err:
@@ -137,16 +145,11 @@ class VirtualMachineProvider:
 
     def delete(self, name: str, wait: bool = True):
         LOGGER.info("Triggering termination of instance: %s", name)
-        self._azure_service.compute.virtual_machines.begin_update(self._resource_group_name,
-                                                                  vm_name=name,
-                                                                  parameters={
-                                                                      "storageProfile": {
-                                                                          "osDisk": {
-                                                                              "createOption": "FromImage",
-                                                                              "deleteOption": "Delete"
-                                                                          }
-                                                                      }
-                                                                  })
+        self._azure_service.compute.virtual_machines.begin_update(
+            self._resource_group_name,
+            vm_name=name,
+            parameters={"storageProfile": {"osDisk": {"createOption": "FromImage", "deleteOption": "Delete"}}},
+        )
 
         task = self._azure_service.compute.virtual_machines.begin_delete(self._resource_group_name, vm_name=name)
         if wait is True:
@@ -163,8 +166,9 @@ class VirtualMachineProvider:
         while wait and time.time() - start_time < 600:  # 10 minutes
             time.sleep(10)
             instance_view = self._azure_service.compute.virtual_machines.instance_view(
-                self._resource_group_name, vm_name=name)
-            if instance_view and instance_view.statuses[-1].display_status == 'VM running':
+                self._resource_group_name, vm_name=name
+            )
+            if instance_view and instance_view.statuses[-1].display_status == "VM running":
                 break
 
     def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
@@ -174,70 +178,75 @@ class VirtualMachineProvider:
         current_tags = self._cache[name].tags
         tags = self._replace_null_value_from_tags_with_empty_string(tags)
         current_tags.update(tags)
-        self._azure_service.compute.virtual_machines.begin_update(self._resource_group_name, name, parameters={
-            "tags": current_tags
-        }).wait()
+        self._azure_service.compute.virtual_machines.begin_update(
+            self._resource_group_name, name, parameters={"tags": current_tags}
+        ).wait()
         v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, name)
         self._cache[v_m.name] = v_m
         return v_m
 
     @staticmethod
-    def _get_os_profile(computer_name: str, admin_username: str,
-                        admin_password: str, ssh_public_key: str, custom_data: str) -> Dict[str, Any]:
-        os_profile = {"os_profile": {
-            "computer_name": computer_name,
-            "admin_username": admin_username,
-            "admin_password": admin_password,
-            "custom_data": base64.b64encode(custom_data.encode('utf-8')).decode('latin-1'),
-            "linux_configuration": {
-                "disable_password_authentication": True,
-                "ssh": {
-                    "public_keys": [{
-                        "path": f"/home/{admin_username}/.ssh/authorized_keys",
-                        "key_data": ssh_public_key,
-                    }],
+    def _get_os_profile(
+        computer_name: str, admin_username: str, admin_password: str, ssh_public_key: str, custom_data: str
+    ) -> Dict[str, Any]:
+        os_profile = {
+            "os_profile": {
+                "computer_name": computer_name,
+                "admin_username": admin_username,
+                "admin_password": admin_password,
+                "custom_data": base64.b64encode(custom_data.encode("utf-8")).decode("latin-1"),
+                "linux_configuration": {
+                    "disable_password_authentication": True,
+                    "ssh": {
+                        "public_keys": [
+                            {
+                                "path": f"/home/{admin_username}/.ssh/authorized_keys",
+                                "key_data": ssh_public_key,
+                            }
+                        ],
+                    },
                 },
-            },
-        }
+            }
         }
         return os_profile
 
     @staticmethod
     def _get_scylla_storage_profile(image_id: str, name: str, disk_size: Optional[int] = None) -> Dict[str, Any]:
         """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
-         (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
-        storage_profile = {"storage_profile": {
-            "os_disk": {
-                           "name": f"{name}-os-disk",
-                           "os_type": "linux",
-                           "caching": "ReadWrite",
-                           "create_option": "FromImage",
-                           "deleteOption": "Delete",  # somehow deletion of VM does not delete os_disk anyway...
-                           "managed_disk": {
-                               "storage_account_type": "StandardSSD_LRS",  # SSD
-                           }
-                           } | ({} if disk_size is None else {"disk_size_gb": disk_size}),
-        }}
+        (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
+        storage_profile = {
+            "storage_profile": {
+                "os_disk": {
+                    "name": f"{name}-os-disk",
+                    "os_type": "linux",
+                    "caching": "ReadWrite",
+                    "create_option": "FromImage",
+                    "deleteOption": "Delete",  # somehow deletion of VM does not delete os_disk anyway...
+                    "managed_disk": {
+                        "storage_account_type": "StandardSSD_LRS",  # SSD
+                    },
+                }
+                | ({} if disk_size is None else {"disk_size_gb": disk_size}),
+            }
+        }
         if image_id.startswith("/subscriptions/"):
-            storage_profile['storage_profile'].update({
-                "image_reference": {"id": image_id},
-                "deleteOption": "Delete"
-            })
+            storage_profile["storage_profile"].update({"image_reference": {"id": image_id}, "deleteOption": "Delete"})
         elif image_id.startswith("/CommunityGalleries/"):
-            storage_profile['storage_profile'].update({
-                "image_reference": {"community_gallery_image_id": image_id},
-                "deleteOption": "Delete"
-            })
+            storage_profile["storage_profile"].update(
+                {"image_reference": {"community_gallery_image_id": image_id}, "deleteOption": "Delete"}
+            )
         else:
             image_reference_values = image_id.split(":")
-            storage_profile['storage_profile'].update({
-                "image_reference": {
-                    "publisher": image_reference_values[0],
-                    "offer": image_reference_values[1],
-                    "sku": image_reference_values[2],
-                    "version": image_reference_values[3],
-                },
-            })
+            storage_profile["storage_profile"].update(
+                {
+                    "image_reference": {
+                        "publisher": image_reference_values[0],
+                        "offer": image_reference_values[1],
+                        "sku": image_reference_values[2],
+                        "version": image_reference_values[3],
+                    },
+                }
+            )
         return storage_profile
 
     def run_command(self, name: str, command: str) -> Result:
@@ -246,20 +255,16 @@ class VirtualMachineProvider:
         LOGGER.debug("Running command '%s' on instance: %s", command, name)
         command_object = RunCommandInput(command_id="RunShellScript", script=[command])
         result = self._azure_service.compute.virtual_machines.begin_run_command(
-            self._resource_group_name, name, command_object).result()
+            self._resource_group_name, name, command_object
+        ).result()
         LOGGER.debug("Finished running command '%s' on instance: %s: %s", command, name, result.value[0])
         try:
-            stdout, stderr = result.value[0].message.split('[stdout]\n')[1].split('\n[stderr]\n')[0:2]
+            stdout, stderr = result.value[0].message.split("[stdout]\n")[1].split("\n[stderr]\n")[0:2]
             exited = 0  # doesn't mean it passed, Azure does not provide rc
         except IndexError:
             stdout, stderr = result.value[0].message, ""
             exited = 1
-        return Result(
-            stdout=stdout,
-            stderr=stderr,
-            exited=exited,
-            encoding="utf-8"
-        )
+        return Result(stdout=stdout, stderr=stderr, exited=exited, encoding="utf-8")
 
     @staticmethod
     def _get_pricing_params(pricing_model: PricingModel):
@@ -269,12 +274,10 @@ class VirtualMachineProvider:
                 "eviction_policy": "Delete",  # can be "Deallocate" or "Delete", Deallocate leaves disks intact
                 "billing_profile": {
                     "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
-                }
+                },
             }
         else:
-            return {
-                "priority": "Regular"
-            }
+            return {"priority": "Regular"}
 
     def clear_cache(self):
         self._cache = {}
@@ -284,7 +287,8 @@ class VirtualMachineProvider:
         """Azure API does not accept 'null' as value for tags, so we replace it with empty string."""
         for key, value in tags.items():
             if value == "null":
-                LOGGER.warning("Tag '%s' has value 'null' which is not allowed by Azure API. Replacing with empty string.",
-                               key)
+                LOGGER.warning(
+                    "Tag '%s' has value 'null' which is not allowed by Azure API. Replacing with empty string.", key
+                )
                 tags[key] = ""
         return tags

@@ -35,7 +35,7 @@ class CSHdrHistogram:
 
     @classmethod
     def format_timestamp(cls, timestamp: float) -> str:
-        return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
     def __init__(self, base_path: str):
         self.base_time = None
@@ -47,17 +47,14 @@ class CSHdrHistogram:
         self._tagged_histograms: dict[str, HdrHistogram] = {}
         self._untagged_histogram = self.get_empty_histogram()
 
-    def build_histogram_from_files(self,
-                                   start_time: float = 0,
-                                   end_time: int = sys.maxsize,
-                                   absolute: bool = False):
+    def build_histogram_from_files(self, start_time: float = 0, end_time: int = sys.maxsize, absolute: bool = False):
         hdr_files = get_list_of_hdr_files(self._base_path)
         for hdr_file in hdr_files:
             hdr_reader = HistogramLogReader(hdr_file, self.get_empty_histogram())
             while True:
-                next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=start_time,
-                                                                   range_end_time_sec=end_time,
-                                                                   absolute=absolute)
+                next_hist = hdr_reader.get_next_interval_histogram(
+                    range_start_time_sec=start_time, range_end_time_sec=end_time, absolute=absolute
+                )
                 if not next_hist:
                     break
 
@@ -73,18 +70,19 @@ class CSHdrHistogram:
                         self._untagged_histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
                     self._untagged_histogram.add(next_hist)
 
-    def get_operation_stats_by_tag(self, tag: str = '') -> dict[str, Any]:
+    def get_operation_stats_by_tag(self, tag: str = "") -> dict[str, Any]:
         histogram = self._untagged_histogram if not tag else self._tagged_histograms.get(tag)
         if not histogram:
             return {}
         percentilies = histogram.get_percentile_to_value_dict(self.PERCENTILES)
-        percentils_in_ms = {f"percentile_{k}".replace(".", "_"): round(
-            (v / 1_000_000), 2) for k, v in percentilies.items()}
+        percentils_in_ms = {
+            f"percentile_{k}".replace(".", "_"): round((v / 1_000_000), 2) for k, v in percentilies.items()
+        }
         return {
             "start_time": self.format_timestamp(histogram.get_start_time_stamp() / 1000),
             "end_time": self.format_timestamp(histogram.get_end_time_stamp() / 1000),
             "stddev": histogram.get_stddev() / 1_000_000,
-            **percentils_in_ms
+            **percentils_in_ms,
         }
 
     def get_write_stats(self):
@@ -99,14 +97,11 @@ class CSHdrHistogram:
         elif operation == "read":
             return {"READ": self.get_read_stats()}
         else:
-            return {
-                "WRITE": self.get_write_stats(),
-                "READ": self.get_read_stats()
-            }
+            return {"WRITE": self.get_write_stats(), "READ": self.get_read_stats()}
 
-    def get_hdr_stats_for_interval(self, workload: str,
-                                   start_ts: float, end_ts: float | int,
-                                   base_dir: str = '') -> list[dict]:
+    def get_hdr_stats_for_interval(
+        self, workload: str, start_ts: float, end_ts: float | int, base_dir: str = ""
+    ) -> list[dict]:
         start_ts = int(start_ts)
         end_ts = int(end_ts)
         if not base_dir:

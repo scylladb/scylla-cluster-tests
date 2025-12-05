@@ -55,17 +55,19 @@ class NetworkInterfaceProvider:
                 continue
             parameters = {
                 "location": self._region,
-                "ip_configurations": [{
-                    "name": nic_name,
-                    "subnet": {
-                        "id": subnet_id,
-                    },
-                }],
+                "ip_configurations": [
+                    {
+                        "name": nic_name,
+                        "subnet": {
+                            "id": subnet_id,
+                        },
+                    }
+                ],
                 "enable_accelerated_networking": True,
             }
             parameters["ip_configurations"][0]["public_ip_address"] = {
                 "id": address,
-                "properties": {"deleteOption": "Delete"}
+                "properties": {"deleteOption": "Delete"},
             }
             LOGGER.info("Creating nic in resource group %s...", self._resource_group_name)
             poller = self._azure_service.network.network_interfaces.begin_create_or_update(

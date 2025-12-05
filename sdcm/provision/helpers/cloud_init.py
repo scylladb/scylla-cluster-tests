@@ -24,11 +24,9 @@ class CloudInitError(Exception):
     pass
 
 
-@retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError, ),
-          message="waiting for cloud-init to complete")
+@retrying(n=20, sleep_time=10, allowed_exceptions=(CloudInitError,), message="waiting for cloud-init to complete")
 def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance):
-    """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok.
-    """
+    """Connects to VM with SSH and waits for cloud-init to complete. Verify if everything went ok."""
     LOGGER.info("Waiting for cloud-init to complete on node %s...", instance.name)
     errors_found = False
     remoter.is_up(60 * 5)

@@ -27,7 +27,7 @@ class NodetoolCommand:
         cmd_split = self.cmd.split()
         if len(cmd_split) > 1:
             options_to_list = [self.options] if self.options else []
-            self.options = ' '.join(cmd_split[1:] + options_to_list)
+            self.options = " ".join(cmd_split[1:] + options_to_list)
             self.cmd = cmd_split[0]
 
 
@@ -41,12 +41,14 @@ class NodetoolEventEncoder(JSONEncoder):
 
 # pylint: disable=too-many-instance-attributes
 class NodetoolEvent(ContinuousEvent):
-    def __init__(self,  # pylint: disable=too-many-arguments
-                 nodetool_command,
-                 severity=Severity.NORMAL,
-                 node=None,
-                 options=None,
-                 publish_event=True):
+    def __init__(  # pylint: disable=too-many-arguments
+        self,
+        nodetool_command,
+        severity=Severity.NORMAL,
+        node=None,
+        options=None,
+        publish_event=True,
+    ):
         self.nodetool_command = NodetoolCommand(cmd=nodetool_command, options=options)
         self.node = str(node)
         self.full_traceback = None

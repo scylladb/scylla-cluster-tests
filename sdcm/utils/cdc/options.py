@@ -13,7 +13,7 @@ CDC_SETTINGS_NAMES_VALUES = {
     "delta": ["full", "keys"],
     "preimage": ["full", True, False],
     "postimage": [True, False],
-    "ttl": "86400"
+    "ttl": "86400",
 }
 
 CDC_DELTA_REGEXP = r"delta.*?(?P<delta>(full|keys))"
@@ -22,11 +22,7 @@ CDC_PREIMAGE_REGEXP = r"preimage.*?(?P<preimage>(full|false|true))"
 CDC_POSTIMAGE_REGEXP = r"postimage.*?(?P<postimage>(true|false))"
 CDC_TTL_REGEXP = r"ttl.*?(?P<ttl>\d+)"
 
-CDC_SETTINGS_REGEXP = [CDC_ENABLED_REGEXP,
-                       CDC_DELTA_REGEXP,
-                       CDC_PREIMAGE_REGEXP,
-                       CDC_POSTIMAGE_REGEXP,
-                       CDC_TTL_REGEXP]
+CDC_SETTINGS_REGEXP = [CDC_ENABLED_REGEXP, CDC_DELTA_REGEXP, CDC_PREIMAGE_REGEXP, CDC_POSTIMAGE_REGEXP, CDC_TTL_REGEXP]
 
 
 def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
@@ -51,11 +47,7 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
     :returns: dict with cdc settings
     :rtype: {dict}
     """
-    cdc_settings = {"delta": "full",
-                    "enabled": False,
-                    "preimage": False,
-                    "postimage": False,
-                    "ttl": "86400"}
+    cdc_settings = {"delta": "full", "enabled": False, "preimage": False, "postimage": False, "ttl": "86400"}
 
     for regexp in CDC_SETTINGS_REGEXP:
         res = re.search(regexp, blob.decode())
@@ -63,7 +55,7 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
             for key, value in res.groupdict().items():
                 if value in ("false", "off"):
                     value = False
-                elif value == 'true':
+                elif value == "true":
                     value = True
 
                 cdc_settings[key] = value
@@ -93,7 +85,7 @@ def get_table_cdc_properties(session, ks_name: str, table_name: str) -> Dict[str
     # For some reason, `refresh_schema_metadata` doesn't refresh immediatelly...
     time.sleep(10)
     ks = session.cluster.metadata.keyspaces[ks_name]
-    raw_cdc_extention = ks.tables[table_name].extensions['cdc']
+    raw_cdc_extention = ks.tables[table_name].extensions["cdc"]
     LOGGER.debug("Blob object with cdc settings: %s", raw_cdc_extention)
     cdc_settings = parse_cdc_blob_settings(raw_cdc_extention)
     LOGGER.debug("CDC settings as dict: %s", cdc_settings)

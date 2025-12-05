@@ -30,7 +30,7 @@ class SshOutAsFile(StreamingBody):
 
     def read(self, amt=1024):
         received = 0
-        buff = b''
+        buff = b""
         while received < amt:
             size, data = self._chan.read(amt - received)
             received += size
@@ -43,8 +43,14 @@ class SshOutAsFile(StreamingBody):
         return True
 
 
-def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str],  # pylint: disable=too-many-arguments
-                                       s3_bucket: str, s3_key: str, max_size_gb: int = 400, public_read_acl: bool = False):
+def upload_remote_files_directly_to_s3(  # pylint: disable=too-many-arguments
+    ssh_info: dict[str, str],
+    files: List[str],
+    s3_bucket: str,
+    s3_key: str,
+    max_size_gb: int = 400,
+    public_read_acl: bool = False,
+):
     """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link."""
 
     def get_dir_size_kb(session, files):
@@ -61,7 +67,7 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
         if not out:
             raise FileNotFoundError(f"Could not get the size of {files}. Possibly it does not exist.")
         total = out.split(b"\n")[-2]
-        return int(total.split(b'G')[0].decode())
+        return int(total.split(b"G")[0].decode())
 
     extra_args = {}
     if public_read_acl is True:
@@ -76,7 +82,7 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
         LOGGER.warning("Skipping upload '%s' directory to S3 due its size: %s GB", files, size)
         return ""
     chan = session.open_session()
-    chan.execute(f'tar -czf - {" ".join(files)}')
+    chan.execute(f"tar -czf - {' '.join(files)}")
     chan_response = SshOutAsFile(chan)
     s3 = boto3.client("s3")
     s3.upload_fileobj(chan_response, s3_bucket, s3_key, ExtraArgs=extra_args)

@@ -35,38 +35,27 @@ class SctEventProtocol(Protocol):
     severity: Severity
 
     # pylint: disable=super-init-not-called
-    def __init__(self, *args, **kwargs):
-        ...
+    def __init__(self, *args, **kwargs): ...
 
     @classmethod
-    def is_abstract(cls) -> bool:
-        ...
+    def is_abstract(cls) -> bool: ...
 
     @classmethod
-    def add_subevent_type(cls,
-                          name: str,
-                          /, *,
-                          abstract: bool = False,
-                          mixin: Optional[Type] = None,
-                          **kwargs) -> None:
-        ...
+    def add_subevent_type(
+        cls, name: str, /, *, abstract: bool = False, mixin: Optional[Type] = None, **kwargs
+    ) -> None: ...
 
     @property
-    def formatted_event_timestamp(self) -> str:
-        ...
+    def formatted_event_timestamp(self) -> str: ...
 
     @property
-    def timestamp(self) -> float:
-        ...
+    def timestamp(self) -> float: ...
 
-    def publish(self, warn_not_ready: bool = True) -> None:
-        ...
+    def publish(self, warn_not_ready: bool = True) -> None: ...
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
-        ...
+    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None: ...
 
-    def to_json(self) -> str:
-        ...
+    def to_json(self) -> str: ...
 
 
 # Monkey patch JSONEncoder make enums jsonable
@@ -83,4 +72,7 @@ def _new_default(self, obj):  # pylint: disable=unused-argument
 json.JSONEncoder.default = _new_default  # set new default method.
 
 
-__all__ = ("SctEventProtocol", "Severity", )
+__all__ = (
+    "SctEventProtocol",
+    "Severity",
+)

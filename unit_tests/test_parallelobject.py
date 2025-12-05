@@ -15,42 +15,42 @@ class DummyException(Exception):
 
 
 def dummy_func_return_tuple(timeout):
-    LOGGER.debug('start %s', dummy_func_return_tuple.__name__)
+    LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(timeout)
-    LOGGER.debug('finished %s', dummy_func_return_tuple.__name__)
-    return (timeout, 'test')
+    LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
+    return (timeout, "test")
 
 
 def dummy_func_return_single(timeout):
-    LOGGER.debug('start %s', dummy_func_return_tuple.__name__)
+    LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(timeout)
-    LOGGER.debug('finished %s', dummy_func_return_tuple.__name__)
+    LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
     return timeout
 
 
 def dummy_func_raising_exception(timeout):
-    LOGGER.debug('start %s', dummy_func_raising_exception.__name__)
+    LOGGER.debug("start %s", dummy_func_raising_exception.__name__)
     raise_after = random.randint(1, timeout)
     while timeout > 0:
         time.sleep(1)
         if timeout == raise_after:
             raise DummyException()
         timeout -= 1
-    LOGGER.debug('finished %s', dummy_func_raising_exception.__name__)
-    return 'Done'
+    LOGGER.debug("finished %s", dummy_func_raising_exception.__name__)
+    return "Done"
 
 
 def dummy_func_accepts_list_as_parameter(accepted_list):
-    LOGGER.debug('start %s', dummy_func_return_tuple.__name__)
+    LOGGER.debug("start %s", dummy_func_return_tuple.__name__)
     time.sleep(accepted_list[0])
-    LOGGER.debug('finished %s', dummy_func_return_tuple.__name__)
+    LOGGER.debug("finished %s", dummy_func_return_tuple.__name__)
     return accepted_list[1]
 
 
 def dummy_func_with_several_parameters(timeout, msg):
-    LOGGER.debug('start %s with timeout %s', msg, timeout)
+    LOGGER.debug("start %s with timeout %s", msg, timeout)
     time.sleep(timeout)
-    LOGGER.info('finished %s', dummy_func_return_tuple.__name__)
+    LOGGER.info("finished %s", dummy_func_return_tuple.__name__)
     return (timeout, msg)
 
 
@@ -62,11 +62,12 @@ class ParallelObjectTester(unittest.TestCase):
     unpacking_kwargs = [{"timeout": t, "msg": f"test{i}"} for i, t in enumerate(rand_timeouts)]
 
     def test_successful_parallel_run_func_returning_tuple(self):
-        parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2,
-                                         num_workers=len(self.rand_timeouts))
+        parallel_object = ParallelObject(
+            self.rand_timeouts, timeout=self.max_timout + 2, num_workers=len(self.rand_timeouts)
+        )
         results = parallel_object.run(dummy_func_return_tuple)
         returned_results = [r.result for r in results]
-        expected_results = [(timeout, 'test') for timeout in self.rand_timeouts]
+        expected_results = [(timeout, "test") for timeout in self.rand_timeouts]
         self.assertListEqual(returned_results, expected_results)
 
     def test_successful_parallel_run_func_returning_single_value(self):
@@ -111,13 +112,13 @@ class ParallelObjectTester(unittest.TestCase):
                 self.assertIsInstance(res_obj.exc, concurrent.futures.TimeoutError)
             else:
                 self.assertIsNone(res_obj.exc)
-                self.assertIn(res_obj.result, [(timeout, 'test') for timeout in self.rand_timeouts])
+                self.assertIn(res_obj.result, [(timeout, "test") for timeout in self.rand_timeouts])
 
     def test_less_number_of_workers_than_length_of_iterable(self):
         parallel_object = ParallelObject(self.rand_timeouts, timeout=self.max_timout + 2, num_workers=2)
         results = parallel_object.run(dummy_func_return_tuple)
         returned_results = [r.result for r in results]
-        expected_results = [(timeout, 'test') for timeout in self.rand_timeouts]
+        expected_results = [(timeout, "test") for timeout in self.rand_timeouts]
         self.assertListEqual(returned_results, expected_results)
 
     def test_unpack_args_for_func(self):

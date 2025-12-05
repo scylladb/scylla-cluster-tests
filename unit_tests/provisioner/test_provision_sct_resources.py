@@ -19,16 +19,23 @@ from sdcm.test_config import TestConfig
 
 def test_can_provision_instances_according_to_sct_configuration(params, test_config, azure_service, fake_remoter):
     """Integration test for provisioning sct resources according to SCT configuration."""
-    fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
-                               r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0)}
+    fake_remoter.result_map = {
+        r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
+        r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0),
+    }
     tags = TestConfig.common_tags()
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
-        backend="azure", test_id=params.get("test_id"), region="eastus", availability_zone="1", azure_service=azure_service)
+        backend="azure",
+        test_id=params.get("test_id"),
+        region="eastus",
+        availability_zone="1",
+        azure_service=azure_service,
+    )
     eastus_instances = provisioner_eastus.list_instances()
-    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
-    loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]
-    monitor_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "monitor"]
+    db_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "scylla-db"]
+    loader_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "loader"]
+    monitor_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "monitor"]
 
     assert len(db_nodes) == 3
     assert len(loader_nodes) == 2
@@ -38,12 +45,17 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
     assert list(db_node.tags.keys()) == list(tags.keys()) + ["NodeType", "keep_action", "NodeIndex"]
     assert db_node.pricing_model == PricingModel.SPOT
 
-    provisioner_easteu = provisioner_factory.create_provisioner(backend="azure", test_id=params.get("test_id"),
-                                                                region="easteu", availability_zone="1", azure_service=azure_service)
+    provisioner_easteu = provisioner_factory.create_provisioner(
+        backend="azure",
+        test_id=params.get("test_id"),
+        region="easteu",
+        availability_zone="1",
+        azure_service=azure_service,
+    )
     easteu_instances = provisioner_easteu.list_instances()
-    db_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "scylla-db"]
-    loader_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "loader"]
-    monitor_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "monitor"]
+    db_nodes = [node for node in easteu_instances if node.tags["NodeType"] == "scylla-db"]
+    loader_nodes = [node for node in easteu_instances if node.tags["NodeType"] == "loader"]
+    monitor_nodes = [node for node in easteu_instances if node.tags["NodeType"] == "monitor"]
 
     assert len(db_nodes) == 1
     assert len(loader_nodes) == 0
@@ -56,15 +68,22 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
 
 def test_fallback_on_demand_when_spot_fails(fallback_on_demand, params, test_config, azure_service, fake_remoter):
     # pylint: disable=unused-argument
-    fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
-                               r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0)}
+    fake_remoter.result_map = {
+        r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
+        r"ls /var/lib/sct/cloud-init": Result(stdout="done", exited=0),
+    }
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
-        backend="azure", test_id=params.get("test_id"), region="eastus", availability_zone="1", azure_service=azure_service)
+        backend="azure",
+        test_id=params.get("test_id"),
+        region="eastus",
+        availability_zone="1",
+        azure_service=azure_service,
+    )
     eastus_instances = provisioner_eastus.list_instances()
-    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
-    loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]
-    monitor_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "monitor"]
+    db_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "scylla-db"]
+    loader_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "loader"]
+    monitor_nodes = [node for node in eastus_instances if node.tags["NodeType"] == "monitor"]
 
     assert len(db_nodes) == 3
     assert len(loader_nodes) == 2

@@ -74,67 +74,84 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
 
 
 class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.scylla-bench"
     _SB_STATS_MAPPING = {
         # Mapping for scylla-bench statistic and configuration keys to db stats keys
-        'Mode': (str, 'Mode'),
-        'Workload': (str, 'Workload'),
-        'Timeout': (int, 'Timeout'),
-        'Consistency level': (str, 'Consistency level'),
-        'Partition count': (int, 'Partition count'),
-        'Clustering rows': (int, 'Clustering rows'),
-        'Page size': (int, 'Page size'),
-        'Concurrency': (int, 'Concurrency'),
-        'Connections': (int, 'Connections'),
-        'Maximum rate': (int, 'Maximum rate'),
-        'Client compression': (bool, 'Client compression'),
-        'Clustering row size': (int, 'Clustering row size'),
-        'Rows per request': (int, 'Rows per request'),
-        'Total rows': (int, 'Total rows'),
-        'max': (int, 'latency max'),
-        '99.9th': (int, 'latency 99.9th percentile'),
-        '99th': (int, 'latency 99th percentile'),
-        '95th': (int, 'latency 95th percentile'),
-        '90th': (int, '90th'),
-        'median': (int, 'latency median'),
-        'Operations/s': (int, 'op rate'),
-        'Rows/s': (int, 'row rate'),
-        'Total ops': (int, 'Total partitions'),
-        'Time (avg)': (int, 'Total operation time'),
-        'Max error number at row': (int, 'Max error number at row'),
-        'Max error number': (str, 'Max error number'),
-        'Retries': (str, 'Retries'),
-        'number': (int, 'Retries number'),
-        'min interval': (int, 'Retries min interval'),
-        'max interval': (int, 'Retries max interval'),
-        'handler': (str, 'Retries handler'),
-        'Hdr memory consumption': (int, 'Hdr memory consumption bytes'),
-        'raw latency': (str, 'raw latency'),
-        'mean': (int, 'latency mean'),
+        "Mode": (str, "Mode"),
+        "Workload": (str, "Workload"),
+        "Timeout": (int, "Timeout"),
+        "Consistency level": (str, "Consistency level"),
+        "Partition count": (int, "Partition count"),
+        "Clustering rows": (int, "Clustering rows"),
+        "Page size": (int, "Page size"),
+        "Concurrency": (int, "Concurrency"),
+        "Connections": (int, "Connections"),
+        "Maximum rate": (int, "Maximum rate"),
+        "Client compression": (bool, "Client compression"),
+        "Clustering row size": (int, "Clustering row size"),
+        "Rows per request": (int, "Rows per request"),
+        "Total rows": (int, "Total rows"),
+        "max": (int, "latency max"),
+        "99.9th": (int, "latency 99.9th percentile"),
+        "99th": (int, "latency 99th percentile"),
+        "95th": (int, "latency 95th percentile"),
+        "90th": (int, "90th"),
+        "median": (int, "latency median"),
+        "Operations/s": (int, "op rate"),
+        "Rows/s": (int, "row rate"),
+        "Total ops": (int, "Total partitions"),
+        "Time (avg)": (int, "Total operation time"),
+        "Max error number at row": (int, "Max error number at row"),
+        "Max error number": (str, "Max error number"),
+        "Retries": (str, "Retries"),
+        "number": (int, "Retries number"),
+        "min interval": (int, "Retries min interval"),
+        "max interval": (int, "Retries max interval"),
+        "handler": (str, "Retries handler"),
+        "Hdr memory consumption": (int, "Hdr memory consumption bytes"),
+        "raw latency": (str, "raw latency"),
+        "mean": (int, "latency mean"),
     }
 
     # pylint: disable=too-many-arguments
-    def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False,
-                 stop_test_on_failure=False, stress_num=1, credentials=None, params=None):
-        super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout, stress_num=stress_num,
-                         node_list=node_list, round_robin=round_robin, params=params,
-                         stop_test_on_failure=stop_test_on_failure)
-        if credentials and 'username=' not in self.stress_cmd:
+    def __init__(
+        self,
+        stress_cmd,
+        loader_set,
+        timeout,
+        node_list=None,
+        round_robin=False,
+        stop_test_on_failure=False,
+        stress_num=1,
+        credentials=None,
+        params=None,
+    ):
+        super().__init__(
+            loader_set=loader_set,
+            stress_cmd=stress_cmd,
+            timeout=timeout,
+            stress_num=stress_num,
+            node_list=node_list,
+            round_robin=round_robin,
+            params=params,
+            stop_test_on_failure=stop_test_on_failure,
+        )
+        if credentials and "username=" not in self.stress_cmd:
             self.stress_cmd += " -username {} -password {}".format(*credentials)
 
-        if not any(opt in self.stress_cmd for opt in ('-error-at-row-limit', '-error-limit')):
+        if not any(opt in self.stress_cmd for opt in ("-error-at-row-limit", "-error-limit")):
             result = re.search(r"-retry-number[= ]+(\d+) ", self.stress_cmd)
             if not (result and int(result.group(1)) > 1):
                 # make it fail after having 1000 errors at row
-                self.stress_cmd += ' -error-at-row-limit 1000'
+                self.stress_cmd += " -error-at-row-limit 1000"
 
         # Find stress mode:
         #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
         #    "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
         self.sb_mode: ScyllaBenchModes = ScyllaBenchModes(re.search(r"-mode=(.+?) ", stress_cmd).group(1))
         self.sb_workload: ScyllaBenchWorkloads = ScyllaBenchWorkloads(
-            re.search(r"-workload=(.+?) ", stress_cmd).group(1))
+            re.search(r"-workload=(.+?) ", stress_cmd).group(1)
+        )
 
     def verify_results(self):
         sb_summary = []
@@ -158,11 +175,11 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     def create_stress_cmd(self, stress_cmd):
         if self.connection_bundle_file:
-            stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
+            stress_cmd = f"{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}"
         else:
             # Select first seed node to send the scylla-bench cmds
             ips = ",".join([n.cql_address for n in self.node_list])
-            stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
+            stress_cmd = f"{stress_cmd.strip()} -nodes {ips}"
 
         return stress_cmd
 
@@ -177,7 +194,9 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
             cmd_runner = cleanup_context = RemoteDocker(
-                loader, self.params.get("stress_image.scylla-bench"), extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined '
+                loader,
+                self.params.get("stress_image.scylla-bench"),
+                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host --entrypoint="" --security-opt seccomp=unconfined ',
             )
             cmd_runner_name = loader.ip_address
 
@@ -191,11 +210,12 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             LOGGER.debug("Replaced stress command: %s", stress_cmd)
 
         elif self.sb_mode == ScyllaBenchModes.READ and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
-            write_timestamp = wait_for(lambda: loader.parent_cluster.sb_write_timeseries_ts,
-                                       step=5,
-                                       timeout=30,
-                                       text='Waiting for "scylla-bench -workload=timeseries -mode=write" been started, to pick up timestamp'
-                                       )
+            write_timestamp = wait_for(
+                lambda: loader.parent_cluster.sb_write_timeseries_ts,
+                step=5,
+                timeout=30,
+                text='Waiting for "scylla-bench -workload=timeseries -mode=write" been started, to pick up timestamp',
+            )
             LOGGER.debug("Found write timestamp %s", write_timestamp)
             stress_cmd = re.sub(r"GET_WRITE_TIMESTAMP", f"{write_timestamp}", self.stress_cmd)
             LOGGER.debug("replaced stress command %s", stress_cmd)
@@ -206,17 +226,20 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
 
-        log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
+        log_file_name = os.path.join(loader.logdir, f"scylla-bench-l{loader_idx}-{uuid.uuid4()}.log")
         stress_cmd = self.create_stress_cmd(stress_cmd)
-        with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
-                                       metrics=nemesis_metrics_obj(),
-                                       stress_operation=self.sb_mode,
-                                       stress_log_filename=log_file_name,
-                                       loader_idx=loader_idx), \
-                cleanup_context, \
-                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher, \
-                ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd,
-                                 log_file_name=log_file_name) as scylla_bench_event:
+        with (
+            ScyllaBenchStressExporter(
+                instance_name=cmd_runner_name,
+                metrics=nemesis_metrics_obj(),
+                stress_operation=self.sb_mode,
+                stress_log_filename=log_file_name,
+                loader_idx=loader_idx,
+            ),
+            cleanup_context,
+            ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher,
+            ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as scylla_bench_event,
+        ):
             publisher.event_id = scylla_bench_event.event_id
             result = None
             try:
@@ -238,17 +261,26 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         Collect results of all nodes and return a dictionaries' list,
         the new structure data will be easy to parse, compare, display or save.
         """
-        results = {'keyspace_idx': None, 'stdev gc time(ms)': None, 'Total errors': None,
-                   'total gc count': None, 'loader_idx': None, 'total gc time (s)': None,
-                   'total gc mb': 0, 'cpu_idx': None, 'avg gc time(ms)': None, 'latency mean': None}
+        results = {
+            "keyspace_idx": None,
+            "stdev gc time(ms)": None,
+            "Total errors": None,
+            "total gc count": None,
+            "loader_idx": None,
+            "total gc time (s)": None,
+            "total gc mb": 0,
+            "cpu_idx": None,
+            "avg gc time(ms)": None,
+            "latency mean": None,
+        }
 
         for line in lines:
             line.strip()
             # Parse load params
             # pylint: disable=too-many-boolean-expressions
-            if line.startswith('Results'):
+            if line.startswith("Results"):
                 continue
-            if 'c-o fixed latency' in line:
+            if "c-o fixed latency" in line:
                 # Ignore C-O Fixed latencies
                 #
                 # c-o fixed latency :
@@ -258,11 +290,11 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 #   95th:       3.342335ms
                 break
 
-            split = line.split(':', maxsplit=1)
+            split = line.split(":", maxsplit=1)
             if len(split) < 2:
                 continue
             key = split[0].strip()
-            value = ' '.join(split[1].split())
+            value = " ".join(split[1].split())
             if value_opts := cls._SB_STATS_MAPPING.get(key):
                 value_type, target_key = value_opts
                 match value_type:
@@ -272,15 +304,15 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                         else:
                             value = convert_metric_to_ms(value)
                     case builtins.bool:
-                        value = value.lower() == 'true'
+                        value = value.lower() == "true"
                     case builtins.str:
                         pass
                     case _:
-                        LOGGER.debug('unknown value type found: `%s`', value_type)
+                        LOGGER.debug("unknown value type found: `%s`", value_type)
                 results[target_key] = value
             else:
-                LOGGER.debug('unknown result key found: `%s` with value `%s`', key, value)
-        row_rate = results.get('row rate')
+                LOGGER.debug("unknown result key found: `%s` with value `%s`", key, value)
+        row_rate = results.get("row rate")
         if row_rate is not None:
-            results['partition rate'] = row_rate
+            results["partition rate"] = row_rate
         return results

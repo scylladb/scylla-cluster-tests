@@ -6,37 +6,41 @@ from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 
 
 class AlternatorTtlLongevityTest(LongevityTest):
-
     keyspace = f"alternator_{NO_LWT_TABLE_NAME}"
-    full_table_name = f'{keyspace}.{NO_LWT_TABLE_NAME}'
+    full_table_name = f"{keyspace}.{NO_LWT_TABLE_NAME}"
 
     def _count_sstables_and_partitions(self, node: BaseNode) -> int:
         cfstats = node.get_cfstats(self.full_table_name)
-        estimated_num_of_partitions = cfstats['Number of partitions (estimate)']
-        num_of_sstables = cfstats['SSTable count']
-        self.log.info('Table stats results are: %s sstables, %s estimated partitions',
-                      num_of_sstables, estimated_num_of_partitions)
+        estimated_num_of_partitions = cfstats["Number of partitions (estimate)"]
+        num_of_sstables = cfstats["SSTable count"]
+        self.log.info(
+            "Table stats results are: %s sstables, %s estimated partitions",
+            num_of_sstables,
+            estimated_num_of_partitions,
+        )
 
-        self.log.info('Run a table scan to count number of existing items')
+        self.log.info("Run a table scan to count number of existing items")
         with self.db_cluster.cql_connection_patient(node=node, connect_timeout=600) as session:
             result = session.execute(f"SELECT count(*) FROM {self.full_table_name} using timeout 10m")
         partitions_num_result = result.current_rows[0].count
-        self.log.info('Number of partitions found: %s', partitions_num_result)
+        self.log.info("Number of partitions found: %s", partitions_num_result)
         return partitions_num_result
 
     def count_sstables_and_partitions_after_major_compaction(self, run_repair: bool = True):
         if run_repair:
-            self.log.info('Run a repair on nodes..')
+            self.log.info("Run a repair on nodes..")
             for node in self.db_cluster.nodes:
                 node.run_nodetool(sub_cmd="repair -pr")
 
         node: BaseNode = self.db_cluster.nodes[0]
-        self.log.info('force offstrategy on %s before running running a major compaction on node %s', self.keyspace,
-                      node.name)
+        self.log.info(
+            "force offstrategy on %s before running running a major compaction on node %s", self.keyspace, node.name
+        )
         node.remoter.run(
             "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
-            f" http://127.0.0.1:10000/storage_service/keyspace_offstrategy_compaction/{self.keyspace}")
-        self.log.info('Run a major compaction on node %s', node.name)
+            f" http://127.0.0.1:10000/storage_service/keyspace_offstrategy_compaction/{self.keyspace}"
+        )
+        self.log.info("Run a major compaction on node %s", node.name)
         node.run_nodetool("compact")
         self.wait_no_compactions_running()
         return self._count_sstables_and_partitions(node=node)
@@ -58,7 +62,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
         # Should wait a total of 48 minutes.
         # splitting to 30 minutes wait before stopping nemesis.
         # Then an additional 18 minutes wait to complete a total of 48 minutes.
-        self.log.info('Wait TTL + scan interval + gc_grace_seconds')
+        self.log.info("Wait TTL + scan interval + gc_grace_seconds")
         wait_for_expired_items = 30 * 60
         time.sleep(wait_for_expired_items)
         self.stop_nemesis(self.db_cluster)
@@ -80,10 +84,10 @@ class AlternatorTtlLongevityTest(LongevityTest):
         self.test_custom_time()
 
         # Rerun the stress_cmd a second time
-        stress_cmd = self.params.get('stress_cmd')
+        stress_cmd = self.params.get("stress_cmd")
         if stress_cmd:
             stress_queue = []
-            params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
+            params = {"stress_cmd": stress_cmd, "round_robin": self.params.get("round_robin")}
             self._run_all_stress_cmds(stress_queue, params)
 
             for stress in stress_queue:
@@ -101,11 +105,10 @@ class AlternatorTtlLongevityTest(LongevityTest):
         """
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
-                                    tester_obj=self)
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
         stress_queue = []
         # prepare write workload
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get("prepare_write_cmd")
         keyspace_num = 1
         self.pre_create_alternator_tables()
         # Disable TTL
@@ -113,13 +116,16 @@ class AlternatorTtlLongevityTest(LongevityTest):
 
         # Run write stress
         self.run_prepare_write_cmd()
-        stress_cmd = self.params.get('stress_cmd')
+        stress_cmd = self.params.get("stress_cmd")
         if stress_cmd:
-            params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
-                      'round_robin': self.params.get('round_robin')}
+            params = {
+                "keyspace_num": keyspace_num,
+                "stress_cmd": stress_cmd,
+                "round_robin": self.params.get("round_robin"),
+            }
             self._run_all_stress_cmds(stress_queue, params)
 
-        if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
+        if not prepare_write_cmd or not self.params.get("nemesis_during_prepare"):
             self.db_cluster.start_nemesis()
 
         for stress in stress_queue:
@@ -130,9 +136,9 @@ class AlternatorTtlLongevityTest(LongevityTest):
         stress_queue = []
 
         # Run read stress as a background thread while TTL scans are going over existing data.
-        stress_read_cmd = self.params.get('stress_read_cmd')
+        stress_read_cmd = self.params.get("stress_read_cmd")
         if stress_read_cmd:
-            params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_read_cmd}
+            params = {"keyspace_num": keyspace_num, "stress_cmd": stress_read_cmd}
             self._run_all_stress_cmds(stress_queue, params)
 
         for stress in stress_queue:
@@ -154,21 +160,21 @@ class AlternatorTtlLongevityTest(LongevityTest):
         # Run the stress_cmd and wait for finish
         self.test_custom_time()
 
-        self.log.info('Wait second-longer-stress TTL + scan-interval + max-estimated-scan-duration')
+        self.log.info("Wait second-longer-stress TTL + scan-interval + max-estimated-scan-duration")
         wait_for_expired_items = 165 * 60
         time.sleep(wait_for_expired_items)
 
-        stress_cmd = self.params.get('stress_cmd')
+        stress_cmd = self.params.get("stress_cmd")
         longest_ttl_stress_cmd = stress_cmd[-1]
-        insert_count = [param for param in longest_ttl_stress_cmd.split() if 'insertcount=' in param]
-        insert_count = int(insert_count[0].split('=')[1])
-        self.log.info('The longest-TTL-load number of items is: %s', insert_count)
+        insert_count = [param for param in longest_ttl_stress_cmd.split() if "insertcount=" in param]
+        insert_count = int(insert_count[0].split("=")[1])
+        self.log.info("The longest-TTL-load number of items is: %s", insert_count)
 
-        self.log.info('Run a major compaction on nodes for all expected expired data tombstones to be deleted.')
+        self.log.info("Run a major compaction on nodes for all expected expired data tombstones to be deleted.")
         for node in self.db_cluster.nodes:
             node.run_nodetool("compact")
         self.wait_no_compactions_running()
 
-        self.log.info('Run a table scan to count number of existing items and compare to expected')
+        self.log.info("Run a table scan to count number of existing items and compare to expected")
         current_partitions_num = self._count_sstables_and_partitions(node=self.db_cluster.nodes[0])
         assert current_partitions_num == insert_count, f"Result: {current_partitions_num}, Expected: {insert_count}"

@@ -19,11 +19,9 @@ from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
 
 
 class LongevityOperatorMultiTenantTest(MultiTenantTestMixin, LongevityTest):
-
     def test_custom_time(self):
         def _run_test_on_one_tenant(tenant):
-            self.log.info("Longevity test for cluster %s with parameters: %s",
-                          tenant.db_cluster, tenant.params)
+            self.log.info("Longevity test for cluster %s with parameters: %s", tenant.db_cluster, tenant.params)
             tenant.test_custom_time()
 
         self.log.info("Starting tests worker threads")

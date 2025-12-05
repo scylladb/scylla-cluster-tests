@@ -36,9 +36,7 @@ class MultipleDcTest(ClusterTester):
         """
 
         # run a background workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              stress_num=2,
-                                              keyspace_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), stress_num=2, keyspace_num=1)
         nodes = self.db_cluster.nodes
 
         # add a new node to existing cluster
@@ -58,11 +56,8 @@ class MultipleDcTest(ClusterTester):
         results = self.get_stress_results(queue=stress_queue)
 
     def test_series_stop(self):
-
         # run a background workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              stress_num=2,
-                                              keyspace_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), stress_num=2, keyspace_num=1)
         nodes_2nd_dc = [n for n in node_list if n.dc_idx == 1]
         for node in nodes_2nd_dc:
             node.stop_scylla(verify_up=True, verify_down=True)
@@ -74,9 +69,7 @@ class MultipleDcTest(ClusterTester):
 
     def test_parallel_stop(self):
         # run a background workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              stress_num=2,
-                                              keyspace_num=1)
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), stress_num=2, keyspace_num=1)
         nodes_2nd_dc = [n for n in node_list if n.dc_idx == 1]
 
         # stop the services of 2nd dc in parallel

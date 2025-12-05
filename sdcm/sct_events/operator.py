@@ -46,14 +46,21 @@ class ScyllaOperatorLogEvent(LogEvent):
             return self
         type_month_date, time_string, *_ = splits
         try:
-            hour_minute_second, milliseconds = time_string.split('.')
-            hour, minute, second = hour_minute_second.split(':')
+            hour_minute_second, milliseconds = time_string.split(".")
+            hour, minute, second = hour_minute_second.split(":")
             year = datetime.datetime.now().year
             month = int(type_month_date[1:3])
             day = int(type_month_date[3:5])
             self.source_timestamp = datetime.datetime(
-                year=year, month=month, day=day, hour=int(hour), minute=int(minute), second=int(second),
-                microsecond=int(milliseconds), tzinfo=datetime.timezone.utc).timestamp()
+                year=year,
+                month=month,
+                day=day,
+                hour=int(hour),
+                minute=int(minute),
+                second=int(second),
+                microsecond=int(milliseconds),
+                tzinfo=datetime.timezone.utc,
+            ).timestamp()
         except Exception:  # pylint: disable=broad-except
             pass
         self.event_timestamp = time.time()
@@ -65,17 +72,19 @@ class ScyllaOperatorLogEvent(LogEvent):
 
 
 ScyllaOperatorLogEvent.add_subevent_type(
-    "REAPPLY", severity=Severity.WARNING,
-    regex="please apply your changes to the latest version and try again")
+    "REAPPLY", severity=Severity.WARNING, regex="please apply your changes to the latest version and try again"
+)
 ScyllaOperatorLogEvent.add_subevent_type(
-    "TLS_HANDSHAKE_ERROR", severity=Severity.WARNING,
-    regex="TLS handshake error from .*")
+    "TLS_HANDSHAKE_ERROR", severity=Severity.WARNING, regex="TLS handshake error from .*"
+)
 ScyllaOperatorLogEvent.add_subevent_type(
-    "OPERATOR_STARTED_INFO", severity=Severity.NORMAL,
-    regex='"Starting controller" controller="ScyllaCluster"')
+    "OPERATOR_STARTED_INFO", severity=Severity.NORMAL, regex='"Starting controller" controller="ScyllaCluster"'
+)
 ScyllaOperatorLogEvent.add_subevent_type(
-    "WRONG_SCHEDULED_PODS", severity=Severity.WARNING,
-    regex=KubernetesWrongSchedulingLogger.WRONG_SCHEDULED_PODS_MESSAGE)
+    "WRONG_SCHEDULED_PODS",
+    severity=Severity.WARNING,
+    regex=KubernetesWrongSchedulingLogger.WRONG_SCHEDULED_PODS_MESSAGE,
+)
 
 
 SCYLLA_OPERATOR_EVENTS = [
@@ -86,8 +95,9 @@ SCYLLA_OPERATOR_EVENTS = [
 ]
 
 
-SCYLLA_OPERATOR_EVENT_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex, re.IGNORECASE), event) for event in SCYLLA_OPERATOR_EVENTS]
+SCYLLA_OPERATOR_EVENT_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex, re.IGNORECASE), event) for event in SCYLLA_OPERATOR_EVENTS
+]
 
 
 __all__ = ("ScyllaOperatorLogEvent", "SCYLLA_OPERATOR_EVENT_PATTERNS")

@@ -37,12 +37,10 @@ class ComparableResult(NamedTuple):
         return self.__getattribute__(item)
 
 
-class Margins(ComparableResult):
-    ...
+class Margins(ComparableResult): ...
 
 
-class Averages(ComparableResult):
-    ...
+class Averages(ComparableResult): ...
 
 
 @dataclass
@@ -139,7 +137,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     "test_id": self._test_id,
                     "node_instance_type": runner.node_instance_type,
                     "node_name": runner.node_name,
-                    **runner.benchmark_results
+                    **runner.benchmark_results,
                 }
                 doc_id = f"{self._test_id}-{runner.node_name.split('-')[-1]}"
                 self._es.create_doc(index=ES_INDEX, doc_type=None, doc_id=doc_id, body=results)
@@ -147,27 +145,30 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                 LOGGER.debug("No benchmarks results for node: %s", runner.node_name)
 
     def _get_benchmark_results(self, instance_type: str = "") -> list[dict]:
-        filter_path = ['hits.hits._id',
-                       'hits.hits._source.test_id',
-                       'hits.hits._source.node_instance_type',
-                       'hits.hits._source',
-                       ]
-        query = f"test_id: \"{self._test_id}\""
+        filter_path = [
+            "hits.hits._id",
+            "hits.hits._source.test_id",
+            "hits.hits._source.node_instance_type",
+            "hits.hits._source",
+        ]
+        query = f'test_id: "{self._test_id}"'
 
         if self._global_compare:
             query = f"NOT {query}"
 
         if instance_type:
-            query += f" AND node_instance_type: \"{instance_type}\""
+            query += f' AND node_instance_type: "{instance_type}"'
 
         LOGGER.debug("QUERY ES: %s", query)
 
         @retrying(n=3, sleep_time=1, message="Get hw performance nodes result...", raise_on_exceeded=False)
         def search_results():
-            results = self._es.search(index=ES_INDEX,  # pylint: disable=unexpected-keyword-arg
-                                      q=query,
-                                      filter_path=filter_path,
-                                      size=1000)
+            results = self._es.search(  # pylint: disable=unexpected-keyword-arg
+                index=ES_INDEX,
+                q=query,
+                filter_path=filter_path,
+                size=1000,
+            )
 
             LOGGER.debug("Found results: %s", results)
             if not results:
@@ -193,19 +194,22 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                 result = ComparableResult(
                     sysbench_eps=runner.benchmark_results["sysbench_events_per_second"],
                     cassandra_fio_read_bw=runner.benchmark_results["cassandra_fio_lcs_64k_read"]["read"]["bw"],
-                    cassandra_fio_write_bw=runner.benchmark_results["cassandra_fio_lcs_64k_write"]["write"]["bw"]
+                    cassandra_fio_write_bw=runner.benchmark_results["cassandra_fio_lcs_64k_write"]["write"]["bw"],
                 )
                 self._comparison.update(
-                    self._check_results(node_name=runner.node_name,
-                                        averages=averages,
-                                        result=result,
-                                        margins=Margins(sysbench_eps=0.03,
-                                                        cassandra_fio_read_bw=0.01,
-                                                        cassandra_fio_write_bw=0.01)))
+                    self._check_results(
+                        node_name=runner.node_name,
+                        averages=averages,
+                        result=result,
+                        margins=Margins(sysbench_eps=0.03, cassandra_fio_read_bw=0.01, cassandra_fio_write_bw=0.01),
+                    )
+                )
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.warning(
-                    "Failed to generate comparable result for the following item:\n%s"
-                    "\nException:%s", runner.benchmark_results, exc)
+                    "Failed to generate comparable result for the following item:\n%s\nException:%s",
+                    runner.benchmark_results,
+                    exc,
+                )
                 continue
 
     @staticmethod
@@ -218,7 +222,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                 "value": result[item],
                 "average": averages[item],
                 "average_ratio": avg_ratio,
-                "is_within_margin": avg_ratio > (1 - margins[item])
+                "is_within_margin": avg_ratio > (1 - margins[item]),
             }
         return results
 
@@ -231,22 +235,26 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
         for item in es_docs:
             try:
-                results.append(ComparableResult(
-                    sysbench_eps=item["sysbench_events_per_second"],
-                    cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
-                    cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
-                ))
+                results.append(
+                    ComparableResult(
+                        sysbench_eps=item["sysbench_events_per_second"],
+                        cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
+                        cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"],
+                    )
+                )
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.warning(
-                    "Failed to generate comparable result for the following item:\n%s"
-                    "\nException:%s", item, exc)
+                    "Failed to generate comparable result for the following item:\n%s\nException:%s", item, exc
+                )
         eps = [item.sysbench_eps for item in results] or [0.0]
         read_bw = [item.cassandra_fio_read_bw for item in results] or [0.0]
         write_bw = [item.cassandra_fio_write_bw for item in results] or [0.0]
 
-        return Averages(sysbench_eps=sum(eps) / len(eps),
-                        cassandra_fio_read_bw=sum(read_bw) / len(read_bw),
-                        cassandra_fio_write_bw=sum(write_bw) / len(write_bw))
+        return Averages(
+            sysbench_eps=sum(eps) / len(eps),
+            cassandra_fio_read_bw=sum(read_bw) / len(read_bw),
+            cassandra_fio_write_bw=sum(write_bw) / len(write_bw),
+        )
 
 
 class ScyllaNodeBenchmarkRunner:
@@ -285,8 +293,7 @@ class ScyllaNodeBenchmarkRunner:
         elif backend in ("gce", "gce-siren"):
             return self._node.parent_cluster.params.get("gce_instance_type_db")
         else:
-            LOGGER.warning("Unrecognized backend type, defaulting to 'Unknown' for"
-                           "db instance type.")
+            LOGGER.warning("Unrecognized backend type, defaulting to 'Unknown' fordb instance type.")
             return ""
 
     def _install_ubuntu_prerequisites(self):
@@ -297,8 +304,9 @@ class ScyllaNodeBenchmarkRunner:
                 self._node.install_package(pkg)
             LOGGER.info("Ubuntu prerequisites for the node benchmarks installed.")
         except Exception as exc:
-            LOGGER.warning("Failed to install Ubuntu prerequisites for the node benchmarking tools. "
-                           "Exception:\n%s", exc)
+            LOGGER.warning(
+                "Failed to install Ubuntu prerequisites for the node benchmarking tools. Exception:\n%s", exc
+            )
 
     def _build_and_install_sysbench(self):
         build_and_install_script = """\
@@ -340,7 +348,7 @@ class ScyllaNodeBenchmarkRunner:
             cassandra_fio_jobs = [job for job in cassandra_fio_jobs if "setup" not in job["jobname"]]
 
             for job in cassandra_fio_jobs:
-                jsoned_output.update({f'cassandra_fio_{job["jobname"]}': job})
+                jsoned_output.update({f"cassandra_fio_{job['jobname']}": job})
             self.benchmark_results.update(jsoned_output)
         except Exception as exc:
             LOGGER.warning("Failed to get cassandra-fio result for node %s with exception:\n%s", self.node_name, exc)

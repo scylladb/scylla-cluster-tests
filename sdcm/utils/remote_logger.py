@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
 
-logging.getLogger('parso.python.diff').setLevel(logging.WARNING)
+logging.getLogger("parso.python.diff").setLevel(logging.WARNING)
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -55,12 +55,10 @@ class LoggerBase(metaclass=ABCMeta):
         self._log = logging.getLogger(self.__class__.__name__)
 
     @abstractmethod
-    def start(self) -> None:
-        ...
+    def start(self) -> None: ...
 
     @abstractmethod
-    def stop(self, timeout: float | None = None) -> None:
-        ...
+    def stop(self, timeout: float | None = None) -> None: ...
 
 
 class SSHLoggerBase(LoggerBase):
@@ -136,7 +134,8 @@ class SSHScyllaSystemdLogger(SSHLoggerBase):
         that read a s json stream, and add the level/priority that
         is missing from regular output
         """
-        return dedent("""
+        return dedent(
+            """
             PYTHON_PROG="
             import json,sys, datetime
 
@@ -153,21 +152,21 @@ class SSHScyllaSystemdLogger(SSHLoggerBase):
                 print(o)
             "
                       """
-                      f'{cmd} -o json | python3 -c "$PYTHON_PROG"'
-                      )
+            f'{cmd} -o json | python3 -c "$PYTHON_PROG"'
+        )
 
     @cached_property
     def _logger_cmd_template(self) -> str:
         return self.reformat_output_command(
-            f'{self._node.journalctl} -f --no-tail --no-pager '
-            '--utc {since} '
-            '-u scylla-ami-setup.service '
-            '-u scylla-image-setup.service '
-            '-u scylla-io-setup.service '
-            '-u scylla-server.service '
-            '-u scylla-jmx.service '
-            '-u scylla-housekeeping-restart.service '
-            '-u scylla-housekeeping-daily.service'
+            f"{self._node.journalctl} -f --no-tail --no-pager "
+            "--utc {since} "
+            "-u scylla-ami-setup.service "
+            "-u scylla-image-setup.service "
+            "-u scylla-io-setup.service "
+            "-u scylla-server.service "
+            "-u scylla-jmx.service "
+            "-u scylla-housekeeping-restart.service "
+            "-u scylla-housekeeping-daily.service"
         )
 
 
@@ -176,6 +175,7 @@ class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
     In NonRoot installation, scylla-server log is redirected a log file in install directory.
     Related commit: https://github.com/scylladb/scylla/commit/0f786f05fed41be94b09e33aa34a767074a14ec1
     """
+
     SCYLLA_LOG_FILE = "~/scylladb/scylla-server.log"
 
     @cached_property
@@ -186,7 +186,7 @@ class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
 class SSHGeneralSystemdLogger(SSHLoggerBase):
     @cached_property
     def _logger_cmd_template(self) -> str:
-        return 'sudo journalctl -f --no-tail --no-pager --utc {since} '
+        return "sudo journalctl -f --no-tail --no-pager --utc {since} "
 
 
 class SSHGeneralFileLogger(SSHLoggerBase):
@@ -223,7 +223,7 @@ class CommandLoggerBase(LoggerBase):
         self._termination_event = ThreadEvent()
         # When first started it picks up logs for an hour before
         # to cover cases when logger is started long after node is started
-        self._last_time_completed = time.time() - 60*60
+        self._last_time_completed = time.time() - 60 * 60
 
     @property
     @abstractmethod
@@ -279,14 +279,14 @@ class DockerScyllaLogger(CommandNodeLoggerBase):
     # pylint: disable=invalid-overridden-method
     @cached_property
     def _logger_cmd(self) -> str:
-        return f'docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}'
+        return f"docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}"
 
 
 class DockerGeneralLogger(CommandNodeLoggerBase):
     # pylint: disable=invalid-overridden-method
     @cached_property
     def _logger_cmd(self) -> str:
-        return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
+        return f"docker logs -f {self._node.name} >>{self._target_log_file} 2>&1"
 
 
 class KubectlGeneralLogger(CommandNodeLoggerBase):
@@ -296,8 +296,12 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
     def _logger_cmd(self) -> str:
         parent_cluster = self._node.parent_cluster
         cmd = self._node.k8s_cluster.kubectl_cmd(
-            f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c",
-            parent_cluster.container, namespace=parent_cluster.namespace)
+            f"logs --previous=false -f --since={int(self.time_delta)}s",
+            self._node.name,
+            "-c",
+            parent_cluster.container,
+            namespace=parent_cluster.namespace,
+        )
         return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
@@ -362,7 +366,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
         self._log.debug("Timeout waiting for pod: '{pod_name}' is still in '{pod_status}' state.")
         return False
 
-    @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError, ))
+    @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError,))
     def _open_stream(self) -> None:
         if self._stream:
             self._stream.close()
@@ -382,14 +386,13 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 since_seconds=since_seconds,
                 # NOTE: need to set a timeout, because GKE's 'pod_log' API tends to hang
                 _request_timeout=self.READ_REQUEST_TIMEOUT,
-                _preload_content=False
+                _preload_content=False,
             )
 
             self._log_reader = self._read_log_lines(self._stream)
             self._reread_logs_till_last_logged_timestamp()
         except (k8s.client.rest.ApiException, StopIteration) as exc:
-            self._log.warning(
-                "'_open_stream()': failed to open pod log stream:\n%s", exc)
+            self._log.warning("'_open_stream()': failed to open pod log stream:\n%s", exc)
             # NOTE: following is workaround for the error 401 which may happen due to
             #       some config data corruption during the forced socket connection failure
             self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._k8s_cluster.get_api_client())
@@ -412,10 +415,12 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                     return
             # each 1000 lines, check if we didn't pass the date, this should not happen and possibly we can drop this code after some time
             if isoparse(log_timestamp) >= isoparse(self._last_log_timestamp):
-                TestFrameworkEvent(source="K8sClientLogger",
-                                   message=f"Failed to find last log timestamp in the log stream for {self._pod_name} after reconnection."
-                                           f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
-                                   severity=Severity.ERROR).publish()
+                TestFrameworkEvent(
+                    source="K8sClientLogger",
+                    message=f"Failed to find last log timestamp in the log stream for {self._pod_name} after reconnection."
+                    f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
+                    severity=Severity.ERROR,
+                ).publish()
                 return
 
     def _write_log_line(self, timestamp, line):
@@ -425,14 +430,14 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
 
     def _read_log_lines(self, stream) -> Generator[tuple[str, str], None, None]:
         """Reads log lines. Returns a tuple of timestamp and log line"""
-        buffer = ''
+        buffer = ""
         while not self._termination_event.is_set():
             chunk = stream.read(self.CHUNK_SIZE).decode("utf-8")
             if not chunk:
                 break
             buffer += chunk
-            while '\n' in buffer:
-                line, buffer = buffer.split('\n', 1)
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
                 try:
                     timestamp, line = line.split(maxsplit=1)
                     yield timestamp, line + "\n"
@@ -450,21 +455,21 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 self._write_log_line(timestamp, line)
             except StopIteration:
                 # pod probably has been deleted, waiting for a while and trying to reconnect
-                self._log.debug("Stream from pod %s logs has been closed, "
-                                "waiting for %s seconds and trying to reconnect",
-                                self._pod_name, self.RECONNECT_DELAY)
+                self._log.debug(
+                    "Stream from pod %s logs has been closed, waiting for %s seconds and trying to reconnect",
+                    self._pod_name,
+                    self.RECONNECT_DELAY,
+                )
                 self._stream = None
                 if self._termination_event.is_set():
                     return
                 time.sleep(self.RECONNECT_DELAY)
                 self._open_stream()
             except (MaxRetryError, ProtocolError, ReadTimeoutError, TimeoutError, AttributeError) as exc:
-                self._log.debug(
-                    "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
+                self._log.debug("'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
             except Exception as exc:  # pylint: disable=broad-except
-                self._log.error(
-                    "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
+                self._log.error("'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
 
 
@@ -495,7 +500,8 @@ class CertManagerLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=cert-manager",
-            namespace="cert-manager")
+            namespace="cert-manager",
+        )
         return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
@@ -507,7 +513,8 @@ class ScyllaManagerLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-manager",
-            namespace=self._cluster._scylla_manager_namespace)  # pylint: disable=protected-access
+            namespace=self._cluster._scylla_manager_namespace,  # pylint: disable=protected-access
+        )
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -519,7 +526,8 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-operator",
-            namespace=self._cluster._scylla_operator_namespace)  # pylint: disable=protected-access
+            namespace=self._cluster._scylla_operator_namespace,  # pylint: disable=protected-access
+        )
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -531,7 +539,8 @@ class HaproxyIngressLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/name=haproxy-ingress",
-            namespace="haproxy-controller")
+            namespace="haproxy-controller",
+        )
         return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
@@ -542,18 +551,19 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         if not self._cluster.allowed_labels_on_scylla_node:
-            return ''
+            return ""
 
         wrong_scheduled_pods_on_scylla_node, node_names = [], []
         if self._cluster.SCYLLA_POOL_NAME in self._cluster.pools:
             node_names = [
-                node.metadata.name
-                for node in self._cluster.pools[self._cluster.SCYLLA_POOL_NAME].nodes.items]
+                node.metadata.name for node in self._cluster.pools[self._cluster.SCYLLA_POOL_NAME].nodes.items
+            ]
         else:
             self._log.warning(
                 "'%s' pool is not registered. Can not get node names to check pods scheduling",
-                self._cluster.SCYLLA_POOL_NAME)
-            return ''
+                self._cluster.SCYLLA_POOL_NAME,
+            )
+            return ""
         try:
             for pod in KubernetesOps.list_pods(self._cluster):
                 if pod.spec.node_name not in node_names:
@@ -562,37 +572,39 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
                     if (key, value) in pod.metadata.labels.items():
                         break
                 else:
-                    wrong_scheduled_pods_on_scylla_node.append(
-                        f"{pod.metadata.name} ({pod.spec.node_name} node)")
+                    wrong_scheduled_pods_on_scylla_node.append(f"{pod.metadata.name} ({pod.spec.node_name} node)")
         except Exception as details:  # pylint: disable=broad-except
             self._log.warning("Failed to get pods list: %s", str(details))
 
         if not wrong_scheduled_pods_on_scylla_node:
-            return ''
+            return ""
 
-        joined_info = ', '.join(wrong_scheduled_pods_on_scylla_node)
+        joined_info = ", ".join(wrong_scheduled_pods_on_scylla_node)
         message = f"{self.WRONG_SCHEDULED_PODS_MESSAGE}: {joined_info}"
-        return f"echo \"I`date -u +\"%m%d %H:%M:%S\"`              {message}\" >> {self._target_log_file} 2>&1"
+        return f'echo "I`date -u +"%m%d %H:%M:%S"`              {message}" >> {self._target_log_file} 2>&1'
 
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
-    if logs_transport == 'docker':
-        if 'db-node' in node.name:
+    if logs_transport == "docker":
+        if "db-node" in node.name:
             return DockerScyllaLogger(node, target_log_file)
         return DockerGeneralLogger(node, target_log_file)
-    if logs_transport == 'kubectl':
+    if logs_transport == "kubectl":
         return KubectlGeneralLogger(node, target_log_file)
-    if logs_transport == 'k8s_client':
+    if logs_transport == "k8s_client":
         return K8sClientLogger(node, target_log_file)
-    if logs_transport == 'ssh':
-        if node.init_system == 'systemd':
-            if 'db-node' in node.name and node.is_nonroot_install and node.remoter.run(
-                    'sudo test -e /var/log/journal', ignore_status=True).exit_status != 0:
+    if logs_transport == "ssh":
+        if node.init_system == "systemd":
+            if (
+                "db-node" in node.name
+                and node.is_nonroot_install
+                and node.remoter.run("sudo test -e /var/log/journal", ignore_status=True).exit_status != 0
+            ):
                 return SSHNonRootScyllaSystemdLogger(node, target_log_file)
-            if 'db-node' in node.name:
+            if "db-node" in node.name:
                 return SSHScyllaSystemdLogger(node, target_log_file)
             return SSHGeneralSystemdLogger(node, target_log_file)
-        if 'db-node' in node.name:
+        if "db-node" in node.name:
             return SSHScyllaFileLogger(node, target_log_file)
         else:
             return SSHGeneralFileLogger(node, target_log_file)

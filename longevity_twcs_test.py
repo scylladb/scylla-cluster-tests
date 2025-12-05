@@ -34,7 +34,7 @@ class TWCSLongevityTest(LongevityTest):
             self.run_post_prepare_cql_cmds()
 
         # Run nemesis during stress as it was stopped before copy expected data
-        if self.params.get('nemesis_during_prepare'):
+        if self.params.get("nemesis_during_prepare"):
             self.db_cluster.start_nemesis()
 
     def test_twcs_longevity(self):

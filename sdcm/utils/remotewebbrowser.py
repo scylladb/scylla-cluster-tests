@@ -35,22 +35,28 @@ LOGGER = logging.getLogger(__name__)
 
 class WebDriverContainerMixin:
     def web_driver_container_run_args(self) -> dict:
-        return dict(image=WEB_DRIVER_IMAGE,
-                    name=f"{self.name}-webdriver",
-                    ports={f"{WEB_DRIVER_REMOTE_PORT}/tcp": None, },
-                    privileged=True,
-                    volumes={"/dev/shm": {"bind": "/dev/shm"}, })
+        return dict(
+            image=WEB_DRIVER_IMAGE,
+            name=f"{self.name}-webdriver",
+            ports={
+                f"{WEB_DRIVER_REMOTE_PORT}/tcp": None,
+            },
+            privileged=True,
+            volumes={
+                "/dev/shm": {"bind": "/dev/shm"},
+            },
+        )
 
     @property
     def web_driver_docker_client(self) -> Optional[DockerClient]:
         if not self.ssh_login_info or self.ssh_login_info["key_file"] is None:
             # running with docker backend, no real monitor node, fallback to use local docker
             return None
-        SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
+        SSHAgent.add_keys((self.ssh_login_info["key_file"],))
         # since a bug in docker package https://github.com/docker-library/python/issues/517 that need to explicitly
         # pass down the port for supporting ipv6
-        user = self.ssh_login_info['user']
-        hostname = normalize_ipv6_url(self.ssh_login_info['hostname'])
+        user = self.ssh_login_info["user"]
+        hostname = normalize_ipv6_url(self.ssh_login_info["hostname"])
         try:
             return DockerClient(base_url=f"ssh://{user}@{hostname}:22", timeout=DOCKER_API_CALL_TIMEOUT)
         except paramiko.ssh_exception.BadHostKeyException as exc:
@@ -78,10 +84,9 @@ class RemoteBrowser:
 
         if self.use_tunnel:
             LOGGER.debug("Start auto_ssh for Selenium remote WebDriver")
-            ContainerManager.run_container(self.node, "auto_ssh:web_driver",
-                                           local_port=port,
-                                           remote_port=get_free_port(),
-                                           ssh_mode="-L")
+            ContainerManager.run_container(
+                self.node, "auto_ssh:web_driver", local_port=port, remote_port=get_free_port(), ssh_mode="-L"
+            )
 
             LOGGER.debug("Waiting for SSH tunnel container is up")
             ContainerManager.wait_for_status(self.node, "auto_ssh:web_driver", status="running")

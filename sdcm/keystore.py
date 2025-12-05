@@ -37,7 +37,7 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return json.loads(self.get_file_contents(json_file))
 
     def download_file(self, filename, dest_filename):
-        with open(dest_filename, 'wb') as file_obj:
+        with open(dest_filename, "wb") as file_obj:
             file_obj.write(self.get_file_contents(filename))
 
     def get_email_credentials(self):
@@ -47,14 +47,14 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("es_token.json")
 
     def get_gcp_credentials(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
+        project = os.environ.get("SCT_GCE_PROJECT") or "gcp-sct-project-1"
         return self.get_json(f"{project}.json")
 
     def get_dbaaslab_gcp_credentials(self):
         return self.get_json("gcp-scylladbaaslab.json")
 
     def get_gcp_service_accounts(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
+        project = os.environ.get("SCT_GCE_PROJECT") or "gcp-sct-project-1"
         return self.get_json(f"{project}_service_accounts.json")
 
     def get_scylladb_upload_credentials(self):
@@ -64,9 +64,11 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("qa_users.json")
 
     def get_ssh_key_pair(self, name):
-        return SSHKey(name=name,
-                      public_key=self.get_file_contents(file_name=f"{name}.pub"),
-                      private_key=self.get_file_contents(file_name=name))
+        return SSHKey(
+            name=name,
+            public_key=self.get_file_contents(file_name=f"{name}.pub"),
+            private_key=self.get_file_contents(file_name=name),
+        )
 
     def get_ec2_ssh_key_pair(self):
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
@@ -112,4 +114,6 @@ def pub_key_from_private_key_file(key_file):
     try:
         return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-rsa"
     except paramiko.ssh_exception.SSHException:
-        return paramiko.ed25519key.Ed25519Key.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-ed25519"
+        return paramiko.ed25519key.Ed25519Key.from_private_key_file(
+            os.path.expanduser(key_file)
+        ).get_base64(), "ssh-ed25519"

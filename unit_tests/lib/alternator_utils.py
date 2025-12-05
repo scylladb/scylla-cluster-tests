@@ -17,7 +17,7 @@ TEST_PARAMS = dict(
     dynamodb_primarykey_type="HASH_AND_RANGE",
     alternator_use_dns_routing=True,
     alternator_port=ALTERNATOR_PORT,
-    docker_network='ycsb_net',
+    docker_network="ycsb_net",
 )
 ALTERNATOR = alternator.api.Alternator(
     sct_params={

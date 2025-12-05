@@ -25,9 +25,13 @@ def upload_sstables_to_s3(node: CollectingNode | BaseNode, keyspace: str, test_i
         node.remoter.run(nodetool_snapshot_cmd)
         snapshot_paths = node.remoter.run(f"find {data_directory} -type d -name {snapshot_tag}").stdout.split()
         s3_link = upload_remote_files_directly_to_s3(
-            node.ssh_login_info, snapshot_paths, s3_bucket=S3Storage.bucket_name,
+            node.ssh_login_info,
+            snapshot_paths,
+            s3_bucket=S3Storage.bucket_name,
             s3_key=f"{test_id}/{snapshot_date}/sstables-{snapshot_date}-{node.name}-{keyspace}.tar.gz",
-            max_size_gb=400, public_read_acl=True)
+            max_size_gb=400,
+            public_read_acl=True,
+        )
         if s3_link:
             LOGGER.info("Successfully uploaded sstables on node %s for keyspace %s", node.name, keyspace)
         node.remoter.run(f"nodetool clearsnapshot -t {snapshot_tag} {keyspace}")

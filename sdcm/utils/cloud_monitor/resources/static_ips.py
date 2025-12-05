@@ -28,16 +28,16 @@ class StaticIP:  # pylint: disable=too-few-public-methods
 
 class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
     def __init__(self, eip, region):
-        tags = eip.get('Tags')
+        tags = eip.get("Tags")
         tags_dict = {}
         if tags:
             tags_dict = aws_tags_to_dict(tags)
         super().__init__(
             cloud="aws",
             name=tags_dict.get("Name", NA) if tags else NA,
-            address=eip['PublicIp'],
+            address=eip["PublicIp"],
             region=region,
-            used_by=eip.get('InstanceId', NA),
+            used_by=eip.get("InstanceId", NA),
             owner=tags_dict.get("RunByUser", NA) if tags else NA,
         )
 
@@ -51,7 +51,7 @@ class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
             address=static_ip.address,
             region=static_ip.region,
             used_by=used_by[0].rsplit("/", maxsplit=1)[-1] if used_by else NA,
-            owner=NA  # currently unsupported, maybe we can store it in description in future
+            owner=NA,  # currently unsupported, maybe we can store it in description in future
         )
 
 
@@ -63,7 +63,7 @@ class AzureStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
             address=static_ip["properties"]["ipAddress"],
             region=static_ip["location"],
             used_by=resource_group,
-            owner=NA  # currently unsupported
+            owner=NA,  # currently unsupported
         )
 
 
@@ -100,9 +100,12 @@ class StaticIPs(CloudResources):
 
     def get_azure_static_ips(self):
         # all azure public ip's are external resources and we pay for it
-        query_bits = ["Resources", "where type =~ 'Microsoft.Network/publicIPAddresses'",
-                      "project id, resourceGroup, name, location, properties"]
-        res = AzureService().resource_graph_query(query=' | '.join(query_bits))
+        query_bits = [
+            "Resources",
+            "where type =~ 'Microsoft.Network/publicIPAddresses'",
+            "project id, resourceGroup, name, location, properties",
+        ]
+        res = AzureService().resource_graph_query(query=" | ".join(query_bits))
         self["azure"] = [AzureStaticIP(ip, ip["resourceGroup"]) for ip in res if "ipAddress" in ip["properties"]]
         self.all.extend(self["azure"])
 

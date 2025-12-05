@@ -76,7 +76,7 @@ def create_cql_ks_and_table(docker_scylla):
     )
 
 
-@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
+@pytest.mark.docker_scylla_args(docker_network="ycsb_net")
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
@@ -85,9 +85,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 "
         "-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s"
     )
-    ycsb_thread = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         ycsb_thread.kill()
@@ -116,20 +114,15 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     assert float(output[0]["latency 99th percentile"]) > 0
 
 
-def test_02_dynamodb_api_dataintegrity(
-    request, docker_scylla, prom_address, events, params
-):
+def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events, params):
     loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
 
     # 2. do write without dataintegrity=true
     cmd = (
-        "bin/ycsb load dynamodb -P workloads/workloada -threads 5 "
-        "-p recordcount=50 -p fieldcount=1 -p fieldlength=100"
+        "bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=50 -p fieldcount=1 -p fieldlength=100"
     )
-    ycsb_thread1 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
-    )
+    ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
 
     def cleanup_thread1():
         ycsb_thread1.kill()
@@ -145,9 +138,7 @@ def test_02_dynamodb_api_dataintegrity(
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 "
         "-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=30000"
     )
-    ycsb_thread2 = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
-    )
+    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
 
     def cleanup_thread2():
         ycsb_thread2.kill()
@@ -187,9 +178,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
         "bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 "
         f"-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s"
     )
-    ycsb_thread = YcsbStressThread(
-        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
-    )
+    ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         ycsb_thread.kill()

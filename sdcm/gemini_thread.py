@@ -63,7 +63,15 @@ class GeminiEventsPublisher(FileFollowerThread):
 class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):  # pylint: disable=too-many-arguments
+    def __init__(
+        self,
+        test_cluster: BaseCluster | BaseScyllaCluster,
+        oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None,
+        loaders,
+        stress_cmd: str,
+        timeout=None,
+        params=None,
+    ):  # pylint: disable=too-many-arguments
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -143,14 +151,22 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
-        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if
-                              key not in stress_cmd) + " " + stress_cmd
+        cmd += (
+            " "
+            + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if key not in stress_cmd)
+            + " "
+            + stress_cmd
+        )
 
         self.gemini_commands.append(cmd)
         return cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
-        for file_name in [self.gemini_result_file, self.gemini_test_statements_file, self.gemini_oracle_statements_file]:
+        for file_name in [
+            self.gemini_result_file,
+            self.gemini_test_statements_file,
+            self.gemini_oracle_statements_file,
+        ]:
             loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
 
         docker = cleanup_context = RemoteDocker(
@@ -181,7 +197,11 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         except Exception:  # noqa: BLE001 pylint: disable=broad-except
             LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
-        with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+        with (
+            cleanup_context,
+            GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher,
+            GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event,
+        ):
             try:
                 publisher.event_id = gemini_stress_event.event_id
                 gemini_stress_event.log_file_name = log_file_name
@@ -211,9 +231,11 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
             local_gemini_test_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+                docker.node.logdir, os.path.basename(self.gemini_test_statements_file)
+            )
             local_gemini_oracle_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file)
+            )
             docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
             docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
 
@@ -280,6 +302,6 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
             split_idx = line.index(":")
             key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            value = line[split_idx + 1 :].split()[0]
             results[key] = int(value)
         return results

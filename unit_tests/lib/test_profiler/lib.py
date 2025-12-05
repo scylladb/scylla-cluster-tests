@@ -22,10 +22,16 @@ from multiprocessing import Process  # pylint: disable=reimported
 
 
 __all__ = [
-    'LibMultiprocessingProcessCustomClass', 'LibProcessCustomClass', 'LibMultiprocessingProcessCustomClassWithRun',
-    'LibProcessCustomClassWithRun', 'LibThreadCustomClass',
-    'LibThreadCustomClassWithRun', 'LibThreadingThreadCustomClass', 'LibThreadingThreadCustomClassWithRun', 'LibThread',
-    'LibProcess'
+    "LibMultiprocessingProcessCustomClass",
+    "LibProcessCustomClass",
+    "LibMultiprocessingProcessCustomClassWithRun",
+    "LibProcessCustomClassWithRun",
+    "LibThreadCustomClass",
+    "LibThreadCustomClassWithRun",
+    "LibThreadingThreadCustomClass",
+    "LibThreadingThreadCustomClassWithRun",
+    "LibThread",
+    "LibProcess",
 ]
 
 

@@ -14,20 +14,18 @@ warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWa
 
 class TestAddNewDc(LongevityTest):
     """Test for procedure:
-     https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
-     """
+    https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
+    """
 
     def test_add_new_dc(self) -> None:  # pylint: disable=too-many-locals
-
         self.log.info("Starting add new DC test...")
-        assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
+        assert self.params.get("n_db_nodes").endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
 
         # reconfigure system keyspaces to use NetworkTopologyStrategy
         status = self.db_cluster.get_nodetool_status()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
-            keyspaces=system_keyspaces,
-            replication_factors={dc: len(status[dc].keys()) for dc in status}
+            keyspaces=system_keyspaces, replication_factors={dc: len(status[dc].keys()) for dc in status}
         )
         self.prewrite_db_with_data()
         read_thread, write_thread = self.start_stress_during_adding_new_dc()
@@ -39,7 +37,7 @@ class TestAddNewDc(LongevityTest):
         status = self.db_cluster.get_nodetool_status()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
             keyspaces=system_keyspaces + ["keyspace1"],
-            replication_factors={dc: len(status[dc].keys()) for dc in status}
+            replication_factors={dc: len(status[dc].keys()) for dc in status},
         )
 
         self.log.info("Running rebuild on each node in new DC")
@@ -56,11 +54,12 @@ class TestAddNewDc(LongevityTest):
         self.verify_data_can_be_read_from_new_dc(new_node)
         self.log.info("Test completed.")
 
-    def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: List[str], replication_factors: dict[str, int]) -> None:
+    def reconfigure_keyspaces_to_use_network_topology_strategy(
+        self, keyspaces: List[str], replication_factors: dict[str, int]
+    ) -> None:
         node = self.db_cluster.nodes[0]
         self.log.info("Reconfiguring keyspace Replication Strategy")
-        network_topology_strategy = NetworkTopologyReplicationStrategy(
-            **replication_factors)
+        network_topology_strategy = NetworkTopologyReplicationStrategy(**replication_factors)
         for keyspace in keyspaces:
             cql = f"ALTER KEYSPACE {keyspace} WITH replication = {network_topology_strategy}"
             node.run_cqlsh(cql)
@@ -68,14 +67,14 @@ class TestAddNewDc(LongevityTest):
 
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
-        stress_cmd = self.params.get('prepare_write_cmd')
+        stress_cmd = self.params.get("prepare_write_cmd")
         pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=pre_thread)
         self.log.info("Database pre write completed")
 
     def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
         self.log.info("Running stress during adding new DC")
-        stress_cmds = self.params.get('stress_cmd')
+        stress_cmds = self.params.get("stress_cmd")
         read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], stats_aggregate_cmds=False, round_robin=False)
         write_thread = self.run_stress_thread(stress_cmd=stress_cmds[1], stats_aggregate_cmds=False, round_robin=False)
         self.log.info("Stress during adding DC started")
@@ -84,8 +83,7 @@ class TestAddNewDc(LongevityTest):
     def add_node_in_new_dc(self) -> BaseNode:
         self.log.info("Adding new node")
         new_node = self.db_cluster.add_nodes(1, dc_idx=1, enable_auto_bootstrap=True)[0]  # add node
-        self.db_cluster.wait_for_init(node_list=[new_node], timeout=900,
-                                      check_node_health=False)
+        self.db_cluster.wait_for_init(node_list=[new_node], timeout=900, check_node_health=False)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitors.reconfigure_scylla_monitoring()
 
@@ -96,7 +94,7 @@ class TestAddNewDc(LongevityTest):
 
     def verify_data_can_be_read_from_new_dc(self, new_node: BaseNode) -> None:
         self.log.info("Veryfing if data has been transferred successfully to the new DC")
-        stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"
+        stress_cmd = self.params.get("verify_data_after_entire_test") + f" -node {new_node.ip_address}"
         end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=end_stress)
 
@@ -104,7 +102,9 @@ class TestAddNewDc(LongevityTest):
         self.log.info("Verifying if querying new node with RF=0 returns no data and does not crash the node. #8354")
         with self.db_cluster.cql_connection_exclusive(new_node) as session:
             statement = SimpleStatement(
-                "select * from keyspace1.standard1 limit 1;", consistency_level=ConsistencyLevel.LOCAL_QUORUM,
-                fetch_size=10)
+                "select * from keyspace1.standard1 limit 1;",
+                consistency_level=ConsistencyLevel.LOCAL_QUORUM,
+                fetch_size=10,
+            )
             data = session.execute(statement).one()
             assert not data, f"no data should be returned when querying with CL=LOCAL_QUORUM and RF=0. {data}"

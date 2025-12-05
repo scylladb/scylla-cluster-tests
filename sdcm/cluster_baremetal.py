@@ -7,9 +7,9 @@ from sdcm import cluster
 
 LOGGER = logging.getLogger(__name__)
 
-BASE_NAME = 'db-node'
-LOADER_NAME = 'loader-node'
-MONITOR_NAME = 'monitor-node'
+BASE_NAME = "db-node"
+LOADER_NAME = "loader-node"
+MONITOR_NAME = "monitor-node"
 
 
 class NodeInfo(TypedDict):
@@ -36,18 +36,30 @@ class PhysicalMachineNode(cluster.BaseNode):
     log = LOGGER
 
     # pylint: disable=too-many-arguments
-    def __init__(self, name, parent_cluster: 'PhysicalMachineCluster',
-                 public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
-        ssh_login_info = {'hostname': None,
-                          'user': getattr(parent_cluster, "ssh_username", credentials.name),
-                          'key_file': credentials.key_file}
+    def __init__(
+        self,
+        name,
+        parent_cluster: "PhysicalMachineCluster",
+        public_ip,
+        private_ip,
+        credentials,
+        base_logdir=None,
+        node_prefix=None,
+    ):
+        ssh_login_info = {
+            "hostname": None,
+            "user": getattr(parent_cluster, "ssh_username", credentials.name),
+            "key_file": credentials.key_file,
+        }
         self._public_ip = public_ip
         self._private_ip = private_ip
-        super().__init__(name=name,
-                         parent_cluster=parent_cluster,
-                         base_logdir=base_logdir,
-                         ssh_login_info=ssh_login_info,
-                         node_prefix=node_prefix)
+        super().__init__(
+            name=name,
+            parent_cluster=parent_cluster,
+            base_logdir=base_logdir,
+            ssh_login_info=ssh_login_info,
+            node_prefix=node_prefix,
+        )
 
     def init(self):
         super().init()
@@ -85,7 +97,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         raise NotImplementedError("reboot not implemented")
 
     def restart(self):
-        self.remoter.run('sudo reboot -h now', ignore_status=True)
+        self.remoter.run("sudo reboot -h now", ignore_status=True)
 
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
@@ -96,13 +108,13 @@ class PhysicalMachineNode(cluster.BaseNode):
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
     def __init__(self, **kwargs):
         self.nodes = []
-        self.credentials = kwargs.pop('credentials')
-        n_nodes = kwargs.get('n_nodes')
-        self._node_public_ips = kwargs.pop('public_ips', None) or []
-        self._node_private_ips = kwargs.pop('private_ips', None) or []
+        self.credentials = kwargs.pop("credentials")
+        n_nodes = kwargs.get("n_nodes")
+        self._node_public_ips = kwargs.pop("public_ips", None) or []
+        self._node_private_ips = kwargs.pop("private_ips", None) or []
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
-            raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
+            raise NodeIpsNotConfiguredError("Physical hosts IPs are not configured!")
         super().__init__(**kwargs)
 
     @property
@@ -111,72 +123,75 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         return self._ssh_username
 
     def _create_node(self, name, public_ip, private_ip):
-        node = PhysicalMachineNode(name,
-                                   parent_cluster=self,
-                                   public_ip=public_ip,
-                                   private_ip=private_ip,
-                                   credentials=self.credentials[0],
-                                   base_logdir=self.logdir,
-                                   node_prefix=self.node_prefix)
+        node = PhysicalMachineNode(
+            name,
+            parent_cluster=self,
+            public_ip=public_ip,
+            private_ip=private_ip,
+            credentials=self.credentials[0],
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+        )
         node.init()
         return node
 
     # pylint: disable=unused-argument,too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "baremetal can provision diffrent types"
         for node_index in range(count):
-            node_name = '%s-%s' % (self.node_prefix, node_index)
-            self.nodes.append(self._create_node(node_name,
-                                                self._node_public_ips[node_index],
-                                                self._node_private_ips[node_index]))
+            node_name = "%s-%s" % (self.node_prefix, node_index)
+            self.nodes.append(
+                self._create_node(node_name, self._node_public_ips[node_index], self._node_private_ips[node_index])
+            )
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
-
     def __init__(self, **kwargs):
-        user_prefix = kwargs.pop('user_prefix')
-        if username := kwargs.pop('ssh_username', None):
+        user_prefix = kwargs.pop("user_prefix")
+        if username := kwargs.pop("ssh_username", None):
             self._ssh_username = username
-        kwargs.update(dict(
-            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
-            node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
-            node_type='scylla-db'
-        ))
+        kwargs.update(
+            dict(
+                cluster_prefix=cluster.prepend_user_prefix(user_prefix, "db-cluster"),
+                node_prefix=cluster.prepend_user_prefix(user_prefix, "db-node"),
+                node_type="scylla-db",
+            )
+        )
         super().__init__(**kwargs)
 
 
 class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):  # pylint: disable=abstract-method
-
     def __init__(self, **kwargs):
-        user_prefix = kwargs.pop('user_prefix')
-        if username := kwargs.pop('ssh_username', None):
+        user_prefix = kwargs.pop("user_prefix")
+        if username := kwargs.pop("ssh_username", None):
             self._ssh_username = username
-        kwargs.update(dict(
-            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-set'),
-            node_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-node'),
-            node_type='loader'
-        ))
+        kwargs.update(
+            dict(
+                cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
+                node_prefix=cluster.prepend_user_prefix(user_prefix, "loader-node"),
+                node_type="loader",
+            )
+        )
         cluster.BaseLoaderSet.__init__(self, kwargs["params"])
         PhysicalMachineCluster.__init__(self, **kwargs)
 
     @classmethod
-    def _get_node_ips_param(cls, ip_type='public'):
+    def _get_node_ips_param(cls, ip_type="public"):
         return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
 
 class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
-
     def __init__(self, **kwargs):
-        user_prefix = kwargs.pop('user_prefix')
-        if username := kwargs.pop('ssh_username', None):
+        user_prefix = kwargs.pop("user_prefix")
+        if username := kwargs.pop("ssh_username", None):
             self._ssh_username = username
-        kwargs.update(dict(
-            cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-set'),
-            node_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-node'),
-            node_type='monitor'
-        ))
-        cluster.BaseMonitorSet.__init__(self,
-                                        targets=kwargs["targets"],
-                                        params=kwargs["params"])
+        kwargs.update(
+            dict(
+                cluster_prefix=cluster.prepend_user_prefix(user_prefix, "monitor-set"),
+                node_prefix=cluster.prepend_user_prefix(user_prefix, "monitor-node"),
+                node_type="monitor",
+            )
+        )
+        cluster.BaseMonitorSet.__init__(self, targets=kwargs["targets"], params=kwargs["params"])
         kwargs.pop("targets")
         PhysicalMachineCluster.__init__(self, **kwargs)

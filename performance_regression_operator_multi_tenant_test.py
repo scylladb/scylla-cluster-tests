@@ -23,9 +23,7 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
     load_iteration_timeout_sec = 7200
 
     def create_test_stats(self, *args, **kwargs):  # pylint: disable=unused-argument
-        self.log.info(
-            "Suppress the test class stats creation. "
-            "Leave it for the per-DB classes.")
+        self.log.info("Suppress the test class stats creation. Leave it for the per-DB classes.")
         self._stats = self._init_stats()
 
     def update_test_with_errors(self):
@@ -38,35 +36,32 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
 
     def wait_no_compactions_running(self, *args, **kwargs):
         for tenant in self.tenants:
-            self.log.info("Waiting for compactions to finish on the '%s' DB cluster",
-                          tenant.db_cluster.name)
+            self.log.info("Waiting for compactions to finish on the '%s' DB cluster", tenant.db_cluster.name)
             tenant.wait_no_compactions_running(*args, **kwargs)
 
     def preload_data(self, compaction_strategy=None):
         def _preload_data(tenant):
-            prepare_write_cmd = tenant.params.get('prepare_write_cmd')
+            prepare_write_cmd = tenant.params.get("prepare_write_cmd")
             db_cluster_name = tenant.db_cluster.name
             if not prepare_write_cmd:
-                self.log.warning(
-                    "No prepare command defined in YAML for the '%s' cluster",
-                    db_cluster_name)
+                self.log.warning("No prepare command defined in YAML for the '%s' cluster", db_cluster_name)
                 return
             self.log.info("Running preload command for the '%s' cluster", db_cluster_name)
-            tenant.create_test_stats(
-                sub_type='write-prepare', doc_id_with_timestamp=True)
-            stress_queue, params = [], {
-                'prefix': 'preload-',
-            }
-            if self.params.get('round_robin'):
-                self.log.debug(
-                    "'%s' DB cluster: Populating data using round_robin", db_cluster_name)
-                params.update({'stress_num': 1, 'round_robin': True})
+            tenant.create_test_stats(sub_type="write-prepare", doc_id_with_timestamp=True)
+            stress_queue, params = (
+                [],
+                {
+                    "prefix": "preload-",
+                },
+            )
+            if self.params.get("round_robin"):
+                self.log.debug("'%s' DB cluster: Populating data using round_robin", db_cluster_name)
+                params.update({"stress_num": 1, "round_robin": True})
             for stress_cmd in prepare_write_cmd:
-                params.update({'stress_cmd': stress_cmd})
+                params.update({"stress_cmd": stress_cmd})
                 # Run all stress commands
                 params.update(dict(stats_aggregate_cmds=False))
-                self.log.debug("'%s' DB cluster: RUNNING stress cmd: %s",
-                               db_cluster_name, stress_cmd)
+                self.log.debug("'%s' DB cluster: RUNNING stress cmd: %s", db_cluster_name, stress_cmd)
                 stress_queue.append(tenant.run_stress_thread(**params))
             for stress in stress_queue:
                 tenant.get_stress_results(queue=stress, store_results=False)

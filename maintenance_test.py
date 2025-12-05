@@ -22,17 +22,14 @@ from sdcm.nemesis import CorruptThenRebuildMonkey
 
 
 class MaintainanceTest(ClusterTester):
-
     """
     Test a Scylla cluster maintenance operations.
     """
 
     def _base_procedure(self, nemesis_class):
-        cs_thread_pool = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                                duration=240)
+        cs_thread_pool = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), duration=240)
         self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.add_nemesis(nemesis=nemesis_class,
-                                    tester_obj=self)
+        self.db_cluster.add_nemesis(nemesis=nemesis_class, tester_obj=self)
         # Wait another 10 minutes
         time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)

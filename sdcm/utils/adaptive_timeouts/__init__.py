@@ -5,8 +5,12 @@ from enum import Enum
 from typing import Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent
-from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
-    NodeLoadInfoServices
+from sdcm.utils.adaptive_timeouts.load_info_store import (
+    NodeLoadInfoService,
+    AdaptiveTimeoutStore,
+    ESAdaptiveTimeoutStore,
+    NodeLoadInfoServices,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,10 +24,12 @@ def _get_decommission_timeout(node_info_service: NodeLoadInfoService) -> tuple[i
         return timeout, node_info_service.as_dict()
     except Exception as exc:  # pylint: disable=broad-except
         LOGGER.warning("Failed to calculate decommission timeout: \n%s \nDefaulting to 6 hours", exc)
-        return 6*60*60, {}
+        return 6 * 60 * 60, {}
 
 
-def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None) -> tuple[int | float, dict[str, Any]]:
+def _get_soft_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None
+) -> tuple[int | float, dict[str, Any]]:
     # no timeout calculation - just return the timeout passed as argument along with node load info
     try:
         return timeout, node_info_service.as_dict()
@@ -32,16 +38,17 @@ def _get_soft_timeout(node_info_service: NodeLoadInfoService, timeout: int | flo
         return timeout, {}
 
 
-def _get_query_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None, query: str = None) -> \
-        tuple[int | float, dict[str, Any]]:
+def _get_query_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None, query: str = None
+) -> tuple[int | float, dict[str, Any]]:
     timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
     stats["query"] = query
     return timeout, stats
 
 
-def _get_service_level_propagation_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None,
-                                           service_level_for_test_step: str = None) -> \
-        tuple[int | float, dict[str, Any]]:
+def _get_service_level_propagation_timeout(
+    node_info_service: NodeLoadInfoService, timeout: int | float = None, service_level_for_test_step: str = None
+) -> tuple[int | float, dict[str, Any]]:
     """service_level_for_test_step will report in ES on which step of test the timeout happened"""
     timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
     stats["service_level_for_test_step"] = service_level_for_test_step
@@ -52,6 +59,7 @@ class Operations(Enum):
     """Available operations for adaptive timeouts. Each operation maps to a function to calculate timeout based on node load info.
 
     maps to (function, (required arguments))"""
+
     DECOMMISSION = ("decommission", _get_decommission_timeout, ())
     NEW_NODE = ("new_node", _get_soft_timeout, ("timeout",))
     CREATE_INDEX = ("create_index", _get_soft_timeout, ("timeout",))
@@ -70,8 +78,11 @@ class Operations(Enum):
     SOFT_TIMEOUT = ("soft_timeout", _get_soft_timeout, ("timeout",))
     FLUSH = ("flush", _get_soft_timeout, ("timeout",))
     QUERY = ("query", _get_query_timeout, ("timeout", "query"))
-    SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
-                                 ("timeout", "service_level_for_test_step"))
+    SERVICE_LEVEL_PROPAGATION = (
+        "service_level_propagation",
+        _get_service_level_propagation_timeout,
+        ("timeout", "service_level_for_test_step"),
+    )
 
 
 class TestInfoServices:  # pylint: disable=too-few-public-methods
@@ -83,7 +94,9 @@ class TestInfoServices:  # pylint: disable=too-few-public-methods
 
 
 @contextmanager
-def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+def adaptive_timeout(
+    operation: Operations, node: "BaseNode", stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs
+):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.
@@ -112,7 +125,12 @@ def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: Ada
             SoftTimeoutEvent(operation=operation.name, soft_timeout=timeout, duration=duration).publish_or_dump()
         try:
             if load_metrics:
-                stats_storage.store(metrics=load_metrics, operation=operation.name, duration=duration,
-                                    timeout=timeout, timeout_occurred=timeout_occurred)
+                stats_storage.store(
+                    metrics=load_metrics,
+                    operation=operation.name,
+                    duration=duration,
+                    timeout=timeout,
+                    timeout_occurred=timeout_occurred,
+                )
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning("Failed to store adaptive timeout stats: \n%s", exc)

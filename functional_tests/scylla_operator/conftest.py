@@ -42,18 +42,19 @@ LOGGER = logging.getLogger(__name__)
 
 # TODO: add support for multiDC setups
 
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
     # Populate test result to test function instance
     outcome = yield
     rep = outcome.get_result()
     if rep.skipped:
-        item._test_result = ('SKIPPED', rep.longrepr[2])  # pylint: disable=protected-access
+        item._test_result = ("SKIPPED", rep.longrepr[2])  # pylint: disable=protected-access
         TESTER.update_test_status(item.nodeid, *item._test_result)  # pylint: disable=protected-access
     elif rep.passed:
-        item._test_result = ('SUCCESS', None)  # pylint: disable=protected-access
+        item._test_result = ("SUCCESS", None)  # pylint: disable=protected-access
     elif not rep.passed:
-        item._test_result = ('FAILED', str(rep.longrepr))  # pylint: disable=protected-access
+        item._test_result = ("FAILED", str(rep.longrepr))  # pylint: disable=protected-access
 
 
 @pytest.fixture(autouse=True, name="harvest_test_results")
@@ -61,14 +62,12 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
     # Pickup test results at the end of the test and submit it to the tester
 
     def publish_test_result():
-        tester.update_test_status(
-            request.node.nodeid,
-            *request.node._test_result)  # pylint: disable=protected-access
+        tester.update_test_status(request.node.nodeid, *request.node._test_result)  # pylint: disable=protected-access
 
     request.addfinalizer(publish_test_result)
 
 
-@pytest.fixture(autouse=True, scope='package', name="tester")
+@pytest.fixture(autouse=True, scope="package", name="tester")
 def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
     global TESTER  # pylint: disable=global-statement
     os.chdir(sct_abs_path())
@@ -92,22 +91,23 @@ def change_test_dir(request):
 
 @pytest.fixture(autouse=True)
 def skip_if_scylla_manager_required_and_absent(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
-    if request.node.get_closest_marker('requires_mgmt') and not tester.params.get('use_mgmt'):
-        pytest.skip('test requires scylla manager to exist')
+    if request.node.get_closest_marker("requires_mgmt") and not tester.params.get("use_mgmt"):
+        pytest.skip("test requires scylla manager to exist")
 
 
 @pytest.fixture(name="db_cluster")
 def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
     if not tester.healthy_flag:
-        pytest.skip('cluster is not healthy, skipping rest of the tests')
+        pytest.skip("cluster is not healthy, skipping rest of the tests")
 
     with tester.db_cluster.scylla_config_map() as scylla_config_map:
         original_scylla_config_map = scylla_config_map
-    original_scylla_cluster_spec = tester.db_cluster.get_scylla_cluster_plain_value('/spec')
+    original_scylla_cluster_spec = tester.db_cluster.get_scylla_cluster_plain_value("/spec")
 
     if dataset_name := tester.db_cluster.params.get("k8s_functional_test_dataset"):
-        tester.db_cluster.wait_for_nodes_up_and_normal(nodes=tester.db_cluster.nodes,
-                                                       verification_node=tester.db_cluster.nodes[0])
+        tester.db_cluster.wait_for_nodes_up_and_normal(
+            nodes=tester.db_cluster.nodes, verification_node=tester.db_cluster.nodes[0]
+        )
         tester.db_cluster.wait_for_init(node_list=tester.db_cluster.nodes, wait_for_db_logs=True)
         tester.db_cluster.prefill_cluster(dataset_name)
     tester.db_cluster.k8s_cluster = tester.db_cluster.k8s_clusters[0]
@@ -115,16 +115,12 @@ def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
 
     if tester.healthy_flag:
         _bring_cluster_back_to_original_state(
-            tester,
-            config_map=original_scylla_config_map,
-            original_scylla_cluster_spec=original_scylla_cluster_spec
+            tester, config_map=original_scylla_config_map, original_scylla_cluster_spec=original_scylla_cluster_spec
         )
 
 
 def _bring_cluster_back_to_original_state(
-        tester: ScyllaOperatorFunctionalClusterTester,
-        config_map: dict,
-        original_scylla_cluster_spec: dict
+    tester: ScyllaOperatorFunctionalClusterTester, config_map: dict, original_scylla_cluster_spec: dict
 ):
     restart = False
     db_cluster = tester.db_cluster
@@ -134,15 +130,15 @@ def _bring_cluster_back_to_original_state(
         #  but keep it in the cluster spec
         # Other alternative is to redeploy cluster, which is expensive and we will do so only if it is found needed
 
-        original_rack_specs = original_scylla_cluster_spec.get('datacenter', {}).get('racks', [])
-        current_cluster_spec = db_cluster.get_scylla_cluster_plain_value('/spec')
-        current_rack_specs = current_cluster_spec.get('datacenter', {}).get('racks', [])
+        original_rack_specs = original_scylla_cluster_spec.get("datacenter", {}).get("racks", [])
+        current_cluster_spec = db_cluster.get_scylla_cluster_plain_value("/spec")
+        current_rack_specs = current_cluster_spec.get("datacenter", {}).get("racks", [])
         if len(original_rack_specs) < len(current_rack_specs):
             # A new racks with 0 members in them to the original cluster specification
             # At this point original_rack_specs is more like cluster spec we want to have
-            new_racks = current_rack_specs[len(original_rack_specs):]
+            new_racks = current_rack_specs[len(original_rack_specs) :]
             for rack in new_racks:
-                rack['members'] = 0
+                rack["members"] = 0
             original_rack_specs.extend(new_racks)
 
         # Restore config-map scylla-config
@@ -153,10 +149,12 @@ def _bring_cluster_back_to_original_state(
                 restart = True
 
         # Exclude some fields from diff, since they are not important for us
-        cluster_spec_diff = DeepDiff(original_scylla_cluster_spec,
-                                     current_cluster_spec,
-                                     ignore_order=True,
-                                     exclude_paths=["forceRedeploymentReason", "repairs", "backups"])
+        cluster_spec_diff = DeepDiff(
+            original_scylla_cluster_spec,
+            current_cluster_spec,
+            ignore_order=True,
+            exclude_paths=["forceRedeploymentReason", "repairs", "backups"],
+        )
         if cluster_spec_diff:
             # If cluster spec we currently have is not equal to what we want replace it.
             # It will cause scylla pods rollout restart on the operator level.
@@ -164,7 +162,7 @@ def _bring_cluster_back_to_original_state(
             #          in "db_cluster.nodes". For the moment all changes to node number must
             #          go though 'add_nodes' and 'decommision' methods only.
             LOGGER.info("Rollout original cluster state due spec change: %s", cluster_spec_diff)
-            db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
+            db_cluster.replace_scylla_cluster_value("/spec", original_scylla_cluster_spec)
             # sleep for 3 minutes to make sure we wait for this rollout to finish (in case some other was running),
             # no impact on test time as anyway rollout takes more than 3 minutes
             time.sleep(180)
@@ -173,12 +171,13 @@ def _bring_cluster_back_to_original_state(
 
         if restart:
             db_cluster.restart_scylla()
-        db_cluster.wait_for_nodes_up_and_normal(
-            nodes=db_cluster.nodes, verification_node=db_cluster.nodes[0])
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=db_cluster.nodes[0])
     except Exception as exc:  # pylint: disable=broad-except
         tester.healthy_flag = False
-        pytest.fail("Failed to bring cluster nodes back to original state due to :\n" +
-                    "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        pytest.fail(
+            "Failed to bring cluster nodes back to original state due to :\n"
+            + "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        )
 
 
 @pytest.fixture(name="cassandra_rackdc_properties")
@@ -192,9 +191,8 @@ def fixture_scylla_yaml(db_cluster: ScyllaPodCluster):
 
 
 @pytest.fixture(autouse=True)
-def skip_if_not_supported_backend(request: pytest.FixtureRequest,
-                                  tester: ScyllaOperatorFunctionalClusterTester):
-    if requires_backend := request.node.get_closest_marker('requires_backend'):
+def skip_if_not_supported_backend(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
+    if requires_backend := request.node.get_closest_marker("requires_backend"):
         backend_name = tester.params.get("cluster_backend")
         if backend_name not in requires_backend.args:
             pytest.skip(f"'{backend_name}' backend is not supported.")
@@ -204,15 +202,14 @@ def skip_if_not_supported_backend(request: pytest.FixtureRequest,
 @pytest.fixture(autouse=True)
 def skip_if_scylla_not_semver(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
     if request.node.get_closest_marker("restart_is_used") and not version_utils.SEMVER_REGEX.match(
-            tester.db_cluster.params.get("scylla_version")):
-        pytest.skip(
-            "test calls 'restart_scylla()' DB method that won't have any effect using non-semver Scylla")
+        tester.db_cluster.params.get("scylla_version")
+    ):
+        pytest.skip("test calls 'restart_scylla()' DB method that won't have any effect using non-semver Scylla")
 
 
 @pytest.fixture(autouse=True)
-def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
-                                         tester: ScyllaOperatorFunctionalClusterTester):
-    requires_scylla_versions = request.node.get_closest_marker('requires_scylla_versions')
+def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
+    requires_scylla_versions = request.node.get_closest_marker("requires_scylla_versions")
     if not requires_scylla_versions:
         return
     requires_scylla_versions = requires_scylla_versions.args
@@ -224,7 +221,7 @@ def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
 
 @pytest.fixture(autouse=True)
 def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
-    if required_operator := request.node.get_closest_marker('required_operator'):
+    if required_operator := request.node.get_closest_marker("required_operator"):
         current_version = tester.k8s_clusters[0].scylla_operator_chart_version.split("-")[0]
         required_version = required_operator.args[0]
         if version_utils.ComparableScyllaOperatorVersion(current_version) < required_version:
@@ -233,5 +230,5 @@ def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: Scyll
 
 @pytest.fixture(autouse=True)
 def skip_if_no_tls(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
-    if request.node.get_closest_marker('requires_tls') and not tester.params.get('k8s_enable_tls'):
-        pytest.skip('test requires k8s_enable_tls to be enabled')
+    if request.node.get_closest_marker("requires_tls") and not tester.params.get("k8s_enable_tls"):
+        pytest.skip("test requires k8s_enable_tls to be enabled")

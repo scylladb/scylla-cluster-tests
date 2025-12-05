@@ -31,34 +31,32 @@ class PartitionNotFound(Exception):
 
 
 class WatcherCallableException(Exception):
-    """ raised when a watcher function in a trigger - watcher pair fails"""
+    """raised when a watcher function in a trigger - watcher pair fails"""
 
 
 class UnsupportedNemesis(Exception):
-    """ raised from within a nemesis execution to skip this nemesis"""
+    """raised from within a nemesis execution to skip this nemesis"""
 
 
 class CdcStreamsWasNotUpdated(Exception):
-    """ raised if messages:
-          - Generation {}: streams description table already updated
-          - CDC description table successfully updated with generation
-        were not found in logs
+    """raised if messages:
+      - Generation {}: streams description table already updated
+      - CDC description table successfully updated with generation
+    were not found in logs
     """
 
 
 class NemesisSubTestFailure(Exception):
-    """ raised if nemesis got error from sub test
-    """
+    """raised if nemesis got error from sub test"""
 
 
 class AuditLogTestFailure(Exception):
-    """ raised if nemesis got error from audit log validation
-    """
+    """raised if nemesis got error from audit log validation"""
 
 
 class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
-    """ raised if node was not boostrapped after bootstrap
-    streaming was aborted """
+    """raised if node was not boostrapped after bootstrap
+    streaming was aborted"""
 
 
 class KillNemesis(BaseException):
