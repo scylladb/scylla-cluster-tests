@@ -34,11 +34,11 @@ class SnitchConfig:
 
     def _get_dc_suffix(self) -> str:
         if self._is_multi_dc:
-            ret = re.findall('-([a-z]+).*-', self._datacenter)
+            ret = re.findall("-([a-z]+).*-", self._datacenter)
             if ret:
-                dc_suffix = 'scylla_node_{}'.format(ret[0])
+                dc_suffix = "scylla_node_{}".format(ret[0])
             else:
-                dc_suffix = self._dc_prefix.replace('-', '_')
+                dc_suffix = self._dc_prefix.replace("-", "_")
             return dc_suffix
         else:
             return ""
@@ -50,12 +50,12 @@ class SnitchConfig:
         Returns `True` if require Scylla restart to make the effect.
         """
         properties = {
-            'dc': self._datacenter,
-            'rack': self._rack,
-            'prefer_local': 'true',
+            "dc": self._datacenter,
+            "rack": self._rack,
+            "prefer_local": "true",
         }
         if self._dc_suffix:
-            properties['dc_suffix'] = self._dc_suffix
+            properties["dc_suffix"] = self._dc_suffix
 
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
             for key, value in properties.items():

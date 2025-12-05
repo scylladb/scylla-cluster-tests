@@ -26,16 +26,16 @@ def get_email_user(email_addr: str) -> str:
 
 def get_username() -> str:  # noqa: PLR0911
     # First we check if user is being impersonated by an api call
-    actual_user_from_request = os.environ.get('BUILD_USER_REQUESTED_BY')
+    actual_user_from_request = os.environ.get("BUILD_USER_REQUESTED_BY")
     if actual_user_from_request:
         return actual_user_from_request
 
     # Then check that we running on Jenkins try to get user email
-    email = os.environ.get('BUILD_USER_EMAIL')
+    email = os.environ.get("BUILD_USER_EMAIL")
     if is_email_in_scylladb_domain(email):
         return get_email_user(email)
 
-    user_id = os.environ.get('BUILD_USER_ID')
+    user_id = os.environ.get("BUILD_USER_ID")
     if user_id:
         user_id = user_id.replace("[", "").replace("]", "")
         return user_id
@@ -48,13 +48,14 @@ def get_username() -> str:  # noqa: PLR0911
 
     # We are not on Jenkins and running in Hydra, try to get email from Git
     # when running in Hydra there are env issues so we pass it using SCT_GIT_USER_EMAIL variable before docker run
-    git_user_email = os.environ.get('GIT_USER_EMAIL')
+    git_user_email = os.environ.get("GIT_USER_EMAIL")
     if is_email_in_scylladb_domain(git_user_email):
         return get_email_user(git_user_email)
 
     # We are outside of Hydra
-    res = subprocess.run("git config --get user.email",
-                         shell=True, check=False, stdout=subprocess.PIPE, encoding="utf-8")
+    res = subprocess.run(
+        "git config --get user.email", shell=True, check=False, stdout=subprocess.PIPE, encoding="utf-8"
+    )
     if is_email_in_scylladb_domain(res.stdout):
         return get_email_user(res.stdout)
 

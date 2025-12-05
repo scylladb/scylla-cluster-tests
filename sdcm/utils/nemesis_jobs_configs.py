@@ -18,13 +18,7 @@ NEMESIS_REQUIRED_ADDITIONAL_CONFIGS = {
 #  Now "ip_ssh_connections" is not supported for AWS and it is ignored.
 #  Test communication address (ip_ssh_connections) is defined as "public" for the relevant pipelines in "two_interfaces.yaml"
 NEMESIS_ADDITIONAL_PIPELINE_PARAMS = {
-    "StopStartInterfacesNetworkMonkey": {
-        "ip_ssh_connections": "public"
-    },
-    "RandomInterruptionNetworkMonkey": {
-        "ip_ssh_connections": "public"
-    },
-    "BlockNetworkMonkey": {
-        "ip_ssh_connections": "public"
-    },
+    "StopStartInterfacesNetworkMonkey": {"ip_ssh_connections": "public"},
+    "RandomInterruptionNetworkMonkey": {"ip_ssh_connections": "public"},
+    "BlockNetworkMonkey": {"ip_ssh_connections": "public"},
 }
