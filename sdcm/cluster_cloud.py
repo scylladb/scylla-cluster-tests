@@ -32,7 +32,7 @@ from sdcm.utils.gce_region import GceRegion
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteCmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.provision.common.utils import configure_vector_target_script
+from sdcm.provision.common.utils import configure_backoff_timeout, configure_vector_target_script, install_vector_from_local_pkg
 
 LOGGER = logging.getLogger(__name__)
 
@@ -351,8 +351,8 @@ class CloudNode(cluster.BaseNode):
             self.remoter.send_files(str(package_path), remote_path)
 
             LOGGER.debug("➡ Installing Vector")
-            ssh_cmd = f"dpkg -i {remote_path} && apt-get update && apt-get install -y vector && systemctl enable vector && systemctl start vector"
-            self.remoter.sudo(shell_script_cmd(ssh_cmd), retry=0, verbose=True)
+            ssh_cmd = configure_backoff_timeout() + install_vector_from_local_pkg(remote_path)
+            self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
             host, port = TestConfig().get_logging_service_host_port()
             ssh_cmd = configure_vector_target_script(host=host, port=port)
             self.remoter.sudo(shell_script_cmd(ssh_cmd, quote="'"), retry=0, verbose=True)
