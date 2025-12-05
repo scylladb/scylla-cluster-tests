@@ -37,9 +37,9 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from uuid import uuid4
 
-from cassandra import ConsistencyLevel, InvalidRequest, Unavailable
+from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
-from cassandra.cluster import NoHostAvailable, OperationTimedOut
+from cassandra.cluster import NoHostAvailable
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
@@ -5589,43 +5589,78 @@ class Nemesis(NemesisFlags):
             self.tester.create_table(name=table_name, keyspace_name=keyspace_name, key_type="bigint",
                                      columns={"name": "text"})
 
-            with simulate_node_unavailability(self.target_node):
-                # target node stopped by Contextmanger. Wait while its status will be updated
-                self.actions_log.info(f"Blocked {self.target_node.name} node"
-                                      f" with {simulate_node_unavailability.__name__}")
-                wait_for(node_operations.is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
-                         down_node=self.target_node, verification_node=working_node, text=f"Wait other nodes see {self.target_node.name} as DOWN...")
-                self.log.debug("Remove node %s : hostid: %s with blocked scylla from cluster",
-                               self.target_node.name, target_host_id)
-                self.actions_log.info(f"Remove {self.target_node.name} node from cluster")
-                # For process paused with SIGSTOP signal, network sockets are still open,
-                # so already running raft barriers could stuck. To avoid that
-                # we need to block scylla ports on target node.
-                if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
-                    with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
+            message_context = (
+                f"Banned node {self.target_node.name} should receive NOTIFY_BANNED "
+                f"and terminate after being removed from cluster"
+            )
+            with wait_for_log_lines(
+                    node=self.target_node, start_line_patterns=[
+                        "received notification of being banned from the cluster"],
+                    end_line_patterns=["terminating."], start_timeout=300, end_timeout=300, error_msg_ctx=message_context,
+            ):
+                with simulate_node_unavailability(self.target_node):
+                    # target node stopped by Contextmanger. Wait while its status will be updated
+                    self.actions_log.info(f"Blocked {self.target_node.name} node"
+                                          f" with {simulate_node_unavailability.__name__}")
+                    wait_for(node_operations.is_node_seen_as_down, step=5, timeout=600, throw_exc=True,
+                             down_node=self.target_node, verification_node=working_node, text=f"Wait other nodes see {self.target_node.name} as DOWN...")
+                    self.log.debug("Remove node %s : hostid: %s with blocked scylla from cluster",
+                                   self.target_node.name, target_host_id)
+                    self.actions_log.info(f"Remove {self.target_node.name} node from cluster")
+                    # For process paused with SIGSTOP signal, network sockets are still open,
+                    # so already running raft barriers could stuck. To avoid that
+                    # we need to block scylla ports on target node.
+                    if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
+                        with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
+                            working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+                    else:
                         working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
-                else:
-                    working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
-                assert node_operations.is_node_removed_from_cluster(removed_node=self.target_node, verification_node=working_node), \
-                    f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
-                # Context manager at exit  start scylla on target node.
-                # But node already removed from cluster. So any operations from it
-                # should be banned. If query executed succesfull, raise an error
-            assert self.target_node.db_up(), f"Scylla was not up on node {self.target_node.name}"
+                    assert node_operations.is_node_removed_from_cluster(removed_node=self.target_node, verification_node=working_node), \
+                        f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
+                    # Context manager at exit  start scylla on target node.
+                    # But node already removed from cluster. So any operations from it
+                    # should be banned. If query executed succesfull, raise an error
 
-            with self.cluster.cql_connection_exclusive(node=self.target_node) as session:
-                self.actions_log.info("Execute query on banned node")
-                for key in random.sample(range(1, 100001), 1000):
-                    try:
+            try:
+                with self.cluster.cql_connection_exclusive(node=self.target_node) as session:
+                    self.actions_log.info("Execute query on banned node")
+                    for key in random.sample(range(1, 100001), 1000):
                         stmt = SimpleStatement(f"INSERT INTO {keyspace_name}.{table_name} (key, name) VALUES ({key}, 'name{key}');",
                                                consistency_level=ConsistencyLevel.QUORUM)
                         session.execute(stmt)
-                        self.log.error("Banned query passed to cluster from banned node")
+
                         raise BannedQueryExecUnexpectedSuccess(
-                            "Query from banned node was executed succesful with Consistency.QUORUM")
-                    except (NoHostAvailable, OperationTimedOut, Unavailable) as exc:
-                        self.log.debug("Query failed with error: %s as expected", exc)
-                        self.actions_log.info("Query failed as expected")
+                            "Query from banned node was executed successful with Consistency.QUORUM"
+                        )
+            except NoHostAvailable as exc:
+                self.actions_log.info(
+                    "Could not establish CQL connection to banned node %s as expected: %s",
+                    self.target_node.name,
+                    exc,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.actions_log.info(
+                    "Query from banned node %s failed as expected: %r",
+                    self.target_node.name,
+                    exc,
+                )
+
+            self.actions_log.info(
+                "Wait for banned node %s to terminate after being removed from cluster", self.target_node.name
+            )
+
+            wait_for(
+                lambda: not self.target_node.db_up(),
+                step=5,
+                timeout=60,
+                throw_exc=True,
+                text=f"Wait banned node {self.target_node.name} to terminate after ban notification...",
+            )
+
+            self.actions_log.info(
+                "Banned node %s has NOTIFY_BANNED and terminating messages in logs",
+                self.target_node.name,
+            )
 
             # Pass only active nodes for connection. Workaround for issue:
             # https://github.com/scylladb/python-driver/issues/484
