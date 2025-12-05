@@ -60,7 +60,7 @@ SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
 
-ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
+ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2023_ARM_64_STANDARD', 'x86_64': 'AL2023_x86_64_STANDARD'}
 
 
 def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
@@ -131,6 +131,9 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             instance_type=params.get("instance_type_loader"),
             role_arn=params.get('eks_nodegroup_role_arn'),
             disk_size=params.get('root_disk_size_monitor'),
+            labels={
+                "scylla.scylladb.com/node-type": "scylla"
+            },
             k8s_cluster=k8s_cluster))
 
     if params.get('k8s_deploy_monitoring'):
@@ -142,7 +145,13 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
             disk_size=params.get('root_disk_size_monitor'),
             k8s_cluster=k8s_cluster))
     k8s_cluster.wait_all_node_pools_to_be_ready()
-    k8s_cluster.configure_ebs_csi_driver()
+
+    k8s_cluster.create_ebs_csi_driver_serviceaccount()
+    k8s_cluster.eks_client.create_addon(
+        clusterName=k8s_cluster.short_cluster_name,
+        addonName='aws-ebs-csi-driver',
+    )
+    k8s_cluster.deploy_ebs_csi_driver()
 
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     if params.get("k8s_enable_sni"):
@@ -176,7 +185,7 @@ class EksNodePool(CloudK8sNodePool):
             ssh_key_pair_name: str = None,
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
-            image_type: Literal['AL2_x86_64', 'AL2_x86_64_GPU', 'AL2_ARM_64'] = None,
+            image_type: Literal['AL2023_x86_64_STANDARD', 'AL2023_ARM_64_STANDARD'] = None,
             disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"] = "gp3",
             k8s_version: str = None,
             is_deployed: bool = False,
@@ -185,7 +194,7 @@ class EksNodePool(CloudK8sNodePool):
         if not image_type:
             current_arch = get_arch_from_instance_type(
                 instance_type=instance_type, region_name=k8s_cluster.region_name)
-            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2_x86_64")
+            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2023_x86_64_STANDARD")
         super().__init__(
             k8s_cluster=k8s_cluster,
             name=name,
@@ -213,11 +222,6 @@ class EksNodePool(CloudK8sNodePool):
         return f'sct-{self.k8s_cluster.short_cluster_name}-{self.name}'
 
     @property
-    def is_launch_template_required(self) -> bool:
-        # NOTE: use launch template to be able to specify the `gp3` disk type by default
-        return True
-
-    @property
     def _launch_template_cfg(self) -> dict:
         root_ebs_block_device_params = {
             "DeleteOnTermination": True,
@@ -241,6 +245,10 @@ class EksNodePool(CloudK8sNodePool):
                 ResourceType="instance",
                 Tags=tags_as_ec2_tags(self.tags)
             )]
+        launch_template['MetadataOptions'] = {
+            'HttpTokens': 'required',
+            'HttpPutResponseHopLimit': 2,
+        }
         return launch_template
 
     @property
@@ -268,29 +276,23 @@ class EksNodePool(CloudK8sNodePool):
             'capacityType': self.provision_type.upper(),
             'version': self.k8s_version
         }
-        if self.is_launch_template_required:
-            node_pool_config['launchTemplate'] = {'name': self.launch_template_name}
-        else:
-            node_pool_config['diskSize'] = self.disk_size
-            node_pool_config['remoteAccess'] = {
-                'ec2SshKey': self.ssh_key_pair_name,
-            }
+        node_pool_config['launchTemplate'] = {'name': self.launch_template_name}
         return node_pool_config
 
     def deploy(self) -> None:
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
-        if self.is_launch_template_required:
-            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
-            create_launch_template_args = {
-                "LaunchTemplateName": self.launch_template_name,
-                "LaunchTemplateData": self._launch_template_cfg,
-            }
-            if self.tags:
-                create_launch_template_args["TagSpecifications"] = [LaunchTemplateTagSpecificationRequestTypeDef(
-                    ResourceType="launch-template",
-                    Tags=tags_as_ec2_tags(self.tags),
-                )]
-            self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
+        self.k8s_cluster.log.info("Deploy launch template %s with the configuration %s", self.launch_template_name,
+                                  str(self._node_group_cfg))
+        create_launch_template_args = {
+            "LaunchTemplateName": self.launch_template_name,
+            "LaunchTemplateData": self._launch_template_cfg,
+        }
+        if self.tags:
+            create_launch_template_args["TagSpecifications"] = [LaunchTemplateTagSpecificationRequestTypeDef(
+                ResourceType="launch-template",
+                Tags=tags_as_ec2_tags(self.tags),
+            )]
+        self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
         self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         self.is_deployed = True
 
@@ -424,19 +426,16 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             },
             tags=self.tags,
         )
+
+        if wait_till_functional:
+            wait_for(lambda: self.cluster_status == 'ACTIVE', step=60, throw_exc=True, timeout=1200,
+                     text=f'Waiting till EKS cluster {self.short_cluster_name} become operational')
+
         self.eks_client.create_addon(
             clusterName=self.short_cluster_name,
             addonName='vpc-cni',
             addonVersion=self.vpc_cni_version
         )
-        # TODO: think if we need to pin version, or select base on k8s version
-        self.eks_client.create_addon(
-            clusterName=self.short_cluster_name,
-            addonName='aws-ebs-csi-driver',
-        )
-        if wait_till_functional:
-            wait_for(lambda: self.cluster_status == 'ACTIVE', step=60, throw_exc=True, timeout=1200,
-                     text=f'Waiting till EKS cluster {self.short_cluster_name} become operational')
 
     @property
     def cluster_info(self) -> dict:
@@ -514,19 +513,20 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def ebs_csi_driver_status(self) -> str:
         return self.ebs_csi_driver_info['status']
 
-    def configure_ebs_csi_driver(self):
+    def create_ebs_csi_driver_serviceaccount(self):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
 
-        wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
-                 text='Waiting till aws-ebs-csi-driver become operational')
         LOCALRUNNER.run(
             f'eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve')
         LOCALRUNNER.run(f'eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system '
                         f'--cluster {self.short_cluster_name} '
                         f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
                         f'--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} '
-                        f'--tags {tags} --override-existing-serviceaccounts')
+                        f'--tags {tags} --role-only --override-existing-serviceaccounts')
 
+    def deploy_ebs_csi_driver(self):
+        wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
+                 text='Waiting till aws-ebs-csi-driver become operational')
         self.kubectl("rollout restart deployment ebs-csi-controller", namespace="kube-system")
 
     def tune_network(self):
