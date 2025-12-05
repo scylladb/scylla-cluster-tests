@@ -16,7 +16,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                    description: 'aws|gce|azure|docker',
                    name: 'backend')
-            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
             string(defaultValue: '',
