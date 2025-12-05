@@ -22,8 +22,8 @@ Delays = Iterable[float]
 
 @dataclass
 class Timings:
-    """A store for timeouts and delays
-    """
+    """A store for timeouts and delays"""
+
     keepalive_timeout: Timing = 30
     keepalive_sending_timeout: Timing = 1
     socket_timeout: NullableTiming = 10

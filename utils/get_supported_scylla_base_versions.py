@@ -11,6 +11,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     get_s3_scylla_repos_mapping,
 )
+
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -18,27 +19,37 @@ LOGGER = logging.getLogger(__name__)
 
 
 # We support to migrate from specific OSS version to enterprise
-supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0',
-                     '2022.2': '5.1', '2023.1': '5.2', '2024.1': '5.4', '2024.2': '6.0', '2025.1': '6.2'}
+supported_src_oss = {
+    "2021.1": "4.3",
+    "2022.1": "5.0",
+    "2022.2": "5.1",
+    "2023.1": "5.2",
+    "2024.1": "5.4",
+    "2024.2": "6.0",
+    "2025.1": "6.2",
+}
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
-start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'},
-                          'centos-9': {'scylla': '5.4', 'enterprise': '2024.1'}}
-start_support_backend = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
+start_support_versions = {
+    "centos-8": {"scylla": "4.1", "enterprise": "2021.1"},
+    "centos-9": {"scylla": "5.4", "enterprise": "2024.1"},
+}
+start_support_backend = {"azure": {"scylla": "5.2", "enterprise": "2023.1"}}
 
 # list of version that are available, but aren't supported, and we should test upgrades from
-unsupported_versions = ['5.3', ]
+unsupported_versions = [
+    "5.3",
+]
 
 
 class UpgradeBaseVersion:
-
     oss_start_support_version = None
     ent_start_support_version = None
 
     def __init__(self, scylla_repo: str, linux_distro: str, scylla_version: str = None):
-        if len(linux_distro.split('-')) > 1:
-            self.dist_type, *_, self.dist_version = linux_distro.split('-')
+        if len(linux_distro.split("-")) > 1:
+            self.dist_type, *_, self.dist_version = linux_distro.split("-")
         else:
-            self.dist_type = linux_distro.split('-')[0]
+            self.dist_type = linux_distro.split("-")[0]
             self.dist_version = None
         self.scylla_repo = scylla_repo
         self.linux_distro = linux_distro
@@ -53,10 +64,11 @@ class UpgradeBaseVersion:
         LOGGER.info("Getting scylla product and major version for upgrade versions listing...")
         if scylla_version is None:
             try:
-                assert 'unstable/' in self.scylla_repo, "Did not find 'unstable/' in scylla_repo. " \
-                                                        "Scylla repo: %s" % self.scylla_repo
-                version = self.scylla_repo.split('unstable/')[1].split('/')[1]
-                scylla_version = version.replace('branch-', '').replace('enterprise-', '')
+                assert "unstable/" in self.scylla_repo, (
+                    "Did not find 'unstable/' in scylla_repo. Scylla repo: %s" % self.scylla_repo
+                )
+                version = self.scylla_repo.split("unstable/")[1].split("/")[1]
+                scylla_version = version.replace("branch-", "").replace("enterprise-", "")
             except AssertionError:
                 scylla_version = get_branch_version(self.scylla_repo)
         LOGGER.info("Scylla major version used for upgrade versions listing: %s", version)
@@ -68,19 +80,23 @@ class UpgradeBaseVersion:
         so we need to assign the start support versions for it.
         """
         LOGGER.info("Setting start support version...")
-        if self.dist_type not in ['debian', 'ubuntu'] and self.linux_distro != 'centos':
+        if self.dist_type not in ["debian", "ubuntu"] and self.linux_distro != "centos":
             versions_dict = start_support_versions.get(self.linux_distro, None)
             if versions_dict is None:
                 raise Exception(
-                    f"We can't detect the support versions for this distro, which shares the repo with {self.dist_type}.")
-            self.oss_start_support_version = versions_dict['scylla']
-            self.ent_start_support_version = versions_dict['enterprise']
+                    f"We can't detect the support versions for this distro, which shares the repo with {self.dist_type}."
+                )
+            self.oss_start_support_version = versions_dict["scylla"]
+            self.ent_start_support_version = versions_dict["enterprise"]
         backend_dict = start_support_backend.get(backend, None)
         if backend_dict:
-            self.oss_start_support_version = backend_dict['scylla']
-            self.ent_start_support_version = backend_dict['enterprise']
-        LOGGER.info("Support start versions set: oss=%s enterprise=%s", self.oss_start_support_version,
-                    self.ent_start_support_version)
+            self.oss_start_support_version = backend_dict["scylla"]
+            self.ent_start_support_version = backend_dict["enterprise"]
+        LOGGER.info(
+            "Support start versions set: oss=%s enterprise=%s",
+            self.oss_start_support_version,
+            self.ent_start_support_version,
+        )
 
     def get_supported_scylla_base_versions(self, supported_versions) -> list:
         """
@@ -93,8 +109,9 @@ class UpgradeBaseVersion:
         oss_base_version = []
         ent_base_version = []
 
-        oss_release_list = [v for v in supported_versions if (
-            not is_enterprise(v)) or ComparableScyllaVersion(v) >= '2025.1.dev']
+        oss_release_list = [
+            v for v in supported_versions if (not is_enterprise(v)) or ComparableScyllaVersion(v) >= "2025.1.dev"
+        ]
         oss_release_list = sorted(oss_release_list)
         ent_release_list = [v for v in supported_versions if is_enterprise(v)]
 
@@ -107,22 +124,22 @@ class UpgradeBaseVersion:
             oss_base_version.append(version)
             oss_base_version.append(supported_src_oss.get(version))
             if idx != 0:
-                lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
-                sts_version = re.compile(r'\d{4}\.2')  # sts = short term support
+                lts_version = re.compile(r"\d{4}\.1")  # lts = long term support
+                sts_version = re.compile(r"\d{4}\.2")  # sts = short term support
 
-                if sts_version.search(version) or ComparableScyllaVersion(version) < '2023.1':
+                if sts_version.search(version) or ComparableScyllaVersion(version) < "2023.1":
                     # we need to support last LTS version
-                    oss_base_version += ent_release_list[idx - 1:][:2]
+                    oss_base_version += ent_release_list[idx - 1 :][:2]
                 elif lts_version.search(version):
                     # we need to support last version + last LTS version
                     idx = 2 if idx == 1 else idx
-                    oss_base_version += ent_release_list[idx - 2:][:2]
+                    oss_base_version += ent_release_list[idx - 2 :][:2]
                 else:
-                    LOGGER.warning('version format not the default - %s', version)
+                    LOGGER.warning("version format not the default - %s", version)
 
-        elif version == 'master':
+        elif version == "master":
             oss_base_version.append(oss_release_list[-1])
-        elif re.match(r'\d+.\d+', version):
+        elif re.match(r"\d+.\d+", version):
             relevant_versions = [v for v in oss_release_list if ComparableScyllaVersion(v) < version]
             # If dest version is smaller than the first supported opensource release,
             # it might be an invalid dest version
@@ -141,8 +158,8 @@ class UpgradeBaseVersion:
     def filter_rc_only_version(self, base_version_list: list) -> list:
         LOGGER.info("Filtering rc versions from base version list...")
         base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
-        if base_version_list and self.scylla_version not in ('enterprise', 'master'):
-            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v]
+        if base_version_list and self.scylla_version not in ("enterprise", "master"):
+            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if "rc" not in v]
             if not filter_rc:
                 base_version_list = base_version_list[:-1]
         return base_version_list
@@ -157,15 +174,21 @@ class UpgradeBaseVersion:
         # Filter out the unsupported versions
         for version_prefix, _ in self.repo_maps.items():
             # can't find the major version from the version_prefix string
-            if not re.match(r'\d+.\d+', version_prefix):
+            if not re.match(r"\d+.\d+", version_prefix):
                 continue
             # OSS: the major version is smaller than the start support version
-            if self.oss_start_support_version and not is_enterprise(version_prefix) and \
-                    ComparableScyllaVersion(version_prefix) < self.oss_start_support_version:
+            if (
+                self.oss_start_support_version
+                and not is_enterprise(version_prefix)
+                and ComparableScyllaVersion(version_prefix) < self.oss_start_support_version
+            ):
                 continue
             # Enterprise: the major version is smaller than the start support version
-            if self.ent_start_support_version and is_enterprise(version_prefix) and \
-                    ComparableScyllaVersion(version_prefix) < self.ent_start_support_version:
+            if (
+                self.ent_start_support_version
+                and is_enterprise(version_prefix)
+                and ComparableScyllaVersion(version_prefix) < self.ent_start_support_version
+            ):
                 continue
             if version_prefix in unsupported_versions:
                 continue

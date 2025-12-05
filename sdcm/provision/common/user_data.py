@@ -18,8 +18,8 @@ from sdcm.provision.common.builders import AttrBuilder
 
 
 class DataDeviceType(str, Enum):
-    ATTACHED = 'attached'
-    INSTANCE_STORE = 'instance_store'
+    ATTACHED = "attached"
+    INSTANCE_STORE = "instance_store"
 
 
 class RaidLevelType(int, Enum):

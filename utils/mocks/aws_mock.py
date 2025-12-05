@@ -48,17 +48,19 @@ class AwsMock:
         self.test_id = test_id
 
         # empty params, now part of ContainerManager api to allow access to SCT configuration
-        self.parent_cluster = namedtuple('cluster', field_names='params')(params={})
+        self.parent_cluster = namedtuple("cluster", field_names="params")(params={})
 
     def aws_mock_container_run_args(self) -> dict:
         return {
             "name": f"aws_mock-{self.test_id}",
             "tty": True,
             "environment": {
-                "AWS_MOCK_HOSTS": " ".join(chain(
-                    DEFAULT_MOCKED_HOSTS,
-                    (f"ec2.{region}.amazonaws.com" for region in self.regions if region != "eu-west-2"),
-                )),
+                "AWS_MOCK_HOSTS": " ".join(
+                    chain(
+                        DEFAULT_MOCKED_HOSTS,
+                        (f"ec2.{region}.amazonaws.com" for region in self.regions if region != "eu-west-2"),
+                    )
+                ),
             },
             "pull": True,
         }
@@ -69,7 +71,11 @@ class AwsMock:
             return AWS_MOCK_IP_FILE.read_text(encoding="utf-8")
 
         container = ContainerManager.run_container(self, "aws_mock")
-        res = container.exec_run(["bash", "-cxe", dedent("""\
+        res = container.exec_run(
+            [
+                "bash",
+                "-cxe",
+                dedent("""\
             mkdir -p /src/s3/scylla-qa-keystore
             ssh-keygen -q -b 2048 -t ed25519 -N "" -C aws_mock -f /src/s3/scylla-qa-keystore/scylla_test_id_ed25519
             chown -R nginx:nginx /src/s3/scylla-qa-keystore
@@ -77,7 +83,9 @@ class AwsMock:
             mkdir -m 700 -p /home/ubuntu/.ssh
             cp /src/s3/scylla-qa-keystore/scylla_test_id_ed25519.pub /home/ubuntu/.ssh/authorized_keys
             chown -R ubuntu:ubuntu /home/ubuntu/.ssh
-        """)])
+        """),
+            ]
+        )
         if res.exit_code:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
 
@@ -87,18 +95,15 @@ class AwsMock:
         return aws_mock_ip
 
     @staticmethod
-    def clean(test_id: str | None = None,
-              all_mocks: bool = False,
-              verbose: bool = False,
-              dry_run: bool = False) -> None:
+    def clean(
+        test_id: str | None = None, all_mocks: bool = False, verbose: bool = False, dry_run: bool = False
+    ) -> None:
         filters = {"NodeType": AWS_MOCK_NODE_TYPE}
         if not all_mocks and test_id:
             filters["TestId"] = test_id
-        containers = list_resources_docker(
-            tags_dict=filters,
-            builder_name="local",
-            verbose=verbose
-        ).get("containers", [])
+        containers = list_resources_docker(tags_dict=filters, builder_name="local", verbose=verbose).get(
+            "containers", []
+        )
 
         aws_mock_ip = None
 
