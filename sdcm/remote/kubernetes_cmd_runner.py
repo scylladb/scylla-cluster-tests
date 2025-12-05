@@ -100,7 +100,8 @@ class KubernetesRunner(Runner):
                     stdin=True,
                     stdout=True,
                     tty=False,
-                    _preload_content=False)
+                    _preload_content=False,
+                )
             except k8s.client.rest.ApiException as exc:
                 raise ConnectionError(str(exc)) from None
 
@@ -133,9 +134,9 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
     default_run_retry = 8
 
-    def __init__(self, kluster, pod_image: str,
-                 pod_name: str, container: Optional[str] = None,
-                 namespace: str = "default") -> None:
+    def __init__(
+        self, kluster, pod_image: str, pod_name: str, container: Optional[str] = None, namespace: str = "default"
+    ) -> None:
         self.kluster = kluster
         self.pod_image = pod_image
         self.pod_name = pod_name
@@ -165,8 +166,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     def run(self, cmd, **kwargs):
         if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
             if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
-                LOGGER.info(
-                    "Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
+                LOGGER.info("Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
                 return self.dynamic_remoter.run(cmd, **kwargs)
             elif is_ycsb_command(cmd) and "ycsb" not in self.pod_image:
                 LOGGER.info("Running following 'ycsb' command in a separate dynamic loader pod: %s", cmd)
@@ -183,48 +183,72 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
 
     @property
     def connection(self):
-        raise RuntimeError('KubernetesCmdRunner does not hold any connection, use _create_connection instead')
+        raise RuntimeError("KubernetesCmdRunner does not hold any connection, use _create_connection instead")
 
     def is_up(self, timeout=None) -> bool:
         return True
 
     def _create_connection(self):
-        return KubernetesRunner(Context(Config(overrides={"k8s_kluster": self.kluster,
-                                                          "k8s_pod_name": self.pod_name,
-                                                          "k8s_container": self.container,
-                                                          "k8s_namespace": self.namespace, })))
+        return KubernetesRunner(
+            Context(
+                Config(
+                    overrides={
+                        "k8s_kluster": self.kluster,
+                        "k8s_pod_name": self.pod_name,
+                        "k8s_container": self.container,
+                        "k8s_namespace": self.namespace,
+                    }
+                )
+            )
+        )
 
-    def _run_execute(self, cmd: str, timeout: Optional[float] = None,
-                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     watchers: Optional[List[StreamWatcher]] = None):
+    def _run_execute(
+        self,
+        cmd: str,
+        timeout: Optional[float] = None,
+        ignore_status: bool = False,
+        verbose: bool = True,
+        new_session: bool = False,
+        watchers: Optional[List[StreamWatcher]] = None,
+    ):
         # TODO: This should be removed than sudo calls will be done in more organized way.
         tmp = cmd.split(maxsplit=3)
-        if tmp[0] == 'sudo':
+        if tmp[0] == "sudo":
             deprecation("Using `sudo' in cmd string is deprecated.  Use `remoter.sudo()' instead.")
             frame = inspect.stack()[1]
-            self.log.error("Cut off `sudo' from the cmd string: %s (%s:%s: %s)",
-                           cmd, frame.filename, frame.lineno, frame.code_context[0].rstrip())
-            if tmp[1] == '-u':
+            self.log.error(
+                "Cut off `sudo' from the cmd string: %s (%s:%s: %s)",
+                cmd,
+                frame.filename,
+                frame.lineno,
+                frame.code_context[0].rstrip(),
+            )
+            if tmp[1] == "-u":
                 cmd = tmp[3]
             else:
-                cmd = cmd[cmd.find('sudo') + 5:]
+                cmd = cmd[cmd.find("sudo") + 5 :]
         # Session should be created for each run
-        return super()._run_execute(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose,
-                                    new_session=True, watchers=watchers)
+        return super()._run_execute(
+            cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, new_session=True, watchers=watchers
+        )
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
-    def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300, sudo: bool = False):
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
+    def receive_files(
+        self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300, sudo: bool = False
+    ):
         # NOTE: sudo parameter is not used here, because we are using kubectl cp command, and not sure if it needed yet
-        KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod_name}:{src}", dst,
-                                container=self.container, timeout=timeout)
+        KubernetesOps.copy_file(
+            self.kluster, f"{self.namespace}/{self.pod_name}:{src}", dst, container=self.container, timeout=timeout
+        )
         return True
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False, sudo: bool = False):
         # NOTE: sudo parameter is not used here, because we are using kubectl cp command, and not sure if it needed yet
         with KEY_BASED_LOCKS.get_lock(f"k8s--{self.kluster.name}--{self.namespace}--{self.pod_name}"):
-            KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}",
-                                    container=self.container, timeout=300)
+            KubernetesOps.copy_file(
+                self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}", container=self.container, timeout=300
+            )
         return True
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
@@ -275,7 +299,7 @@ class KubernetesPodWatcher(KubernetesRunner):
     def should_use_pty(self, pty: bool, fallback: bool) -> bool:
         return True
 
-    @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError, ))
+    @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError,))
     def _open_stream(self) -> None:
         try:
             # NOTE: following API call is analog of the following CLI command:
@@ -287,19 +311,17 @@ class KubernetesPodWatcher(KubernetesRunner):
                 timestamps=False,
                 # NOTE: need to set a timeout, because GKE's 'pod_log' API tends to hang
                 _request_timeout=self.READ_REQUEST_TIMEOUT,
-                _preload_content=False)
+                _preload_content=False,
+            )
             self.stream_connection_start_time = time.time()
         except k8s.client.rest.ApiException as exc:
-            LOGGER.warning(
-                "'_open_stream()': failed to open pod log stream:\n%s", exc)
+            LOGGER.warning("'_open_stream()': failed to open pod log stream:\n%s", exc)
             # NOTE: following is workaround for the error 401 which may happen due to
             #       some config data corruption during the forced socket connection failure
-            self._k8s_core_v1_api = KubernetesOps.core_v1_api(
-                self.context.config.k8s_kluster.get_api_client())
+            self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.context.config.k8s_kluster.get_api_client())
             raise ConnectionError(str(exc)) from None
 
-    @retrying(n=12, sleep_time=10, allowed_exceptions=(
-        ProtocolError, ReadTimeoutError, TimeoutError, AttributeError))
+    @retrying(n=12, sleep_time=10, allowed_exceptions=(ProtocolError, ReadTimeoutError, TimeoutError, AttributeError))
     def _read_from_stream(self, num_bytes: int) -> str:
         pod_name = self.context.config.k8s_pod_name
         with self._ws_lock:
@@ -309,20 +331,23 @@ class KubernetesPodWatcher(KubernetesRunner):
                     LOGGER.warning(
                         "'_read_from_stream': stopping '%s' pod because stream to it "
                         "cannot be established having alive pod.",
-                        self.context.config.k8s_pod_name)
+                        self.context.config.k8s_pod_name,
+                    )
                     self._stop_pod()
                     time.sleep(10)
-                    return ''
+                    return ""
                 else:
                     LOGGER.debug(
-                        "'_read_from_stream' called for the %s pod having closed socket. Recreating it.",
-                        pod_name)
+                        "'_read_from_stream' called for the %s pod having closed socket. Recreating it.", pod_name
+                    )
                     self._start()
             elif self.STREAM_CONNECTION_TTL < time.time() - self.stream_connection_start_time:
                 LOGGER.debug(
                     "'_read_from_stream': Recreate '%s' pod log stream connection to avoid freezes. "
                     "Reason: reached '%s' seconds of 'time to live'",
-                    pod_name, self.STREAM_CONNECTION_TTL)
+                    pod_name,
+                    self.STREAM_CONNECTION_TTL,
+                )
                 self.process.close()
                 self._start()
 
@@ -341,8 +366,8 @@ class KubernetesPodWatcher(KubernetesRunner):
                     #       where special symbol's bytes are cut for pieces.
                     #       So, to overcome it we read some more bytes and then parse the output.
                     InfoEvent(
-                        message=f"Failure decoding 'utf-8' on the '{pod_name}' pod: {exc}",
-                        severity=Severity.WARNING).publish()
+                        message=f"Failure decoding 'utf-8' on the '{pod_name}' pod: {exc}", severity=Severity.WARNING
+                    ).publish()
                     addon_result = self.process.read(5)
                     sum_result = result + addon_result
                     try:
@@ -350,12 +375,12 @@ class KubernetesPodWatcher(KubernetesRunner):
                     except UnicodeDecodeError as exc:
                         InfoEvent(
                             message=f"[fallback error] Failure decoding 'utf-8' on the '{pod_name}' pod: {exc}",
-                            severity=Severity.ERROR).publish()
+                            severity=Severity.ERROR,
+                        ).publish()
                         return f"<not-decoded-{len(sum_result)}-bytes>"
             return result
 
-    @retrying(n=30, sleep_time=10, allowed_exceptions=(
-        ProtocolError, ReadTimeoutError, TimeoutError, AttributeError))
+    @retrying(n=30, sleep_time=10, allowed_exceptions=(ProtocolError, ReadTimeoutError, TimeoutError, AttributeError))
     def _start(self) -> None:
         pod_name = self.context.config.k8s_pod_name
         with self._ws_lock:
@@ -368,7 +393,9 @@ class KubernetesPodWatcher(KubernetesRunner):
                     "'runner._start()' method for the '%s' pod: "
                     "Going to re-read '%s' num of bytes to avoid sending bytes "
                     "to consumer which were already sent.",
-                    pod_name, self.current_read_bytes_num)
+                    pod_name,
+                    self.current_read_bytes_num,
+                )
                 reread_bytes = 0
                 while self.current_read_bytes_num > reread_bytes:
                     time.sleep(0.01)
@@ -376,32 +403,34 @@ class KubernetesPodWatcher(KubernetesRunner):
                     self.process.read(read_chunk_size)
                     reread_bytes += read_chunk_size
                 LOGGER.debug(
-                    "'runner._start()' method for the '%s' pod: "
-                    "Successfully re-read '%s' num of bytes.",
-                    pod_name, self.current_read_bytes_num)
+                    "'runner._start()' method for the '%s' pod: Successfully re-read '%s' num of bytes.",
+                    pod_name,
+                    self.current_read_bytes_num,
+                )
 
     def start(self, command: str, shell: str, env: dict) -> None:
         LOGGER.debug(
-            "Calling 'runner.start()' method for the '%s' pod.\n"
-            "command: %s\n",
-            self.context.config.k8s_pod_name, command)
+            "Calling 'runner.start()' method for the '%s' pod.\ncommand: %s\n",
+            self.context.config.k8s_pod_name,
+            command,
+        )
         self._start()
 
     def _get_docker_image(self, command) -> str:
         params = self.context.config.k8s_kluster.params
         if is_scylla_bench_command(command):
-            return params.get('stress_image.scylla-bench')
+            return params.get("stress_image.scylla-bench")
         if is_ycsb_command(command):
             return params.get("stress_image.ycsb")
-        if loader_image := params.get('stress_image.cassandra-stress'):
+        if loader_image := params.get("stress_image.cassandra-stress"):
             return loader_image
         raise ValueError("No loader image found in the params")
 
     def _get_pod_status(self) -> dict:
         result_raw = self.context.config.k8s_kluster.kubectl(
-            f"get pod {self.context.config.k8s_pod_name} "
-            "-o jsonpath='{.status}'",
-            namespace=self.context.config.k8s_namespace).stdout.strip()
+            f"get pod {self.context.config.k8s_pod_name} -o jsonpath='{{.status}}'",
+            namespace=self.context.config.k8s_namespace,
+        ).stdout.strip()
         return yaml.safe_load(result_raw) or {}
 
     def returncode(self, status: dict | None = None) -> Optional[int]:
@@ -427,24 +456,21 @@ class KubernetesPodWatcher(KubernetesRunner):
         status, pod_name = self._get_pod_status(), self.context.config.k8s_pod_name
         returncode = self.returncode(status=status)
         if returncode not in (None, 0):
-            raise RuntimeError(
-                f"'{pod_name}' failed with following exit code: %s" % returncode)
+            raise RuntimeError(f"'{pod_name}' failed with following exit code: %s" % returncode)
         result = False
         for condition in status.get("conditions", []):
             if condition.get("type") != "Ready":
                 continue
             result = condition.get("status") == "True" or condition.get("reason") == "PodCompleted"
-        LOGGER.debug(
-            "'runner._is_pod_ready_or_completed': %s , result: %s",
-            pod_name, result)
+        LOGGER.debug("'runner._is_pod_ready_or_completed': %s , result: %s", pod_name, result)
         return result
 
     def _is_pod_failed_or_completed(self, _cache={}) -> bool:  # noqa: B006
-        last_call_at = _cache.get('last_call_at')
+        last_call_at = _cache.get("last_call_at")
         if last_call_at and time.time() - last_call_at < 3:
             time.sleep(3)
         status = self._get_pod_status()
-        _cache['last_call_at'] = time.time()
+        _cache["last_call_at"] = time.time()
         if self.returncode(status=status) is not None:
             return True
         result = False
@@ -452,9 +478,7 @@ class KubernetesPodWatcher(KubernetesRunner):
             if condition.get("type") != "Ready":
                 continue
             result = condition.get("reason") in ("PodFailed", "PodCompleted")
-        LOGGER.debug(
-            "'runner._is_pod_failed_or_completed': %s , result: %s",
-            self.context.config.k8s_pod_name, result)
+        LOGGER.debug("'runner._is_pod_failed_or_completed': %s , result: %s", self.context.config.k8s_pod_name, result)
         return result
 
     def read_proc_output(self, reader: Callable[[int], str]) -> Iterator[str]:
@@ -471,13 +495,15 @@ class KubernetesPodWatcher(KubernetesRunner):
     def read_proc_stderr(self, num_bytes: int) -> str:
         # NOTE: 'pod logs reader driver' provides only combined output (stdout + stderr)
         #       So, we do not try to read it having read everything as part of the stdout
-        return ''
+        return ""
 
     def _write_proc_stdin(self, data: str) -> None:
         LOGGER.warning(
             "Unexpected operation on the 'K8S pod logs watcher' (%s) was attempted. "
             "Writing data to stdin cannot be done. Data: %s",
-            self.context.config.k8s_pod_name, data)
+            self.context.config.k8s_pod_name,
+            data,
+        )
 
     @property
     def process_is_finished(self) -> bool:
@@ -492,28 +518,28 @@ class KubernetesPodWatcher(KubernetesRunner):
         self.context.config.k8s_kluster.kubectl(
             f"exec {self.context.config.k8s_pod_name} -- /bin/bash -c 'rm /tmp/keep_running'",
             namespace=self.context.config.k8s_namespace,
-            timeout=30, ignore_status=True)
+            timeout=30,
+            ignore_status=True,
+        )
         self.process.close()
 
     def kill(self) -> None:
-        LOGGER.warning(
-            "'kill()' method is called for the '%s' pod",
-            self.context.config.k8s_pod_name)
+        LOGGER.warning("'kill()' method is called for the '%s' pod", self.context.config.k8s_pod_name)
         self._stop_pod()
 
     def stop(self) -> None:
         pod_name = self.context.config.k8s_pod_name
         if self._is_pod_failed_or_completed():
-            LOGGER.debug(
-                "'stop()' method is called for the '%s' pod, which is already closed. Ignoring",
-                pod_name)
+            LOGGER.debug("'stop()' method is called for the '%s' pod, which is already closed. Ignoring", pod_name)
             return
         with self._ws_lock:
             if TestConfig().tester_obj().teardown_started:
                 LOGGER.warning(
                     "'stop()' method is called for the '%s' pod as part of the 'tearDown'. "
                     "'log reader' socket is '%s'.",
-                    pod_name, "closed" if not self.process or self.process.closed else "open")
+                    pod_name,
+                    "closed" if not self.process or self.process.closed else "open",
+                )
                 self._stop_pod()
                 return
             if not self.process or self.process.closed:
@@ -522,23 +548,27 @@ class KubernetesPodWatcher(KubernetesRunner):
                     "having closed 'log reader' socket. Which is probably the cause for "
                     "calling this method. Recreating the socket which can be "
                     "closed for various reasons unexpectedly.",
-                    pod_name)
+                    pod_name,
+                )
                 self._start()
             else:
                 LOGGER.warning(
                     "'stop()' method is called for the '%s' pod, "
                     "it is running and has open 'log reader' socket. "
                     "So, looks like it is intentional close of the socket.",
-                    pod_name)
+                    pod_name,
+                )
                 self._stop_pod()
 
     def run(self, command, **kwargs):
         pod_name = self.context.config.k8s_pod_name
 
         LOGGER.debug(
-            "'remoter.run': '%s' pod will be called with following command: "
-            "%s\nAnd kwargs: %s\n",
-            pod_name, command, kwargs)
+            "'remoter.run': '%s' pod will be called with following command: %s\nAnd kwargs: %s\n",
+            pod_name,
+            command,
+            kwargs,
+        )
         environ = self.context.config.k8s_environ
         environ["K8S_POD_COMMAND"] = command
         environ["K8S_POD_NAME"] = pod_name
@@ -559,27 +589,30 @@ class KubernetesPodWatcher(KubernetesRunner):
             step=2,
             text="'%s' pod is not ready/completed yet..." % pod_name,
             timeout=420,
-            throw_exc=True)
+            throw_exc=True,
+        )
 
         # NOTE: run a watcher for the pod's logs
         return super().run(command, **kwargs)
 
 
 class KubernetesPodRunner(KubernetesCmdRunner):
-    def __init__(self, kluster,
-                 template_path: str,
-                 template_modifiers: list,
-                 pod_name_template: str,
-                 namespace: str,
-                 environ: dict) -> None:
+    def __init__(
+        self,
+        kluster,
+        template_path: str,
+        template_modifiers: list,
+        pod_name_template: str,
+        namespace: str,
+        environ: dict,
+    ) -> None:
         self.kluster = kluster
         self.template_path = template_path
         self.template_modifiers = template_modifiers
         self.pod_name_template = pod_name_template
         self.namespace = namespace
         self.environ = environ
-        RemoteCmdRunnerBase.__init__(
-            self=self, hostname=f"pod/{pod_name_template}")
+        RemoteCmdRunnerBase.__init__(self=self, hostname=f"pod/{pod_name_template}")
         self._pod_counter = -1
         self._connections = []
         self._mounted_files_mapping = {}
@@ -593,7 +626,9 @@ class KubernetesPodRunner(KubernetesCmdRunner):
     def pod_name(self) -> str:
         LOGGER.debug(
             "'remoter.pod_name': called for the '%s'. Current counter value is '%s'",
-            self.pod_name_template, self._pod_counter)
+            self.pod_name_template,
+            self._pod_counter,
+        )
         return f"{self.pod_name_template}-{self._pod_counter}"
 
     def get_init_arguments(self) -> dict:
@@ -611,24 +646,31 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         #       instance is triggered by the need to created a new pod with a unique name.
         self._pod_counter += 1
 
-        if self.kluster.params.get('reuse_cluster'):
+        if self.kluster.params.get("reuse_cluster"):
             pod_names = self.kluster.kubectl("get pods -o name", namespace=self.namespace).stdout.split()
-            while f'pod/{self.pod_name}' in pod_names:
+            while f"pod/{self.pod_name}" in pod_names:
                 self._pod_counter += 1
 
-        connection = KubernetesPodWatcher(Context(Config(overrides={
-            "k8s_kluster": self.kluster,
-            "k8s_template_path": self.template_path,
-            "k8s_template_modifiers": self.template_modifiers,
-            "k8s_pod_name": self.pod_name,
-            "k8s_namespace": self.namespace,
-            "k8s_environ": self.environ,
-        })))
+        connection = KubernetesPodWatcher(
+            Context(
+                Config(
+                    overrides={
+                        "k8s_kluster": self.kluster,
+                        "k8s_template_path": self.template_path,
+                        "k8s_template_modifiers": self.template_modifiers,
+                        "k8s_pod_name": self.pod_name,
+                        "k8s_namespace": self.namespace,
+                        "k8s_environ": self.environ,
+                    }
+                )
+            )
+        )
         self._connections.append(connection)
         return connection
 
-    def receive_files(self, src, dst, delete_dst=False,
-                      preserve_perm=True, preserve_symlinks=False, timeout=300, sudo=False):
+    def receive_files(
+        self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300, sudo=False
+    ):
         # TODO: may be implemented if we want to copy files which exist in the image
         #       because this runner doesn't imply execution of commands on the already
         #       running pod.
@@ -656,16 +698,15 @@ class KubernetesPodRunner(KubernetesCmdRunner):
                 # Different src file, but the same 'dst' means we do something really wrong
                 raise ValueError(
                     "Cannot mount '%s' src file to the '%s' dst. "
-                    "It is already used by another src file -> '%s'." % (src, dst, existing_src))
+                    "It is already used by another src file -> '%s'." % (src, dst, existing_src)
+                )
 
             # Generate name for the configMap
             cm_name = f"cm--{self.pod_name_template}--{generate_random_string(5).lower()}"
-            filename = dst.split('/')[-1]
+            filename = dst.split("/")[-1]
 
             # Create configMap from the 'src' file
-            self.kluster.kubectl(
-                f"create configmap {cm_name} --from-file={filename}={src}",
-                namespace=self.namespace)
+            self.kluster.kubectl(f"create configmap {cm_name} --from-file={filename}={src}", namespace=self.namespace)
 
             # Create modifier function for the pod template
             #
@@ -681,22 +722,26 @@ class KubernetesPodRunner(KubernetesCmdRunner):
             #       configMap:
             #         name: {cm_name}
             def add_file_mount(obj):
-                if obj['kind'] != 'Pod':
+                if obj["kind"] != "Pod":
                     return
-                if 'volumes' not in obj['spec']:
-                    obj['spec']['volumes'] = []
-                obj['spec']['volumes'].append({
-                    'name': cm_name,
-                    'configMap': {'name': cm_name},
-                })
-                for i, _ in enumerate(obj['spec']['containers']):
-                    if 'volumeMounts' not in obj['spec']['containers'][i]:
-                        obj['spec']['containers'][i]['volumeMounts'] = []
-                    obj['spec']['containers'][i]['volumeMounts'].append({
-                        'name': cm_name,
-                        'mountPath': dst,
-                        'subPath': filename,
-                    })
+                if "volumes" not in obj["spec"]:
+                    obj["spec"]["volumes"] = []
+                obj["spec"]["volumes"].append(
+                    {
+                        "name": cm_name,
+                        "configMap": {"name": cm_name},
+                    }
+                )
+                for i, _ in enumerate(obj["spec"]["containers"]):
+                    if "volumeMounts" not in obj["spec"]["containers"][i]:
+                        obj["spec"]["containers"][i]["volumeMounts"] = []
+                    obj["spec"]["containers"][i]["volumeMounts"].append(
+                        {
+                            "name": cm_name,
+                            "mountPath": dst,
+                            "subPath": filename,
+                        }
+                    )
 
             # Add new modifier function to the list of pod template's modifiers
             self.template_modifiers.append(add_file_mount)

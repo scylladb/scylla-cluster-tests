@@ -9,6 +9,7 @@ class ClassBase:
     """
     This class that is meant to be used as base for class that could be stored or loaded (in ES or any other backend)
     """
+
     _es_data_mapping = {}
     _data_type = None
 
@@ -23,16 +24,16 @@ class ClassBase:
         for data_name, value in kwargs.items():
             data_type = self.__annotations__.get(data_name, None)
             if data_type is None:
-                errors.append(f'Wrong {data_name} attribute was provided')
+                errors.append(f"Wrong {data_name} attribute was provided")
                 continue
             if not isinstance(value, data_type):
-                errors.append(f'Wrong {data_name} attribute value was provided')
+                errors.append(f"Wrong {data_name} attribute value was provided")
                 continue
             setattr(self, data_name, value)
         if errors:
             raise ValueError(
-                f"Following errors occurred during class {self.__class__.__name__} initialization: \n" +
-                "\n".join(errors)
+                f"Following errors occurred during class {self.__class__.__name__} initialization: \n"
+                + "\n".join(errors)
             )
 
     def load_from_es_data(self, es_data):
@@ -46,7 +47,7 @@ class ClassBase:
             data_path = data_mapping.get(data_name, __DEFAULT__)
             if data_path is __DEFAULT__:
                 value = es_data.get(data_name, __DEFAULT__)
-            elif data_path == '':
+            elif data_path == "":
                 value = es_data
             else:
                 value = get_data_by_path(es_data, data_path=data_path, default=__DEFAULT__)
@@ -66,7 +67,8 @@ class ClassBase:
                     value = data_instance.save_to_es_data()
                 else:
                     value = data_instance
-                output['.'.join(es_data_path)] = value
+                output[".".join(es_data_path)] = value
+
         self._iterate_data(data_cb)
         return output
 
@@ -103,16 +105,15 @@ class ClassBase:
                     # No mapping if custom loader defined
                     child_data_mapping = {}
                 else:
-                    child_data_mapping = data_type._get_all_es_data_mapping(
-                        max_level=max_level-1)
+                    child_data_mapping = data_type._get_all_es_data_mapping(max_level=max_level - 1)
                 if not child_data_mapping:
                     output[data_name] = data_path
                     continue
                 for child_data_name, child_data_path in child_data_mapping.items():
                     if data_path:
-                        output[f'{data_name}.{child_data_name}'] = f'{data_path}.{child_data_path}'
+                        output[f"{data_name}.{child_data_name}"] = f"{data_path}.{child_data_path}"
                     else:
-                        output[f'{data_name}.{child_data_name}'] = child_data_path
+                        output[f"{data_name}.{child_data_name}"] = child_data_path
             else:
                 output[data_name] = data_path
         return output
@@ -131,16 +132,17 @@ class ClassBase:
             for data_name, data_instance in current_instance.__dict__.items():
                 if current_instance.__annotations__.get(data_name, None) is None:
                     continue
-                es_data_name = current_instance._es_data_mapping.get(
-                    data_name, None)
+                es_data_name = current_instance._es_data_mapping.get(data_name, None)
                 if es_data_name is None:
                     es_data_name = es_data_path + [data_name]
-                elif es_data_name == '':
+                elif es_data_name == "":
                     es_data_name = es_data_path
                 else:
-                    es_data_name = es_data_path + es_data_name.split('.')
-                if not isinstance(data_instance, ClassBase) \
-                        or data_instance.__class__.load_from_es_data is not ClassBase.load_from_es_data:
+                    es_data_name = es_data_path + es_data_name.split(".")
+                if (
+                    not isinstance(data_instance, ClassBase)
+                    or data_instance.__class__.load_from_es_data is not ClassBase.load_from_es_data
+                ):
                     callback(data_instance, current_instance, data_path + [data_name], es_data_name, True)
                     continue
                 if callback(data_instance, current_instance, data_path + [data_name], es_data_name, False):
@@ -154,7 +156,7 @@ class ClassBase:
         """
         data_patterns_split = []
         for data_pattern in data_patterns:
-            data_patterns_split.append(data_pattern.split('.'))
+            data_patterns_split.append(data_pattern.split("."))
 
         output = {}
 
@@ -169,7 +171,7 @@ class ClassBase:
                         final_return = True
                         break
                     data_path_part = data_path[num]
-                    if data_pattern_part == '*':
+                    if data_pattern_part == "*":
                         to_add = is_edge
                         to_return = True
                         break
@@ -183,7 +185,7 @@ class ClassBase:
                         result = data_instance
                     current_output = output
                     if flatten:
-                        current_output['.'.join(es_data_path)] = result
+                        current_output[".".join(es_data_path)] = result
                     else:
                         for es_data_path_part in es_data_path[:-1]:
                             new_current_output = current_output.get(es_data_path_part, __DEFAULT__)
@@ -196,5 +198,6 @@ class ClassBase:
                 if to_return:
                     return True
             return final_return
+
         self._iterate_data(data_cb)
         return output

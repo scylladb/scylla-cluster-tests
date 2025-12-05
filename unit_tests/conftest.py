@@ -28,8 +28,16 @@ from sdcm.cluster_docker import VectorStoreSetDocker
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.certificate import (
-    create_ca, create_certificate, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
-    CLIENT_FACING_KEYFILE, CA_CERT_FILE, CA_KEY_FILE, CLIENT_CERT_FILE, CLIENT_KEY_FILE)
+    create_ca,
+    create_certificate,
+    SCYLLA_SSL_CONF_DIR,
+    CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE,
+    CA_CERT_FILE,
+    CA_KEY_FILE,
+    CLIENT_CERT_FILE,
+    CLIENT_KEY_FILE,
+)
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
@@ -63,12 +71,22 @@ def mock_remote_scylla_yaml(scylla_node):
                 yaml_key, yaml_value = key, str(value)
                 # remove existing occurrences of the key and add a new value
                 remove_cmd = [
-                    'docker', 'exec', container_id, 'bash', '-c',
-                    f'sed -i "/^{yaml_key}:/d" /etc/scylla/scylla.yaml']
+                    "docker",
+                    "exec",
+                    container_id,
+                    "bash",
+                    "-c",
+                    f'sed -i "/^{yaml_key}:/d" /etc/scylla/scylla.yaml',
+                ]
                 subprocess.run(remove_cmd, capture_output=True, text=True, check=False)
                 add_cmd = [
-                    'docker', 'exec', container_id, 'bash', '-c',
-                    f'echo "{yaml_key}: {yaml_value}" >> /etc/scylla/scylla.yaml']
+                    "docker",
+                    "exec",
+                    container_id,
+                    "bash",
+                    "-c",
+                    f'echo "{yaml_key}: {yaml_value}" >> /etc/scylla/scylla.yaml',
+                ]
                 result = subprocess.run(add_cmd, capture_output=True, text=True, check=False)
 
                 if result.returncode == 0:
@@ -79,10 +97,11 @@ def mock_remote_scylla_yaml(scylla_node):
         logging.error("Error in mock_remote_scylla_yaml: %s", e)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def events():
     class LocalMixing(EventsUtilsMixin):
         pass
+
     mixing = LocalMixing()
     mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
     yield mixing
@@ -90,7 +109,7 @@ def events():
     mixing.teardown_events_processes()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def events_function_scope():
     mixing = EventsUtilsMixin()
     mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
@@ -99,63 +118,76 @@ def events_function_scope():
     mixing.teardown_events_processes()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def prom_address():
     yield start_metrics_server()
 
 
 def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
-    ssl = docker_scylla_args.get('ssl')
-    docker_network = docker_scylla_args.get('docker_network')
+    ssl = docker_scylla_args.get("ssl")
+    docker_network = docker_scylla_args.get("docker_network")
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
-    entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
+    entryfile_path = entryfile_path / "docker" / "scylla-sct" / ("entry_ssl.sh" if ssl else "entry.sh")
 
     alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
 
     default_image = "docker.io/scylladb/scylla-nightly:2025.2.0-dev-0.20250302.0343235aa269"
-    docker_version = docker_scylla_args.get('scylla_docker_image') or docker_scylla_args.get('image', default_image)
+    docker_version = docker_scylla_args.get("scylla_docker_image") or docker_scylla_args.get("image", default_image)
     cluster = LocalScyllaClusterDummy(params=params)
 
-    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+    ssl_dir = (Path(__file__).parent.parent / "data_dir" / "ssl_conf").absolute()
 
     if ssl:
-        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        localhost = LocalHost(user_prefix="unit_test_fake_user", test_id="unit_test_fake_test_id")
         create_ca(localhost)
 
-    env_vars = '-e VECTOR_SEARCH_TEST=true' if docker_scylla_args.get('scylla_docker_image') else ''
-    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
-                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z'
-                         f' --user root {env_vars} --entrypoint /entry.sh')
+    env_vars = "-e VECTOR_SEARCH_TEST=true" if docker_scylla_args.get("scylla_docker_image") else ""
+    extra_docker_opts = (
+        f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh:z'
+        f" -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}:z"
+        f" --user root {env_vars} --entrypoint /entry.sh"
+    )
 
     if seeds := docker_scylla_args.get("seeds"):
         seeds = f" --seeds={seeds}"
     else:
         seeds = ""
 
-    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
-                          command_line=f"--smp 1 {alternator_flags}{seeds}",
-                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+    scylla = RemoteDocker(
+        LocalNode("scylla", cluster),
+        image_name=docker_version,
+        command_line=f"--smp 1 {alternator_flags}{seeds}",
+        extra_docker_opts=extra_docker_opts,
+        docker_network=docker_network,
+    )
 
     if ssl:
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
-                               ip_addresses=[scylla.ip_address], dns_names=[scylla.public_dns_name])
-            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
+            create_certificate(
+                CLIENT_FACING_CERTFILE,
+                CLIENT_FACING_KEYFILE,
+                cname="scylladb",
+                ca_cert_file=CA_CERT_FILE,
+                ca_key_file=CA_KEY_FILE,
+                ip_addresses=[scylla.ip_address],
+                dns_names=[scylla.public_dns_name],
+            )
+            create_certificate(
+                CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb", ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE
+            )
         finally:
             os.chdir(curr_dir)
 
     cluster.nodes = [scylla]
-    DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
+    DummyRemoter = collections.namedtuple("DummyRemoter", ["run", "sudo"])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
-    scylla.is_running = lambda: bool(getattr(scylla, 'docker_id', None))
+    scylla.is_running = lambda: bool(getattr(scylla, "docker_id", None))
     scylla.remote_scylla_yaml = lambda: mock_remote_scylla_yaml(scylla)
 
     def db_up():
@@ -172,12 +204,13 @@ def configure_scylla_node(docker_scylla_args: dict, params):  # noqa: PLR0914
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
-    wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
-    wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
-                  timeout=120, throw_exc=True)
+    wait.wait_for(func=db_up, step=1, text="Waiting for DB services to be up", timeout=120, throw_exc=True)
+    wait.wait_for(
+        func=db_alternator_up, step=1, text="Waiting for DB services to be up alternator)", timeout=120, throw_exc=True
+    )
 
 
-@pytest.fixture(name='docker_scylla', scope='function')
+@pytest.fixture(name="docker_scylla", scope="function")
 def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0914
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
@@ -188,55 +221,62 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # noqa: PLR0
     scylla.kill()
 
 
-@pytest.fixture(name='docker_scylla_2', scope='function')
+@pytest.fixture(name="docker_scylla_2", scope="function")
 def fixture_docker_2_scylla(request: pytest.FixtureRequest, docker_scylla, params):  # noqa: PLR0914
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
-    docker_scylla_args['seeds'] = docker_scylla.ip_address
+    docker_scylla_args["seeds"] = docker_scylla.ip_address
     scylla = configure_scylla_node(docker_scylla_args, params)
     yield scylla
 
     scylla.kill()
 
 
-@pytest.fixture(name='docker_vector_store', scope='function')
+@pytest.fixture(name="docker_vector_store", scope="function")
 def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, params):
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
 
-    if not docker_scylla_args.get('vs_docker_image'):
+    if not docker_scylla_args.get("vs_docker_image"):
         yield None
         return
 
     # restart the container to reload scylla.yaml config
     def reload_config_for_test():
         docker_scylla.node.remoter.run(f"docker restart {docker_scylla.docker_id}")
+
     docker_scylla.reload_config = reload_config_for_test
 
     cluster = docker_scylla.parent_cluster
-    os.environ.setdefault('_SCT_TEST_LOGDIR', '/tmp/test_vector_search_logs')
+    os.environ.setdefault("_SCT_TEST_LOGDIR", "/tmp/test_vector_search_logs")
 
     class MockTester:
         def __init__(self):
             self.rack_names_per_datacenter_and_rack_idx_map = {}
+
     TestConfig.set_tester_obj(MockTester())
 
-    vs_docker_image_version = docker_scylla_args.get('vs_docker_image', 'scylladb/vector-store:latest')
+    vs_docker_image_version = docker_scylla_args.get("vs_docker_image", "scylladb/vector-store:latest")
     vs_docker_image, vs_version = (
-        vs_docker_image_version.rsplit(':', 1) if ':' in vs_docker_image_version
-        else (vs_docker_image_version, 'latest'))
+        vs_docker_image_version.rsplit(":", 1)
+        if ":" in vs_docker_image_version
+        else (vs_docker_image_version, "latest")
+    )
 
-    params.update({
-        'n_vector_store_nodes': 1,
-        'vector_store_port': 6080,
-        'vector_store_scylla_port': 9042,
-        'vector_store_threads': 2,
-        'docker_network': docker_scylla_args.get('docker_network') or 'bridge',
-        'user_prefix': 'test-vector',
-        'vector_store_docker_image': vs_docker_image,
-        'vector_store_version': vs_version})
+    params.update(
+        {
+            "n_vector_store_nodes": 1,
+            "vector_store_port": 6080,
+            "vector_store_scylla_port": 9042,
+            "vector_store_threads": 2,
+            "docker_network": docker_scylla_args.get("docker_network") or "bridge",
+            "user_prefix": "test-vector",
+            "vector_store_docker_image": vs_docker_image,
+            "vector_store_version": vs_version,
+        }
+    )
 
     def destroy_vector_store_cluster(vs_cluster):
         if vs_cluster:
@@ -249,10 +289,11 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
     try:
         vector_store_cluster = VectorStoreSetDocker(
             params=params,
-            vs_docker_image=params.get('vector_store_docker_image'),
-            vs_docker_image_tag=params.get('vector_store_version'),
-            cluster_prefix='test-vector-store',
-            n_nodes=1)
+            vs_docker_image=params.get("vector_store_docker_image"),
+            vs_docker_image_tag=params.get("vector_store_version"),
+            cluster_prefix="test-vector-store",
+            n_nodes=1,
+        )
 
         vector_store_cluster.configure_with_scylla_cluster(cluster)
         for node in vector_store_cluster.nodes:
@@ -262,12 +303,16 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         # restart scylla container to apply vector store URI changes
         scylla_node = cluster.nodes[0]
         restart_result = subprocess.run(
-            ['docker', 'restart', scylla_node.docker_id], capture_output=True, text=True, check=False)
+            ["docker", "restart", scylla_node.docker_id], capture_output=True, text=True, check=False
+        )
         if restart_result.returncode != 0:
             raise RuntimeError(f"Container restart failed: {restart_result.stderr}")
         wait.wait_for(
             func=lambda: scylla_node.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server"),
-            step=2, timeout=60, text="Waiting for Scylla container to restart")
+            step=2,
+            timeout=60,
+            text="Waiting for Scylla container to restart",
+        )
 
         yield vector_store_cluster
 
@@ -284,12 +329,12 @@ def fake_remoter():
     return FakeRemoter
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def fake_provisioner():
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def fake_region_definition_builder():
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
 
@@ -297,25 +342,27 @@ def fake_region_definition_builder():
 @pytest.fixture(scope="function", name="params")
 def fixture_params(request: pytest.FixtureRequest):
     if sct_config_marker := request.node.get_closest_marker("sct_config"):
-        config_files = sct_config_marker.kwargs.get('files')
-        os.environ['SCT_CONFIG_FILES'] = config_files
+        config_files = sct_config_marker.kwargs.get("files")
+        os.environ["SCT_CONFIG_FILES"] = config_files
 
-    os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+    os.environ["SCT_CLUSTER_BACKEND"] = "docker"
     params = sct_config.SCTConfiguration()
-    params.update(dict(
-        authenticator='PasswordAuthenticator',
-        authenticator_user='cassandra',
-        authenticator_password='cassandra',
-        authorizer='CassandraAuthorizer',
-    ))
+    params.update(
+        dict(
+            authenticator="PasswordAuthenticator",
+            authenticator_user="cassandra",
+            authenticator_password="cassandra",
+            authorizer="CassandraAuthorizer",
+        )
+    )
     yield params
 
     for k in os.environ:
-        if k.startswith('SCT_'):
+        if k.startswith("SCT_"):
             del os.environ[k]
 
 
-@pytest.fixture(scope='function', autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
 
