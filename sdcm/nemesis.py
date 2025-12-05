@@ -2943,11 +2943,11 @@ class Nemesis(NemesisFlags):
             task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
         return task
 
-    def _manager_backup_and_report(self, object_storage_upload_mode: ObjectStorageUploadMode, label) -> BackupTask:
+    def _manager_backup_and_report(self, method: ObjectStorageUploadMode, label) -> BackupTask:
         """
         Run a backup using Scylla Manager and report the result to Argus.
 
-        :param object_storage_upload_mode: The upload mode for object storage (e.g., RCLONE or NATIVE).
+        :param method: The transfer mode for object storage (e.g., RCLONE or NATIVE).
         :param label: A label for reporting.
         :return: BackupTask object representing the backup operation.
         """
@@ -2956,7 +2956,7 @@ class Nemesis(NemesisFlags):
         mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
         decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
             self._run_manager_backup)
-        task = decorated(mgr_cluster, object_storage_upload_mode, timeout)
+        task = decorated(mgr_cluster, method, timeout)
         report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
         return task
 
