@@ -20,25 +20,26 @@ from pathlib import Path
 from typing import List, Any, Dict
 
 from azure.core.exceptions import ResourceNotFoundError, AzureError, ODataV4Error, _HttpResponseCommonAPI
-from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
+from azure.mgmt.network.models import NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork
 from azure.mgmt.resource.resources.models import ResourceGroup
 from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
 
 
 def snake_case_to_camel_case(string):
-    temp = string.split('_')
-    return temp[0] + ''.join(ele.title() for ele in temp[1:])
+    temp = string.split("_")
+    return temp[0] + "".join(ele.title() for ele in temp[1:])
 
 
 def dict_keys_to_camel_case(dct):
     if isinstance(dct, list):
         return [dict_keys_to_camel_case(i) if isinstance(i, (dict, list)) else i for i in dct]
-    return {snake_case_to_camel_case(a): dict_keys_to_camel_case(b) if isinstance(b, (dict, list))
-            else b for a, b in dct.items()}
+    return {
+        snake_case_to_camel_case(a): dict_keys_to_camel_case(b) if isinstance(b, (dict, list)) else b
+        for a, b in dct.items()
+    }
 
 
 class WaitableObject:
-
     def __init__(self, error: AzureError = None):
         self.error = error
 
@@ -48,19 +49,25 @@ class WaitableObject:
 
 
 class ResultableObject:
-
     def __init__(self, stdout, stderr):
         self.stdout = stdout
         self.stderr = stderr
 
-    def result(self,):
-        value = InstanceViewStatus(additional_properties={}, code='ProvisioningState/succeeded', level='Info',
-                                   display_status='Provisioning succeeded', message=f'Enable succeeded: \n[stdout]\n{self.stdout}\n[stderr]\n{self.stderr}', time=None)
+    def result(
+        self,
+    ):
+        value = InstanceViewStatus(
+            additional_properties={},
+            code="ProvisioningState/succeeded",
+            level="Info",
+            display_status="Provisioning succeeded",
+            message=f"Enable succeeded: \n[stdout]\n{self.stdout}\n[stderr]\n{self.stderr}",
+            time=None,
+        )
         return RunCommandResult(value=[value])
 
 
 class FakeResourceGroups:
-
     def __init__(self, path: Path):
         self.path = path
 
@@ -69,9 +76,7 @@ class FakeResourceGroups:
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}",
             "name": resource_group_name,
             "type": "Microsoft.Resources/resourceGroups",
-            "properties": {
-                "provisioningState": "Succeeded"
-            },
+            "properties": {"provisioningState": "Succeeded"},
         }
         res_group.update(**parameters)
         (self.path / resource_group_name).mkdir(exist_ok=True)
@@ -116,56 +121,60 @@ class FakeNetworkSecurityGroup:
                 elements.append(NetworkSecurityGroup.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, network_security_group_name: str,
-                               parameters: Dict[str, Any]) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, network_security_group_name: str, parameters: Dict[str, Any]
+    ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/networkSecurityGroups/default",
             "name": network_security_group_name,
             "type": "Microsoft.Network/networkSecurityGroups",
             "location": parameters["location"],
-            "etag": "W/\"90369d69-7507-4e77-8b90-66e1f971f290\"",
+            "etag": 'W/"90369d69-7507-4e77-8b90-66e1f971f290"',
             "properties": {
-                "subnets": [
-                ],
+                "subnets": [],
                 "resourceGuid": "2100b376-ad42-449d-a9c2-62cdade9db83",
-                "provisioningState": "Succeeded"
-            }
+                "provisioningState": "Succeeded",
+            },
         }
         rules = []
         for rule in parameters["security_rules"]:
-            rules.append({
-                "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
-                f"/providers/Microsoft.Network/networkSecurityGroups/default/securityRules/{rule['name']}",
-                "name": rule["name"],
-                "etag": "W/\"90369d69-7507-4e77-8b90-66e1f971f290\"",
-                "type": "Microsoft.Network/networkSecurityGroups/securityRules",
-                "properties": {
-                    "protocol": rule["protocol"],
-                    "sourcePortRange": rule["source_port_range"],
-                    "destinationPortRange": rule["destination_port_range"],
-                    "sourceAddressPrefix": rule["source_address_prefix"],
-                    "sourceAddressPrefixes": [],
-                    "destinationAddressPrefix": rule["destination_address_prefix"],
-                    "destinationAddressPrefixes": [],
-                    "sourcePortRanges": [],
-                    "destinationPortRanges": [],
-                    "access": rule["access"],
-                    "priority": rule["priority"],
-                    "direction": rule["direction"],
-                    "provisioningState": "Succeeded"
+            rules.append(
+                {
+                    "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
+                    f"/providers/Microsoft.Network/networkSecurityGroups/default/securityRules/{rule['name']}",
+                    "name": rule["name"],
+                    "etag": 'W/"90369d69-7507-4e77-8b90-66e1f971f290"',
+                    "type": "Microsoft.Network/networkSecurityGroups/securityRules",
+                    "properties": {
+                        "protocol": rule["protocol"],
+                        "sourcePortRange": rule["source_port_range"],
+                        "destinationPortRange": rule["destination_port_range"],
+                        "sourceAddressPrefix": rule["source_address_prefix"],
+                        "sourceAddressPrefixes": [],
+                        "destinationAddressPrefix": rule["destination_address_prefix"],
+                        "destinationAddressPrefixes": [],
+                        "sourcePortRanges": [],
+                        "destinationPortRanges": [],
+                        "access": rule["access"],
+                        "priority": rule["priority"],
+                        "direction": rule["direction"],
+                        "provisioningState": "Succeeded",
+                    },
                 }
-            })
+            )
         base.update({"securityRules": rules})
-        with open(self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "w",
-                  encoding="utf-8") as file:
+        with open(
+            self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "w", encoding="utf-8"
+        ) as file:
             json.dump(base, fp=file, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, network_security_group_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r",
-                      encoding="utf-8") as file:
+            with open(
+                self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r", encoding="utf-8"
+            ) as file:
                 return NetworkSecurityGroup.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
@@ -186,28 +195,24 @@ class FakeVirtualNetwork:
                 elements.append(VirtualNetwork.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, parameters: Dict[str, Any]
-                               ) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, virtual_network_name: str, parameters: Dict[str, Any]
+    ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/virtualNetworks/{virtual_network_name}",
             "name": virtual_network_name,
             "type": "Microsoft.Network/virtualNetworks",
             "location": parameters["location"],
-            "etag": "W/\"821c1ea3-6313-4798-859b-63ba15e882cc\"",
+            "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "properties": {
-                "addressSpace": {
-                    "addressPrefixes": [
-                        parameters['address_space']['address_prefixes']
-                    ]
-                },
-                "subnets": [
-                ],
+                "addressSpace": {"addressPrefixes": [parameters["address_space"]["address_prefixes"]]},
+                "subnets": [],
                 "virtualNetworkPeerings": [],
                 "resourceGuid": "e9660f35-9f2b-4134-8b0e-309bd9b3792c",
                 "provisioningState": "Succeeded",
-                "enableDdosProtection": False
-            }
+                "enableDdosProtection": False,
+            },
         }
         with open(self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "w", encoding="utf-8") as file:
             json.dump(base, fp=file, indent=2)
@@ -215,7 +220,9 @@ class FakeVirtualNetwork:
 
     def get(self, resource_group_name: str, virtual_network_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8") as file:
+            with open(
+                self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8"
+            ) as file:
                 return VirtualNetwork.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
@@ -227,8 +234,11 @@ class FakeSubnet:
 
     def list(self, resource_group_name: str, virtual_network_name: str) -> List[Subnet]:
         try:
-            files = [file for file in os.listdir(self.path / resource_group_name) if
-                     file.startswith(f"subnet-{virtual_network_name}")]
+            files = [
+                file
+                for file in os.listdir(self.path / resource_group_name)
+                if file.startswith(f"subnet-{virtual_network_name}")
+            ]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
@@ -237,36 +247,38 @@ class FakeSubnet:
                 elements.append(Subnet.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, subnet_name: str,
-                               subnet_parameters: Dict[str, Any]) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, virtual_network_name: str, subnet_name: str, subnet_parameters: Dict[str, Any]
+    ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/virtualNetworks/{virtual_network_name}/subnets/{subnet_name}",
             "name": subnet_name,
-            "etag": "W/\"821c1ea3-6313-4798-859b-63ba15e882cc\"",
+            "etag": 'W/"821c1ea3-6313-4798-859b-63ba15e882cc"',
             "type": "Microsoft.Network/virtualNetworks/subnets",
             "properties": {
                 "addressPrefix": subnet_parameters["address_prefix"],
-                "networkSecurityGroup": {
-                    "id": subnet_parameters["network_security_group"]["id"]
-                },
-                "ipConfigurations": [
-                ],
+                "networkSecurityGroup": {"id": subnet_parameters["network_security_group"]["id"]},
+                "ipConfigurations": [],
                 "delegations": [],
                 "provisioningState": "Succeeded",
                 "privateEndpointNetworkPolicies": "Enabled",
-                "privateLinkServiceNetworkPolicies": "Enabled"
-            }
+                "privateLinkServiceNetworkPolicies": "Enabled",
+            },
         }
-        with open(self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json", "w",
-                  encoding="utf-8") as file:
+        with open(
+            self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json", "w", encoding="utf-8"
+        ) as file:
             json.dump(base, fp=file, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, virtual_network_name: str, subnet_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json", "r",
-                      encoding="utf-8") as file:
+            with open(
+                self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json",
+                "r",
+                encoding="utf-8",
+            ) as file:
                 return Subnet.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Subnet group not found") from None
@@ -287,39 +299,39 @@ class FakeIpAddress:
                 elements.append(PublicIPAddress.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
-                               ) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
+    ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/publicIPAddresses/{public_ip_address_name}",
             "name": public_ip_address_name,
             "type": "Microsoft.Network/publicIPAddresses",
             "location": parameters["location"],
-            "sku": {
-                "name": parameters["sku"]["name"],
-                "tier": "Regional"
-            },
-            "etag": "W/\"c6bd8f78-66eb-4fc6-90d0-98d790c5467e\"",
+            "sku": {"name": parameters["sku"]["name"], "tier": "Regional"},
+            "etag": 'W/"c6bd8f78-66eb-4fc6-90d0-98d790c5467e"',
             "properties": {
                 "publicIPAllocationMethod": parameters["public_ip_allocation_method"],
                 "publicIPAddressVersion": parameters["public_ip_address_version"],
-                "ipConfiguration": {
-                },
+                "ipConfiguration": {},
                 "ipTags": [],
                 "ipAddress": "52.240.59.45",
                 "idleTimeoutInMinutes": 4,
                 "resourceGuid": "63d8cd05-8056-488f-a252-2c5e6b38360e",
-                "provisioningState": "Succeeded"
-            }
+                "provisioningState": "Succeeded",
+            },
         }
-        with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8") as file_obj:
+        with open(
+            self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8"
+        ) as file_obj:
             json.dump(base, fp=file_obj, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, public_ip_address_name: str) -> PublicIPAddress:
         try:
-            with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r",
-                      encoding="utf-8") as file:
+            with open(
+                self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r", encoding="utf-8"
+            ) as file:
                 return PublicIPAddress.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Public IP address not found") from None
@@ -344,41 +356,38 @@ class FakeNetworkInterface:
                 elements.append(NetworkInterface.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
-                               ) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
+    ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
             f"/Microsoft.Network/networkInterfaces/{network_interface_name}",
             "name": network_interface_name,
             "type": "Microsoft.Network/networkInterfaces",
             "location": parameters["location"],
-            "etag": "W/\"a1a80a74-a244-4e0b-9883-41eb47fa633e\"",
+            "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
             "properties": {
                 "ipConfigurations": [
                     {
                         "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
                         f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/"
                         f"{network_interface_name}/ipConfigurations/{parameters['ip_configurations'][0]['name']}",
-                        "name": parameters['ip_configurations'][0]['name'],
-                        "etag": "W/\"a1a80a74-a244-4e0b-9883-41eb47fa633e\"",
+                        "name": parameters["ip_configurations"][0]["name"],
+                        "etag": 'W/"a1a80a74-a244-4e0b-9883-41eb47fa633e"',
                         "type": "Microsoft.Network/networkInterfaces/ipConfigurations",
                         "properties": {
                             "privateIPAddress": "10.0.0.4",
                             "privateIPAllocationMethod": "Dynamic",
                             "privateIPAddressVersion": "IPv4",
-                            "subnet": {
-                                "id": parameters["ip_configurations"][0]["subnet"]["id"]
-                            },
+                            "subnet": {"id": parameters["ip_configurations"][0]["subnet"]["id"]},
                             "primary": True,
                             "publicIPAddress": {
-                                "id": parameters['ip_configurations'][0]['public_ip_address']["id"],
-                                "name": parameters['ip_configurations'][0]['public_ip_address']["id"].split("/", -1)[
-                                    -1],
+                                "id": parameters["ip_configurations"][0]["public_ip_address"]["id"],
+                                "name": parameters["ip_configurations"][0]["public_ip_address"]["id"].split("/", -1)[
+                                    -1
+                                ],
                                 "type": "Microsoft.Network/publicIPAddresses",
-                                "sku": {
-                                    "name": "Basic",
-                                    "tier": "Regional"
-                                },
+                                "sku": {"name": "Basic", "tier": "Regional"},
                                 "properties": {
                                     "publicIPAllocationMethod": "Dynamic",
                                     "publicIPAddressVersion": "IPv4",
@@ -392,18 +401,18 @@ class FakeNetworkInterface:
                                     "idleTimeoutInMinutes": 4,
                                     "resourceGuid": "cbf93df3-72ac-4c54-8bc1-71c9ebfb1907",
                                     "provisioningState": "Succeeded",
-                                    "deleteOption": "Delete"
-                                }
+                                    "deleteOption": "Delete",
+                                },
                             },
-                            "provisioningState": "Succeeded"
-                        }
+                            "provisioningState": "Succeeded",
+                        },
                     }
                 ],
                 "tapConfigurations": [],
                 "dnsSettings": {
                     "dnsServers": [],
                     "appliedDnsServers": [],
-                    "internalDomainNameSuffix": "guhwn0jlt20edcyogcn3tm1zfe.bx.internal.cloudapp.net"
+                    "internalDomainNameSuffix": "guhwn0jlt20edcyogcn3tm1zfe.bx.internal.cloudapp.net",
                 },
                 "macAddress": "00-0D-3A-14-3F-92",
                 "primary": True,
@@ -412,17 +421,20 @@ class FakeNetworkInterface:
                 "hostedWorkloads": [],
                 "resourceGuid": "3232a287-da4c-40eb-b5c8-cadb487d6dce",
                 "provisioningState": "Succeeded",
-                "nicType": "Standard"
-            }
+                "nicType": "Standard",
+            },
         }
-        with open(self.path / resource_group_name / f"nic-{network_interface_name}.json", "w", encoding="utf-8") as file:
+        with open(
+            self.path / resource_group_name / f"nic-{network_interface_name}.json", "w", encoding="utf-8"
+        ) as file:
             json.dump(base, fp=file, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, network_interface_name: str) -> NetworkInterface:
         try:
-            with open(self.path / resource_group_name / f"nic-{network_interface_name}.json", "r",
-                      encoding="utf-8") as file:
+            with open(
+                self.path / resource_group_name / f"nic-{network_interface_name}.json", "r", encoding="utf-8"
+            ) as file:
                 return NetworkInterface.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("NIC not found") from None
@@ -433,7 +445,6 @@ class FakeNetworkInterface:
 
 
 class FakeNetwork:
-
     def __init__(self, path) -> None:
         self.path: Path = path
         self.network_security_groups = FakeNetworkSecurityGroup(self.path)
@@ -458,13 +469,18 @@ class FakeVirtualMachines:
                 elements.append(VirtualMachine.deserialize(json.load(file)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]
-                               ) -> WaitableObject:
+    def begin_create_or_update(
+        self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]
+    ) -> WaitableObject:
         tags = parameters.pop("tags") if "tags" in parameters else {}
         parameters = dict_keys_to_camel_case(parameters)
         location = parameters.pop("location")
         priority = parameters.get("priority") or ""
-        if tags.get("JenkinsJobTag") == "FailSpotDB" and priority.lower() == "spot" and tags.get("NodeType") == "scylla-db":
+        if (
+            tags.get("JenkinsJobTag") == "FailSpotDB"
+            and priority.lower() == "spot"
+            and tags.get("NodeType") == "scylla-db"
+        ):
             # for testing fallback on demand
             class Resp(_HttpResponseCommonAPI):
                 @property
@@ -473,6 +489,7 @@ class FakeVirtualMachines:
 
                 def text(self):
                     return '{"message": "preemption error msg", "error": {"message": "preemption error", "code": "OperationPreempted"}}'
+
             return WaitableObject(error=ODataV4Error(response=Resp()))
 
         base = {
@@ -482,16 +499,14 @@ class FakeVirtualMachines:
             "type": "Microsoft.Compute/virtualMachines",
             "location": location,
             "properties": {
-                "hardwareProfile": {
-                    "vmSize": "Standard_D2_v5"
-                },
+                "hardwareProfile": {"vmSize": "Standard_D2_v5"},
                 "storageProfile": {
                     "imageReference": {
                         "publisher": "OpenLogic",
                         "offer": "CentOS",
                         "sku": "7.5",
                         "version": "latest",
-                        "exactVersion": "7.5.201808150"
+                        "exactVersion": "7.5.201808150",
                     },
                     "osDisk": {
                         "osType": "Linux",
@@ -501,13 +516,13 @@ class FakeVirtualMachines:
                         "diskSizeGB": 30,
                         "managedDisk": {
                             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
-                                  f"/{resource_group_name}/providers/Microsoft.Compute/disks"
-                                  f"/{vm_name}_OsDisk_1_7fcdd979aec64c40b5b153bfe9daed35",
-                            "storageAccountType": "Standard_LRS"
+                            f"/{resource_group_name}/providers/Microsoft.Compute/disks"
+                            f"/{vm_name}_OsDisk_1_7fcdd979aec64c40b5b153bfe9daed35",
+                            "storageAccountType": "Standard_LRS",
                         },
-                        "deleteOption": "Detach"
+                        "deleteOption": "Detach",
                     },
-                    "dataDisks": []
+                    "dataDisks": [],
                 },
                 "osProfile": {
                     "computerName": "lukasz-3",
@@ -518,34 +533,29 @@ class FakeVirtualMachines:
                             "publicKeys": [
                                 {
                                     "path": "/home/lukasz/.ssh/authorized_keys",
-                                    "keyData": "ssh-rsa fake_key_data== scylla_test_id_ed25519\n"
+                                    "keyData": "ssh-rsa fake_key_data== scylla_test_id_ed25519\n",
                                 }
                             ]
                         },
                         "provisionVMAgent": True,
-                        "patchSettings": {
-                            "patchMode": "ImageDefault",
-                            "assessmentMode": "ImageDefault"
-                        }
+                        "patchSettings": {"patchMode": "ImageDefault", "assessmentMode": "ImageDefault"},
                     },
                     "secrets": [],
                     "allowExtensionOperations": True,
-                    "requireGuestProvisionSignal": True
+                    "requireGuestProvisionSignal": True,
                 },
                 "networkProfile": {
                     "networkInterfaces": [
                         {
                             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups"
                             f"/{resource_group_name}/providers/Microsoft.Network/networkInterfaces/lukasz-3-nic",
-                            "properties": {
-                                "deleteOption": "Delete"
-                            }
+                            "properties": {"deleteOption": "Delete"},
                         }
                     ]
                 },
                 "provisioningState": "Succeeded",
-                "vmId": "ce7b8d6c-4204-4262-9504-862189431e5d"
-            }
+                "vmId": "ce7b8d6c-4204-4262-9504-862189431e5d",
+            },
         }
         base["properties"].update(**parameters)
         base["tags"] = tags
@@ -576,7 +586,8 @@ class FakeVirtualMachines:
         nic = network_svc.network_interfaces.get(resource_group_name, nic_name)
         network_svc.network_interfaces.begin_delete(resource_group_name, nic_name)
         network_svc.public_ip_addresses.begin_delete(
-            resource_group_name, nic.ip_configurations[0].public_ip_address.name)
+            resource_group_name, nic.ip_configurations[0].public_ip_address.name
+        )
         return WaitableObject()
 
     def get(self, resource_group_name: str, vm_name: str, expand: str = "") -> VirtualMachine:
@@ -590,8 +601,7 @@ class FakeVirtualMachines:
         return WaitableObject()
 
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
-        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,
-                                text=True, check=False)
+        result = subprocess.run(parameters.script[0], shell=True, capture_output=True, text=True, check=False)
         return ResultableObject(result.stdout, result.stderr)
 
 
@@ -605,7 +615,6 @@ class FakeImages:
 
 
 class Compute:
-
     def __init__(self, path) -> None:
         self.path: Path = path
         self.virtual_machines = FakeVirtualMachines(self.path)
@@ -613,7 +622,6 @@ class Compute:
 
 
 class FakeResourceManagementClient:
-
     def __init__(self, path: Path) -> None:
         self.path = path
 
@@ -623,7 +631,6 @@ class FakeResourceManagementClient:
 
 
 class FakeAzureService:
-
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.mkdir(exist_ok=True)

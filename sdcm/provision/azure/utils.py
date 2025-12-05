@@ -30,34 +30,30 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_scylla_images(
-        scylla_version: str,
-        region_name: str,
-        arch: VmArch = VmArch.X86,
-        azure_service: AzureService = AzureService()
+    scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
-    tags_to_search = {
-        'arch': arch.value
-    }
+    tags_to_search = {"arch": arch.value}
     if len(version_bucket) == 1:
-        if '.' in scylla_version:
+        if "." in scylla_version:
             # Plain version, like 4.5.0
-            tags_to_search['scylla_version'] = lambda ver: ver and ver.replace("~", "-").startswith(scylla_version)\
-                and '-dev' not in ver
+            tags_to_search["scylla_version"] = (
+                lambda ver: ver and ver.replace("~", "-").startswith(scylla_version) and "-dev" not in ver
+            )
         else:
             # commit id
-            tags_to_search['scylla_version'] = lambda ver: ver and scylla_version[:9] in ver
+            tags_to_search["scylla_version"] = lambda ver: ver and scylla_version[:9] in ver
     else:
         # Branched version, like master:latest
         branch, build_id = version_bucket
-        tags_to_search['branch'] = branch
-        if build_id == 'latest':
+        tags_to_search["branch"] = branch
+        if build_id == "latest":
             only_latest = True
-        elif build_id == 'all':
+        elif build_id == "all":
             pass
         else:
-            tags_to_search['build-id'] = build_id
+            tags_to_search["build-id"] = build_id
     output = []
     unparsable_scylla_versions = []
     with suppress(AzureResourceNotFoundError):
@@ -65,12 +61,12 @@ def get_scylla_images(
             resource_group_name="SCYLLA-IMAGES",
         )
         for image in gallery_image_versions:
-            if image.location != region_name or image.name.startswith('debug-'):
+            if image.location != region_name or image.name.startswith("debug-"):
                 continue
-            image.tags["scylla_version"] = image.tags.get('scylla_version', image.tags.get('ScyllaVersion'))
+            image.tags["scylla_version"] = image.tags.get("scylla_version", image.tags.get("ScyllaVersion"))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
-                actual_value = image.tags.get(tag_name).replace('~', '-')
+                actual_value = image.tags.get(tag_name).replace("~", "-")
                 if callable(expected_value):
                     if not expected_value(actual_value):
                         break
@@ -83,8 +79,7 @@ def get_scylla_images(
                     unparsable_scylla_versions.append(f"{image.name}: {image.tags.get('scylla_version')}")
     if unparsable_scylla_versions:
         LOGGER.warning("Couldn't parse scylla version from images: %s", str(unparsable_scylla_versions))
-    output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(
-        img.tags.get('scylla_version')).group("date")))
+    output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(img.tags.get("scylla_version")).group("date")))
 
     if only_latest:
         return output[-1:]
@@ -92,21 +87,17 @@ def get_scylla_images(
 
 
 def get_released_scylla_images(
-        scylla_version: str,
-        region_name: str,
-        arch: VmArch = VmArch.X86,
-        azure_service: AzureService = AzureService()
-
+    scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[CommunityGalleryImageVersion]:
-    branch_version = '.'.join(scylla_version.split('.')[:2])
-    if is_enterprise(branch_version) and ComparableScyllaVersion(branch_version) < '2025.1.0':
-        gallery_image_name = f'scylla-enterprise-{branch_version}'
+    branch_version = ".".join(scylla_version.split(".")[:2])
+    if is_enterprise(branch_version) and ComparableScyllaVersion(branch_version) < "2025.1.0":
+        gallery_image_name = f"scylla-enterprise-{branch_version}"
     else:
-        gallery_image_name = f'scylla-{branch_version}'
+        gallery_image_name = f"scylla-{branch_version}"
     community_gallery_images = azure_service.compute.community_gallery_image_versions.list(
         location=region_name,
         gallery_image_name=gallery_image_name,
-        public_gallery_name='scylladb-7e8d8a04-23db-487d-87ec-0e175c0615bb',
+        public_gallery_name="scylladb-7e8d8a04-23db-487d-87ec-0e175c0615bb",
     )
     community_gallery_images: list[CommunityGalleryImageVersion] = list(community_gallery_images)
     community_gallery_images.sort(key=lambda x: x.published_date, reverse=True)
@@ -121,11 +112,13 @@ def get_released_scylla_images(
 
 
 IMAGE_URL_REGEX = re.compile(
-    r'.*/resourceGroups/(?P<resource_group_name>.*)/providers/Microsoft.Compute/images/(?P<image_name>.*)')
+    r".*/resourceGroups/(?P<resource_group_name>.*)/providers/Microsoft.Compute/images/(?P<image_name>.*)"
+)
 
 
 COMMUNITY_IMAGE_URL_REGEX = re.compile(
-    r'.*/CommunityGalleries/(?P<public_gallery_name>.*)/Images/(?P<gallery_image_name>.*)/Versions/(?P<version>.*)')
+    r".*/CommunityGalleries/(?P<public_gallery_name>.*)/Images/(?P<gallery_image_name>.*)/Versions/(?P<version>.*)"
+)
 
 
 def get_image_tags(link: str) -> dict:
@@ -135,5 +128,5 @@ def get_image_tags(link: str) -> dict:
         return azure_image.tags
     elif match := COMMUNITY_IMAGE_URL_REGEX.search(link):
         params = match.groupdict()
-        return dict(scylla_version=params.get('version'), user_data_format_version='3')
+        return dict(scylla_version=params.get("version"), user_data_format_version="3")
     return {}

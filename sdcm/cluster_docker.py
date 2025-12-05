@@ -49,41 +49,51 @@ class NodeContainerMixin:
         return dict(path=self.parent_cluster.node_container_context_path)
 
     def node_container_image_build_args(self):
-        return dict(buildargs={"SOURCE_IMAGE": self.parent_cluster.source_image, },
-                    labels=self.parent_cluster.tags)
+        return dict(
+            buildargs={
+                "SOURCE_IMAGE": self.parent_cluster.source_image,
+            },
+            labels=self.parent_cluster.tags,
+        )
 
     def node_container_run_args(self, seed_ip):
         volumes = {
-            '/var/run/docker.sock': {"bind": '/var/run/docker.sock', "mode": "rw"},
+            "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
         }
 
         smp = 1
-        if self.node_type == 'db':
-            scylla_args = self.parent_cluster.params.get('append_scylla_args')
-            smp_match = re.search(r'--smp\s(\d+)', scylla_args)
+        if self.node_type == "db":
+            scylla_args = self.parent_cluster.params.get("append_scylla_args")
+            smp_match = re.search(r"--smp\s(\d+)", scylla_args)
             smp = int(smp_match.group(1)) if smp_match else 1
 
-        return dict(name=self.name,
-                    image=self.node_container_image_tag,
-                    command=f'--seeds="{seed_ip}"' if seed_ip else None,
-                    volumes=volumes,
-                    network=self.parent_cluster.params.get('docker_network'),
-                    nano_cpus=smp*10**9)  # Same as `docker run --cpus=N ...' CLI command.
+        return dict(
+            name=self.name,
+            image=self.node_container_image_tag,
+            command=f'--seeds="{seed_ip}"' if seed_ip else None,
+            volumes=volumes,
+            network=self.parent_cluster.params.get("docker_network"),
+            nano_cpus=smp * 10**9,
+        )  # Same as `docker run --cpus=N ...' CLI command.
 
 
 class DockerNode(cluster.BaseNode, NodeContainerMixin):
-    def __init__(self,
-                 parent_cluster: "DockerCluster",
-                 container: Optional[Container] = None,
-                 node_prefix: str = "node",
-                 base_logdir: Optional[str] = None,
-                 ssh_login_info: Optional[dict] = None,
-                 node_index: int = 1) -> None:
-        super().__init__(name=f"{node_prefix}-{node_index}",
-                         parent_cluster=parent_cluster,
-                         ssh_login_info=ssh_login_info,
-                         base_logdir=base_logdir,
-                         node_prefix=node_prefix)
+    def __init__(
+        self,
+        parent_cluster: "DockerCluster",
+        container: Optional[Container] = None,
+        node_prefix: str = "node",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            ssh_login_info=ssh_login_info,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+        )
         self.node_index = node_index
 
         if container is not None:
@@ -124,8 +134,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
 
     @cached_property
     def tags(self) -> Dict[str, str]:
-        return {**super().tags,
-                "NodeIndex": str(self.node_index), }
+        return {
+            **super().tags,
+            "NodeIndex": str(self.node_index),
+        }
 
     def _get_public_ip_address(self) -> Optional[str]:
         return ContainerManager.get_ip_address(self, "node")
@@ -153,13 +165,17 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         ContainerManager.get_container(self, "node").restart()
 
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
-        container_status = ContainerManager.get_container(self, "node").attrs['State']['Status']
+        container_status = ContainerManager.get_container(self, "node").attrs["State"]["Status"]
         # return similar interface to what supervisorctl would return
-        return type('ServiceStatus', (), {
-            'stdout': f"{service_name} {container_status}",
-            'stderr': "",
-            'ok': container_status in ['running', 'active', 'RUNNING']
-        })
+        return type(
+            "ServiceStatus",
+            (),
+            {
+                "stdout": f"{service_name} {container_status}",
+                "stderr": "",
+                "ok": container_status in ["running", "active", "RUNNING"],
+            },
+        )
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=None):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
@@ -167,7 +183,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
             self.wait_db_down(timeout=timeout)
 
         container = ContainerManager.get_container(self, "node")
-        if container.status != 'running':
+        if container.status != "running":
             self.log.info("Starting Docker container %s", container.name)
             container.start()
             ContainerManager.wait_for_status(self, "node", status="running")
@@ -233,16 +249,16 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         self.install_package("tar")
         super().do_default_installations()
 
-    def install_sudo(self, user: str = 'scylla', verbose=False):
+    def install_sudo(self, user: str = "scylla", verbose=False):
         """Install and configure passwordless sudo"""
-        pkg_mgr = 'microdnf' if self.distro.is_rhel_like else 'apt'
-        self.remoter.run(f'{pkg_mgr} install -y sudo', verbose=verbose, ignore_status=True, user='root')
+        pkg_mgr = "microdnf" if self.distro.is_rhel_like else "apt"
+        self.remoter.run(f"{pkg_mgr} install -y sudo", verbose=verbose, ignore_status=True, user="root")
 
-        self.remoter.run("mkdir -p /etc/sudoers.d", user='root', ignore_status=True, verbose=verbose)
+        self.remoter.run("mkdir -p /etc/sudoers.d", user="root", ignore_status=True, verbose=verbose)
         sudoers_file = f"/etc/sudoers.d/{user}-nopasswd"
         sudoers_content = f"{user} ALL=(ALL) NOPASSWD: ALL"
-        self.remoter.run(f"echo '{sudoers_content}' > {sudoers_file}", user='root', verbose=verbose, ignore_status=True)
-        self.remoter.run(f"chmod 440 {sudoers_file}", user='root', verbose=verbose, ignore_status=True)
+        self.remoter.run(f"echo '{sudoers_content}' > {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
+        self.remoter.run(f"chmod 440 {sudoers_file}", user="root", verbose=verbose, ignore_status=True)
 
         verify_result = self.remoter.run("sudo -n true", ignore_status=True, verbose=verbose)
         if verify_result.ok:
@@ -256,9 +272,9 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
         Attempts to send SIGHUP to Scylla process, falls back to container restart if signal fails.
         """
         try:
-            result = self.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True, user='root')
+            result = self.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True, user="root")
             if result.ok and (pid := result.stdout.strip()):
-                self.remoter.run(f"kill -s HUP {pid}", ignore_status=True, user='root')
+                self.remoter.run(f"kill -s HUP {pid}", ignore_status=True, user="root")
         except Exception:  # noqa: BLE001
             self.restart_scylla_server(verify_up_before=True, verify_up_after=True)
         self.log.info("Scylla configuration have been reloaded")
@@ -267,31 +283,35 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):
 class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
     """Docker node running Vector Store service"""
 
-    def __init__(self,
-                 parent_cluster: "VectorStoreSetDocker",
-                 container: Optional[Container] = None,
-                 node_prefix: str = "vector",
-                 base_logdir: Optional[str] = None,
-                 ssh_login_info: Optional[dict] = None,
-                 node_index: int = 1) -> None:
-        super().__init__(parent_cluster=parent_cluster,
-                         container=container,
-                         node_prefix=node_prefix,
-                         base_logdir=base_logdir,
-                         ssh_login_info=ssh_login_info,
-                         node_index=node_index)
+    def __init__(
+        self,
+        parent_cluster: "VectorStoreSetDocker",
+        container: Optional[Container] = None,
+        node_prefix: str = "vector",
+        base_logdir: Optional[str] = None,
+        ssh_login_info: Optional[dict] = None,
+        node_index: int = 1,
+    ) -> None:
+        super().__init__(
+            parent_cluster=parent_cluster,
+            container=container,
+            node_prefix=node_prefix,
+            base_logdir=base_logdir,
+            ssh_login_info=ssh_login_info,
+            node_index=node_index,
+        )
 
     def node_container_run_args(self, seed_ip=None):
         return self.vector_container_run_args(seed_ip)
 
     def vector_container_run_args(self, seed_ip=None):
         environment = {
-            'VECTOR_STORE_URI': f"0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}",
-            'VECTOR_STORE_SCYLLADB_URI': self.scylla_uri,
+            "VECTOR_STORE_URI": f"0.0.0.0:{self.parent_cluster.params.get('vector_store_port')}",
+            "VECTOR_STORE_SCYLLADB_URI": self.scylla_uri,
         }
 
-        if (threads := self.parent_cluster.params.get('vector_store_threads')) > 0:
-            environment['VECTOR_STORE_THREADS'] = str(threads)
+        if (threads := self.parent_cluster.params.get("vector_store_threads")) > 0:
+            environment["VECTOR_STORE_THREADS"] = str(threads)
         ports = {f"{self.parent_cluster.params.get('vector_store_port')}/tcp": None}
 
         return dict(
@@ -299,50 +319,59 @@ class VectorStoreDockerNode(VectorStoreNodeMixin, DockerNode):
             image=self.node_container_image_tag,
             environment=environment,
             ports=ports,
-            network=self.parent_cluster.params.get('docker_network'))
+            network=self.parent_cluster.params.get("docker_network"),
+        )
 
 
 class DockerCluster(cluster.BaseCluster):
     node_container_user = "scylla-test"
 
-    def __init__(self,
-                 docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
-                 docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
-                 cluster_prefix: str = "cluster",
-                 node_prefix: str = "node",
-                 node_type: Optional[str] = None,
-                 n_nodes: Union[list, int] = 3,
-                 params: dict = None) -> None:
+    def __init__(
+        self,
+        docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
+        docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
+        node_key_file: Optional[str] = None,
+        cluster_prefix: str = "cluster",
+        node_prefix: str = "node",
+        node_type: Optional[str] = None,
+        n_nodes: Union[list, int] = 3,
+        params: dict = None,
+    ) -> None:
         self.source_image = f"{docker_image}:{docker_image_tag}"
         self.node_container_key_file = node_key_file
 
-        super().__init__(cluster_prefix=cluster_prefix,
-                         node_prefix=node_prefix,
-                         n_nodes=n_nodes,
-                         params=params,
-                         region_names=["localhost-dc", ],  # Multi DC is not supported currently.
-                         node_type=node_type)
+        super().__init__(
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            region_names=[
+                "localhost-dc",
+            ],  # Multi DC is not supported currently.
+            node_type=node_type,
+        )
 
     @property
     def node_container_context_path(self):
         # scylla_linux_distro can be: centos or ubuntu-focal, hence we need to split it
-        return os.path.join(os.path.dirname(__file__), '../docker/scylla-sct',
-                            self.params.get("scylla_linux_distro").split('-')[0])
+        return os.path.join(
+            os.path.dirname(__file__), "../docker/scylla-sct", self.params.get("scylla_linux_distro").split("-")[0]
+        )
 
     def _create_node(self, node_index, container=None):
-        node = DockerNode(parent_cluster=self,
-                          container=container,
-                          ssh_login_info=dict(hostname=None,
-                                              user=self.node_container_user,
-                                              key_file=self.node_container_key_file),
-                          base_logdir=self.logdir,
-                          node_prefix=self.node_prefix,
-                          node_index=node_index)
+        node = DockerNode(
+            parent_cluster=self,
+            container=container,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+        )
 
         if container is None:
             ContainerManager.run_container(
-                node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None)
+                node, "node", seed_ip=self.nodes[0].public_ip_address if node_index else None
+            )
             ContainerManager.wait_for_status(node, "node", status="running")
 
         node.init()
@@ -378,23 +407,27 @@ class DockerCluster(cluster.BaseCluster):
 
 
 class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
-    def __init__(self,
-                 docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
-                 docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, str] = 3,
-                 params: dict = None) -> None:
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
-        super().__init__(docker_image=docker_image,
-                         docker_image_tag=docker_image_tag,
-                         node_key_file=node_key_file,
-                         cluster_prefix=cluster_prefix,
-                         node_prefix=node_prefix,
-                         node_type="scylla-db",
-                         n_nodes=n_nodes,
-                         params=params)
+    def __init__(
+        self,
+        docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
+        docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
+        node_key_file: Optional[str] = None,
+        user_prefix: Optional[str] = None,
+        n_nodes: Union[list, str] = 3,
+        params: dict = None,
+    ) -> None:
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "db-cluster")
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "db-node")
+        super().__init__(
+            docker_image=docker_image,
+            docker_image_tag=docker_image_tag,
+            node_key_file=node_key_file,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="scylla-db",
+            n_nodes=n_nodes,
+            params=params,
+        )
 
         self.vector_store_cluster = None
 
@@ -413,9 +446,9 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
             container = ContainerManager.get_container(node, "node")
             container.start()
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        for event in check_nodes_status(nodes_status=node.get_nodes_status(),
-                                        current_node=node,
-                                        removed_nodes_list=self.dead_nodes_ip_address_list):
+        for event in check_nodes_status(
+            nodes_status=node.get_nodes_status(), current_node=node, removed_nodes_list=self.dead_nodes_ip_address_list
+        ):
             event.publish()
         self.clean_replacement_node_options(node)
 
@@ -429,7 +462,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         if aio_max_nr < recommended_value:
             raise ScyllaDockerRequirementError(
                 f"{node}: value of sysctl key `fs.aio-max-nr' ({aio_max_nr}) "
-                f"is less than recommended value ({recommended_value})")
+                f"is less than recommended value ({recommended_value})"
+            )
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
@@ -437,10 +471,12 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     def get_scylla_args(self):
-
-        append_scylla_args = self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
-            self.params.get('append_scylla_args')
-        return re.sub(r'--blocked-reactor-notify-ms[ ]+[0-9]+', '', append_scylla_args)
+        append_scylla_args = (
+            self.params.get("append_scylla_args_oracle")
+            if self.name.find("oracle") > 0
+            else self.params.get("append_scylla_args")
+        )
+        return re.sub(r"--blocked-reactor-notify-ms[ ]+[0-9]+", "", append_scylla_args)
 
     def destroy(self):
         if self.vector_store_cluster:
@@ -456,23 +492,17 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):
 class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
     """Set of Vector Store nodes"""
 
-    def __init__(self,
-                 params,
-                 vs_docker_image,
-                 vs_docker_image_tag,
-                 **kwargs):
+    def __init__(self, params, vs_docker_image, vs_docker_image_tag, **kwargs):
         self.scylla_cluster = None
 
-        kwargs['cluster_prefix'] = cluster.prepend_user_prefix(kwargs.get('cluster_prefix'), 'vs-set')
-        kwargs.setdefault('node_prefix', 'vs-node')
-        kwargs.setdefault('node_type', 'vs')
+        kwargs["cluster_prefix"] = cluster.prepend_user_prefix(kwargs.get("cluster_prefix"), "vs-set")
+        kwargs.setdefault("node_prefix", "vs-node")
+        kwargs.setdefault("node_type", "vs")
 
         if not vs_docker_image_tag:
-            vs_docker_image_tag = 'latest'
+            vs_docker_image_tag = "latest"
 
-        super().__init__(docker_image=vs_docker_image,
-                         docker_image_tag=vs_docker_image_tag,
-                         params=params, **kwargs)
+        super().__init__(docker_image=vs_docker_image, docker_image_tag=vs_docker_image_tag, params=params, **kwargs)
 
     def _reconfigure_vector_store_nodes(self):
         """Update Vector Store nodes with Scylla info"""
@@ -499,7 +529,8 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
             container=container,
             node_prefix=self.node_prefix,
             base_logdir=self.logdir,
-            node_index=node_index)
+            node_index=node_index,
+        )
 
         if container is None:
             ContainerManager.run_container(node, "node")
@@ -514,42 +545,48 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
             self.log.warning("Vector Store HA not implemented yet, creating only 1 node instead of %d", count)
             count = 1
 
-        reuse_cluster = getattr(self.test_config, 'REUSE_CLUSTER', 'UNDEFINED')
+        reuse_cluster = getattr(self.test_config, "REUSE_CLUSTER", "UNDEFINED")
         result = self._get_nodes() if reuse_cluster else self._create_nodes(count)
         return result
 
 
 class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
-    def __init__(self,
-                 docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
-                 docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, str] = 3,
-                 params: dict = None) -> None:
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
+    def __init__(
+        self,
+        docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
+        docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
+        node_key_file: Optional[str] = None,
+        user_prefix: Optional[str] = None,
+        n_nodes: Union[list, str] = 3,
+        params: dict = None,
+    ) -> None:
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "loader-node")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "loader-set")
 
-        cluster.BaseLoaderSet.__init__(self,
-                                       params=params)
-        DockerCluster.__init__(self,
-                               docker_image=docker_image,
-                               docker_image_tag=docker_image_tag,
-                               node_key_file=node_key_file,
-                               cluster_prefix=cluster_prefix,
-                               node_prefix=node_prefix,
-                               node_type="loader",
-                               n_nodes=n_nodes,
-                               params=params)
+        cluster.BaseLoaderSet.__init__(self, params=params)
+        DockerCluster.__init__(
+            self,
+            docker_image=docker_image,
+            docker_image_tag=docker_image_tag,
+            node_key_file=node_key_file,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="loader",
+            n_nodes=n_nodes,
+            params=params,
+        )
 
     def node_setup(self, node: DockerNode, verbose=False, **kwargs):
         node.remoter.sudo("apt update", verbose=True, ignore_status=True)
         node.remoter.sudo("apt install -y openjdk-8-jre", verbose=True, ignore_status=True)
-        node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
-                          verbose=True, ignore_status=True)
+        node.remoter.sudo(
+            "ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
+            verbose=True,
+            ignore_status=True,
+        )
 
         self._install_docker_cli(node, verbose=verbose)
-        if self.params.get('client_encrypt'):
+        if self.params.get("client_encrypt"):
             node.config_client_encrypt()
 
     def _install_docker_cli(self, node, verbose=False):
@@ -562,22 +599,23 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
         commands = (
             [
-                'apt update',
-                'apt install -y gnupg2 software-properties-common lsb-release',
-                'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -',
+                "apt update",
+                "apt install -y gnupg2 software-properties-common lsb-release",
+                "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -",
                 'add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"',
-                'apt update',
-                'apt install -y docker-ce-cli'
+                "apt update",
+                "apt install -y docker-ce-cli",
             ]
             if node.distro.is_debian_like
             else [
-                'curl -L https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo',
-                'microdnf -y update',
-                'microdnf -y install docker-ce-cli'
-            ])
+                "curl -L https://download.docker.com/linux/centos/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo",
+                "microdnf -y update",
+                "microdnf -y install docker-ce-cli",
+            ]
+        )
 
         for cmd in commands:
-            result = node.remoter.run(cmd, timeout=300, verbose=verbose, ignore_status=True, retry=3, user='root')
+            result = node.remoter.run(cmd, timeout=300, verbose=verbose, ignore_status=True, retry=3, user="root")
             if not result.ok:
                 raise RuntimeError(f"Command {cmd} failed with error: {result.stderr.strip()}")
 
@@ -591,17 +629,21 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 class DockerMonitoringNode(cluster.BaseNode):
     log = LOGGER
 
-    def __init__(self,
-                 parent_cluster: "MonitorSetDocker",
-                 node_prefix: str = "monitor-node",
-                 base_logdir: Optional[str] = None,
-                 node_index: int = 1,
-                 ssh_login_info: Optional[dict] = None) -> None:
-        super().__init__(name=f"{node_prefix}-{node_index}",
-                         parent_cluster=parent_cluster,
-                         base_logdir=base_logdir,
-                         node_prefix=node_prefix,
-                         ssh_login_info=ssh_login_info)
+    def __init__(
+        self,
+        parent_cluster: "MonitorSetDocker",
+        node_prefix: str = "monitor-node",
+        base_logdir: Optional[str] = None,
+        node_index: int = 1,
+        ssh_login_info: Optional[dict] = None,
+    ) -> None:
+        super().__init__(
+            name=f"{node_prefix}-{node_index}",
+            parent_cluster=parent_cluster,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            ssh_login_info=ssh_login_info,
+        )
         self.node_index = node_index
 
     def wait_for_cloud_init(self):
@@ -613,7 +655,10 @@ class DockerMonitoringNode(cluster.BaseNode):
 
     @cached_property
     def tags(self) -> dict[str, str]:
-        return {**super().tags, "NodeIndex": str(self.node_index), }
+        return {
+            **super().tags,
+            "NodeIndex": str(self.node_index),
+        }
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = LOCALRUNNER
@@ -654,33 +699,30 @@ class DockerMonitoringNode(cluster.BaseNode):
 
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
-    def __init__(self,
-                 targets: dict,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, int] = 3,
-                 params: dict = None) -> None:
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
+    def __init__(
+        self, targets: dict, user_prefix: Optional[str] = None, n_nodes: Union[list, int] = 3, params: dict = None
+    ) -> None:
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-node")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "monitor-set")
 
-        cluster.BaseMonitorSet.__init__(self,
-                                        targets=targets,
-                                        params=params)
-        DockerCluster.__init__(self,
-                               cluster_prefix=cluster_prefix,
-                               node_prefix=node_prefix,
-                               node_type="monitor",
-                               n_nodes=n_nodes,
-                               params=params)
+        cluster.BaseMonitorSet.__init__(self, targets=targets, params=params)
+        DockerCluster.__init__(
+            self,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            node_type="monitor",
+            n_nodes=n_nodes,
+            params=params,
+        )
 
     def _create_node(self, node_index, container=None):
-        node = DockerMonitoringNode(parent_cluster=self,
-                                    base_logdir=self.logdir,
-                                    node_prefix=self.node_prefix,
-                                    node_index=node_index,
-                                    ssh_login_info=dict(hostname=None,
-                                                        user=self.node_container_user,
-                                                        key_file=self.node_container_key_file)
-                                    )
+        node = DockerMonitoringNode(
+            parent_cluster=self,
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index,
+            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+        )
         node.init()
         return node
 
