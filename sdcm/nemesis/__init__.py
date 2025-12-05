@@ -60,6 +60,7 @@ from sdcm.cluster import (
     DB_LOG_PATTERN_RESHARDING_FINISH,
     MAX_TIME_WAIT_FOR_NEW_NODE_UP,
     MAX_TIME_WAIT_FOR_DECOMMISSION,
+    ClusterNodesNotReady,
     NodeSetupFailed,
     NodeSetupTimeout,
     HOUR_IN_SEC,
@@ -119,6 +120,7 @@ from sdcm.utils.common import (
     update_authenticator,
     sleep_for_percent_of_duration,
     get_views_of_base_table,
+    wait_for_tasks,
 )
 from sdcm.utils.parallel_object import ParallelObject, ParallelObjectResult
 from sdcm.utils.features import is_tablets_feature_enabled, is_views_with_tablets_enabled
@@ -6193,6 +6195,81 @@ class NemesisRunner:
             finally:
                 with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                     drop_materialized_view(session, ks_name, view_name)
+
+    @target_data_nodes
+    def disrupt_abort_decommission(self):
+        """
+        Start decommission on target node and abort it after streaming starts.
+
+        If aborting the decommission task fails, add a new node to replace it.
+        """
+        if len([n for n in self.cluster.data_nodes if n.rack == self.target_node.rack]) == 1:
+            raise UnsupportedNemesis(
+                f"Target node {self.target_node.name} is the only one in rack {self.target_node.rack}, cannot decommission it."
+            )
+
+        def decommission():
+            try:
+                with EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING,
+                    event_class=DatabaseLogEvent,
+                    extra_time_to_expiration=30,
+                    regex=r".*Decommission failed. See earlier errors \(aborted on user request\).*",
+                ):
+                    self.target_node.run_nodetool(
+                        sub_cmd="decommission",
+                        warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
+                        long_running=True,
+                        retry=0,
+                    )
+            except (UnexpectedExit, Libssh2UnexpectedExit) as ex:
+                if "Decommission failed. See earlier errors (aborted on user request)" in ex.stdout + ex.stderr:
+                    self.actions_log.info("Decommission was aborted as expected")
+                else:
+                    raise
+
+        def abort():
+            task_id = wait_for_tasks(
+                self.target_node,
+                module="node_ops",
+                timeout=60,
+                filter={"entity": self.target_node.host_id, "type": "decommission"},
+            )[0]["task_id"]
+
+            # In order to ensure streaming has started, we follow the system log for a message
+            # indicating that SSTable streaming has finished for at least one sstable.
+            # Once the `log_follower` yields a line, we know streaming has started.
+            log_follower = self.target_node.follow_system_log(
+                patterns=[r"stream_blob - stream_sstables\[[0-9a-f-]+\] Finished sending sstable_nr"]
+            )
+
+            _streaming_started = lambda: len(list(log_follower)) > 0
+
+            wait_for(_streaming_started, timeout=60)
+            # Abort the decommission task after streaming has started
+            self.target_node.run_nodetool(
+                f"tasks abort {task_id}", warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit), retry=0
+            )
+            # This will wait until either abort finishes, or, if abort fails, until decommission finishes
+            self.target_node.run_nodetool(f"tasks wait {task_id}")
+
+        target_is_seed = self.target_node.is_seed
+        ParallelObject(objects=[decommission, abort], timeout=600).call_objects()
+
+        # Validate that node is still part of the cluster
+        try:
+            self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node], timeout=60)
+        except ClusterNodesNotReady as ex:
+            self.log.warning(
+                f"Node {self.target_node.name} is no longer part of the cluster: {ex}. Adding a new node to replace it."
+            )
+            self.monitoring_set.reconfigure_scylla_monitoring()
+            # If decommission succeeded despite abort, add a new node to replace it
+            new_node = self.add_new_nodes(count=1, rack=self.target_node.rack)[0]
+            if new_node.is_seed != target_is_seed:
+                new_node.set_seed_flag(target_is_seed)
+                self.cluster.update_seed_provider()
+            self.log.info(f"Added new node {new_node.name} to replace decommissioned node {self.target_node.name}")
 
 
 def disrupt_method_wrapper(method, caller_obj: "NemesisBaseClass", is_exclusive=False):  # noqa: PLR0915
