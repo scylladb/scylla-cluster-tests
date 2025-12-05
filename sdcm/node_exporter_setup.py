@@ -1,7 +1,7 @@
 from sdcm.remote import shell_script_cmd
 
 
-NODE_EXPORTER_VERSION = '1.8.2'
+NODE_EXPORTER_VERSION = "1.8.2"
 
 
 class NodeExporterSetup:
@@ -10,7 +10,8 @@ class NodeExporterSetup:
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             remoter = node.remoter
-        remoter.sudo(shell_script_cmd(f"""
+        remoter.sudo(
+            shell_script_cmd(f"""
             if ! id node_exporter > /dev/null 2>&1; then
                 useradd -rs /bin/false node_exporter
             fi
@@ -40,4 +41,5 @@ class NodeExporterSetup:
             systemctl daemon-reload
             systemctl enable node_exporter.service
             systemctl start node_exporter.service
-        """))
+        """)
+        )

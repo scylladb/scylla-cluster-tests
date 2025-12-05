@@ -23,23 +23,20 @@ from sdcm.utils.common import skip_optional_stage
 
 
 class MaintainanceTest(ClusterTester):
-
     """
     Test a Scylla cluster maintenance operations.
     """
 
     def _base_procedure(self, nemesis_class):
-        if not skip_optional_stage('main_load'):
-            cs_thread_pool = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                                    duration=240)
+        if not skip_optional_stage("main_load"):
+            cs_thread_pool = self.run_stress_thread(stress_cmd=self.params.get("stress_cmd"), duration=240)
         self.db_cluster.wait_total_space_used_per_node()
-        self.db_cluster.add_nemesis(nemesis=nemesis_class,
-                                    tester_obj=self)
+        self.db_cluster.add_nemesis(nemesis=nemesis_class, tester_obj=self)
         # Wait another 10 minutes
         time.sleep(10 * 60)
         self.db_cluster.start_nemesis(interval=10)
         time.sleep(180 * 60)
-        if not skip_optional_stage('main_load'):
+        if not skip_optional_stage("main_load"):
             # Kill c-s when done
             self.kill_stress_thread()
             self.verify_stress_thread(cs_thread_pool)

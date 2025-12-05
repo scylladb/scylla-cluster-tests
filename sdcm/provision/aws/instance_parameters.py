@@ -31,7 +31,7 @@ class AWSInstanceProfile(BaseModel):
 
 
 class AWSDiskMappingEbsInfo(BaseModel):
-    VolumeType: Literal['standard', 'io1', 'io2', 'gp2', 'sc1', 'st1', 'gp3']
+    VolumeType: Literal["standard", "io1", "io2", "gp2", "sc1", "st1", "gp3"]
     VolumeSize: int
     VirtualName: Optional[str] = None
     DeleteOnTermination: Optional[bool] = None
@@ -51,11 +51,10 @@ class AWSDiskMapping(BaseModel):
 class AWSPlacementInfo(BaseModel):
     AvailabilityZone: str
     GroupName: str | None = None
-    Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
+    Tenancy: Literal["default", "dedicated", "host"] = "default"
 
 
 class AWSInstanceParams(InstanceParamsBase):
-
     ImageId: str
     KeyName: str
     InstanceType: str
@@ -79,6 +78,6 @@ class AWSInstanceParams(InstanceParamsBase):
             **kwargs,
         )
         if encode_user_data:
-            if user_data := dict_data.get('UserData'):
-                dict_data['UserData'] = base64.b64encode(user_data.encode('ascii')).decode("ascii")
+            if user_data := dict_data.get("UserData"):
+                dict_data["UserData"] = base64.b64encode(user_data.encode("ascii")).decode("ascii")
         return dict_data

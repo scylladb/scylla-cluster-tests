@@ -19,18 +19,18 @@ if TYPE_CHECKING:
 
 @dataclass
 class ConfigParams:
-    mode: Literal['random', 'table', 'partition', 'aggregate', 'table_and_aggregate']
+    mode: Literal["random", "table", "partition", "aggregate", "table_and_aggregate"]
     ks_cf: str = "random"
     interval: int = 10
     page_size: int = 10000
-    pk_name: str = 'pk'
-    ck_name: str = 'ck'
-    data_column_name: str = 'v'
+    pk_name: str = "pk"
+    ck_name: str = "ck"
+    data_column_name: str = "v"
     validate_data: bool = False
     include_data_column: bool = False
     rows_count: int = 5000
     full_scan_operation_limit: int = 300  # timeout for SELECT * statement, 5 min by default
-    full_scan_aggregates_operation_limit: int = 60*30  # timeout for SELECT count(* statement 30 min by default
+    full_scan_aggregates_operation_limit: int = 60 * 30  # timeout for SELECT count(* statement 30 min by default
 
     def __post_init__(self):
         types = get_type_hints(ConfigParams)
@@ -40,12 +40,11 @@ class ConfigParams:
             value = getattr(self, item.name)
             if get_origin(expected_type) is Literal:
                 if not value in expected_type.__args__:
-                    errors.append(
-                        f"field '{item.name}' must be one of '{expected_type.__args__}' but got '{value}'")
+                    errors.append(f"field '{item.name}' must be one of '{expected_type.__args__}' but got '{value}'")
             elif not isinstance(value, expected_type):
                 errors.append(f"field '{item.name}' must be an instance of {expected_type}, but got '{value}'")
         if errors:
-            errors = '\n\t'.join(errors)
+            errors = "\n\t".join(errors)
             raise ValueError(f"Config params validation errors:\n\t{errors}")
 
 
@@ -63,6 +62,7 @@ class OperationThreadStats:
     """
     Keeps track of stats for multiple operations.
     """
+
     number_of_rows_read: int = 0
     read_pages: int = 0
     scans_counter: int = 0
@@ -76,8 +76,17 @@ class OperationThreadStats:
 
         pretty_table = PrettyTable(field_names=[field.name for field in dataclasses.fields(self.stats[0])])
         for stat in self.stats:
-            pretty_table.add_row([stat.op_type, stat.duration, "\n".join(stat.exceptions), stat.nemesis_at_start,
-                                  stat.nemesis_at_end, stat.success, stat.cmd])
+            pretty_table.add_row(
+                [
+                    stat.op_type,
+                    stat.duration,
+                    "\n".join(stat.exceptions),
+                    stat.nemesis_at_start,
+                    stat.nemesis_at_end,
+                    stat.success,
+                    stat.cmd,
+                ]
+            )
         return pretty_table
 
 
@@ -86,6 +95,7 @@ class OneOperationStat:
     """
     Keeps track of stats for a single operation.
     """
+
     op_type: str = None
     duration: float = None
     exceptions: list = dataclasses.field(default_factory=list)
@@ -125,9 +135,10 @@ class OperationThread:
 
         # create different scan operations objects
         self.operation_params = {
-            'generator': self.generator,
-            'thread_params': self.thread_params,
-            'thread_stats': self.thread_stats}
+            "generator": self.generator,
+            "thread_params": self.thread_params,
+            "thread_stats": self.thread_stats,
+        }
 
         # create mapping for different scan operations objects,
         # please see usage in get_next_scan_operation()
@@ -173,14 +184,24 @@ class OperationThread:
         return self._thread.join(timeout)
 
     def _wait_until_user_table_exists(self, timeout_min: int = 20):
-        text = f'Waiting until {self.thread_params.ks_cf} user table exists'
+        text = f"Waiting until {self.thread_params.ks_cf} user table exists"
         db_node = random.choice(self.thread_params.db_cluster.nodes)
 
-        if self.thread_params.ks_cf.lower() == 'random':
-            wait.wait_for(func=lambda: len(self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)) > 0,
-                          step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
+        if self.thread_params.ks_cf.lower() == "random":
+            wait.wait_for(
+                func=lambda: len(self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)) > 0,
+                step=60,
+                text=text,
+                timeout=60 * timeout_min,
+                throw_exc=False,
+            )
             self.thread_params.ks_cf = self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)[0]
         else:
-            wait.wait_for(func=lambda: self.thread_params.ks_cf in (
-                self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)
-            ), step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
+            wait.wait_for(
+                func=lambda: self.thread_params.ks_cf
+                in (self.thread_params.db_cluster.get_non_system_ks_cf_list(db_node)),
+                step=60,
+                text=text,
+                timeout=60 * timeout_min,
+                throw_exc=False,
+            )

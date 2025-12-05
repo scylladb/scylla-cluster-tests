@@ -26,9 +26,14 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.system import TestResultEvent
 from sdcm.sct_events.events_device import get_events_main_device
-from sdcm.sct_events.events_processes import \
-    EVENTS_FILE_LOGGER_ID, EventsProcessesRegistry, BaseEventsProcess, \
-    start_events_process, get_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_FILE_LOGGER_ID,
+    EventsProcessesRegistry,
+    BaseEventsProcess,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+)
 
 
 EVENTS_LOG: str = "events.log"
@@ -63,10 +68,10 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
         self.events_log = base_dir / EVENTS_LOG
         self.events_logs_by_severity = {
             Severity.CRITICAL: base_dir / CRITICAL_LOG,
-            Severity.ERROR:    base_dir / ERROR_LOG,
-            Severity.WARNING:  base_dir / WARNING_LOG,
-            Severity.NORMAL:   base_dir / NORMAL_LOG,
-            Severity.DEBUG:    base_dir / DEBUG_LOG,
+            Severity.ERROR: base_dir / ERROR_LOG,
+            Severity.WARNING: base_dir / WARNING_LOG,
+            Severity.NORMAL: base_dir / NORMAL_LOG,
+            Severity.DEBUG: base_dir / DEBUG_LOG,
         }
 
         self.events_summary = collections.defaultdict(int)
@@ -77,7 +82,13 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
     def run(self) -> None:
         LOGGER.debug("Writing to %s", self.events_log)
 
-        for log_file in chain((self.events_log, self.events_summary_log, ), self.events_logs_by_severity.values(), ):
+        for log_file in chain(
+            (
+                self.events_log,
+                self.events_summary_log,
+            ),
+            self.events_logs_by_severity.values(),
+        ):
             log_file.touch()
 
         for event_tuple in self.inbound_events():
@@ -101,7 +112,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                     tee(message)
 
         # Write event to events.log file
-        if getattr(event, 'save_to_files', False):
+        if getattr(event, "save_to_files", False):
             with verbose_suppress("%s: failed to write %s to %s", self, event, self.events_log):
                 with self.events_log.open("ab+", buffering=0) as fobj:
                     fobj.write(message_bin)
@@ -147,8 +158,9 @@ start_events_logger = partial(start_events_process, EVENTS_FILE_LOGGER_ID, Event
 get_events_logger = cast(Callable[..., EventsFileLogger], partial(get_events_process, EVENTS_FILE_LOGGER_ID))
 
 
-def get_events_grouped_by_category(limit: Optional[int] = None,
-                                   _registry: Optional[EventsProcessesRegistry] = None) -> Dict[str, List[str]]:
+def get_events_grouped_by_category(
+    limit: Optional[int] = None, _registry: Optional[EventsProcessesRegistry] = None
+) -> Dict[str, List[str]]:
     return get_events_logger(_registry=_registry).get_events_by_category(limit=limit)
 
 
@@ -160,5 +172,10 @@ def get_logger_event_summary(_registry: Optional[EventsProcessesRegistry] = None
     return {}
 
 
-__all__ = ("EventsFileLogger",
-           "start_events_logger", "get_events_logger", "get_events_grouped_by_category", "get_logger_event_summary", )
+__all__ = (
+    "EventsFileLogger",
+    "start_events_logger",
+    "get_events_logger",
+    "get_events_grouped_by_category",
+    "get_logger_event_summary",
+)

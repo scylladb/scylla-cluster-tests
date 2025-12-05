@@ -11,8 +11,7 @@ client = get_scylla_images_ec2_client("us-east-1")
 SCYLLA_AMI_OWNER_ID_LIST = ("797456418907", "158855661827")
 test = client.describe_images(
     Owners=SCYLLA_AMI_OWNER_ID_LIST,
-    Filters=[{"Name": "is-public", "Values": ["true"]},
-             {"Name": "name", "Values": ["ScyllaDB*2024.2*"]}]
+    Filters=[{"Name": "is-public", "Values": ["true"]}, {"Name": "name", "Values": ["ScyllaDB*2024.2*"]}],
 )
 
 result = gen_moto_amis(test["Images"])

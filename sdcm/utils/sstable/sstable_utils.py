@@ -22,13 +22,17 @@ class SstableUtils:
 
     REMOTE_SSTABLEDUMP_PATH = "/tmp/sstabledump.json"
 
-    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None,
-                 db_node: 'BaseNode' = None,  # noqa: F821
-                 **kwargs):
+    def __init__(
+        self,
+        propagation_delay_in_seconds: int = 0,
+        ks_cf: str = None,
+        db_node: "BaseNode" = None,  # noqa: F821
+        **kwargs,
+    ):
         self.db_node = db_node
         self.db_cluster = self.db_node.parent_cluster if self.db_node else None
         self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.data_nodes[0]))
-        self.keyspace, self.table = self.ks_cf.split('.')
+        self.keyspace, self.table = self.ks_cf.split(".")
         self.propagation_delay_in_seconds = propagation_delay_in_seconds
         self.log = logging.getLogger(self.__class__.__name__)
         self.user = kwargs.get("user", None)
@@ -39,28 +43,26 @@ class SstableUtils:
         tombstones_num = 0
         for sstable in sstables:
             tombstones_num += self.count_sstable_tombstones(sstable=sstable)
-        self.log.debug('Got %s tombstones for %s', tombstones_num, self.ks_cf)
+        self.log.debug("Got %s tombstones for %s", tombstones_num, self.ks_cf)
         return tombstones_num
 
     def get_sstables(self, from_minutes_ago: int = 0):
         selected_sstables = []
-        ks_cf_path = self.ks_cf.replace('.', '/')
+        ks_cf_path = self.ks_cf.replace(".", "/")
         find_cmd = f"find /var/lib/scylla/data/{ks_cf_path}-*/*-big-Data.db -maxdepth 1 -type f"
         if from_minutes_ago:
             find_cmd += f" -cmin -{from_minutes_ago}"
         sstables_res = self.db_node.remoter.sudo(find_cmd, verbose=True, ignore_status=True)
         if sstables_res.stderr:
-            self.log.debug('Failed to get sstables for %s. Error: %s', self.ks_cf, sstables_res.stderr)
+            self.log.debug("Failed to get sstables for %s. Error: %s", self.ks_cf, sstables_res.stderr)
         else:
             selected_sstables = sstables_res.stdout.split()
 
-        message = f'filtered by last {from_minutes_ago} minutes' if from_minutes_ago else '(not filtered by time)'
-        self.log.debug('Got %s sstables %s', len(selected_sstables), message)
+        message = f"filtered by last {from_minutes_ago} minutes" if from_minutes_ago else "(not filtered by time)"
+        self.log.debug("Got %s sstables %s", len(selected_sstables), message)
         return selected_sstables
 
-    def check_that_sstables_are_encrypted(self, sstables=None,
-                                          expected_bool_value: bool = True) -> list:
-
+    def check_that_sstables_are_encrypted(self, sstables=None, expected_bool_value: bool = True) -> list:
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
@@ -72,21 +74,21 @@ class SstableUtils:
 
         dump_cmd = get_sstable_metadata_dump_command(self.db_node, self.keyspace, self.table)
         for sstable in sstables:
-            sstables_res = self.db_node.remoter.sudo(
-                f"{dump_cmd} {sstable}",
-                ignore_status=True, verbose=True)
+            sstables_res = self.db_node.remoter.sudo(f"{dump_cmd} {sstable}", ignore_status=True, verbose=True)
 
             self.log.debug("sstables_res.stdout: %s", sstables_res.stdout)
             self.log.debug("sstables_res.stderr: %s", sstables_res.stderr)
             # NOTE: if we have 'stdout' then the data was successfully read and it means there was no encryption
             if sstables_res.stdout:
                 self.log.debug("Successfully read the sstable located at '%s'.", sstable)
-                if dump_cmd == 'sstabledump':
+                if dump_cmd == "sstabledump":
                     sstables_encrypted_mapping[sstable] = False
                 else:
-                    scylla_metadata = json.loads(sstables_res.stdout, strict=False)['sstables']
-                    sstables_encrypted_mapping[sstable] = all('scylla_encryption_options' in metadata.get('extension_attributes', {})
-                                                              for table, metadata in scylla_metadata.items())
+                    scylla_metadata = json.loads(sstables_res.stdout, strict=False)["sstables"]
+                    sstables_encrypted_mapping[sstable] = all(
+                        "scylla_encryption_options" in metadata.get("extension_attributes", {})
+                        for table, metadata in scylla_metadata.items()
+                    )
             # NOTE: case when sstable exists and it is encrypted:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. \
@@ -98,8 +100,11 @@ class SstableUtils:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception \
             #       (/var/.../me-3g9s_1941_4web4236cvthbyawsi-big-TOC.txt: file not found)
-            elif (" file not found)" in sstables_res.stderr or "Cannot find file" in sstables_res.stderr
-                    or "No such file or directory" in sstables_res.stderr):
+            elif (
+                " file not found)" in sstables_res.stderr
+                or "Cannot find file" in sstables_res.stderr
+                or "No such file or directory" in sstables_res.stderr
+            ):
                 self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
             # NOTE: case when
             #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
@@ -111,24 +116,27 @@ class SstableUtils:
                 self.log.warning(
                     "'%s' sstable cannot be loaded with 'first and last keys of summary are misordered' error. "
                     "Not representative. Skipping it.",
-                    sstable)
-            elif "NullPointerException" in sstables_res.stderr or "ArrayIndexOutOfBoundsException" in sstables_res.stderr:
+                    sstable,
+                )
+            elif (
+                "NullPointerException" in sstables_res.stderr or "ArrayIndexOutOfBoundsException" in sstables_res.stderr
+            ):
                 # using sstabledump
                 sstables_encrypted_mapping[sstable] = True
             # NOTE: all other unexpected cases
             else:
-                self.log.warning(
-                    "Unexpected error reading sstable located at '%s': %s", sstable, sstables_res.stderr)
+                self.log.warning("Unexpected error reading sstable located at '%s': %s", sstable, sstables_res.stderr)
                 sstables_encrypted_mapping[sstable] = None
 
         # NOTE: we read sstables in a concurrent environment.
         #       So, we can get failures trying to read some of them when it gets deleted concurrently...
         encryption_success_part, encryption_results = 0.79, list(sstables_encrypted_mapping.values())
         assert encryption_results
-        assert (encryption_results.count(expected_bool_value) / len(encryption_results) >= encryption_success_part), (
+        assert encryption_results.count(expected_bool_value) / len(encryption_results) >= encryption_success_part, (
             "Sstables encryption check failed."
             f" Success part: '{encryption_success_part}'. Expected bool value: '{expected_bool_value}'."
-            f" Encryption results: {encryption_results}")
+            f" Encryption results: {encryption_results}"
+        )
 
     def count_sstable_tombstones(self, sstable: str) -> int:
         """
@@ -143,17 +151,20 @@ class SstableUtils:
 
         # Fetch the dumped JSON content
         result = self.db_node.remoter.run(
-            f'sudo cat {self.REMOTE_SSTABLEDUMP_PATH}', verbose=False, ignore_status=False)
+            f"sudo cat {self.REMOTE_SSTABLEDUMP_PATH}", verbose=False, ignore_status=False
+        )
 
         if not result.ok:
-            self.log.debug("Failed to retrieve SSTable dump data for %s: (%s, %s)", sstable, result.stdout,
-                           result.stderr)
+            self.log.debug(
+                "Failed to retrieve SSTable dump data for %s: (%s, %s)", sstable, result.stdout, result.stderr
+            )
             return 0
 
         try:
             dump_data = json.loads(result.stdout)
             num_tombstones = sum(
-                1 for partition in dump_data.get("sstables", {}).get("anonymous", [])
+                1
+                for partition in dump_data.get("sstables", {}).get("anonymous", [])
                 if "tombstone" in partition or partition.get("expired") is True
             )
 
@@ -177,31 +188,34 @@ class SstableUtils:
         Example returned value: '2022-12-28 11:53:53'
         """
         self.verify_a_live_normal_node_is_used()
-        with self.db_cluster.cql_connection_patient(node=self.db_node, connect_timeout=300,
-                                                    user=self.user, password=self.password) as session:
+        with self.db_cluster.cql_connection_patient(
+            node=self.db_node, connect_timeout=300, user=self.user, password=self.password
+        ) as session:
             try:
-                query = f"SELECT repair_time from system.repair_history WHERE keyspace_name = '{self.keyspace}' " \
+                query = (
+                    f"SELECT repair_time from system.repair_history WHERE keyspace_name = '{self.keyspace}' "
                     f"AND table_name = '{self.table}' ALLOW FILTERING;"
+                )
                 results = session.execute(query)
                 output = results.all()
                 output_length = len(output)
                 if output_length == 0:
-                    self.log.debug('No repair history found for %s.%s', self.keyspace, self.table)
+                    self.log.debug("No repair history found for %s.%s", self.keyspace, self.table)
                     return None
-                self.log.debug('Number of rows in repair_time results: %d', output_length)
-                self.log.debug('Last row in repair_time results: %s', output[-1])
+                self.log.debug("Number of rows in repair_time results: %d", output_length)
+                self.log.debug("Last row in repair_time results: %s", output[-1])
                 return str(output[-1].repair_time)
             except Exception as exc:
-                self.log.error('Failed to get repair date of %s.%s. Error: %s', self.keyspace, self.table, exc)
+                self.log.error("Failed to get repair date of %s.%s. Error: %s", self.keyspace, self.table, exc)
                 raise
 
     def get_table_repair_date_and_delta_minutes(self) -> (datetime.datetime, int):
-
-        table_repair_date = datetime.datetime.strptime(self.get_table_repair_date(), '%Y-%m-%d %H:%M:%S')
+        table_repair_date = datetime.datetime.strptime(self.get_table_repair_date(), "%Y-%m-%d %H:%M:%S")
         now = datetime.datetime.now()
         delta_repair_date_minutes = ((now - table_repair_date).seconds - self.propagation_delay_in_seconds) // 60
-        self.log.debug('Found table-repair-date: %s, Ended %s minutes ago',
-                       table_repair_date, delta_repair_date_minutes)
+        self.log.debug(
+            "Found table-repair-date: %s, Ended %s minutes ago", table_repair_date, delta_repair_date_minutes
+        )
         return table_repair_date, delta_repair_date_minutes
 
     def _run_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
@@ -223,7 +237,8 @@ class SstableUtils:
         # Proceed with dump command
         dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
         dump_result = self.db_node.remoter.run(
-            f'sudo {dump_cmd} {sstable} 1>{remote_json_path}', verbose=False, ignore_status=True)
+            f"sudo {dump_cmd} {sstable} 1>{remote_json_path}", verbose=False, ignore_status=True
+        )
 
         if not dump_result.ok:
             self.log.error("Failed to run SSTable dump for %s: %s", sstable, dump_result.stderr)
@@ -233,7 +248,7 @@ class SstableUtils:
 
     def _are_tombstones_in_sstabledump(self, sstable: str, remote_json_path: str = REMOTE_SSTABLEDUMP_PATH) -> bool:
         # Check if tombstones exist in the dumped sstable JSON
-        check_tombstones_cmd = f'sudo grep -q tombstone {remote_json_path}'
+        check_tombstones_cmd = f"sudo grep -q tombstone {remote_json_path}"
         result = self.db_node.remoter.run(check_tombstones_cmd, verbose=False, ignore_status=True)
 
         if result.exit_status != 0:
@@ -256,22 +271,24 @@ class SstableUtils:
             return []
 
         tombstones_deletion_info = []
-        result = self.db_node.remoter.run(f'sudo cat {self.REMOTE_SSTABLEDUMP_PATH}', verbose=False,
-                                          ignore_status=False)
+        result = self.db_node.remoter.run(
+            f"sudo cat {self.REMOTE_SSTABLEDUMP_PATH}", verbose=False, ignore_status=False
+        )
 
         if not result.ok:
-            self.log.warning("Failed to retrieve SSTable dump data for %s: (%s, %s)", sstable, result.stdout,
-                             result.stderr)
+            self.log.warning(
+                "Failed to retrieve SSTable dump data for %s: (%s, %s)", sstable, result.stdout, result.stderr
+            )
             return tombstones_deletion_info
 
         try:
             dump_data = json.loads(result.stdout)
 
             # Get the list of records for the given SSTable
-            sstable_data = dump_data['sstables'].get(sstable, [])
+            sstable_data = dump_data["sstables"].get(sstable, [])
 
             # Extract entries that contain a tombstone
-            tombstones_deletion_info = [entry for entry in sstable_data if 'tombstone' in entry]
+            tombstones_deletion_info = [entry for entry in sstable_data if "tombstone" in entry]
 
         except json.JSONDecodeError as e:
             self.log.error("Failed to parse SSTable dump JSON for %s: %s", sstable, str(e))
@@ -297,19 +314,21 @@ class SstableUtils:
                 self.log.debug("Got an unexpected tombstone element format: %s", entry)
                 continue
             key_info = entry.get("key", "No key information")
-            self.log.debug('Processing tombstone deletion info of: %s', key_info)
+            self.log.debug("Processing tombstone deletion info of: %s", key_info)
 
             tombstone_date = self.get_tombstone_date(entry)
             if not tombstone_date:
                 self.log.debug("Tombstone date not found for element: %s", key_info)
                 continue
 
-            self.log.debug('Checking tombstone delete date %s < table repair date: %s',
-                           tombstone_date, table_repair_date)
+            self.log.debug(
+                "Checking tombstone delete date %s < table repair date: %s", tombstone_date, table_repair_date
+            )
 
             if tombstone_date < table_repair_date:
                 non_deleted_tombstones.append(
-                    f'(key: {key_info}, date: {tombstone_date.strftime("%Y-%m-%d %H:%M:%S")})')
+                    f"(key: {key_info}, date: {tombstone_date.strftime('%Y-%m-%d %H:%M:%S')})"
+                )
 
         if non_deleted_tombstones:
             raise NonDeletedTombstonesFound(
@@ -340,7 +359,7 @@ class SstableUtils:
 
         if "deletion_time" in tombstone_info:
             try:
-                dt = datetime.datetime.fromisoformat(tombstone_info["deletion_time"].replace('z', '+00:00'))
+                dt = datetime.datetime.fromisoformat(tombstone_info["deletion_time"].replace("z", "+00:00"))
                 return dt.replace(tzinfo=None)  # Remove timezone to make it naive
             except ValueError:
                 self.log.debug("Invalid deletion_time format: %s", tombstone_info["deletion_time"])
@@ -382,9 +401,9 @@ def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str
     """
     scylla_conf_dir = Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent
     return (
-        f'SCYLLA_CONF={scylla_conf_dir} '
-        f'{node.add_install_prefix("/usr/bin/scylla")} sstable {command} '
-        f'--keyspace {keyspace} --table {table} --sstables'
+        f"SCYLLA_CONF={scylla_conf_dir} "
+        f"{node.add_install_prefix('/usr/bin/scylla')} sstable {command} "
+        f"--keyspace {keyspace} --table {table} --sstables"
     )
 
 
@@ -399,7 +418,7 @@ def get_sstable_metadata_dump_command(node, keyspace: str, table: str, debug_log
     :return: Command string for metadata dump.
     """
     if not is_new_sstable_dump_supported(node):
-        return 'sstabledump'
+        return "sstabledump"
 
     log_level_option = " --logger-log-level scylla-sstable=debug" if debug_log_level else ""
     command = f"dump-scylla-metadata{log_level_option}"
@@ -417,5 +436,5 @@ def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
     :return: Command string for data dump.
     """
     if not is_new_sstable_dump_supported(node):
-        return 'sstabledump'
+        return "sstabledump"
     return _generate_sstable_dump_command(node, "dump-data", keyspace, table)
