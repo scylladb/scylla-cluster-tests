@@ -4635,8 +4635,9 @@ class BaseScyllaCluster:
             # TODO: find how to recognize, that nemesis on the node is running
             if self.nemesis_count == 1:
                 node_for_timeout = next((n for n in self.nodes if not n.running_nemesis), self.nodes[0])
+                timeout_multiplier = 2 if self.params.get('cluster_backend') == 'xcloud' else 1
                 with adaptive_timeout(Operations.HEALTHCHECK, node=node_for_timeout,
-                                      timeout=len(self.nodes) * 30):
+                                      timeout=len(self.nodes) * 30 * timeout_multiplier):
                     for node in self.nodes:
                         node.check_node_health()
             else:

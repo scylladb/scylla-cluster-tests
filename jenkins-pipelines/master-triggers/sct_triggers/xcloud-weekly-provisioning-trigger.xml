@@ -59,7 +59,7 @@ requested_by_user=dimakr</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../longevity/longevity-scylla-cloud-sanity-30m-test</projects>
+          <projects>../longevity/longevity-scylla-cloud-10gb-3h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -77,7 +77,7 @@ requested_by_user=dimakr</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../longevity/longevity-scylla-cloud-sanity-30m-test</projects>
+          <projects>../longevity/longevity-scylla-cloud-10gb-3h-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
