@@ -127,7 +127,7 @@ if __name__ == '__main__':
         }
     else:
         key_store = KeyStore()
-        creds = key_store.get_argus_rest_credentials()
+        creds = key_store.get_argus_rest_credentials_per_provider()
 
     for index in ["latency-during-ops-write", "latency-during-ops-read", "latency-during-ops-mixed"]:
         migrate(creds=creds, days=days_back,
