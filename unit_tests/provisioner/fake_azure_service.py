@@ -604,12 +604,26 @@ class FakeImages:
             return [Image.deserialize(image) for image in json.load(file)]
 
 
+class FakeGalleryImageVersions:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def list_by_gallery_image(self, resource_group_name: str, gallery_name: str, gallery_image_name: str) -> List[Image]:
+        try:
+            with open(self.path / resource_group_name / f"{gallery_name}_{gallery_image_name}_gallery_images_list.json",
+                      encoding="utf-8") as file:
+                return [Image.deserialize(image) for image in json.load(file)]
+        except FileNotFoundError:
+            raise ResourceNotFoundError("No gallery images found") from None
+
+
 class Compute:
 
     def __init__(self, path) -> None:
         self.path: Path = path
         self.virtual_machines = FakeVirtualMachines(self.path)
         self.images = FakeImages(self.path)
+        self.gallery_image_versions = FakeGalleryImageVersions(self.path)
 
 
 class FakeResourceManagementClient:
