@@ -3,11 +3,6 @@ name: Build hydra image
 on:
   pull_request_target:
     types: [labeled]
-    paths:
-      - 'Dockerfile'
-      - 'docker/env/build_n_push.sh'
-      - 'uv.lock'
-      - 'pyproject.toml'
 
 permissions:
   actions: write
