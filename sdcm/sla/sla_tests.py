@@ -270,7 +270,7 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events
+            return error_events
 
     def test_increase_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                          cassandra_stress_column_definition=None):
@@ -322,7 +322,7 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events
+            return error_events
 
     def test_decrease_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                          cassandra_stress_column_definition=None):
@@ -375,7 +375,7 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events
+            return error_events
 
     def test_replace_service_level_using_detach_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                             cassandra_stress_column_definition=None):
@@ -449,7 +449,7 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events
+            return error_events
 
     def test_replace_service_level_using_drop_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                           cassandra_stress_column_definition=None):
@@ -524,7 +524,7 @@ class SlaTests(Steps):
                 self.clean_auth(entities_list_of_dict=read_roles)
                 if new_sl:
                     new_sl.drop()
-                return error_events
+            return error_events
 
     def test_maximum_allowed_sls_with_max_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
                                                              cassandra_stress_column_definition=None,
@@ -568,4 +568,4 @@ class SlaTests(Steps):
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
-                return error_events
+            return error_events
