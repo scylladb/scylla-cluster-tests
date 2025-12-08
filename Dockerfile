@@ -19,16 +19,8 @@ RUN echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg -o /usr/share/keyrings/cloud.google.gpg
 RUN chmod a+r /usr/share/keyrings/cloud.google.gpg
 
-RUN curl -fsSL https://packages.confluent.io/deb/8.0/archive.key | gpg --dearmor > /etc/apt/keyrings/confluent.gpg
-RUN chmod a+r /etc/apt/keyrings/confluent.gpg
-
-RUN echo "deb [signed-by=/etc/apt/keyrings/confluent.gpg] https://packages.confluent.io/deb/8.0 stable main" > /etc/apt/sources.list.d/confluent.list && \
-    echo "deb [signed-by=/etc/apt/keyrings/confluent.gpg] https://packages.confluent.io/clients/deb/ bookworm main" >> /etc/apt/sources.list.d/confluent.list
-
 # Download, build and install Python packages.
 FROM apt_base AS python_packages
-COPY --from=apt_repos /etc/apt/keyrings/confluent.gpg /etc/apt/keyrings/confluent.gpg
-COPY --from=apt_repos /etc/apt/sources.list.d/confluent.list /etc/apt/sources.list.d/confluent.list
 ENV PIP_NO_CACHE_DIR=1
 ENV UV_PROJECT_ENVIRONMENT="/usr/local/"
 RUN apt-get update
@@ -38,7 +30,6 @@ RUN apt-get install -y --no-install-recommends \
     libssl-dev \
     zlib1g-dev \
     libffi-dev \
-    librdkafka-dev \
     libev4 \
     libev-dev
 ADD uv.lock  .
@@ -58,8 +49,6 @@ COPY --from=apt_repos /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.asc
 COPY --from=apt_repos /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.list
 COPY --from=apt_repos /usr/share/keyrings/cloud.google.gpg /usr/share/keyrings/cloud.google.gpg
 COPY --from=apt_repos /etc/apt/sources.list.d/google-cloud-sdk.list /etc/apt/sources.list.d/google-cloud-sdk.list
-COPY --from=apt_repos /etc/apt/keyrings/confluent.gpg /etc/apt/keyrings/confluent.gpg
-COPY --from=apt_repos /etc/apt/sources.list.d/confluent.list /etc/apt/sources.list.d/confluent.list
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y --no-install-recommends \
         google-cloud-sdk \
@@ -82,8 +71,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         docker-ce-cli \
         docker-compose-plugin \
         libev4 \
-        libev-dev \
-        librdkafka-dev && \
+        libev-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
