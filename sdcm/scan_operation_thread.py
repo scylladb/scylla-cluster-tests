@@ -176,7 +176,7 @@ class FullscanOperationBase:
                     # success is True if there were no exceptions
                     self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
                     self.update_stats(self.current_operation_stat)
-                    return self.current_operation_stat
+                return self.current_operation_stat
 
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
