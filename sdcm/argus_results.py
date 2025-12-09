@@ -135,6 +135,7 @@ class ManagerRestoreBenchmarkResult(StaticGenericResultTable):
             ColumnMetadata(name="l&s bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
             ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER, higher_is_better=False),
         ]
         ValidationRules = {
             "restore time": ValidationRule(best_pct=10),
