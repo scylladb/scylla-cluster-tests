@@ -24,7 +24,7 @@ from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuil
 from sdcm.provision.common.user_data import UserDataBuilderBase
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, EC2NetworkConfiguration
+from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, EC2NetworkConfiguration, check_ena_express_support
 
 LOGGER = logging.getLogger(__name__)
 
@@ -141,9 +141,24 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     def _network_interface_params(self, interface_index: int = 0):
         LOGGER.debug("ec2_subnet_ids: %s; availability_zone: %s, interface_index: %s",
                      self._ec2_subnet_ids, self.availability_zone, interface_index)
+        is_ena = check_ena_express_support(instance_type=self.params.get(
+            self._INSTANCE_TYPE_PARAM_NAME), region_name=self._region_name)
+        if is_ena:
+            ena_conf = {
+                'EnaSrdSpecification': {
+                    'EnaSrdEnabled': True,
+                    'EnaSrdUdpSpecification': {
+                        'EnaSrdUdpEnabled': True  # Set to False if UDP acceleration isn't needed
+                    }
+                }
+            }
+        else:
+            ena_conf = {}
+
         return {
             'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],
             'Groups': self._ec2_security_group_ids[self.region_id],
+            **ena_conf,
         }
 
     @property
