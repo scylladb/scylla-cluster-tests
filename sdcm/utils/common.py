@@ -2081,6 +2081,7 @@ def get_post_behavior_actions(config):
         "db_nodes": {"node_types": ["scylla-db"], "action": None},
         "monitor_nodes": {"node_types": ["monitor"], "action": None},
         "loader_nodes": {"node_types": ["loader"], "action": None},
+        "vector_store_nodes": {"node_types": ["vector-store"], "action": None},
         "k8s_cluster": {"node_types": ["k8s"], "action": None},
     }
 

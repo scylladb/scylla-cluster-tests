@@ -39,6 +39,7 @@ class TestConfig(metaclass=Singleton):
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
+    KEEP_ALIVE_VECTOR_STORE_NODES = False
     KEEP_ALIVE_DEDICATED_HOST = False
 
     REUSE_CLUSTER = False
@@ -158,6 +159,8 @@ class TestConfig(metaclass=Singleton):
             cls.KEEP_ALIVE_LOADER_NODES = bool(val == "keep")
         elif "monitor_nodes" in node_type:
             cls.KEEP_ALIVE_MONITOR_NODES = bool(val == "keep")
+        elif "vector_store_nodes" in node_type:
+            cls.KEEP_ALIVE_VECTOR_STORE_NODES = bool(val == "keep")
         elif "dedicated_host" in node_type:
             cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == "keep")
 
@@ -171,6 +174,8 @@ class TestConfig(metaclass=Singleton):
             return cls.KEEP_ALIVE_LOADER_NODES
         if "monitor" in node_type:
             return cls.KEEP_ALIVE_MONITOR_NODES
+        if "vs" in node_type:
+            return cls.KEEP_ALIVE_VECTOR_STORE_NODES
         if "dedicated_host" in node_type:
             return cls.KEEP_ALIVE_DEDICATED_HOST
         return False

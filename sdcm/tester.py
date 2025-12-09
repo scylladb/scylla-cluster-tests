@@ -1148,6 +1148,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         post_behavior_loader_nodes = self.params.get("post_behavior_loader_nodes")
         self.log.debug("Post behavior for loader nodes %s", post_behavior_loader_nodes)
         self.test_config.keep_cluster(node_type="loader_nodes", val=post_behavior_loader_nodes)
+        post_behavior_vector_store_nodes = self.params.get("post_behavior_vector_store_nodes")
+        self.log.debug("Post behavior for vector store nodes %s", post_behavior_vector_store_nodes)
+        self.test_config.keep_cluster(node_type="vector_store_nodes", val=post_behavior_vector_store_nodes)
         self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get("cluster_backend")
         if cluster_backend in ("aws", "k8s-eks"):
@@ -3599,6 +3602,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
         critical_events = get_testrun_status(self.test_config.test_id(), self.logdir, only_critical=True)
+
+        if self.db_cluster and getattr(self.db_cluster, "vector_store_cluster", None):
+            action = actions_per_cluster_type["vector_store_nodes"]["action"]
+            self.log.info("Action for vector store nodes is %s", action)
+            if (action == "destroy") or (action == "keep-on-failure" and not critical_events):
+                self.destroy_cluster(self.db_cluster.vector_store_cluster)
+                self.db_cluster.vector_store_cluster = None
+            elif action == "keep-on-failure" and critical_events:
+                self.log.info("Critical errors found. Set keep flag for vector store nodes")
+                self.test_config.keep_cluster(node_type="vector_store_nodes", val="keep")
+                self.set_keep_alive_on_failure(self.db_cluster.vector_store_cluster)
+
         if self.db_cluster is not None:
             action = actions_per_cluster_type["db_nodes"]["action"]
             self.log.info("Action for db nodes is %s", action)

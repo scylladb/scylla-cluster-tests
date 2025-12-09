@@ -3039,6 +3039,15 @@ Failure/post test behavior, i.e. what to do with the monitor cloud instances at 
 **type:** str (appendable)
 
 
+## **post_behavior_vector_store_nodes** / SCT_POST_BEHAVIOR_VECTOR_STORE_NODES
+
+Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.<br><br>'destroy' - Destroy instances and credentials (default)<br>'keep' - Keep instances running and leave credentials alone<br>'keep-on-failure' - Keep instances if testrun failed
+
+**default:** destroy
+
+**type:** str (appendable)
+
+
 ## **post_behavior_k8s_cluster** / SCT_POST_BEHAVIOR_K8S_CLUSTER
 
 Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.<br><br>'destroy' - Destroy k8s cluster and credentials (default)<br>'keep' - Keep k8s cluster running and leave credentials alone<br>'keep-on-failure' - Keep k8s cluster if testrun failed
