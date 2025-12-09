@@ -294,9 +294,10 @@ def test_12_k8s_scylla_version_ubuntu_loader_centos(monkeypatch):
 
 @pytest.mark.integration
 def test_13_scylla_version_ami_branch_latest(monkeypatch):
+    latest_branch = ".".join(get_latest_scylla_release(product="scylla").split(".")[0:2])
     monkeypatch.delenv("SCT_AMI_ID_DB_SCYLLA", raising=False)
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "branch-5.2:latest")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", f"branch-{latest_branch}:latest")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
@@ -720,7 +721,8 @@ def test_18_error_if_no_version_repo_ami_selected(monkeypatch):
             continue
         if "siren" in backend:
             continue
-
+        if backend == "xcloud":
+            monkeypatch.setenv("SCT_XCLOUD_PROVIDER", "aws")
         monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
         monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
 
