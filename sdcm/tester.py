@@ -4305,6 +4305,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         """
         self.db_cluster.fstrim_scylla_disks_on_nodes()
 
+    def _get_vector_store_nodes(self):
+        if not self.db_cluster:
+            return None
+
+        if getattr(self.db_cluster, "vs_nodes", None):
+            return self.db_cluster.vs_nodes
+
+        vector_store_cluster = getattr(self.db_cluster, "vector_store_cluster", None)
+        if vector_store_cluster and getattr(vector_store_cluster, "nodes", None):
+            return vector_store_cluster.nodes
+
+        return None
+
     @silence()
     def collect_logs(self) -> None:
         if not self.params.get("collect_logs"):
@@ -4350,14 +4363,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 and (
                     [self.db_cluster.scylla_manager_node]
                     if self.params.get("cluster_backend") == "xcloud"
-                    else self.db_cluster.manager_instance
+                    else getattr(self.db_cluster, "manager_instance", None)
                 ),
                 "collector": SirenManagerLogCollector,
                 "logname": "monitoring_log",
             },
             {
                 "name": "vector_store",
-                "nodes": (self.db_cluster and hasattr(self.db_cluster, "vs_nodes") and self.db_cluster.vs_nodes),
+                "nodes": self._get_vector_store_nodes(),
                 "collector": VectorStoreLogCollector,
                 "logname": "vector_store_log",
             },

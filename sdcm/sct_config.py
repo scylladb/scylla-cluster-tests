@@ -2126,7 +2126,7 @@ class SCTConfiguration(dict):
             'keep' - Keep instances running and leave credentials alone
             'keep-on-failure' - Keep instances if testrun failed
          """,
-            choices=("keep", "keep-on-failure", "destroy")
+            choices=("keep", "keep-on-failure", "destroy"),
         ),
         dict(
             name="post_behavior_k8s_cluster",

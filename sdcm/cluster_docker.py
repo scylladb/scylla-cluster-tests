@@ -498,7 +498,7 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
 
         kwargs["cluster_prefix"] = cluster.prepend_user_prefix(kwargs.get("cluster_prefix"), "vs-set")
         kwargs.setdefault("node_prefix", "vs-node")
-        kwargs.setdefault("node_type", "vs")
+        kwargs.setdefault("node_type", "vector-store")
 
         if not vs_docker_image_tag:
             vs_docker_image_tag = "latest"

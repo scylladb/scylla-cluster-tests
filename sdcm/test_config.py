@@ -176,7 +176,7 @@ class TestConfig(metaclass=Singleton):
             return cls.KEEP_ALIVE_LOADER_NODES
         if "monitor" in node_type:
             return cls.KEEP_ALIVE_MONITOR_NODES
-        if "vs" in node_type:
+        if "vector" in node_type:
             return cls.KEEP_ALIVE_VECTOR_STORE_NODES
         if "dedicated_host" in node_type:
             return cls.KEEP_ALIVE_DEDICATED_HOST
