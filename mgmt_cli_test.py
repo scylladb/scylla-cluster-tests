@@ -1040,21 +1040,55 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         extra_params = self.params.get("mgmt_restore_extra_params")
         return extra_params if extra_params else None
 
-    def _send_restore_results_to_argus(
-        self, task: RestoreTask, manager_version_timestamp: int, dataset_label: str = None
-    ):
+    def _get_restore_results(self, task: RestoreTask, node) -> dict:
+        """Extract restore results from a RestoreTask.
+
+        Args:
+            task: The restore task to extract results from
+            node: Node to query for replication factor (required for dataset size calculation)
+
+        Returns:
+            Dictionary with restore metrics including times, bandwidth, and size in GB
+        """
         total_restore_time = int(task.duration.total_seconds())
         repair_time = int(task.post_restore_repair_duration.total_seconds())
+
         results = {
             "restore time": (total_restore_time - repair_time),
             "repair time": repair_time,
             "total": total_restore_time,
         }
-        download_bw, load_and_stream_bw = task.download_bw, task.load_and_stream_bw
-        if download_bw:
-            results["download bandwidth"] = download_bw
-        if load_and_stream_bw:
-            results["l&s bandwidth"] = load_and_stream_bw
+
+        # Add bandwidth metrics if available
+        if task.download_bw:
+            results["download bandwidth"] = task.download_bw
+        if task.load_and_stream_bw:
+            results["l&s bandwidth"] = task.load_and_stream_bw
+
+        # Compute backup dataset size
+        try:
+            # Sum of restored sizes across keyspaces
+            total_bytes = task.total_user_keyspaces_restored_size_bytes()
+            # Replication factor of primary user keyspace
+            # Assumption: all user keyspaces have the same RF
+            if rf := task.user_keyspace_rf(node):
+                self.log.debug("Using RF=%s retrieved from keyspace", rf)
+                dataset_bytes = int(total_bytes // rf)
+                dataset_size_gb = int(dataset_bytes / (1024**3))
+                results["size"] = dataset_size_gb
+        except Exception as err:  # noqa: BLE001
+            self.log.debug("Got an error while retrieving backup dataset size: %s", err)
+
+        return results
+
+    def _send_restore_results_to_argus(self, results: dict, manager_version_timestamp: int, dataset_label: str = None):
+        """Send restore benchmark results to Argus.
+
+        Args:
+            results: Dictionary with restore metrics (restore time, repair time, bandwidth, etc.)
+            manager_version_timestamp: Timestamp of the manager version
+            dataset_label: Label for the dataset being restored
+        """
         result_table = ManagerRestoreBenchmarkResult(sut_timestamp=manager_version_timestamp)
         send_manager_benchmark_results_to_argus(
             argus_client=self.test_config.argus_client(),
@@ -1114,7 +1148,8 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         self.manager_test_metrics.restore_time = task.duration
 
         manager_version_timestamp = manager_tool.sctool.client_version_timestamp
-        self._send_restore_results_to_argus(task, manager_version_timestamp)
+        results = self._get_restore_results(task, node=self.db_cluster.nodes[0])
+        self._send_restore_results_to_argus(results, manager_version_timestamp)
 
         self.run_verification_read_stress()
 
@@ -1188,7 +1223,10 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             )
             restore_time = task.duration
             manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
-            self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
+
+            # Get restore results including backup dataset size
+            results = self._get_restore_results(task, node=self.db_cluster.nodes[0])
+            self._send_restore_results_to_argus(results, manager_version_timestamp, dataset_label=snapshot_name)
 
         self.manager_test_metrics.restore_time = restore_time
 
