@@ -1193,7 +1193,7 @@ class VectorStoreSetAWS(VectorStoreClusterMixin, AWSCluster):
         self.scylla_cluster = None
 
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'vs-node')
-        node_type = 'vs'
+        node_type = 'vector-store'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'vs-set')
 
         super().__init__(ec2_ami_id=ec2_ami_id,
