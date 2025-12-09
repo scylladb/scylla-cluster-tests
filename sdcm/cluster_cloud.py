@@ -729,7 +729,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         expiration_hours = compute_cluster_exp_hours(
             self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type))
-        cluster_name = f"{self.name}-keep-{expiration_hours}h"
+        # cluster name is limited to 63 characters in Scylla Cloud
+        cluster_name = f"{self.name:.53}-keep-{expiration_hours}h"
         self.log.info("Cluster will be created with expiration time of %s hours", expiration_hours)
 
         return {
