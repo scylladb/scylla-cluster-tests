@@ -26,9 +26,11 @@ import requests
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours
+from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours, build_cloud_cluster_name
 from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.get_username import get_username
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteCmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
@@ -507,8 +509,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.vs_nodes = []
         self.manager_node = None
 
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
+        cluster_prefix = 'db-cluster'
+        node_prefix = 'db-node'
 
         super().__init__(
             cluster_prefix=cluster_prefix,
@@ -729,8 +731,11 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         expiration_hours = compute_cluster_exp_hours(
             self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type))
-        cluster_name = f"{self.name}-keep-{expiration_hours}h"
-        self.log.info("Cluster will be created with expiration time of %s hours", expiration_hours)
+        username = get_username()
+        test_name = get_test_name()
+        cluster_name = build_cloud_cluster_name(username, test_name, self.shortid, expiration_hours)
+        self.log.info("Cluster will be created with name '%s' (username: %s, test_name: %s, test_id: %s, expiration: %s hours)",
+                      cluster_name, username, test_name, self.shortid, expiration_hours)
 
         return {
             'account_id': self._account_id,
