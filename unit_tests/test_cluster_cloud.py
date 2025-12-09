@@ -1,6 +1,8 @@
 """Unit tests for cluster_cloud module."""
 from unittest.mock import MagicMock
+
 from sdcm.cluster_cloud import xcloud_super_if_supported
+from sdcm.utils.cloud_api_utils import build_cloud_cluster_name
 
 
 class TestXCloudSuperIfSupportedDecorator:
@@ -145,3 +147,29 @@ class TestXCloudSuperIfSupportedDecorator:
         result = vs_node.test_method()
 
         assert result == "BaseNode"
+
+
+class TestCloudClusterNaming:
+
+    def test_simple_username(self):
+        name = build_cloud_cluster_name("john", "PR-test", "abc12345", 6)
+        assert name == "PR-test-john-abc12345-keep-006h"
+        assert len(name) <= 63
+
+    def test_username_with_dot(self):
+        name = build_cloud_cluster_name("john.doe", "PR-test", "abc12345", 60)
+        assert name == "PR-test-john_doe-abc12345-keep-060h"
+        assert len(name) <= 63
+
+    def test_no_space_for_testname_prefix(self):
+        long_username = "123456789-abcdefghi-123456789-abcdefghi-123"  # 43 chars
+        name = build_cloud_cluster_name(
+            long_username, "PR-provision-test", "abc12345", 360)
+        assert name == f"{long_username}-abc12345-keep-360h"
+        assert len(name) <= 63
+
+    def test_testname_prefix_truncation(self):
+        name = build_cloud_cluster_name(
+            "firstname.laastname", "very-long-test-name-to-be-truncated", "abc12345", 360)
+        assert name.startswith("very-long-test-name-to-b-")
+        assert len(name) <= 63
