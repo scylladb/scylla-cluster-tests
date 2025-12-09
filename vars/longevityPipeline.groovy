@@ -92,6 +92,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
+            string(defaultValue: "${pipelineParams.get('post_behavior_vector_store_nodes', 'destroy')}",
+                   description: 'keep|keep-on-failure|destroy',
+                   name: 'post_behavior_vector_store_nodes')
 
             // SSH Configuration
             separator(name: 'SSH_CONFIG', sectionHeader: 'SSH Configuration')
