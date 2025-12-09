@@ -18,6 +18,7 @@ FullPartitionScanReversedOrderEvent: ERROR
 FullPartitionScanEvent: ERROR
 TombstoneGcVerificationEvent: ERROR
 FullScanAggregateEvent: ERROR
+DatabaseLogEvent.SUSPECTED_CPU_BOTTLENECK: ERROR
 DatabaseLogEvent.OVERSIZED_ALLOCATION: ERROR
 DatabaseLogEvent.WARNING: WARNING
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
