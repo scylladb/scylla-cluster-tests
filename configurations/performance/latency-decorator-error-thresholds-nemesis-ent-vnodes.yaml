@@ -1,6 +1,6 @@
 latency_decorator_error_thresholds:
   write:
-    _mgmt_repair_cli:
+    run_repair_manager:
       duration:
         fixed_limit: 7200
     _terminate_and_wait:
@@ -17,7 +17,7 @@ latency_decorator_error_thresholds:
         fixed_limit: 1800
 
   read:
-    _mgmt_repair_cli:
+    run_repair_manager:
       duration:
         fixed_limit: 2000
     _terminate_and_wait:
@@ -34,7 +34,7 @@ latency_decorator_error_thresholds:
         fixed_limit: 1300
 
   mixed:
-    _mgmt_repair_cli:
+    run_repair_manager:
       duration:
         fixed_limit: 2500
     _terminate_and_wait:
