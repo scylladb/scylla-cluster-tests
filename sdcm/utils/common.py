@@ -1920,6 +1920,7 @@ def filter_aws_instances_by_type(instances):
         "loader_nodes": [],
         "monitor_nodes": [],
         "kubernetes_nodes": [],
+        "vs_nodes": [],
     }
 
     for instance in instances:
@@ -1936,6 +1937,8 @@ def filter_aws_instances_by_type(instances):
             filtered_instances["loader_nodes"].append(instance)
         elif "-k8s-" in name:
             filtered_instances["kubernetes_nodes"].append(instance)
+        elif "vs-node" in name:
+            filtered_instances["vs_nodes"].append(instance)
 
     return filtered_instances
 

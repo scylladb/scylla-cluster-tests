@@ -1618,81 +1618,34 @@ class Collector:
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
         filtered_instances = filter_aws_instances_by_type(instances)
-        for instance in filtered_instances["db_nodes"]:
-            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
-            self.db_cluster.append(
-                CollectingNode(
-                    name=name[0],
-                    ssh_login_info={
-                        "hostname": self.get_aws_ip_address(instance),
-                        "user": self.params.get("ami_db_scylla_user"),
-                        "key_file": self.params.get("user_credentials_path"),
-                    },
-                    instance=instance,
-                    global_ip=self.get_aws_ip_address(instance),
-                    tags={
-                        **self.tags,
-                        "NodeType": "scylla-db",
-                    },
+
+        node_types = {
+            "db_nodes": ("db_cluster", "ami_db_scylla_user", "scylla-db"),
+            "monitor_nodes": ("monitor_set", "ami_monitor_user", "monitor"),
+            "loader_nodes": ("loader_set", "ami_loader_user", "loader"),
+            "kubernetes_nodes": ("kubernetes_set", "ami_loader_user", "loader"),
+            "vs_nodes": ("vector_store_set", "ami_vector_store_user", "vector-store"),
+        }
+        for node_type, (attr, user_key, node_tag) in node_types.items():
+            for instance in filtered_instances[node_type]:
+                name = next((tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"), None)
+                ssh_login_info = {
+                    "hostname": self.get_aws_ip_address(instance),
+                    "user": self.params.get(user_key),
+                    "key_file": self.params.get("user_credentials_path"),
+                }
+                getattr(self, attr).append(
+                    CollectingNode(
+                        name=name,
+                        ssh_login_info=ssh_login_info,
+                        instance=instance,
+                        global_ip=self.get_aws_ip_address(instance),
+                        tags={**self.tags, "NodeType": node_tag},
+                    )
                 )
-            )
-        for instance in filtered_instances["monitor_nodes"]:
-            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
-            self.monitor_set.append(
-                CollectingNode(
-                    name=name[0],
-                    ssh_login_info={
-                        "hostname": self.get_aws_ip_address(instance),
-                        "user": self.params.get("ami_monitor_user"),
-                        "key_file": self.params.get("user_credentials_path"),
-                    },
-                    instance=instance,
-                    global_ip=self.get_aws_ip_address(instance),
-                    tags={
-                        **self.tags,
-                        "NodeType": "monitor",
-                    },
-                )
-            )
+
         if self.params.get("use_cloud_manager"):
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
-
-        for instance in filtered_instances["loader_nodes"]:
-            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
-            self.loader_set.append(
-                CollectingNode(
-                    name=name[0],
-                    ssh_login_info={
-                        "hostname": self.get_aws_ip_address(instance),
-                        "user": self.params.get("ami_loader_user"),
-                        "key_file": self.params.get("user_credentials_path"),
-                    },
-                    instance=instance,
-                    global_ip=self.get_aws_ip_address(instance),
-                    tags={
-                        **self.tags,
-                        "NodeType": "loader",
-                    },
-                )
-            )
-        for instance in filtered_instances["kubernetes_nodes"]:
-            name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
-            self.kubernetes_set.append(
-                CollectingNode(
-                    name=name[0],
-                    ssh_login_info={
-                        "hostname": self.get_aws_ip_address(instance),
-                        "user": self.params.get("ami_loader_user"),
-                        "key_file": self.params.get("user_credentials_path"),
-                    },
-                    instance=instance,
-                    global_ip=self.get_aws_ip_address(instance),
-                    tags={
-                        **self.tags,
-                        "NodeType": "loader",
-                    },
-                )
-            )
 
     def get_gce_ip_address(self, instance):
         return (
