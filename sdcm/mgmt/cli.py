@@ -37,9 +37,12 @@ from sdcm.mgmt.common import (
     HostRestStatus,
     duration_to_timedelta,
     DEFAULT_TASK_TIMEOUT,
+    parse_size_to_bytes,
 )
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.utils.context_managers import DbNodeLogger
+from sdcm.utils.database_query_utils import is_system_keyspace
+from sdcm.utils.replication_strategy_utils import ReplicationStrategy
 from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
@@ -617,6 +620,78 @@ class RestoreTask(ManagerTask):
             per_table_duration_timedelta = [duration_to_timedelta(table[-1]) for table in repair_by_tables]
             duration_timedelta = sum(per_table_duration_timedelta, datetime.timedelta(0))
             return duration_timedelta
+
+    def restored_keyspace_sizes(self) -> dict[str, int]:
+        """Parse sctool restore progress output and return per-keyspace total size in bytes.
+
+        It parses the 'Keyspace' progress table and extracts the 'Size' column.
+        System keyspaces are included; caller may filter them out.
+
+        Example output table:
+
+        ╭───────────────────────────────────┬───────────┬────────────┬────────────┬────────────┬────────╮
+        │ Keyspace                          │  Progress │       Size │    Success │ Downloaded │ Failed │
+        ├───────────────────────────────────┼───────────┼────────────┼────────────┼────────────┼────────┤
+        │ 128gb_twcs_quorum_1024_1_2025_2_5 │ 100% | 0% │ 404.545GiB │ 404.545GiB │         0B │     0B │
+        │ system_traces                     │      100% │         0B │         0B │         0B │     0B │
+        │ system_replicated_keys            │      100% │         0B │         0B │         0B │     0B │
+        │ system_distributed                │      100% │         0B │         0B │         0B │     0B │
+        ╰───────────────────────────────────┴───────────┴────────────┴────────────┴────────────┴────────╯
+        """
+        sizes: dict[str, int] = {}
+        res = self.progress_string()
+        try:
+            header_index = res.index(["Keyspace", "Progress", "Size", "Success", "Downloaded", "Failed"])
+            rows = res[header_index + 1 :]
+        except ValueError as ex:
+            LOGGER.warning("Failed to find 'Keyspace' progress table in the sctool restore progress output: %s", ex)
+            # Fallback: try raw stdout parsing when table parsing is disabled
+            raw = self.progress_string(parse_table_res=False).stdout
+            for line in raw.splitlines():
+                parts = [p.strip() for p in line.split("│")]
+                if len(parts) >= 5 and parts[1] and parts[3]:
+                    keyspace = parts[1]
+                    size_str = parts[3]
+                    try:
+                        sizes[keyspace] = parse_size_to_bytes(size_str)
+                    except Exception:  # noqa: BLE001
+                        continue
+            return sizes
+
+        for row in rows:
+            if len(row) < 6:
+                break  # end of table or separator
+            keyspace, *_middle, size_str, _success, _downloaded, _failed = row
+            try:
+                sizes[keyspace] = parse_size_to_bytes(size_str)
+            except Exception:  # noqa: BLE001
+                continue
+        LOGGER.debug("Got restored keyspace sizes: %s", sizes)
+        return sizes
+
+    def total_user_keyspaces_restored_size_bytes(self) -> int:
+        ks_sizes = self.restored_keyspace_sizes()
+        user_sizes_bytes = sum(size for ks, size in ks_sizes.items() if not is_system_keyspace(ks))
+        LOGGER.debug("Got restored user-keyspace total size of: %s", user_sizes_bytes)
+        return user_sizes_bytes
+
+    def user_keyspace_rf(self, node) -> int | None:
+        """Get the replication factor of the primary user keyspace restored.
+        Uses ReplicationStrategy.get to inspect RF. If multiple user keyspaces exist,
+        picks the first non-system one from the progress table.
+        """
+        ks_sizes = self.restored_keyspace_sizes()
+        # Prefer non-system keyspaces
+        user_ks = [ks for ks in ks_sizes.keys() if not is_system_keyspace(ks)]
+        if not user_ks:
+            LOGGER.warning("Could not find any user keyspace in the restore task progress")
+            return None
+        keyspace = user_ks[0]
+        strategy = ReplicationStrategy.get(node, keyspace)
+        # For NetworkTopology, sum factors; for Simple, first element.
+        rf_list = strategy.replication_factors
+        rf = sum(rf_list) if len(rf_list) > 1 else rf_list[0]
+        return int(rf) if rf else None
 
 
 class ManagerCluster(ScyllaManagerBase):
