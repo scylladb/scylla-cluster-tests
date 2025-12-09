@@ -2116,6 +2116,19 @@ class SCTConfiguration(dict):
             choices=("keep", "keep-on-failure", "destroy"),
         ),
         dict(
+            name="post_behavior_vector_store_nodes",
+            env="SCT_POST_BEHAVIOR_VECTOR_STORE_NODES",
+            type=str,
+            help="""
+            Failure/post test behavior, i.e. what to do with the vector store cloud instances at the end of the test.
+
+            'destroy' - Destroy instances and credentials (default)
+            'keep' - Keep instances running and leave credentials alone
+            'keep-on-failure' - Keep instances if testrun failed
+         """,
+            choices=("keep", "keep-on-failure", "destroy")
+        ),
+        dict(
             name="post_behavior_k8s_cluster",
             env="SCT_POST_BEHAVIOR_K8S_CLUSTER",
             type=str,
