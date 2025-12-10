@@ -33,16 +33,16 @@ def get_distro_name(distro_object: Distro) -> str:
 def duration_to_timedelta(duration_string):
     total_seconds = 0
     if "d" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('d')]) * 86400
-        duration_string = duration_string[duration_string.find('d') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("d")]) * 86400
+        duration_string = duration_string[duration_string.find("d") + 1 :]
     if "h" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('h')]) * 3600
-        duration_string = duration_string[duration_string.find('h') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("h")]) * 3600
+        duration_string = duration_string[duration_string.find("h") + 1 :]
     if "m" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('m')]) * 60
-        duration_string = duration_string[duration_string.find('m') + 1:]
+        total_seconds += int(duration_string[: duration_string.find("m")]) * 60
+        duration_string = duration_string[duration_string.find("m") + 1 :]
     if "s" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('s')])
+        total_seconds += int(duration_string[: duration_string.find("s")])
     return datetime.timedelta(seconds=total_seconds)
 
 
@@ -57,7 +57,7 @@ def get_manager_repo_from_defaults(manager_version, distro):
         manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
 
     # If the version is a patch version, we need to remove the patch part
-    if len(version_parts := manager_version.split('.')) == 3:
+    if len(version_parts := manager_version.split(".")) == 3:
         manager_version = f"{version_parts[0]}.{version_parts[1]}"
 
     version_specific_repos = manager_repos_by_version_dict.get(manager_version, None)

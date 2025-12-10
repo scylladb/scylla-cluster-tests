@@ -56,9 +56,12 @@ class FailedDecommissionOperationMonitoring:
                 return True
             else:
                 LOGGER.debug("Wait decommission to be done...")
-                wait_for(func=lambda: not self.is_node_decommissioning(), step=15,
-                         timeout=self.timeout,
-                         text=f"Waiting decommission is finished for {self.target_node.name}...")
+                wait_for(
+                    func=lambda: not self.is_node_decommissioning(),
+                    step=15,
+                    timeout=self.timeout,
+                    text=f"Waiting decommission is finished for {self.target_node.name}...",
+                )
                 self.db_cluster.verify_decommission(self.target_node)
                 return True
 

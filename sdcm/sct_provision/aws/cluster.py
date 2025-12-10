@@ -24,8 +24,13 @@ from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
-    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder, ScyllaZeroTokenParamsBuilder
+from sdcm.sct_provision.aws.instance_parameters_builder import (
+    ScyllaInstanceParamsBuilder,
+    LoaderInstanceParamsBuilder,
+    MonitorInstanceParamsBuilder,
+    OracleScyllaInstanceParamsBuilder,
+    ScyllaZeroTokenParamsBuilder,
+)
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
@@ -33,7 +38,7 @@ from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 
 
 class ClusterNode(BaseModel):
-    parent_cluster: 'ClusterBase' = None
+    parent_cluster: "ClusterBase" = None
     region_id: int
     az_id: int
     node_num: int
@@ -41,11 +46,11 @@ class ClusterNode(BaseModel):
 
     @property
     def name(self):
-        return self.node_name_prefix + '-' + str(self.node_num)
+        return self.node_name_prefix + "-" + str(self.node_num)
 
     @property
     def tags(self) -> Dict[str, str]:
-        return self.parent_cluster.tags | {'NodeIndex': str(self.node_num)}
+        return self.parent_cluster.tags | {"NodeIndex": str(self.node_num)}
 
 
 class ClusterBase(BaseModel):
@@ -88,31 +93,30 @@ class ClusterBase(BaseModel):
 
     @property
     def _cluster_postfix(self):
-        return self._NODE_PREFIX + '-cluster'
+        return self._NODE_PREFIX + "-cluster"
 
     @property
     def _node_postfix(self):
-        return self._NODE_PREFIX + '-node'
+        return self._NODE_PREFIX + "-node"
 
     @property
     def _user_prefix(self):
-        return self.params.get('user_prefix')
+        return self.params.get("user_prefix")
 
     @property
     def cluster_name(self):
-        return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix), self._short_id)
+        return "%s-%s" % (cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix), self._short_id)
 
     @property
     def placement_group_name(self):
         if self.params.get("use_placement_group") and self._USE_PLACEMENT_GROUP:
-            return '%s-%s' % (
-                cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
+            return "%s-%s" % (cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
         else:
             return None
 
     @property
     def _node_prefix(self):
-        return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._node_postfix), self._short_id)
+        return "%s-%s" % (cluster.prepend_user_prefix(self._user_prefix, self._node_postfix), self._short_id)
 
     @property
     def _short_id(self):
@@ -136,7 +140,7 @@ class ClusterBase(BaseModel):
 
     @property
     def _instance_provision(self):
-        instance_provision = self.params.get('instance_provision')
+        instance_provision = self.params.get("instance_provision")
         return INSTANCE_PROVISION_SPOT if instance_provision == INSTANCE_PROVISION_SPOT_FLEET else instance_provision
 
     @property
@@ -163,7 +167,7 @@ class ClusterBase(BaseModel):
 
     @cached_property
     def _azs(self) -> str:
-        return self.params.get('availability_zone').split(',')
+        return self.params.get("availability_zone").split(",")
 
     @cached_property
     def _node_nums(self) -> List[int]:
@@ -174,7 +178,7 @@ class ClusterBase(BaseModel):
             return [node_nums]
         if isinstance(node_nums, str):
             return [int(num) for num in node_nums.split()]
-        raise ValueError('Unexpected value of %s parameter' % (self._NODE_NUM_PARAM_NAME,))
+        raise ValueError("Unexpected value of %s parameter" % (self._NODE_NUM_PARAM_NAME,))
 
     @property
     def _instance_type(self) -> str:
@@ -182,13 +186,13 @@ class ClusterBase(BaseModel):
 
     @property
     def _test_duration(self) -> int:
-        return self.params.get('test_duration')
+        return self.params.get("test_duration")
 
     def provision_plan(self, region_id: int, availability_zone: str) -> ProvisionPlan:
         return ProvisionPlanBuilder(
             initial_provision_type=self._instance_provision,
             duration=self._test_duration,
-            fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
+            fallback_provision_on_demand=self.params.get("instance_provision_fallback_on_demand"),
             region_name=self._region(region_id),
             availability_zone=availability_zone,
             provisioner=AWSInstanceProvisioner(),
@@ -200,7 +204,7 @@ class ClusterBase(BaseModel):
             region_id=region_id,
             user_data_raw=self._user_data,
             availability_zone=availability_zone,
-            placement_group=self.placement_group_name
+            placement_group=self.placement_group_name,
         )
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
@@ -221,32 +225,32 @@ class ClusterBase(BaseModel):
                     instance_parameters=instance_parameters,
                     node_tags=node_tags,
                     node_names=node_names,
-                    node_count=node_count
+                    node_count=node_count,
                 )
                 if not instances:
-                    raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                    raise RuntimeError("End of provision plan reached, but no instances provisioned")
                 total_instances_provisioned.extend(instances)
         return total_instances_provisioned
 
 
 class DBCluster(ClusterBase):
-    _NODE_TYPE = 'scylla-db'
-    _NODE_PREFIX = 'db'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
-    _NODE_NUM_PARAM_NAME = 'n_db_nodes'
-    _ZEROTOKEN_NODE_NUM_PARAM_NAME = 'n_db_zero_token_nodes'
+    _NODE_TYPE = "scylla-db"
+    _NODE_PREFIX = "db"
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db"
+    _NODE_NUM_PARAM_NAME = "n_db_nodes"
+    _ZEROTOKEN_NODE_NUM_PARAM_NAME = "n_db_zero_token_nodes"
     _ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
     _USE_ZERO_NODES_PARAM_NAME = "use_zero_nodes"
     _INSTANCE_PARAMS_BUILDER = ScyllaInstanceParamsBuilder
     _ZERO_TOKEN_INSTANCE_PARAMS_BUILDER = ScyllaZeroTokenParamsBuilder
-    _USER_PARAM = 'ami_db_scylla_user'
+    _USER_PARAM = "ami_db_scylla_user"
 
     @property
     def _user_data(self) -> str:
         return ScyllaUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
-            user_data_format_version=self.params.get('user_data_format_version'),
+            user_data_format_version=self.params.get("user_data_format_version"),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
@@ -256,7 +260,7 @@ class DBCluster(ClusterBase):
             region_id=region_id,
             user_data_raw=self._user_data,
             availability_zone=availability_zone,
-            placement_group=self.placement_group_name
+            placement_group=self.placement_group_name,
         )
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
@@ -280,7 +284,7 @@ class DBCluster(ClusterBase):
         elif isinstance(node_nums, str):
             return [int(num) for num in node_nums.split()]
         else:
-            raise ValueError('Unexpected value of %s parameter' % (self._NODE_NUM_PARAM_NAME,))
+            raise ValueError("Unexpected value of %s parameter" % (self._NODE_NUM_PARAM_NAME,))
 
     def _get_zero_token_nodes(self) -> list[int]:
         zero_token_nodes_num = self.params.get(self._ZEROTOKEN_NODE_NUM_PARAM_NAME)
@@ -294,15 +298,14 @@ class DBCluster(ClusterBase):
         elif isinstance(zero_token_nodes_num, str):
             return [int(num) for num in zero_token_nodes_num.split()]
         else:
-            raise ValueError('Unexpected value of %s parameter' % (self._ZEROTOKEN_NODE_NUM_PARAM_NAME,))
+            raise ValueError("Unexpected value of %s parameter" % (self._ZEROTOKEN_NODE_NUM_PARAM_NAME,))
 
     @cached_property
     def _node_nums(self) -> List[int]:
         total_nodes = self._get_data_nodes()
         zero_token_nodes = self._get_zero_token_nodes()
         if zero_token_nodes:
-            total_nodes = [n1 + n2 for n1,
-                           n2 in zip(total_nodes, zero_token_nodes)]
+            total_nodes = [n1 + n2 for n1, n2 in zip(total_nodes, zero_token_nodes)]
         return total_nodes
 
     def provision(self):
@@ -312,11 +315,9 @@ class DBCluster(ClusterBase):
         for region_id in range(len(self._regions_with_nodes)):
             az_nodes, az_zero_nodes = self._az_nodes(region_id=region_id)
             for az_id, _ in enumerate(self._azs):
-
                 node_count = az_nodes[az_id]
                 zero_node_count = az_zero_nodes[az_id]
                 if node_count:
-
                     instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=az_id)
                     node_tags = self._node_tags(region_id=region_id, az_id=az_id)[:node_count]
                     node_names = self._node_names(region_id=region_id, az_id=az_id)[:node_count]
@@ -324,15 +325,16 @@ class DBCluster(ClusterBase):
                         instance_parameters=instance_parameters,
                         node_tags=node_tags,
                         node_names=node_names,
-                        node_count=node_count
+                        node_count=node_count,
                     )
                     if not instances:
-                        raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                        raise RuntimeError("End of provision plan reached, but no instances provisioned")
                     total_instances_provisioned.extend(instances)
 
                 if zero_node_count:
                     instance_parameters = self._zero_token_instance_parameters(
-                        region_id=region_id, availability_zone=az_id)
+                        region_id=region_id, availability_zone=az_id
+                    )
                     node_tags = self._node_tags(region_id=region_id, az_id=az_id)[node_count:]
                     for node_tag in node_tags:
                         node_tag.update({"ZeroTokenNode": "True"})
@@ -341,39 +343,39 @@ class DBCluster(ClusterBase):
                         instance_parameters=instance_parameters,
                         node_tags=node_tags,
                         node_names=node_names,
-                        node_count=zero_node_count
+                        node_count=zero_node_count,
                     )
                     if not instances:
-                        raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                        raise RuntimeError("End of provision plan reached, but no instances provisioned")
                     total_instances_provisioned.extend(instances)
         return total_instances_provisioned
 
 
 class OracleDBCluster(ClusterBase):
-    _NODE_TYPE = 'oracle-db'
-    _NODE_PREFIX = 'oracle'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db_oracle'
-    _NODE_NUM_PARAM_NAME = 'n_test_oracle_db_nodes'
+    _NODE_TYPE = "oracle-db"
+    _NODE_PREFIX = "oracle"
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_db_oracle"
+    _NODE_NUM_PARAM_NAME = "n_test_oracle_db_nodes"
     _INSTANCE_PARAMS_BUILDER = OracleScyllaInstanceParamsBuilder
-    _USER_PARAM = 'ami_db_scylla_user'
+    _USER_PARAM = "ami_db_scylla_user"
 
     @property
     def _user_data(self) -> str:
         return ScyllaUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
-            user_data_format_version=self.params.get('oracle_user_data_format_version'),
+            user_data_format_version=self.params.get("oracle_user_data_format_version"),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
 
 class LoaderCluster(ClusterBase):
-    _NODE_TYPE = 'loader'
-    _NODE_PREFIX = 'loader'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_loader'
-    _NODE_NUM_PARAM_NAME = 'n_loaders'
+    _NODE_TYPE = "loader"
+    _NODE_PREFIX = "loader"
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_loader"
+    _NODE_NUM_PARAM_NAME = "n_loaders"
     _INSTANCE_PARAMS_BUILDER = LoaderInstanceParamsBuilder
-    _USER_PARAM = 'ami_loader_user'
+    _USER_PARAM = "ami_loader_user"
 
     @property
     def _user_data(self) -> str:
@@ -386,12 +388,12 @@ class LoaderCluster(ClusterBase):
 
 
 class MonitoringCluster(ClusterBase):
-    _NODE_TYPE = 'monitor'
-    _NODE_PREFIX = 'monitor'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_monitor'
-    _NODE_NUM_PARAM_NAME = 'n_monitor_nodes'
+    _NODE_TYPE = "monitor"
+    _NODE_PREFIX = "monitor"
+    _INSTANCE_TYPE_PARAM_NAME = "instance_type_monitor"
+    _NODE_NUM_PARAM_NAME = "n_monitor_nodes"
     _INSTANCE_PARAMS_BUILDER = MonitorInstanceParamsBuilder
-    _USER_PARAM = 'ami_monitor_user'
+    _USER_PARAM = "ami_monitor_user"
     # disable placement group for monitor nodes, because it doesn't need low-latency network performance
     _USE_PLACEMENT_GROUP = False
 
@@ -404,15 +406,15 @@ class MonitoringCluster(ClusterBase):
 
 
 class PlacementGroup(ClusterBase):
-
     @property
     def _user_data(self) -> str:
-        return ''
+        return ""
 
     def provision(self):
         if self.placement_group_name:
             create_cluster_placement_groups_aws(
-                name=self.placement_group_name, tags=self.common_tags, region=self._region(0))
+                name=self.placement_group_name, tags=self.common_tags, region=self._region(0)
+            )
 
 
 ClusterNode.update_forward_refs()

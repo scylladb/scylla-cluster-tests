@@ -28,7 +28,7 @@ from thrift_bindings.v22.Cassandra import *
 from thrift_bindings.v22.ttypes import NotFoundException
 
 tests = []
-ks_name = 'test_upgrade_schema_ks'
+ks_name = "test_upgrade_schema_ks"
 thrift_client = None
 cql_client = None
 
@@ -38,11 +38,11 @@ def test(test):
 
 
 def _i32(n):
-    return struct.pack('>i', n)  # big endian = network order
+    return struct.pack(">i", n)  # big endian = network order
 
 
 def _i64(n):
-    return struct.pack('>q', n)  # big endian = network order
+    return struct.pack(">q", n)  # big endian = network order
 
 
 def describe_table(ks, table):
@@ -62,22 +62,26 @@ class Test(TestCase):
 
 @test
 class TestNonCompoundThriftDynamicTable(Test):
-    keys = ['key%d' % i for i in range(10)]
+    keys = ["key%d" % i for i in range(10)]
 
     def setUp(self):
-        cf = CfDef(ks_name, 'test_table0',
-                   key_validation_class='UTF8Type',
-                   comparator_type='LongType',
-                   default_validation_class='Int32Type')
+        cf = CfDef(
+            ks_name,
+            "test_table0",
+            key_validation_class="UTF8Type",
+            comparator_type="LongType",
+            default_validation_class="Int32Type",
+        )
         thrift_client.system_add_column_family(cf)
         for key in self.keys:
-            thrift_client.insert(key, ColumnParent('test_table0'), Column(_i64(1), _i32(1), 1), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table0"), Column(_i64(1), _i32(1), 1), ConsistencyLevel.ONE)
 
     def runTest(self):
         for key in self.keys:
             self.assertEqual(
-                thrift_client.get(key, ColumnPath('test_table0', column=_i64(1)), ConsistencyLevel.ONE).column,
-                Column(_i64(1), _i32(1), 1))
+                thrift_client.get(key, ColumnPath("test_table0", column=_i64(1)), ConsistencyLevel.ONE).column,
+                Column(_i64(1), _i32(1), 1),
+            )
 
 
 @test
@@ -133,7 +137,8 @@ class TestCqlTableMigration(Test):
         cql_client.execute("create table test2 (k int, v1 int, v2 int, primary key (k))")
         cql_client.execute("create table test3 (k int, v1 int, v2 int, primary key (k)) with compact storage")
         cql_client.execute(
-            "create table test4 (k int, ck int, ck1 int, v int, primary key (k, ck, ck1)) with compact storage")
+            "create table test4 (k int, ck int, ck1 int, v int, primary key (k, ck, ck1)) with compact storage"
+        )
         cql_client.execute("create table test5 (k int, ck int, value int, primary key (k, ck)) with compact storage")
         cql_client.execute("create table test6 (k int primary key)")
         cql_client.execute("create table test7 (k int, ck int, primary key (k, ck)) with compact storage")
@@ -164,36 +169,41 @@ class TestCqlTableMigration(Test):
 # Fails for Scylla 1.7 -> 2.0 migration due to https://github.com/scylladb/scylla/issues/2573
 @test
 class TestNonStandardComparator(Test):
-    keys = ['key%d' % i for i in range(10)]
+    keys = ["key%d" % i for i in range(10)]
 
     def _insertData(self):
         for key in self.keys:
-            thrift_client.insert(key, ColumnParent('test_table'), Column(_i64(4), _i32(1), 1), ConsistencyLevel.ONE)
-            thrift_client.insert(key, ColumnParent('test_table'), Column(_i64(5), _i32(2), 2), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table"), Column(_i64(4), _i32(1), 1), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table"), Column(_i64(5), _i32(2), 2), ConsistencyLevel.ONE)
 
     def setUp(self):
-        cf = CfDef(ks_name, 'test_table',
-                   column_metadata=[
-                       ColumnDef(_i64(4), 'Int32Type'),
-                       ColumnDef(_i64(5), 'Int32Type'),
-                       # Fails due to https://github.com/scylladb/scylla/issues/2573
-                       # ColumnDef(_i64(-2), 'Int32Type')
-                   ],
-                   key_validation_class='UTF8Type',
-                   comparator_type='LongType',
-                   default_validation_class='UTF8Type')
+        cf = CfDef(
+            ks_name,
+            "test_table",
+            column_metadata=[
+                ColumnDef(_i64(4), "Int32Type"),
+                ColumnDef(_i64(5), "Int32Type"),
+                # Fails due to https://github.com/scylladb/scylla/issues/2573
+                # ColumnDef(_i64(-2), 'Int32Type')
+            ],
+            key_validation_class="UTF8Type",
+            comparator_type="LongType",
+            default_validation_class="UTF8Type",
+        )
         thrift_client.system_add_column_family(cf)
         self._insertData()
 
     def runTest(self):
         for key in self.keys:
-            assert thrift_client.get(key, ColumnPath('test_table', column=_i64(4)),
-                                     ConsistencyLevel.ONE).column == Column(_i64(4), _i32(1), 1)
-            assert thrift_client.get(key, ColumnPath('test_table', column=_i64(5)),
-                                     ConsistencyLevel.ONE).column == Column(_i64(5), _i32(2), 2)
+            assert thrift_client.get(
+                key, ColumnPath("test_table", column=_i64(4)), ConsistencyLevel.ONE
+            ).column == Column(_i64(4), _i32(1), 1)
+            assert thrift_client.get(
+                key, ColumnPath("test_table", column=_i64(5)), ConsistencyLevel.ONE
+            ).column == Column(_i64(5), _i32(2), 2)
         self._insertData()
 
-        cdef = describe_table(ks_name, 'test_table')
+        cdef = describe_table(ks_name, "test_table")
 
         # Fails due to https://github.com/scylladb/scylla/issues/2573
         # assert cdef.comparator_type == "org.apache.cassandra.db.marshal.LongType"
@@ -205,38 +215,43 @@ class TestNonStandardComparator(Test):
 # Fails due to https://github.com/scylladb/scylla/issues/2588
 # @test
 class TestThriftTableConvertedFromDenseToSparse(Test):
-    keys = ['key%d' % i for i in range(10)]
+    keys = ["key%d" % i for i in range(10)]
 
     def setUp(self):
-        cf = CfDef(ks_name, 'test_table2',
-                   key_validation_class='UTF8Type',
-                   comparator_type='LongType',
-                   default_validation_class='UTF8Type')
+        cf = CfDef(
+            ks_name,
+            "test_table2",
+            key_validation_class="UTF8Type",
+            comparator_type="LongType",
+            default_validation_class="UTF8Type",
+        )
         thrift_client.system_add_column_family(cf)
         for key in self.keys:
-            thrift_client.insert(key, ColumnParent('test_table2'), Column(_i64(1), _i32(1), 1), ConsistencyLevel.ONE)
-            thrift_client.insert(key, ColumnParent('test_table2'), Column(_i64(2), _i32(1), 1), ConsistencyLevel.ONE)
-            thrift_client.insert(key, ColumnParent('test_table2'), Column(_i64(3), _i32(1), 1), ConsistencyLevel.ONE)
-            thrift_client.insert(key, ColumnParent('test_table2'), Column(_i64(4), _i32(1), 1), ConsistencyLevel.ONE)
-        cf.column_metadata = [
-            ColumnDef(_i64(4), 'Int32Type')
-        ]
+            thrift_client.insert(key, ColumnParent("test_table2"), Column(_i64(1), _i32(1), 1), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table2"), Column(_i64(2), _i32(1), 1), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table2"), Column(_i64(3), _i32(1), 1), ConsistencyLevel.ONE)
+            thrift_client.insert(key, ColumnParent("test_table2"), Column(_i64(4), _i32(1), 1), ConsistencyLevel.ONE)
+        cf.column_metadata = [ColumnDef(_i64(4), "Int32Type")]
         thrift_client.system_update_column_family(cf)
 
     def runTest(self):
         for key in self.keys:
             self.assertEqual(
-                thrift_client.get(key, ColumnPath('test_table2', column=_i64(1)), ConsistencyLevel.ONE).column,
-                Column(_i64(1), _i32(1), 1))
+                thrift_client.get(key, ColumnPath("test_table2", column=_i64(1)), ConsistencyLevel.ONE).column,
+                Column(_i64(1), _i32(1), 1),
+            )
             self.assertEqual(
-                thrift_client.get(key, ColumnPath('test_table2', column=_i64(2)), ConsistencyLevel.ONE).column,
-                Column(_i64(2), _i32(1), 1))
+                thrift_client.get(key, ColumnPath("test_table2", column=_i64(2)), ConsistencyLevel.ONE).column,
+                Column(_i64(2), _i32(1), 1),
+            )
             self.assertEqual(
-                thrift_client.get(key, ColumnPath('test_table2', column=_i64(3)), ConsistencyLevel.ONE).column,
-                Column(_i64(3), _i32(1), 1))
+                thrift_client.get(key, ColumnPath("test_table2", column=_i64(3)), ConsistencyLevel.ONE).column,
+                Column(_i64(3), _i32(1), 1),
+            )
             self.assertEqual(
-                thrift_client.get(key, ColumnPath('test_table2', column=_i64(4)), ConsistencyLevel.ONE).column,
-                Column(_i64(4), _i32(1), 1))
+                thrift_client.get(key, ColumnPath("test_table2", column=_i64(4)), ConsistencyLevel.ONE).column,
+                Column(_i64(4), _i32(1), 1),
+            )
 
 
 class UpgradeSchemaTest(ClusterTester):
@@ -244,7 +259,7 @@ class UpgradeSchemaTest(ClusterTester):
     Test a Scylla cluster upgrade.
     """
 
-    default_params = {'timeout': 650000}
+    default_params = {"timeout": 650000}
 
     def _get_thrift_client(self, host, port=9160):  # 9160
         socket = TSocket.TSocket(host, port)
@@ -256,7 +271,6 @@ class UpgradeSchemaTest(ClusterTester):
         return c
 
     def test_upgrade_schema(self):
-
         global thrift_client  # noqa: PLW0603
         global cql_client  # noqa: PLW0603
         ips = []
@@ -269,11 +283,14 @@ class UpgradeSchemaTest(ClusterTester):
 
         try:
             thrift_client.describe_keyspace(ks_name)
-            cql_client.execute("drop keyspace \"%s\"" % ks_name)
+            cql_client.execute('drop keyspace "%s"' % ks_name)
         except NotFoundException:
             pass
         thrift_client.system_add_keyspace(
-            KsDef(ks_name, 'org.apache.cassandra.locator.NetworkTopologyStrategy', {'replication_factor': '1'}, cf_defs=[]))
+            KsDef(
+                ks_name, "org.apache.cassandra.locator.NetworkTopologyStrategy", {"replication_factor": "1"}, cf_defs=[]
+            )
+        )
         thrift_client.set_keyspace(ks_name)
         cql_client.set_keyspace(ks_name)
 
@@ -288,9 +305,8 @@ class UpgradeSchemaTest(ClusterTester):
 
         duration = 15 * len(self.db_cluster.nodes)
 
-        stress_cmd = self._cs_add_node_flag(self.params.get('stress_cmd'))
-        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
-                                                duration=duration)
+        stress_cmd = self._cs_add_node_flag(self.params.get("stress_cmd"))
+        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd, duration=duration)
 
         l = len(self.db_cluster.nodes)
         # prepare an array containing the indexes
@@ -303,8 +319,7 @@ class UpgradeSchemaTest(ClusterTester):
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
             self.log.info("started upgrade node {0}".format(self.db_cluster.node_to_upgrade))
-            self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode,
-                                        tester_obj=self)
+            self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode, tester_obj=self)
             self.db_cluster.start_nemesis(interval=15)
             # 15 minutes to upgrade 1 node
             self.db_cluster.stop_nemesis(timeout=15 * 60)

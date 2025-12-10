@@ -17,16 +17,16 @@ from sdcm.provision.common.utils import (
     configure_syslogng_target_script,
     restart_syslogng_service,
     install_syslogng_exporter,
-    configure_syslogng_destination_conf)
+    configure_syslogng_destination_conf,
+)
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
 @dataclass
 class SyslogNgUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
-        return self.params.get('logs_transport') == 'syslog-ng'
+        return self.params.get("logs_transport") == "syslog-ng"
 
     @property
     def packages_to_install(self) -> set[str]:
@@ -36,7 +36,8 @@ class SyslogNgUserDataObject(SctUserDataObject):
     def script_to_run(self) -> str:
         host, port = self.test_config.get_logging_service_host_port()
         script = configure_syslogng_destination_conf(
-            host=host, port=port, throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
+            host=host, port=port, throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND
+        )
         script += configure_syslogng_target_script(hostname=self.instance_name)
         script += restart_syslogng_service()
         return script
@@ -44,10 +45,9 @@ class SyslogNgUserDataObject(SctUserDataObject):
 
 @dataclass
 class SyslogNgExporterUserDataObject(SctUserDataObject):
-
     @property
     def is_applicable(self) -> bool:
-        return self.params.get('logs_transport') == 'syslog-ng'
+        return self.params.get("logs_transport") == "syslog-ng"
 
     @property
     def script_to_run(self) -> str:
