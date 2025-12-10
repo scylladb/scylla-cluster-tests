@@ -37,9 +37,9 @@ class EventsUtilsMixin:
         cls.temp_dir = tempfile.mkdtemp()
         cls.events_processes_registry = EventsProcessesRegistry(log_dir=cls.temp_dir)
         if registry_patcher:
-            cls.events_processes_registry_patcher = \
-                unittest.mock.patch("sdcm.sct_events.base.SctEvent._events_processes_registry",
-                                    cls.events_processes_registry)
+            cls.events_processes_registry_patcher = unittest.mock.patch(
+                "sdcm.sct_events.base.SctEvent._events_processes_registry", cls.events_processes_registry
+            )
             cls.events_processes_registry_patcher.start()
         if events_device:
             start_events_device(_registry=cls.events_processes_registry)
@@ -56,8 +56,7 @@ class EventsUtilsMixin:
         shutil.rmtree(cls.temp_dir)
 
     @contextmanager
-    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1,
-                          last_event_processing_delay: float = 1):
+    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1, last_event_processing_delay: float = 1):
         last_event_n = subscriber.events_counter + count
         end_time = time.perf_counter() + timeout
 
@@ -65,8 +64,9 @@ class EventsUtilsMixin:
 
         while time.perf_counter() < end_time and subscriber.events_counter < last_event_n:
             time.sleep(0.1)
-        assert last_event_n <= subscriber.events_counter, \
+        assert last_event_n <= subscriber.events_counter, (
             f"Subscriber {subscriber} didn't receive {count} events in {timeout} seconds"
+        )
 
         # Give a chance to the subscriber to handle last event received.
         time.sleep(last_event_processing_delay)

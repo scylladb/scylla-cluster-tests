@@ -17,8 +17,7 @@ from functools import partial
 from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, \
-    EventPeriod
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, EventPeriod
 
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
 from sdcm.sct_events.system import TestFrameworkEvent
@@ -77,66 +76,87 @@ class ReactorStalledMixin(Generic[T_log_event]):
             # Dynamically handle reactor stalls severity.
             if int(MILLI_RE.findall(line)[0]) >= self.tolerable_reactor_stall:
                 self.severity = Severity.ERROR
-        except (ValueError, IndexError, ):
+        except (
+            ValueError,
+            IndexError,
+        ):
             LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
         return super().add_info(node=node, line=line, line_number=line_number)
 
 
 # cause this is warning level, it's need to be before WARNING being suppressed
-DatabaseLogEvent.add_subevent_type("OVERSIZED_ALLOCATION", severity=Severity.ERROR,
-                                   regex="seastar_memory - oversized allocation:")
-DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.SUPPRESS,
-                                   regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
-DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
-                                   regex="No space left on device")
-DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
-                                   regex="(unknown verb exception|unknown_verb_error)")
-DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNING,
-                                   regex=r"cql_server - exception while processing connection:")
-DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
-                                   regex="semaphore_timed_out")
+DatabaseLogEvent.add_subevent_type(
+    "OVERSIZED_ALLOCATION", severity=Severity.ERROR, regex="seastar_memory - oversized allocation:"
+)
+DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.SUPPRESS, regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
+DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR, regex="No space left on device")
+DatabaseLogEvent.add_subevent_type(
+    "UNKNOWN_VERB", severity=Severity.WARNING, regex="(unknown verb exception|unknown_verb_error)"
+)
+DatabaseLogEvent.add_subevent_type(
+    "CLIENT_DISCONNECT", severity=Severity.WARNING, regex=r"cql_server - exception while processing connection:"
+)
+DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING, regex="semaphore_timed_out")
 # The below ldap-connection-reset is dependent on https://github.com/scylladb/scylla-enterprise/issues/2710
-DatabaseLogEvent.add_subevent_type("LDAP_CONNECTION_RESET", severity=Severity.WARNING,
-                                   regex=r".*ldap_connection - Seastar read failed: std::system_error \(error system:104, "
-                                         r"recv: Connection reset by peer\).*")
+DatabaseLogEvent.add_subevent_type(
+    "LDAP_CONNECTION_RESET",
+    severity=Severity.WARNING,
+    regex=r".*ldap_connection - Seastar read failed: std::system_error \(error system:104, "
+    r"recv: Connection reset by peer\).*",
+)
 # This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
 # it before DATABASE_ERROR. Message example:
 # storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
 # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
-DatabaseLogEvent.add_subevent_type("SYSTEM_PAXOS_TIMEOUT", severity=Severity.WARNING,
-                                   regex="(mutation_write_|Operation timed out for system.paxos|"
-                                         "Operation failed for system.paxos)")
-DatabaseLogEvent.add_subevent_type("SERVICE_LEVEL_CONTROLLER", severity=Severity.WARNING,
-                                   regex="Operation timed out for system_distributed.service_levels")
-DatabaseLogEvent.add_subevent_type("GATE_CLOSED", severity=Severity.WARNING,
-                                   regex="exception \"gate closed\" in no_wait handler ignored")
-DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
-                                   regex="scylla-server.service.*State 'stop-sigterm' timed out")
-DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
-                                   regex=r"cql_server - exception while processing connection: "
-                                         r"seastar::nested_exception \(seastar::nested_exception\)$")
-DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMAL,
-                                   regex="compaction_stopped_exception")
-DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
-                                   regex="std::bad_alloc")
+DatabaseLogEvent.add_subevent_type(
+    "SYSTEM_PAXOS_TIMEOUT",
+    severity=Severity.WARNING,
+    regex="(mutation_write_|Operation timed out for system.paxos|Operation failed for system.paxos)",
+)
+DatabaseLogEvent.add_subevent_type(
+    "SERVICE_LEVEL_CONTROLLER",
+    severity=Severity.WARNING,
+    regex="Operation timed out for system_distributed.service_levels",
+)
+DatabaseLogEvent.add_subevent_type(
+    "GATE_CLOSED", severity=Severity.WARNING, regex='exception "gate closed" in no_wait handler ignored'
+)
+DatabaseLogEvent.add_subevent_type(
+    "RESTARTED_DUE_TO_TIME_OUT",
+    severity=Severity.WARNING,
+    regex="scylla-server.service.*State 'stop-sigterm' timed out",
+)
+DatabaseLogEvent.add_subevent_type(
+    "EMPTY_NESTED_EXCEPTION",
+    severity=Severity.WARNING,
+    regex=r"cql_server - exception while processing connection: "
+    r"seastar::nested_exception \(seastar::nested_exception\)$",
+)
+DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMAL, regex="compaction_stopped_exception")
+DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR, regex="std::bad_alloc")
 # Due to scylla issue https://github.com/scylladb/scylladb/issues/19093, we need to suppress the below error
-DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
-                                   regex=r'(.*ERROR|!ERR).*Failed to load schema version')
-DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
-                                   regex="std::runtime_error")
+DatabaseLogEvent.add_subevent_type(
+    "SCHEMA_FAILURE", severity=Severity.ERROR, regex=r"(.*ERROR|!ERR).*Failed to load schema version"
+)
+DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR, regex="std::runtime_error")
 # remove below workaround after dropping support for Scylla 2023.1 and 5.2 (see scylladb/scylla#13538)
-DatabaseLogEvent.add_subevent_type("DIRECTORY_NOT_EMPTY", severity=Severity.NORMAL,
-                                   regex="remove failed: Directory not empty")
-DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
-                                   regex="filesystem_error")
-DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
-                                   regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error")
-DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
-                                   regex=r'^(?!.*libabsl).*stacktrace')
+DatabaseLogEvent.add_subevent_type(
+    "DIRECTORY_NOT_EMPTY", severity=Severity.NORMAL, regex="remove failed: Directory not empty"
+)
+DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR, regex="filesystem_error")
+DatabaseLogEvent.add_subevent_type(
+    "DISK_ERROR",
+    severity=Severity.ERROR,
+    regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error",
+)
+DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR, regex=r"^(?!.*libabsl).*stacktrace")
 # scylladb/scylladb#12972
-DatabaseLogEvent.add_subevent_type("RAFT_TRANSFER_SNAPSHOT_ERROR", severity=Severity.WARNING,
-                                   regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
-                                         r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)")
+DatabaseLogEvent.add_subevent_type(
+    "RAFT_TRANSFER_SNAPSHOT_ERROR",
+    severity=Severity.WARNING,
+    regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
+    r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)",
+)
 
 # scylladb/scylladb#22980
 DatabaseLogEvent.add_subevent_type(
@@ -150,31 +170,32 @@ DatabaseLogEvent.add_subevent_type(
         r"raft_topology.* send_raft_topology_cmd.*"
         r" failed with exception \(node state is bootstrapping\).*"
         r" raft::request_aborted.*Request aborted while performing action on leader.*"
-        r"current leader\:.*previous leader\: unknown"))
+        r"current leader\:.*previous leader\: unknown"
+    ),
+)
 
 # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
-DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
-                                   regex="Reactor stalled")
-DatabaseLogEvent.add_subevent_type("KERNEL_CALLSTACK", severity=Severity.DEBUG,
-                                   regex="kernel callstack: 0x.{16}")
-DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
-                                   regex="Aborting on shard")
-DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
-                                   regex="segmentation")
-DatabaseLogEvent.add_subevent_type("CORRUPTED_SSTABLE", severity=Severity.CRITICAL,
-                                   regex="sstables::malformed_sstable_exception|invalid_mutation_fragment_stream")
-DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
-                                   regex="integrity check failed")
-DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
-                                   regex="journal: Suppressed")
-DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
-                                   regex="stream_exception")
-DatabaseLogEvent.add_subevent_type("RPC_CONNECTION", severity=Severity.WARNING,
-                                   regex=r'(^ERROR|!ERR).*rpc - client .*(connection dropped|fail to connect)')
-DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
-                                   regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
-DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
-                                   regex="^(?!.*audit:).*backtrace")
+DatabaseLogEvent.add_subevent_type(
+    "REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG, regex="Reactor stalled"
+)
+DatabaseLogEvent.add_subevent_type("KERNEL_CALLSTACK", severity=Severity.DEBUG, regex="kernel callstack: 0x.{16}")
+DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR, regex="Aborting on shard")
+DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR, regex="segmentation")
+DatabaseLogEvent.add_subevent_type(
+    "CORRUPTED_SSTABLE",
+    severity=Severity.CRITICAL,
+    regex="sstables::malformed_sstable_exception|invalid_mutation_fragment_stream",
+)
+DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR, regex="integrity check failed")
+DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING, regex="journal: Suppressed")
+DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR, regex="stream_exception")
+DatabaseLogEvent.add_subevent_type(
+    "RPC_CONNECTION",
+    severity=Severity.WARNING,
+    regex=r"(^ERROR|!ERR).*rpc - client .*(connection dropped|fail to connect)",
+)
+DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR, regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
+DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR, regex="^(?!.*audit:).*backtrace")
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.OVERSIZED_ALLOCATION(),
     DatabaseLogEvent.WARNING(),
@@ -198,11 +219,9 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.STACKTRACE(),
     DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
     DatabaseLogEvent.RAFT_TOPOLOGY_SENDING_ERROR(),
-
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.KERNEL_CALLSTACK(),
-
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.CORRUPTED_SSTABLE(),
@@ -213,14 +232,18 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
 )
-SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
-    [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
+SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = [
+    (re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS
+]
 
 # BACKTRACE_RE should match those:
 # 2022-03-05T08:33:48+00:00 rolling-*-0-1 !    INFO |   /opt/scylladb/libreloc/libc.so.6+0x35a15
 # 2022-03-05T08:33:48+00:00 rolling-*-0-1 !    INFO |   0x2e8653d
-BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-9a-f]*$)|'
-                          r'(?P<scylla_bt>0x[0-9a-f]*$)', re.IGNORECASE)
+BACKTRACE_RE = re.compile(
+    r"(?P<other_bt>/lib.*?\+0x[0-9a-f]*$)|"
+    r"(?P<scylla_bt>0x[0-9a-f]*$)",
+    re.IGNORECASE,
+)
 
 
 class ScyllaHelpErrorEvent(SctEvent, abstract=True):
@@ -294,7 +317,7 @@ class ScyllaServerEventPatternFuncs(NamedTuple):
 class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
     begin_pattern: str = NotImplemented
     end_pattern: str = NotImplemented
-    continuous_hash_fields = ('node', 'shard')
+    continuous_hash_fields = ("node", "shard")
 
     def __init__(self, node: str, shard: int = None, severity=Severity.UNKNOWN, publish_event=True):
         self.node = node
@@ -311,24 +334,23 @@ class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
 
 
 class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Starting Scylla Server'
-    end_pattern = r'Stopping Scylla Server|Failed to start Scylla Server'
+    begin_pattern = r"Starting Scylla Server"
+    end_pattern = r"Stopping Scylla Server|Failed to start Scylla Server"
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
 
 
 class BootstrapEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Starting to bootstrap'
-    end_pattern = r'Bootstrap succeeded'
+    begin_pattern = r"Starting to bootstrap"
+    end_pattern = r"Bootstrap succeeded"
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
 
 
 class FullScanEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL,
-                 **kwargs):
+    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **kwargs):
         self.ks_cf = ks_cf
         self.message = message
         self.user = kwargs.get("user", None)
@@ -404,11 +426,11 @@ class FullScanAggregateEvent(ScyllaDatabaseContinuousEvent):
 
 
 class RepairEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\], shard=(?P<shard>\d+)'
-    end_pattern = r'repair id \[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\] on shard (?P<shard>\d+) completed'
+    begin_pattern = r"Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\], shard=(?P<shard>\d+)"
+    end_pattern = r"repair id \[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\] on shard (?P<shard>\d+) completed"
     publish_to_grafana = False
     save_to_files = False
-    continuous_hash_fields = ('node', 'shard', 'uuid')
+    continuous_hash_fields = ("node", "shard", "uuid")
 
     def __init__(self, node: str, shard: int, uuid: str, severity=Severity.NORMAL, **__):
         self.uuid = uuid
@@ -417,16 +439,19 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
 
 
 class CompactionEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
-                    r'(?P<compaction_process_id>.+)\] Compacting '
-    end_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
-                  r'(?P<compaction_process_id>.+)\] Compacted '
+    begin_pattern = (
+        r"\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) "
+        r"(?P<compaction_process_id>.+)\] Compacting "
+    )
+    end_pattern = (
+        r"\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) "
+        r"(?P<compaction_process_id>.+)\] Compacted "
+    )
     publish_to_grafana = False
     save_to_files = False
-    continuous_hash_fields = ('node', 'shard', 'table', 'compaction_process_id')
+    continuous_hash_fields = ("node", "shard", "table", "compaction_process_id")
 
-    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,
-                 severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str, severity=Severity.NORMAL, **__):
         self.table = table
         self.compaction_process_id = compaction_process_id
         super().__init__(node=node, shard=shard, severity=severity)
@@ -435,32 +460,34 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
     @property
     def msgfmt(self):
         table = " table={0.table}" if self.table is not None else ""
-        compaction_process_id = " compaction_process_id={0.compaction_process_id}" \
-            if self.compaction_process_id is not None else ""
+        compaction_process_id = (
+            " compaction_process_id={0.compaction_process_id}" if self.compaction_process_id is not None else ""
+        )
         fmt = f"{super().msgfmt}{table}{compaction_process_id}"
 
         return fmt
 
 
 class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Starting the JMX server'
-    end_pattern = r'Stopped Scylla JMX'
+    begin_pattern = r"Starting the JMX server"
+    end_pattern = r"Stopped Scylla JMX"
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
 
 
 class ScyllaSysconfigSetupEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Move current config files before running scylla_sysconfig setup'
-    end_pattern = r'Finished running scylla_sysconfig_setup'
+    begin_pattern = r"Move current config files before running scylla_sysconfig setup"
+    end_pattern = r"Finished running scylla_sysconfig_setup"
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity, publish_event=True)
 
 
 class ScyllaYamlUpdateEvent(InformationalEvent):
-    def __init__(self, node_name: str, message: Optional[str] = None, diff: dict | None = None,
-                 severity=Severity.NORMAL, **__):
+    def __init__(
+        self, node_name: str, message: Optional[str] = None, diff: dict | None = None, severity=Severity.NORMAL, **__
+    ):
         super().__init__(severity=severity)
         self.message = message or f"Updating scylla.yaml contents on node: {node_name}. Diff: {diff}"
 
@@ -473,12 +500,11 @@ SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,
     JMXServiceEvent,
-    ScyllaSysconfigSetupEvent
+    ScyllaSysconfigSetupEvent,
 ]
 
 
-def get_pattern_to_event_to_func_mapping(node: str) \
-        -> List[ScyllaServerEventPatternFuncs]:
+def get_pattern_to_event_to_func_mapping(node: str) -> List[ScyllaServerEventPatternFuncs]:
     """
     This function maps regex patterns, event classes and begin / end
     functions into ScyllaServerEventPatternFuncs object. Helper
@@ -496,7 +522,7 @@ def get_pattern_to_event_to_func_mapping(node: str) \
 
     def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
         kwargs = match.groupdict()
-        continuous_hash = event_type.get_continuous_hash_from_dict({'node': node, **kwargs})
+        continuous_hash = event_type.get_continuous_hash_from_dict({"node": node, **kwargs})
         if begin_event := event_registry.find_continuous_events_by_hash(continuous_hash):
             begin_event[-1].end_event()
             return
@@ -504,14 +530,23 @@ def get_pattern_to_event_to_func_mapping(node: str) \
             source=event_type.__name__,
             message=f"Did not find events of type {event_type} with hash {continuous_hash} ({kwargs})"
             f" with period type {EventPeriod.BEGIN.value}",
-            severity=Severity.DEBUG
+            severity=Severity.DEBUG,
         ).publish_or_dump()
 
     for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:
-        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.begin_pattern),
-                                                     event_class=event,
-                                                     period_func=partial(_add_event, event_type=event)))
-        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.end_pattern), event_class=event,
-                                                     period_func=partial(_end_event, event_type=event)))
+        mapping.append(
+            ScyllaServerEventPatternFuncs(
+                pattern=re.compile(event.begin_pattern),
+                event_class=event,
+                period_func=partial(_add_event, event_type=event),
+            )
+        )
+        mapping.append(
+            ScyllaServerEventPatternFuncs(
+                pattern=re.compile(event.end_pattern),
+                event_class=event,
+                period_func=partial(_end_event, event_type=event),
+            )
+        )
 
     return mapping

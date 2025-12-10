@@ -28,8 +28,9 @@ def report_to_argus(monitors, test_config, report_type: ManagerReportType, data:
     submit_results_to_argus(test_config.argus_client(), table)
 
 
-def report_manager_backup_results_to_argus(monitors, test_config, label: str, task: BackupTask,
-                                           mgr_cluster: ManagerCluster) -> None:
+def report_manager_backup_results_to_argus(
+    monitors, test_config, label: str, task: BackupTask, mgr_cluster: ManagerCluster
+) -> None:
     report = {
         "Size": get_backup_size(mgr_cluster, task.id),
         "Time": int(task.duration.total_seconds()),
