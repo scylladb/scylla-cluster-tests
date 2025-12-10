@@ -21,15 +21,6 @@ from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
 class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, PerformanceRegressionTest):
     load_iteration_timeout_sec = 7200
 
-    def create_test_stats(self, *args, **kwargs):
-        self.log.info(
-            "Suppress the test class stats creation. "
-            "Leave it for the per-DB classes.")
-        self._stats = self._init_stats()
-
-    def update_test_with_errors(self):
-        self.log.info("update_test_with_errors: Suppress writing errors to ES")
-
     def run_fstrim_on_all_db_nodes(self):
         for tenant in self.tenants:
             self.log.info("Running fstrim command on the '%s' DB cluster", tenant.db_cluster.name)
@@ -51,8 +42,6 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
                     db_cluster_name)
                 return
             self.log.info("Running preload command for the '%s' cluster", db_cluster_name)
-            tenant.create_test_stats(
-                sub_type='write-prepare', doc_id_with_timestamp=True)
             stress_queue, params = [], {
                 'prefix': 'preload-',
             }
@@ -66,7 +55,6 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
                     'duration': self.params.get('prepare_stress_duration'),
                 })
                 # Run all stress commands
-                params.update(dict(stats_aggregate_cmds=False))
                 self.log.debug("'%s' DB cluster: RUNNING stress cmd: %s",
                                db_cluster_name, stress_cmd)
                 stress_queue.append(tenant.run_stress_thread(**params))

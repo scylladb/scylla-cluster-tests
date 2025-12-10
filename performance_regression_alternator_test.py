@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import contextlib
-import traceback
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import optional_stage, latency_calculator_decorator
@@ -83,23 +82,11 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         if debug_message:
             self.log.debug(debug_message)
 
-        if save_stats:
-            self.create_test_stats(test_name=test_name, sub_type=sub_type,
-                                   doc_id_with_timestamp=True, append_sub_test_to_name=False)
         self.log.info(f'Starting stress cmd: {stress_cmd}')
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, keyspace_num=keyspace_num,
-                                              prefix=prefix, stats_aggregate_cmds=False)
+                                              prefix=prefix)
         self.log.info(f'Started stress cmd: {stress_cmd}, waiting for results')
-        try:
-            self.get_stress_results(queue=stress_queue, store_results=True)
-        except:
-            self.log.exception(f'Stress cmd failed: {stress_cmd}')
-            self.log.error(traceback.format_exc())
-            raise
-        self.log.info(f'Completed stress cmd: {stress_cmd}')
-        self.build_histogram(self.params['workload_name'], hdr_tags=self.hdr_tags)
-        if save_stats:
-            self.update_test_details(scylla_conf=True, alternator=is_alternator)
+        self.get_stress_results(queue=stress_queue, store_results=True)
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
@@ -117,9 +104,6 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         self.log.info(f'Preloading data with `{prepare_write_cmd}` write command.')
         if prepare_write_cmd:
-            # create new document in ES with doc_id = test_id + timestamp
-            # allow to correctly save results for future compare
-            self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
             stress_queue = []
             params = {'prefix': 'preload-'}
             for stress_type in ['dynamodb', 'scylla']:
@@ -137,7 +121,6 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
                         })
 
                         # Run all stress commands
-                        params.update(dict(stats_aggregate_cmds=False))
                         self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd.replace('dynamodb', stress_type)))
                         stress_queue.append(self.run_stress_thread(**params))
 
@@ -148,7 +131,6 @@ all tests are run with cql and alternator, with FORBID_RMW isolation and with AL
                         duration=self.params.get('prepare_stress_duration'),
                         stress_num=1,
                         prefix='preload-',
-                        stats_aggregate_cmds=False,
                     ))
 
             self.log.debug('Waiting for loaders...')

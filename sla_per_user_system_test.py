@@ -18,7 +18,6 @@ from pkg_resources import parse_version
 
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
 from sdcm.utils.version_utils import ComparableScyllaVersion
@@ -64,7 +63,6 @@ class SlaPerUserTest(LongevityTest):
         self.class_users = {}
         self.connection_cql = None
         self._comparison_results = {}
-        self._es = ES()
 
     def prepare_schema(self):
         self.prometheus_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
@@ -83,7 +81,7 @@ class SlaPerUserTest(LongevityTest):
                                                  threads=250)
         self.run_stress_and_verify_threads(params={'stress_cmd': write_cmd,
                                                    'prefix': 'preload-',
-                                                   'stats_aggregate_cmds': False})
+                                                   })
 
         self.wait_no_compactions_running(n=120)
 
@@ -761,7 +759,7 @@ class SlaPerUserTest(LongevityTest):
                 'round_robin': True})
             self._comparison_results = self._compare_workloads_c_s_metrics(workloads_queue)
             self.log.info("C-S comparison results:\n%s", self._comparison_results)
-            self.upload_c_s_comparison_to_es()
+            # self.upload_c_s_comparison_to_es()
         finally:
             pass
 
@@ -809,19 +807,20 @@ class SlaPerUserTest(LongevityTest):
                           "workloads.")
             raise
 
-    def upload_c_s_comparison_to_es(self) -> None:
-        self.log.info("Uploading c-s comparison to ES...")
-        es_body = {
-            self.db_cluster.get_node().db_node_instance_type: {
-                "test_id": self.test_id,
-                "backend": self.db_cluster.params.get("cluster_backend"),
-                "scylla_version": self.get_scylla_versions(),
-                **self._comparison_results
-            }
-        }
-        self._es.create_doc(index="workload_types",
-                            doc_id=self.test_id, body=es_body)
-        self.log.info("C-s comparison uploaded to ES.")
+    # TODO: upload to Argus if needed
+    # def upload_c_s_comparison_to_es(self) -> None:
+    #    self.log.info("Uploading c-s comparison to ES...")
+    #    es_body = {
+    #        self.db_cluster.get_node().db_node_instance_type: {
+    #            "test_id": self.test_id,
+    #            "backend": self.db_cluster.params.get("cluster_backend"),
+    #            "scylla_version": self.get_scylla_versions(),
+    #            **self._comparison_results
+    #        }
+    #    }
+    #    self._es.create_doc(index="workload_types",
+    #                        doc_id=self.test_id, body=es_body)
+    #    self.log.info("C-s comparison uploaded to ES.")
 
     def get_email_data(self):
         self.log.info("Prepare data for email for SLA test")
