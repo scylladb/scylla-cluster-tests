@@ -67,6 +67,7 @@ import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
+from sdcm.utils.docker_utils import get_docker_hub_credentials
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
     convert_cpu_units_to_k8s_value,
@@ -310,6 +311,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self.params = params
         self.api_call_rate_limiter = None
         self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
+        self.docker_hub_auth_secret = "docker-auth"
         self.scylla_config_lock = RLock()
         self.scylla_restart_required = False
         self.scylla_cpu_limit = None
@@ -449,8 +451,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         namespaces = yaml.safe_load(self.kubectl("get namespaces -o yaml").stdout)
         if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
             self.kubectl(f"create namespace {namespace}")
+            self.create_docker_hub_auth_secret(namespace)
         else:
             self.log.warning("The '%s' namespace already exists.")
+
+    def create_docker_hub_auth_secret(self, namespace: str) -> None:
+        self.log.info("Create docker hub auth secret in '%s'", namespace)
+        docker_hub_url = "https://index.docker.io/v1/"
+        docker_hub_creds = get_docker_hub_credentials()
+        self.kubectl(f"create secret docker-registry {self.docker_hub_auth_secret} "
+                     f"--docker-server={docker_hub_url} "
+                     f"--docker-username={docker_hub_creds['username']} "
+                     f"--docker-password={docker_hub_creds['password']} "
+                     f"--docker-email={docker_hub_creds['email']}", namespace=namespace)
 
     @cached_property
     def cert_manager_log(self) -> str:
@@ -2522,7 +2535,7 @@ class PodCluster(cluster.BaseCluster):
                 if candidate_namespace not in namespaces:
                     # NOTE: the namespaces must match for all the K8S clusters
                     for k8s_cluster in self.k8s_clusters:
-                        k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
+                        k8s_cluster.create_namespace(candidate_namespace)
                     return candidate_namespace
                 # TODO: make it work correctly for case with reusage of multi-tenant cluster
                 k8s_cluster = self.k8s_clusters[0]
