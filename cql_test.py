@@ -19,7 +19,6 @@ from sdcm.tester import ClusterTester
 
 
 class CQLExampleTest(ClusterTester):
-
     """
     Example test of how to establish CQL connections and run commands on them.
     """
@@ -30,7 +29,7 @@ class CQLExampleTest(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
-            self.create_keyspace(keyspace_name='ks', replication_factor=1)
+            self.create_keyspace(keyspace_name="ks", replication_factor=1)
             session.execute("""
                 CREATE TABLE ks.test1 (
                     k int,
@@ -42,7 +41,6 @@ class CQLExampleTest(ClusterTester):
                 );
             """)
             time.sleep(1)
-            session.execute("INSERT INTO ks.test1 (k, c1, c2, v1, v2) "
-                            "VALUES (1, 2, 3, 4, 5)")
+            session.execute("INSERT INTO ks.test1 (k, c1, c2, v1, v2) VALUES (1, 2, 3, 4, 5)")
             res = session.execute("SELECT v1, v2 from ks.test1")
             self.log.debug(list(res))
