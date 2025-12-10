@@ -1311,10 +1311,9 @@ class Nemesis:
             new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
 
-    @latency_calculator_decorator(legend="Terminate node and wait before adding new node")
-    def _terminate_and_wait(self, target_node, sleep_time=300):
+    @latency_calculator_decorator(legend="Terminate node before adding new node")
+    def terminate_node(self, target_node):
         self._terminate_cluster_node(target_node)
-        time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
 
     @latency_calculator_decorator(legend="Replace a node in cluster with new one")
     def replace_node(self, old_node_ip: str, host_id: str, rack: int = 0, is_zero_node: bool = False) -> BaseNode:
@@ -1557,7 +1556,8 @@ class Nemesis:
         host_id = self.target_node.host_id
         is_old_node_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
-        self._terminate_and_wait(target_node=self.target_node)
+        self.terminate_node(target_node=self.target_node)
+        time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
         assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self.replace_node(old_node_ip, host_id, rack=self.target_node.rack,
