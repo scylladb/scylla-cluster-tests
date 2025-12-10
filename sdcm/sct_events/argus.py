@@ -19,10 +19,17 @@ from functools import partial
 from collections import defaultdict
 
 from argus.common.sct_types import RawEventPayload
-from sdcm.sct_events.events_processes import \
-    EVENTS_ARGUS_ANNOTATOR_ID, EVENTS_ARGUS_AGGREGATOR_ID, EVENTS_ARGUS_POSTMAN_ID, \
-    EventsProcessesRegistry, BaseEventsProcess, EventsProcessPipe, \
-    start_events_process, get_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_ARGUS_ANNOTATOR_ID,
+    EVENTS_ARGUS_AGGREGATOR_ID,
+    EVENTS_ARGUS_POSTMAN_ID,
+    EventsProcessesRegistry,
+    BaseEventsProcess,
+    EventsProcessPipe,
+    start_events_process,
+    get_events_process,
+    verbose_suppress,
+)
 from sdcm.utils.argus import Argus
 
 
@@ -45,20 +52,22 @@ class ArgusEventCollector(EventsProcessPipe[Tuple[str, Any], SCTArgusEvent]):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
                 if not event.publish_to_argus:
                     continue
-                evt = SCTArgusEvent({
-                    "run_id": run_id,
-                    "severity": event.severity.name,
-                    "ts": event.timestamp,
-                    "duration": getattr(event, "duration", None),
-                    "event_type": event_class,
-                    "message": str(event),
-                    "known_issue": getattr(event, "known_issue", None),
-                    "nemesis_name": getattr(event, "nemesis_name", None),
-                    "nemesis_status": getattr(event, "nemesis_status", None),
-                    "node": getattr(event, "node", None),
-                    "received_timestamp": getattr(event, "received_timestamp", None),
-                    "target_node": getattr(event, "target_node", None),
-                })
+                evt = SCTArgusEvent(
+                    {
+                        "run_id": run_id,
+                        "severity": event.severity.name,
+                        "ts": event.timestamp,
+                        "duration": getattr(event, "duration", None),
+                        "event_type": event_class,
+                        "message": str(event),
+                        "known_issue": getattr(event, "known_issue", None),
+                        "nemesis_name": getattr(event, "nemesis_name", None),
+                        "nemesis_status": getattr(event, "nemesis_status", None),
+                        "node": getattr(event, "node", None),
+                        "received_timestamp": getattr(event, "received_timestamp", None),
+                        "target_node": getattr(event, "target_node", None),
+                    }
+                )
                 self.outbound_queue.put(evt)
 
 
@@ -100,8 +109,11 @@ class ArgusEventPostman(BaseEventsProcess[SCTArgusEvent, None], threading.Thread
         self.enabled.wait()
 
         for event in self.inbound_events():  # events from ArgusAggregator
-            with verbose_suppress("ArgusEventPostman failed to post an event to '%s' "
-                                  "endpoint.\nEvent: %s", self._argus_client.Routes.SUBMIT_EVENT, event):
+            with verbose_suppress(
+                "ArgusEventPostman failed to post an event to '%s' endpoint.\nEvent: %s",
+                self._argus_client.Routes.SUBMIT_EVENT,
+                event,
+            ):
                 if self._argus_client:
                     self._argus_client.submit_event(event)
 

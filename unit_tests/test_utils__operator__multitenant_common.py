@@ -76,7 +76,6 @@ class FakeMultitenantPerformanceTest(FakeMultitenantTestBase, FakePerformanceTes
 
 
 class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
-
     def setUp(self):
         self.setup_default_env()
 
@@ -86,27 +85,24 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
 
     @classmethod
     def setup_default_env(cls):
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
-        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-eks'
+        os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
+        os.environ["SCT_CLUSTER_BACKEND"] = "k8s-eks"
 
     @classmethod
     def clear_sct_env_variables(cls):
         for k in os.environ:
-            if k.startswith('SCT_'):
+            if k.startswith("SCT_"):
                 del os.environ[k]
 
     def _multitenant_class_with_shared_options(self, klass):
-        os.environ['SCT_CONFIG_FILES'] = (
-            'unit_tests/test_data/test_config/multitenant/shared_option_values.yaml')
+        os.environ["SCT_CONFIG_FILES"] = "unit_tests/test_data/test_config/multitenant/shared_option_values.yaml"
 
         fake_multitenant_test_class_instance = klass()
         tenants = get_tenants(fake_multitenant_test_class_instance)
 
         self.assertEqual(2, len(tenants))
         for i, tenant in enumerate(tenants):
-            self.assertEqual(
-                tenant.__class__.__name__,
-                f"TenantFor{klass.__name__.replace('Multitenant', '')}-{i + 1}")
+            self.assertEqual(tenant.__class__.__name__, f"TenantFor{klass.__name__.replace('Multitenant', '')}-{i + 1}")
             if "Longevity" in klass.__name__:
                 tenant_id = f"{tenant.test_config.test_id()}-{tenant._test_index}"
             else:
@@ -114,19 +110,18 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
             self.assertEqual(tenant.id(), tenant_id)
             self.assertEqual(
                 tenant.params.get("prepare_write_cmd"),
-                [f"fake__prepare_write_cmd__all_tenants__part{j}" for j in range(1, 3)])
+                [f"fake__prepare_write_cmd__all_tenants__part{j}" for j in range(1, 3)],
+            )
             self.assertEqual(
-                tenant.params.get("prepare_verify_cmd"),
-                "fake__prepare_verify_cmd__all_tenants__single_str")
+                tenant.params.get("prepare_verify_cmd"), "fake__prepare_verify_cmd__all_tenants__single_str"
+            )
             for cmd_name in ("nemesis_selector", "stress_cmd_m", "stress_cmd", "stress_cmd_r"):
                 self.assertEqual(
-                    tenant.params.get(cmd_name),
-                    [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)])
+                    tenant.params.get(cmd_name), [f"fake__{cmd_name}__all_tenants__part{j}" for j in range(1, 3)]
+                )
             for cmd_name in ("stress_read_cmd", "stress_cmd_w"):
-                self.assertEqual(
-                    tenant.params.get(cmd_name), f"fake__{cmd_name}__all_tenants__single_str")
-            self.assertEqual(
-                tenant.params.get("nemesis_class_name"), "FakeNemesisClassName")
+                self.assertEqual(tenant.params.get(cmd_name), f"fake__{cmd_name}__all_tenants__single_str")
+            self.assertEqual(tenant.params.get("nemesis_class_name"), "FakeNemesisClassName")
             self.assertEqual(tenant.params.get("nemesis_interval"), 5)
             self.assertEqual(tenant.params.get("nemesis_sequence_sleep_between_ops"), 3)
             self.assertEqual(tenant.params.get("nemesis_during_prepare"), False)
@@ -145,8 +140,7 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         self._multitenant_class_with_shared_options(FakeMultitenantPerformanceTest)
 
     def _multitenant_class_with_unique_options(self, klass):
-        os.environ['SCT_CONFIG_FILES'] = (
-            'unit_tests/test_data/test_config/multitenant/unique_option_values.yaml')
+        os.environ["SCT_CONFIG_FILES"] = "unit_tests/test_data/test_config/multitenant/unique_option_values.yaml"
 
         fake_multitenant_longevity_test_class_instance = klass()
         tenants = get_tenants(fake_multitenant_longevity_test_class_instance)
@@ -154,41 +148,35 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         self.assertEqual(2, len(tenants))
         for i, tenant in enumerate(tenants):
             self.assertEqual(
-                tenant.get_str_index(),
-                f"k8s-{'perf' if 'Perf' in klass.__name__ else 'longevity'}-2-tenants")
-            self.assertEqual(
-                tenant.__class__.__name__,
-                f"TenantFor{klass.__name__.replace('Multitenant', '')}-{i + 1}")
+                tenant.get_str_index(), f"k8s-{'perf' if 'Perf' in klass.__name__ else 'longevity'}-2-tenants"
+            )
+            self.assertEqual(tenant.__class__.__name__, f"TenantFor{klass.__name__.replace('Multitenant', '')}-{i + 1}")
             if "Longevity" in klass.__name__:
                 tenant_id = f"{tenant.test_config.test_id()}-{tenant._test_index}"
             else:
                 tenant_id = f"id--{tenant._test_index}"
             self.assertEqual(tenant.id(), tenant_id)
-            self.assertEqual(
-                tenant.params.get("prepare_write_cmd"),
-                "fake__prepare_write_cmd__all_tenants__single_str")
+            self.assertEqual(tenant.params.get("prepare_write_cmd"), "fake__prepare_write_cmd__all_tenants__single_str")
             self.assertEqual(
                 tenant.params.get("prepare_verify_cmd"),
-                [f"fake__prepare_verify_cmd__all_tenants__part{j}" for j in range(1, 3)])
+                [f"fake__prepare_verify_cmd__all_tenants__part{j}" for j in range(1, 3)],
+            )
             self.assertEqual(
-                tenant.params.get("stress_cmd"),
-                [f"fake__stress_cmd__all_tenants__part{j}" for j in range(1, 3)])
-            self.assertEqual(
-                tenant.params.get("stress_read_cmd"),
-                "fake__stress_read_cmd__all_tenants__single_str")
-            self.assertEqual(
-                tenant.params.get("stress_cmd_w"), "fake__stress_cmd_w__all_tenants__single_str")
+                tenant.params.get("stress_cmd"), [f"fake__stress_cmd__all_tenants__part{j}" for j in range(1, 3)]
+            )
+            self.assertEqual(tenant.params.get("stress_read_cmd"), "fake__stress_read_cmd__all_tenants__single_str")
+            self.assertEqual(tenant.params.get("stress_cmd_w"), "fake__stress_cmd_w__all_tenants__single_str")
 
         # Process tenant-1 specific options
         for cmd_name in ("stress_cmd_r", "stress_cmd_m"):
             self.assertEqual(
-                tenants[0].params.get(cmd_name),
-                [f"fake__{cmd_name}__tenant1__part{j}" for j in range(1, 3)])
-        self.assertEqual(
-            tenants[0].params.get("nemesis_class_name"), "FakeNemesisClassNameForTenant1")
+                tenants[0].params.get(cmd_name), [f"fake__{cmd_name}__tenant1__part{j}" for j in range(1, 3)]
+            )
+        self.assertEqual(tenants[0].params.get("nemesis_class_name"), "FakeNemesisClassNameForTenant1")
         self.assertEqual(
             tenants[0].params.get("nemesis_selector"),
-            [f"fake__nemesis_selector__tenant1__part{j}" for j in range(1, 3)])
+            [f"fake__nemesis_selector__tenant1__part{j}" for j in range(1, 3)],
+        )
         self.assertEqual(tenants[0].params.get("nemesis_interval"), 5)
         self.assertEqual(tenants[0].params.get("nemesis_sequence_sleep_between_ops"), 3)
         self.assertEqual(tenants[0].params.get("nemesis_during_prepare"), False)
@@ -201,14 +189,10 @@ class UtilsOperatorMultitenantCommonTests(unittest.TestCase):
         self.assertEqual(tenants[0].params.get("round_robin"), True)
 
         # Process tenant-2 specific options
-        self.assertEqual(
-            tenants[1].params.get("stress_cmd_r"), "fake__stress_cmd_r__tenant2__single_str_in_list")
-        self.assertEqual(
-            tenants[1].params.get("stress_cmd_m"), "fake__stress_cmd_m__tenant2__single_str")
-        self.assertEqual(
-            tenants[1].params.get("nemesis_class_name"), "FakeNemesisClassNameForTenant2")
-        self.assertEqual(
-            tenants[1].params.get("nemesis_selector"), ["fake__nemesis_selector__tenant2"])
+        self.assertEqual(tenants[1].params.get("stress_cmd_r"), "fake__stress_cmd_r__tenant2__single_str_in_list")
+        self.assertEqual(tenants[1].params.get("stress_cmd_m"), "fake__stress_cmd_m__tenant2__single_str")
+        self.assertEqual(tenants[1].params.get("nemesis_class_name"), "FakeNemesisClassNameForTenant2")
+        self.assertEqual(tenants[1].params.get("nemesis_selector"), ["fake__nemesis_selector__tenant2"])
         self.assertEqual(tenants[1].params.get("nemesis_interval"), 7)
         self.assertEqual(tenants[1].params.get("nemesis_sequence_sleep_between_ops"), 5)
         self.assertEqual(tenants[1].params.get("nemesis_during_prepare"), True)
