@@ -3,7 +3,7 @@ latency_decorator_error_thresholds:
     _mgmt_repair_cli:
       duration:
         fixed_limit: 7200
-    _terminate_and_wait:
+    terminate_node:
       duration:
         fixed_limit: null
     add_new_nodes:
@@ -22,7 +22,7 @@ latency_decorator_error_thresholds:
     _mgmt_repair_cli:
       duration:
         fixed_limit: 3200
-    _terminate_and_wait:
+    terminate_node:
       duration:
         fixed_limit: null
     add_new_nodes:
@@ -41,7 +41,7 @@ latency_decorator_error_thresholds:
     _mgmt_repair_cli:
       duration:
         fixed_limit: 4200
-    _terminate_and_wait:
+    terminate_node:
       duration:
         fixed_limit: null
     add_new_nodes:
