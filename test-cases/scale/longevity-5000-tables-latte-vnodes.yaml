@@ -1,0 +1,76 @@
+test_duration: 1080 # ~5h prepare + 10h mixed + 3h margin
+
+n_db_nodes: 6
+instance_type_db: 'i4i.4xlarge'
+n_loaders: 1
+instance_type_loader: 'c6i.4xlarge'
+
+user_prefix: 'schema-scale-vnodes-5000t'
+append_scylla_yaml:
+  # NOTE: per table metrics on the big count of tables has terrible performance
+  # See: https://github.com/scylladb/scylla-monitoring/issues/2429
+  # So, disable per table metrics
+  enable_node_aggregated_table_metrics: false
+
+nemesis_class_name: "SisyphusMonkey"
+nemesis_seed: '777'
+nemesis_interval: 5
+# NOTE: prepare phase fails without nemesis. See https://github.com/scylladb/scylladb/issues/27566
+#       So, it is better to keep prepare phase without nemesis to cover the bug case.
+nemesis_during_prepare: false
+
+round_robin: true
+# NOTE: use 1 latte thread with concurrency=12 to avoid the following bug:
+#       https://github.com/scylladb/scylladb/issues/27551
+prepare_write_cmd:
+  - >-
+    latte run --tag create-schema -f create_schema
+    --threads=1 --concurrency=12 --connections=1
+    --warmup=0 --retries=2 --retry-interval=10s --request-timeout 300 --sampling 1s
+    -d 5000
+    -P keyspace_count=1
+    -P table_count_per_keyspace=5000
+    -P enable_tablets=false
+    -P create_index=false
+    -P replication_factor=3
+    -P compaction_strategy="\"IncrementalCompactionStrategy\""
+    -P sstable_compression="\"LZ4Compressor\""
+    data_dir/latte/schema_scale.rn
+# TODO: increase the concurrency to be '2048' when the following bug gets fixed:
+#       https://github.com/scylladb/scylladb/issues/27566
+prepare_verify_cmd:
+  - >-
+    latte run --tag populate-data -f write
+    --threads=14 --concurrency=256 --connections=1
+    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    -d 1000000000
+    -P keyspace_count=1
+    -P table_count_per_keyspace=5000
+    -P row_count_per_table=200000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=0
+    -P gauss_stddev=0
+    -P table_group_size=5000
+    -P table_shift_count=0
+    -P table_shift_interval_s=0
+    data_dir/latte/schema_scale.rn
+stress_cmd:
+  - >-
+    latte run --tag mixed -f write:1 -f read:5
+    --threads=14 --concurrency=32 --connections=1
+    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    --validation-strategy=fail-fast
+    -d 36000s
+    -P keyspace_count=1
+    -P table_count_per_keyspace=5000
+    -P row_count_per_table=200000
+    -P blob_col_size=128
+    -P text_col_size=128
+    -P gauss_mean=100000
+    -P gauss_stddev=20000
+    -P table_group_size=100
+    -P table_shift_count=1
+    -P table_shift_interval_s=5
+    -P data_validation=true
+    data_dir/latte/schema_scale.rn
