@@ -3896,7 +3896,7 @@ class BaseCluster:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
                                        filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=keyspaces,
-                                       filter_func=filter_func)
+                                       filter_func=filter_func, filter_paxos_tables=True)
 
     def get_non_system_ks_cf_list(self, db_node,
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
@@ -3905,12 +3905,12 @@ class BaseCluster:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
                                        filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace,
-                                       filter_func=filter_func)
+                                       filter_func=filter_func, filter_paxos_tables=True)
 
     def get_any_ks_cf_list(self, db_node,
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
-                           filter_by_keyspace: list = None, filter_func: Callable[..., bool] = None) -> List[str]:
+                           filter_by_keyspace: list = None, filter_func: Callable[..., bool] = None, filter_paxos_tables=False) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -3942,6 +3942,8 @@ class BaseCluster:
 
             for row in current_rows:
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
+                if filter_paxos_tables and getattr(row, column_names[1]).endswith("$paxos"):
+                    continue
 
                 if filter_out_system and is_system_keyspace(getattr(row, column_names[0])):
                     continue
