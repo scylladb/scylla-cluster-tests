@@ -3284,11 +3284,28 @@ class Nemesis(NemesisFlags):
                                node=self.target_node):
                 with DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node), \
                         self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"):
-                    self.target_node.remoter.run(
-                        "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
-                        " http://127.0.0.1:10000/storage_service/force_terminate_repair"
-                    )
-                thread.result(timeout=120)
+                    # force_terminate_repair only aborts running repair tasks
+                    # it is possible that it will be called just after a task has ended and just before the next task starts
+                    # calling it multiple times increases chances that at least one call will hit the target when a task is running
+                    for _ in range(10):
+                        zero_jobs_log = self.target_node.follow_system_log(
+                            r"repair - Started to abort repair jobs=\{\}, nr_jobs=0")
+                        found_jobs_log = self.target_node.follow_system_log(
+                            r"repair - Started to abort repair jobs=\{[^}]+\}, nr_jobs=(?!0\b)\d+")
+                        self.target_node.remoter.run(
+                            "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                            " http://127.0.0.1:10000/storage_service/force_terminate_repair"
+                        )
+                        time.sleep(1)
+                        if list(found_jobs_log):
+                            break
+                try:
+                    thread.result(timeout=120)
+                except TimeoutError:
+                    if list(zero_jobs_log):
+                        raise UnsupportedNemesis("No repair jobs running when terminate was called")
+                    else:
+                        raise
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
         self.log.debug("Execute a complete repair for target node")
