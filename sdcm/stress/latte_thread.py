@@ -104,7 +104,10 @@ class LatteStressThread(DockerBasedStressThread):
         script_name = script_name_regx.search(self.stress_cmd).group(0)
 
         for src_file in (Path(get_sct_root_path()) / script_name).parent.iterdir():
-            cmd_runner.send_files(str(src_file), str(Path(script_name).parent / src_file.name))
+            if src_file.is_file():
+                remote_path = str(Path(script_name).parent / src_file.name)
+                if not cmd_runner.run(f"test -f {remote_path}", ignore_status=True, verbose=False).ok:
+                    cmd_runner.send_files(str(src_file), remote_path)
 
         ssl_config = ''
         if self.params['client_encrypt']:
