@@ -5207,7 +5207,8 @@ class Nemesis(NemesisFlags):
                 raise UnsupportedNemesis(
                     "Tried to create already existing index. See log for details")
             try:
-                with adaptive_timeout(operation=Operations.CREATE_INDEX, node=self.target_node, timeout=14400) as timeout:
+                # timeout changed from 14400 to 28800 to avoid softimeout errors
+                with adaptive_timeout(operation=Operations.CREATE_INDEX, node=self.target_node, timeout=28800) as timeout:
                     with self.action_log_scope("Wait for index to be built"):
                         wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=timeout * 2)
                 verify_query_by_index_works(session, ks, cf, column)
