@@ -1,4 +1,3 @@
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -34,14 +33,14 @@ class AzureKmsProvider:
     @property
     def managed_identity_config(self):
         return {
-            'resource_group': self._kms_config['resource_group'],
-            'identity_name': self._kms_config['identity_name'],
-            'principal_id': self._kms_config['managed_identity_principal_id']
+            "resource_group": self._kms_config["resource_group"],
+            "identity_name": self._kms_config["identity_name"],
+            "principal_id": self._kms_config["managed_identity_principal_id"],
         }
 
     @property
     def sct_service_principal_id(self):
-        return self._kms_config['sct_service_principal_id']
+        return self._kms_config["sct_service_principal_id"]
 
     @classmethod
     def _get_vault_name(cls, region: str) -> str:
@@ -62,7 +61,7 @@ class AzureKmsProvider:
         vault_name = cls._get_vault_name(region)
         vault_uri = f"https://{vault_name}.vault.azure.net/"
         kms_config = KeyStore().get_azure_kms_config()
-        num_of_keys = kms_config['num_of_keys']
+        num_of_keys = kms_config["num_of_keys"]
         key_number = (hash(test_id) % num_of_keys) + 1
         return f"{vault_uri}scylla-key-{key_number}"
 
@@ -71,7 +70,8 @@ class AzureKmsProvider:
         vault_name = self._get_vault_name(self._region)
         try:
             vault = self._azure_service.keyvault.vaults.begin_create_or_update(
-                resource_group_name=self._kms_config['resource_group'], vault_name=vault_name,
+                resource_group_name=self._kms_config["resource_group"],
+                vault_name=vault_name,
                 parameters={
                     "location": self._region,
                     "properties": {
@@ -79,32 +79,35 @@ class AzureKmsProvider:
                         "sku": {"name": "standard", "family": "A"},
                         "enabled_for_disk_encryption": True,
                         "enable_rbac_authorization": False,
-                        "access_policies": [{
-                            "tenant_id": self._azure_service.azure_credentials["tenant_id"],
-                            "object_id": self.managed_identity_config['principal_id'],
-                            "permissions": {
-                                "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
-                                "secrets": ["get"],
-                                "certificates": ["get"]
-                            }
-                        }, {
-                            # SCT service principal
-                            "tenant_id": self._azure_service.azure_credentials["tenant_id"],
-                            "object_id": self.sct_service_principal_id,
-                            "permissions": {
-                                "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],
-                                "secrets": ["get"],
-                                "certificates": ["get"]
-                            }
-                        }],
-                    }
-                }
+                        "access_policies": [
+                            {
+                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                                "object_id": self.managed_identity_config["principal_id"],
+                                "permissions": {
+                                    "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
+                                    "secrets": ["get"],
+                                    "certificates": ["get"],
+                                },
+                            },
+                            {
+                                # SCT service principal
+                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                                "object_id": self.sct_service_principal_id,
+                                "permissions": {
+                                    "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],
+                                    "secrets": ["get"],
+                                    "certificates": ["get"],
+                                },
+                            },
+                        ],
+                    },
+                },
             ).result()
 
             vault_uri = vault.properties.vault_uri
 
             # Pick one key, if required create keys.
-            num_of_keys = self._kms_config['num_of_keys']
+            num_of_keys = self._kms_config["num_of_keys"]
             for i in range(1, num_of_keys + 1):
                 key_name = f"scylla-key-{i}"
                 if not self._azure_service.get_vault_key(vault_uri, key_name):
@@ -113,11 +116,7 @@ class AzureKmsProvider:
 
             key_number = (hash(test_id) % num_of_keys) + 1
             key_uri = f"{vault_uri}scylla-key-{key_number}"
-            vault_info = {
-                'identity_id': self._get_managed_identity_id(),
-                'vault_uri': vault_uri,
-                'key_uri': key_uri
-            }
+            vault_info = {"identity_id": self._get_managed_identity_id(), "vault_uri": vault_uri, "key_uri": key_uri}
             return vault_info
         except AzureError as e:
             LOGGER.warning(f"Failed to setup Azure KMS: {e}")
