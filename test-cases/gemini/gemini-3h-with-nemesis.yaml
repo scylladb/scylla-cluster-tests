@@ -7,7 +7,7 @@ instance_type_db: 'i4i.large'
 user_prefix: 'gemini-with-nemesis-3h-normal'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'run_with_gemini'
+nemesis_selector: 'run_with_gemini and not enospc'
 nemesis_seed: '032'
 
 gemini_cmd: |

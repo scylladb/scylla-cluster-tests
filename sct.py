@@ -89,6 +89,7 @@ from sdcm.utils.common import (
     search_test_id_in_latest,
     get_latest_scylla_release, images_dict_in_json_format, get_hdr_tags,
     download_and_unpack_logs,
+    find_equivalent_ami,
 )
 from sdcm.utils.nemesis_generation import generate_nemesis_yaml, NemesisJobGenerator
 from sdcm.utils.open_with_diff import OpenWithDiff, ErrorCarrier
@@ -123,7 +124,9 @@ import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 from sdcm.utils.docker_utils import get_ip_address_of_container
-
+from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
+from unit_tests.nemesis.fake_cluster import FakeTester
+from sdcm.logcollector import Collector
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -922,8 +925,6 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
 def find_ami_equivalent(ami_id: str, source_region: str, target_regions: tuple[str, ...],
                         target_arch: AwsArchType | None, output_format: str):
     """Find equivalent AMIs in different regions or architectures based on tags."""
-    from sdcm.utils.common import find_equivalent_ami
-
     add_file_logger()
 
     # Convert tuple to list or None
@@ -1499,7 +1500,6 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     add_file_logger()
 
-    from sdcm.logcollector import Collector  # noqa: PLC0415
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1975,11 +1975,6 @@ def get_nemesis_list(backend, config):
     hydra nemesis-list
 
     """
-
-    # NOTE: this import messes up logging for the test, since it's importing tester.py
-    # directly down the line
-    from unit_tests.nemesis.fake_cluster import FakeTester  # noqa: PLC0415
-
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
 
@@ -2157,7 +2152,6 @@ def hdr_investigate(test_id: str, stress_tool: str, stress_operation: str, throt
        hydra hdr-investigate --stress-operation READ --throttled-load true --test-id 8732ecb1-7e1f-44e7-b109-6d789b15f4b5
        --start-time \"2025-09-14\\ 20:45:18\" --duration-from-start-min 30
     """
-    from sdcm.utils.hdrhistogram import make_hdrhistogram_summary_by_interval
     stress_operation = stress_operation.upper()
 
     try:

@@ -134,6 +134,10 @@ class ServiceLevel:
     def workload_type(self, workload_type: str):
         self._sl_attributes.workload_type = workload_type
 
+    def __hash__(self):
+        return hash((self.name, tuple((field.name, getattr(self._sl_attributes, field.name))
+                                      for field in fields(self._sl_attributes))))
+
     def __eq__(self, other):
         return (self.name == other.name) and self._sl_attributes == other._sl_attributes
 

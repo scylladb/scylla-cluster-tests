@@ -1743,6 +1743,15 @@ Supported: eastus
 **type:** str (appendable)
 
 
+## **eks_admin_arn** / SCT_EKS_ADMIN_ARN
+
+
+
+**default:** N/A
+
+**type:** str_or_list_or_eval (appendable)
+
+
 ## **eks_cluster_version** / SCT_EKS_CLUSTER_VERSION
 
 
@@ -2536,6 +2545,15 @@ cassandra-stress commands.<br>You can specify everything but the -node parameter
 
 
 ## **stress_cmd_m** / SCT_STRESS_CMD_M
+
+cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
+
+**default:** N/A
+
+**type:** str_or_list (appendable)
+
+
+## **stress_cmd_read_disk** / SCT_STRESS_CMD_READ_DISK
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
 
@@ -3709,7 +3727,7 @@ AWS account id on behalf of which the test is run
 
 Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}
 
-**default:** {'write': {'default': {'P90 write': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': 5}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': 5}, 'P90 read': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
+**default:** {'write': {'default': {'P90 write': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': 5}, 'P99 read': {'fixed_limit': 10}}}, 'read_disk_only': {'default': {'P90 read': {'fixed_limit': 5}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': 5}, 'P90 read': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
 
 **type:** dict_or_str
 

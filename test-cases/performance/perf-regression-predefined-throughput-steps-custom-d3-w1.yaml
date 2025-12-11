@@ -1,0 +1,115 @@
+test_duration: 600
+
+n_db_nodes: 6
+n_loaders: 4
+simulated_racks: 2
+
+gce_instance_type_db: 'n2-highmem-8'
+gce_instance_type_loader: 'e2-highcpu-8'
+
+use_preinstalled_scylla: true
+use_prepared_loaders: false
+backtrace_decoding: false
+store_perf_results: true
+use_mgmt: false
+email_recipients: ['qa@scylladb.com']
+user_prefix: 'perf-rgrsn-prdfnd-steps-cstm-d3w1'
+custom_es_index: 'performancestatsv2'
+use_hdrhistogram: true
+adaptive_timeout_store_metrics: false
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+append_scylla_yaml:
+  auto_snapshot: false
+
+round_robin: true
+
+latte_schema_parameters:
+  # NOTE: below values are defaults in the rune script, used here only for clarity of what can be set
+  keyspace: custom_d3_w1
+  tablets: "true"
+  replication_factor: 2
+  compaction_strategy: IncrementalCompactionStrategy
+  tombstone_gc_mode: repair
+
+prepare_write_cmd:
+  - >-
+    latte run --tag prepare1 --duration 250100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 14 --concurrency 256 --connections 1 --consistency ALL
+    --function t1__insert -P blob_col_size=113 --start-cycle 0
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag prepare2 --duration 250100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 14 --concurrency 256 --connections 1 --consistency ALL
+    --function t1__insert -P blob_col_size=113 --start-cycle 250100100
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag prepare3 --duration 250100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 14 --concurrency 256 --connections 1 --consistency ALL
+    --function t1__insert -P blob_col_size=113 --start-cycle 500200200
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag prepare4 --duration 250100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 14 --concurrency 256 --connections 1 --consistency ALL
+    --function t1__insert -P blob_col_size=113 --start-cycle 750300300
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+
+# NOTE: cache covers data range for 1st main read command out of 2
+stress_cmd_cache_warmup:
+  - >-
+    latte run --tag warmup1 --duration 10100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 128 --connections 1 --consistency ALL --rate 12000
+    --function t1__get --start-cycle 0
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag warmup2 --duration 10100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 128 --connections 1 --consistency ALL --rate 12000
+    --function t1__get --start-cycle 10100100
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag warmup3 --duration 10100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 128 --connections 1 --consistency ALL --rate 12000
+    --function t1__get --start-cycle 20200200
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag warmup4 --duration 10100100 --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 128 --connections 1 --consistency ALL --rate 12000
+    --function t1__get --start-cycle 30300300
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+
+# NOTE: simulate:
+#       - ~50% reads from cache: 1-2 cmds always read from cache, other 2 always read from disk
+#       - Proportion 2/1 for reads/writes
+stress_cmd_m:
+  - >-
+    latte run --tag mixed1-rw --duration $duration --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 256 --connections 1 --consistency ONE $throttle
+    --function t1__insert,t1__get -P blob_col_size=113 --start-cycle 0 --end-cycle 40400400
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag mixed2-rw --duration $duration --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 256 --connections 1 --consistency ONE $throttle
+    --function t1__insert,t1__get -P blob_col_size=113 --start-cycle 0 --end-cycle 40400400
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag mixed3-r --duration $duration --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 256 --connections 1 --consistency ONE $throttle
+    --function t1__get -P bypass_cache=true --start-cycle 300200200
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn
+  - >-
+    latte run --tag mixed4-r --duration $duration --sampling 5s --request-timeout 60 --retry-interval '1s,5s'
+    --threads 7 --concurrency 256 --connections 1 --consistency ONE $throttle
+    --function t1__get -P bypass_cache=true --start-cycle 650300300
+    -P rows_per_partition=1 -P partition_sizes="\"50:1,50:2\"" -P row_count=1000400400
+    scylla-qa-internal/custom_d3/workflow1/latte/custom_d3_workflow1.rn

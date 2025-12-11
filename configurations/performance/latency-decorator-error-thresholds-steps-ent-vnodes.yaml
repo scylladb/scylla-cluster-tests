@@ -46,6 +46,38 @@ latency_decorator_error_thresholds:
         # This value was determined based on performance testing: 10% below the avg. of 5 best results in the last 3 months.
         fixed_limit: 862336
 
+
+  read_disk_only:
+    "80000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 5
+    "165000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 5
+    "250000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: 50
+    "300000":
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        # Fixed throughput limit in operations per second (ops/sec).
+        # This value was determined based on performance testing: 10% below the avg. of 5 best results in the last 3 months.
+        fixed_limit: 300000
+
   mixed:
     "50000":
       P90 write:

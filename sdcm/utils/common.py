@@ -206,11 +206,8 @@ def get_data_dir_path(*args):
     return os.path.abspath(data_dir)
 
 
-def get_sct_root_path():
-    import sdcm  # noqa: PLC0415
-    sdcm_path = os.path.realpath(sdcm.__path__[0])
-    sct_root_dir = os.path.join(sdcm_path, "..")
-    return os.path.abspath(sct_root_dir)
+def get_sct_root_path() -> Path:
+    return Path(__file__).parent.parent.parent.absolute()
 
 
 def find_file_under_sct_dir(filename: str, sub_folder: str = None):
@@ -2747,7 +2744,7 @@ def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = Non
         raise ValueError("%s not found in argus logs", log_type)
 
     LOGGER.debug("Unpacking loader logs...")
-    from sdcm.monitorstack import extract_file_from_tar_archive
+    from sdcm.monitorstack import extract_file_from_tar_archive  # noqa: PLC0415 # avoid circular import
     hdr_folder = extract_file_from_tar_archive(pattern=log_type, archive=logs_file, extract_dir=tmp_dir)
     LOGGER.debug("%s logs unpacked to %s", log_type, hdr_folder[test_id])
     if not hdr_folder:

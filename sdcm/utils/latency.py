@@ -55,6 +55,8 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  
 
     if load_type == 'mixed':
         load_type = ['read', 'write']
+    elif load_type == 'read_disk_only':
+        load_type = ['read']
     else:
         load_type = [load_type]
 
@@ -155,12 +157,12 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
                 for workload, results in interval.items():
                     interval[workload]["color"] = {}
                     if results["percentile_90"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_90"]:
-                        interval[workload]["color"].update({"percentile_90": "red"})
+                        results["color"].update({"percentile_90": "red"})
                     else:
-                        interval[workload]["color"].update({"percentile_90": ""})
+                        results["color"].update({"percentile_90": ""})
                     if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
-                        interval[workload]["color"].update({"percentile_99": "red"})
+                        results["color"].update({"percentile_99": "red"})
                     else:
-                        interval[workload]["color"].update({"percentile_99": ""})
+                        results["color"].update({"percentile_99": ""})
 
     return result_stats

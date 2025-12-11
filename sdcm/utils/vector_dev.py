@@ -23,6 +23,7 @@ from sdcm.utils.docker_utils import ContainerManager
 
 VECTOR_DEV_IMAGE = "timberio/vector:0.46.1-alpine"
 VECTOR_DEV_PORT = 49153  # Non-root
+VECTOR_EXTERNAL_PORT = 15000  # Static external port for xcloud communication
 
 
 LOGGER = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class VectorDevContainerMixin:
 
     @property
     def vector_port(self) -> Optional[int]:
-        return ContainerManager.get_container_port(self, "vector", VECTOR_DEV_PORT)
+        return VECTOR_EXTERNAL_PORT
 
     @property
     def vector_log_dir(self) -> Optional[str]:
@@ -62,7 +63,7 @@ class VectorDevContainerMixin:
             'name': f"{self.name}-vector",
             'command': " -c /etc/vector/vector.yaml",
             'auto_remove': True,
-            'ports': {f"{VECTOR_DEV_PORT}/tcp": None},
+            'ports': {f"{VECTOR_DEV_PORT}/tcp": VECTOR_EXTERNAL_PORT},
             'volumes': volumes,
             'environment': {
                 'PUID': getpwnam(username).pw_uid,

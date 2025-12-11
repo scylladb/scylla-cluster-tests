@@ -58,6 +58,8 @@ class DateClassBase(ClassBase):
         if not other.is_valid():
             raise ValueError(f"Can't compare {self.__class__.__name__} to not valid instance")
 
+    __hash__ = False
+
     def __le__(self, other):
         self._check_if_comparable(other)
         return self.value <= other.date
@@ -179,6 +181,8 @@ class SoftwareVersionInfoBase(ClassBase):
         if not self.is_valid() or not other.is_valid():
             raise ValueError(f"Can't compare {self.__class__.__name__}, both should be valid")
 
+    __hash__ = False
+
     def __le__(self, other):
         self._check_if_can_compare(other)
         self_version = self.version.as_int
@@ -260,6 +264,8 @@ class SctClusterBase(ClassBase):
     type: str = None
     gce_type: str = None
     ami_id: str = None
+
+    __hash__ = False
 
     def __eq__(self, other):
         for name in ['nodes', 'type', 'gce_type']:

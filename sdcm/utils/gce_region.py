@@ -19,13 +19,13 @@ from typing import Optional
 import googleapiclient.errors
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
-import google
 import google.api_core.exceptions
 from google.cloud import storage
 from google.cloud import compute_v1
 from google.cloud.compute_v1 import Firewall
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.gce_utils import wait_for_extended_operation
 
 
 LOGGER = logging.getLogger(__name__)
@@ -131,6 +131,11 @@ class GceRegion:
             Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-manager',
                      direction="INGRESS",
                      allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['10001', '5080', '5443', '5090', '5112'])],
+                     source_ranges=["0.0.0.0/0"],
+                     network=self.network.self_link),
+            Firewall(name=f'{self.SCT_NETWORK_NAME}-allow-vector',
+                     direction="INGRESS",
+                     allowed=[compute_v1.Allowed(I_p_protocol="tcp", ports=['15000'])],
                      source_ranges=["0.0.0.0/0"],
                      network=self.network.self_link),
             Firewall(name=f'{self.SCT_NETWORK_NAME}-deny-all',
@@ -263,8 +268,8 @@ class GceRegion:
             network=self.SCT_NETWORK_NAME,
             project=self.project,
             networks_remove_peering_request_resource=compute_v1.NetworksRemovePeeringRequest(name=peering_name))
-        self.network_client.remove_peering(request=remove_request)
-        time.sleep(3)  # wait a bit for the operation to propagate
+        operation = self.network_client.remove_peering(request=remove_request)
+        wait_for_extended_operation(operation, f"Remove peering {peering_name}", timeout=120)
 
         final_status = self.get_peering_status(peering_name)
         if final_status:

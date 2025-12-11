@@ -8,7 +8,7 @@ instance_type_loader: 'c6i.4xlarge'
 user_prefix: 'gemini-8h-large-num-columns'
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_selector: 'run_with_gemini'
+nemesis_selector: 'run_with_gemini and not enospc'
 nemesis_seed: '023'
 
 gemini_cmd: |

@@ -129,7 +129,7 @@ from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperi
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS, DefaultValue, unique_disruption_name
-from sdcm.utils.nemesis_utils.indexes import (get_random_column_name, create_index,
+from sdcm.utils.nemesis_utils.indexes import (ViewFinishedBuildingException, get_random_column_name, create_index,
                                               wait_for_index_to_be_built, verify_query_by_index_works,
                                               drop_index, wait_for_view_to_be_built, drop_materialized_view,
                                               is_cf_a_view, create_materialized_view_for_random_column, wait_materialized_view_building_tasks_started)
@@ -226,6 +226,7 @@ class NemesisFlags:
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
     sla: bool = False               # flag that signal that nemesis is used for SLA tests
+    enospc: bool = False             # flag that signal that nemesis causes a node to go out of space
 
 
 class Nemesis(NemesisFlags):
@@ -1923,18 +1924,18 @@ class Nemesis(NemesisFlags):
             self._mgmt_repair_cli(ignore_down_hosts=ignore_down_hosts)
 
     def repair_nodetool_rebuild(self):
-        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=60):
             self.target_node.run_nodetool('rebuild', long_running=True, retry=0)
 
     def nodetool_cleanup_on_all_nodes_parallel(self):
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
-            with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
+            with adaptive_timeout(Operations.CLEANUP, node, timeout=60):
                 node.run_nodetool(sub_cmd="cleanup", long_running=True, retry=0)
 
         parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(
-            32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
+            32, len(self.cluster.nodes)), timeout=300)
         with self.action_log_scope("Cleanup all nodes in parallel"):
             parallel_objects.run(_nodetool_cleanup)
 
@@ -5678,6 +5679,10 @@ class Nemesis(NemesisFlags):
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
                     wait_materialized_view_building_tasks_started(session, ks_name, view_name)
+                except ViewFinishedBuildingException:
+                    drop_materialized_view(session, ks_name, view_name)
+                    raise UnsupportedNemesis(
+                        f"Skip nemesis because view {ks_name}.{view_name} has already finished building")
                 except Exception as error:  # pylint: disable=broad-except
                     self.log.error('Failed creating a materialized view: %s', error)
                     raise
@@ -6198,6 +6203,7 @@ class EnospcMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    enospc = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc()
@@ -6206,6 +6212,7 @@ class EnospcMonkey(Nemesis):
 class EnospcAllNodesMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    enospc = True
 
     def disrupt(self):
         self.disrupt_nodetool_enospc(all_nodes=True)

@@ -960,6 +960,9 @@ class SCTConfiguration(dict):
         dict(name="eks_role_arn", env="SCT_EKS_ROLE_ARN", type=str,
              help=""),
 
+        dict(name="eks_admin_arn", env="SCT_EKS_ADMIN_ARN", type=str_or_list_or_eval,
+             help=""),
+
         dict(name="eks_cluster_version", env="SCT_EKS_CLUSTER_VERSION", type=str,
              help=""),
 
@@ -1285,6 +1288,13 @@ class SCTConfiguration(dict):
                     multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_m", env="SCT_STRESS_CMD_M",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands.
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
+        dict(name="stress_cmd_read_disk", env="SCT_STRESS_CMD_READ_DISK",
              type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
@@ -1944,7 +1954,7 @@ class SCTConfiguration(dict):
                     'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
                     'k8s_scylla_cluster_name', 'k8s_loader_cluster_name',
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
-                    'eks_cluster_version', 'eks_nodegroup_role_arn'],
+                    'eks_admin_arn', 'eks_cluster_version', 'eks_nodegroup_role_arn'],
 
         'xcloud': ['user_prefix', 'xcloud_provider', 'scylla_version'],
     }
@@ -1984,7 +1994,7 @@ class SCTConfiguration(dict):
         # this list is used for variouse checks against stress commands, such as:
         # 1. Check if all c-s profile files existing that are referred in the commands
         # 2. Check what stress tools test is needed when loader is prepared
-        'gemini_cmd', 'stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m',
+        'gemini_cmd', 'stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m', 'stress_cmd_read_disk',
         'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile',
         'prepare_stress_cmd', 'stress_cmd_1', 'stress_cmd_complex_prepare', 'prepare_write_stress',
         'stress_cmd_read_10m', 'stress_cmd_read_cl_one', 'stress_cmd_read_80m',
@@ -2164,7 +2174,7 @@ class SCTConfiguration(dict):
                             ami = get_scylla_ami_versions(version=oracle_scylla_version,
                                                           region_name=region, arch=aws_arch)[0]
                     except Exception as ex:  # noqa: BLE001
-                        raise ValueError(f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} "
+                        raise ValueError(f"AMIs for oracle_scylla_version='{oracle_scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
 
                     self.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s",

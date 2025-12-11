@@ -4,6 +4,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING
 from shlex import quote
 from pathlib import Path
+import shutil
 
 from invoke.runners import Result
 from invoke.exceptions import UnexpectedExit
@@ -205,7 +206,6 @@ class DockerCmdRunner(CommandRunner):
             dst_path = Path(dst)
             if delete_dst and dst_path.exists():
                 if dst_path.is_dir():
-                    import shutil
                     shutil.rmtree(dst_path)
                 else:
                     dst_path.unlink()

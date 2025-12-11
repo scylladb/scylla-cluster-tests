@@ -1,0 +1,38 @@
+latency_decorator_error_thresholds:
+  mixed:
+    "100000":
+      P90 write:
+          fixed_limit: null
+      P90 read:
+          fixed_limit: null
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 5
+    "150000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 10
+    "180000":
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 3000
+      P99 read:
+        fixed_limit: 20100
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: 15
+      P99 read:
+        fixed_limit: 1000

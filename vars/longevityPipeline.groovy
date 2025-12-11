@@ -26,9 +26,9 @@ def call(Map pipelineParams) {
                description: 'aws|gce|azure|docker|xcloud',
                name: 'backend')
 
-            choice(name: 'xcloud_provider',
-                   choices: ['aws', 'gce'],
-                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',)
+            string(defaultValue: "${pipelineParams.get('xcloud_provider', 'aws')}",
+                   description: 'Cloud provider for Scylla Cloud backend (only used when backend=xcloud). Supported providers: aws, gce',
+                   name: 'xcloud_provider')
 
             string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
                    description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
@@ -43,7 +43,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+            string(defaultValue: "${pipelineParams.get('availability_zone', '')}",
                description: 'Availability zone',
                name: 'availability_zone')
 

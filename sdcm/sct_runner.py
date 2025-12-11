@@ -71,6 +71,7 @@ from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_lo
 from sdcm.utils.context_managers import environment
 from sdcm.test_config import TestConfig
 from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
 if TYPE_CHECKING:
 
@@ -194,8 +195,6 @@ class SctRunner(ABC):
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
-
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
 
@@ -795,7 +794,7 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str,  params: SCTConfiguration | None = None):
-        availability_zone = random_zone(region_name)
+        availability_zone = params.get("availability_zone") or random_zone(region_name)
         super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.gce_region = region_name
         self.gce_source_region = self.SOURCE_IMAGE_REGION

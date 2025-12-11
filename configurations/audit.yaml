@@ -1,5 +1,5 @@
 append_scylla_yaml:
-  audit: 'syslog'
+  audit: 'syslog,table'
   audit_categories: 'DCL,DDL,AUTH,ADMIN'
   audit_tables: 'keyspace1.standard1,scylla_bench.test'
   audit_keyspaces: 'keyspace1,scylla_bench'

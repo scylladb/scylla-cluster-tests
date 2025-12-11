@@ -16,6 +16,8 @@ from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import list_logs_by_test_id, S3Storage, remove_files, get_free_port
 from sdcm.utils.decorators import retrying
 
+from sdcm.logcollector import GrafanaEntity, MonitoringStack  # noqa: PLC0415
+from sdcm.db_stats import PrometheusDBStats  # noqa: PLC0415
 
 LOGGER = logging.getLogger(name='monitoringstack')
 
@@ -515,8 +517,6 @@ def verify_dockers_are_running(containers_ports):
 
 
 def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
-
-    from sdcm.logcollector import GrafanaEntity, MonitoringStack
     grafana_statuses = []
     for dashboard in GrafanaEntity.base_grafana_dashboards:
         try:
@@ -545,8 +545,6 @@ def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT
     :returns: True if request is successful, False otherwise
     :rtype: {bool}
     """
-
-    from sdcm.db_stats import PrometheusDBStats
 
     time_end = time.time()
     time_start = time_end - 600
