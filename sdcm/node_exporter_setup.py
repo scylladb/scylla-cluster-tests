@@ -14,7 +14,7 @@ class NodeExporterSetup:
             if ! id node_exporter > /dev/null 2>&1; then
                 useradd -rs /bin/false node_exporter
             fi
-            curl -L -O https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+            curl -L --retry 5 --retry-max-time 300 -O https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             tar -xzvf node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
 
