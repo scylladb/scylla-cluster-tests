@@ -21,6 +21,7 @@ from functools import cached_property
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
+from sdcm.reporting.tooling_reporter import VectorStoreVersionReporter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
@@ -506,6 +507,8 @@ class VectorStoreSetDocker(VectorStoreClusterMixin, DockerCluster):
             ContainerManager.run_container(node, "node")
             ContainerManager.wait_for_status(node, "node", status="running")
 
+        VectorStoreVersionReporter(
+            node.remoter, "docker exec -it node /opt/vector-store/vector-store", self.test_config.argus_client()).report()
         node.init()
         return node
 
