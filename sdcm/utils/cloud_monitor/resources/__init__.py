@@ -7,7 +7,7 @@ CLOUD_PROVIDERS = ("aws", "gce", "azure")
 class CloudInstance:
     pricing = None  # need to be set in the child class
 
-    def __init__(self, cloud, name, instance_id, region_az, state, lifecycle, instance_type, owner, create_time, keep, project='N/A'):
+    def __init__(self, cloud, name, instance_id, region_az, state, lifecycle, instance_type, owner, create_time, keep, project='N/A', billing_project='N/A'):
         self.cloud = cloud
         self.name = name
         self.instance_id = instance_id
@@ -19,6 +19,7 @@ class CloudInstance:
         self.create_time = create_time
         self.keep = keep  # keep alive
         self.project = project
+        self.billing_project = billing_project
 
         try:
             self.price = self.pricing.get_instance_price(region=self.region, instance_type=self.instance_type,

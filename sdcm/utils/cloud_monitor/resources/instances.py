@@ -25,14 +25,15 @@ class AWSInstance(CloudInstance):
         super().__init__(
             cloud="aws",
             name=self._tags.get("Name", NA),
-            instance_id=instance['InstanceId'],
+            instance_id=instance["InstanceId"],
             region_az=instance["Placement"]["AvailabilityZone"],
             state=instance["State"]["Name"],
             lifecycle=InstanceLifecycle.SPOT if instance.get("SpotInstanceRequestId") else InstanceLifecycle.ON_DEMAND,
             instance_type=instance["InstanceType"],
             owner=self.get_owner(),
-            create_time=instance['LaunchTime'],
+            create_time=instance["LaunchTime"],
             keep=self._tags.get("keep", ""),
+            billing_project=self._tags.get("BillingProject", NA) if self._tags else NA,
         )
 
     @property
@@ -79,7 +80,8 @@ class GCEInstance(CloudInstance):
             owner=tags.get("RunByUser", NA) if tags else NA,
             create_time=datetime.fromisoformat(instance.creation_timestamp),
             keep=self.get_keep_alive_gce_instance(instance),
-            project=instance.self_link.split('/')[6]
+            project=instance.self_link.split('/')[6],
+            billing_project=tags.get("BillingProject", NA) if tags else NA,
         )
 
     @property
@@ -119,7 +121,8 @@ class AzureInstance(CloudInstance):
             owner=tags.get("RunByUser", NA),
             create_time=creation_time,
             keep=tags.get("keep", ""),
-            project=resource_group
+            project=resource_group,
+            billing_project=tags.get("BillingProject", NA) if tags else NA,
         )
 
     @staticmethod
