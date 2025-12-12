@@ -33,19 +33,23 @@ class AutoSshContainerMixin:
         user = self.ssh_login_info["user"]
         volumes = {os.path.expanduser(self.ssh_login_info["key_file"]): {"bind": "/id_rsa", "mode": "ro,z"}}
 
-        return dict(image=AUTO_SSH_IMAGE,
-                    name=f"{self.name}-{hostname.replace(':', '-')}-autossh",
-                    environment=dict(SSH_HOSTNAME=hostname,
-                                     SSH_HOSTPORT=port,
-                                     SSH_HOSTUSER=user,
-                                     SSH_TUNNEL_HOST="127.0.0.1",
-                                     SSH_MODE=ssh_mode,
-                                     SSH_TUNNEL_LOCAL=local_port,
-                                     SSH_TUNNEL_REMOTE=remote_port,
-                                     AUTOSSH_GATETIME=0),
-                    network_mode="host",
-                    restart_policy={"Name": "always"},
-                    volumes=volumes)
+        return dict(
+            image=AUTO_SSH_IMAGE,
+            name=f"{self.name}-{hostname.replace(':', '-')}-autossh",
+            environment=dict(
+                SSH_HOSTNAME=hostname,
+                SSH_HOSTPORT=port,
+                SSH_HOSTUSER=user,
+                SSH_TUNNEL_HOST="127.0.0.1",
+                SSH_MODE=ssh_mode,
+                SSH_TUNNEL_LOCAL=local_port,
+                SSH_TUNNEL_REMOTE=remote_port,
+                AUTOSSH_GATETIME=0,
+            ),
+            network_mode="host",
+            restart_policy={"Name": "always"},
+            volumes=volumes,
+        )
 
     @cached_property
     def auto_ssh_container_logfile(self):

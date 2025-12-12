@@ -17,8 +17,13 @@ from typing import Literal, List, Dict, Any, Union
 import yaml
 from pydantic import field_validator, BaseModel, ConfigDict
 
-from sdcm.provision.scylla_yaml.auxiliaries import EndPointSnitchType, ServerEncryptionOptions, ClientEncryptionOptions, \
-    SeedProvider, RequestSchedulerOptions
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    EndPointSnitchType,
+    ServerEncryptionOptions,
+    ClientEncryptionOptions,
+    SeedProvider,
+    RequestSchedulerOptions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +63,9 @@ class ScyllaYaml(BaseModel):
     def set_endpoint_snitch(cls, endpoint_snitch: str):
         if endpoint_snitch is None:
             return endpoint_snitch
-        if endpoint_snitch.startswith('org.apache.cassandra.locator.'):
+        if endpoint_snitch.startswith("org.apache.cassandra.locator."):
             return endpoint_snitch
-        return 'org.apache.cassandra.locator.' + endpoint_snitch
+        return "org.apache.cassandra.locator." + endpoint_snitch
 
     rpc_address: str = None  # 'localhost'
     rpc_interface: str = None  # "eth1"
@@ -81,7 +86,7 @@ class ScyllaYaml(BaseModel):
     incremental_backups: bool = None  # False
     snapshot_before_compaction: bool = None  # False
     phi_convict_threshold: int = None  # 8
-    commitlog_sync: Literal['periodic', 'batch'] = None  # 'periodic'
+    commitlog_sync: Literal["periodic", "batch"] = None  # 'periodic'
     commitlog_segment_size_in_mb: int = None  # 64
     commitlog_sync_period_in_ms: int = None  # 10000
     commitlog_sync_batch_window_in_ms: int = None  # 10000
@@ -94,11 +99,7 @@ class ScyllaYaml(BaseModel):
     preheat_kernel_page_cache: bool = None  # False
     sstable_preemptive_open_interval_in_mb: int = None  # 50
     defragment_memory_on_idle: bool = None  # False
-    memtable_allocation_type: Literal[
-        'heap_buffers',
-        'offheap_buffers',
-        'offheap_objects'
-    ] = None  # "heap_buffers"
+    memtable_allocation_type: Literal["heap_buffers", "offheap_buffers", "offheap_objects"] = None  # "heap_buffers"
     memtable_cleanup_threshold: float = None  # .11
     file_cache_size_in_mb: int = None  # 512
     memtable_flush_queue_size: int = None  # 4
@@ -121,7 +122,7 @@ class ScyllaYaml(BaseModel):
     initial_token: int = None  # None
     num_tokens: int = None  # 1
     # 'org.apache.cassandra.dht.Murmur3Partitioner'
-    partitioner: Literal['org.apache.cassandra.dht.Murmur3Partitioner'] = None
+    partitioner: Literal["org.apache.cassandra.dht.Murmur3Partitioner"] = None
     storage_port: int = None  # 7000
     auto_snapshot: bool = None  # True
     key_cache_keys_to_save: int = None  # 0
@@ -130,10 +131,7 @@ class ScyllaYaml(BaseModel):
     row_cache_keys_to_save: int = None  # 0
     row_cache_size_in_mb: int = None  # 0
     row_cache_save_period: int = None  # 0
-    memory_allocator: Literal[
-        "NativeAllocator",
-        "JEMallocAllocator"
-    ] = None  # "NativeAllocator"
+    memory_allocator: Literal["NativeAllocator", "JEMallocAllocator"] = None  # "NativeAllocator"
     counter_cache_size_in_mb: int = None  # 0
     counter_cache_save_period: int = None  # 7200
     counter_cache_keys_to_save: int = None  # 0
@@ -149,9 +147,9 @@ class ScyllaYaml(BaseModel):
     cross_node_timeout: bool = None  # False
     internode_send_buff_size_in_bytes: int = None  # 0
     internode_recv_buff_size_in_bytes: int = None  # 0
-    internode_compression: Literal['none', 'all', 'dc'] = None  # "none"
+    internode_compression: Literal["none", "all", "dc"] = None  # "none"
     internode_compression_enable_advanced: bool = None
-    rpc_dict_training_when: Literal['always', 'never', 'when_leader'] = None
+    rpc_dict_training_when: Literal["always", "never", "when_leader"] = None
     rpc_dict_training_min_time_seconds: int = None
     rpc_dict_update_period_seconds: int = None
     rpc_dict_training_min_bytes: int = None
@@ -173,23 +171,31 @@ class ScyllaYaml(BaseModel):
     rpc_min_threads: int = None  # 16
     rpc_recv_buff_size_in_bytes: int = None  # 0
     rpc_send_buff_size_in_bytes: int = None  # 0
-    rpc_server_type: Literal['sync', 'hsh'] = None  # "sync"
+    rpc_server_type: Literal["sync", "hsh"] = None  # "sync"
     cache_hit_rate_read_balancing: bool = None  # True
     dynamic_snitch_badness_threshold: int = None  # 0
     dynamic_snitch_reset_interval_in_ms: int = None  # 60000
     dynamic_snitch_update_interval_in_ms: int = None  # 100
     hinted_handoff_enabled: Literal[
-        'enabled', 'true', 'True', '1', True,
-        'disabled', 'false', 'False', '0', False,
+        "enabled",
+        "true",
+        "True",
+        "1",
+        True,
+        "disabled",
+        "false",
+        "False",
+        "0",
+        False,
     ] = None
     hinted_handoff_throttle_in_kb: int = None  # 1024
     max_hint_window_in_ms: int = None  # 10800000
     max_hints_delivery_threads: int = None  # 2
     batchlog_replay_throttle_in_kb: int = None  # 1024
-    request_scheduler: Literal[
-        'org.apache.cassandra.scheduler.NoScheduler',
-        'org.apache.cassandra.scheduler.RoundRobinScheduler'
-    ] | None = None
+    request_scheduler: (
+        Literal["org.apache.cassandra.scheduler.NoScheduler", "org.apache.cassandra.scheduler.RoundRobinScheduler"]
+        | None
+    ) = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
     @field_validator("request_scheduler", mode="before")
@@ -197,53 +203,59 @@ class ScyllaYaml(BaseModel):
     def set_request_scheduler(cls, request_scheduler: str):
         if request_scheduler is None:
             return request_scheduler
-        if request_scheduler.startswith('org.apache.cassandra.scheduler.'):
+        if request_scheduler.startswith("org.apache.cassandra.scheduler."):
             return request_scheduler
-        return 'org.apache.cassandra.scheduler.' + request_scheduler
+        return "org.apache.cassandra.scheduler." + request_scheduler
 
     request_scheduler_id: str = None  # None
     request_scheduler_options: RequestSchedulerOptions = None  # None
     thrift_framed_transport_size_in_mb: int = None  # 15
     thrift_max_message_length_in_mb: int = None  # 16
-    authenticator: Literal[
-        "org.apache.cassandra.auth.PasswordAuthenticator",
-        "org.apache.cassandra.auth.AllowAllAuthenticator",
-        "com.scylladb.auth.TransitionalAuthenticator",
-        "com.scylladb.auth.SaslauthdAuthenticator"
-    ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
+    authenticator: (
+        Literal[
+            "org.apache.cassandra.auth.PasswordAuthenticator",
+            "org.apache.cassandra.auth.AllowAllAuthenticator",
+            "com.scylladb.auth.TransitionalAuthenticator",
+            "com.scylladb.auth.SaslauthdAuthenticator",
+        ]
+        | None
+    ) = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
     @field_validator("authenticator", mode="before")
     @classmethod
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
             return authenticator
-        if authenticator.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
+        if authenticator.startswith(("org.apache.cassandra.auth.", "com.scylladb.auth.")):
             return authenticator
-        if authenticator in ['PasswordAuthenticator', 'AllowAllAuthenticator']:
-            return 'org.apache.cassandra.auth.' + authenticator
-        if authenticator in ['TransitionalAuthenticator', 'SaslauthdAuthenticator']:
-            return 'com.scylladb.auth.' + authenticator
+        if authenticator in ["PasswordAuthenticator", "AllowAllAuthenticator"]:
+            return "org.apache.cassandra.auth." + authenticator
+        if authenticator in ["TransitionalAuthenticator", "SaslauthdAuthenticator"]:
+            return "com.scylladb.auth." + authenticator
         return authenticator
 
     internode_authenticator: Literal["enabled", "disabled"] = None  # "disabled"
-    authorizer: Literal[
-        "org.apache.cassandra.auth.AllowAllAuthorizer",
-        "org.apache.cassandra.auth.CassandraAuthorizer",
-        "com.scylladb.auth.TransitionalAuthorizer",
-        "com.scylladb.auth.SaslauthdAuthorizer"
-    ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
+    authorizer: (
+        Literal[
+            "org.apache.cassandra.auth.AllowAllAuthorizer",
+            "org.apache.cassandra.auth.CassandraAuthorizer",
+            "com.scylladb.auth.TransitionalAuthorizer",
+            "com.scylladb.auth.SaslauthdAuthorizer",
+        ]
+        | None
+    ) = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
     @field_validator("authorizer", mode="before")
     @classmethod
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
             return authorizer
-        if authorizer.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
+        if authorizer.startswith(("org.apache.cassandra.auth.", "com.scylladb.auth.")):
             return authorizer
-        if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
-            return 'org.apache.cassandra.auth.' + authorizer
-        if authorizer in ['TransitionalAuthorizer', 'SaslauthdAuthorizer']:
-            return 'com.scylladb.auth.' + authorizer
+        if authorizer in ["AllowAllAuthorizer", "CassandraAuthorizer"]:
+            return "org.apache.cassandra.auth." + authorizer
+        if authorizer in ["TransitionalAuthorizer", "SaslauthdAuthorizer"]:
+            return "com.scylladb.auth." + authorizer
         return authorizer
 
     role_manager: str = None  # "org.apache.cassandra.auth.CassandraRoleManager"
@@ -318,8 +330,9 @@ class ScyllaYaml(BaseModel):
     alternator_https_port: int = None  # 0
     alternator_address: str = None  # "0.0.0.0"
     alternator_enforce_authorization: bool = None  # False
-    alternator_write_isolation: Literal["unsafe_rmw", "only_rmw_uses_lwt",
-                                        "forbid_rmw", "always_use_lwt"] = None  # None
+    alternator_write_isolation: Literal["unsafe_rmw", "only_rmw_uses_lwt", "forbid_rmw", "always_use_lwt"] = (
+        None  # None
+    )
     alternator_streams_time_window_s: int = None  # 10
     alternator_ttl_period_in_seconds: int = None  # None
     abort_on_ebadf: bool = None  # True
@@ -328,7 +341,7 @@ class ScyllaYaml(BaseModel):
     redis_read_consistency_level: str = None  # "LOCAL_QUORUM"
     redis_write_consistency_level: str = None  # "LOCAL_QUORUM"
     redis_database_count: int = None  # 16
-    redis_keyspace_replication_strategy: Literal['SimpleStrategy', 'NetworkTopologyStrategy'] = None  # 'SimpleStrategy'
+    redis_keyspace_replication_strategy: Literal["SimpleStrategy", "NetworkTopologyStrategy"] = None  # 'SimpleStrategy'
     default_log_level: str = None  # None
     logger_log_level: dict = None  # None
     log_to_stdout: bool = None  # None
@@ -357,7 +370,7 @@ class ScyllaYaml(BaseModel):
     compaction_collection_items_count_warning_threshold: int = None  # None
 
     enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
-    tablets_mode_for_new_keyspaces: Literal['disabled', 'enabled', 'enforced'] = None  # enabled
+    tablets_mode_for_new_keyspaces: Literal["disabled", "enabled", "enforced"] = None  # enabled
     force_gossip_topology_changes: bool = None  # False
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
@@ -383,7 +396,7 @@ class ScyllaYaml(BaseModel):
                 to_dict[required_attrs] = getattr(self, required_attrs, None)
         return to_dict
 
-    def update(self, *objects: Union['ScyllaYaml', dict]):
+    def update(self, *objects: Union["ScyllaYaml", dict]):
         """
         Do the same as dict.update, with one exception.
         It ignores whatever key if it's value equal to default
@@ -404,11 +417,13 @@ class ScyllaYaml(BaseModel):
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self
 
-    def diff(self, other: 'ScyllaYaml') -> str:
-        self_str = yaml.safe_dump(self.model_dump(
-            exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
-        other_str = yaml.safe_dump(other.model_dump(
-            exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
+    def diff(self, other: "ScyllaYaml") -> str:
+        self_str = yaml.safe_dump(
+            self.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+        ).splitlines(keepends=True)
+        other_str = yaml.safe_dump(
+            other.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True)
+        ).splitlines(keepends=True)
         return "".join(unified_diff(self_str, other_str))
 
     def __copy__(self):
