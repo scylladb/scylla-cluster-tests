@@ -2941,7 +2941,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
-        new_image = f"{self.params.get('docker_image')}:{new_version}"
 
         if not self.nodes:
             return True
@@ -2950,13 +2949,17 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             timeout=self.nodes[0].pod_replace_timeout * 2 * 60,
             sleep_time=self.PodContainerClass.pod_readiness_delay)
         def wait_till_any_node_get_new_image(nodes_with_old_image: list):
-            for node in nodes_with_old_image.copy():
+            old_nodes = nodes_with_old_image.copy()
+            for node in old_nodes:
                 # NOTE: 'node.image' may be 'docker.io/scylladb/scylla:4.5.3'
-                #       as well as 'scylladb/scylla:4.5.3'
-                if node.image.endswith(new_image):
+                # as well as 'scylladb/scylla-enterprise:2024.1.19' or 'scylladb/scylla:2025.1.5'
+                if node.image.endswith(new_version):
                     nodes_with_old_image.remove(node)
                     return True
-            raise RuntimeError('No node was upgraded')
+            actual_versions = [f"{node.name}: {node.image}" for node in old_nodes]
+            raise RuntimeError(
+                f"No node was upgraded. Expected image version '{new_version}', but found {actual_versions}"
+            )
 
         nodes = self.nodes.copy()
         while nodes:
