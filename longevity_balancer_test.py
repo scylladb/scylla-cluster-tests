@@ -17,7 +17,8 @@
 from collections import defaultdict
 from contextlib import ExitStack
 import contextlib
-from time import sleep
+from datetime import timedelta
+from time import sleep, time
 from longevity_test import LongevityTest
 from sdcm.argus_results import PeriodicDiskUsageToArgus
 from sdcm.cluster import MAX_TIME_WAIT_FOR_DECOMMISSION, MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
@@ -154,6 +155,26 @@ class LongevityBalancerTest(LongevityTest):
             self.scale_in(new_nodes)
             self.wait_for_balance()
             self.check_final_balance()
+
+    def test_load_balance_short(self):
+        """
+        Test to measure the time impact of size based load balancing in a cluster.
+
+        This test will:
+        1. Expand the cluster by adding new nodes of different types.
+            No possible to start with heterogeneous nodes, as the cluster is created with a single type.
+        2. Populate the cluster with data.
+        3. Wait for the cluster to balance.
+        4. Check the final balance of the cluster.
+        """
+        self.scale_out()
+        with PeriodicDiskUsageToArgus(self.db_cluster, self.test_config.argus_client(), interval=600):
+            start_time = time()
+            self.run_prepare_write_cmd()
+            InfoEvent(f'Prepare time: {timedelta(seconds=int(time() - start_time))}').publish()
+            self.wait_for_balance()
+            self.check_final_balance()
+            InfoEvent(f'Total time: {timedelta(seconds=int(time() - start_time))}').publish()
 
     def test_workload_latencies(self):
         """
