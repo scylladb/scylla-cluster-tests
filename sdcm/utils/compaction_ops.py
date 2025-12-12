@@ -1,5 +1,6 @@
 import time
 import logging
+from contextlib import contextmanager
 from typing import Callable, Optional, NamedTuple, Union
 
 from fabric.runners import Result
@@ -90,6 +91,19 @@ class CompactionOps:
     def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
         node = node if node else self.node
         node.run_nodetool(f'disableautocompaction {keyspace} {cf}')
+
+    def enable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
+        node = node if node else self.node
+        node.run_nodetool(f'enableautocompaction {keyspace} {cf}')
+
+    @contextmanager
+    def temporarily_disable_autocompaction_on_ks_cf(self, node: BaseNode, keyspace: str = "", cf: Optional[str] = ""):
+        """Context manager to temporarily disable autocompaction and re-enable it on exit."""
+        try:
+            self.disable_autocompaction_on_ks_cf(node=node, keyspace=keyspace, cf=cf)
+            yield
+        finally:
+            self.enable_autocompaction_on_ks_cf(node=node, keyspace=keyspace, cf=cf)
 
     def _stop_compaction(self, nodetool_cmd: str) -> Result:
         LOGGER.info("Stopping compaction with nodetool %s", nodetool_cmd)
