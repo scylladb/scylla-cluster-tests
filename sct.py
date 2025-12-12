@@ -19,7 +19,6 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta, UTC
 import json
 import os
-import re
 import sys
 import unittest
 import logging
@@ -27,7 +26,6 @@ import time
 import subprocess
 import traceback
 import pprint
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial, reduce
 from typing import List
@@ -37,6 +35,8 @@ import pytest
 import click
 import yaml
 from prettytable import PrettyTable
+
+import utils.lint_test_cases
 from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
@@ -1071,79 +1071,6 @@ def output_conf(config_files, backend):
     config = SCTConfiguration()
     click.secho(config.dump_config(), fg='green')
     sys.exit(0)
-
-
-def _run_yaml_test(backend, full_path, env):
-    output = []
-    error = False
-    output.append(f'---- linting: {full_path} -----')
-    while os.environ:
-        os.environ.popitem()
-    for key, value in env.items():
-        os.environ[key] = value
-    os.environ['SCT_CLUSTER_BACKEND'] = backend
-    os.environ['SCT_CONFIG_FILES'] = full_path
-    logging.getLogger().handlers = []
-    logging.getLogger().disabled = True
-    try:
-        config = SCTConfiguration()
-        config.verify_configuration()
-        config.check_required_files()
-    except Exception as exc:  # noqa: BLE001
-        output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
-        error = True
-    return error, output
-
-
-@cli.command(help="Test yaml in test-cases directory")
-@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
-@click.option('-i', '--include', type=str, default='')
-@click.option('-e', '--exclude', type=str, default='')
-def lint_yamls(backend, exclude: str, include: str):
-    if not include:
-        raise ValueError('You did not provide include filters')
-
-    exclude_filters = []
-    for flt in exclude.split(','):
-        if not flt:
-            continue
-        try:
-            exclude_filters.append(re.compile(flt))
-        except Exception as exc:  # noqa: BLE001
-            raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
-
-    include_filters = []
-    for flt in include.split(','):
-        if not flt:
-            continue
-        try:
-            include_filters.append(re.compile(flt))
-        except Exception as exc:  # noqa: BLE001
-            raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
-
-    original_env = {**os.environ}
-    process_pool = ProcessPoolExecutor(max_workers=5)
-
-    features = []
-    for root, _, files in os.walk('./test-cases'):
-        for file in files:
-            full_path = os.path.join(root, file)
-            if not any((flt.search(file) or flt.search(full_path) for flt in include_filters)):
-                continue
-            if any((flt.search(file) or flt.search(full_path) for flt in exclude_filters)):
-                continue
-            features.append(process_pool.submit(_run_yaml_test, backend, full_path, original_env))
-
-    failed = False
-    for pp_feature in features:
-        error, pp_output = pp_feature.result()
-        if error:
-            failed = True
-            click.secho('\n'.join(pp_output), fg='red')
-        else:
-            click.secho('\n'.join(pp_output), fg='green')
-    print()
-    sys.exit(1 if failed else 0)
 
 
 @cli.command(help="Check test configuration file")
@@ -2207,6 +2134,7 @@ def hdr_investigate(test_id: str, stress_tool: str, stress_operation: str, throt
     click.echo(hdr_table.get_string(title="HDR Latency Spikes"))
 
 
+cli.add_command(utils.lint_test_cases.main)
 cli.add_command(sct_ssh.ssh)
 cli.add_command(sct_ssh.tunnel)
 cli.add_command(sct_ssh.copy_cmd)

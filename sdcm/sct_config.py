@@ -2788,7 +2788,7 @@ class SCTConfiguration(dict):
                 f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
 
     def _validate_placement_group_required_values(self):
-        if self.get("use_placement_group"):
+        if self.get("use_placement_group") and self.get("cluster_backend") == "aws":
             az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
             regions_count = len(self.region_names)
             assert az_count == 1 and regions_count == 1, \
