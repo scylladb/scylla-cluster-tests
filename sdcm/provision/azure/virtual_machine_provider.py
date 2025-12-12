@@ -74,14 +74,17 @@ class VirtualMachineProvider:
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
                 "tags": tags,
+                "diagnostics_profile": {
+                    "boot_diagnostics": {
+                        "enabled": True,
+                        "storage_uri": None,  # None triggers Managed Storage
+                    }
+                },
                 "hardware_profile": {
                     "vm_size": definition.type,
                 },
                 "network_profile": {
-                    "network_interfaces": [{
-                        "id": nic_id,
-                        "properties": {"deleteOption": "Detach"}
-                    }],
+                    "network_interfaces": [{"id": nic_id, "properties": {"deleteOption": "Detach"}}],
                 },
             }
 
