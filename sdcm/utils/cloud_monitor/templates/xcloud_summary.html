@@ -1,0 +1,16 @@
+    <h3>Scylla Cloud test clusters summary</h3>
+
+    <table id="results_table">
+        <tr>
+            <th>Environment</th>
+            <th>AWS</th>
+            <th>GCP</th>
+        </tr>
+        {% for env in ['lab', 'staging', 'prod'] %}
+        <tr>
+            <td>{{ env|capitalize }}</td>
+            <td>{{ results.get(env, {}).get('AWS', 0) }}</td>
+            <td>{{ results.get(env, {}).get('GCP', 0) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
