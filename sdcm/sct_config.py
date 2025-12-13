@@ -78,7 +78,7 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.azure_utils import (
     azure_check_instance_type_available,
 )
-from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS, XCLOUD_VS_INSTANCE_TYPES
+from sdcm.utils.cloud_api_utils import MIN_SCYLLA_VERSION_FOR_VS
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -4233,11 +4233,13 @@ class SCTConfiguration(dict):
                 )
 
             vs_instance_type = self.get("instance_type_vector_store")
-            supported_types = XCLOUD_VS_INSTANCE_TYPES[cloud_provider]
-            if vs_instance_type not in supported_types.keys():
+            supported_vs_types = cloud_api_client.get_vector_search_instance_types(
+                cloud_provider_id=provider_id, region_id=region_id
+            )
+            if vs_instance_type not in supported_vs_types:
                 raise ValueError(
                     f"Instance type '{vs_instance_type}' is not supported for Vector Search on {cloud_provider.upper()}.\n"
-                    f"Supported types: {', '.join(supported_types.keys())}"
+                    f"Supported types: {', '.join(supported_vs_types)}"
                 )
 
 
