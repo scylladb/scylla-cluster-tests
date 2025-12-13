@@ -12,6 +12,7 @@ from sdcm.utils.cloud_monitor.report import (
     NonQaInstancesTimeDistributionReport,
 )
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
+from sdcm.utils.cloud_monitor.resources.xcloud import XCloudResources
 
 LOGGER = getLogger(__name__)
 
@@ -34,9 +35,27 @@ def cloud_report(mail_to):
     cloud_instances = CloudInstances()
     static_ips = StaticIPs(cloud_instances)
     crs = get_active_capacity_reservations()
+
+    LOGGER.info("Starting xcloud resources collection...")
+    try:
+        xcloud_resources = XCloudResources()
+        cluster_count = len(xcloud_resources.clusters)
+        LOGGER.info(
+            f"Collected {cluster_count} xcloud cluster(s) for reporting"
+            if cluster_count
+            else "No xcloud clusters found"
+        )
+    except Exception:  # noqa: BLE001
+        LOGGER.error("Failed to collect xcloud resources", exc_info=True)
+        xcloud_resources = None
+
     notify_by_email(
-        general_report=GeneralReport(cloud_instances=cloud_instances, static_ips=static_ips, crs=crs),
-        detailed_report=DetailedReport(cloud_instances=cloud_instances, static_ips=static_ips),
+        general_report=GeneralReport(
+            cloud_instances=cloud_instances, static_ips=static_ips, crs=crs, xcloud_resources=xcloud_resources
+        ),
+        detailed_report=DetailedReport(
+            cloud_instances=cloud_instances, static_ips=static_ips, xcloud_resources=xcloud_resources
+        ),
         recipients=mail_to,
     )
 
