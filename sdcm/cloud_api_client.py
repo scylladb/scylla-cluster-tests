@@ -152,11 +152,21 @@ class ScyllaCloudAPIClient:
         return next(region for region in regions if region["externalId"] == region_name)["id"]
 
     def get_instance_types(
-            self, *, cloud_provider_id: int, region_id: int, defaults: bool = False) -> dict[str, Any]:
-        """Get instance types available for a given cloud provider and region"""
+            self, *, cloud_provider_id: int, region_id: int, defaults: bool = False,
+            target: str | None = None) -> dict[str, Any]:
+        """
+        Get instance types available for a given cloud provider and region.
+
+        :param cloud_provider_id: ID of the cloud provider
+        :param region_id: ID of the region
+        :param defaults: whether to include default values
+        :param target: optional target filter (e.g., 'VECTOR_SEARCH' for Vector Search instance types)
+        """
         params = {}
         if defaults:
             params['defaults'] = 'true'
+        if target:
+            params['target'] = target
         return self.request(
             'GET', f'/deployment/cloud-provider/{cloud_provider_id}/region/{region_id}', params=params)
 
@@ -171,6 +181,18 @@ class ScyllaCloudAPIClient:
             raise ScyllaCloudAPIError(
                 f"Instance type '{instance_type_name}' not found in region_id: {region_id} for cloud_provider_id: "
                 f"{cloud_provider_id}, available instance types: {', '.join(t['externalId'] for t in instance_types)}")
+
+    def get_vector_search_instance_types(self, *, cloud_provider_id: int, region_id: int) -> dict[str, int]:
+        """
+        Get Vector Search instance types for a given cloud provider and region.
+
+        :param cloud_provider_id: ID of the cloud provider
+        :param region_id: ID of the region
+        :return: dict mapping instance type names (externalId) to their IDs
+        """
+        response = self.get_instance_types(
+            cloud_provider_id=cloud_provider_id, region_id=region_id, target='VECTOR_SEARCH')
+        return {instance["externalId"]: instance["id"] for instance in response["instances"]}
 
     @cached_property
     def cloud_provider_ids(self) -> dict[CloudProviderType, int]:
