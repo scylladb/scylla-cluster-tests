@@ -9,7 +9,7 @@ dependencies = [
     "azure-identity==1.16.1",
     "azure-keyvault-keys==4.11.0",
     "azure-mgmt-compute==37.0.1",
-    "azure-mgmt-keyvault==12.0.0",
+    "azure-mgmt-keyvault==13.0.0",
     "azure-mgmt-msi==7.0.0",
     "azure-mgmt-network==30.0.0",
     "azure-mgmt-resource==24.0.0",
