@@ -109,6 +109,9 @@ def call(Map params, String region){
     if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
         export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
     fi
+    if [[ -n "${params.post_behavior_vector_store_nodes ? params.post_behavior_vector_store_nodes : ''}" ]] ; then
+        export SCT_POST_BEHAVIOR_VECTOR_STORE_NODES="${params.post_behavior_vector_store_nodes}"
+    fi
 
     if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
         export SCT_INSTANCE_PROVISION="${params.provision_type}"
