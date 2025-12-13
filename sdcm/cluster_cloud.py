@@ -28,7 +28,7 @@ from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import XCLOUD_VS_INSTANCE_TYPES, compute_cluster_exp_hours, build_cloud_cluster_name
+from sdcm.utils.cloud_api_utils import compute_cluster_exp_hours, build_cloud_cluster_name
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.test_config import TestConfig
@@ -724,10 +724,20 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             except CidrAllocationError as e:
                 raise ScyllaCloudError(f"CIDR allocation failed: {e}") from e
 
-        vs_config = {
-            'defaultNodes': int(self.params.get('n_vector_store_nodes')),
-            'defaultInstanceTypeId': XCLOUD_VS_INSTANCE_TYPES[self._cloud_provider][self.params.get('instance_type_vector_store')]
-        } if self._deploy_vs_nodes else None
+        vs_config = None
+        if self._deploy_vs_nodes:
+            vs_instance_type_name = self.params.get('instance_type_vector_store')
+            # Get VS instance types dynamically from API
+            vs_instance_types = self._api_client.get_vector_search_instance_types(
+                cloud_provider_id=self.provider_id, region_id=self.region_id)
+            if vs_instance_type_name not in vs_instance_types:
+                raise ScyllaCloudError(
+                    f"Vector Search instance type '{vs_instance_type_name}' is not available in region. "
+                    f"Available types: {', '.join(vs_instance_types.keys())}")
+            vs_config = {
+                'defaultNodes': int(self.params.get('n_vector_store_nodes')),
+                'defaultInstanceTypeId': vs_instance_types[vs_instance_type_name]
+            }
 
         expiration_hours = compute_cluster_exp_hours(
             self.test_config.TEST_DURATION, self.test_config.should_keep_alive(self.node_type))
