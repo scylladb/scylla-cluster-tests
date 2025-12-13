@@ -41,6 +41,17 @@
 </head>
 <body>
 {{ body|safe }}
+
+{% if xcloud_summary %}
+{{ xcloud_summary|safe }}
+{% endif %}
+
+{% if xcloud_per_user %}
+{{ xcloud_per_user|safe }}
+{% endif %}
+
+<h2>For detailed report download and open attached html</h2>
+
 <a href="https://docs.google.com/document/d/1gb8-K6RmlOypezcYB7ca7TnfuxuEoON87epUxOYorZk/edit#heading=h.mhz4o9ik7vhe">Procedure of using the cloud</a>
 </body>
 </html>
