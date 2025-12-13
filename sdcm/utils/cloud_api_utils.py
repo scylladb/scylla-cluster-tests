@@ -24,20 +24,6 @@ CLOUD_KEEP_BUFFER_MINUTES = 125
 MAX_CLUSTER_NAME_LENGTH = 63  # Siren limit for cluster name length
 
 MIN_SCYLLA_VERSION_FOR_VS = "2025.4.0"
-# Node instance type limitations for Vector Search Beta on Scylla Cloud
-# Source: https://cloud.docs.scylladb.com/stable/vector-search/vector-search-clusters.html
-XCLOUD_VS_INSTANCE_TYPES = {
-    "aws": {
-        "t4g.small": 175,
-        "t4g.medium": 176,
-        "r7g.medium": 177,
-    },
-    "gce": {
-        "e2-small": 178,
-        "e2-medium": 179,
-        "n4-highmem-2": 180,
-    },
-}
 
 
 def compute_cluster_exp_hours(test_duration_minutes: int, keep_alive: bool = False) -> int:
