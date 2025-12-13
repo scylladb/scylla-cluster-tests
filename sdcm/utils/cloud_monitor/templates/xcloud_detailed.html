@@ -1,0 +1,40 @@
+    <h2>Scylla Cloud Clusters</h2>
+    {% for user, clusters in results|dictsort %}
+    <h3>{{ user }}</h3>
+    <table id="results_table">
+        <tr>
+            <th>Env</th>
+            <th>Cloud Provider</th>
+            <th>Cluster Name</th>
+            <th>Cluster ID</th>
+            <th>Status</th>
+            <th>DB Nodes</th>
+            <th>VS Nodes</th>
+            <th>Created At</th>
+            <th>Hours to Keep</th>
+        </tr>
+        {% for cluster in clusters %}
+        <tr>
+            <td>{{ cluster.environment|capitalize }}</td>
+            <td>{{ cluster.cloud_provider }}</td>
+            <td>{{ cluster.cluster_name }}</td>
+            <td>{{ cluster.cluster_id }}</td>
+            <td>{{ cluster.status }}</td>
+            <td>{{ cluster.db_node_count }}</td>
+            <td>{{ cluster.vs_node_count }}</td>
+            <td>{{ cluster.created_at }}</td>
+            {% if cluster.hours_remaining is not none %}
+                {% if cluster.hours_remaining < 0 %}
+            <td><span class="red fbold">TO DELETE ({{ "%.1f"|format(-cluster.hours_remaining) }}h overdue)</span></td>
+                {% elif cluster.hours_remaining < 1 %}
+            <td><span class="orange fbold">{{ "%.1f"|format(cluster.hours_remaining) }}h</span></td>
+                {% else %}
+            <td>{{ "%.1f"|format(cluster.hours_remaining) }}h</td>
+                {% endif %}
+            {% else %}
+            <td><span class="blue">Manual</span></td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
+    {% endfor %}

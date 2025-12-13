@@ -27,6 +27,7 @@ from sdcm.utils.cloud_monitor.resources import CLOUD_PROVIDERS
 from sdcm.utils.cloud_monitor.resources.capacity_reservations import CapacityReservation
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
+from sdcm.utils.cloud_monitor.resources.xcloud import XCloudResources, XCloudCluster
 
 
 class BaseReport:
@@ -126,33 +127,117 @@ class PerUserSummaryReport(BaseReport):
 
 
 class GeneralReport(BaseReport):
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, crs: list[CapacityReservation]):
+    def __init__(
+        self,
+        cloud_instances: CloudInstances,
+        static_ips: StaticIPs,
+        crs: list[CapacityReservation],
+        xcloud_resources: XCloudResources | None = None,
+    ):
         super().__init__(cloud_instances, static_ips, html_template="base.html")
         self.cloud_resources_report = CloudResourcesReport(cloud_instances=cloud_instances, static_ips=static_ips)
         self.per_user_report = PerUserSummaryReport(cloud_instances, static_ips, crs)
 
+        self.xcloud_summary_report = None
+        self.xcloud_per_user_report = None
+        if xcloud_resources and xcloud_resources.clusters:
+            self.xcloud_summary_report = XCloudSummaryReport(xcloud_resources)
+            self.xcloud_per_user_report = XCloudPerUserSummaryReport(xcloud_resources)
+
     def to_html(self):
-        cloud_resources_html = self.cloud_resources_report.to_html()
-        per_user_report_html = self.per_user_report.to_html()
-        return self._jinja_render_template(body=cloud_resources_html + per_user_report_html)
+        body_html = self.cloud_resources_report.to_html() + self.per_user_report.to_html()
+        xcloud_summary_html = self.xcloud_summary_report.to_html() if self.xcloud_summary_report else None
+        xcloud_per_user_html = self.xcloud_per_user_report.to_html() if self.xcloud_per_user_report else None
+
+        return self._jinja_render_template(
+            body=body_html, xcloud_summary=xcloud_summary_html, xcloud_per_user=xcloud_per_user_html
+        )
 
 
 class DetailedReport(BaseReport):
     """Attached as HTML file"""
 
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, user=None):
+    def __init__(
+        self,
+        cloud_instances: CloudInstances,
+        static_ips: StaticIPs,
+        user=None,
+        xcloud_resources: XCloudResources | None = None,
+    ):
         super().__init__(cloud_instances, static_ips, html_template="per_user.html")
         self.user = user
         self.report = defaultdict(list)
+
+        self.xcloud_detailed_report = None
+        if xcloud_resources and xcloud_resources.clusters:
+            self.xcloud_detailed_report = XCloudDetailedReport(xcloud_resources)
 
     def to_html(self):
         for instance in self.cloud_instances.all:
             self.report[instance.owner].append(instance)
         if self.user:
             self.report = {self.user: self.report.get(self.user)}
-        resources_html = self.render_template()
+
+        xcloud_detailed_html = self.xcloud_detailed_report.to_html() if self.xcloud_detailed_report else None
+        resources_html = self._jinja_render_template(**vars(self), xcloud_detailed=xcloud_detailed_html)
+
         self.html_template = "base.html"
         return self._jinja_render_template(body=resources_html)
+
+
+class XCloudSummaryReport(BaseReport):
+    """Summary table showing total cluster count per environment/provider"""
+
+    def __init__(self, xcloud_resources: XCloudResources):
+        super().__init__(cloud_instances=None, static_ips=None, html_template="xcloud_summary.html")
+        self.results = self.build_summary(xcloud_resources.clusters)
+
+    @staticmethod
+    def build_summary(clusters: list[XCloudCluster]) -> dict:
+        summary = {}
+        for cluster in clusters:
+            env, provider = cluster.environment, cluster.cloud_provider
+            summary.setdefault(env, {}).setdefault(provider, 0)
+            summary[env][provider] += 1
+        return summary
+
+
+class XCloudPerUserSummaryReport(BaseReport):
+    """Per-user summary showing clusters and nodes per environment/provider"""
+
+    def __init__(self, xcloud_resources: XCloudResources):
+        super().__init__(cloud_instances=None, static_ips=None, html_template="xcloud_per_user_summary.html")
+        self.results = self.build_per_user_summary(xcloud_resources.clusters)
+
+    @staticmethod
+    def build_per_user_summary(clusters: list[XCloudCluster]) -> dict:
+        summary = {}
+        for cluster in clusters:
+            owner, env, provider = cluster.owner, cluster.environment, cluster.cloud_provider
+            total_nodes = cluster.db_node_count + cluster.vs_node_count
+
+            summary.setdefault(owner, {}).setdefault(env, {}).setdefault(
+                provider, {"cluster_count": 0, "node_count": 0}
+            )
+            summary[owner][env][provider]["cluster_count"] += 1
+            summary[owner][env][provider]["node_count"] += total_nodes
+
+        return summary
+
+
+class XCloudDetailedReport(BaseReport):
+    """Detailed per-user cluster list for HTML attachment"""
+
+    def __init__(self, xcloud_resources: XCloudResources):
+        super().__init__(cloud_instances=None, static_ips=None, html_template="xcloud_detailed.html")
+        self.results = self.group_by_user(xcloud_resources.clusters)
+
+    @staticmethod
+    def group_by_user(clusters: list[XCloudCluster]) -> dict:
+        grouped = defaultdict(list)
+        for cluster in clusters:
+            grouped[cluster.owner].append(cluster)
+        return grouped
 
 
 class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):

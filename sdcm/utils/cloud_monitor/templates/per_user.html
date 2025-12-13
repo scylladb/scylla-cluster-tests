@@ -56,3 +56,7 @@
         {% endfor %}
     </table>
     {% endfor %}
+
+    {% if xcloud_detailed %}
+{{ xcloud_detailed|safe }}
+    {% endif %}
