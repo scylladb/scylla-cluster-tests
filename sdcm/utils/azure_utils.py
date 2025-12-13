@@ -88,6 +88,15 @@ class AzureService(metaclass=Singleton):
         return self.azure_credentials["subscription_id"]
 
     @cached_property
+    def tenant_id(self) -> str:
+        """Get tenant_id from Azure API to handle cases where credential config has invalid/placeholder values."""
+        # Use tenants.list() to get the tenant_id associated with the current credentials
+        tenants = list(self.subscription.tenants.list())
+        if tenants:
+            return tenants[0].tenant_id
+        return self.azure_credentials["tenant_id"]
+
+    @cached_property
     def credential(self) -> TokenCredential:
         return ClientSecretCredential(
             tenant_id=self.azure_credentials["tenant_id"],
