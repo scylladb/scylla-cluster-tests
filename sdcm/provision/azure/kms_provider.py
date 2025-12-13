@@ -72,19 +72,20 @@ class AzureKmsProvider:
     def _create_or_update_keyvault(self, vault_name: str):
         """Create or update Azure Key Vault with retry logic for conflict errors."""
         try:
+            tenant_id = self._azure_service.tenant_id
             return self._azure_service.keyvault.vaults.begin_create_or_update(
                 resource_group_name=self._kms_config["resource_group"],
                 vault_name=vault_name,
                 parameters={
                     "location": self._region,
                     "properties": {
-                        "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                        "tenant_id": tenant_id,
                         "sku": {"name": "standard", "family": "A"},
                         "enabled_for_disk_encryption": True,
                         "enable_rbac_authorization": False,
                         "access_policies": [
                             {
-                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                                "tenant_id": tenant_id,
                                 "object_id": self.managed_identity_config["principal_id"],
                                 "permissions": {
                                     "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
@@ -94,7 +95,7 @@ class AzureKmsProvider:
                             },
                             {
                                 # SCT service principal
-                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                                "tenant_id": tenant_id,
                                 "object_id": self.sct_service_principal_id,
                                 "permissions": {
                                     "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],

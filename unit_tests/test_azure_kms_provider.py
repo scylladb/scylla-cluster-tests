@@ -1,9 +1,11 @@
 """Unit tests for Azure KMS Provider."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from azure.core.exceptions import AzureError, HttpResponseError
+
 from sdcm.provision.azure.kms_provider import AzureKmsProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.provisioner import ProvisionError, InstanceDefinition
@@ -27,6 +29,7 @@ def azure_service_mock():
     """Mock Azure service."""
     service = MagicMock()
     service.subscription_id = "test-subscription-id"
+    service.tenant_id = "valid-tenant-id-from-api"
     service.azure_credentials = {"tenant_id": "test-tenant-id"}
     return service
 
@@ -162,6 +165,31 @@ def test_get_or_create_keyvault_success(mock_logger, kms_provider, azure_service
     assert "vault_uri" in result
     assert "key_uri" in result
     assert result["vault_uri"] == "https://test-vault.vault.azure.net/"
+
+
+def test_access_policies_include_tenant_id(mock_logger, kms_provider, azure_service_mock, mock_vault_poller):
+    """Test that access policies include tenant_id as required by Azure API.
+
+    Azure Key Vault API requires tenant_id in each access policy entry.
+    See: https://learn.microsoft.com/en-us/python/api/azure-mgmt-keyvault/azure.mgmt.keyvault.models.accesspolicyentry
+    Without tenant_id, Azure returns: (BadRequest) An invalid value was provided for 'tenantId'.
+    """
+    azure_service_mock.keyvault.vaults.begin_create_or_update.return_value = mock_vault_poller
+    azure_service_mock.get_vault_key.return_value = True
+
+    kms_provider.get_or_create_keyvault_and_identity("test-id-123")
+
+    # Capture the parameters passed to begin_create_or_update
+    call_args = azure_service_mock.keyvault.vaults.begin_create_or_update.call_args
+    parameters = call_args.kwargs.get("parameters") or call_args[1].get("parameters")
+
+    access_policies = parameters["properties"]["access_policies"]
+    vault_tenant_id = parameters["properties"]["tenant_id"]
+
+    # Verify each access policy has tenant_id matching the vault's tenant_id
+    for policy in access_policies:
+        assert "tenant_id" in policy, "Access policy must include tenant_id"
+        assert policy["tenant_id"] == vault_tenant_id, "Access policy tenant_id must match vault tenant_id"
 
 
 def test_vm_creation_fails_when_kms_returns_none(vm_provider, mock_ssh_key):
