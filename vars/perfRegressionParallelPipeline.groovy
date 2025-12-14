@@ -30,10 +30,20 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+            string(defaultValue: "${pipelineParams.get('oci_region', 'us-ashburn-1')}",
+                   description: 'Oracle Cloud Region',
+                   name: 'oci_region')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             // ScyllaDB Configuration
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
-            string(defaultValue: '', description: 'Version of ScyllaDB', name: 'scylla_version')
+            string(defaultValue: '',
+                   description: 'Version of ScyllaDB to run against. Can be a released version (2025.4) or a master (master:latest)',
+                   name: 'scylla_version')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+            string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
