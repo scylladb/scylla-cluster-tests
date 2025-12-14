@@ -54,6 +54,9 @@ n_loaders: 4
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c7i.8xlarge'
 instance_type_monitor: 't3.small'
+azure_instance_type_db: 'Standard_L16s_v4'
+azure_instance_type_loader: 'Standard_F32as_v6'
+azure_instance_type_monitor: 'Standard_D2_v4'
 use_capacity_reservation: true
 nemesis_add_node_cnt: 0
 
