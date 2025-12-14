@@ -1,7 +1,7 @@
 test_duration: 500
 
 # Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema without hardcoded ks.table definition.
-prepare_stress_cmd: "cassandra-stress write cl=ALL n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate 'threads=1' -col 'size=FIXED(1024) n=FIXED(1)'"
+prepare_stress_cmd: "cassandra-stress write cl=ALL n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=1' -col 'size=FIXED(1024) n=FIXED(1)'"
 
 prepare_write_cmd: [
     "cassandra-stress write  cl=ALL n=162500001 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode connectionsPerHost=8 cql3 native -rate threads=50 throttle=37500/s -col 'size=FIXED(1024) n=FIXED(1)'  -pop seq=1..162500001",
@@ -54,6 +54,9 @@ n_loaders: 4
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c7i.8xlarge'
 instance_type_monitor: 't3.small'
+azure_instance_type_db: 'Standard_L16s_v4'
+azure_instance_type_loader: 'Standard_F32as_v7'
+azure_instance_type_monitor: 'Standard_D2_v4'
 use_capacity_reservation: true
 nemesis_add_node_cnt: 0
 
