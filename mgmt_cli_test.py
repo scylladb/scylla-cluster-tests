@@ -23,7 +23,7 @@ from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_ma
                                 ManagerRestoreBenchmarkResult, ManagerOneOneRestoreBenchmarkResult)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.argus_report import report_to_argus, ManagerReportType
-from sdcm.mgmt.cli import RestoreTask
+from sdcm.mgmt.cli import RestoreTask, BackupTask, ManagerCluster
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots, get_backup_size, ObjectStorageUploadMode
 from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.nemesis import MgmtRepair
@@ -970,7 +970,8 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         return extra_params if extra_params else None
 
     def _send_restore_results_to_argus(self, task: RestoreTask, manager_version_timestamp: int,
-                                       dataset_label: str = None):
+                                       dataset_label: str = None, backup_task: BackupTask | None = None, mgr_cluster: ManagerCluster | None = None,
+                                       precreated_backup_size_gb: int | None = None):
         total_restore_time = int(task.duration.total_seconds())
         repair_time = int(task.post_restore_repair_duration.total_seconds())
         results = {
@@ -978,6 +979,18 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             "repair time": repair_time,
             "total": total_restore_time,
         }
+
+        # Append backup size if available (non-precreated backup path)
+        if backup_task and mgr_cluster:
+            try:
+                results["size"] = get_backup_size(mgr_cluster, backup_task.id)
+            except Exception:  # noqa: BLE001
+                # Keep report resilient even if backup size retrieval fails
+                pass
+        # For pre-created backups, include dataset size in GB when available
+        elif precreated_backup_size_gb is not None:
+            results["size"] = int(precreated_backup_size_gb)
+
         download_bw, load_and_stream_bw = task.download_bw, task.load_and_stream_bw
         if download_bw:
             results["download bandwidth"] = download_bw
@@ -1035,7 +1048,8 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         self.manager_test_metrics.restore_time = task.duration
 
         manager_version_timestamp = manager_tool.sctool.client_version_timestamp
-        self._send_restore_results_to_argus(task, manager_version_timestamp)
+        self._send_restore_results_to_argus(task, manager_version_timestamp,
+                                            backup_task=backup_task, mgr_cluster=mgr_cluster)
 
         self.run_verification_read_stress()
 
@@ -1095,7 +1109,21 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                                                  manager_backup_restore_method=manager_backup_restore_method)
             restore_time = task.duration
             manager_version_timestamp = mgr_cluster.sctool.client_version_timestamp
-            self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
+            # Compute pre-created backup dataset size in GB
+            precreated_size_gb = None
+            try:
+                # Sum of restored sizes across keyspaces
+                total_bytes = task.total_user_keyspaces_restored_size_bytes()
+                # Replication factor of primary user keyspace
+                # Assumption: all user keyspaces have the same RF
+                if rf := task.user_keyspace_rf(self.db_cluster.nodes[0]):
+                    self.log.debug("Using RF=%s retrieved from keyspace", rf)
+                    dataset_bytes = int(total_bytes // rf)
+                    precreated_size_gb = int(dataset_bytes / (1024 ** 3))
+            except Exception as _err:  # noqa: BLE001
+                self.log.debug("Got an error while retrieving pre-created backup size: %s", _err)
+            self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name,
+                                                precreated_backup_size_gb=precreated_size_gb)
 
         self.manager_test_metrics.restore_time = restore_time
 
