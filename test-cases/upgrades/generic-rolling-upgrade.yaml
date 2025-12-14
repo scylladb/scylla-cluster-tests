@@ -30,3 +30,6 @@ use_preinstalled_scylla: false
 # SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
 # for the upgrading version you need:
 # SCT_NEW_SCYLLA_REPO=
+
+# as reference, taken from configurations/gce/z3-highmem-8-highlssd.yaml
+gce_instance_type_db: 'z3-highmem-8-highlssd'
