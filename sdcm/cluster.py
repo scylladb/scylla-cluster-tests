@@ -5635,6 +5635,11 @@ class BaseScyllaCluster:
 
         if self.params.get("force_run_iotune"):
             node.remoter.sudo(cmd="scylla_io_setup", timeout=600)
+            if self.params.get("cluster_backend") == "azure":
+                node.remoter.sudo(
+                    cmd="curl -o /opt/scylladb/scripts/libexec/perftune.py https://raw.githubusercontent.com/scylladb/seastar/aaad35e1975c11014f0c459033fcdc76d2bff32a/scripts/perftune.py"
+                )
+                node.remoter.sudo(cmd="/opt/scylladb/scripts/perftune.py --nic eth1 --tune net", timeout=600)
 
         if self.params.get("gce_setup_hybrid_raid"):
             gce_n_local_ssd_disk_db = self.params.get("gce_n_local_ssd_disk_db")
