@@ -1535,6 +1535,7 @@ class Collector:
         self.cluster_log_collectors |= {
             ScyllaLogCollector: self.db_cluster,
             SchemaLogCollector: self.sct_set,
+            FailureStatisticsCollector: self.sct_set,
             BaseSCTLogCollector: self.sct_set,
             PythonSCTLogCollector: self.sct_set,
             LoaderLogCollector: self.loader_set,
@@ -1961,6 +1962,28 @@ class SchemaLogCollector(BaseSCTLogCollector):
     ]
     cluster_log_type = "schema-logs"
     cluster_dir_prefix = "schema-logs"
+
+
+class FailureStatisticsCollector(BaseSCTLogCollector):
+    """Failure diagnostic statistics log collector
+
+    Collects diagnostic files generated on test failure:
+    - nodetool status, gossipinfo, compactionstats outputs
+    - scylla-doctor vitals and logs (if enabled)
+
+    Extends:
+        BaseSCTLogCollector
+    """
+
+    log_entities = [
+        FileLog(name="nodetool_status_failure.log", search_locally=True),
+        FileLog(name="nodetool_gossipinfo_failure_*", search_locally=True),
+        FileLog(name="nodetool_compactionstats_failure_*", search_locally=True),
+        FileLog(name="scylla_doctor_*_vitals.json", search_locally=True),
+        FileLog(name="scylla_doctor_*_logs.tar.gz", search_locally=True),
+    ]
+    cluster_log_type = "failure-statistics"
+    cluster_dir_prefix = "failure-statistics"
 
 
 def check_archive(remoter, path: str) -> bool:
