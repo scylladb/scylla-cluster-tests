@@ -3655,6 +3655,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         """
         Save nodetool command output to a file.
 
+        This method is used during test teardown to collect diagnostics,
+        so we suppress error events (raise_error_event=False) to avoid
+        adding noise to the test results when the cluster is already
+        in a failed state.
+
         :param node: Node to run the command on
         :param sub_cmd: nodetool subcommand (e.g., 'status', 'gossipinfo')
         :param log_file: filename to save output to
@@ -3718,6 +3723,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.params.get("use_scylla_doctor_on_failure", default=False):
             self.log.info("Running scylla-doctor on failure (as configured)...")
             try:
+                # Import delayed to avoid circular dependency issues and because
+                # scylla-doctor is optional and may not be needed in all cases
                 from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
 
                 for node in self.db_cluster.nodes:

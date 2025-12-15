@@ -503,7 +503,8 @@ class TestGatherFailureStatistics:
             source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
         ).publish()
 
-        # Allow some time for event to be processed
+        # Brief sleep needed for asynchronous event processing to complete
+        # This ensures the event is registered before get_test_status() is called
         time.sleep(0.1)
 
         # Mock gather_failure_statistics to verify it's called
