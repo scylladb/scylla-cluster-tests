@@ -495,9 +495,6 @@ class TestGatherFailureStatistics:
         tester.db_cluster.nodes = [mock_node]
         tester.params = FakeSCTConfiguration()
 
-        # Mock test failure by adding error event
-        from sdcm.sct_events.system import TestFrameworkEvent  # noqa: PLC0415
-
         # Setup events before calling tearDown
         tester.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
 

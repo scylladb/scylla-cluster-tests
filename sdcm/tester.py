@@ -3669,7 +3669,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     res_file.write(result.stdout.strip())
             else:
                 self.log.warning("Failed to run nodetool %s on node %s: %s", sub_cmd, node.name, result.stderr)
-        except Exception as exc:  # noqa: BLE001
+        except (UnexpectedExit, Failure, OSError) as exc:
+            # UnexpectedExit/Failure: command execution failures
+            # OSError: file write errors
             self.log.warning("Exception while running nodetool %s on node %s: %s", sub_cmd, node.name, exc)
 
     @silence(name="Gather failure statistics")
@@ -3716,7 +3718,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if self.params.get("use_scylla_doctor_on_failure", default=False):
             self.log.info("Running scylla-doctor on failure (as configured)...")
             try:
-                from utils.scylla_doctor import ScyllaDoctor  # noqa: PLC0415
+                from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
 
                 for node in self.db_cluster.nodes:
                     if not node._is_node_ready_run_scylla_commands():
@@ -3726,10 +3728,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                         doctor.install_scylla_doctor()
                         doctor.run_scylla_doctor_and_collect_results()
                         self.log.info("Scylla-doctor completed for node %s", node.name)
-                    except Exception as exc:  # noqa: BLE001
+                    except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
+                        # ScyllaDoctorException: scylla-doctor specific errors
+                        # UnexpectedExit/Failure: command execution failures
+                        # AssertionError: from scylla-doctor result validation
                         self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)
-            except Exception as exc:  # noqa: BLE001
-                self.log.warning("Failed to import or run scylla-doctor: %s", exc)
+            except ImportError as exc:
+                self.log.warning("Failed to import scylla-doctor module: %s", exc)
 
         self.log.info("Failure statistics collection completed")
 
