@@ -25,6 +25,7 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     ARGUS_VERSION_RE,
     VERSION_NOT_FOUND_ERROR,
+    get_scylla_docker_repo_from_version,
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"
@@ -757,3 +758,30 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
     expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
     actual_repo = get_branched_repo(scylla_version, distro)
     assert actual_repo == expected_template.format(expected_repo)
+
+
+@pytest.mark.parametrize(
+    "version, expected_repo",
+    (
+        ("6.2.2", "scylladb/scylla"),
+        ("6.2.3", "scylladb/scylla"),
+        ("6.2.4", "scylladb/scylla"),
+        ("6.2.66", "scylladb/scylla"),
+        ("2024.1.1", "scylladb/scylla-enterprise"),
+        ("2024.2.13", "scylladb/scylla-enterprise"),
+        ("2024.2.14", "scylladb/scylla-enterprise"),
+        ("enterprise:latest", "scylladb/scylla-enterprise"),
+        ("branch-2024.2:latest", "scylladb/scylla-enterprise"),
+        ("branch-2024.1:latest", "scylladb/scylla-enterprise"),
+        ("2025.1.0", "scylladb/scylla"),
+        ("2025.2.99", "scylladb/scylla"),
+        ("2025.4.0", "scylladb/scylla"),
+        ("branch-2025.1:latest", "scylladb/scylla"),
+        ("branch-2025.2:latest", "scylladb/scylla"),
+        ("branch-2025.3:latest", "scylladb/scylla"),
+        ("branch-2025.4:latest", "scylladb/scylla"),
+        ("master:latest", "scylladb/scylla"),
+    ),
+)
+def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
+    assert get_scylla_docker_repo_from_version(version) == expected_repo

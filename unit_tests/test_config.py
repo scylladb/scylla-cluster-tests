@@ -29,6 +29,14 @@ RPM_URL = (
 )
 
 
+upgrade_test_cases = [
+    ("k8s-eks", "2024.1.21", "scylladb/scylla-enterprise"),
+    ("k8s-gke", "2024.1.21", "scylladb/scylla-enterprise"),
+    ("k8s-eks", "2025.4.0", "scylladb/scylla"),
+    ("k8s-gke", "2025.4.0", "scylladb/scylla"),
+]
+
+
 @pytest.fixture(scope="module")
 def monkeymodule():
     """Fixture that provides a monkeypatching with module scope."""
@@ -114,15 +122,6 @@ def test_06a_docker_latest_no_loader(monkeypatch):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
     assert conf["scylla_version"] != "latest"
-
-
-def test_06b_docker_development(monkeypatch):
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
-    monkeypatch.setenv("SCT_USE_MGMT", "false")
-    monkeypatch.setenv("SCT_SCYLLA_VERSION", "666.development-blah")
-
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
 
 
 def test_07_baremetal_exception(monkeypatch):
@@ -1013,3 +1012,14 @@ def test_37_raises_error_for_invalid_thread_count_type(monkeypatch):
     with pytest.raises(ValueError):
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
+
+
+@pytest.mark.parametrize("backend, version, expected_repo", upgrade_test_cases)
+def test_38_verify_scylla_version_lookup_k8s(monkeypatch, backend, version, expected_repo):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
+    monkeypatch.setenv("SCT_USE_MGMT", "true")
+    monkeypatch.setenv("SCT_SCYLLA_VERSION", version)
+    conf = sct_config.SCTConfiguration()
+    conf.verify_configuration()
+    assert "docker_image" in conf.dump_config()
+    assert conf.get("docker_image") == expected_repo
