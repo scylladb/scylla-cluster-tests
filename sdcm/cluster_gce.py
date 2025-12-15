@@ -245,16 +245,6 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._safe_destroy)
         super().destroy()
 
-    def get_console_output(self):
-        # TODO adding console output from instance on GCE
-        self.log.warning("Method is not implemented for GCENode")
-        return ""
-
-    def get_console_screenshot(self):
-        # TODO adding console output from instance on GCE
-        self.log.warning("Method is not implemented for GCENode")
-        return b""
-
     @cache
     def _get_ipv6_ip_address(self):
         self.log.warning(
