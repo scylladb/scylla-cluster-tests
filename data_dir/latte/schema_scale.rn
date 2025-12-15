@@ -1,0 +1,317 @@
+use latte::*;
+
+//////////////////////////////////////////////////
+///// REQUIRED params for each user function /////
+//////////////////////////////////////////////////
+const KEYSPACE_COUNT = latte::param!("keyspace_count", 3);
+const TABLE_COUNT_PER_KEYSPACE = latte::param!("table_count_per_keyspace", 100);
+
+//////////////////////////////////
+///// SCHEMA creation params /////
+//////////////////////////////////
+const ENABLE_TABLETS = latte::param!("enable_tablets", false);
+const CREATE_INDEX = latte::param!("create_index", false);
+const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
+const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
+const SSTABLE_COMPRESSION = latte::param!("sstable_compression", "LZ4Compressor");
+
+////////////////////////////////////
+///// DATA manipulation params /////
+////////////////////////////////////
+const DATA_VALIDATION = latte::param!("data_validation", true);
+const ROW_COUNT_PER_TABLE = latte::param!("row_count_per_table", 20);
+const TEXT_COL_SIZE = latte::param!("text_col_size", 128);
+const BLOB_COL_SIZE = latte::param!("blob_col_size", 128);
+const GAUSS_MEAN = latte::param!("gauss_mean", 0);
+const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
+// NOTE: 'table_group_size', 'table_shift_count' and 'table_shift_interval_s' work together.
+// When we have a big amount of tables
+// we want to have a smooth workload all over them with adequate cache hit/miss ratio.
+// So, we achive it by making the load walk over a group/subset of tables ('table_group_size')
+// for some time ('table_shift_interval_s') then we shift the table window by the
+// 'table_shift_count' tables which effectively make the queries use a changed subset of tables
+// for queries. And it is done in a loop based on the 'table_shift_interval_s'.
+//
+// Example for '20' tables, 'table_group_size=5', 'table_shift_count=3' and 'table_shift_interval_s=3':
+//
+// |elapsed seconds|current table window (specific subset of tables used for queries)
+// |              1|*****---------------
+// |              2|*****---------------
+// |              3|---*****------------
+// |              4|---*****------------
+// |              5|---*****------------
+// |              6|------*****---------
+//
+// And if we use gauss data distribution params ('gauss_mean', 'gauss_stddev')
+// we control the cache hit/miss ratio completely.
+//
+// NOTE: 'TABLE_GROUP_SIZE' defines 'how big subset of tables' we use for making queries.
+const TABLE_GROUP_SIZE = latte::param!("table_group_size", 10);
+// NOTE: 'TABLE_SHIFT_COUNT' defines 'how many tables' we shift in our table group/subset each
+// 'TABLE_SHIFT_INTERVAL_S' seconds.
+const TABLE_SHIFT_COUNT = latte::param!("table_shift_count", 1);
+// NOTE: 'TABLE_SHIFT_INTERVAL_S' defines 'how much time' to wait before shifting
+// the table window by 'TABLE_SHIFT_COUNT' tables.
+const TABLE_SHIFT_INTERVAL_S = latte::param!("table_shift_interval_s", 10);
+
+pub async fn schema(db) {
+    println!(
+        "rune-info: NOTHING was done. Use 'latte run -f create_schema ...' cmd to create schema",
+    );
+}
+
+pub async fn prepare(db) {
+    assert!(KEYSPACE_COUNT > 0, "'keyspace_count' cannot be less than '1'");
+    assert!(TABLE_COUNT_PER_KEYSPACE > 0, "'table_count_per_keyspace' cannot be less than '1'");
+    db.data.total_tables = KEYSPACE_COUNT * TABLE_COUNT_PER_KEYSPACE;
+    if !is_none(db.data.get("functions_to_invoke")) { // latte sets it for the 'latte run' command only
+        // dbg!(db.data.functions_to_invoke);
+        for item in db.data.functions_to_invoke {
+            let fn_name = item.0; // item = (fn_name_as_str, fn_weight_as_f64)
+            if fn_name == "create_schema" {
+                println!(
+                    "rune-info: SKIP prepared statements cooking because the 'create_schema' fn is used " +
+                    "and it doesn't do data manipulation operations."
+                );
+                return
+            }
+        }
+    }
+
+    // Data manipulation preparation section
+    assert!(ROW_COUNT_PER_TABLE > 0, "'row_count_per_table' cannot be less than '1'");
+    assert!(TEXT_COL_SIZE > 0, "'text_col_size' cannot be less than '1'");
+    assert!(BLOB_COL_SIZE > 0, "'blob_col_size' cannot be less than '1'");
+    assert!(TABLE_GROUP_SIZE > 0, "'table_group_workload_size' cannot be less than '1'");
+    assert!(TABLE_SHIFT_COUNT >= 0, "'table_shift_count' cannot be less than '0'");
+    assert!(TABLE_SHIFT_INTERVAL_S >= 0, "'table_shift_interval_s' cannot be less than '0'");
+    if (TABLE_SHIFT_COUNT == 0 && TABLE_SHIFT_INTERVAL_S != 0) || (TABLE_SHIFT_COUNT != 0 && TABLE_SHIFT_INTERVAL_S == 0) {
+        panic!("Either set 'table_shift_count' and 'table_shift_interval_s' both to be '0' or both to be non-zero.");
+    }
+    assert!(TABLE_GROUP_SIZE <= db.data.total_tables, "'table_group_size' cannot be bigger than total table count");
+    prepare_gauss_distribution(db).await; // needed only for data manipulation rune functions
+    db.data.p_stmt = [];
+    db.data.ks_table_mapping = [];
+    for ks_i in 0..KEYSPACE_COUNT {
+        let tables = [];
+        let kpadding = get_index_padding(ks_i, KEYSPACE_COUNT).await;
+        let ks = `schema_scale_k${kpadding}${ks_i + 1}`;
+        for table_i in 0..TABLE_COUNT_PER_KEYSPACE {
+            // Save pairs of keyspaces and tables into a mapping
+            db.data.ks_table_mapping.push((ks_i, table_i));
+
+            // Calculate prepared statements
+            let tpadding = get_index_padding(table_i + 1, TABLE_COUNT_PER_KEYSPACE).await;
+            let table = `schema_scale_t${tpadding}${table_i + 1}`;
+
+            // Process 'insert' prepared statement
+            let p_stmt_insert_name = `k${kpadding}${ks_i + 1}.${table}__insert`;
+            let p_stmt_insert = (
+                `INSERT INTO ${ks}.${table}(pk, col_text, col_date, col_blob)` +
+                " VALUES (:pk, :col_text, :col_date, :col_blob)"
+            );
+            db.prepare(p_stmt_insert_name, p_stmt_insert).await?;
+
+            // Process 'select' prepared statement
+            let p_stmt_select_name = `k${kpadding}${ks_i + 1}.${table}__select`;
+            let p_stmt_select = `SELECT col_text, col_date, col_blob FROM ${ks}.${table} WHERE pk = :pk`;
+            db.prepare(p_stmt_select_name, p_stmt_select).await?;
+
+            // Keep mapping of prepared statements and keyspace.table values
+            tables.push(#{
+                "INSERT": p_stmt_insert_name,
+                "SELECT": p_stmt_select_name,
+                "keyspace": ks,
+                "table": table,
+            });
+        }
+        db.data.p_stmt.push(tables);
+    }
+}
+
+async fn get_index_padding(i, max_len) {
+    let max_digits = max_len.to_string().len();
+    let i_digits = i.to_string().len();
+    let padding = "";
+    let current_i = 0;
+    while max_digits > i_digits + current_i {
+        padding = padding + "0";
+        current_i = current_i + 1;
+    }
+    padding
+}
+
+pub async fn create_schema(db, i) { // user fn to be run in a 'latte run -f ...' cmd
+    if i + 1 > db.data.total_tables {
+        println!(
+            "SKIP! Current stress index '{i}' is bigger than the requested table count '{tc}'",
+            i=i + 1, tc=db.data.total_tables,
+        );
+        return
+    }
+
+    // Create keyspace
+    let ks_index = i % KEYSPACE_COUNT + 1;
+    let kpadding = get_index_padding(ks_index, KEYSPACE_COUNT).await;
+    let ks = `schema_scale_k${kpadding}${ks_index}`;
+    db.execute(`
+        CREATE KEYSPACE IF NOT EXISTS ${ks} WITH REPLICATION = {
+            'class': 'NetworkTopologyStrategy',
+            'replication_factor': ${REPLICATION_FACTOR}
+        }
+        AND durable_writes = true
+        AND tablets = {'enabled': ${ENABLE_TABLETS}}
+    `).await?;
+
+    // Create table
+    let table_index = i / KEYSPACE_COUNT + 1;
+    let tpadding = get_index_padding(table_index, TABLE_COUNT_PER_KEYSPACE).await;
+    let table = `schema_scale_t${tpadding}${table_index}`;
+    db.execute(`
+        CREATE TABLE IF NOT EXISTS ${ks}.${table} (
+            pk uuid PRIMARY KEY,
+            col_text text,
+            col_date date,
+            col_blob blob,
+        ) WITH bloom_filter_fp_chance = 0.01
+            AND comment = 'Created by latte'
+            AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+            AND compaction = {'class': '${COMPACTION_STRATEGY}'}
+            AND compression = {'sstable_compression': '${SSTABLE_COMPRESSION}'}
+            AND crc_check_chance = 1
+            AND default_time_to_live = 604800
+            AND gc_grace_seconds = 864000
+            AND min_index_interval = 128
+            AND max_index_interval = 2048
+            AND memtable_flush_period_in_ms = 0
+            AND speculative_retry = '99.0PERCENTILE';
+    `).await?;
+
+    // Create indices
+    if CREATE_INDEX {
+        db.execute(`CREATE INDEX IF NOT EXISTS ${table}_index_on_col_text ON ${ks}.${table} (col_text)`).await?;
+    }
+}
+
+// //////////////////////////////////////
+// // USER DATA MANIPULATION FUNCTIONS //
+// //////////////////////////////////////
+
+/// Utility function that enables and validates the gauss/normal distribution
+async fn prepare_gauss_distribution(db) {
+    if GAUSS_MEAN > 0 && GAUSS_STDDEV > 0 {
+        db.data.gauss_mean = GAUSS_MEAN as f64;
+        db.data.gauss_stddev = GAUSS_STDDEV as f64;
+        db.data.gauss_enabled = true;
+        println!(
+            "debug: Gauss/normal distribution is enabled: mean='{mean}', stddev='{stddev}'",
+            mean=db.data.gauss_mean, stddev=db.data.gauss_stddev);
+    } else if GAUSS_MEAN == 0 && GAUSS_STDDEV == 0 {
+        db.data.gauss_enabled = false;
+        println!("debug: Gauss/normal distribution is disabled");
+    } else {
+        Err(format!(
+            "'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) " +
+            "or in range of '{min}..{max}' (0..row_count_per_table)",
+            min=0, max=ROW_COUNT_PER_TABLE))
+    }
+}
+
+/// Utility function which generates partition index based on the cycle id and distribution type
+async fn get_idx(db, i) {
+    if db.data.gauss_enabled {
+        let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
+        if current_idx > ROW_COUNT_PER_TABLE {
+            current_idx = ROW_COUNT_PER_TABLE - 1;
+        }
+        return current_idx;
+    } else {
+        return i % ROW_COUNT_PER_TABLE;
+    }
+}
+
+async fn gen_data(idx, ks_index, t_index) {
+    let data_gen_seed = idx + (hash2(ks_index, t_index) / 2);
+    let ret = #{ // Object with attrs as a return value
+        "col_text": text(data_gen_seed, TEXT_COL_SIZE),
+        "col_date": (hash_range(data_gen_seed, 4_294_967_295) + 1_000_000_000) % 4_294_967_295,
+        "col_blob": blob(data_gen_seed, BLOB_COL_SIZE),
+        "col_names": [ // utility attr to be used by further data verification
+            "col_text",
+            "col_date",
+            "col_blob",
+        ]
+    };
+    ret
+}
+
+async fn get_ks_table_mapping_i(db, i) {
+    let shift_window_i = i % TABLE_GROUP_SIZE;
+    if TABLE_SHIFT_INTERVAL_S > 0 {
+        let elapsed = db.elapsed_secs();
+        let shift_window_offset = (elapsed as i64 / TABLE_SHIFT_INTERVAL_S) * TABLE_SHIFT_COUNT;
+        let ks_table_mapping_i = (shift_window_offset + shift_window_i) % db.data.total_tables;
+        ks_table_mapping_i
+    } else {
+        shift_window_i
+    }
+}
+
+pub async fn write(db, i) {
+    let ks_table_mapping_i = get_ks_table_mapping_i(db, i).await;
+    let ks_index = db.data.ks_table_mapping[ks_table_mapping_i][0];
+    let t_index = db.data.ks_table_mapping[ks_table_mapping_i][1];
+    // NOTE: each table getting queries after a table shift will get non-zero first row index.
+    //       It is ok because we care about the step increment value and not starting index.
+    let row_i = (i / TABLE_GROUP_SIZE) % ROW_COUNT_PER_TABLE;
+    let idx = get_idx(db, row_i).await;
+
+    let pk = uuid(idx);
+    let data = gen_data(idx, ks_index, t_index).await;
+    db.execute_prepared(db.data.p_stmt[ks_index][t_index].INSERT, [
+        pk, data.col_text, data.col_date, data.col_blob,
+    ]).await?
+}
+
+pub async fn read(db, i) {
+    let ks_table_mapping_i = get_ks_table_mapping_i(db, i).await;
+    let ks_index = db.data.ks_table_mapping[ks_table_mapping_i][0];
+    let t_index = db.data.ks_table_mapping[ks_table_mapping_i][1];
+    // NOTE: each table getting queries after a table shift will get non-zero first row index.
+    //       It is ok because we care about the step increment value and not starting index.
+    let row_i = (i / TABLE_GROUP_SIZE) % ROW_COUNT_PER_TABLE;
+    let idx = get_idx(db, row_i).await;
+
+    let pk = uuid(idx);
+    if !DATA_VALIDATION {
+        db.execute_prepared(db.data.p_stmt[ks_index][t_index].SELECT, [pk]).await?
+    } else {
+        let rows = db.execute_prepared_with_result(db.data.p_stmt[ks_index][t_index].SELECT, [pk]).await?;
+        let rows_len = rows.len();
+        let row_err_info = (
+            `ks='${db.data.p_stmt[ks_index][t_index].keyspace}', ` +
+            `table='${db.data.p_stmt[ks_index][t_index].table}', pk='${pk}'`);
+        if rows_len != 1 {
+            // NOTE: may be false negative only if we didn't populate DB correctly.
+            db.signal_failure(
+                `Expected exactly 1 row. But got '${rows_len}'. ` + row_err_info
+            ).await?;
+        }
+        let data = gen_data(idx, ks_index, t_index).await;
+        for col_name in data.col_names {
+            // TODO: make it be compatible with prep stmts which select non-all columns
+            let actual = rows.0.get(col_name).unwrap();
+            let expected = data.get(col_name).unwrap();
+            if actual != expected {
+                if col_name == "col_blob" {
+                    actual = format!("{a:?}", a=actual);
+                    expected = format!("{e:?}", e=expected);
+                }
+                db.signal_failure(
+                    `${row_err_info}, column '${col_name}'. ` +
+                    `Actual value is '${actual}', but expected is '${expected}'.`
+                ).await?;
+            }
+        }
+    }
+}
