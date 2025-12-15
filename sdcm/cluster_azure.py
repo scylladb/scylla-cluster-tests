@@ -167,16 +167,6 @@ class AzureNode(cluster.BaseNode):
         self._instance.terminate(wait=True)
         super().destroy()
 
-    def get_console_output(self):
-        # TODO adding console output from instance on Azure
-        self.log.warning("Method is not implemented for AzureNode")
-        return ""
-
-    def get_console_screenshot(self):
-        # TODO adding console output from instance on Azure
-        self.log.warning("Method is not implemented for AzureNode")
-        return b""
-
     def _get_ipv6_ip_address(self):
         # todo: fix it
         return ""

@@ -1,39 +1,15 @@
 import argparse
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from pytz import utc
 
 from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_utils import get_gce_compute_instances_client, SUPPORTED_PROJECTS
 from sdcm.utils.log import setup_stdout_logger
-from utils.cloud_cleanup import update_argus_resource_status
+from utils.cloud_cleanup import update_argus_resource_status, should_keep, get_keep_hours_from_tags, DEFAULT_KEEP_HOURS
 
-DEFAULT_KEEP_HOURS = 14
 LOGGER = setup_stdout_logger()
-
-
-def should_keep(creation_time, keep_hours):
-    if keep_hours <= 0:
-        return True
-    try:
-        keep_date = creation_time + timedelta(hours=keep_hours)
-        now = datetime.utcnow()
-
-        return now < keep_date
-    except (TypeError, ValueError) as exc:
-        LOGGER.info("error while defining if should keep: %s. Keeping.", exc)
-        return True
-
-
-def get_keep_hours(instance_metadata, default=DEFAULT_KEEP_HOURS):
-    keep = instance_metadata.get("keep", "").lower() if instance_metadata else None
-    if keep == "alive":
-        return -1
-    try:
-        return int(keep)
-    except (ValueError, TypeError):
-        return default
 
 
 def clean_gce_instances(instances_client, project_id, dry_run):
@@ -45,7 +21,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
             instance_metadata.update(instance.labels)
             if "keep-alive" in instance.tags.items:
                 instance_metadata.update({"keep": "alive"})
-            if should_keep(vm_creation_time, get_keep_hours(instance_metadata)):
+            if should_keep(vm_creation_time, get_keep_hours_from_tags(instance_metadata)):
                 LOGGER.info(
                     "keeping instance %s, keep: %s, creation time: %s ",
                     instance.name,
