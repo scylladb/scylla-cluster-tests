@@ -3012,6 +3012,15 @@ Collect logs from instances and sct runner
 **type:** boolean
 
 
+## **use_scylla_doctor_on_failure** / SCT_USE_SCYLLA_DOCTOR_ON_FAILURE
+
+Run scylla-doctor on test failure to collect additional diagnostics
+
+**default:** True
+
+**type:** boolean
+
+
 ## **execute_post_behavior** / SCT_EXECUTE_POST_BEHAVIOR
 
 Run post behavior actions in sct teardown step

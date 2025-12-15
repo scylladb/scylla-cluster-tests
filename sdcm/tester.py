@@ -3667,6 +3667,94 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with open(log_file_path, "w", encoding="utf-8") as res_file:
             res_file.write(result.strip())
 
+    @silence(name="Save nodetool output", raise_error_event=False)
+    def save_nodetool_output_in_file(self, node, sub_cmd: str, log_file: str):
+        """
+        Save nodetool command output to a file.
+
+        :param node: Node to run the command on
+        :param sub_cmd: nodetool subcommand (e.g., 'status', 'gossipinfo')
+        :param log_file: filename to save output to
+        """
+        self.log.info("Save nodetool %s output to %s/%s from node %s", sub_cmd, self.logdir, log_file, node.name)
+
+        log_file_path = Path(self.logdir) / log_file
+        try:
+            result = node.run_nodetool(sub_cmd=sub_cmd, ignore_status=True, publish_event=False, timeout=300)
+            if result.ok:
+                log_file_path.write_text(result.stdout.strip(), encoding="utf-8")
+            else:
+                self.log.warning("Failed to run nodetool %s on node %s: %s", sub_cmd, node.name, result.stderr)
+        except (UnexpectedExit, Failure, OSError) as exc:
+            self.log.warning("Exception while running nodetool %s on node %s: %s", sub_cmd, node.name, exc)
+
+    @silence(name="Gather failure statistics")
+    def gather_failure_statistics(self):
+        """
+        Gather extra statistics on test failure for debugging purposes.
+        Collects nodetool status, gossipinfo, compactionstats, and optionally scylla-doctor output.
+        """
+        if self.db_cluster is None:
+            return
+
+        self.log.info("Gathering failure statistics from cluster nodes...")
+
+        # collect nodetool status from first available node
+        for node in self.db_cluster.nodes:
+            if node._is_node_ready_run_scylla_commands():
+                self.save_nodetool_output_in_file(node, "status", "nodetool_status_failure.log")
+                break
+
+        ready_nodes = [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]
+        if not ready_nodes:
+            self.log.warning("No ready nodes found for collecting gossipinfo and compactionstats")
+            return
+
+        def collect_node_stats(node):
+            try:
+                self.save_nodetool_output_in_file(node, "gossipinfo", f"nodetool_gossipinfo_failure_{node.name}.log")
+                self.save_nodetool_output_in_file(
+                    node, "compactionstats", f"nodetool_compactionstats_failure_{node.name}.log"
+                )
+                return node.name, True, None
+            except Exception as exc:  # noqa: BLE001
+                return node.name, False, str(exc)
+
+        with ThreadPoolExecutor(max_workers=len(ready_nodes)) as executor:
+            for future in as_completed(executor.submit(collect_node_stats, node) for node in ready_nodes):
+                node_name, success, error = future.result()
+                if not success:
+                    self.log.warning("Failed to collect stats from node %s: %s", node_name, error)
+
+        if self.params.get("use_scylla_doctor_on_failure"):
+            self.log.info("Running scylla-doctor on failure...")
+            try:
+                from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
+
+                for node in ready_nodes:
+                    try:
+                        doctor = ScyllaDoctor(node=node, test_config=self.test_config, offline_install=True)
+                        doctor.install_scylla_doctor()
+                        doctor.run_scylla_doctor_and_collect_results()
+
+                        if doctor.json_result_file:
+                            local_json_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_vitals.json")
+                            node.remoter.receive_files(src=doctor.json_result_file, dst=local_json_path)
+                            self.log.debug("Downloaded scylla-doctor vitals from %s to %s", node.name, local_json_path)
+
+                        if doctor.scylla_logs_file:
+                            local_logs_path = os.path.join(self.logdir, f"scylla_doctor_{node.name}_logs.tar.gz")
+                            node.remoter.receive_files(src=doctor.scylla_logs_file, dst=local_logs_path)
+                            self.log.debug("Downloaded scylla-doctor logs from %s to %s", node.name, local_logs_path)
+
+                        self.log.info("Scylla-doctor completed for node %s", node.name)
+                    except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
+                        self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)
+            except Exception as exc:  # noqa: BLE001
+                self.log.warning("Unexpected error when collecting scylla-doctor info: %s", exc)
+
+        self.log.info("Failure statistics collection completed")
+
     def save_schema(self):
         """
         Saves the node's schema including internal metadata.
@@ -3704,6 +3792,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with silence(parent=self, name="Sending test end event"):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
+
+        test_status = self.get_test_status()
+        if test_status == "FAILED":
+            self.gather_failure_statistics()
+
         self.log.info("Post test validators are starting...")
         for validator_class in teardown_validators_list:
             validator_class(self.params, self).validate()

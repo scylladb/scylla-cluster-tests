@@ -103,6 +103,7 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
 
     def tearDown(self):
         self.monitors = MagicMock()
+        self.create_stats = False
         super().tearDown()
 
     @property
@@ -312,3 +313,211 @@ def test_tester_subclass(pytester, test_class, results, outcomes):
     output = result.stdout.str().splitlines()
     for outcome in outcomes:
         assert outcome in output
+
+
+class TestGatherFailureStatistics:
+    """Tests for the gather_failure_statistics functionality."""
+
+    def test_gather_failure_statistics_no_db_cluster(self, tmp_path):
+        """Test that gather_failure_statistics handles missing db_cluster gracefully."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_no_cluster")
+        tester.db_cluster = None
+        tester.logdir = str(tmp_path)
+
+        # Should not raise an exception
+        tester.gather_failure_statistics()
+
+    def test_gather_failure_statistics_with_nodes(self, tmp_path):
+        """Test that gather_failure_statistics collects nodetool outputs."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_with_nodes")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with nodes
+        mock_node = MagicMock()
+        mock_node.name = "test_node_1"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        # Mock nodetool commands
+        mock_result = MagicMock()
+        mock_result.ok = True
+        mock_result.stdout = "Test nodetool output"
+        mock_result.stderr = ""
+        mock_node.run_nodetool.return_value = mock_result
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+        tester.params = FakeSCTConfiguration()
+
+        # Run the function
+        tester.gather_failure_statistics()
+
+        # Verify nodetool commands were called
+        assert mock_node.run_nodetool.called
+        nodetool_calls = [call[1]["sub_cmd"] for call in mock_node.run_nodetool.call_args_list]
+        assert "status" in nodetool_calls
+        assert "gossipinfo" in nodetool_calls
+        assert "compactionstats" in nodetool_calls
+
+        # Verify files were created
+        assert (tmp_path / "nodetool_status_failure.log").exists()
+        assert (tmp_path / "nodetool_gossipinfo_failure_test_node_1.log").exists()
+        assert (tmp_path / "nodetool_compactionstats_failure_test_node_1.log").exists()
+
+    def test_gather_failure_statistics_node_not_ready(self, tmp_path):
+        """Test that gather_failure_statistics handles nodes that are not ready."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_node_not_ready")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with a node that's not ready
+        mock_node = MagicMock()
+        mock_node.name = "test_node_not_ready"
+        mock_node._is_node_ready_run_scylla_commands.return_value = False
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+        tester.params = FakeSCTConfiguration()
+
+        # Run the function
+        tester.gather_failure_statistics()
+
+        # Verify nodetool was not called on the not-ready node
+        assert not mock_node.run_nodetool.called
+
+    def test_gather_failure_statistics_with_multiple_nodes(self, tmp_path):
+        """Test that gather_failure_statistics collects from multiple nodes."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_multiple_nodes")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with multiple nodes
+        mock_nodes = []
+        for i in range(3):
+            mock_node = MagicMock()
+            mock_node.name = f"test_node_{i}"
+            mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+            mock_result = MagicMock()
+            mock_result.ok = True
+            mock_result.stdout = f"Test output from node {i}"
+            mock_result.stderr = ""
+            mock_node.run_nodetool.return_value = mock_result
+
+            mock_nodes.append(mock_node)
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = mock_nodes
+        tester.params = FakeSCTConfiguration()
+
+        # Run the function
+        tester.gather_failure_statistics()
+
+        # Verify all nodes were queried for gossipinfo and compactionstats
+        for i, node in enumerate(mock_nodes):
+            assert node.run_nodetool.called
+            # Each node should have gossipinfo and compactionstats calls
+            nodetool_calls = [call[1]["sub_cmd"] for call in node.run_nodetool.call_args_list]
+            assert "gossipinfo" in nodetool_calls
+            assert "compactionstats" in nodetool_calls
+
+    def test_gather_failure_statistics_nodetool_failure(self, tmp_path):
+        """Test that gather_failure_statistics handles nodetool command failures."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_nodetool_failure")
+        tester.logdir = str(tmp_path)
+
+        # Mock db_cluster with a node where nodetool fails
+        mock_node = MagicMock()
+        mock_node.name = "test_node_fail"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        # Mock failed nodetool command
+        mock_result = MagicMock()
+        mock_result.ok = False
+        mock_result.stdout = ""
+        mock_result.stderr = "Command failed"
+        mock_node.run_nodetool.return_value = mock_result
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+        tester.params = FakeSCTConfiguration()
+
+        # Should not raise an exception
+        tester.gather_failure_statistics()
+
+        # Verify it still attempted to call nodetool
+        assert mock_node.run_nodetool.called
+
+    def test_save_nodetool_output_in_file(self, tmp_path):
+        """Test save_nodetool_output_in_file method."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_save_nodetool")
+        tester.logdir = str(tmp_path)
+
+        # Mock node
+        mock_node = MagicMock()
+        mock_node.name = "test_node"
+
+        # Mock successful nodetool command
+        mock_result = MagicMock()
+        mock_result.ok = True
+        mock_result.stdout = "Test nodetool status output"
+        mock_result.stderr = ""
+        mock_node.run_nodetool.return_value = mock_result
+
+        # Save output
+        tester.save_nodetool_output_in_file(node=mock_node, sub_cmd="status", log_file="test_nodetool_output.log")
+
+        # Verify file was created with correct content
+        output_file = tmp_path / "test_nodetool_output.log"
+        assert output_file.exists()
+        assert output_file.read_text() == "Test nodetool status output"
+
+    def test_teardown_calls_gather_failure_statistics_on_failure(self, tmp_path):
+        """Test that tearDown calls gather_failure_statistics when test fails."""
+        tester = ClusterTesterForTests()
+        tester._init_logging(tmp_path / "test_teardown_failure")
+        tester.logdir = str(tmp_path)
+        tester.monitors = MagicMock()
+        tester.kafka_cluster = None  # Required by tearDown
+
+        # Mock db_cluster
+        mock_node = MagicMock()
+        mock_node.name = "test_node"
+        mock_node._is_node_ready_run_scylla_commands.return_value = True
+
+        mock_result = MagicMock()
+        mock_result.ok = True
+        mock_result.stdout = "Test output"
+        mock_node.run_nodetool.return_value = mock_result
+
+        tester.db_cluster = MagicMock()
+        tester.db_cluster.nodes = [mock_node]
+        tester.params = FakeSCTConfiguration()
+        tester.start_time = time.time()  # Required by tearDown
+
+        # Setup events before calling tearDown
+        tester.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+
+        # Create an error event to make test status FAILED
+        TestFrameworkEvent(
+            source="test", source_method="test", exception=Exception("Test error"), severity=Severity.ERROR
+        ).publish()
+
+        # Brief sleep needed for asynchronous event processing to complete
+        # This ensures the event is registered before get_test_status() is called
+        time.sleep(0.1)
+
+        # Mock gather_failure_statistics to verify it's called
+        tester.gather_failure_statistics = MagicMock()
+
+        # Run tearDown
+        tester.tearDown()
+
+        # Verify gather_failure_statistics was called
+        assert tester.gather_failure_statistics.called
+
+        # Cleanup
+        tester.teardown_events_processes()

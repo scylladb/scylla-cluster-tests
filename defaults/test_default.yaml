@@ -74,6 +74,7 @@ email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
 collect_logs: false
+use_scylla_doctor_on_failure: true
 
 hinted_handoff: 'disabled'
 parallel_node_operations: true  # supported from Scylla 6.0
