@@ -392,7 +392,7 @@ def configure_syslogng_file_source(log_file: str) -> str:
 def install_vector_from_local_pkg(pkg_path: str) -> str:
     """Install Vector from a local .deb package"""
     return dedent(f"""\
-        dpkg -i {pkg_path}
+        dpkg -i --force-confold --force-confdef {pkg_path}
 
 {update_repo_cache()}
         for n in 1 2 3; do
