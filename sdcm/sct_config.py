@@ -3035,8 +3035,7 @@ class SCTConfiguration(dict):
         dist_version = scylla_linux_distro.split("-")[-1]
 
         if scylla_version := self.get("scylla_version"):
-            if not self.get("docker_image"):
-                self["docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
+            self["docker_image"] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
                 "docker",
                 "k8s-eks",

@@ -511,11 +511,16 @@ def get_systemd_version(output: str) -> int:
 def get_scylla_docker_repo_from_version(scylla_version: str):
     if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
-    if scylla_version in ("enterprise", "enterprise:latest"):
+    elif scylla_version in ("enterprise", "enterprise:latest"):
         return "scylladb/scylla-enterprise-nightly"
-    if is_enterprise(scylla_version):
+    elif "6.2.3" < ComparableScyllaVersion(scylla_version) < "2025.1.0~dev":
         return "scylladb/scylla-enterprise"
-    return "scylladb/scylla"
+    elif (
+        ComparableScyllaVersion(scylla_version) <= "6.2.3" or ComparableScyllaVersion(scylla_version) >= "2025.1.0~dev"
+    ):
+        return "scylladb/scylla"
+    else:
+        raise RuntimeError(f"Unsupported scylla version {scylla_version}, check test logic")
 
 
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
