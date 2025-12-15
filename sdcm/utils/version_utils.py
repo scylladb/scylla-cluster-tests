@@ -508,14 +508,28 @@ def get_systemd_version(output: str) -> int:
     return 0
 
 
-def get_scylla_docker_repo_from_version(scylla_version: str):
-    if scylla_version in ("latest", "master:latest"):
+def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
+    # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
+    if scylla_version == "latest":
         return "scylladb/scylla-nightly"
-    if scylla_version in ("enterprise", "enterprise:latest"):
-        return "scylladb/scylla-enterprise-nightly"
-    if is_enterprise(scylla_version):
+    elif scylla_version == "master:latest":
+        return "scylladb/scylla"
+    elif scylla_version in ("enterprise", "enterprise:latest"):
         return "scylladb/scylla-enterprise"
-    return "scylladb/scylla"
+    elif re.search(r"^branch-20(2[5-9]|[3-9]\d).*", scylla_version) is not None:
+        return "scylladb/scylla"
+    elif re.search(r"^branch-202[0-4].*", scylla_version) is not None:
+        return "scylladb/scylla-enterprise"
+    # should be a semver then, but fail fast if not
+    try:
+        comparable_version = ComparableScyllaVersion(scylla_version)
+        if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
+            return "scylladb/scylla"
+        elif "6.2.99" < comparable_version < "2025.1.0~dev":
+            return "scylladb/scylla-enterprise"
+    except ValueError:
+        pass
+    raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
 
 
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
