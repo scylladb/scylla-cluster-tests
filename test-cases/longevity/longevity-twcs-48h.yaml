@@ -6,16 +6,15 @@ stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=
 # write-rate = -max-rate / -concurrency = 30000 / 150 = 200
 stress_read_cmd: [
     "scylla-bench -workload=timeseries -mode=read -partition-count=4000 -concurrency=150 -replication-factor=3 -clustering-row-count=10000 -clustering-row-size=200  -rows-per-request=1 -start-timestamp=GET_WRITE_TIMESTAMP -write-rate 200 -distribution hnormal --connection-count 100 -duration=2880m -timeout=30s -retry-number=30 -retry-interval=80ms,1s",
-    "scylla-bench -workload=timeseries -mode=read -partition-count=4000 -concurrency=150 -replication-factor=3 -clustering-row-count=10000 -clustering-row-size=200  -rows-per-request=1 -start-timestamp=GET_WRITE_TIMESTAMP -write-rate 200 -distribution uniform --connection-count 100 -duration=2880m -timeout=30s -retry-number=30 -retry-interval=80ms,1s"
     ]
 
 
 n_db_nodes: 6
-n_loaders: 3
+n_loaders: 1
 
-instance_type_db: 'i8ge.xlarge'
+instance_type_db: 'i3en.xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'IsolateNodeWithIptableRuleNemesis'
 nemesis_seed: '025'
 nemesis_interval: 15
 nemesis_during_prepare: false

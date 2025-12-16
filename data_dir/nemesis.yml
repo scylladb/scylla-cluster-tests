@@ -30,6 +30,22 @@ disrupt_add_drop_column:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
+disrupt_add_nodes_remove_nodes:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  enospc: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  networking: false
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: true
+  zero_node_changes: false
 disrupt_add_remove_dc:
   config_changes: false
   delete_rows: false
@@ -894,22 +910,6 @@ disrupt_rebuild_streaming_err:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
-  config_changes: false
-  delete_rows: false
-  disruptive: true
-  enospc: false
-  free_tier_set: false
-  has_steady_run: false
-  kubernetes: false
-  limited: false
-  manager_operation: false
-  networking: false
-  schema_changes: false
-  sla: false
-  supports_high_disk_utilization: true
-  topology_changes: true
-  zero_node_changes: false
 disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   config_changes: false
   delete_rows: false
@@ -939,7 +939,7 @@ disrupt_remove_node_then_add_node:
   networking: false
   schema_changes: false
   sla: false
-  supports_high_disk_utilization: false
+  supports_high_disk_utilization: true
   topology_changes: true
   zero_node_changes: false
 disrupt_remove_service_level_while_load:

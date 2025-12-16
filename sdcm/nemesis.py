@@ -4039,145 +4039,255 @@ class Nemesis(NemesisFlags):
                 self.cluster.wait_all_nodes_un()
         self.actions_log.info(f"Network block finished on {self.target_node.name} node")
 
-    @target_all_nodes
-    def disrupt_remove_node_then_add_node(self):
-        """
-        https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
+    # i dont think its a proper place for this method but where else to put it?
+    def _add_nodes_to_the_same_rack_as_removed(self, removed_nodes: List[BaseNode]) -> List[BaseNode]:
+        new_nodes: List[BaseNode] = []
+        for old in removed_nodes:
+            new_node_args = {"count": 1, "rack": old.rack}
+            if getattr(old, "_is_zero_token_node", False):
+                new_node_args["is_zero_node"] = True
 
-        1. Terminate node
-        2. Run full repair
-        3. Nodetool removenode, if removenode rejected, because removing node is UN in gossiper,
-           repeat operation in 5 second
-        4. Add new node
-        5. Run nodetool cleanup (on each node) for each keyspace
+            new_node = self._add_and_init_new_cluster_nodes(**new_node_args)[0]
+            new_nodes.append(new_node)
+
+        return new_nodes
+
+    # for _refuse_connection_from_banned_node usage, maybe define it in caller?
+    def _remove_node_add_node(
+        self,
+        verification_node: BaseNode,
+        nodes_to_remove: Union[BaseNode, List[BaseNode]],
+        remove_node_host_id: Optional[str] = None,
+    ) -> Optional[List[BaseNode]]:
+        """
+        Remove one node from the cluster and add replacement node.
+        """
+        if isinstance(nodes_to_remove, BaseNode):
+            nodes_to_remove = [nodes_to_remove]
+
+        self._remove_nodes(verification_node, nodes_to_remove, remove_node_host_id)
+        new_node = self._add_nodes_to_the_same_rack_as_removed(nodes_to_remove)
+        return new_node
+
+    def disrupt_add_nodes_remove_nodes(self) -> None:
+        """
+        New nemesis: add N node(s) first into random racks, then remove exactly those node(s).
+
+        Flow:
+          1) Validate preconditions (cloud/k8s guards).
+          2) Pick target racks randomly.
+          3) Add nodes -> wait for them to become UN (handled by existing add/init helper).
+          4) Remove the same nodes using `_remove_nodes` (removenode path).
+          5) Optional cluster-wide cleanup.
         """
         if self.cluster.params.get("db_type") == "cloud_scylla":
             raise UnsupportedNemesis(
-                "Skipping this nemesis due the replace node option that supported by Cloud "
-                "is tested by CloudReplaceNonResponsiveNode nemesis"
+                "Skipping: Cloud replace-node is covered by CloudReplaceNonResponsiveNode nemesis",
             )
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("On K8S nodes get removed differently. Skipping.")
 
-        node_to_remove = self.target_node
-        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
+        add_cnt = int(self.tester.params.get("nemesis_add_node_cnt"))
 
-        with self.node_allocator.run_nemesis(
-            nemesis_label="RemoveNodeAddNode", node_list=up_normal_nodes
-        ) as verification_node:
-            self._remove_node_add_node(verification_node=verification_node, node_to_remove=node_to_remove)
+        verification_node = self.target_node
+        self.log.info(f"add_nodes_remove_nodes: verification node = {verification_node.name}")
 
-    def _remove_node_add_node(self, verification_node, node_to_remove, remove_node_host_id=None):
-        # node_to_remove must be different than node
-        # node_to_remove is single/last seed in cluster, before
-        # it will be terminated, choose new seed node
-        num_of_seed_nodes = len(self.cluster.seed_nodes)
-        if node_to_remove.is_seed and num_of_seed_nodes < 2:
-            new_seed_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
-            new_seed_node.set_seed_flag(True)
-            self.cluster.update_seed_provider()
+        nodes_by_dc_rack = self.cluster.get_nodes_per_datacenter_and_rack_idx()
+        racks_to_use = {rack for (_, rack) in nodes_by_dc_rack}
+        selected_racks = random.choices(list(racks_to_use), k=add_cnt)
+        self.log.info(f"Selected racks for adding nodes: {selected_racks}")
 
-        # get node's host_id
-        if not remove_node_host_id:
-            removed_node_status = self.cluster.get_node_status_dictionary(
-                ip_address=node_to_remove.ip_address, verification_node=verification_node
+        new_nodes = [self._add_and_init_new_cluster_nodes(count=1, rack=rack)[0] for rack in selected_racks]
+
+        self.log.info(
+            f"Added {len(new_nodes)} node(s): {[n.name for n in new_nodes]} — proceeding to remove the same nodes",
+        )
+
+        try:
+            self._remove_nodes(
+                verification_node=verification_node,
+                nodes_to_remove=new_nodes,
+                do_cleanup=True,
             )
-            assert removed_node_status is not None, "failed to get host_id using nodetool status"
-            host_id = removed_node_status["host_id"]
-        else:
-            host_id = remove_node_host_id
+        finally:
+            for node in new_nodes:
+                self.node_allocator.unset_running_nemesis(node, self.current_disruption)
 
-        if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21815", params=self.tester.params):
-            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
-            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
-        else:
-            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
-
-        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
-            self.actions_log.info(f"Stop {node_to_remove.name} node and make sure is DN")
-            node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
-            self._terminate_cluster_node(node_to_remove)
-
-        wait_for(
-            node_operations.is_node_seen_as_down,
-            step=5,
-            timeout=600,
-            throw_exc=True,
-            down_node=node_to_remove,
-            verification_node=verification_node,
-            text=f"Wait other nodes see {node_to_remove.name} as DOWN...",
+        self.log.info(
+            "add_nodes_remove_nodes completed: added and then removed %d node(s).",
+            len(new_nodes),
         )
 
-        @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
-        def remove_node():
-            removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
-            with self.node_allocator.run_nemesis(nemesis_label="RemoveNodeAddNode") as rnd_node:
+    def _execute_parallel_removenode(
+        self,
+        verification_node: BaseNode,
+        node_host_id_pairs: List[tuple],
+    ) -> None:
+        """
+        Execute nodetool removenode in parallel for multiple nodes.
+
+        Args:
+            verification_node: Node to run removenode commands from
+            node_host_id_pairs: List of (node, host_id) tuples
+        """
+        removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
+        dead_host_ids = [hid for _, hid in node_host_id_pairs]
+
+        def remove_task(pair):
+            node, target_host_id = pair
+            self.log.info(f"Starting removenode for {node.name} (host_id: {target_host_id})")
+
+            # Build ignore-dead-nodes option excluding current node's host_id
+            other_dead_ids = [hid for hid in dead_host_ids if hid != target_host_id]
+            ignore_dead_nodes_option = ""
+            if other_dead_ids:
+                ignore_dead_nodes_option = f"--ignore-dead-nodes {','.join(other_dead_ids)}"
+
+            with adaptive_timeout(Operations.REMOVE_NODE, verification_node, timeout=60 * 60):
+                result = verification_node.run_nodetool(
+                    f"removenode {ignore_dead_nodes_option} {target_host_id}",
+                    ignore_status=True,
+                    verbose=True,
+                    long_running=True,
+                    retry=0,
+                )
+            out = (result.stdout or "") + "\n" + (result.stderr or "")
+            msg = "rejected" if re.search(removenode_reject_msg, out) else "failed"
+            if result.failed:
+                raise Exception(f"Removenode {msg} for {node.name} (host_id={target_host_id}):\n{out}")
+            self.log.info(f"Removenode completed for {node.name}")
+            return result.exit_status
+
+        self.log.info(f"Starting parallel removenode for {len(node_host_id_pairs)} nodes")
+
+        parallel_obj = ParallelObject(
+            objects=node_host_id_pairs,
+            timeout=60 * 60,  # not sure how long it can take
+        )
+        parallel_obj.run(remove_task, ignore_exceptions=False)
+        self.log.info("Parallel removenode completed for all nodes")
+
+    def _remove_nodes(
+        self,
+        verification_node: "BaseNode",
+        nodes_to_remove: Union["BaseNode", List["BaseNode"]],
+        remove_node_host_id: Optional[str] = None,
+        do_cleanup: bool = True,
+    ) -> None:
+        """
+        Remove one or more nodes from the cluster.
+
+        Responsibilities:
+          - Ensure seed survivability.
+          - Stop scylla on victims, terminate VMs/containers.
+          - Wait until DOWN, then `nodetool removenode` in parallel.
+          - Verify removal, run repair on survivors, run `nodetool cleanup`.
+        """
+        if isinstance(nodes_to_remove, BaseNode):
+            nodes_to_remove = [nodes_to_remove]
+
+        self.log.info(f"_remove_nodes: removing {len(nodes_to_remove)} node(s): {[n.name for n in nodes_to_remove]}")
+
+        for node in nodes_to_remove:
+            self.node_allocator.set_running_nemesis(node, self.current_disruption)
+
+        # lots of helpers inside, can we extract them to separate module?
+        def _ensure_seed_node_after_removal(victims: List[BaseNode]) -> None:
+            surviving_nodes = [n for n in self.cluster.nodes if n not in victims]
+            if not surviving_nodes:
+                self.log.warning("No surviving nodes after removal - skipping seed promotion")
+                return
+            surviving_seeds = [n for n in surviving_nodes if getattr(n, "is_seed", False)]
+            if not surviving_seeds:
+                candidate = random.choice(surviving_nodes)
+                candidate.set_seed_flag(True)
+                self.cluster.update_seed_provider()
                 self.log.info(
-                    "Running removenode command on {}, Removing node with the following host_id: {}".format(
-                        rnd_node.ip_address, host_id
-                    )
+                    f"Promoted {candidate.name} to seed to maintain availability after removing {[n.name for n in victims]}"
                 )
-                with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
-                    res = rnd_node.run_nodetool(
-                        "removenode {}".format(host_id), ignore_status=True, verbose=True, long_running=True, retry=0
-                    )
-                if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
-                    raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
-            return res.exit_status
+        def _wait_for_nodes_down(victims: List[BaseNode], verifier: BaseNode, timeout: int = 600) -> None:
+            def all_down():
+                return all(
+                    node_operations.is_node_seen_as_down(down_node=v, verification_node=verifier) for v in victims
+                )
 
-        with self.action_log_scope(f"Remove {node_to_remove.name} node"):
-            exit_status = remove_node()
-        # if remove node command failed by any reason,
-        # we will remove the terminated node from
-        # dead_nodes_list, so the health validator terminate the job
-        if exit_status != 0:
-            self.log.error(f"nodetool removenode command exited with status {exit_status}")
-            # check difference between group0 and token ring,
-            garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
-            self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
+            self.log.info(f"Waiting for nodes {[v.name for v in victims]} to be seen as DOWN")
+            wait_for(all_down, step=5, timeout=timeout, throw_exc=True, text="Waiting for nodes to be seen as DOWN")
+
+        def _handle_failed_removenode(node_to_remove: BaseNode, verifier: BaseNode) -> None:
+            self.log.error(f"nodetool removenode failed for node {node_to_remove.name}")
+            garbage_host_ids = verifier.raft.get_diff_group0_token_ring_members()
+            self.log.debug(f"Difference between token ring and group0: {garbage_host_ids}")
             if garbage_host_ids:
-                # if difference found, clean garbage and continue
-                verification_node.raft.clean_group0_garbage()
+                verifier.raft.clean_group0_garbage()
             else:
-                # group0 and token ring are consistent. Removenode failed by meanigfull reason.
-                # remove node from dead_nodes list to raise critical issue by HealthValidator
-                self.log.debug(
-                    f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}"
+                self.log.debug("Attempting to remove node from dead_nodes_list")
+                node_in_dead = next(
+                    (
+                        n
+                        for n in node_to_remove.parent_cluster.dead_nodes_list
+                        if n.ip_address == node_to_remove.ip_address
+                    ),
+                    None,
                 )
-                node = next(
-                    (n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address), None
-                )
-                if node:
-                    self.cluster.dead_nodes_list.remove(node)
+                if node_in_dead:
+                    node_to_remove.parent_cluster.dead_nodes_list.remove(node_in_dead)
+
+        try:
+            _ensure_seed_node_after_removal(nodes_to_remove)
+            status_dict = self.cluster.get_node_status_dictionary(verification_node=verification_node)
+
+            node_host_id_pairs = []
+            for node in nodes_to_remove:
+                if node_operations.is_node_removed_from_cluster(node, verification_node):
+                    self.log.info(
+                        f"Node {node.name} already removed from ring; skipping removenode; will terminate only"
+                    )
+                    continue
+
+                # Resolve host_id
+                if remove_node_host_id and len(nodes_to_remove) == 1:
+                    host_id = remove_node_host_id
                 else:
-                    self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
+                    host_id = getattr(node, "host_id", None) or status_dict.get(node.ip_address, {}).get("host_id")
+                node_host_id_pairs.append((node, host_id))
+                self.log.debug(f"Node {node.name} host_id: {host_id}")
 
-        # verify node is removed by nodetool status
-        removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=verification_node
-        )
-        assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
+            victims_needing_removenode = [n for (n, _) in node_host_id_pairs]
+            self.log.info("Stopping scylla on victims that need removenode...")
+            for node in victims_needing_removenode:
+                with ignore_ycsb_connection_refused():
+                    node.stop_scylla_server(verify_up=False, verify_down=True)
 
-        # full cluster repair
-        # Repairing will result in a best effort repair due to the terminated node,
-        # and as a result requires ignoring repair errors
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
-            self.run_repair(ignore_down_hosts=True)
+            self.log.info("Terminating victim nodes...")
+            for node in nodes_to_remove:
+                with ignore_ycsb_connection_refused():
+                    self._terminate_cluster_node(node)
 
-        # add new node with same type (data node / zero token node)
-        new_node_args = {"count": 1, "rack": self.target_node.rack}
-        if self.target_node._is_zero_token_node:
-            new_node_args.update({"is_zero_node": True})
-        new_node = self._add_and_init_new_cluster_nodes(**new_node_args)[0]
-        # in case the removed node was not last seed.
-        if node_to_remove.is_seed and num_of_seed_nodes > 1:
-            new_node.set_seed_flag(True)
-            self.cluster.update_seed_provider()
-        # after add_node, the left nodes have data that isn't part of their tokens anymore.
-        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-        self.nodetool_cleanup_on_all_nodes_parallel()
+            if node_host_id_pairs:
+                _wait_for_nodes_down(victims_needing_removenode, verification_node)
+                self._execute_parallel_removenode(
+                    verification_node=verification_node,
+                    node_host_id_pairs=node_host_id_pairs,
+                )
+
+                for node, _ in node_host_id_pairs:
+                    if not node_operations.is_node_removed_from_cluster(node, verification_node):
+                        _handle_failed_removenode(node, verification_node)
+                    else:
+                        self.log.info(f"Node {node.name} successfully removed from cluster")
+            else:
+                self.log.info("All nodes were already removed from ring; skipped removenode")
+            with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"):
+                self.run_repair(ignore_down_hosts=True)
+
+            # After removals, run cleanup on all nodes to drop stale data for departed tokens
+            self.nodetool_cleanup_on_all_nodes_parallel()
+
+        finally:
+            for node in nodes_to_remove:
+                self.node_allocator.unset_running_nemesis(node, self.current_disruption)
 
     @target_all_nodes
     def disrupt_network_reject_inter_node_communication(self):
@@ -6101,7 +6211,7 @@ class Nemesis(NemesisFlags):
                 if exc_type is not KillNemesis:
                     self._remove_node_add_node(
                         verification_node=working_node,
-                        node_to_remove=self.target_node,
+                        nodes_to_remove=self.target_node,
                         remove_node_host_id=target_host_id,
                     )
                 return False
@@ -7393,7 +7503,7 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
     supports_high_disk_utilization = False  # Removing a node consumes disk space
 
     def disrupt(self):
-        self.disrupt_remove_node_then_add_node()
+        self.disrupt_add_nodes_remove_nodes()
 
 
 class ToggleCDCMonkey(Nemesis):
@@ -7674,7 +7784,13 @@ class IsolateNodeWithIptableRuleNemesis(Nemesis):
     topology_changes = True
 
     def disrupt(self):
-        self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()
+        asd = [
+            self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node,
+            self.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node,
+            self.disrupt_add_nodes_remove_nodes,
+        ]
+        random.choice(asd)()
+        # self.disrupt_remove_node_then_add_node()
 
 
 class KillMVBuildingCoordinator(Nemesis):
