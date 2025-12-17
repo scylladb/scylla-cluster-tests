@@ -993,3 +993,11 @@ class KillMVBuildingCoordinator(NemesisBaseClass):
 
     def disrupt(self):
         self.runner.disrupt_kill_mv_building_coordinator()
+
+
+@target_all_nodes
+class SplitMergeTabletsWithAlter(NemesisBaseClass):
+    schema_changes = True
+
+    def disrupt(self):
+        self.runner.disrupt_trigger_split_merge_tablets_with_alter()

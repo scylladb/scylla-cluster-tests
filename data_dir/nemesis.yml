@@ -1511,6 +1511,23 @@ SnapshotOperations:
   topology_changes: false
   xcloud: true
   zero_node_changes: false
+SplitMergeTabletsWithAlter:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  xcloud: false
+  zero_node_changes: false
 SoftRebootNodeMonkey:
   config_changes: false
   delete_rows: false
