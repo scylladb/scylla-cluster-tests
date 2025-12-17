@@ -24,7 +24,9 @@ from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
-REPLICATOR_URL = "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"
+REPLICATOR_URL = (
+    "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"
+)
 REPLICATOR_JAR = "replicator.jar"
 REPLICATOR_LOG = "cdc-replicator.log"
 
@@ -63,14 +65,16 @@ class TabletSplitMergeTest(LongevityTest):
         if self.enable_cdc:
             with self.cs_db_cluster.cql_connection_patient(node=self.cs_db_cluster.nodes[0]) as sess:
                 self.log.info("Create the keyspace on the replica cluster.")
-                sess.execute(dedent(f"""\
+                sess.execute(
+                    dedent(f"""\
                     CREATE KEYSPACE IF NOT EXISTS {self.ks_name}
                         WITH replication = {{
                             'class' : 'NetworkTopologyStrategy',
                             'replication_factor' : 3
                         }}
                         AND tablets = {{ 'enabled' : true }}
-                """))
+                """)
+                )
 
     @cache
     def run_post_latte_schema_cmd(self) -> None:
@@ -114,7 +118,7 @@ class TabletSplitMergeTest(LongevityTest):
                     severity=Severity.NORMAL,
                     message=f"Number of rows in master and replica: {master_row_count}",
                 ).publish()
-            replicator_log_path = os.path.join(self.logdir, 'cdc-replicator.log')
+            replicator_log_path = os.path.join(self.logdir, "cdc-replicator.log")
             self.loaders.nodes[0].remoter.receive_files(src=REPLICATOR_LOG, dst=replicator_log_path)
 
     def setup_replicator_tools(self, loader_node: cluster.BaseNode) -> None:
@@ -138,15 +142,26 @@ class TabletSplitMergeTest(LongevityTest):
 
         Redirect stdout and stderr to cdc-replicator.log file.
         """
-        replicator_cmd = " ".join([
-            "java", "-cp", REPLICATOR_JAR, "com.scylladb.cdc.replicator.Main",
-            "-k", self.ks_name,
-            "-t", self.table_name,
-            "-s", self.db_cluster.nodes[0].external_address,
-            "-d", self.cs_db_cluster.nodes[0].external_address,
-            "-cl", "one",
-            "-m", mode,
-        ])
+        replicator_cmd = " ".join(
+            [
+                "java",
+                "-cp",
+                REPLICATOR_JAR,
+                "com.scylladb.cdc.replicator.Main",
+                "-k",
+                self.ks_name,
+                "-t",
+                self.table_name,
+                "-s",
+                self.db_cluster.nodes[0].external_address,
+                "-d",
+                self.cs_db_cluster.nodes[0].external_address,
+                "-cl",
+                "one",
+                "-m",
+                mode,
+            ]
+        )
         replicator_script = dedent(f"""\
             tmux new-session -d -s replicator
             tmux pipe-pane -t replicator -o 'cat >> {REPLICATOR_LOG}'
@@ -163,10 +178,12 @@ class TabletSplitMergeTest(LongevityTest):
     def get_email_data(self) -> dict:
         email_data = super().get_email_data()
         if self.enable_cdc:
-            email_data.update({
-                "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
-                "oracle_ami_id": self.params.get("ami_id_db_oracle"),
-                "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
-                "oracle_instance_type": self.params.get("instance_type_db_oracle"),
-            })
+            email_data.update(
+                {
+                    "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
+                    "oracle_ami_id": self.params.get("ami_id_db_oracle"),
+                    "oracle_db_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
+                    "oracle_instance_type": self.params.get("instance_type_db_oracle"),
+                }
+            )
         return email_data
