@@ -237,15 +237,26 @@ pub async fn update_or_delete_by_cycle(db, i) {
 
     if cycles_position < UPDATE_CYCLES {
         let a = hash_range(i, 1_000_000_000);
+<<<<<<< HEAD
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
         db.execute_prepared("update_all_fields_in_table", [a, pad(i), pad(i), pk, ck]).await?;
     } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
+=======
+        let ck = hash(i);
+        db.execute_prepared("update_table", [pad(i), pad(i), pk, ck]).await?;
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
+        let ck = hash(i % TOTAL_ROWS);
+>>>>>>> b99df68b5 (test(yaml): add new test config for all tables)
         db.execute_prepared("read_from_table", [pk, ck]).await?;
     } else if cycles_position < UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES {
         db.execute_prepared("delete_partition", [pk]).await?;
     } else {
+<<<<<<< HEAD
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
+=======
+        let ck = hash(i % TOTAL_ROWS);
+>>>>>>> b99df68b5 (test(yaml): add new test config for all tables)
         db.execute_prepared("read_from_table", [pk, ck]).await?;
     }
 
