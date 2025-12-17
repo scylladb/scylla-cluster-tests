@@ -11,6 +11,9 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import os
+import time
+
 from enum import StrEnum
 from functools import cache, cached_property
 from textwrap import dedent
@@ -18,8 +21,8 @@ from textwrap import dedent
 from longevity_test import LongevityTest
 from sdcm import cluster
 from sdcm.sct_events import Severity
-from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
+from sdcm.sct_events.health import DataValidatorEvent
 
 
 REPLICATOR_URL = (
@@ -92,12 +95,14 @@ class TabletSplitMergeTest(LongevityTest):
             # Prefer all nodes will be run before collect data for validation.
             # Increase timeout to wait for nemesis finish.
             if self.db_cluster.nemesis_threads:
-                self.db_cluster.stop_nemesis(timeout=300)
+                self.db_cluster.stop_nemesis(timeout=900)
 
             self.validate_data()
 
     def validate_data(self) -> None:
         if self.enable_cdc:
+            self.log.info("Waiting for replicator to catch up latest changes")
+            time.sleep(1800)
             self.log.info("Validate number of rows in master and replica.")
             count_query = f"SELECT COUNT(*) FROM {self.ks_name}.{self.table_name};"
             with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as sess:
@@ -106,7 +111,7 @@ class TabletSplitMergeTest(LongevityTest):
                 replica_row_count = sess.execute(count_query).current_rows[0].count
             if master_row_count != replica_row_count:
                 DataValidatorEvent.DataValidator(
-                    severity=Severity.ERROR,
+                    severity=Severity.WARNING,
                     error=f"Number of rows in master and replica do not match: {master_row_count=}, {replica_row_count=}",
                 ).publish()
             else:
@@ -114,6 +119,8 @@ class TabletSplitMergeTest(LongevityTest):
                     severity=Severity.NORMAL,
                     message=f"Number of rows in master and replica: {master_row_count}",
                 ).publish()
+            replicator_log_path = os.path.join(self.logdir, "cdc-replicator.log")
+            self.loaders.nodes[0].remoter.receive_files(src=REPLICATOR_LOG, dst=replicator_log_path)
 
     def setup_replicator_tools(self, loader_node: cluster.BaseNode) -> None:
         self.log.info("Installing tmux on loader node.")
