@@ -9,25 +9,40 @@ latte_schema_parameters:
 
 prepare_write_cmd:
   - >-
-    latte run -f write_to_table -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 0 --tag write-1
+    latte run -f write_to_table -P rows_per_partition=10 -P rows=500000000
+    --duration=5000000 --concurrency=1000 --rate=25000 --start-cycle 0 --tag write-1
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f write_to_table -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 5000001 --tag write-2
+    latte run -f write_to_table -P rows_per_partition=10 -P offset=500000000 -P rows=500000000
+    --duration=5000000 --concurrency=1000 --rate=25000 --start-cycle 500000001 --tag write-2
     data_dir/latte/tablet_split_merge_load.rn
 
 stress_cmd:
   - >-
-    latte run -f update_table --consistency=QUORUM --threads=1 --rate=500 --concurrency=900 --duration=360m --tag update
+    latte run -f update_or_delete_partitions --consistency=QUORUM --threads=50 --rate=2000 --concurrency=50
+    --duration=360m --request-timeout 900s --retry-number 50 --retry-interval 1s,30s --tag update_or_delete
+    -P rows_per_partition=10 -P rows=500000000 --sampling=15
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f read_from_table --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-table
+    latte run -f update_or_delete_partitions --consistency=QUORUM --threads=50 --rate=2000 --concurrency=50
+    --duration=360m --request-timeout 900s --retry-number 50 --retry-interval 1s,30s --tag update_or_delete1
+    -P rows_per_partition=10 -P rows=500000000 --sampling=15
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f delete_partition -P delete_pct=50 --rate 20  --concurrency=10 --duration=360m --tag delete-partition
+    latte run -f update_or_delete_partitions --consistency=QUORUM --threads=50 --rate=2000 --concurrency=50
+    --duration=360m --request-timeout 900s --retry-number 50 --retry-interval 1s,30s --tag update_or_delete2
+    -P rows_per_partition=10 -P rows=500000000 -P offset=500000000 --sampling=15
     data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f update_or_delete_partitions --consistency=QUORUM --threads=50 --rate=2000 --concurrency=50
+    --duration=360m --request-timeout 900s --retry-number 50 --retry-interval 1s,30s --tag update_or_delete3
+    -P rows_per_partition=10 -P rows=500000000 -P offset=500000000 --sampling=15
+    data_dir/latte/tablet_split_merge_load.rn
+
 
 db_type: mixed_scylla
 
