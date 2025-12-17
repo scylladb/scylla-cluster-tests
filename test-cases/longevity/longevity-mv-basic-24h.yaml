@@ -10,11 +10,11 @@ latte_schema_parameters:
 
 prepare_write_cmd:
   - >-
-    latte run -f write_to_table -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 0 --tag write-1
+    latte run -f write_to_table -P rows_per_partition=100 --rate 2500 --duration=5000000 --start-cycle 0 --tag write-1
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
-    latte run -f write_to_table -P rows_per_partition=1000 --rate 2500 --duration=5000000 --start-cycle 5000001 --tag write-2
+    latte run -f write_to_table -P rows_per_partition=100 --rate 2500 --duration=5000000 --start-cycle 5000001 --tag write-2
     data_dir/latte/tablet_split_merge_load.rn
 
 stress_cmd:
@@ -27,7 +27,12 @@ stress_cmd:
     data_dir/latte/tablet_split_merge_load.rn
 
   - >-
+    latte run -f read_from_mv_notcol --consistency=QUORUM --threads=1 --rate=800 --concurrency=900 --duration=360m --tag read-from-mv-notcolctd
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
     latte run -f delete_partition -P delete_pct=50 --rate 20  --concurrency=10 --duration=360m --tag delete-partition
+    --request-timeout 600s --retry-number 25 --retry-interval 1s,5s
     data_dir/latte/tablet_split_merge_load.rn
 
 n_db_nodes: 6
