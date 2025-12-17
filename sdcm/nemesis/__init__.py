@@ -5878,6 +5878,15 @@ class NemesisRunner:
         """
         Trigger split and merge tablets on target node while altering table with tablets enabled.
         Verifies that after the alter operation is complete, the tablets are in a healthy state.
+
+        Uses ALTER TABLE/VIEW ... WITH tablets = {'min_tablet_count': N} to trigger split/merge.
+        This is the recommended approach per the ScyllaDB tablets team.
+        The min_tablet_count is a hint; actual split/merge depends on data size and shard limits.
+
+        The tablet count is intentionally not restored to the original value after the nemesis:
+        - This operation is non-disruptive (schema change only)
+        - Scylla will naturally adjust tablet counts based on data size conditions
+        - Subsequent nemesis runs will alternate between split (count=256) and merge (count=2)
         """
         if not is_tablets_feature_enabled(self.target_node):
             raise UnsupportedNemesis("Tablets feature is not enabled on target node")
@@ -6014,4 +6023,3 @@ for _, module_name, _ in pkgutil.walk_packages(path=__path__, prefix="sdcm.nemes
             if inspect.isclass(obj) and (issubclass(obj, NemesisBaseClass) or issubclass(obj, NemesisRunner)):
                 globals()[item] = obj
                 __all__.append(item)
-
