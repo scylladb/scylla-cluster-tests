@@ -28,7 +28,7 @@ version_tuple: VERSION_TUPLE
 commit_id: COMMIT_ID
 __commit_id__: COMMIT_ID
 
-__version__ = version = '0.15.6'
-__version_tuple__ = version_tuple = (0, 15, 6)
+__version__ = version = '0.15.9'
+__version_tuple__ = version_tuple = (0, 15, 9)
 
-__commit_id__ = commit_id = 'g46c898c68'
+__commit_id__ = commit_id = 'g18aee71c2'
