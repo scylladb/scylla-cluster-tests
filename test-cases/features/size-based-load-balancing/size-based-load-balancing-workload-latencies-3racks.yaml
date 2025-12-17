@@ -3,10 +3,10 @@ test_duration: 2880  # maximum test duration in minutes, after which the test wi
 prepare_stress_duration: 1440  # maximum duration for the initial data loading phase in minutes, after which the test will timeout
 # fill to 90%
 prepare_write_cmd: [
-  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..729000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=729000001..1458000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1458000001..2187000000",
-  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=2187000001..2916000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=12000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..729000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=12000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=729000001..1458000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=12000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1458000001..2187000000",
+  "cassandra-stress write no-warmup cl=QUORUM n=729000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=400 fixed=12000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=2187000001..2916000000",
 ]
 
 # base workload, will run for the entire test duration, after prepare

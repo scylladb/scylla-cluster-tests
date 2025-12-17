@@ -2,7 +2,7 @@
 test_duration: 2880  # maximum test duration in minutes, after which the test will timeout
 prepare_stress_duration: 1440  # maximum duration for the initial data loading phase in minutes, after which the test will timeout
 # fill to 90%
-prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=29160000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate 'threads=400 fixed=75000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..29160000"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=29160000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate 'threads=400 fixed=48000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..29160000"
 
 # base workload, will run for the entire test duration, after prepare
 stress_cmd: "cassandra-stress mixed 'ratio(write=1,read=3)' no-warmup cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1)' -mode cql3 native -rate 'threads=400 fixed=36000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..29160000,2916000,29160)'"
