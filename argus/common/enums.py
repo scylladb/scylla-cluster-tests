@@ -39,6 +39,7 @@ class PytestStatus(str, Enum):
 
 
 class TestInvestigationStatus(str, Enum):
+    __test__ = False  # prevent pytest from collecting this Enum as a test class
     NOT_INVESTIGATED = "not_investigated"
     IN_PROGRESS = "in_progress"
     INVESTIGATED = "investigated"
