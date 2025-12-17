@@ -98,7 +98,7 @@ class LatteStressThread(DockerBasedStressThread):
     def set_stress_operation(self, stress_cmd):
         return get_latte_operation_type(self.stress_cmd)
 
-    def build_stress_cmd(self, cmd_runner, loader, hosts):
+    def build_stress_cmd(self, cmd_runner, loader, hosts):  # noqa: PLR0912, PLR0914
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r"([/\w-]*\.rn)")
         script_name = script_name_regx.search(self.stress_cmd).group(0)
