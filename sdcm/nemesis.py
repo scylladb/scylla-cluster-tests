@@ -6059,6 +6059,11 @@ class Nemesis(NemesisFlags):
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skip test for K8S because no supported yet")
 
+        if SkipPerIssues("scylladb/scylla-cluster-tests#12755", self.cluster.params):
+            # until https://github.com/scylladb/scylla-cluster-tests/issues/12755 test fails
+            # consisently and there's no point to run it
+            raise UnsupportedNemesis("scylladb/scylla-cluster-tests#12755")
+
         if SkipPerIssues("scylladb/scylla-drivers#95", self.cluster.params):
             # until https://github.com/scylladb/scylla-drivers/issues/95 would be solved
             # we should disable the target node switching
