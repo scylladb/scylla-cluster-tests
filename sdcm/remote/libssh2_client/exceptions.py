@@ -19,9 +19,18 @@ from .result import Result
 
 
 __all__ = (
-    'AuthenticationException', 'UnknownHostException', 'ConnectError', 'ConnectTimeout', 'PKeyFileError',
-    'UnexpectedExit', 'CommandTimedOut', 'FailedToReadCommandOutput', 'OpenChannelTimeout', 'Failure',
-    'FailedToRunCommand', 'SocketRecvError'
+    "AuthenticationException",
+    "UnknownHostException",
+    "ConnectError",
+    "ConnectTimeout",
+    "PKeyFileError",
+    "UnexpectedExit",
+    "CommandTimedOut",
+    "FailedToReadCommandOutput",
+    "OpenChannelTimeout",
+    "Failure",
+    "FailedToRunCommand",
+    "SocketRecvError",
 )
 
 
@@ -120,12 +129,8 @@ class Failure(Exception):
         template = "<{}: cmd={!r}{}>"
         rest = ""
         if kwargs:
-            rest = " " + " ".join(
-                "{}={}".format(key, value) for key, value in kwargs.items()
-            )
-        return template.format(
-            self.__class__.__name__, self.result.command, rest
-        )
+            rest = " " + " ".join("{}={}".format(key, value) for key, value in kwargs.items())
+        return template.format(self.__class__.__name__, self.result.command, rest)
 
 
 class UnexpectedExit(Failure):
@@ -226,7 +231,7 @@ Stderr:{}
 Exception:{}
 {}
 """
-        return template.format(command, stdout, stderr, ''.join(traceback.format_tb(self.exception.__traceback__)), self.exception)
+        return template.format(command, stdout, stderr, "".join(traceback.format_tb(self.exception.__traceback__)), self.exception)
 
 
 class FailedToRunCommand(Failure):
@@ -267,4 +272,4 @@ Stderr:{}
 Exception:{}
 {}
 """
-        return template.format(command, stdout, stderr, ''.join(traceback.format_tb(self.exception.__traceback__)), self.exception)
+        return template.format(command, stdout, stderr, "".join(traceback.format_tb(self.exception.__traceback__)), self.exception)

@@ -83,8 +83,7 @@ class NemesisRegistry:
         for subclass in subclasses_list:
             if method_name_str := get_disrupt_method_from_class(subclass):
                 disrupt_methods.append(method_name_str)
-        disrupt_methods_objects_list = [func for name, func in inspect.getmembers(
-            self.base_class) if name in disrupt_methods and callable(func)]
+        disrupt_methods_objects_list = [func for name, func in inspect.getmembers(self.base_class) if name in disrupt_methods and callable(func)]
         return disrupt_methods_objects_list
 
     def gather_properties(self) -> Tuple[Dict[SourceType, Dict[str, bool]], Dict[str, Dict[str, bool]]]:

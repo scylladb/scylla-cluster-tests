@@ -48,8 +48,7 @@ class ActionLogger:
         self._log(logging.ERROR, action, target, trace_id, metadata)
 
     @contextmanager
-    def action_scope(self, action: str, target: Optional[str] = None,
-                     trace_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Iterator[None]:
+    def action_scope(self, action: str, target: Optional[str] = None, trace_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Iterator[None]:
         self.info(f"Started - {action}", target, trace_id, metadata)
         try:
             yield

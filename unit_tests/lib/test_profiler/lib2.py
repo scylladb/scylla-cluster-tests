@@ -16,10 +16,7 @@ import time
 from sdcm.utils.profiler import ProfileableProcess as LibProfileableProcess, ProfileableThread as LibProfileableThread
 
 
-__all__ = [
-    'LibProfileableProcessCustomClass', 'LibProfileableProcessCustomClassWithRun',
-    'LibProfileableThreadCustomClass', 'LibProfileableThreadCustomClassWithRun'
-]
+__all__ = ["LibProfileableProcessCustomClass", "LibProfileableProcessCustomClassWithRun", "LibProfileableThreadCustomClass", "LibProfileableThreadCustomClassWithRun"]
 
 
 def lib2_function_sleep():

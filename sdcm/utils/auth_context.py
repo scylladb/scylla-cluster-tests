@@ -3,12 +3,7 @@ import logging
 from contextlib import contextmanager
 from sdcm.cluster import BaseNode
 
-VALID_AUTHENTICATORS = [
-    "org.apache.cassandra.auth.PasswordAuthenticator",
-    "org.apache.cassandra.auth.AllowAllAuthenticator",
-    "com.scylladb.auth.TransitionalAuthenticator",
-    "com.scylladb.auth.SaslauthdAuthenticator"
-]
+VALID_AUTHENTICATORS = ["org.apache.cassandra.auth.PasswordAuthenticator", "org.apache.cassandra.auth.AllowAllAuthenticator", "com.scylladb.auth.TransitionalAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"]
 
 LOGGER = logging.getLogger(__name__)
 

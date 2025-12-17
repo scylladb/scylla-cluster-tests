@@ -131,7 +131,7 @@ class CachedJiraIssues:
 
 @cache
 class JiraIssueRetriever:
-    """ Class to retrieve Jira issues with caching support """
+    """Class to retrieve Jira issues with caching support"""
 
     def __init__(self):
         self.s3_cache = CachedJiraIssues()
@@ -183,8 +183,7 @@ class CachedGitHubIssues:
         for issue in csv.DictReader(scsv.decode().splitlines(), fieldnames=("number", "state", "labels", "title")):
             issue_id = int(issue["number"])
             labels = [label for label in issue["labels"].strip().split("|") if label]
-            issues[issue_id] = Issue(number=issue_id, state=issue["state"].lower(),
-                                     labels=labels, title=issue.get("title", None))
+            issues[issue_id] = Issue(number=issue_id, state=issue["state"].lower(), labels=labels, title=issue.get("title", None))
         return issues
 
     def get_issue(self, owner: str, repo_id: str, issue_id: int) -> Issue:
@@ -194,7 +193,7 @@ class CachedGitHubIssues:
 
 @cache
 class GithubIssueRetriever:
-    """ Class to retrieve GitHub issues/pull-requests with caching support """
+    """Class to retrieve GitHub issues/pull-requests with caching support"""
 
     def __init__(self):
         self.s3_cache = CachedGitHubIssues()
@@ -258,7 +257,7 @@ class SkipPerIssues:
         issues = [issues] if isinstance(issues, str) else issues
 
         self.issues = [self.get_issue_details(issue) for issue in issues]
-        self.issues = list(filter(lambda x:  x, self.issues))  # filter None - unmatched issues
+        self.issues = list(filter(lambda x: x, self.issues))  # filter None - unmatched issues
 
     @lru_cache
     def get_issue_details(self, issue) -> Issue | None:
@@ -267,10 +266,7 @@ class SkipPerIssues:
 
         except ValueError:
             logging.warning("couldn't parse issue: %s", issue)
-            TestFrameworkEvent(source=self.__class__.__name__,
-                               message=f"couldn't parse issue: {issue}",
-                               severity=Severity.WARNING,
-                               trace=sys._getframe().f_back).publish()
+            TestFrameworkEvent(source=self.__class__.__name__, message=f"couldn't parse issue: {issue}", severity=Severity.WARNING, trace=sys._getframe().f_back).publish()
             return None
 
         if isinstance(ref, GitHubIssue):
@@ -279,8 +275,7 @@ class SkipPerIssues:
                 return GithubIssueRetriever().get_issue(ref.user, ref.repo, issue_id)
             except Exception as exc:  # noqa: BLE001
                 logging.warning("failed to get issue: %s\n %s", issue, exc)
-                TestFrameworkEvent(source=self.__class__.__name__,
-                                   message=f"failed to get issue {issue}", severity=Severity.ERROR, exception=exc).publish()
+                TestFrameworkEvent(source=self.__class__.__name__, message=f"failed to get issue {issue}", severity=Severity.ERROR, exception=exc).publish()
                 return None
 
         if isinstance(ref, JiraIssue):
@@ -289,24 +284,22 @@ class SkipPerIssues:
                 return JiraIssueRetriever().get_issue(issue_id)
             except Exception as exc:  # noqa: BLE001
                 logging.warning("failed to get issue: %s\n %s", issue, exc)
-                TestFrameworkEvent(source=self.__class__.__name__,
-                                   message=f"failed to get issue {issue}", severity=Severity.ERROR, exception=exc).publish()
+                TestFrameworkEvent(source=self.__class__.__name__, message=f"failed to get issue {issue}", severity=Severity.ERROR, exception=exc).publish()
                 return None
 
         logging.warning("issue should be github/jira issue: %s", issue)
-        TestFrameworkEvent(source=self.__class__.__name__,
-                           message=f"issue should be github/jira issue {issue}", severity=Severity.ERROR).publish()
+        TestFrameworkEvent(source=self.__class__.__name__, message=f"issue should be github/jira issue {issue}", severity=Severity.ERROR).publish()
         return None
 
     def issues_opened(self) -> bool:
         # both final states of jira and github combined
-        return any(issue.state not in ('closed', 'merged', 'done', 'duplicate', 'deferred') for issue in self.issues)
+        return any(issue.state not in ("closed", "merged", "done", "duplicate", "deferred") for issue in self.issues)
 
     def issues_labeled(self) -> bool:
         if self.params.scylla_version:
-            branch_version = '.'.join(self.params.scylla_version.split('.')[0:2])
+            branch_version = ".".join(self.params.scylla_version.split(".")[0:2])
             issues_labels = sum([issue.labels for issue in self.issues], [])
-            return any(f'sct-{branch_version}-skip' in label for label in issues_labels) or any(f'dtest/{branch_version}-skip' in label for label in issues_labels)
+            return any(f"sct-{branch_version}-skip" in label for label in issues_labels) or any(f"dtest/{branch_version}-skip" in label for label in issues_labels)
 
         return False
 

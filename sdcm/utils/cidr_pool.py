@@ -47,10 +47,7 @@ class CidrPoolManager:
     def get_available_cidr(self, cloud_provider: str, region: str) -> str:
         """Allocate an available CIDR block for a new cluster"""
         used_cidrs = set()
-        provider_map = {
-            'aws': (AwsRegion, 'get_vpc_peering_routes'),
-            'gce': (GceRegion, 'get_peering_routes')
-        }
+        provider_map = {"aws": (AwsRegion, "get_vpc_peering_routes"), "gce": (GceRegion, "get_peering_routes")}
 
         try:
             provider = provider_map.get(cloud_provider.lower())
@@ -62,9 +59,7 @@ class CidrPoolManager:
 
         available_cidr = self._generate_next_cidr(used_cidrs)
         if not available_cidr:
-            raise CidrAllocationError(
-                f"No available CIDR blocks in range {self.cidr_base} for Scylla Cloud cluster "
-                f"in {cloud_provider}:{region}")
+            raise CidrAllocationError(f"No available CIDR blocks in range {self.cidr_base} for Scylla Cloud cluster in {cloud_provider}:{region}")
 
         LOGGER.info("Allocated CIDR %s for %s:%s", available_cidr, cloud_provider, region)
 

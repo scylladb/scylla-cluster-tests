@@ -6,7 +6,7 @@ from pydantic import Field, BaseModel, ConfigDict
 class ConnectorConfiguration(BaseModel):
     # general options
     connector_class: str = Field(alias="connector.class")
-    topics: Optional[str] = ''
+    topics: Optional[str] = ""
 
     # scylla-cdc-source-connector options
     # see https://github.com/scylladb/scylla-cdc-source-connector?tab=readme-ov-file#configuration
@@ -27,8 +27,6 @@ class ConnectorConfiguration(BaseModel):
 
 
 class SctKafkaConfiguration(BaseModel):
-    source: str = Field(
-        exclude=True
-    )  # url to specific release or hub version ex. 'hub:scylladb/scylla-cdc-source-connector:1.1.2'
+    source: str = Field(exclude=True)  # url to specific release or hub version ex. 'hub:scylladb/scylla-cdc-source-connector:1.1.2'
     name: str  # connector name, each one should be named differently
     config: ConnectorConfiguration

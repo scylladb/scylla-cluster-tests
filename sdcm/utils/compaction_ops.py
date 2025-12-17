@@ -46,10 +46,7 @@ class CompactionOps:
     def trigger_major_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
         return self.storage_service_client.compact_ks_cf(keyspace=keyspace, cf=cf)
 
-    def trigger_scrub_compaction(self,
-                                 keyspace: str = "keyspace1",
-                                 cf: str = "standard1",
-                                 scrub_mode: Optional[str] = None) -> Result:
+    def trigger_scrub_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1", scrub_mode: Optional[str] = None) -> Result:
         params = {"keyspace": keyspace, "cf": cf, "scrub_mode": scrub_mode}
 
         return self.storage_service_client.scrub_ks_cf(**params)
@@ -58,9 +55,7 @@ class CompactionOps:
         return self.storage_service_client.cleanup_ks_cf(keyspace=keyspace, cf=cf, timeout=timeout)
 
     def trigger_validation_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
-        return self.storage_service_client.scrub_ks_cf(keyspace=keyspace,
-                                                       cf=cf,
-                                                       scrub_mode=self.SCRUB_MODES.VALIDATE)
+        return self.storage_service_client.scrub_ks_cf(keyspace=keyspace, cf=cf, scrub_mode=self.SCRUB_MODES.VALIDATE)
 
     def trigger_upgrade_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
         return self.storage_service_client.upgrade_sstables(keyspace=keyspace, cf=cf)
@@ -87,17 +82,16 @@ class CompactionOps:
     def stop_validation_compaction(self) -> Result:
         return self.stop_scrub_compaction()
 
-    def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
+    def disable_autocompaction_on_ks_cf(self, node: BaseNode, keyspace: str = "", cf: Optional[str] = ""):
         node = node if node else self.node
-        node.run_nodetool(f'disableautocompaction {keyspace} {cf}')
+        node.run_nodetool(f"disableautocompaction {keyspace} {cf}")
 
     def _stop_compaction(self, nodetool_cmd: str) -> Result:
         LOGGER.info("Stopping compaction with nodetool %s", nodetool_cmd)
         return self.node.run_nodetool(nodetool_cmd)
 
     @staticmethod
-    def stop_on_user_compaction_logged(node: BaseNode, watch_for: str, timeout: int,
-                                       stop_func: Callable, mark: Optional[int] = None) -> Result:
+    def stop_on_user_compaction_logged(node: BaseNode, watch_for: str, timeout: int, stop_func: Callable, mark: Optional[int] = None) -> Result:
         LOGGER.info("Starting to watch for user compaction logged...")
         start_time = time.time()
         with open(node.system_log, encoding="utf-8") as log_file:
@@ -118,6 +112,7 @@ class StartStopCompactionArgs(NamedTuple):
     NamedTuple for passing around common arguments
     in the start-stop compaction tests.
     """
+
     keyspace: str
     columnfamily: str
     timeout: int

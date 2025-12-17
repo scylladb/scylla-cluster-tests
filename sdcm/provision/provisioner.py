@@ -39,15 +39,14 @@ class DataDisk:
 class InstanceDefinition:
     name: str
     image_id: str
-    type: str   # instance_type from yaml
+    type: str  # instance_type from yaml
     user_name: str
     ssh_key: SSHKey = field(repr=False)
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
     data_disks: List[DataDisk] | None = None
-    user_data: List[UserDataObject] | None = field(
-        default_factory=list, repr=False)  # None when no cloud-init use at all
+    user_data: List[UserDataObject] | None = field(default_factory=list, repr=False)  # None when no cloud-init use at all
     use_public_ip: bool = False
 
 
@@ -64,9 +63,9 @@ class ProvisionerError(Exception):
 
 
 class PricingModel(Enum):
-    ON_DEMAND = 'on_demand'
-    SPOT = 'spot'
-    SPOT_FLEET = 'spot_fleet'
+    ON_DEMAND = "on_demand"
+    SPOT = "spot"
+    SPOT_FLEET = "spot_fleet"
 
     def is_spot(self) -> bool:
         return self is not PricingModel.ON_DEMAND
@@ -114,7 +113,7 @@ class VmInstance:
 
 class Provisioner(ABC):
     """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
-    Limits only to machines related to provided test_id. """
+    Limits only to machines related to provided test_id."""
 
     def __init__(self, test_id: str, region: str, availability_zone: str) -> None:
         self._test_id = test_id
@@ -138,18 +137,12 @@ class Provisioner(ABC):
         """Returns provisioner class instance for each region where resources exist."""
         raise NotImplementedError()
 
-    def get_or_create_instance(self,
-                               definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT
-                               ) -> VmInstance:
+    def get_or_create_instance(self, definition: InstanceDefinition, pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
         """Create an instance specified by an InstanceDefinition.
         If instance already exists, returns it."""
         raise NotImplementedError()
 
-    def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+    def get_or_create_instances(self, definitions: List[InstanceDefinition], pricing_model: PricingModel = PricingModel.SPOT) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
         raise NotImplementedError()
@@ -159,7 +152,7 @@ class Provisioner(ABC):
         raise NotImplementedError()
 
     def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
-        """Reboot instance by name. """
+        """Reboot instance by name."""
         raise NotImplementedError()
 
     def list_instances(self) -> List[VmInstance]:
@@ -180,7 +173,6 @@ class Provisioner(ABC):
 
 
 class ProvisionerFactory:
-
     def __init__(self) -> None:
         self._classes = {}
 
@@ -191,8 +183,7 @@ class ProvisionerFactory:
         """Creates provisioner for given backend, test_id and region and returns it."""
         provisioner = self._classes.get(backend)
         if not provisioner:
-            raise ProvisionerError(f"No provisioner found for backend '{backend}'. "
-                                   f"Register it with provisioner_factory.register_provisioner method.")
+            raise ProvisionerError(f"No provisioner found for backend '{backend}'. Register it with provisioner_factory.register_provisioner method.")
         return provisioner(test_id, region, availability_zone, **config)
 
     def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:

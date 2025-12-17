@@ -25,8 +25,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ProvisionType(str, Enum):
-    ON_DEMAND = 'on_demand'
-    SPOT = 'spot'
+    ON_DEMAND = "on_demand"
+    SPOT = "spot"
 
 
 class ProvisionPlanBuilder(BaseModel):
@@ -40,7 +40,7 @@ class ProvisionPlanBuilder(BaseModel):
     @property
     def _provision_request_on_demand(self) -> Optional[ProvisionParameters]:
         return ProvisionParameters(
-            name='On Demand',
+            name="On Demand",
             spot=False,
             region_name=self.region_name,
             availability_zone=self.availability_zone,
@@ -49,7 +49,7 @@ class ProvisionPlanBuilder(BaseModel):
     @property
     def _provision_request_spot(self) -> ProvisionParameters:
         return ProvisionParameters(
-            name='Spot',
+            name="Spot",
             spot=True,
             region_name=self.region_name,
             availability_zone=self.availability_zone,
@@ -61,9 +61,11 @@ class ProvisionPlanBuilder(BaseModel):
             return [self._provision_request_on_demand]
         provision_plan = []
         if self.initial_provision_type == ProvisionType.SPOT:
-            provision_plan.extend([
-                self._provision_request_spot,
-            ])
+            provision_plan.extend(
+                [
+                    self._provision_request_spot,
+                ]
+            )
         if self.fallback_provision_on_demand:
             provision_plan.append(self._provision_request_on_demand)
         return provision_plan

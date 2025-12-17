@@ -148,8 +148,7 @@ class GeminiStressThread(DockerBasedStressThread):
 
         stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
-        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if
-                              key not in stress_cmd) + " " + stress_cmd
+        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if key not in stress_cmd) + " " + stress_cmd
 
         self.gemini_commands.append(cmd)
         return cmd
@@ -216,10 +215,8 @@ class GeminiStressThread(DockerBasedStressThread):
             results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
-            local_gemini_test_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
-            local_gemini_oracle_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+            local_gemini_test_statements_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+            local_gemini_oracle_statements_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
             docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
             docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
 
@@ -286,6 +283,6 @@ class GeminiStressThread(DockerBasedStressThread):
 
             split_idx = line.index(":")
             key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            value = line[split_idx + 1 :].split()[0]
             results[key] = int(value)
         return results

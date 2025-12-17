@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-scylla_qa_internal_path = Path(__file__).resolve().parents[2] / 'scylla-qa-internal'
+scylla_qa_internal_path = Path(__file__).resolve().parents[2] / "scylla-qa-internal"
 
 # if scylla-qa-internal already exists, add it to the Python path
 # TODO: make this support multiple paths if needed
@@ -14,10 +14,7 @@ if scylla_qa_internal_path.exists():
 try:
     from xcloud_internal.connectivity import XCloudConnectivityContainerMixin
 except ImportError:
-    not_supported_message = (
-        "XCloud connectivity is not available in this environment. "
-        "Ensure that the xcloud_internal module is installed and accessible."
-    )
+    not_supported_message = "XCloud connectivity is not available in this environment. Ensure that the xcloud_internal module is installed and accessible."
     # If xcloud_internal is not available, define a dummy mixin
 
     class XCloudConnectivityContainerMixin:
@@ -40,5 +37,6 @@ except ImportError:
 
         def xcloud_connect_get_manager_ssh_address(self, cluster_id, sdm_environment):
             raise NotImplementedError(not_supported_message)
+
 
 __all__ = ["XCloudConnectivityContainerMixin"]

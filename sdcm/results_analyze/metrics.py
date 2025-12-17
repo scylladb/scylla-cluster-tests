@@ -28,12 +28,7 @@ class MetricBase(ClassBase):
                 other_value=other.value,
                 inverted_betterness=self.inverted_betterness,
             )
-        return MetricRelativeDiffBase(
-            base_value=self.value,
-            other_value=other.value,
-            inverted_betterness=self.inverted_betterness,
-            name=name
-        )
+        return MetricRelativeDiffBase(base_value=self.value, other_value=other.value, inverted_betterness=self.inverted_betterness, name=name)
 
     def diff(self, other, name=None):
         if not self._same_type(other):
@@ -44,12 +39,7 @@ class MetricBase(ClassBase):
                 other_value=other.value,
                 inverted_betterness=self.inverted_betterness,
             )
-        return MetricRelativeDiffBase(
-            base_value=self.value,
-            other_value=other.value,
-            inverted_betterness=self.inverted_betterness,
-            name=name
-        )
+        return MetricRelativeDiffBase(base_value=self.value, other_value=other.value, inverted_betterness=self.inverted_betterness, name=name)
 
     def rate(self, other, name=None):
         if not self._same_type(other):
@@ -60,17 +50,12 @@ class MetricBase(ClassBase):
                 other_value=other.value,
                 inverted_betterness=self.inverted_betterness,
             )
-        return MetricRateDiffBase(
-            base_value=self.value,
-            other_value=other.value,
-            inverted_betterness=self.inverted_betterness,
-            name=name
-        )
+        return MetricRateDiffBase(base_value=self.value, other_value=other.value, inverted_betterness=self.inverted_betterness, name=name)
 
     @property
     def betterness(self):
         if self.inverted_betterness:
-            return - self.value
+            return -self.value
         return self.value
 
     def _same_type(self, other):
@@ -84,8 +69,8 @@ class MetricDiffBase(MetricBase):
     base_value: float = None
     other_value: float = None
     inverted_betterness: bool = False
-    name: str = 'diff'
-    units = '%'
+    name: str = "diff"
+    units = "%"
 
     @property
     def value(self):
@@ -102,16 +87,16 @@ class MetricDiffBase(MetricBase):
     @property
     def sign(self):
         if self.value >= 0:
-            return '+'
-        return '-'
+            return "+"
+        return "-"
 
 
 class MetricRelativeDiffBase(MetricBase):
     base_value: float = None
     other_value: float = None
     inverted_betterness: bool = False
-    name: str = 'diff'
-    units = '%'
+    name: str = "diff"
+    units = "%"
 
     @property
     def value(self):
@@ -128,16 +113,16 @@ class MetricRelativeDiffBase(MetricBase):
     @property
     def sign(self):
         if self.value >= 0:
-            return '+'
-        return '-'
+            return "+"
+        return "-"
 
 
 class MetricRateDiffBase(MetricBase):
     base_value: float = None
     other_value: float = None
     inverted_betterness: bool = False
-    name: str = 'diff'
-    units = '%'
+    name: str = "diff"
+    units = "%"
 
     @property
     def value(self):
@@ -154,87 +139,90 @@ class MetricRateDiffBase(MetricBase):
     @property
     def sign(self):
         if self.value >= 0:
-            return '+'
-        return '-'
+            return "+"
+        return "-"
 
 
 class LatencyMetricBase(MetricBase):
-    name = 'latency'
-    units = 'us'
+    name = "latency"
+    units = "us"
     inverted_betterness = True
 
 
 class ThroughputMetricBase(MetricBase):
-    units = 'op/s'
+    units = "op/s"
 
 
 class ThroughputMinScyllaMetric(ThroughputMetricBase):
-    name = 'scylla throughput (min)'
+    name = "scylla throughput (min)"
 
 
 class ThroughputAvgScyllaMetric(ThroughputMetricBase):
-    name = 'scylla throughput (avg)'
+    name = "scylla throughput (avg)"
 
 
 class ThroughputMaxScyllaMetric(ThroughputMetricBase):
-    name = 'scylla throughput (max)'
+    name = "scylla throughput (max)"
 
 
 class ThroughputStdevScyllaMetric(ThroughputMetricBase):
-    name = 'scylla throughput (stdev)'
+    name = "scylla throughput (stdev)"
 
 
 class ReadLatency99MinScyllaMetric(LatencyMetricBase):
-    name = 'scylla read latency 99% (min)'
+    name = "scylla read latency 99% (min)"
 
 
 class ReadLatency99AvgScyllaMetric(LatencyMetricBase):
-    name = 'scylla read latency 99% (avg)'
+    name = "scylla read latency 99% (avg)"
 
 
 class ReadLatency99MaxScyllaMetric(LatencyMetricBase):
-    name = 'scylla read latency 99% (max)'
+    name = "scylla read latency 99% (max)"
 
 
 class ReadLatency99StdevScyllaMetric(LatencyMetricBase):
-    name = 'scylla read latency 99% (stdev)'
+    name = "scylla read latency 99% (stdev)"
 
 
 class WriteLatency99MinScyllaMetric(LatencyMetricBase):
-    name = 'scylla write latency 99% (min)'
+    name = "scylla write latency 99% (min)"
 
 
 class WriteLatency99AvgScyllaMetric(LatencyMetricBase):
-    name = 'scylla write latency 99% (avg)'
+    name = "scylla write latency 99% (avg)"
 
 
 class WriteLatency99MaxScyllaMetric(LatencyMetricBase):
-    name = 'scylla write latency 99% (max)'
+    name = "scylla write latency 99% (max)"
 
 
 class WriteLatency99StdevScyllaMetric(LatencyMetricBase):
-    name = 'scylla write latency 99% (stdev)'
+    name = "scylla write latency 99% (stdev)"
 
 
 class Latency99CassandraStressMetric(LatencyMetricBase):
     """
     Metric read from cassandra stress command results
     """
-    name = 'c-s latency 99%'
+
+    name = "c-s latency 99%"
 
 
 class LatencyMeanCassandraStressMetric(LatencyMetricBase):
     """
     Metric read from cassandra stress command results
     """
-    name = 'c-s latency mean'
+
+    name = "c-s latency mean"
 
 
 class ThroughputCassandraStressMetric(ThroughputMetricBase):
     """
     Metric read from cassandra stress command results
     """
-    name = 'c-s throughput'
+
+    name = "c-s throughput"
 
 
 class MetricsBase(ClassBase):
@@ -273,10 +261,7 @@ class ThroughputCassandraStressMetrics(MetricsBase):
 
 
 class ScyllaMetrics(ClassBase):
-    _es_data_mapping = {
-        'read_latency_99': 'latency_read_99',
-        'write_latency_99': 'latency_write_99'
-    }
+    _es_data_mapping = {"read_latency_99": "latency_read_99", "write_latency_99": "latency_write_99"}
     throughput: ThroughputScyllaMetrics = None
     read_latency_99: ReadLatency99ScyllaMetrics = None
     write_latency_99: WriteLatency99ScyllaMetrics = None
@@ -287,9 +272,9 @@ class ScyllaMetrics(ClassBase):
 
 class CassandraStressMetrics(ClassBase):
     _es_data_mapping = {
-        'latency_99': 'stats_average.latency 99th percentile',
-        'latency_mean': 'stats_average.latency mean',
-        'throughput': 'stats_average.op rate',
+        "latency_99": "stats_average.latency 99th percentile",
+        "latency_mean": "stats_average.latency mean",
+        "throughput": "stats_average.op rate",
     }
     latency_99: Latency99CassandraStressMetric = None
     latency_mean: LatencyMeanCassandraStressMetric = None
@@ -303,8 +288,8 @@ class ScyllaTestMetrics(ClassBase):
     scylla_metrics: ScyllaMetrics = None
     cs_metrics: CassandraStressMetrics = None
     _es_data_mapping = {
-        'scylla_metrics': 'results',
-        'cs_metrics': 'results',
+        "scylla_metrics": "results",
+        "cs_metrics": "results",
     }
 
     def is_valid(self):
