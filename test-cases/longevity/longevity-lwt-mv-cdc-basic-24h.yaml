@@ -1,0 +1,124 @@
+test_duration: 750
+
+latte_schema_parameters:
+  lwt: 'true'
+  cdc: 'true'
+  mv: 'true'
+  ks_name: 'main_keyspace'
+  table_name: 'main_table'
+  mv_name: 'mv_for_main_table'
+
+prepare_write_cmd:
+  - >-
+    latte run -f write_to_table -P rows=5000000 -P rows_per_partition=1
+    --duration=2500000 --concurrency=100 --rate=10000 --threads=100 --tag write-1
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f write_to_table -P rows_per_partition=1 -P offset=5000000 -P rows=5000000
+    --duration=2500000 --concurrency=100 --rate=10000 --threads=100 --tag write-2
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=100 --rate=10000 --duration=10000000 --tag write3
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,300s
+    -P offset=1000000000 -P rows=5000000 -P rows_per_partition=10
+    -P update_cycles=1 -P read_cycles=2 -P delete_cycles=0
+    data_dir/latte/tablet_split_merge_load.rn
+
+
+stress_cmd:
+  - >-
+    latte run -f update_first_part_of_table --serial-consistency=LOCAL_SERIAL
+    -P rows=5000000 -P rows_per_partition=1
+    --threads=1 --rate=50 --concurrency=50 --duration=720m --tag update-first-part
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f update_second_part_of_table --serial-consistency=LOCAL_SERIAL
+    -P rows=5000000 -P offset=5000000 -P rows_per_partition=1
+    --threads=1 --rate=50 --concurrency=50 --duration=720m --tag update-second-part
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f read_from_table --consistency=LOCAL_SERIAL
+    -P rows=5000000 -P rows_per_partition=1
+    --threads=1 --rate=250 --concurrency=50 --duration=720m --tag read-from-table
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f read_from_table --consistency=QUORUM
+    -P rows=5000000 -P offset=5000000 -P rows_per_partition=1
+    --threads=1 --rate=250 --concurrency=50 --duration=720m --tag read-from-table
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f delete_partition --consistency=QUORUM
+    -P delete_pct=75 --rate 10  --concurrency=10 --duration=720m --tag delete-partition
+    -P rows_per_partition=1 -P rows=5000000
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f read_from_mv --consistency=QUORUM --threads=1 --rate=40 --concurrency=50 --duration=720m --tag read-from-mv
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    -P rows_per_partition=1 -P rows=5000000
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f read_from_mv_notcol --consistency=QUORUM --threads=1 --rate=40 --concurrency=50 --duration=720m --tag read-from-mv-notcolctd
+    --request-timeout 900s --retry-number 50 --retry-interval 1s,300s
+    -P rows_per_partition=1 -P rows=5000000 -P offset=5000000
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=10 --rate=10000 --duration=360m --tag update-or-delete-by-cycle2
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,300s
+    -P offset=1000000000 -P rows=5000000 -P rows_per_partition=10
+    -P update_cycles=10 -P read_cycles=20 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+  - >-
+    latte run -f "update_or_delete_by_cycle" --consistency=QUORUM --concurrency 10 --threads=10 --rate=10000 --duration=360m --tag update-or-delete-by-cycle2
+    --request-timeout=900s --retry-number=50 --retry-interval=1s,300s
+    -P offset=2000000000 -P rows=5000000 -P rows_per_partition=10
+    -P update_cycles=10 -P read_cycles=20 -P delete_cycles=5
+    data_dir/latte/tablet_split_merge_load.rn
+
+db_type: mixed_scylla
+
+n_db_nodes: 6
+simulated_racks: 3
+n_loaders: 4
+round_robin: true
+
+instance_type_db: 'i4i.4xlarge'
+gce_instance_type_db: 'n2-highmem-8'
+gce_n_local_ssd_disk_db: 8
+
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: '2025.4.0'
+
+nemesis_class_name: 'MajorCompactionMonkey:1 SisyphusMonkey:1'
+nemesis_selector: ["", "topology_changes"]
+nemesis_interval: 15
+
+nemesis_seed: '021'
+nemesis_during_prepare: false
+space_node_threshold: 64424
+
+user_prefix: 'longevity-lwt-mv-cdc-24h'
+
+use_preinstalled_scylla: true
+
+append_scylla_yaml:
+  rf_rack_valid_keyspaces: true
+
+append_scylla_args: '--logger-log-level table=debug'

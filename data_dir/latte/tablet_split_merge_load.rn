@@ -13,9 +13,14 @@ const RF = latte::param!("replication_factor", 3);
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
 
 const TOTAL_ROWS = latte::param!("rows", 10_000_000);
+const OFFSET = latte::param!("offset", 0);
 const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1000);
-const PARTITION_SIZES = "100:1";
-const DELETE_PCT = latte::param!("delete_pct", 50);
+const PARTITION_SIZES = "10:1,35:2,35:3,20:5";
+const LWT_PARTITION_SIZES = "100:1";
+const DELETE_PCT = latte::param!("delete_pct", 75);
+const UPDATE_CYCLES = latte::param!("update_cycles", 5);
+const READ_CYCLES = latte::param!("read_cycles", 2);
+const DELETE_CYCLES = latte::param!("delete_cycles", 1);
 const HALF_ROWS = TOTAL_ROWS / 2;
 
 pub async fn schema(db) {
@@ -34,9 +39,12 @@ pub async fn schema(db) {
             ck bigint,
             a int,
             pad text,
+            text text,
             PRIMARY KEY (pk, ck))
          WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }
-         AND cdc = { 'enabled' : ${ENABLE_CDC} }
+         AND cdc = { 'enabled' : ${ENABLE_CDC}, 'ttl' : 900 }
+         AND tablets = {'min_tablet_count': 2, 'expected_data_size_in_gb': 1}
+         AND default_time_to_live = 600
     `).await?;
 
     if ENABLE_MV {
@@ -48,6 +56,15 @@ pub async fn schema(db) {
             AND ck IS NOT NULL
             PRIMARY KEY (pk, ck)
         `).await?;
+        db.execute(`
+            CREATE MATERIALIZED VIEW IF NOT EXISTS ${KS_NAME}.${MV_NAME}_notcolocated
+            AS SELECT a, pad, text
+            FROM ${KS_NAME}.${TABLE_NAME}
+            WHERE pk IS NOT NULL
+            AND ck IS NOT NULL
+            AND a IS NOT NULL
+            PRIMARY KEY (a, pk, ck)
+        `).await?;
     }
 }
 
@@ -56,9 +73,13 @@ pub async fn prepare(db) {
         "main", TOTAL_ROWS, ROWS_PER_PARTITION, PARTITION_SIZES,
     ).await?;
 
+    db.init_partition_row_distribution_preset(
+        "lwt", TOTAL_ROWS, ROWS_PER_PARTITION, LWT_PARTITION_SIZES,
+    ).await?;
+
     db.prepare(
         "write_to_table",
-        `INSERT INTO ${KS_NAME}.${TABLE_NAME} (pk, ck, a, pad) VALUES (?, ?, ?, ?)`
+        `INSERT INTO ${KS_NAME}.${TABLE_NAME} (pk, ck, a, pad, text) VALUES (?, ?, ?, ?, ?)`
     ).await?;
 
     db.prepare(
@@ -67,8 +88,18 @@ pub async fn prepare(db) {
     ).await?;
 
     db.prepare(
+       "delete_prev_partitions",
+       `DELETE FROM ${KS_NAME}.${TABLE_NAME} WHERE pk in ?`
+    ).await?;
+
+    db.prepare(
         "update_table",
-        `UPDATE ${KS_NAME}.${TABLE_NAME} SET pad = ? WHERE pk = ? AND ck = ?`
+        `UPDATE ${KS_NAME}.${TABLE_NAME} SET pad = ?, text = ? WHERE pk = ? AND ck = ?`
+    ).await?;
+
+    db.prepare(
+        "update_all_fields_in_table",
+        `UPDATE ${KS_NAME}.${TABLE_NAME} USING TTL 500 SET a = ?, pad = ?, text = ? WHERE pk = ? AND ck = ?`
     ).await?;
 
     db.prepare(
@@ -86,29 +117,48 @@ pub async fn prepare(db) {
         `SELECT a, pad FROM ${KS_NAME}.${TABLE_NAME} WHERE pk = ? AND ck = ?`
     ).await?;
 
+    db.prepare(
+        "get_rows_count",
+        `SELECT COUNT(*) FROM ${KS_NAME}.${TABLE_NAME} WHERE pk = ?`
+    ).await?;
+
     if ENABLE_MV {
         db.prepare(
             "read_from_mv",
             `SELECT a, pad FROM ${KS_NAME}.${MV_NAME} WHERE pk = ? AND ck = ?`
         ).await?;
+        db.prepare(
+            "read_from_mv_notcol",
+            `SELECT a, pad, text FROM ${KS_NAME}.${MV_NAME}_notcolocated WHERE a = ? AND pk = ? AND ck = ?`
+        ).await?;
     }
 }
 
 fn pad(i) {
-    latte::text(i, 200)
+    latte::text(i, 1024)
+}
+
+fn get_partitions_distribution() {
+    let dataset = if ENABLE_LWT {"lwt"}  else {"main" };
+    dataset
 }
 
 pub async fn write_to_table(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition_config_name = get_partitions_distribution();
+    let partition = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
-    let a = hash_range(i, 1_000_000);
+    let a = hash_range(i, 1_000_000_000);
 
-    db.execute_prepared("write_to_table", [pk, ck, a, pad(i)]).await
+    db.execute_prepared("write_to_table", [pk, ck, a, pad(i), pad(pk)]).await
 }
 
+
 pub async fn delete_partition(db, i) {
-    let partition  = db.get_partition_info("main", i).await;
+    let partition_config_name = get_partitions_distribution();
+    let partition  = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let bucket = hash_range(partition.idx, 100);
 
@@ -121,36 +171,83 @@ pub async fn delete_partition(db, i) {
 }
 
 pub async fn update_table(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition_config_name = get_partitions_distribution();
+    let partition = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
-    db.execute_prepared("update_table", [pad(i), pk, ck]).await
+    db.execute_prepared("update_table", [pad(i), pad(i), pk, ck]).await?;
 }
 
 pub async fn update_first_part_of_table(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition = db.get_partition_info("lwt", i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
     db.execute_prepared("update_if_lesser_threshold", [pad(i), pk, ck, HALF_ROWS]).await
 }
 
 pub async fn update_second_part_of_table(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition = db.get_partition_info("lwt", i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
     db.execute_prepared("update_if_higher_threshold", [pad(i), pk, ck, HALF_ROWS]).await
 }
 
 pub async fn read_from_table(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition_config_name = get_partitions_distribution();
+    let partition = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
     db.execute_prepared("read_from_table", [pk, ck]).await
 }
 
 pub async fn read_from_mv(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition_config_name = get_partitions_distribution();
+    let partition = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
     db.execute_prepared("read_from_mv", [pk, ck]).await
+}
+
+pub async fn read_from_mv_notcol(db, i) {
+    let partition_config_name = get_partitions_distribution();
+    let partition = db.get_partition_info(partition_config_name, i).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+    let a = hash_range(i, 1_000_000_000);
+    db.execute_prepared("read_from_mv_notcol", [a, pk, ck]).await
+}
+
+/// Write/Delete/Read pattern: UPDATE_CYCLE cycles WRITE,
+/// READ_CYCLE cycles READ, DELETE_CYCLE cycle DELETE,
+/// READ_CYCLE cycles READ, repeat
+pub async fn update_or_delete_by_cycle(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+
+    let cycle_number = i / TOTAL_ROWS;
+    let total_cycles = UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES + READ_CYCLES;
+    let cycles_position = cycle_number % total_cycles;
+
+    if cycles_position < UPDATE_CYCLES {
+        let a = hash_range(i, 1_000_000_000);
+        let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
+        db.execute_prepared("update_all_fields_in_table", [a, pad(i), pad(i), pk, ck]).await?;
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
+        let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
+        db.execute_prepared("read_from_table", [pk, ck]).await?;
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES {
+        db.execute_prepared("delete_partition", [pk]).await?;
+    } else {
+        let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
+        db.execute_prepared("read_from_table", [pk, ck]).await?;
+    }
+
+    Ok(())
 }
