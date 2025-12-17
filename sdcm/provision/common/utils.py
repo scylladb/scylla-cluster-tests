@@ -66,71 +66,64 @@ def configure_vector_target_script(host: str, port: int) -> str:
         - filter_suppress_warnings: remove Severity.SUPPRESS events
     """
     return dedent("""
-        echo "
-        sources:
-            journald:
-                type: journald
-            vector_metrics:
-                type: internal_metrics
+        cat > /etc/vector/vector.yaml <<'EOF'
+sources:
+    journald:
+        type: journald
+    vector_metrics:
+        type: internal_metrics
 
-        transforms:
-            filter_audit:
-                inputs:
-                    - journald
-                type: filter
-                condition: |
-                    !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? \\"default\\", \\"AUDIT\\")
+transforms:
+    filter_audit:
+        inputs: [journald]
+        type: filter
+        condition: |
+            !starts_with(to_string(.SYSLOG_IDENTIFIER) ?? "default", "AUDIT")
 
-            filter_system_services:
-                inputs:
-                    - filter_audit
-                type: filter
-                condition: |
-                    identifier = to_string(.SYSLOG_IDENTIFIER) ?? \\"\\"
-                    identifier != \\"sshd\\" &&
-                    identifier != \\"systemd\\" &&
-                    identifier != \\"systemd-logind\\" &&
-                    identifier != \\"sudo\\" &&
-                    identifier != \\"dhclient\\"
+    filter_system_services:
+        inputs: [filter_audit]
+        type: filter
+        condition: |
+            identifier = to_string(.SYSLOG_IDENTIFIER) ?? ""
+            identifier != "sshd" &&
+            identifier != "systemd" &&
+            identifier != "systemd-logind" &&
+            identifier != "sudo" &&
+            identifier != "dhclient"
 
-            filter_verbose_scylla:
-                inputs:
-                    - filter_system_services
-                type: filter
-                condition: |
-                    message = to_string(.message) ?? \\"\\"
-                    !contains(message, \\"] compaction - [Compact\\") &&
-                    !contains(message, \\"] table - Done with off-strategy compaction\\") &&
-                    !contains(message, \\"] table - Starting off-strategy compaction\\") &&
-                    !contains(message, \\"] repair - Repair\\") &&
-                    !contains(message, \\"repair id [id=\\") &&
-                    !contains(message, \\"] stream_session - [Stream\\") &&
-                    !contains(message, \\"] sstable - Rebuilding bloom filter\\") &&
-                    !contains(message, \\"] storage_proxy - Exception when communicating with\\")
+    filter_verbose_scylla:
+        inputs: [filter_system_services]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !contains(message, "] compaction - [Compact") &&
+            !contains(message, "] table - Done with off-strategy compaction") &&
+            !contains(message, "] table - Starting off-strategy compaction") &&
+            !contains(message, "] repair - Repair") &&
+            !contains(message, "repair id [id=") &&
+            !contains(message, "] stream_session - [Stream") &&
+            !contains(message, "] sstable - Rebuilding bloom filter") &&
+            !contains(message, "] storage_proxy - Exception when communicating with")
 
-            filter_suppress_warnings:
-                inputs:
-                    - filter_verbose_scylla
-                type: filter
-                condition: |
-                    message = to_string(.message) ?? \\"\\"
-                    !(match(message, to_regex!(\\"^WARNING.*[shard.*]\\")) || match(message, to_regex!(\\"^!.*WARNING.*[shard.*]\\")))
+    filter_suppress_warnings:
+        inputs: [filter_verbose_scylla]
+        type: filter
+        condition: |
+            message = to_string(.message) ?? ""
+            !(match(message, to_regex!("^WARNING.*[shard.*]")) || match(message, to_regex!("^!.*WARNING.*[shard.*]")))
 
-        sinks:
-            sct-runner:
-                type: vector
-                inputs:
-                    - filter_suppress_warnings
-                address: {host}:{port}
-                healthcheck: false
-            prometheus:
-                type: prometheus_exporter
-                address: 0.0.0.0:9577
-                inputs:
-                  - vector_metrics
-                healthcheck: false
-
-        " > /etc/vector/vector.yaml
+sinks:
+    sct-runner:
+        type: vector
+        inputs: [filter_suppress_warnings]
+        address: {host}:{port}
+        healthcheck: false
+    prometheus:
+        type: prometheus_exporter
+        address: 0.0.0.0:9577
+        inputs: [vector_metrics]
+        healthcheck: false
+EOF
 
         systemctl kill -s HUP --kill-who=main vector.service
     """).format(host=host, port=port)
