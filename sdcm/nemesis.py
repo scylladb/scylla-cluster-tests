@@ -6251,6 +6251,68 @@ class Nemesis(NemesisFlags):
                 with self.cluster.cql_connection_patient(node=working_node, connect_timeout=600) as session:
                     drop_materialized_view(session, ks_name, view_name)
 
+    @target_all_nodes
+    def disrupt_trigger_split_merge_tablets_with_alter(self):
+        """
+        Trigger split and merge tablets on target node while altering table with tablets enabled.
+        Verifies that after the alter operation is complete, the tablets are in a healthy state.
+        """
+        if not is_tablets_feature_enabled(self.target_node):
+            raise UnsupportedNemesis("Tablets feature is not enabled on target node")
+
+        with self.cluster.cql_connection_patient(node=self.target_node, connect_timeout=600) as session:
+            ks_cfs_mvs = self.cluster.get_non_system_ks_cf_with_tablets_list(
+                db_node=self.target_node,
+                filter_empty_tables=False,
+                filter_out_table_with_counter=True,
+                filter_out_mv=False,
+            )
+            ks_cfs = self.cluster.get_non_system_ks_cf_with_tablets_list(
+                db_node=self.target_node,
+                filter_empty_tables=False,
+                filter_out_table_with_counter=True,
+                filter_out_mv=True,
+            )
+            mvs = set(ks_cfs_mvs) - set(ks_cfs)
+            ks_cfs = [(ks_cf, False) for ks_cf in ks_cfs] + [(ks_mv, True) for ks_mv in mvs]
+            if not ks_cfs:
+                raise UnsupportedNemesis(
+                    "Non-system keyspaces with enabled tablets are not found. nemesis can't be run"
+                )
+            log_followers = {}
+            cql_query = "ALTER {table} {ks_name}.{table_name} WITH tablets = {{'min_tablet_count': {count}, 'expected_data_size_in_gb': 100}}"
+
+            for ks_cf, is_mv in ks_cfs:
+                ks_name, table_name = ks_cf.split(".")
+                cql = f"SELECT count(*) from system.tablets where table_name = '{table_name}' ALLOW FILTERING"
+                result = session.execute(cql)
+                tablet_count = result.one().count
+                if tablet_count < 16:
+                    cql = cql_query.format(
+                        table="MATERIALIZED VIEW" if is_mv else "TABLE",
+                        ks_name=ks_name,
+                        table_name=table_name,
+                        count=256,
+                    )
+                    reg_exp = "Detected tablet split"
+                else:
+                    cql = cql_query.format(
+                        table="MATERIALIZED VIEW" if is_mv else "TABLE", ks_name=ks_name, table_name=table_name, count=2
+                    )
+                    reg_exp = "Detected tablet merge"
+                log_followers.update(
+                    {(ks_name, table_name, reg_exp): self.target_node.follow_system_log(patterns=[reg_exp])}
+                )
+                session.execute(cql)
+
+            for (ks_name, table_name, reg_exp), follower in log_followers.items():
+                wait_for(
+                    func=lambda: list(follower),
+                    timeout=900,
+                    text=f"Waiting for {reg_exp} on {ks_name}.{table_name}",
+                    throw_exc=False,
+                )
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
     """
@@ -7682,3 +7744,10 @@ class KillMVBuildingCoordinator(Nemesis):
 
     def disrupt(self):
         self.disrupt_kill_mv_building_coordinator()
+
+
+class SplitMergeTabletsWithAlter(Nemesis):
+    schema_changes = True
+
+    def disrupt(self):
+        self.disrupt_trigger_split_merge_tablets_with_alter()

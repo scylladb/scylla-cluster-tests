@@ -1455,6 +1455,23 @@ disrupt_toggle_table_ics:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
+disrupt_trigger_split_merge_tablets_with_alter:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: false
+  networking: false
+  run_with_gemini: true
+  schema_changes: true
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
 disrupt_truncate:
   config_changes: false
   delete_rows: false
