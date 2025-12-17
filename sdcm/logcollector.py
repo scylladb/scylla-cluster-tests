@@ -1102,6 +1102,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="result_gradual_increase.log"),
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
