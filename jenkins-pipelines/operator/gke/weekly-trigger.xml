@@ -21,11 +21,11 @@ H 02 * * 0</spec>
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>docker_image=scylladb/scylla-nightly
+              <properties>
 scylla_version=latest
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
 k8s_scylla_operator_chart_version=latest
-requested_by_user=mflendrich
+requested_by_user=abramche
               </properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
