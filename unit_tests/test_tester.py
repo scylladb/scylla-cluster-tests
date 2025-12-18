@@ -480,6 +480,7 @@ class TestGatherFailureStatistics:
         tester._init_logging(tmp_path / "test_teardown_failure")
         tester.logdir = str(tmp_path)
         tester.monitors = MagicMock()
+        tester.kafka_cluster = None  # Required by tearDown
 
         # Mock db_cluster
         mock_node = MagicMock()
