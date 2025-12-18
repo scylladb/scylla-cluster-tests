@@ -87,3 +87,23 @@ upgrade_test.py                             @abramche @fruch
 /sdcm/utils/vector_dev.py                   @fruch
 /sdcm/utils/remote_logger.py                @fruch
 /sdcm/logcollector.py                       @fruch
+
+# Nemesis orchestration
+/sdcm/nemesis_registry                      @pehala
+
+# Tombstone GC
+/test-cases/features/tombstone_gc           @pehala
+/longevity_tombstone_gc_test.py             @pehala
+
+# Out of space prevention
+/longevity_oos_test.py                                    @pehala
+/test-cases/features/out-of-space-prevention              @pehala
+/jenkins-pipelines/oss/features/out-of-space-prevention   @pehala
+
+# Elasticity
+/test-cases/features/elasticity                           @pehala
+/jenkins-pipelines/oss/features/elasticity                @pehala
+
+# Compression
+/test-cases/features/compression                          @pehala
+/jenkins-pipelines/performance/branch-perf-v17/scylla-master/perf-features/compression   @pehala
