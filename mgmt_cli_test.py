@@ -1161,7 +1161,6 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
             timeout=600,
             restore_schema=True,
             location_list=locations,
-            manager_backup_restore_method=manager_backup_restore_method,
         )
 
         if restore_outside_manager:
