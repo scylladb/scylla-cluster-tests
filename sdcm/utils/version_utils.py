@@ -208,6 +208,9 @@ class ComparableScyllaVersion:
         #       So, make empty 'pre-release' prevail over any defined one.
         return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or "xyz")
 
+    def isReleaseVersion(self):
+        return self.v_build == "" and self.v_pre_release == ""
+
     def __hash__(self):
         return hash(self.as_comparable())
 
@@ -509,24 +512,33 @@ def get_systemd_version(output: str) -> int:
 
 
 def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
+    """
+    Get scylla docker repo based scylla version.
+
+    :param scylla_version: scylla version string
+    :param docker_image: docker image name
+
+    :return: scylla docker repo
+    """
+
     # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
-    if scylla_version == "latest":
+    if scylla_version in ("latest", "master:latest"):
         return "scylladb/scylla-nightly"
-    elif scylla_version == "master:latest":
-        return "scylladb/scylla"
     elif scylla_version in ("enterprise", "enterprise:latest"):
-        return "scylladb/scylla-enterprise"
-    elif re.search(r"^branch-20(2[5-9]|[3-9]\d).*", scylla_version) is not None:
-        return "scylladb/scylla"
-    elif re.search(r"^branch-202[0-4].*", scylla_version) is not None:
-        return "scylladb/scylla-enterprise"
+        return "scylladb/scylla-enterprise-nightly"
     # should be a semver then, but fail fast if not
     try:
         comparable_version = ComparableScyllaVersion(scylla_version)
         if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
-            return "scylladb/scylla"
+            if comparable_version.isReleaseVersion():
+                return "scylladb/scylla"
+            else:
+                return "scylladb/scylla-nightly"
         elif "6.2.99" < comparable_version < "2025.1.0~dev":
-            return "scylladb/scylla-enterprise"
+            if comparable_version.isReleaseVersion():
+                return "scylladb/scylla-enterprise"
+            else:
+                return "scylladb/scylla-enterprise-nightly"
     except ValueError:
         pass
     raise ValueError(f"Unsupported scylla version {scylla_version}, check test logic")
