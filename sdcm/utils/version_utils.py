@@ -508,21 +508,9 @@ def get_systemd_version(output: str) -> int:
     return 0
 
 
-def get_scylla_docker_repo_from_version(scylla_version: str, docker_image: str):  # noqa: PLR0911
-    """
-    Get scylla docker repo based scylla version.
-
-    :param scylla_version: scylla version string
-    :param docker_image: docker image name
-
-    :return: scylla docker repo
-    """
-
+def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
     # scylla_version can take on a variety of formats, so try to match non-standard/non-semver first
-    if docker_image:
-        # user set something which is not empty, that should be honored (even if wrong)
-        return docker_image
-    elif scylla_version == "latest" or "-dev" in scylla_version:
+    if scylla_version == "latest":
         return "scylladb/scylla-nightly"
     elif scylla_version == "master:latest":
         return "scylladb/scylla"

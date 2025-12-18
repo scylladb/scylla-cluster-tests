@@ -761,30 +761,27 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
 
 
 @pytest.mark.parametrize(
-    "version, expected_repo, input_repo",
+    "version, expected_repo",
     (
-        ("6.2.2", "scylladb/scylla", None),
-        ("6.2.3", "scylladb/scylla", None),
-        ("6.2.4", "scylladb/scylla", None),
-        ("6.2.66", "scylladb/scylla", None),
-        ("2024.1.1", "scylladb/scylla-enterprise", None),
-        ("2024.2.13", "scylladb/scylla-enterprise", None),
-        ("2024.2.14", "scylladb/scylla-enterprise", None),
-        ("enterprise:latest", "scylladb/scylla-enterprise", None),
-        ("branch-2024.2:latest", "scylladb/scylla-enterprise", None),
-        ("branch-2024.1:latest", "scylladb/scylla-enterprise", None),
-        ("2025.1.0", "scylladb/scylla", None),
-        ("2025.2.99", "scylladb/scylla", None),
-        ("2025.4.0", "scylladb/scylla", None),
-        ("branch-2025.1:latest", "scylladb/scylla", None),
-        ("branch-2025.2:latest", "scylladb/scylla", None),
-        ("branch-2025.3:latest", "scylladb/scylla", None),
-        ("branch-2025.4:latest", "scylladb/scylla", None),
-        ("master:latest", "scylladb/scylla", None),
-        ("2026.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly", None),
-        ("2026.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly", "scylladb/scylla-nightly"),
-        ("2026.1.0.20251217.55f4a2b75472", "scylladb/scylla-nightly", "scylladb/scylla-nightly"),
+        ("6.2.2", "scylladb/scylla"),
+        ("6.2.3", "scylladb/scylla"),
+        ("6.2.4", "scylladb/scylla"),
+        ("6.2.66", "scylladb/scylla"),
+        ("2024.1.1", "scylladb/scylla-enterprise"),
+        ("2024.2.13", "scylladb/scylla-enterprise"),
+        ("2024.2.14", "scylladb/scylla-enterprise"),
+        ("enterprise:latest", "scylladb/scylla-enterprise"),
+        ("branch-2024.2:latest", "scylladb/scylla-enterprise"),
+        ("branch-2024.1:latest", "scylladb/scylla-enterprise"),
+        ("2025.1.0", "scylladb/scylla"),
+        ("2025.2.99", "scylladb/scylla"),
+        ("2025.4.0", "scylladb/scylla"),
+        ("branch-2025.1:latest", "scylladb/scylla"),
+        ("branch-2025.2:latest", "scylladb/scylla"),
+        ("branch-2025.3:latest", "scylladb/scylla"),
+        ("branch-2025.4:latest", "scylladb/scylla"),
+        ("master:latest", "scylladb/scylla"),
     ),
 )
-def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo, input_repo):
-    assert get_scylla_docker_repo_from_version(version, input_repo) == expected_repo
+def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
+    assert get_scylla_docker_repo_from_version(version) == expected_repo
