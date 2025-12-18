@@ -88,6 +88,16 @@
 /test-cases/features/out-of-space-prevention              @pehala
 /jenkins-pipelines/oss/features/out-of-space-prevention   @pehala
 
+# Backup & Restore
+jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/scylla-enterprise-perf-manager-native-backup-nemesis.jenkinsfile   @pehala
+jenkins-pipelines/performance/branch-perf-v17/scylla-enterprise/perf-regression/scylla-enterprise-perf-manager-rclone-backup-nemesis.jenkinsfile   @pehala
+test-cases/performance/perf-regression-latency-backup-nemesis.yaml    @pehala
+configurations/manager/manager_rclone_backup_nemesis.yaml             @pehala
+configurations/manager/manager_native_backup_nemesis.yaml             @pehala
+configurations/object_storage.yaml                                    @pehala
+configurations/object_storage_native_method.yaml                      @pehala
+configurations/object_storage_rclone_method.yaml                      @pehala
+
 # Elasticity
 /test-cases/features/elasticity                           @pehala
 /jenkins-pipelines/oss/features/elasticity                @pehala

@@ -1,6 +1,7 @@
 # Test case for ScyllaDB elasticity at 90% utilization
 # The test writes approximately 1.5 TB of data to fill the cluster at around 90% utilization.
 # A 3rd of the data is written to a keyspace that is truncated after all writes are done.
+# Maintained by Storage QA
 test_duration: 360
 prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=QUORUM n=480000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..480000000",
