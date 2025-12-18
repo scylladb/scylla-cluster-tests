@@ -2,6 +2,7 @@
 # The test writes approximately 0.4 TB of data to fill the cluster at around 90% utilization.
 # After the cluster is filled, a mixed workload is run at approximately 50% load.
 # The cluster is the scaled out then in with larger nodes.
+# Maintained by Storage QA
 test_duration: 800
 prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=QUORUM n=120000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..120000000",

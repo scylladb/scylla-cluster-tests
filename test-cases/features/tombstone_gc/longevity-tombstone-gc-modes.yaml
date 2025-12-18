@@ -1,3 +1,4 @@
+# Maintained by Storage QA
 test_duration: 200
 
 stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=3 -partition-count=400 -clustering-row-count=10000 -clustering-row-size=200 -concurrency=10 -rows-per-request=1 -start-timestamp=SET_WRITE_TIMESTAMP -connection-count 10 -max-rate 30000 -timeout=120s -retry-number=30 -retry-interval=80ms,1s -duration=80m"]

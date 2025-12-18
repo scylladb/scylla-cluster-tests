@@ -6,6 +6,7 @@
 # On each batch cycle, 125 tables are created, then a load is generated for all of these tables.
 # When all the 125 stress writes/reads are done, it continue with the next batch until stress to all 500 tables is completed (after 4 cycles).
 # Each one of the 500 tables has both write and read load.
+# Maintained by Storage QA
 
 test_duration: 600
 
