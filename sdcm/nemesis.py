@@ -3551,11 +3551,24 @@ class Nemesis(NemesisFlags):
                     DbNodeLogger(self.cluster.nodes, "abort repair streaming", target_node=self.target_node),
                     self.action_log_scope(f"Abort repair streaming on {self.target_node.name} node"),
                 ):
+                    # force_terminate_repair only aborts running repair tasks
+                    # it is possible that it will be called just after a task has ended and just before the next task starts
+                    zero_jobs_log = self.target_node.follow_system_log(
+                        r"repair - Started to abort repair jobs=\{\}, nr_jobs=0"
+                    )
+
                     self.target_node.remoter.run(
                         "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
                         " http://127.0.0.1:10000/storage_service/force_terminate_repair"
                     )
-                thread.result(timeout=120)
+
+                try:
+                    thread.result(timeout=120)
+                except TimeoutError:
+                    if list(zero_jobs_log):
+                        raise UnsupportedNemesis("No repair jobs running when terminate was called")
+                    else:
+                        raise
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
         self.log.debug("Execute a complete repair for target node")
