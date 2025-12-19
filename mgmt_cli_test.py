@@ -103,7 +103,9 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
         mgr_cluster = self.db_cluster.get_cluster_manager()
         if not ks_names:
             ks_names = ["keyspace1"]
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=ks_names)
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=self.locations, keyspace_list=ks_names, method=self.backup_method
+        )
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -127,7 +129,7 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
         mgr_cluster = self.db_cluster.get_cluster_manager(
             alternator_credentials=self.alternator.get_credentials(node=self.db_cluster.nodes[0])
         )
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -146,7 +148,7 @@ class ManagerBackupTests(ManagerRestoreTests):
     def test_basic_backup(self, ks_names: list = None):
         self.log.info("starting test_basic_backup")
         mgr_cluster = self.db_cluster.get_cluster_manager()
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -169,7 +171,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         tables = self.create_ks_and_tables(10, 100)
         self.log.debug("tables list = {}".format(tables))
         # TODO: insert data to those tables
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -181,7 +183,9 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info("starting test_backup_location_with_path")
         mgr_cluster = self.db_cluster.get_cluster_manager()
         try:
-            mgr_cluster.create_backup_task(location_list=[f"{location}/path_testing/" for location in self.locations])
+            mgr_cluster.create_backup_task(
+                location_list=[f"{location}/path_testing/" for location in self.locations], method=self.backup_method
+            )
         except ScyllaManagerError as error:
             self.log.info("Expected to fail - error: {}".format(error))
         self.log.info("finishing test_backup_location_with_path")
@@ -191,7 +195,9 @@ class ManagerBackupTests(ManagerRestoreTests):
         mgr_cluster = self.db_cluster.get_cluster_manager()
         rate_limit_list = [f"{dc}:{random.randint(15, 25)}" for dc in self.get_all_dcs_names()]
         self.log.info("rate limit will be {}".format(rate_limit_list))
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=self.locations, rate_limit_list=rate_limit_list, method=self.backup_method
+        )
         task_status = backup_task.wait_and_get_final_status(timeout=18000)
         assert task_status == TaskStatus.DONE, (
             f"Task {backup_task.id} did not end successfully:\n{backup_task.detailed_progress}"
@@ -212,7 +218,9 @@ class ManagerBackupTests(ManagerRestoreTests):
         mgr_cluster = self.db_cluster.get_cluster_manager()
         snapshot_file_list_pre_test = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, retention=1)
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=self.locations, retention=1, method=self.backup_method
+        )
         backup_task.wait_for_uploading_stage(step=5)
         backup_task.stop()
         snapshot_file_list_post_task_stopping = self.get_all_snapshot_files(cluster_id=mgr_cluster.id)
@@ -244,7 +252,7 @@ class ManagerBackupTests(ManagerRestoreTests):
 
         with ignore_no_space_errors(node=target_node):
             try:
-                backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+                backup_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
                 backup_task.wait_for_uploading_stage()
                 backup_task.stop()
 
@@ -274,7 +282,9 @@ class ManagerBackupTests(ManagerRestoreTests):
 
         self.log.info("starting test_enospc_before_restore")
         mgr_cluster = self.db_cluster.get_cluster_manager()
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=self.locations, keyspace_list=["keyspace1"], method=self.backup_method
+        )
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -356,7 +366,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
 
         self.log.info("Run backup #1")
-        backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_1_status = backup_task_1.wait_and_get_final_status(timeout=3600)
         assert backup_task_1_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_1_status} instead of {TaskStatus.DONE}"
@@ -364,7 +374,7 @@ class ManagerBackupTests(ManagerRestoreTests):
         self.log.info(f"Backup task #1 duration - {backup_task_1.duration}")
 
         self.log.info("Run backup #2")
-        backup_task_2 = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_2 = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         backup_task_2_status = backup_task_2.wait_and_get_final_status(timeout=60)
         assert backup_task_2_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_2_status} instead of {TaskStatus.DONE}"
@@ -693,7 +703,7 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         # the test is not able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         if task_type == "backup":
-            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
+            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         elif task_type == "repair":
             # Set intensity and parallel to 1 to make repair task run longer to be able to catch RUNNING state
             suspendable_task = mgr_cluster.create_repair_task(intensity=1, parallel=1)
@@ -720,7 +730,7 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
         task_type = random.choice(["backup", "repair"])
         if task_type == "backup":
-            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
+            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         else:
             suspendable_task = mgr_cluster.create_repair_task()
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), (
@@ -757,7 +767,7 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
         # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
         # the test is not able to catch the required statuses
         mgr_cluster = self.db_cluster.get_cluster_manager(force_add=True)
-        suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations, method=self.backup_method)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), (
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
         )
@@ -838,7 +848,9 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
 
         self.log.info("Run backup and wait for it to finish")
-        backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=["0"])
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=location_list, rate_limit_list=["0"], method=self.backup_method
+        )
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -1097,7 +1109,9 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.db_cluster.get_cluster_manager()
 
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task = mgr_cluster.create_backup_task(
+            location_list=self.locations, rate_limit_list=["0"], method=self.backup_method
+        )
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
         assert backup_task_status == TaskStatus.DONE, (
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
