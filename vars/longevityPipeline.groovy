@@ -86,7 +86,7 @@ def call(Map pipelineParams) {
                    name: 'ip_ssh_connections')
 
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
-                   description: 'master_latest|3.2|3.1',
+                   description: 'master_latest|3.8|3.7',
                    name: 'manager_version')
 
             string(defaultValue: '',
