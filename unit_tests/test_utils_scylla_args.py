@@ -44,7 +44,7 @@ class TestScyllaArgParser(unittest.TestCase):
         ScyllaArgParser.from_scylla_help(
             SCYLLA_HELP_EXAMPLE + "\n" + SCYLLA_HELP_EXAMPLE,
             duplicate_cb=lambda dups: self.assertEqual(
-                ["--help", "--options-file", "--version", "--workdir"], sorted(dups)
+                ["--help", "--logger-log-level", "--options-file", "--version", "--workdir"], sorted(dups)
             ),
         )
 
@@ -66,15 +66,13 @@ class TestScyllaArgParser(unittest.TestCase):
 
     def test_repeated_logger_log_level_args(self):
         """Test that multiple --logger-log-level arguments are preserved.
-        
+
         This test demonstrates the issue where only the last occurrence
         of --logger-log-level is kept when multiple are provided.
         """
         # Test case from the issue: multiple --logger-log-level arguments
-        result = self.parser.filter_args(
-            "--logger-log-level load_balancer=debug --logger-log-level tablets=debug"
-        )
-        
+        result = self.parser.filter_args("--logger-log-level load_balancer=debug --logger-log-level tablets=debug")
+
         # Expected: both logger-log-level arguments should be present
         # This assertion will FAIL with the current implementation
         # because argparse with action='store' only keeps the last value

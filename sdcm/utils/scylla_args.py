@@ -51,7 +51,7 @@ class ScyllaArgParser(argparse.ArgumentParser):
         duplicates = set()
         for *args, val in SCYLLA_ARG.findall(help_text):
             try:
-                parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
+                parser.add_argument(*filter(bool, args), action="append" if val else "store_false")
             except argparse.ArgumentError:
                 if arg_names := list(filter(bool, args)):
                     duplicates.add(arg_names[-1])
@@ -66,7 +66,17 @@ class ScyllaArgParser(argparse.ArgumentParser):
             unknown_args_cb(unknown_args)
         filtered_args = []
         for arg, val in vars(parsed_args).items():
-            filtered_args.append(f"--{arg.replace('_', '-')}")
-            if val:
+            if isinstance(val, list):
+                # Repeated argument - add each occurrence
+                for v in val:
+                    filtered_args.append(f"--{arg.replace('_', '-')}")
+                    if v:
+                        filtered_args.append(v)
+            elif val is False:
+                # Boolean flag (action=store_false)
+                filtered_args.append(f"--{arg.replace('_', '-')}")
+            elif val:
+                # Single string argument (shouldn't happen with action=append, but handle for safety)
+                filtered_args.append(f"--{arg.replace('_', '-')}")
                 filtered_args.append(val)
         return " ".join(filtered_args)
