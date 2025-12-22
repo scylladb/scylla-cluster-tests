@@ -85,7 +85,13 @@ def call(Map pipelineParams) {
                    name: 'ip_ssh_connections')
 
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
+<<<<<<< HEAD
                    description: 'master_latest|3.2|3.1',
+||||||| parent of 418c64032 (feature(manager): introduce Manager 3.8 into repository)
+                   description: 'master_latest|3.7|3.6',
+=======
+                   description: 'master_latest|3.8|3.7',
+>>>>>>> 418c64032 (feature(manager): introduce Manager 3.8 into repository)
                    name: 'manager_version')
 
             string(defaultValue: '',
