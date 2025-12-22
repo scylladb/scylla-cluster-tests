@@ -28,14 +28,6 @@ def createRunConfiguration(String backend) {
         configuration.docker_image = 'scylladb/scylla-nightly'
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
-        if (scylla_version.endsWith('latest')) {
-            configuration.scylla_version = 'latest'
-            configuration.docker_image = 'scylladb/scylla-nightly'
-            configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
-            configuration.k8s_scylla_operator_chart_version = 'latest'
-            configuration.k8s_enable_tls = 'false'
-            configuration.k8s_enable_sni = 'false'
-        }
         configuration.test_config = "test-cases/scylla-operator/functional.yaml"
         configuration.test_name = "functional_tests/scylla_operator"
         configuration.functional_tests = true
