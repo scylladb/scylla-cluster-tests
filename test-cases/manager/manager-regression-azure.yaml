@@ -10,6 +10,8 @@ azure_image_monitor: 'RedHat:RHEL:9_5:latest'
 # Default 50 GB value is changed here as the size of the corresponding disk in the VM image: 64 GB
 root_disk_size_monitor: 64
 
+monitor_branch: 'branch-4.12'  # Pass it as RHEL image is not the formal monitor image
+
 client_encrypt: true
 
 use_preinstalled_scylla: true
