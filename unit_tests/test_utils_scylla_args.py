@@ -29,6 +29,10 @@ Scylla options:
                                         all its subdirectories. The location of
                                         individual subdirs can be overriden by
                                         the respective *_directory options.
+  --logger-log-level arg                Set logger log level. Argument is either
+                                        'logger=level' or just 'level'. Use
+                                        --list-loggers to get the list of
+                                        available loggers
 """
 
 
@@ -59,3 +63,20 @@ class TestScyllaArgParser(unittest.TestCase):
 
     def test_wrong_known_arg(self):
         self.assertRaises(ScyllaArgError, self.parser.filter_args, "-W --arg arg --arg2")
+
+    def test_repeated_logger_log_level_args(self):
+        """Test that multiple --logger-log-level arguments are preserved.
+        
+        This test demonstrates the issue where only the last occurrence
+        of --logger-log-level is kept when multiple are provided.
+        """
+        # Test case from the issue: multiple --logger-log-level arguments
+        result = self.parser.filter_args(
+            "--logger-log-level load_balancer=debug --logger-log-level tablets=debug"
+        )
+        
+        # Expected: both logger-log-level arguments should be present
+        # This assertion will FAIL with the current implementation
+        # because argparse with action='store' only keeps the last value
+        self.assertIn("--logger-log-level load_balancer=debug", result)
+        self.assertIn("--logger-log-level tablets=debug", result)
