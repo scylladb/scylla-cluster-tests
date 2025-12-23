@@ -3668,7 +3668,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
         log_file_path = Path(self.logdir) / log_file
         try:
-            result = node.run_nodetool(sub_cmd=sub_cmd, ignore_status=True, publish_event=False)
+            result = node.run_nodetool(sub_cmd=sub_cmd, ignore_status=True, publish_event=False, timeout=300)
             if result.ok:
                 with open(log_file_path, "w", encoding="utf-8") as res_file:
                     res_file.write(result.stdout.strip())
@@ -3704,19 +3704,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             break
 
         # Collect nodetool gossipinfo and compactionstats from all nodes
-        for idx, node in enumerate(self.db_cluster.nodes):
+        for node in self.db_cluster.nodes:
             if not node._is_node_ready_run_scylla_commands():
                 self.log.warning("Node %s is not ready, skipping nodetool commands", node.name)
                 continue
 
             # Save gossipinfo
             self.save_nodetool_output_in_file(
-                node=node, sub_cmd="gossipinfo", log_file=f"nodetool_gossipinfo_failure_{node.name}_{idx}.log"
+                node=node, sub_cmd="gossipinfo", log_file=f"nodetool_gossipinfo_failure_{node.name}.log"
             )
 
             # Save compactionstats
             self.save_nodetool_output_in_file(
-                node=node, sub_cmd="compactionstats", log_file=f"nodetool_compactionstats_failure_{node.name}_{idx}.log"
+                node=node, sub_cmd="compactionstats", log_file=f"nodetool_compactionstats_failure_{node.name}.log"
             )
 
         # Run scylla-doctor if enabled

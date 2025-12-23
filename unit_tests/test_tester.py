@@ -361,8 +361,8 @@ class TestGatherFailureStatistics:
 
         # Verify files were created
         assert (tmp_path / "nodetool_status_failure.log").exists()
-        assert (tmp_path / "nodetool_gossipinfo_failure_test_node_1_0.log").exists()
-        assert (tmp_path / "nodetool_compactionstats_failure_test_node_1_0.log").exists()
+        assert (tmp_path / "nodetool_gossipinfo_failure_test_node_1.log").exists()
+        assert (tmp_path / "nodetool_compactionstats_failure_test_node_1.log").exists()
 
     def test_gather_failure_statistics_node_not_ready(self, tmp_path):
         """Test that gather_failure_statistics handles nodes that are not ready."""
