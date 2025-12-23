@@ -433,7 +433,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         """
 
         def _calculate_relative_change_magnitude(current_value, best_value):
-            if not best_value:
+            if not best_value or current_value is None:
                 return "N/A"
             else:
                 return round(((current_value - best_value) / best_value) * 100, 2)
@@ -452,7 +452,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                     continue
                 for _, best in best_result[nemesis].items():
                     # Initialize hdr_summary_diff
-                    best.setdefault('hdr_summary_diff', {})
+                    best.setdefault("hdr_summary_diff", {})
 
                     # Check if nemesis exists in current_result
                     if nemesis not in current_result:
@@ -460,42 +460,46 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                         continue
 
                     # Iterate through workloads in best result
-                    for workload in best.get('hdr_summary_average', {}):
+                    for workload in best.get("hdr_summary_average", {}):
                         # Check if workload exists in current result
-                        current_hdr = current_result.get(nemesis, {}).get('hdr_summary_average', {})
+                        current_hdr = current_result.get(nemesis, {}).get("hdr_summary_average", {})
                         if workload not in current_hdr:
                             LOGGER.warning(
                                 "Workload '%s' not found in current_result['%s']['hdr_summary_average'], skipping diff calculation",
-                                workload, nemesis
+                                workload,
+                                nemesis,
                             )
                             continue
 
                         # Initialize workload in diff dict
-                        diff = best['hdr_summary_diff']
+                        diff = best["hdr_summary_diff"]
                         diff[workload] = {}
 
                         # Calculate diff for each percentile
                         for perc in self.percentiles:
                             try:
                                 current_val = current_hdr[workload].get(perc)
-                                best_val = best['hdr_summary_average'][workload].get(perc)
+                                best_val = best["hdr_summary_average"][workload].get(perc)
                                 diff[workload][perc] = _calculate_relative_change_magnitude(current_val, best_val)
                             except (KeyError, TypeError) as exc:
                                 LOGGER.warning(
                                     "Failed to calculate diff for workload '%s', percentile '%s': %s",
-                                    workload, perc, exc
+                                    workload,
+                                    perc,
+                                    exc,
                                 )
                                 diff[workload][perc] = "N/A"
 
                     # Calculate average time operation diff
                     try:
-                        current_avg_time = current_result[nemesis].get('average_time_operation_in_sec')
-                        best_avg_time = best.get('average_time_operation_in_sec')
-                        best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
-                            current_avg_time, best_avg_time)
+                        current_avg_time = current_result[nemesis].get("average_time_operation_in_sec")
+                        best_avg_time = best.get("average_time_operation_in_sec")
+                        best["average_time_operation_in_sec_diff"] = _calculate_relative_change_magnitude(
+                            current_avg_time, best_avg_time
+                        )
                     except (KeyError, TypeError) as exc:
                         LOGGER.warning("Failed to calculate average_time_operation_in_sec_diff: %s", exc)
-                        best['average_time_operation_in_sec_diff'] = "N/A"
+                        best["average_time_operation_in_sec_diff"] = "N/A"
         except Exception as exc:  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
