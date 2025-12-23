@@ -55,7 +55,7 @@ dependencies = [
     "python-jenkins==1.8.2",
     "PyYAML==6.0.1",
     "pyzmq==27.1.0",
-    "questionary==2.1.0",
+    "questionary==2.1.1",
     "requests==2.32.4",
     "scylla-driver==3.29.5",
     "sortedcontainers==2.4.0",
