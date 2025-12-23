@@ -14,11 +14,10 @@ LOGGER = setup_stdout_logger()
 
 def argus_client_factory() -> Callable[[str], ArgusSCTClient]:
     """Factory function to create ArgusSCTClient instances with pre-configured credentials."""
-    creds = KeyStore().get_argus_rest_credentials()
+    creds = KeyStore().get_argus_rest_credentials_per_provider()
     return partial(
         ArgusSCTClient, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
     )
-
 
 argus_client = argus_client_factory()
 
