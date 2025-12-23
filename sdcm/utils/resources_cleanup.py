@@ -744,6 +744,9 @@ def clean_clusters_scylla_cloud(tags_dict: dict, config: dict, dry_run: bool = F
     """Clean up Scylla Cloud resources based on tags"""
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
 
+    if "NodeType" in tags_dict and "scylla-db" not in tags_dict.get("NodeType"):
+        return
+
     if dry_run:
         LOGGER.info("DRY RUN: No actual resources will be deleted")
 
