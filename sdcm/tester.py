@@ -3689,6 +3689,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         - nodetool gossipinfo (from all nodes)
         - nodetool compactionstats (from all nodes)
         - scylla-doctor output (optional, if enabled)
+
+        Collection is parallelized to improve performance on large clusters.
         """
         if self.db_cluster is None:
             self.log.info("No DB cluster found, skipping failure statistics collection")
@@ -3703,21 +3705,39 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.save_nodetool_output_in_file(node=node, sub_cmd="status", log_file="nodetool_status_failure.log")
             break
 
-        # Collect nodetool gossipinfo and compactionstats from all nodes
-        for node in self.db_cluster.nodes:
-            if not node._is_node_ready_run_scylla_commands():
-                self.log.warning("Node %s is not ready, skipping nodetool commands", node.name)
-                continue
+        # Collect nodetool gossipinfo and compactionstats from all nodes in parallel
+        ready_nodes = [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]
 
-            # Save gossipinfo
-            self.save_nodetool_output_in_file(
-                node=node, sub_cmd="gossipinfo", log_file=f"nodetool_gossipinfo_failure_{node.name}.log"
-            )
+        if not ready_nodes:
+            self.log.warning("No ready nodes found for collecting gossipinfo and compactionstats")
+        else:
 
-            # Save compactionstats
-            self.save_nodetool_output_in_file(
-                node=node, sub_cmd="compactionstats", log_file=f"nodetool_compactionstats_failure_{node.name}.log"
-            )
+            def collect_node_stats(node):
+                """Collect gossipinfo and compactionstats from a single node."""
+                try:
+                    # Save gossipinfo
+                    self.save_nodetool_output_in_file(
+                        node=node, sub_cmd="gossipinfo", log_file=f"nodetool_gossipinfo_failure_{node.name}.log"
+                    )
+
+                    # Save compactionstats
+                    self.save_nodetool_output_in_file(
+                        node=node,
+                        sub_cmd="compactionstats",
+                        log_file=f"nodetool_compactionstats_failure_{node.name}.log",
+                    )
+                    return node.name, True, None
+                except Exception as exc:  # noqa: BLE001
+                    return node.name, False, str(exc)
+
+            # Use ThreadPoolExecutor to parallelize collection
+            with ThreadPoolExecutor(max_workers=len(ready_nodes)) as executor:
+                futures = {executor.submit(collect_node_stats, node): node for node in ready_nodes}
+
+                for future in as_completed(futures):
+                    node_name, success, error = future.result()
+                    if not success:
+                        self.log.warning("Failed to collect stats from node %s: %s", node_name, error)
 
         # Run scylla-doctor if enabled
         if self.params.get("use_scylla_doctor_on_failure", default=False):
