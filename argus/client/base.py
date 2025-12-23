@@ -37,15 +37,13 @@ class ArgusClient:
         self._auth_token = auth_token
         self._base_url = base_url
         self._api_ver = api_version
-        self._extra_headers = extra_headers or {}
+        self.session = requests.Session()
+        if extra_headers:
+            self.session.headers.update(extra_headers)
 
     @property
     def auth_token(self) -> str:
         return self._auth_token
-
-    @property
-    def extra_headers(self) -> dict:
-        return self._extra_headers
 
     def verify_location_params(self, endpoint: str, location_params: dict[str, str]) -> bool:
         required_params: list[str] = re.findall(r"\$[\w_]+", endpoint)
@@ -92,7 +90,6 @@ class ArgusClient:
             "Authorization": f"token {self.auth_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
-            **self.extra_headers,
         }
 
     def get(self, endpoint: str, location_params: dict[str, str] = None, params: dict = None) -> requests.Response:
@@ -101,7 +98,7 @@ class ArgusClient:
             location_params=location_params
         )
         LOGGER.debug("GET Request: %s, params: %s", url, params)
-        response = requests.get(
+        response = self.session.get(
             url=url,
             params=params,
             headers=self.request_headers
@@ -122,7 +119,7 @@ class ArgusClient:
             location_params=location_params
         )
         LOGGER.debug("POST Request: %s, params: %s, body: %s", url, params, body)
-        response = requests.post(
+        response = self.session.post(
             url=url,
             params=params,
             json=body,

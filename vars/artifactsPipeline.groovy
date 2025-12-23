@@ -10,6 +10,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_ENABLE_ARGUS_REPORT = "1"
         }
         parameters {
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
@@ -274,18 +275,6 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                        stage("Send email with result ${instance_type}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 10, unit: 'MINUTES') {
-                                                            runSendEmail(params, currentBuild)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
                                         stage('Finish Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
                                                 script {
@@ -294,6 +283,18 @@ def call(Map pipelineParams) {
                                                             timeout(time: 5, unit: 'MINUTES') {
                                                                 finishArgusTestRun(params, currentBuild)
                                                             }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Send email with result ${instance_type}") {
+                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runSendEmail(params, currentBuild)
                                                         }
                                                     }
                                                 }
