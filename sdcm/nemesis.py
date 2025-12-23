@@ -6088,49 +6088,43 @@ class Nemesis(NemesisFlags):
                 return False
 
             stack.push(_finalizer)
-            message_context = (
-                f"Banned node {self.target_node.name} should receive NOTIFY_BANNED "
-                f"and terminate after being removed from cluster"
+
+            pattern = ["received notification of being banned from the cluster"]
+            follower = self.target_node.follow_system_log(
+                patterns=pattern,
             )
-            with wait_for_log_lines(
-                node=self.target_node,
-                start_line_patterns=["received notification of being banned from the cluster"],
-                end_line_patterns=["terminating."],
-                start_timeout=300,
-                end_timeout=300,
-                error_msg_ctx=message_context,
-            ):
-                with simulate_node_unavailability(self.target_node):
-                    # target node stopped by Contextmanger. Wait while its status will be updated
-                    self.actions_log.info(
-                        f"Blocked {self.target_node.name} node with {simulate_node_unavailability.__name__}"
-                    )
-                    wait_for(
-                        node_operations.is_node_seen_as_down,
-                        step=5,
-                        timeout=600,
-                        throw_exc=True,
-                        down_node=self.target_node,
-                        verification_node=working_node,
-                        text=f"Wait other nodes see {self.target_node.name} as DOWN...",
-                    )
-                    self.log.debug(
-                        "Remove node %s : hostid: %s with blocked scylla from cluster",
-                        self.target_node.name,
-                        target_host_id,
-                    )
-                    self.actions_log.info(f"Remove {self.target_node.name} node from cluster")
-                    # For process paused with SIGSTOP signal, network sockets are still open,
-                    # so already running raft barriers could stuck. To avoid that
-                    # we need to block scylla ports on target node.
-                    if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
-                        with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
-                            working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
-                    else:
+
+            with simulate_node_unavailability(self.target_node):
+                # target node stopped by Contextmanger. Wait while its status will be updated
+                self.actions_log.info(
+                    f"Blocked {self.target_node.name} node with {simulate_node_unavailability.__name__}"
+                )
+                wait_for(
+                    node_operations.is_node_seen_as_down,
+                    step=5,
+                    timeout=600,
+                    throw_exc=True,
+                    down_node=self.target_node,
+                    verification_node=working_node,
+                    text=f"Wait other nodes see {self.target_node.name} as DOWN...",
+                )
+                self.log.debug(
+                    "Remove node %s : hostid: %s with blocked scylla from cluster",
+                    self.target_node.name,
+                    target_host_id,
+                )
+                self.actions_log.info(f"Remove {self.target_node.name} node from cluster")
+                # For process paused with SIGSTOP signal, network sockets are still open,
+                # so already running raft barriers could stuck. To avoid that
+                # we need to block scylla ports on target node.
+                if simulate_node_unavailability == node_operations.pause_scylla_with_sigstop:
+                    with node_operations.block_scylla_ports(self.target_node, ports=[7000, 7001]):
                         working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
-                    assert node_operations.is_node_removed_from_cluster(
-                        removed_node=self.target_node, verification_node=working_node
-                    ), f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
+                else:
+                    working_node.run_nodetool(f"removenode {target_host_id}", retry=0, long_running=True)
+                assert node_operations.is_node_removed_from_cluster(
+                    removed_node=self.target_node, verification_node=working_node
+                ), f"Node {self.target_node.name} with host id {target_host_id} was not removed. See log errors"
 
             wait_for(
                 lambda: not self.target_node.db_up(),
@@ -6139,6 +6133,13 @@ class Nemesis(NemesisFlags):
                 throw_exc=True,
                 text=f"Wait banned node {self.target_node.name} to terminate after ban notification...",
             )
+
+            assert wait_for(
+                func=lambda: list(follower),
+                timeout=30,
+                text="Waiting for ban notification patterns in log",
+                throw_exc=False,
+            ), "Ban notification patterns were not found in system log"
 
             self.actions_log.info(
                 "Banned node %s has NOTIFY_BANNED and terminating messages in logs",
