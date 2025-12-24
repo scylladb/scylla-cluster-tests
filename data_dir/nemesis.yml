@@ -9,7 +9,6 @@ disrupt_abort_repair:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -26,7 +25,6 @@ disrupt_add_drop_column:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: false
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -43,7 +41,6 @@ disrupt_add_remove_dc:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -60,7 +57,6 @@ disrupt_add_remove_mv:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: false
@@ -77,7 +73,6 @@ disrupt_bootstrap_streaming_error:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -94,7 +89,6 @@ disrupt_corrupt_then_scrub:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -111,7 +105,6 @@ disrupt_create_index:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: false
@@ -128,7 +121,6 @@ disrupt_decommission_streaming_err:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -145,7 +137,6 @@ disrupt_delete_10_full_partitions:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -162,7 +153,6 @@ disrupt_delete_by_rows_range:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -179,7 +169,6 @@ disrupt_delete_overlapping_row_ranges:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -196,7 +185,6 @@ disrupt_destroy_data_then_rebuild:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -213,7 +201,6 @@ disrupt_destroy_data_then_repair:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -230,7 +217,6 @@ disrupt_disable_binary_gossip_execute_major_compaction:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -247,7 +233,6 @@ disrupt_disable_enable_ldap_authorization:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -264,7 +249,6 @@ disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -281,7 +265,6 @@ disrupt_drain_kubernetes_node_then_replace_scylla_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -298,7 +281,6 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -315,7 +297,6 @@ disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -332,7 +313,6 @@ disrupt_end_of_quota_nemesis:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -349,7 +329,6 @@ disrupt_grow_shrink_cluster:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -366,7 +345,6 @@ disrupt_grow_shrink_new_rack:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -383,7 +361,6 @@ disrupt_grow_shrink_zero_nodes:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -400,7 +377,6 @@ disrupt_hard_reboot_node:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -417,7 +393,6 @@ disrupt_hot_reloading_internode_certificate:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -434,7 +409,6 @@ disrupt_increase_shares_by_attach_another_sl_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -451,7 +425,6 @@ disrupt_kill_mv_building_coordinator:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -468,7 +441,6 @@ disrupt_kill_scylla:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -485,7 +457,6 @@ disrupt_ldap_connection_toggle:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -502,7 +473,6 @@ disrupt_load_and_stream:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -519,7 +489,6 @@ disrupt_major_compaction:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -536,7 +505,6 @@ disrupt_manager_backup:
   limited: false
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -553,7 +521,6 @@ disrupt_maximum_allowed_sls_with_max_shares_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -570,7 +537,6 @@ disrupt_memory_stress:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -587,7 +553,6 @@ disrupt_mgmt_backup:
   limited: true
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -604,7 +569,6 @@ disrupt_mgmt_backup_specific_keyspaces:
   limited: true
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -621,7 +585,6 @@ disrupt_mgmt_corrupt_then_repair:
   limited: false
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -638,7 +601,6 @@ disrupt_mgmt_repair_cli:
   limited: true
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -655,7 +617,6 @@ disrupt_mgmt_restore:
   limited: true
   manager_operation: true
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -672,7 +633,6 @@ disrupt_modify_table:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -689,7 +649,6 @@ disrupt_multiple_hard_reboot_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -706,7 +665,6 @@ disrupt_network_block:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -723,7 +681,6 @@ disrupt_network_random_interruptions:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -740,7 +697,6 @@ disrupt_network_reject_inter_node_communication:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -757,7 +713,6 @@ disrupt_network_reject_node_exporter:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -774,7 +729,6 @@ disrupt_network_reject_thrift:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -791,7 +745,6 @@ disrupt_network_start_stop_interface:
   limited: false
   manager_operation: false
   networking: true
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -808,7 +761,6 @@ disrupt_no_corrupt_repair:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -825,7 +777,6 @@ disrupt_nodetool_cleanup:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -842,7 +793,6 @@ disrupt_nodetool_decommission:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -859,7 +809,6 @@ disrupt_nodetool_drain:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -876,7 +825,6 @@ disrupt_nodetool_enospc:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -893,7 +841,6 @@ disrupt_nodetool_flush_and_reshard_on_kubernetes:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -910,7 +857,6 @@ disrupt_nodetool_refresh:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -927,7 +873,6 @@ disrupt_nodetool_seed_decommission:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -944,7 +889,6 @@ disrupt_rebuild_streaming_err:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -961,7 +905,6 @@ disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -978,7 +921,6 @@ disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -995,7 +937,6 @@ disrupt_remove_node_then_add_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -1012,7 +953,6 @@ disrupt_remove_service_level_while_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -1029,7 +969,6 @@ disrupt_repair_streaming_err:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1046,7 +985,6 @@ disrupt_replace_scylla_node_on_kubernetes:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1063,7 +1001,6 @@ disrupt_replace_service_level_using_detach_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -1080,7 +1017,6 @@ disrupt_replace_service_level_using_drop_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -1097,7 +1033,6 @@ disrupt_resetlocalschema:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1114,7 +1049,6 @@ disrupt_restart_then_repair_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1131,7 +1065,6 @@ disrupt_restart_with_resharding:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1149,7 +1082,6 @@ disrupt_rolling_config_change_internode_compression:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1166,7 +1098,6 @@ disrupt_rolling_restart_cluster:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1183,7 +1114,6 @@ disrupt_run_cdcstressor_tool:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1200,7 +1130,6 @@ disrupt_run_unique_sequence:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: false
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1217,7 +1146,6 @@ disrupt_serial_restart_elected_topology_coordinator:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1234,7 +1162,6 @@ disrupt_show_toppartitions:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1251,7 +1178,6 @@ disrupt_sla_decrease_shares_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -1268,7 +1194,6 @@ disrupt_sla_increase_shares_during_load:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: true
   supports_high_disk_utilization: true
@@ -1285,7 +1210,6 @@ disrupt_snapshot_operations:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1302,7 +1226,6 @@ disrupt_soft_reboot_node:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1319,7 +1242,6 @@ disrupt_start_stop_cleanup_compaction:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1336,7 +1258,6 @@ disrupt_start_stop_major_compaction:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1353,7 +1274,6 @@ disrupt_start_stop_scrub_compaction:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1370,7 +1290,6 @@ disrupt_start_stop_validation_compaction:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: false
@@ -1387,7 +1306,6 @@ disrupt_stop_start_scylla_server:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1404,7 +1322,6 @@ disrupt_stop_wait_start_scylla_server:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1421,7 +1338,6 @@ disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_ba
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1438,7 +1354,6 @@ disrupt_terminate_and_replace_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1455,7 +1370,6 @@ disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1472,7 +1386,6 @@ disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1489,7 +1402,6 @@ disrupt_toggle_audit_syslog:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -1506,7 +1418,6 @@ disrupt_toggle_cdc_feature_properties_on_table:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -1523,7 +1434,6 @@ disrupt_toggle_table_gc_mode:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -1540,7 +1450,6 @@ disrupt_toggle_table_ics:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: true
   sla: false
   supports_high_disk_utilization: true
@@ -1557,7 +1466,6 @@ disrupt_truncate:
   limited: true
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1574,7 +1482,6 @@ disrupt_truncate_large_partition:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
@@ -1591,7 +1498,6 @@ disrupt_validate_hh_short_downtime:
   limited: false
   manager_operation: false
   networking: false
-  run_with_gemini: true
   schema_changes: false
   sla: false
   supports_high_disk_utilization: true
