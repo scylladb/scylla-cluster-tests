@@ -45,8 +45,8 @@ gce_n_local_ssd_disk_db: 8
 
 n_test_oracle_db_nodes: 3
 instance_type_db_oracle: 'i4i.2xlarge'
-oracle_scylla_version: ''
-ami_id_db_oracle: 'ami-0c14b7ebb55b4ce15'
+oracle_scylla_version: '2025.4.0'
+
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ["schema_changes and not disruptive"]
