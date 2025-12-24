@@ -250,7 +250,6 @@ class NemesisFlags:
     disruptive: bool = False  # flag that signal that nemesis disrupts node/cluster,
     # i.e reboot,kill, hardreboot, terminate
     supports_high_disk_utilization: bool = True  # supported in a 90% disk utilization scenario
-    run_with_gemini: bool = True  # flag that signal that nemesis runs with gemini tests
     networking: bool = False  # flag that signal that nemesis interact with nemesis,
     # i.e switch off/on network interface, network issues
     kubernetes: bool = False  # flag that signal that nemesis run with k8s cluster
@@ -6534,7 +6533,6 @@ class NoOpMonkey(Nemesis):
 
 class AddRemoveDcNemesis(Nemesis):
     disruptive = True
-    run_with_gemini = False
     limited = True
     topology_changes = True
 
@@ -6719,7 +6717,6 @@ class MajorCompactionMonkey(Nemesis):
 
 class RefreshMonkey(Nemesis):
     disruptive = False
-    run_with_gemini = False
     kubernetes = True
     limited = True
 
@@ -6729,7 +6726,6 @@ class RefreshMonkey(Nemesis):
 
 class LoadAndStreamMonkey(Nemesis):
     disruptive = False
-    run_with_gemini = False
     kubernetes = True
     limited = True
 
@@ -6739,7 +6735,6 @@ class LoadAndStreamMonkey(Nemesis):
 
 class RefreshBigMonkey(Nemesis):
     disruptive = False
-    run_with_gemini = False
     kubernetes = True
 
     def disrupt(self):
@@ -6967,7 +6962,6 @@ class ModifyTableMonkey(Nemesis):
 
 class AddDropColumnMonkey(Nemesis):
     disruptive = False
-    run_with_gemini = False
     networking = False
     kubernetes = True
     limited = True
@@ -7260,7 +7254,6 @@ class TopPartitions(Nemesis):
 class RandomInterruptionNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
     kubernetes = True
 
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
@@ -7276,7 +7269,6 @@ class RandomInterruptionNetworkMonkey(Nemesis):
 class BlockNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
     kubernetes = True
 
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
@@ -7292,7 +7284,6 @@ class BlockNetworkMonkey(Nemesis):
 class RejectInterNodeNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
     free_tier_set = True
 
     def disrupt(self):
@@ -7302,7 +7293,6 @@ class RejectInterNodeNetworkMonkey(Nemesis):
 class RejectNodeExporterNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
 
     def disrupt(self):
         self.disrupt_network_reject_node_exporter()
@@ -7311,7 +7301,6 @@ class RejectNodeExporterNetworkMonkey(Nemesis):
 class RejectThriftNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
 
     def disrupt(self):
         self.disrupt_network_reject_thrift()
@@ -7320,7 +7309,6 @@ class RejectThriftNetworkMonkey(Nemesis):
 class StopStartInterfacesNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
-    run_with_gemini = False
 
     additional_configs = ["configurations/network_config/two_interfaces.yaml"]
     # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.
@@ -7368,7 +7356,6 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
 class NemesisSequence(Nemesis):
     disruptive = True
     networking = False
-    run_with_gemini = False
 
     def disrupt(self):
         self.disrupt_run_unique_sequence()
