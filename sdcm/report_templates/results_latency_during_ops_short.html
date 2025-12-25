@@ -144,32 +144,41 @@
                                     <td > {{ version }} </td>
                                     {% for perc in lat_type_list %}
                                             {% for workload in workloads %}
-                                                {% set best_perc_value = best.get('hdr_summary_diff')[workload][perc] %}
-                                                <td style="text-align: right"> {{ best.get('hdr_summary_average')[workload].get(perc, "n/a") }} <br/>(
-                                                    {% if best_perc_value <= -5 %}
+                                                {% set hdr_diff = best.get('hdr_summary_diff') or {} %}
+                                                {% set best_perc_value = hdr_diff.get(workload, {}).get(perc, "n/a") %}
+                                                {% set hdr_avg = best.get('hdr_summary_average') or {} %}
+                                                <td style="text-align: right"> {{ hdr_avg.get(workload, {}).get(perc, "n/a") }} <br/>(
+                                                    {% if best_perc_value is number and best_perc_value <= -5 %}
                                                         {% set color = "green" %}
-                                                    {% elif -5 < best_perc_value <= 5 %}
+                                                    {% elif best_perc_value is number and -5 < best_perc_value <= 5 %}
                                                         {% set color = "grey" %}
-                                                    {% elif best_perc_value > 5 %}
+                                                    {% elif best_perc_value is number and best_perc_value > 5 %}
                                                         {% set color = "red" %}
+                                                    {% else %}
+                                                        {% set color = "grey" %}
                                                     {% endif %}
-                                                    <span style="color: {{ color }};">{{best_perc_value }}%</span>) </td>
+                                                    <span style="color: {{ color }};">{{best_perc_value }}{% if best_perc_value is number %}%{% endif %}</span>) </td>
                                             {% endfor %}
                                             {% for workload in workloads  %}
-                                                <td style="text-align: right;"> {{ best["Steady State"]["hdr_summary"][workload].get(perc, "n/a") }} </td>
+                                                {% set steady_state = best.get("Steady State") or {} %}
+                                                {% set hdr_summary = steady_state.get("hdr_summary") or {} %}
+                                                <td style="text-align: right;"> {{ hdr_summary.get(workload, {}).get(perc, "n/a") }} </td>
                                             {% endfor %}
                                     {% endfor %}
-                                    {% set best_duration_value = best.get('average_time_operation_in_sec_diff') %}
+                                    {% set best_duration_value = best.get('average_time_operation_in_sec_diff', "n/a") %}
                                     <td style="text-align: right;"> {{ best.get('average_time_operation', "N/A") }} <br/>(
-                                        {% if best_duration_value <= -5 %}
+                                        {% if best_duration_value is number and best_duration_value <= -5 %}
                                             {% set color = "green" %}
-                                        {% elif -5 < best_duration_value <= 5 %}
+                                        {% elif best_duration_value is number and -5 < best_duration_value <= 5 %}
                                             {% set color = "grey" %}
-                                        {% elif best_duration_value > 5 %}
+                                        {% elif best_duration_value is number and best_duration_value > 5 %}
                                             {% set color = "red" %}
+                                        {% else %}
+                                            {% set color = "grey" %}
                                         {% endif %}
-                                        <span style="color: {{ color }};">{{ best_duration_value }} </span> %) </td>
-                                    <td style="text-align: center;">{{ best.get('version')['commit_id'] }},<br/>{{ best.get('version')['date'] }}</td>
+                                        <span style="color: {{ color }};">{{ best_duration_value }}{% if best_duration_value is number %} %{% endif %}</span>) </td>
+                                    {% set version_info = best.get('version') or {} %}
+                                    <td style="text-align: center;">{{ version_info.get('commit_id', 'n/a') }},<br/>{{ version_info.get('date', 'n/a') }}</td>
                                 </tr>
                             {% endfor %}
                         {% endif %}
