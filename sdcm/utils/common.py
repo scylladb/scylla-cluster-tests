@@ -2760,8 +2760,14 @@ def get_hdr_tags(stress_tool: str, stress_operation: str, throttled_load: bool) 
             else:
                 raise ValueError(f"Unsupported stress_operation: {stress_operation}")
         case "scylla-bench":
-            # TODO: will be defined later
-            raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")
+            if stress_operation.lower() == "write":
+                return ["co-fixed"]
+            elif stress_operation.lower() == "mixed":
+                return ["co-fixed-write", "co-fixed-read"]
+            elif stress_operation.lower() == "read":
+                return ["co-fixed"]
+            else:
+                raise ValueError(f"Unknown scylla-bench mode: {stress_operation}")
         case "latte":
             # TODO: will be defined later
             raise NotImplementedError("get_hdr_tags: 'scylla-bench' is not yet supported.")

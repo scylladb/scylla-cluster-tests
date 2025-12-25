@@ -1,0 +1,41 @@
+# Define the commands to be used in the write-load test. The purpose of this command is to prepare the schema.
+prepare_stress_cmd: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=1 -clustering-row-count=1 -clustering-row-size=1024 -concurrency=10 -connection-count=10 -rows-per-request=1"
+
+prepare_write_cmd: [
+##  in goal to solve https://github.com/scylladb/scylla-cluster-tests/issues/11037 issue, the PR https://github.com/scylladb/scylla-cluster-tests/pull/11354 was raised.
+##  The PR did not solve the problem, so we use the old command for now.
+     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=162500001 -clustering-row-count=1                       -clustering-row-size=1024 -concurrency=50 -connection-count=10 -rows-per-request=10 -timeout=30s " ,
+     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=162500001 -clustering-row-count=1 -partition-offset=162500002 -clustering-row-size=1024 -concurrency=50 -connection-count=10 -rows-per-request=10 -timeout=30s ",
+     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=162500001 -clustering-row-count=1 -partition-offset=325000003 -clustering-row-size=1024 -concurrency=50 -connection-count=10 -rows-per-request=10 -timeout=30s ",
+     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -consistency-level=all -partition-count=162500001 -clustering-row-count=1 -partition-offset=487500005 -clustering-row-size=1024  -concurrency=50 -connection-count=10 -rows-per-request=10 -timeout=30s ",
+]
+
+stress_cmd_w:  [
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=402653184 -clustering-row-count=1                       -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s " ,
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=402653184 -clustering-row-count=1 -partition-offset=402653185 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=402653184 -clustering-row-count=1 -partition-offset=805306370 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=402653184 -clustering-row-count=1 -partition-offset=1207959555 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s ",
+]
+
+stress_cmd_r: [
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=5000000 -clustering-row-count=1                       -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=30s " ,
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=5000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=10000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=15000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=30s ",
+]
+
+stress_cmd_cache_warmup: [
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -consistency-level=all -partition-count=5000000 -clustering-row-count=1                       -clustering-row-size=1024 -concurrency=$threads -connection-count=10 -rows-per-request=10 -timeout=30s " ,
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -consistency-level=all -partition-count=5000000 -clustering-row-count=1 -partition-offset=5000001 -clustering-row-size=1024 -concurrency=$threads -connection-count=10 -rows-per-request=10 -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -consistency-level=all -partition-count=5000000 -clustering-row-count=1 -partition-offset=10000001 -clustering-row-size=1024 -concurrency=$threads -connection-count=10 -rows-per-request=10 -timeout=30s ",
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -consistency-level=all -partition-count=5000000 -clustering-row-count=1 -partition-offset=15000001 -clustering-row-size=1024 -concurrency=$threads -connection-count=10 -rows-per-request=10 -timeout=30s ",
+]
+
+stress_cmd_m: [
+  "scylla-bench -workload=sequential -mode=mixed -replication-factor=3 -partition-count=5000000 -clustering-row-count=1                       -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=300s " ,
+  "scylla-bench -workload=sequential -mode=mixed -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=5000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=300s ",
+  "scylla-bench -workload=sequential -mode=mixed -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=10000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=300s ",
+  "scylla-bench -workload=sequential -mode=mixed -replication-factor=3 -partition-count=5000000 -clustering-row-count=1 -partition-offset=15000001 -clustering-row-size=1024 $throttle -concurrency=$threads -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=0  -duration=$duration -timeout=300s ",
+]
+
+instance_type_loader: 'c7i.2xlarge'
