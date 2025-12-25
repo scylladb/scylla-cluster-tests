@@ -1131,7 +1131,7 @@ class Nemesis(NemesisFlags):
     def disrupt(self):
         raise NotImplementedError("Derived classes must implement disrupt()")
 
-    @cached_property
+    @property
     def base_disruption_name(self) -> str:
         return self.current_disruption.rsplit("-", 1)[0]
 
