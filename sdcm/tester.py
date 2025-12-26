@@ -3652,6 +3652,121 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with open(log_file_path, "w", encoding="utf-8") as res_file:
             res_file.write(result.strip())
 
+    @silence(name="Save nodetool output", raise_error_event=False)
+    def save_nodetool_output_in_file(self, node, sub_cmd: str, log_file: str):
+        """
+        Save nodetool command output to a file.
+
+        This method is used during test teardown to collect diagnostics,
+        so we suppress error events (raise_error_event=False) to avoid
+        adding noise to the test results when the cluster is already
+        in a failed state.
+
+        :param node: Node to run the command on
+        :param sub_cmd: nodetool subcommand (e.g., 'status', 'gossipinfo')
+        :param log_file: filename to save output to
+        """
+        self.log.info("Save nodetool %s output to %s/%s from node %s", sub_cmd, self.logdir, log_file, node.name)
+
+        log_file_path = Path(self.logdir) / log_file
+        try:
+            result = node.run_nodetool(sub_cmd=sub_cmd, ignore_status=True, publish_event=False, timeout=300)
+            if result.ok:
+                with open(log_file_path, "w", encoding="utf-8") as res_file:
+                    res_file.write(result.stdout.strip())
+            else:
+                self.log.warning("Failed to run nodetool %s on node %s: %s", sub_cmd, node.name, result.stderr)
+        except (UnexpectedExit, Failure, OSError) as exc:
+            # UnexpectedExit/Failure: command execution failures
+            # OSError: file write errors
+            self.log.warning("Exception while running nodetool %s on node %s: %s", sub_cmd, node.name, exc)
+
+    @silence(name="Gather failure statistics")
+    def gather_failure_statistics(self):
+        """
+        Gather extra statistics on test failure for debugging purposes.
+
+        Collects:
+        - nodetool status (cluster-wide status)
+        - nodetool gossipinfo (from all nodes)
+        - nodetool compactionstats (from all nodes)
+        - scylla-doctor output (optional, if enabled)
+
+        Collection is parallelized to improve performance on large clusters.
+        """
+        if self.db_cluster is None:
+            self.log.info("No DB cluster found, skipping failure statistics collection")
+            return
+
+        self.log.info("Gathering failure statistics from cluster nodes...")
+
+        # Collect nodetool status from first available node
+        for node in self.db_cluster.nodes:
+            if not node._is_node_ready_run_scylla_commands():
+                continue
+            self.save_nodetool_output_in_file(node=node, sub_cmd="status", log_file="nodetool_status_failure.log")
+            break
+
+        # Collect nodetool gossipinfo and compactionstats from all nodes in parallel
+        ready_nodes = [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]
+
+        if not ready_nodes:
+            self.log.warning("No ready nodes found for collecting gossipinfo and compactionstats")
+        else:
+
+            def collect_node_stats(node):
+                """Collect gossipinfo and compactionstats from a single node."""
+                try:
+                    # Save gossipinfo
+                    self.save_nodetool_output_in_file(
+                        node=node, sub_cmd="gossipinfo", log_file=f"nodetool_gossipinfo_failure_{node.name}.log"
+                    )
+
+                    # Save compactionstats
+                    self.save_nodetool_output_in_file(
+                        node=node,
+                        sub_cmd="compactionstats",
+                        log_file=f"nodetool_compactionstats_failure_{node.name}.log",
+                    )
+                    return node.name, True, None
+                except Exception as exc:  # noqa: BLE001
+                    return node.name, False, str(exc)
+
+            # Use ThreadPoolExecutor to parallelize collection
+            with ThreadPoolExecutor(max_workers=len(ready_nodes)) as executor:
+                futures = {executor.submit(collect_node_stats, node): node for node in ready_nodes}
+
+                for future in as_completed(futures):
+                    node_name, success, error = future.result()
+                    if not success:
+                        self.log.warning("Failed to collect stats from node %s: %s", node_name, error)
+
+        # Run scylla-doctor if enabled
+        if self.params.get("use_scylla_doctor_on_failure"):
+            self.log.info("Running scylla-doctor on failure (as configured)...")
+            try:
+                # Import delayed to avoid circular dependency issues and because
+                # scylla-doctor is optional and may not be needed in all cases
+                from utils.scylla_doctor import ScyllaDoctor, ScyllaDoctorException  # noqa: PLC0415
+
+                for node in self.db_cluster.nodes:
+                    if not node._is_node_ready_run_scylla_commands():
+                        continue
+                    try:
+                        doctor = ScyllaDoctor(node=node, test_config=self.test_config, offline_install=True)
+                        doctor.install_scylla_doctor()
+                        doctor.run_scylla_doctor_and_collect_results()
+                        self.log.info("Scylla-doctor completed for node %s", node.name)
+                    except (ScyllaDoctorException, UnexpectedExit, Failure, AssertionError) as exc:
+                        # ScyllaDoctorException: scylla-doctor specific errors
+                        # UnexpectedExit/Failure: command execution failures
+                        # AssertionError: from scylla-doctor result validation
+                        self.log.warning("Failed to run scylla-doctor on node %s: %s", node.name, exc)
+            except ImportError as exc:
+                self.log.warning("Failed to import scylla-doctor module: %s", exc)
+
+        self.log.info("Failure statistics collection completed")
+
     def save_schema(self):
         """
         Saves the node's schema including internal metadata.
@@ -3689,6 +3804,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         with silence(parent=self, name="Sending test end event"):
             InfoEvent(message="TEST_END").publish()
         self.save_schema()
+
+        # Gather extra statistics if test failed (has ERROR or CRITICAL events)
+        test_status = self.get_test_status()
+        if test_status == "FAILED":
+            self.log.info("Test failed, gathering extra failure statistics...")
+            self.gather_failure_statistics()
+
         self.log.info("Post test validators are starting...")
         for validator_class in teardown_validators_list:
             validator_class(self.params, self).validate()

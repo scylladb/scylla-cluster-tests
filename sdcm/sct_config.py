@@ -2071,6 +2071,12 @@ class SCTConfiguration(dict):
             name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean, help="Collect logs from instances and sct runner"
         ),
         dict(
+            name="use_scylla_doctor_on_failure",
+            env="SCT_USE_SCYLLA_DOCTOR_ON_FAILURE",
+            type=boolean,
+            help="Run scylla-doctor on test failure to collect additional diagnostics",
+        ),
+        dict(
             name="execute_post_behavior",
             env="SCT_EXECUTE_POST_BEHAVIOR",
             type=boolean,
