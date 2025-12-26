@@ -3740,7 +3740,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                         self.log.warning("Failed to collect stats from node %s: %s", node_name, error)
 
         # Run scylla-doctor if enabled
-        if self.params.get("use_scylla_doctor_on_failure", default=False):
+        if self.params.get("use_scylla_doctor_on_failure"):
             self.log.info("Running scylla-doctor on failure (as configured)...")
             try:
                 # Import delayed to avoid circular dependency issues and because
