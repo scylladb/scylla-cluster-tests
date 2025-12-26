@@ -18,6 +18,7 @@ const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1000);
 const PARTITION_SIZES = "10:1,35:2,35:3,20:5";
 const LWT_PARTITION_SIZES = "100:1";
 const DELETE_PCT = latte::param!("delete_pct", 75);
+const UPDATE_CYCLES = latte::param!("update_cycles", 5);
 const HALF_ROWS = TOTAL_ROWS / 2;
 
 pub async fn schema(db) {
@@ -149,55 +150,6 @@ pub async fn write_lwt_table(db, i) {
     db.execute_prepared("write_to_table", [pk, ck, a, pad(i), pad(pk)]).await
 }
 
-
-pub async fn delete_all_previous_partitions(db, i) {
-    let partition = db.get_partition_info("main", i).await;
-
-    // delete all previously inserted partitions
-    let deleted_num = partition.idx - 1;
-    for j in partition.idx-deleted_num..partition.idx {
-        let pk = hash(j);
-        db.execute_prepared("delete_partition", [pk]).await?;
-    }
-
-    for j in partition.idx - deleted_num .. partition.idx {
-        let pk = hash(j);
-        let result = db.execute_prepared_with_result("get_rows_count", [pk]).await?;
-        let actual_count = result[0].get("count")?;
-        if actual_count > 0 {
-            println!("Not all rows were deleted");
-        }
-    }
-}
-
-pub async fn update_or_delete_partitions(db, i) {
-    update_table(db, i).await;
-    let partition = db.get_partition_info("main", i).await;
-    partition.idx += OFFSET;
-    let pk = hash(partition.idx);
-    let expected_rows = partition.rows_num;
-
-    // filter small partitions
-    if expected_rows < 5 * ROWS_PER_PARTITION {
-        return Ok(());
-    }
-    // Calculate delete threshold
-    let delete_threshold = (expected_rows * DELETE_PCT) / 100;
-
-    // Count actual rows in the partition
-    let result = db.execute_prepared_with_result("get_rows_count", [pk]).await?;
-    let actual_count = result[0].get("count")?;
-
-    if actual_count >= delete_threshold {
-        // Delete partition if it has >= DELETE_PCT of expected rows
-        db.execute_prepared("delete_partition", [pk]).await?;
-        // simulate sleep, so the no data added add give time for merge
-        for j in 0..600 {
-            let result = db.execute_prepared_with_result("get_rows_count", [hash(0)]).await?;
-        }
-    }
-}
-
 pub async fn delete_partition(db, i) {
     let partition  = db.get_partition_info("main", i).await;
     partition.idx += OFFSET;
@@ -259,4 +211,32 @@ pub async fn read_from_mv_notcol(db, i) {
     let ck = hash(i);
     let a = hash_range(i, 1_000_000_000);
     db.execute_prepared("read_from_mv_notcol", [a, pk, ck]).await
+}
+
+/// Update/Delete pattern: UPDATE_CYCLES cycles UPDATE, 1 cycle DELETE, repeat
+/// Algorithm for infinite loop with cycling:
+/// - Cycle pattern repeats every UPDATE_CYCLES cycles (UPDATE_CYCLES * TOTAL_ROWS)
+/// - Cycles 0, 1, 2 .. UPDATE_CYCLES: INSERT operations only
+/// - Cycle 1: DELETE operations only
+pub async fn update_or_delete_by_cycle(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+
+    let cycle_number = i / TOTAL_ROWS;
+    let total_cycles = UPDATE_CYCLES + 1;
+
+    let final_operation_is_write = (cycle_number % total_cycles) < (total_cycles - 1);
+
+    if final_operation_is_write {
+        let a = hash_range(i, 1_000_000_000);
+        db.execute_prepared("update_table", [pad(i), pad(i), pk, ck]).await?;
+        println!("Update {i}, {pk}", i=i, pk=partition.idx);
+    } else {
+        db.execute_prepared("delete_partition", [pk]).await?;
+        println!("Delete {i}, {pk}", i=i, pk=partition.idx);
+    }
+
+    Ok(())
 }
