@@ -19,6 +19,8 @@ const PARTITION_SIZES = "10:1,35:2,35:3,20:5";
 const LWT_PARTITION_SIZES = "100:1";
 const DELETE_PCT = latte::param!("delete_pct", 75);
 const UPDATE_CYCLES = latte::param!("update_cycles", 5);
+const READ_CYCLES = latte::param!("read_cycles", 2);
+const DELETE_CYCLES = latte::param!("delete_cycles", 1);
 const HALF_ROWS = TOTAL_ROWS / 2;
 
 pub async fn schema(db) {
@@ -213,29 +215,27 @@ pub async fn read_from_mv_notcol(db, i) {
     db.execute_prepared("read_from_mv_notcol", [a, pk, ck]).await
 }
 
-/// Update/Delete pattern: UPDATE_CYCLES cycles UPDATE, 1 cycle DELETE, repeat
-/// Algorithm for infinite loop with cycling:
-/// - Cycle pattern repeats every UPDATE_CYCLES cycles (UPDATE_CYCLES * TOTAL_ROWS)
-/// - Cycles 0, 1, 2 .. UPDATE_CYCLES: INSERT operations only
-/// - Cycle 1: DELETE operations only
+/// Write/Delete/Read pattern: UPDATE_CYCLE cycles WRITE,
+/// DELETE_CYCLE cycle DELETE, READ_CYCLE cycles READ, repeat
 pub async fn update_or_delete_by_cycle(db, i) {
-    let partition = db.get_partition_info("main", i).await;
+    let partition = db.get_partition_info("lwt", i).await;
     partition.idx += OFFSET;
     let pk = hash(partition.idx);
     let ck = hash(i);
 
     let cycle_number = i / TOTAL_ROWS;
-    let total_cycles = UPDATE_CYCLES + 1;
+    let total_cycles = UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES + READ_CYCLES;
+    let cycles_position = cycle_number % total_cycles;
 
-    let final_operation_is_write = (cycle_number % total_cycles) < (total_cycles - 1);
-
-    if final_operation_is_write {
+    if cycles_position < UPDATE_CYCLES {
         let a = hash_range(i, 1_000_000_000);
         db.execute_prepared("update_table", [pad(i), pad(i), pk, ck]).await?;
-        println!("Update {i}, {pk}", i=i, pk=partition.idx);
-    } else {
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
+        db.execute_prepared("get_rows_count", [pk]).await?;
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES {
         db.execute_prepared("delete_partition", [pk]).await?;
-        println!("Delete {i}, {pk}", i=i, pk=partition.idx);
+    } else {
+        db.execute_prepared("get_rows_count", [pk, ck]).await?;
     }
 
     Ok(())
