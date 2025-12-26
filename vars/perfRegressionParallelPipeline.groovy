@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def base_versions_list = []
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     pipeline {
         agent none
@@ -30,10 +30,15 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             // ScyllaDB Configuration
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection (Choose only one from below 6 options)')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB', name: 'scylla_ami_id')
             string(defaultValue: '', description: 'Version of ScyllaDB', name: 'scylla_version')
+            string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
+            string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
