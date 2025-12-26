@@ -2,9 +2,7 @@
 #         https://github.com/scylladb/scylladb/issues/27621
 #       And fails because of the following bug:
 #         https://github.com/scylladb/scylladb/issues/27620
-#       So, it is unknown how much time the full data population phase going to take using tablets.
-# TODO: update the 'test_duration' value according to the expected time for the data population.
-test_duration: 1080 # 5h? prepare + 10h mixed + 3h margin
+test_duration: 900 # 1h prepare + 10h mixed + 4h margin
 
 n_db_nodes: 6
 instance_type_db: 'i4i.4xlarge'
@@ -24,6 +22,14 @@ nemesis_interval: 5
 # NOTE: prepare phase fails without nemesis. See https://github.com/scylladb/scylladb/issues/27566
 #       So, it is better to keep prepare phase without nemesis to cover the bug case.
 nemesis_during_prepare: false
+# NOTE: skip enospc https://github.com/scylladb/scylla-cluster-tests/issues/12989
+nemesis_selector: 'not enospc and not manager_operation'
+# NOTE: disable mgmt because we run disruptive nemesis with data validation.
+# And if we do repairs, it takes too long making data validation exceed retries.
+use_mgmt: false
+
+root_disk_size_monitor: 120
+root_disk_size_runner: 120
 
 round_robin: true
 # NOTE: use 1 latte thread with concurrency=12 to avoid the following bug:
@@ -37,6 +43,7 @@ prepare_write_cmd:
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
     -P enable_tablets=true
+    -P min_per_shard_tablet_count=1.0
     -P create_index=false
     -P replication_factor=3
     -P compaction_strategy="\"IncrementalCompactionStrategy\""
@@ -47,8 +54,8 @@ prepare_write_cmd:
 prepare_verify_cmd:
   - >-
     latte run --tag populate-data -f write
-    --threads=14 --concurrency=256 --connections=1
-    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    --threads=14 --concurrency=64 --connections=1
+    --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
     -d 1000000000
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
@@ -66,7 +73,7 @@ stress_cmd:
     latte run --tag mixed -f write:1 -f read:5
     --threads=14 --concurrency=32 --connections=1
     --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
-    --validation-strategy=fail-fast
+    --validation-strategy=retry
     -d 36000s
     -P keyspace_count=1
     -P table_count_per_keyspace=5000

@@ -10,6 +10,7 @@ const TABLE_COUNT_PER_KEYSPACE = latte::param!("table_count_per_keyspace", 100);
 ///// SCHEMA creation params /////
 //////////////////////////////////
 const ENABLE_TABLETS = latte::param!("enable_tablets", false);
+const MIN_PER_SHARD_TABLET_COUNT = latte::param!("min_per_shard_tablet_count", 10.0); // default in Scylla
 const CREATE_INDEX = latte::param!("create_index", false);
 const REPLICATION_FACTOR = latte::param!("replication_factor", 3);
 const COMPACTION_STRATEGY = latte::param!("compaction_strategy", "IncrementalCompactionStrategy");
@@ -167,6 +168,11 @@ pub async fn create_schema(db, i) { // user fn to be run in a 'latte run -f ...'
     let table_index = i / KEYSPACE_COUNT + 1;
     let tpadding = get_index_padding(table_index, TABLE_COUNT_PER_KEYSPACE).await;
     let table = `schema_scale_t${tpadding}${table_index}`;
+    let min_per_shard_tablet_count = if ENABLE_TABLETS {
+        `AND tablets = {'min_per_shard_tablet_count': '${MIN_PER_SHARD_TABLET_COUNT}'}`
+    } else {
+        ""
+    };
     db.execute(`
         CREATE TABLE IF NOT EXISTS ${ks}.${table} (
             pk uuid PRIMARY KEY,
@@ -174,6 +180,7 @@ pub async fn create_schema(db, i) { // user fn to be run in a 'latte run -f ...'
             col_date date,
             col_blob blob,
         ) WITH bloom_filter_fp_chance = 0.01
+            ${min_per_shard_tablet_count}
             AND comment = 'Created by latte'
             AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
             AND compaction = {'class': '${COMPACTION_STRATEGY}'}

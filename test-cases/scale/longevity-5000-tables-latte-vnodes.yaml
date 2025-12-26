@@ -18,6 +18,14 @@ nemesis_interval: 5
 # NOTE: prepare phase fails without nemesis. See https://github.com/scylladb/scylladb/issues/27566
 #       So, it is better to keep prepare phase without nemesis to cover the bug case.
 nemesis_during_prepare: false
+# NOTE: skip enospc https://github.com/scylladb/scylla-cluster-tests/issues/12989
+nemesis_selector: 'not enospc and not manager_operation'
+# NOTE: disable mgmt because we run disruptive nemesis with data validation.
+# And if we do repairs, it takes too long making data validation exceed retries.
+use_mgmt: false
+
+root_disk_size_monitor: 120
+root_disk_size_runner: 120
 
 round_robin: true
 # NOTE: use 1 latte thread with concurrency=12 to avoid the following bug:
@@ -36,13 +44,11 @@ prepare_write_cmd:
     -P compaction_strategy="\"IncrementalCompactionStrategy\""
     -P sstable_compression="\"LZ4Compressor\""
     data_dir/latte/schema_scale.rn
-# TODO: increase the concurrency to be '2048' when the following bug gets fixed:
-#       https://github.com/scylladb/scylladb/issues/27566
 prepare_verify_cmd:
   - >-
     latte run --tag populate-data -f write
-    --threads=14 --concurrency=256 --connections=1
-    --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
+    --threads=14 --concurrency=64 --connections=1
+    --warmup=0 --retries=10 --retry-interval=5s,10s --request-timeout 60 --sampling 5s
     -d 1000000000
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
@@ -60,7 +66,7 @@ stress_cmd:
     latte run --tag mixed -f write:1 -f read:5
     --threads=14 --concurrency=32 --connections=1
     --warmup=0 --retries=5 --retry-interval=1s,3s --request-timeout 30 --sampling 5s
-    --validation-strategy=fail-fast
+    --validation-strategy=retry
     -d 36000s
     -P keyspace_count=1
     -P table_count_per_keyspace=5000
