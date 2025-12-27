@@ -8,4 +8,6 @@ server_encrypt: true
 internode_encryption: 'all'
 user_prefix: 'longevity-fips'
 test_duration: 400
+# Only run non-disruptive nemesis to avoid topology changes (adding/removing nodes)
+# because Scylla is not pre-installed and would not be installed on nodes added by nemesis
 nemesis_selector: "not disruptive"
