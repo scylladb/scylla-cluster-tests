@@ -1,4 +1,5 @@
 name: Cache issues status
+permissions: {}
 on:
   schedule:
     - cron: '0 */2 * * *'
