@@ -91,7 +91,7 @@ def make_hdrhistogram_summary_from_log_line(
 
 
 @dataclass
-class _HistorgramSummaryBase:
+class _HistogramSummaryBase:
     start_time: str
     end_time: str
     stddev: float
@@ -101,10 +101,10 @@ def _generate_percentile_name(percentile: int):
     return f"percentile_{percentile}".replace(".", "_")
 
 
-_HistorgramSummary = make_dataclass(
-    "HistorgramSummary",
+_HistogramSummary = make_dataclass(
+    "HistogramSummary",
     [(_generate_percentile_name(perc), float) for perc in PERCENTILES] + [("throughput", int)],
-    bases=(_HistorgramSummaryBase,),
+    bases=(_HistogramSummaryBase,),
 )
 
 
@@ -445,7 +445,7 @@ class _HdrRangeHistogramBuilder:
     @staticmethod
     def _convert_raw_histogram(
         histogram: _HdrHistogram, base_start_ts: float = 0.0, base_end_ts: float = 0.0
-    ) -> "_HistorgramSummary":
+    ) -> "_HistogramSummary":
         percentiles_data = {}
         if percentiles := histogram.get_percentile_to_value_dict(PERCENTILES):
             for perc, value in percentiles.items():
@@ -454,7 +454,7 @@ class _HdrRangeHistogramBuilder:
                 histogram.get_total_count()
                 / ((histogram.get_end_time_stamp() - histogram.get_start_time_stamp()) / 1000)
             )
-            return _HistorgramSummary(
+            return _HistogramSummary(
                 start_time=histogram.get_start_time_stamp() or base_start_ts,
                 end_time=histogram.get_end_time_stamp() or base_end_ts,
                 stddev=histogram.get_stddev(),
