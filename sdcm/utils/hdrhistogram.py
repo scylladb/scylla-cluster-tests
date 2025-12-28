@@ -101,8 +101,8 @@ def _generate_percentile_name(percentile: int):
     return f"percentile_{percentile}".replace(".", "_")
 
 
-_HistorgramSummary = make_dataclass(
-    "HistorgramSummary",
+_HistogramSummary = make_dataclass(
+    "HistogramSummary",
     [(_generate_percentile_name(perc), float) for perc in PERCENTILES] + [("throughput", int)],
     bases=(_HistorgramSummaryBase,),
 )
