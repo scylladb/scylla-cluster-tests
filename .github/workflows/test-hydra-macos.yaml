@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     if: contains(github.event.pull_request.labels.*.name, 'test-macos')
+    permissions:
+      contents: read
     runs-on: macos-15-intel
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
