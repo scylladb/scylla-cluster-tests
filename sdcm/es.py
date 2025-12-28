@@ -1,4 +1,5 @@
 import logging
+import math
 from functools import cached_property
 
 import elasticsearch
@@ -6,6 +7,31 @@ import elasticsearch
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
+
+
+def sanitize_elasticsearch_data(data):
+    """
+    Recursively sanitize data for Elasticsearch by replacing NaN and Inf values with None.
+
+    Elasticsearch cannot parse NaN and Infinity values as they are not valid in JSON standard.
+    This function replaces them with None to prevent mapper_parsing_exception errors.
+
+    Args:
+        data: Data structure (dict, list, or primitive) to sanitize
+
+    Returns:
+        Sanitized data with NaN/Inf replaced by None
+    """
+    if isinstance(data, dict):
+        return {key: sanitize_elasticsearch_data(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_elasticsearch_data(item) for item in data]
+    elif isinstance(data, float):
+        if math.isnan(data) or math.isinf(data):
+            return None
+        return data
+    else:
+        return data
 
 
 class ES(elasticsearch.Elasticsearch):
@@ -31,6 +57,7 @@ class ES(elasticsearch.Elasticsearch):
         LOGGER.info("INDEX: %s", index)
         LOGGER.info("DOC_ID: %s", doc_id)
         LOGGER.info("BODY: %s", body)
+        body = sanitize_elasticsearch_data(body)
         self._create_index(index)
         if self.exists(index=index, id=doc_id):
             self.update(index=index, id=doc_id, body={"doc": body})
@@ -42,6 +69,7 @@ class ES(elasticsearch.Elasticsearch):
         Update document with partial data
         """
         LOGGER.info("Update doc %s with info %s", doc_id, body)
+        body = sanitize_elasticsearch_data(body)
         self.update(index=index, id=doc_id, body=dict(doc=body))
 
     def get_all(self, index, limit=1000):
