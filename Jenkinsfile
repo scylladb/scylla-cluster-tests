@@ -13,15 +13,17 @@ def createRunConfiguration(String backend) {
         backend: backend,
         test_name: 'longevity_test.LongevityTest.test_custom_time',
         test_config: 'test-cases/PR-provision-test.yaml',
-        availability_zone: 'a',
         scylla_version: scylla_version,
+        availability_zone: '',
         region: 'eu-west-1',
     ]
+    if (backend == 'aws' || backend == 'vs-aws') {
+        configuration.availability_zone = 'a'
+    }
     if (backend == 'gce') {
         configuration.gce_datacenter = "us-east1"
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
-        configuration.availability_zone = ''
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
@@ -42,6 +44,7 @@ def createRunConfiguration(String backend) {
         }
         if (backend == 'xcloud-aws') {
             configuration.xcloud_provider = 'aws'
+            configuration.availability_zone = 'a'
             configuration.test_config = '["test-cases/PR-provision-test.yaml"]'
         }
     }
