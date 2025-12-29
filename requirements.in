@@ -54,3 +54,4 @@ gimme-aws-creds==2.8.0
 confluent-kafka==2.5.3
 fastavro==1.9.7
 jira~=3.10.0
+cloud-detect>=0.0.13
