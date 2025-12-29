@@ -23,6 +23,8 @@ import boto3
 import paramiko
 from mypy_boto3_s3.client import S3Client
 from mypy_boto3_s3.service_resource import S3ServiceResource
+from botocore.exceptions import ClientError
+from cloud_detect import provider
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
@@ -129,10 +131,16 @@ class KeyStore:
     def get_gcp_kms_config(self):
         return self.get_json("gcp_kms_config.json")
 
-    def get_argusdb_credentials(self):
-        return self.get_json("argusdb_config_v2.json")
+    def get_argus_rest_credentials_per_provider(self, cloud_provider: str | None = None):
+        cloud_provider = cloud_provider or provider(timeout=0.5)
 
-    def get_argus_rest_credentials(self):
+        if os.environ.get("JOB_NAME"):  # we are in Jenkins
+            try:
+                return self.get_json(f"argus_rest_credentials_sct_{cloud_provider}.json")
+            except ClientError as e:
+                if not e.response["Error"]["Code"] == "NoSuchKey":
+                    raise
+
         return self.get_json("argus_rest_credentials.json")
 
     def get_baremetal_config(self, config_name: str):
