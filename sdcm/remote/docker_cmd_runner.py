@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from shlex import quote
 from pathlib import Path
 import shutil
+import logging
 
 from invoke.runners import Result
 from invoke.exceptions import UnexpectedExit
@@ -158,6 +159,7 @@ class DockerCmdRunner(CommandRunner):
         src_path = Path(src)
         with tarfile.open(fileobj=tar_stream, mode="w") as tar:
             if src_path.is_dir():
+                logging.error("Creating tar stream for directory: %s", src)
                 for file_path in src_path.rglob("*"):
                     if file_path.is_file():
                         tar.add(str(file_path), arcname=str(file_path.relative_to(src_path.parent)))
