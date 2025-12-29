@@ -2728,6 +2728,18 @@ class SCTConfiguration(dict):
             type=list,
             help="Destination-source map of dirs/buckets to download from S3 before starting the test",
         ),
+        dict(
+            name="argus_email_report_template",
+            env="SCT_ARGUS_EMAIL_REPORT_TEMPLATE",
+            type=str,
+            help="Path to the email report template used for sending argus email reports",
+        ),
+        dict(
+            name="enable_argus_email_report",
+            env="SCT_ENABLE_ARGUS_REPORT",
+            type=bool,
+            help="Whether or not to send email using argus instead of SCT.",
+        ),
     ]
 
     required_params = [
