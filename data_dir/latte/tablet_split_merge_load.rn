@@ -4,6 +4,7 @@ const ENABLE_TABLETS = latte::param!("tablets", true);
 const ENABLE_LWT = latte::param!("lwt", true);
 const ENABLE_MV = latte::param!("mv", true);
 const ENABLE_CDC = latte::param!("cdc", true);
+const USE_COUNTER = latte::param!("use_counter", false);
 
 const KS_NAME = latte::param!("ks_name", "keyspace1");
 const TABLE_NAME = latte::param!("table_name", "table1");
@@ -17,6 +18,7 @@ const OFFSET = latte::param!("offset", 0);
 const ROWS_PER_PARTITION = latte::param!("rows_per_partition", 1000);
 const PARTITION_SIZES = "10:1,35:2,35:3,20:5";
 const LWT_PARTITION_SIZES = "100:1";
+const COUNTER_PARTITION_SIZES = "100:1";
 const DELETE_PCT = latte::param!("delete_pct", 75);
 const UPDATE_CYCLES = latte::param!("update_cycles", 5);
 const READ_CYCLES = latte::param!("read_cycles", 2);
@@ -24,6 +26,8 @@ const DELETE_CYCLES = latte::param!("delete_cycles", 1);
 const HALF_ROWS = TOTAL_ROWS / 2;
 
 pub async fn schema(db) {
+    let tablets_opts = if ENABLE_TABLETS { "AND tablets = {'min_tablet_count': 2, 'expected_data_size_in_gb': 1}" } else { "" };
+
     db.execute(`
         CREATE KEYSPACE IF NOT EXISTS ${KS_NAME}
         WITH replication = {
@@ -32,6 +36,21 @@ pub async fn schema(db) {
         }
         AND tablets = { 'enabled': ${ENABLE_TABLETS} }
     `).await?;
+
+    if USE_COUNTER {
+        db.execute(`
+            CREATE TABLE IF NOT EXISTS ${KS_NAME}.${TABLE_NAME}_counter (
+                pk bigint,
+                ck bigint,
+                counter_field counter,
+                counter_field1 counter,
+                counter_field2 counter,
+                counter_field3 counter,
+                PRIMARY KEY (pk, ck))
+            WITH compaction = { 'class' : '${COMPACTION_STRATEGY}' }
+            AND tablets = {'min_tablet_count': 2, 'expected_data_size_in_gb': 1}
+        `).await?;
+    }
 
     db.execute(`
         CREATE TABLE IF NOT EXISTS ${KS_NAME}.${TABLE_NAME} (
@@ -76,6 +95,39 @@ pub async fn prepare(db) {
     db.init_partition_row_distribution_preset(
         "lwt", TOTAL_ROWS, ROWS_PER_PARTITION, LWT_PARTITION_SIZES,
     ).await?;
+
+    if USE_COUNTER {
+        db.init_partition_row_distribution_preset(
+            "counter", TOTAL_ROWS, ROWS_PER_PARTITION, COUNTER_PARTITION_SIZES,
+        ).await?;
+
+        db.prepare(
+            "increase_counter",
+            `UPDATE ${KS_NAME}.${TABLE_NAME}_counter SET counter_field = counter_field + 1,
+             counter_field1 = counter_field1 + 100,
+             counter_field2 = counter_field2 + 1000,
+             counter_field3 = counter_field3 + 500  WHERE pk = ? and ck = ?`
+        ).await?;
+
+        db.prepare(
+            "decrease_counter",
+            `UPDATE ${KS_NAME}.${TABLE_NAME}_counter SET counter_field = counter_field - 1,
+             counter_field1 = counter_field1 - 50,
+             counter_field2 = counter_field2 - 500,
+             counter_field3 = counter_field3 - 300  WHERE pk = ? and ck = ?`
+        ).await?;
+
+        db.prepare(
+            "read_from_counter_table",
+            `SELECT * FROM ${KS_NAME}.${TABLE_NAME}_counter WHERE pk = ? AND ck = ?`
+        ).await?;
+
+        db.prepare(
+            "delete_from_counter_table",
+            `DELETE FROM ${KS_NAME}.${TABLE_NAME}_counter WHERE pk = ? and ck = ?`
+        ).await?;
+
+    }
 
     db.prepare(
         "write_to_table",
@@ -154,6 +206,15 @@ pub async fn write_to_table(db, i) {
     db.execute_prepared("write_to_table", [pk, ck, a, pad(i), pad(pk)]).await
 }
 
+
+pub async fn write_to_table_with_counter(db, i) {
+    let partition = db.get_partition_info("main", i).await;
+    partition.idx += OFFSET;
+    let pk = hash(partition.idx);
+    let ck = hash(i);
+
+    db.execute_prepared("write_to_table_with_counter", [pk, ck]).await
+}
 
 pub async fn delete_partition(db, i) {
     let partition_config_name = get_partitions_distribution();
@@ -237,27 +298,57 @@ pub async fn update_or_delete_by_cycle(db, i) {
 
     if cycles_position < UPDATE_CYCLES {
         let a = hash_range(i, 1_000_000_000);
-<<<<<<< HEAD
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
         db.execute_prepared("update_all_fields_in_table", [a, pad(i), pad(i), pk, ck]).await?;
     } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
-=======
-        let ck = hash(i);
-        db.execute_prepared("update_table", [pad(i), pad(i), pk, ck]).await?;
-    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
-        let ck = hash(i % TOTAL_ROWS);
->>>>>>> b99df68b5 (test(yaml): add new test config for all tables)
         db.execute_prepared("read_from_table", [pk, ck]).await?;
     } else if cycles_position < UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES {
         db.execute_prepared("delete_partition", [pk]).await?;
     } else {
-<<<<<<< HEAD
         let ck = hash(i % (UPDATE_CYCLES * TOTAL_ROWS));
-=======
-        let ck = hash(i % TOTAL_ROWS);
->>>>>>> b99df68b5 (test(yaml): add new test config for all tables)
         db.execute_prepared("read_from_table", [pk, ck]).await?;
+    }
+
+    Ok(())
+}
+
+/// Write/Delete/Read pattern: UPDATE_CYCLE cycles WRITE,
+/// READ_CYCLE cycles READ, DELETE_CYCLE cycle DELETE,
+/// READ_CYCLE cycles READ, repeat
+pub async fn update_or_delete_by_cycle_with_counter(db, i) {
+    let partition = db.get_partition_info("counter", i).await;
+    partition.idx += OFFSET;
+
+    let pk = hash(partition.idx);
+    let cycle_number = i / TOTAL_ROWS;
+    let total_cycles = UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES + READ_CYCLES;
+    let cycles_position = cycle_number % total_cycles;
+
+    // Each total_cycles round works with a unique set of ck values
+    // Round 0: ck 0-4, Round 1: ck 5-9, Round 2: ck 10-14, etc.
+    let round_number = cycle_number / total_cycles;
+    let base_ck = round_number * UPDATE_CYCLES;
+
+    // During UPDATE cycles: create ck values sequentially (base_ck + 0, 1, 2, 3, 4)
+    // During READ/DELETE cycles: access the same ck values created in this round
+    let ck = hash(if cycles_position < UPDATE_CYCLES {
+        base_ck + cycles_position
+    } else {
+        base_ck + (cycles_position % UPDATE_CYCLES)
+    });
+    if cycles_position < UPDATE_CYCLES {
+        if ((cycles_position + 1) % (UPDATE_CYCLES / 2)) == 0 {
+            db.execute_prepared("decrease_counter", [pk, ck]).await?;
+        } else {
+            db.execute_prepared("increase_counter", [pk, ck]).await?;
+        }
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES {
+        db.execute_prepared("read_from_counter_table", [pk, ck]).await?;
+    } else if cycles_position < UPDATE_CYCLES + READ_CYCLES + DELETE_CYCLES {
+        db.execute_prepared("delete_from_counter_table", [pk, ck]).await?;
+    } else {
+        db.execute_prepared("read_from_counter_table", [pk, ck]).await?;
     }
 
     Ok(())

@@ -1024,7 +1024,6 @@ class SCTConfiguration(dict):
             type=int_or_list,
             k8s_multitenancy_supported=True,
             help="""Nemesis sleep interval to use if None provided specifically in the test""",
-            # is_k8s_multitenant_value=True,
         ),
         dict(
             name="nemesis_sequence_sleep_between_ops",
