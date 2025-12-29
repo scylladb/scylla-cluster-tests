@@ -96,6 +96,7 @@ from sdcm.utils.common import (
 from sdcm.utils.resources_cleanup import (
     clean_cloud_resources,
     clean_resources_according_post_behavior,
+    init_argus_client,
 )
 from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
@@ -1451,7 +1452,7 @@ def get_test_results_for_failed_test(test_status, start_time):
 @click.option("--runner-ip", type=str, required=False, help="Sct runner ip for the running test")
 @click.option("--email-recipients", help="Send email to next recipients")
 @click.option("--logdir", help="Directory where to find testrun folder")
-def send_email(
+def send_email(  # noqa: PLR0914, PLR0912
     test_id=None,
     test_status=None,
     start_time=None,
@@ -1469,6 +1470,26 @@ def send_email(
         sys.exit(1)
     LOGGER.info("Email will be sent to next recipients: %s", email_recipients)
     email_recipients = email_recipients.split(",")
+    sct_config = SCTConfiguration()
+    if sct_config.get("enable_argus_email_report"):
+        LOGGER.info("Sending email for test %s...", test_id)
+        client = init_argus_client(os.environ.get("SCT_TEST_ID"))
+
+        template = sct_config.get("argus_email_report_template")
+        if not template:
+            LOGGER.error("Argus Email Report is enabled but the template file is not defined.")
+            sys.exit(1)
+
+        p = Path(f"./defaults/{template}")
+        if not p.exists():
+            LOGGER.error("Argus Email Report is enabled but the template does not exist.")
+            sys.exit(1)
+
+        with p.open() as f:
+            template = yaml.safe_load(f)
+
+        client.send_email(recipients=email_recipients, sections=template["sections"])
+        return
 
     if not logdir:
         logdir = os.path.expanduser("~/sct-results")
