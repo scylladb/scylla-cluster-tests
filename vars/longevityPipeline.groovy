@@ -19,6 +19,7 @@ def call(Map pipelineParams) {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
             SCT_GCE_PROJECT = "${params.gce_project}"
+            SCT_ENABLE_ARGUS_REPORT = "1"
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
@@ -376,6 +377,22 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Finish Argus Test Run') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        finishArgusTestRun(params, currentBuild)
+                                        completed_stages['report_to_argus'] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage("Send email with result") {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -400,22 +417,6 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
                                     completed_stages['clean_sct_runner'] = true
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            stage('Finish Argus Test Run') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    timeout(time: 5, unit: 'MINUTES') {
-                                        finishArgusTestRun(params, currentBuild)
-                                        completed_stages['report_to_argus'] = true
-                                    }
                                 }
                             }
                         }
@@ -453,12 +454,14 @@ def call(Map pipelineParams) {
                             }
                         }
                     }
-                    if (!completed_stages['clean_sct_runner']) {
+                    if (!completed_stages['report_to_argus']) {
                         catchError {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                      cleanSctRunners(params, currentBuild)
+                                        timeout(time: 5, unit: 'MINUTES') {
+                                            finishArgusTestRun(params, currentBuild)
+                                        }
                                     }
                                 }
                             }
@@ -477,14 +480,12 @@ def call(Map pipelineParams) {
                             }
                         }
                     }
-                    if (!completed_stages['report_to_argus']) {
+                    if (!completed_stages['clean_sct_runner']) {
                         catchError {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        timeout(time: 5, unit: 'MINUTES') {
-                                            finishArgusTestRun(params, currentBuild)
-                                        }
+                                      cleanSctRunners(params, currentBuild)
                                     }
                                 }
                             }
