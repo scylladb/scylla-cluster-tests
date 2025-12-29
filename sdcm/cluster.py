@@ -453,14 +453,14 @@ class BaseNode(AutoSshContainerMixin):
         if self.ssh_login_info:
             self.ssh_login_info["hostname"] = self.external_address
 
-        self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
+            self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
 
-        # Start task threads after ssh is up, otherwise the dense ssh attempts from task
-        # threads will make SCT builder to be blocked by sshguard of gce instance.
-        self.wait_ssh_up(verbose=True)
-        self.wait_for_cloud_init()
+            # Start task threads after ssh is up, otherwise the dense ssh attempts from task
+            # threads will make SCT builder to be blocked by sshguard of gce instance.
+            self.wait_ssh_up(verbose=True)
+            self.wait_for_cloud_init()
 
-        self._reconfigure_agent(self.remoter)
+            self._reconfigure_agent(self.remoter)
 
         self._init_remoter(self.ssh_login_info)
         if not self.test_config.REUSE_CLUSTER:
