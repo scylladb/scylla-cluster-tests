@@ -9,6 +9,7 @@ from uuid import UUID
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
 from argus.client.sct.types import EventsInfo
+
 from sdcm.keystore import KeyStore
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.events_device import start_events_main_device
@@ -66,7 +67,8 @@ def is_uuid(uuid) -> bool:
 def get_argus_client(run_id: UUID | str, init_global=True) -> ArgusSCTClient:
     if not is_uuid(run_id):
         raise ArgusError("Malformed UUID provided")
-    creds = KeyStore().get_argus_rest_credentials()
+
+    creds = KeyStore().get_argus_rest_credentials_per_provider()
     argus_client = ArgusSCTClient(
         run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"], extra_headers=creds.get("extra_headers")
     )
