@@ -131,7 +131,7 @@ if __name__ == "__main__":
         creds = {"token": "<token for local environment>", "baseUrl": "http://localhost:5000"}
     else:
         key_store = KeyStore()
-        creds = key_store.get_argus_rest_credentials()
+        creds = key_store.get_argus_rest_credentials_per_provider()
 
     for index in ["latency-during-ops-write", "latency-during-ops-read", "latency-during-ops-mixed"]:
         migrate(creds=creds, days=days_back, index_name=index, job_name=job_name, dry_run=dry_run)
