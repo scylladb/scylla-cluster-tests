@@ -37,7 +37,7 @@ class ReplicationStrategy:
 
     @classmethod
     def get(cls, node: "BaseNode", keyspace: str):
-        create_ks_statement = node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
+        create_ks_statement = node.run_cqlsh(f"describe {cql_quote_if_needed(keyspace)}").stdout.splitlines()[1]
         return ReplicationStrategy.from_string(create_ks_statement)
 
     def apply(self, node: "BaseNode", keyspace: str):
