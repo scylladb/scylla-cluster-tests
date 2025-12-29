@@ -48,6 +48,7 @@ import concurrent.futures
 import hashlib
 from pathlib import Path
 from collections import OrderedDict
+
 import requests
 import boto3
 from botocore.exceptions import ClientError
@@ -331,7 +332,7 @@ class S3Storage:
 
         if not self.s3_host_name_regex.match(link):
             # get the actual s3 link from Argus first
-            creds = KeyStore().get_argus_rest_credentials()
+            creds = KeyStore().get_argus_rest_credentials_per_provider()
             headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
 
             response = requests.head(link, allow_redirects=True, headers=headers)
