@@ -3865,3 +3865,21 @@ Destination-source map of dirs/buckets to download from S3 before starting the t
 **default:** N/A
 
 **type:** list
+
+
+## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
+
+Path to the email report template used for sending argus email reports
+
+**default:** email_report_template_basic.yaml
+
+**type:** str (appendable)
+
+
+## **enable_argus_email_report** / SCT_ENABLE_ARGUS_REPORT
+
+Whether or not to send email using argus instead of SCT.
+
+**default:** N/A
+
+**type:** bool
