@@ -90,6 +90,30 @@ class LocalNode(BaseNode):
     def ssl_conf_dir(self):
         return Path(get_data_dir_path("ssl_conf"))
 
+    def _init_remoter(self, ssh_login_info):
+        pass
+
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        pass
+
+    def set_hostname(self):
+        pass
+
+    def configure_remote_logging(self):
+        pass
+
+    def do_default_installations(self):
+        pass
+
+    def start_task_threads(self):
+        pass
+
+    def _init_port_mapping(self):
+        pass
+
+    def set_keep_alive(self):
+        pass
+
 
 class LocalLoaderSetDummy(BaseCluster):
     def __init__(self, nodes=None, params=None):

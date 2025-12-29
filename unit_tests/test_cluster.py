@@ -43,7 +43,8 @@ from sdcm.utils.common import (
 from sdcm.utils.distro import Distro
 from sdcm.utils.nemesis_utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
-from unit_tests.dummy_remote import DummyRemote
+from sdcm.remote import LocalCmdRunner
+from unit_tests.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
 
@@ -1289,3 +1290,15 @@ class TestNodetool(unittest.TestCase):
         min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
         assert min_token == -9193109213506951143
         assert max_token == 9202125676696964746
+
+
+def test_base_node_init_with_none_ssh_login_info():
+    """Verify that node initialization does not crash when ssh_login_info is not defined."""
+    node = LocalNode(
+        name="test_local_node",
+        parent_cluster=DummyDbCluster(nodes=[]),
+    )
+
+    node.init()
+
+    assert isinstance(node.remoter, LocalCmdRunner), f"Expected LocalCmdRunner, got {type(node.remoter)}"
