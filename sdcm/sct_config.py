@@ -2547,117 +2547,6 @@ class SCTConfiguration(dict):
             type=boolean,
             help="Store adaptive timeout metrics in Argus. Disabled for performance tests only.",
         ),
-<<<<<<< HEAD
-||||||| parent of 3390a277f (feature(sct.py): Argus-based email reports)
-        dict(
-            name="xcloud_credentials_path",
-            env="SCT_XCLOUD_CREDENTIALS_PATH",
-            type=str,
-            help="Path to Scylla Cloud credentials file, if stored locally",
-        ),
-        dict(name="xcloud_env", env="SCT_XCLOUD_ENV", type=str, help="Scylla Cloud environment (e.g., lab)."),
-        dict(
-            name="xcloud_provider",
-            env="SCT_XCLOUD_PROVIDER",
-            type=str,
-            help="Cloud provider for Scylla Cloud deployment (aws, gce)",
-        ),
-        dict(
-            name="xcloud_replication_factor",
-            env="SCT_XCLOUD_REPLICATION_FACTOR",
-            type=int,
-            help="Replication factor for Scylla Cloud cluster",
-        ),
-        dict(
-            name="xcloud_vpc_peering",
-            env="SCT_XCLOUD_VPC_PEERING",
-            type=dict_or_str,
-            help="""Dictionary of VPC peering parameters for private connectivity between
-             SCT infrastructure and Scylla Cloud. The following parameters are used:
-                enabled: bool - indicates whether VPC peering is to be used
-                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
-                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
-        ),
-        dict(
-            name="n_vector_store_nodes",
-            env="SCT_N_VECTOR_STORE_NODES",
-            type=int,
-            help="Number of vector store nodes (0 = VS is disabled)",
-        ),
-        dict(name="vector_store_port", env="SCT_VECTOR_STORE_PORT", type=int, help="Vector Store API port"),
-        dict(
-            name="vector_store_scylla_port",
-            env="SCT_VECTOR_STORE_SCYLLA_PORT",
-            type=int,
-            help="ScyllaDB connection port for Vector Store",
-        ),
-        dict(
-            name="vector_store_threads",
-            env="SCT_VECTOR_STORE_THREADS",
-            type=int,
-            help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
-        ),
-        dict(
-            name="download_from_s3",
-            env="SCT_DOWNLOAD_FROM_S3",
-            type=list,
-            help="Destination-source map of dirs/buckets to download from S3 before starting the test",
-        ),
-=======
-        dict(
-            name="xcloud_credentials_path",
-            env="SCT_XCLOUD_CREDENTIALS_PATH",
-            type=str,
-            help="Path to Scylla Cloud credentials file, if stored locally",
-        ),
-        dict(name="xcloud_env", env="SCT_XCLOUD_ENV", type=str, help="Scylla Cloud environment (e.g., lab)."),
-        dict(
-            name="xcloud_provider",
-            env="SCT_XCLOUD_PROVIDER",
-            type=str,
-            help="Cloud provider for Scylla Cloud deployment (aws, gce)",
-        ),
-        dict(
-            name="xcloud_replication_factor",
-            env="SCT_XCLOUD_REPLICATION_FACTOR",
-            type=int,
-            help="Replication factor for Scylla Cloud cluster",
-        ),
-        dict(
-            name="xcloud_vpc_peering",
-            env="SCT_XCLOUD_VPC_PEERING",
-            type=dict_or_str,
-            help="""Dictionary of VPC peering parameters for private connectivity between
-             SCT infrastructure and Scylla Cloud. The following parameters are used:
-                enabled: bool - indicates whether VPC peering is to be used
-                cidr_pool_base: str - base of CIDR pool to use for cluster private networks ('172.31.0.0/16' by default)
-                cidr_subnet_size: int - size of subnet to use for cluster private network (24 by default)""",
-        ),
-        dict(
-            name="n_vector_store_nodes",
-            env="SCT_N_VECTOR_STORE_NODES",
-            type=int,
-            help="Number of vector store nodes (0 = VS is disabled)",
-        ),
-        dict(name="vector_store_port", env="SCT_VECTOR_STORE_PORT", type=int, help="Vector Store API port"),
-        dict(
-            name="vector_store_scylla_port",
-            env="SCT_VECTOR_STORE_SCYLLA_PORT",
-            type=int,
-            help="ScyllaDB connection port for Vector Store",
-        ),
-        dict(
-            name="vector_store_threads",
-            env="SCT_VECTOR_STORE_THREADS",
-            type=int,
-            help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
-        ),
-        dict(
-            name="download_from_s3",
-            env="SCT_DOWNLOAD_FROM_S3",
-            type=list,
-            help="Destination-source map of dirs/buckets to download from S3 before starting the test",
-        ),
         dict(
             name="argus_email_report_template",
             env="SCT_ARGUS_EMAIL_REPORT_TEMPLATE",
@@ -2670,7 +2559,6 @@ class SCTConfiguration(dict):
             type=bool,
             help="Whether or not to send email using argus instead of SCT.",
         ),
->>>>>>> 3390a277f (feature(sct.py): Argus-based email reports)
     ]
 
     required_params = [
