@@ -55,6 +55,15 @@ from sdcm.utils.gce_utils import (
 LOGGER = logging.getLogger("utils")
 
 
+def init_argus_client(test_id: str):
+    try:
+        argus_client = get_argus_client(run_id=test_id)
+    except ArgusError as exc:
+        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
+        argus_client = MagicMock()
+    return argus_client
+
+
 def clean_cloud_resources(tags_dict, config=None, dry_run=False):
     """
     Clean up cloud resources created in various cloud platforms.
