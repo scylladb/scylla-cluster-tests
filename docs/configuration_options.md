@@ -3793,27 +3793,6 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **default:** N/A
 
 **type:** int
-<<<<<<< HEAD
-||||||| parent of 3390a277f (feature(sct.py): Argus-based email reports)
-
-
-## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
-
-Destination-source map of dirs/buckets to download from S3 before starting the test
-
-**default:** N/A
-
-**type:** list
-=======
-
-
-## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
-
-Destination-source map of dirs/buckets to download from S3 before starting the test
-
-**default:** N/A
-
-**type:** list
 
 
 ## **argus_email_report_template** / SCT_ARGUS_EMAIL_REPORT_TEMPLATE
@@ -3832,4 +3811,3 @@ Whether or not to send email using argus instead of SCT.
 **default:** N/A
 
 **type:** bool
->>>>>>> 3390a277f (feature(sct.py): Argus-based email reports)

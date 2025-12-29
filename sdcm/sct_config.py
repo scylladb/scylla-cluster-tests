@@ -2665,21 +2665,6 @@ class SCTConfiguration(dict):
             type=int,
             help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)",
         ),
-<<<<<<< HEAD
-||||||| parent of 3390a277f (feature(sct.py): Argus-based email reports)
-        dict(
-            name="download_from_s3",
-            env="SCT_DOWNLOAD_FROM_S3",
-            type=list,
-            help="Destination-source map of dirs/buckets to download from S3 before starting the test",
-        ),
-=======
-        dict(
-            name="download_from_s3",
-            env="SCT_DOWNLOAD_FROM_S3",
-            type=list,
-            help="Destination-source map of dirs/buckets to download from S3 before starting the test",
-        ),
         dict(
             name="argus_email_report_template",
             env="SCT_ARGUS_EMAIL_REPORT_TEMPLATE",
@@ -2692,7 +2677,6 @@ class SCTConfiguration(dict):
             type=bool,
             help="Whether or not to send email using argus instead of SCT.",
         ),
->>>>>>> 3390a277f (feature(sct.py): Argus-based email reports)
     ]
 
     required_params = [
