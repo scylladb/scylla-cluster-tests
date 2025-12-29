@@ -760,6 +760,18 @@ wheels = [
 ]
 
 [[package]]
+name = "cloud-detect"
+version = "0.0.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp", marker = "sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bf/62/24bed800541c4312b5bc73d528408c3ce7577b5f295e55630c5b7ba99841/cloud-detect-0.0.13.tar.gz", hash = "sha256:05b5bf007ed8332a26158717fe61b38bf3581e4a6eff8d35f1d03f50a6ee9822", size = 8195, upload-time = "2024-01-31T15:20:25.966Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/56/05c2aea92e2d9f6f174848230a847027adb18cdf140a9f699fe0d1e2bfa1/cloud_detect-0.0.13-py3-none-any.whl", hash = "sha256:6c85f6d808f8ec6c6770fb3ef7d8b3250643e64e39e8b23b06f03dc8773eb51a", size = 11104, upload-time = "2024-01-31T15:20:24.054Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -3468,6 +3480,7 @@ dependencies = [
     { name = "boto3", marker = "sys_platform != 'win32'" },
     { name = "boto3-stubs", extra = ["dynamodb", "ec2", "pricing", "s3"], marker = "sys_platform != 'win32'" },
     { name = "click", marker = "sys_platform != 'win32'" },
+    { name = "cloud-detect", marker = "sys_platform != 'win32'" },
     { name = "confluent-kafka", extra = ["avro"], marker = "sys_platform != 'win32'" },
     { name = "deepdiff", marker = "sys_platform != 'win32'" },
     { name = "docker", marker = "sys_platform != 'win32'" },
@@ -3540,7 +3553,14 @@ requires-dist = [
     { name = "boto3", specifier = "==1.38.35" },
     { name = "boto3-stubs", extras = ["s3", "ec2", "dynamodb", "pricing"], specifier = "==1.28.4" },
     { name = "click", specifier = "==8.1.3" },
+<<<<<<< HEAD
     { name = "confluent-kafka", extras = ["avro"], specifier = "==2.10.1" },
+||||||| parent of d1d5e836c (feature(argus): add ability to have configuration per cloud provider)
+    { name = "confluent-kafka", extras = ["avro"], specifier = "==2.12.1" },
+=======
+    { name = "cloud-detect", specifier = ">=0.0.13" },
+    { name = "confluent-kafka", extras = ["avro"], specifier = "==2.12.1" },
+>>>>>>> d1d5e836c (feature(argus): add ability to have configuration per cloud provider)
     { name = "deepdiff", specifier = "==8.6.1" },
     { name = "docker", specifier = "==7.1.0" },
     { name = "elasticsearch", specifier = "==9.2.0" },
