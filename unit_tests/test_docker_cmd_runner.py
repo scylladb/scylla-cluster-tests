@@ -4,6 +4,9 @@ import unittest
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import pytest
+import docker
+from docker.errors import NotFound
 from invoke.exceptions import UnexpectedExit
 from invoke.watchers import StreamWatcher
 
@@ -214,3 +217,170 @@ class TestDockerCmdRunner(unittest.TestCase):
                 watchers=None,
                 user="testuser",
             )
+
+
+@pytest.fixture
+def docker_node_with_name(docker_scylla):
+    """Fixture that adds required attributes to docker_scylla for DockerCmdRunner compatibility."""
+    # Ensure _containers dict exists (required by ContainerManager)
+    if not hasattr(docker_scylla, "_containers"):
+        docker_scylla._containers = {}
+
+    # Get the actual Docker container instance
+    if "node" not in docker_scylla._containers:
+        docker_client = docker.from_env()
+        try:
+            container = docker_client.containers.get(docker_scylla.docker_id)
+            docker_scylla._containers["node"] = container
+        except NotFound:
+            # Container doesn't exist yet, this is fine - it will be created when needed
+            pass
+
+    return docker_scylla
+
+
+@pytest.mark.integration
+@pytest.mark.docker_scylla_args()
+def test_send_files_integration_with_real_docker(docker_node_with_name, tmp_path):
+    """
+    Integration test: send files to a real Docker container.
+
+    This test uses an actual Docker container running Scylla.
+    It verifies that files can be successfully copied from the host
+    to the container using the DockerCmdRunner.
+    """
+    runner = DockerCmdRunner(docker_node_with_name)
+
+    # Create a temporary file with test data
+    test_file = tmp_path / "test_file.txt"
+    test_content = "This is a test file for Docker integration testing\n"
+    test_file.write_text(test_content)
+
+    # Send file to container
+    remote_path = "/tmp/test_file.txt"
+    result = runner.send_files(str(test_file), remote_path)
+
+    # Verify file was sent successfully
+    assert result is True, "Failed to send file to Docker container"
+
+    # Verify file content in container
+    check_cmd = f"cat {remote_path}"
+    cmd_result = runner.run(check_cmd, verbose=False)
+    assert cmd_result.ok, f"Failed to read file from container: {cmd_result.stderr}"
+    assert test_content.strip() in cmd_result.stdout, "File content mismatch in container"
+
+    # Cleanup
+    runner.run(f"rm -f {remote_path}", ignore_status=True)
+
+
+@pytest.mark.integration
+@pytest.mark.docker_scylla_args()
+def test_send_directory_integration_with_real_docker(docker_node_with_name, tmp_path):
+    """
+    Integration test: send an entire directory to a real Docker container.
+
+    This test creates a local directory structure with multiple files
+    and subdirectories, then copies the entire structure to the container.
+    It verifies that the directory hierarchy and all files are preserved.
+    """
+    runner = DockerCmdRunner(docker_node_with_name)
+
+    # Create directory structure
+    src_dir = tmp_path / "source_directory"
+    src_dir.mkdir()
+
+    # Create files in root of source directory
+    (src_dir / "file1.txt").write_text("Content of file 1\n")
+    (src_dir / "file2.txt").write_text("Content of file 2\n")
+
+    # Create subdirectories with files
+    subdir1 = src_dir / "subdir1"
+    subdir1.mkdir()
+    (subdir1 / "nested_file1.txt").write_text("Nested file 1 content\n")
+
+    subdir2 = src_dir / "subdir2"
+    subdir2.mkdir()
+    (subdir2 / "nested_file2.txt").write_text("Nested file 2 content\n")
+
+    # Create a deeper nested structure
+    deep_dir = subdir1 / "deep"
+    deep_dir.mkdir()
+    (deep_dir / "deep_file.txt").write_text("Deep file content\n")
+
+    # Remote destination
+    remote_dest = "/tmp/copied_directory"
+    runner.run(f"mkdir -p {remote_dest}", ignore_status=True)
+    # Send entire directory to container
+    result = runner.send_files(str(src_dir), remote_dest)
+
+    # Verify directory was sent successfully
+    assert result is True, "Failed to send directory to Docker container"
+
+    # Verify directory structure and files in container
+    # Check if source_directory exists
+    check_dir = runner.run(f"test -d {remote_dest} && echo 'exists'", ignore_status=True)
+    assert "exists" in check_dir.stdout, f"Remote directory not found: {remote_dest}"
+
+    # Verify files exist
+    test_cases = [
+        (f"{remote_dest}/file1.txt", "Content of file 1"),
+        (f"{remote_dest}/file2.txt", "Content of file 2"),
+        (f"{remote_dest}/subdir1/nested_file1.txt", "Nested file 1 content"),
+        (f"{remote_dest}/subdir2/nested_file2.txt", "Nested file 2 content"),
+        (f"{remote_dest}/subdir1/deep/deep_file.txt", "Deep file content"),
+    ]
+
+    for remote_file, expected_content in test_cases:
+        # Check file exists
+        exists_result = runner.run(f"test -f {remote_file} && echo 'exists'", ignore_status=True)
+        assert "exists" in exists_result.stdout, f"Remote file not found: {remote_file}"
+
+        # Verify file content
+        content_result = runner.run(f"cat {remote_file}", verbose=False)
+        assert content_result.ok, f"Failed to read file: {remote_file}"
+        assert expected_content in content_result.stdout, (
+            f"Content mismatch for {remote_file}. Expected: {expected_content}, Got: {content_result.stdout}"
+        )
+
+    # Verify directory structure using find command
+    find_result = runner.run(f"find {remote_dest} -type f | wc -l", verbose=False)
+    assert find_result.ok, "Failed to count files in remote directory"
+    file_count = int(find_result.stdout.strip())
+    assert file_count == 5, f"Expected 5 files, but found {file_count} in {remote_dest}"
+
+    # Cleanup
+    runner.run(f"rm -rf {remote_dest}", ignore_status=True)
+
+
+@pytest.mark.integration
+@pytest.mark.docker_scylla_args()
+def test_receive_files_integration_with_real_docker(docker_node_with_name, tmp_path):
+    """
+    Integration test: receive files from a real Docker container.
+
+    This test creates files in the container, then retrieves them
+    back to the host using the DockerCmdRunner.
+    """
+    runner = DockerCmdRunner(docker_node_with_name)
+
+    # Create a temporary file in the container
+    remote_file = "/tmp/test_receive_file.txt"
+    test_content = "This is content created in the container\n"
+    create_cmd = f"echo '{test_content.strip()}' > {remote_file}"
+    runner.run(create_cmd)
+
+    # Create a temporary file on host to receive the content
+    local_file = tmp_path / "received_file.txt"
+
+    # Receive file from container
+    result = runner.receive_files(remote_file, str(local_file))
+
+    # Verify file was received successfully
+    assert result is True, "Failed to receive file from Docker container"
+
+    # Verify file content on host
+    received_content = local_file.read_text()
+    assert test_content.strip() in received_content, "File content mismatch after receive"
+
+    # Cleanup
+    runner.run(f"rm -f {remote_file}", ignore_status=True)
