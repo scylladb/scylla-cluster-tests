@@ -32,6 +32,18 @@
 /sdcm/cloud_api_client.py   @dimakr
 /sdcm/cloud_api_utils.py    @dimakr
 
+# k8s
+/sdcm/cluster_k8s/          @abramche
+/sdcm/k8s_configs/          @abramche
+/sdcm/utils/k8s/            @abramche
+/defaults/k8s*.yaml         @abramche
+
+# Operator functionality
+/jenkins-pipelines/operator/                @abramche
+/test-cases/scylla-operator/                @abramche
+sdcm/fill_db_data.py                        @abramche @fruch
+upgrade_test.py                             @abramche @fruch
+
 # Stress tools
 /sdcm/stress_thread.py                      @soyacz @CodeLieutenant
 /sdcm/stress/base.py                        @soyacz @CodeLieutenant
