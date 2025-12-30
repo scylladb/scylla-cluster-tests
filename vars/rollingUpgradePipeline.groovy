@@ -45,7 +45,7 @@ def call(Map pipelineParams) {
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: "${pipelineParams.get('scylla_ami_id', '')}", description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}", description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
-	        string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+            string(defaultValue: "${pipelineParams.get('azure_image_db', '')}", description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
 
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
             booleanParam(defaultValue: base_version_all_sts_versions,
@@ -341,7 +341,6 @@ def call(Map pipelineParams) {
                                                     }
                                                 }
                                                 stage("Send email for Upgrade from ${base_version}") {
-                                                    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     catchError(stageResult: 'FAILURE') {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
