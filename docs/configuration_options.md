@@ -3820,3 +3820,12 @@ Whether or not to send email using argus instead of SCT.
 **default:** N/A
 
 **type:** bool
+
+
+## **c_s_driver_version** / SCT_C_S_DRIVER_VERSION
+
+cassandra-stress driver version to use: 3|4|random
+
+**default:** 3
+
+**type:** str (appendable)
