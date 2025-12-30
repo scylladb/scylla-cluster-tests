@@ -217,19 +217,17 @@ async fn prepare_gauss_distribution(db) {
         db.data.gauss_enabled = false;
         println!("debug: Gauss/normal distribution is disabled");
     } else {
-        db.data.gauss_enabled = false;
-        println!(
-            "error: invalid gauss/normal distribution configuration: \
-'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) \
-or in range of '0..{max}' (0..row_count_per_table)",
-            max=ROW_COUNT_PER_TABLE);
+        return Err(format!(
+            "'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) " +
+            "or in range of '{min}..{max}' (0..row_count_per_table)",
+            min=0, max=ROW_COUNT_PER_TABLE));
     }
 }
 
 /// Utility function which generates partition index based on the cycle id and distribution type
 async fn get_idx(db, i) {
     if db.data.gauss_enabled {
-        let mut current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
+        let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
         if current_idx < 0 {
             current_idx = 0;
         } else if current_idx >= ROW_COUNT_PER_TABLE {
