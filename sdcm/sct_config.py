@@ -16,6 +16,7 @@ Handling Scylla-cluster-test configuration loading
 """
 
 import os
+import random
 import re
 import ast
 import json
@@ -2746,6 +2747,13 @@ class SCTConfiguration(dict):
             type=bool,
             help="Whether or not to send email using argus instead of SCT.",
         ),
+        dict(
+            name="c_s_driver_version",
+            env="SCT_C_S_DRIVER_VERSION",
+            type=str,
+            choices=("3", "4", "random"),
+            help="cassandra-stress driver version to use: 3|4|random",
+        ),
     ]
 
     required_params = [
@@ -3422,6 +3430,10 @@ class SCTConfiguration(dict):
                         f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
                         f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
                     )
+
+        if self.get("c_s_driver_version") == "random":
+            self["c_s_driver_version"] = random.choice(["4", "3"])
+            self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
 
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
