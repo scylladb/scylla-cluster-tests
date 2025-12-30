@@ -28,7 +28,7 @@ const GAUSS_STDDEV = latte::param!("gauss_stddev", 0);
 // NOTE: 'table_group_size', 'table_shift_count' and 'table_shift_interval_s' work together.
 // When we have a big amount of tables
 // we want to have a smooth workload all over them with adequate cache hit/miss ratio.
-// So, we achive it by making the load walk over a group/subset of tables ('table_group_size')
+// So, we achieve it by making the load walk over a group/subset of tables ('table_group_size')
 // for some time ('table_shift_interval_s') then we shift the table window by the
 // 'table_shift_count' tables which effectively make the queries use a changed subset of tables
 // for queries. And it is done in a loop based on the 'table_shift_interval_s'.
@@ -83,7 +83,7 @@ pub async fn prepare(db) {
     assert!(ROW_COUNT_PER_TABLE > 0, "'row_count_per_table' cannot be less than '1'");
     assert!(TEXT_COL_SIZE > 0, "'text_col_size' cannot be less than '1'");
     assert!(BLOB_COL_SIZE > 0, "'blob_col_size' cannot be less than '1'");
-    assert!(TABLE_GROUP_SIZE > 0, "'table_group_workload_size' cannot be less than '1'");
+    assert!(TABLE_GROUP_SIZE > 0, "'table_group_size' cannot be less than '1'");
     assert!(TABLE_SHIFT_COUNT >= 0, "'table_shift_count' cannot be less than '0'");
     assert!(TABLE_SHIFT_INTERVAL_S >= 0, "'table_shift_interval_s' cannot be less than '0'");
     if (TABLE_SHIFT_COUNT == 0 && TABLE_SHIFT_INTERVAL_S != 0) || (TABLE_SHIFT_COUNT != 0 && TABLE_SHIFT_INTERVAL_S == 0) {
@@ -217,18 +217,22 @@ async fn prepare_gauss_distribution(db) {
         db.data.gauss_enabled = false;
         println!("debug: Gauss/normal distribution is disabled");
     } else {
-        Err(format!(
-            "'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) " +
-            "or in range of '{min}..{max}' (0..row_count_per_table)",
-            min=0, max=ROW_COUNT_PER_TABLE))
+        db.data.gauss_enabled = false;
+        println!(
+            "error: invalid gauss/normal distribution configuration: \
+'gauss_mean' and 'gauss_stddev' both must be either '0' (disabled) \
+or in range of '0..{max}' (0..row_count_per_table)",
+            max=ROW_COUNT_PER_TABLE);
     }
 }
 
 /// Utility function which generates partition index based on the cycle id and distribution type
 async fn get_idx(db, i) {
     if db.data.gauss_enabled {
-        let current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
-        if current_idx > ROW_COUNT_PER_TABLE {
+        let mut current_idx = normal(i, db.data.gauss_mean, db.data.gauss_stddev) as i64;
+        if current_idx < 0 {
+            current_idx = 0;
+        } else if current_idx >= ROW_COUNT_PER_TABLE {
             current_idx = ROW_COUNT_PER_TABLE - 1;
         }
         return current_idx;
