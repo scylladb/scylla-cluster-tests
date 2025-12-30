@@ -108,6 +108,13 @@ class CassandraStressThread(DockerBasedStressThread):
         self.compaction_strategy = compaction_strategy
         self.set_hdr_tags(stress_cmd)
 
+    @property
+    def is_driver_4x(self) -> bool:
+        driver_version = self.params.get("c_s_driver_version")
+        if driver_version == "4":
+            return True
+        return False
+
     def set_stress_operation(self, stress_cmd):
         if " mixed " in stress_cmd:
             self.stress_operation = "mixed"
@@ -164,7 +171,7 @@ class CassandraStressThread(DockerBasedStressThread):
     def adjust_cmd_node_option(self, stress_cmd, loader, cmd_runner):
         if self.node_list and "-node" not in stress_cmd:
             stress_cmd += " -node "
-            if self.loader_set.test_config.MULTI_REGION:
+            if self.loader_set.test_config.MULTI_REGION or self.is_driver_4x:
                 # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
                 # not for loader nodes. So call next function for DB nodes
                 datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
@@ -200,6 +207,15 @@ class CassandraStressThread(DockerBasedStressThread):
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 
+    def set_driver_version_in_cmd(self, stress_cmd: str) -> str:
+        if not self.is_driver_4x:
+            return stress_cmd
+
+        if " native " in stress_cmd:
+            return stress_cmd.replace(" native ", " 4x ", 1)
+
+        return stress_cmd.replace("-mode", "-mode 4x", 1)
+
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):
         stress_cmd = self.stress_cmd
 
@@ -216,6 +232,7 @@ class CassandraStressThread(DockerBasedStressThread):
 
         stress_cmd = self.adjust_cmd_keyspace_name(stress_cmd, keyspace_idx)
         stress_cmd = self.adjust_cmd_compaction_strategy(stress_cmd)
+        stress_cmd = self.set_driver_version_in_cmd(stress_cmd)
 
         credentials = self.loader_set.get_db_auth()
         if credentials and "user=" not in stress_cmd:
