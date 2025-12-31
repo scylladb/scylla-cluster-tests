@@ -41,6 +41,7 @@ dependencies = [
     "lz4>3.0.0",
     "moto[server]==5.1.1",
     "mysql-connector-python==9.1.0",
+    "oci==2.164.2",
     "packaging>=24",
     "parameterized==0.8.1",
     "paramiko==4.0.0",
