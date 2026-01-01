@@ -36,6 +36,8 @@ because that would slow it down
     SCT_GCE_PROJECT=gcp-local-ssd-latency ./sct.py create-runner-image -c gce -r us-east1 -z a
 
     ./sct.py create-runner-image -c azure -r eastus -z a
+
+   ./sct.py create-runner-image -c oci -r us-ashburn-1 -z a
     ```
 3. update version on `aws_builder.py` and `gce_builder.py`
 4. build jenkins configuration with new sct runner image

@@ -22,6 +22,9 @@ import oci
 from oci.core import ComputeClient, VirtualNetworkClient
 from oci.core.models import Instance, Image
 from oci.identity import IdentityClient
+from oci.object_storage import ObjectStorageClient
+from oci.work_requests import WorkRequestClient
+from oci.exceptions import ServiceError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
@@ -105,19 +108,49 @@ def get_oci_network_client(region: str | None = None) -> tuple[VirtualNetworkCli
     return VirtualNetworkClient(config), config
 
 
-def oci_tags_to_dict(freeform_tags: dict | None) -> dict:
-    """Convert OCI freeform tags to a standard dict.
+def get_oci_object_storage_client(region: str | None = None) -> tuple[ObjectStorageClient, dict]:
+    """Get OCI Object Storage client.
 
-    OCI uses freeform_tags as a dict[str, str], so this is mostly a pass-through
+    Args:
+        region: OCI region name. If None, uses the default from config.
+
+    Returns:
+        Tuple of (ObjectStorageClient, config_dict)
+    """
+    config = get_oci_config()
+    if region:
+        config["region"] = region
+    return ObjectStorageClient(config), config
+
+
+def get_oci_work_request_client(region: str | None = None) -> tuple[WorkRequestClient, dict]:
+    """Get OCI Work Request client.
+
+    Args:
+        region: OCI region name. If None, uses the default from config.
+
+    Returns:
+        Tuple of (WorkRequestClient, config_dict)
+    """
+    config = get_oci_config()
+    if region:
+        config["region"] = region
+    return WorkRequestClient(config), config
+
+
+def oci_tags_to_dict(defined_tags: dict | None) -> dict:
+    """Convert OCI defined tags to a standard dict.
+
+    OCI uses defined_tags as a dict[str, dict[str, str]], so this is mostly a pass-through
     with None handling.
 
     Args:
-        freeform_tags: OCI instance freeform_tags attribute
+        defined_tags: OCI instance defined_tags attribute
 
     Returns:
         Dict of tags, empty dict if None
     """
-    return freeform_tags or {}
+    return defined_tags or {}
 
 
 def get_availability_domains(compartment_id: str, region: str | None = None) -> list[str]:
@@ -271,19 +304,25 @@ def list_instances_oci(
     return all_instances
 
 
-def filter_oci_by_tags(tags_dict: dict, instances: list[Instance]) -> list[Instance]:
-    """Filter OCI instances by freeform tags.
+def filter_oci_by_tags(tags_dict: dict, instances: list[Instance], tag_namespace: str = "sct") -> list[Instance]:
+    """Filter OCI instances by defined tags within a specific namespace.
 
     Args:
-        tags_dict: Dict of tag key-value pairs to match
-        instances: List of OCI Instance objects
+        tags_dict: Dict of tag key-value pairs to match.
+        instances: List of OCI Instance objects.
+        tag_namespace: The tag namespace to search within. Defaults to "sct".
 
     Returns:
         Filtered list of instances that match all specified tags
     """
+    if not tags_dict:
+        return instances
+
     filtered = []
     for instance in instances:
-        instance_tags = oci_tags_to_dict(instance.freeform_tags)
+        defined_tags = instance.defined_tags or {}
+        instance_tags = defined_tags.get(tag_namespace, {})
+
         if all(instance_tags.get(k) == v for k, v in tags_dict.items()):
             filtered.append(instance)
     return filtered
@@ -436,6 +475,324 @@ def wait_for_image_state(
         time.sleep(poll_interval)
 
     raise TimeoutError(f"Image {image_id} did not reach state '{target_state}' within {timeout}s")
+
+
+def wait_for_work_request(
+    work_request_client: WorkRequestClient,
+    work_request_id: str,
+    operation_name: str,
+    timeout: int = 3600,
+    poll_interval: int = 30,
+) -> None:
+    """Wait for a work request to complete.
+
+    Args:
+        work_request_client: OCI Work Request client
+        work_request_id: Work request OCID
+        operation_name: Description of the operation for logging
+        timeout: Maximum time to wait in seconds (default: 1 hour)
+        poll_interval: Time between status checks in seconds
+
+    Raises:
+        RuntimeError: If the work request fails
+        TimeoutError: If the work request doesn't complete within timeout
+    """
+    LOGGER.info("Waiting for %s (Work Request ID: %s)...", operation_name, work_request_id)
+    start_time = time.time()
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+
+    while time.time() - start_time < timeout:
+        try:
+            work_request = work_request_client.get_work_request(work_request_id=work_request_id).data
+
+            # Reset error counter on successful request
+            consecutive_errors = 0
+
+            if work_request.status == "SUCCEEDED":
+                LOGGER.info("%s completed successfully.", operation_name)
+                return
+
+            if work_request.status == "FAILED":
+                raise RuntimeError(f"{operation_name} failed. Work Request ID: {work_request_id}")
+
+            LOGGER.debug("%s in progress (status: %s)...", operation_name, work_request.status)
+
+        except (oci.exceptions.RequestException, oci.exceptions.ServiceError) as exc:
+            consecutive_errors += 1
+            # Extract just the error type for cleaner logging
+            error_type = type(exc).__name__
+            LOGGER.warning(
+                "Network error (%s) while checking work request status (attempt %d/%d). Will retry...",
+                error_type,
+                consecutive_errors,
+                max_consecutive_errors,
+            )
+
+            if consecutive_errors >= max_consecutive_errors:
+                LOGGER.error("Too many consecutive errors while waiting for %s", operation_name)
+                raise
+
+            # Use a shorter sleep on error to retry sooner
+            time.sleep(min(poll_interval, 10))
+            continue
+
+        time.sleep(poll_interval)
+
+    raise TimeoutError(f"{operation_name} did not complete within {timeout}s")
+
+
+def wait_for_object_storage_work_request(
+    os_client: ObjectStorageClient,
+    work_request_id: str,
+    operation_name: str,
+    timeout: int = 7200,
+    poll_interval: int = 30,
+) -> None:
+    """Wait for an Object Storage work request to complete.
+
+    Args:
+        os_client: OCI Object Storage client
+        work_request_id: Work request OCID
+        operation_name: Description of the operation for logging
+        timeout: Maximum time to wait in seconds (default: 2 hours)
+        poll_interval: Time between status checks in seconds
+
+    Raises:
+        RuntimeError: If the work request fails
+        TimeoutError: If the work request doesn't complete within timeout
+    """
+    LOGGER.info("Waiting for %s (Work Request ID: %s)...", operation_name, work_request_id)
+    start_time = time.time()
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+
+    while time.time() - start_time < timeout:
+        try:
+            work_request = os_client.get_work_request(work_request_id=work_request_id).data
+
+            # Reset error counter on successful request
+            consecutive_errors = 0
+
+            if work_request.status in ("COMPLETED", "SUCCEEDED"):
+                LOGGER.info("%s completed successfully.", operation_name)
+                return
+
+            if work_request.status == "FAILED":
+                raise RuntimeError(f"{operation_name} failed. Work Request ID: {work_request_id}")
+
+            LOGGER.debug("%s in progress (status: %s)...", operation_name, work_request.status)
+
+        except (oci.exceptions.RequestException, oci.exceptions.ServiceError) as exc:
+            consecutive_errors += 1
+            # Extract just the error type for cleaner logging
+            error_type = type(exc).__name__
+            LOGGER.warning(
+                "Network error (%s) while checking work request status (attempt %d/%d). Will retry...",
+                error_type,
+                consecutive_errors,
+                max_consecutive_errors,
+            )
+
+            if consecutive_errors >= max_consecutive_errors:
+                LOGGER.error("Too many consecutive errors while waiting for %s", operation_name)
+                raise
+
+            # Use a shorter sleep on error to retry sooner
+            time.sleep(min(poll_interval, 10))
+            continue
+
+        time.sleep(poll_interval)
+
+    raise TimeoutError(f"{operation_name} did not complete within {timeout}s")
+
+
+def create_bucket_if_missing(
+    os_client: ObjectStorageClient,
+    bucket_name: str,
+    compartment_id: str,
+    namespace: str,
+) -> None:
+    """Create an Object Storage bucket if it doesn't exist.
+
+    Args:
+        os_client: OCI Object Storage client
+        bucket_name: Name of the bucket
+        compartment_id: Compartment OCID
+        namespace: Object Storage namespace
+
+    Raises:
+        ServiceError: If bucket creation fails for reasons other than already existing
+    """
+    LOGGER.info("Checking if bucket '%s' exists...", bucket_name)
+    try:
+        os_client.get_bucket(namespace_name=namespace, bucket_name=bucket_name)
+        LOGGER.info("Bucket '%s' already exists.", bucket_name)
+    except ServiceError as exc:
+        if exc.status == 404:
+            LOGGER.info("Bucket '%s' does not exist. Creating it...", bucket_name)
+            create_bucket_details = oci.object_storage.models.CreateBucketDetails(
+                name=bucket_name,
+                compartment_id=compartment_id,
+                public_access_type="NoPublicAccess",
+            )
+            os_client.create_bucket(namespace_name=namespace, create_bucket_details=create_bucket_details)
+            LOGGER.info("  Bucket '%s' created successfully.", bucket_name)
+        else:
+            raise
+
+
+def export_image_to_object_storage(
+    compute_client: ComputeClient,
+    work_request_client: WorkRequestClient,
+    os_client: ObjectStorageClient,
+    image_id: str,
+    bucket_name: str,
+    namespace: str,
+    object_name: str,
+) -> None:
+    """Export an OCI image to Object Storage.
+
+    Args:
+        compute_client: OCI Compute client
+        work_request_client: OCI Work Request client
+        os_client: OCI Object Storage client
+        image_id: Image OCID to export
+        bucket_name: Destination bucket name
+        namespace: Object Storage namespace
+        object_name: Name for the exported object
+
+    Raises:
+        ServiceError: If export fails
+    """
+    # Check if already exported
+    LOGGER.info("Checking if image export already exists in bucket %s...", bucket_name)
+    try:
+        os_client.head_object(namespace_name=namespace, bucket_name=bucket_name, object_name=object_name)
+        LOGGER.info("  Image export already exists. Skipping export.")
+        return
+    except ServiceError as exc:
+        if exc.status != 404:
+            raise
+        LOGGER.info("Image object not found. Proceeding with export.")
+
+    # Ensure image is in a valid state for export
+    LOGGER.info("Waiting for source image to be in a valid state for export...")
+    image = compute_client.get_image(image_id=image_id).data
+    if image.lifecycle_state not in ("AVAILABLE", "EXPORTING"):
+        wait_for_image_state(compute_client=compute_client, image_id=image_id, target_state="AVAILABLE")
+
+    # Export the image
+    LOGGER.info("Exporting image to Object Storage...")
+    export_details = oci.core.models.ExportImageViaObjectStorageTupleDetails(
+        bucket_name=bucket_name,
+        namespace_name=namespace,
+        object_name=object_name,
+        export_format="QCOW2",
+    )
+
+    response = compute_client.export_image(image_id=image_id, export_image_details=export_details)
+    work_request_id = response.headers["opc-work-request-id"]
+    wait_for_work_request(work_request_client, work_request_id, "Image Export")
+
+
+def copy_object_to_region(
+    os_client: ObjectStorageClient,
+    namespace: str,
+    source_bucket: str,
+    source_object_name: str,
+    dest_region: str,
+    dest_bucket: str,
+    dest_object_name: str,
+) -> None:
+    """Copy an Object Storage object to another region.
+
+    Args:
+        os_client: OCI Object Storage client (from source region)
+        namespace: Object Storage namespace
+        source_bucket: Source bucket name
+        source_object_name: Source object name
+        dest_region: Destination region name
+        dest_bucket: Destination bucket name
+        dest_object_name: Destination object name
+
+    Raises:
+        ServiceError: If copy fails
+    """
+    LOGGER.info("Copying object to %s...", dest_region)
+    copy_details = oci.object_storage.models.CopyObjectDetails(
+        source_object_name=source_object_name,
+        destination_region=dest_region,
+        destination_namespace=namespace,
+        destination_bucket=dest_bucket,
+        destination_object_name=dest_object_name,
+    )
+
+    try:
+        response = os_client.copy_object(
+            namespace_name=namespace, bucket_name=source_bucket, copy_object_details=copy_details
+        )
+        work_request_id = response.headers["opc-work-request-id"]
+        wait_for_object_storage_work_request(os_client, work_request_id, "Cross-region Copy")
+    except ServiceError as exc:
+        if "InsufficientServicePermissions" in str(exc):
+            LOGGER.error("Cross-region copy failed due to insufficient permissions.")
+            LOGGER.error(
+                "You may need to create IAM policies to allow object storage service to manage objects across regions."
+            )
+        raise
+
+
+def import_image_from_object_storage(
+    compute_client: ComputeClient,
+    compartment_id: str,
+    image_name: str,
+    bucket_name: str,
+    namespace: str,
+    object_name: str,
+    defined_tags: dict | None = None,
+) -> Image:
+    """Import an image from Object Storage.
+
+    Args:
+        compute_client: OCI Compute client
+        compartment_id: Compartment OCID
+        image_name: Display name for the imported image
+        bucket_name: Source bucket name
+        namespace: Object Storage namespace
+        object_name: Source object name
+        defined_tags: Optional tags to apply to the image
+
+    Returns:
+        The imported image
+
+    Raises:
+        ServiceError: If import fails
+    """
+    LOGGER.info("Importing image from Object Storage...")
+
+    import_details = oci.core.models.CreateImageDetails(
+        compartment_id=compartment_id,
+        display_name=image_name,
+        image_source_details=oci.core.models.ImageSourceViaObjectStorageTupleDetails(
+            source_type="objectStorageTuple",
+            bucket_name=bucket_name,
+            namespace_name=namespace,
+            object_name=object_name,
+            source_image_type="QCOW2",
+        ),
+        defined_tags=defined_tags or {},
+    )
+
+    response = compute_client.create_image(create_image_details=import_details)
+    new_image_id = response.data.id
+    LOGGER.info("Image import started. New Image OCID: %s", new_image_id)
+
+    # Wait for import to complete
+    image = wait_for_image_state(compute_client=compute_client, image_id=new_image_id, target_state="AVAILABLE")
+    LOGGER.info("Image imported successfully: %s", new_image_id)
+
+    return image
 
 
 class OciService(metaclass=Singleton):

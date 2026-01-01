@@ -60,6 +60,7 @@ from sdcm.sct_runner import (
     AwsSctRunner,
     GceSctRunner,
     AzureSctRunner,
+    OciSctRunner,
     get_sct_runner,
     clean_sct_runners,
     update_sct_runner_tags,
@@ -2026,7 +2027,7 @@ def configure_aws_peering(regions):
     help=f"Create an SCT runner image in the selected cloud region."
     f" If the requested region is not a source region"
     f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
     f" source region and then copied to the chosen one.",
 )
 @cloud_provider_option
@@ -2035,6 +2036,8 @@ def configure_aws_peering(regions):
 def create_runner_image(cloud_provider, region, availability_zone):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
+    elif cloud_provider == "oci":
+        assert availability_zone, "Availability zone is required for OCI"
     add_file_logger()
     os.environ.setdefault("SCT_CLUSTER_BACKEND", cloud_provider)
     sct_config = SCTConfiguration()
