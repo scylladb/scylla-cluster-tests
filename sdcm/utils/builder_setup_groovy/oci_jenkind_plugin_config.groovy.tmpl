@@ -1,0 +1,158 @@
+// OCI Compute Cloud configuration for Jenkins
+// Uses BaremetalCloudAgentTemplate with proper constructor signature
+// If instantiation fails, it will print config for manual setup: Manage Jenkins -> System -> OCI Compute Cloud
+//
+// IDEMPOTENT: This script can be run multiple times safely. It will:
+// 1. Remove any existing cloud configuration with the same name
+// 2. Create a fresh configuration with current parameters
+// 3. Report whether it was an update or new creation
+//
+// NOTE: You may see OCI SDK warnings like "Using an unknown runtime" or "Received unknown value 'GENERIC_BM'"
+// These are harmless - the OCI SDK logs warnings for new shape types it doesn't recognize yet.
+
+import jenkins.model.Jenkins
+import hudson.model.Node
+import java.util.Collections
+
+config = [
+    name: "$name",
+    region: "$region_name",
+    compartmentId: "$compartment_id",
+    vcnId: "$vcn_id",
+    availabilityDomain: "$availability_domain",
+    imageId: "$image_id",
+    shape: "$shape",
+    subnetId: "$subnet_id",
+    labels: "$jenkins_labels",
+    numExecutors: "$num_executors",
+]
+
+println("=== OCI Builder Configuration ===")
+config.each { k, v -> println("$${k}: $${v}") }
+println("==================================")
+
+
+// Get Jenkins instance
+def jenkins = Jenkins.getInstance()
+if (jenkins == null) {
+    println("ERROR: Unable to get Jenkins instance")
+    return false
+}
+println("Successfully obtained Jenkins instance")
+
+def tmplClass = Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloudAgentTemplate")
+def cloudClass = Class.forName("com.oracle.cloud.baremetal.jenkins.BaremetalCloud")
+
+def nsgList = Collections.emptyList()
+def tagList = Collections.emptyList()
+
+// Correct DataBoundConstructor signature from plugin
+def ctor = tmplClass.getDeclaredConstructor(
+    String,                    // compartmentId
+    String,                    // availableDomain
+    String,                    // vcnCompartmentId
+    String,                    // vcnId
+    String,                    // subnetCompartmentId
+    String,                    // subnetId
+    List,                      // nsgIds (List<BaremetalCloudNsgTemplate>)
+    String,                    // imageCompartmentId
+    String,                    // imageId
+    String,                    // shape
+    String,                    // sshCredentialsId
+    String,                    // description
+    String,                    // remoteFS
+    Boolean,                   // assignPublicIP
+    Boolean,                   // usePublicIP
+    String,                    // numExecutors
+    Node.Mode,                 // mode
+    String,                    // labelString
+    String,                    // idleTerminationMinutes
+    int,                       // templateId
+    String,                    // jenkinsAgentUser
+    String,                    // customJavaPath
+    String,                    // customJVMOpts
+    String,                    // initScript
+    Boolean,                   // exportJenkinsEnvVars
+    String,                    // sshConnectTimeoutSeconds
+    Boolean,                   // verificationStrategy
+    String,                    // startTimeoutSeconds
+    String,                    // initScriptTimeoutSeconds
+    String,                    // instanceCap
+    String,                    // numberOfOcpus
+    Boolean,                   // autoImageUpdate
+    Boolean,                   // stopOnIdle
+    List,                      // tags (List<BaremetalCloudTagsTemplate>)
+    String,                    // instanceNamePrefix
+    String,                    // memoryInGBs
+    Boolean,                   // doNotDisable
+    String                     // retryTimeoutMins
+)
+
+def tmpl = ctor.newInstance(
+    config.compartmentId,           // compartmentId
+    config.availabilityDomain,      // availableDomain
+    config.compartmentId,           // vcnCompartmentId
+    config.vcnId,                   // vcnId
+    config.compartmentId,           // subnetCompartmentId
+    config.subnetId,                // subnetId
+    nsgList,                        // nsgIds
+    config.compartmentId,           // imageCompartmentId
+    config.imageId,                 // imageId
+    config.shape,                   // shape
+    "user-jenkins_scylla-qa-ec2-rsa.pem", // sshCredentialsId - cause of https://issues.jenkins.io/browse/JENKINS-76347
+    config.name,                    // description
+    "/tmp/jenkins",                // remoteFS
+    true,                           // assignPublicIP
+    true,                           // usePublicIP
+    config.numExecutors,            // numExecutors (String, not int!)
+    Node.Mode.NORMAL,               // mode
+    config.labels,                  // labelString
+    "6",                           // idleTerminationMinutes
+    0,                              // templateId
+    "ubuntu",                      // jenkinsAgentUser
+    null,                           // customJavaPath
+    "-Djdk.httpclient.maxLiteralWithIndexing=0 -Djdk.httpclient.maxNonFinalResponses=0", // customJVMOpts
+    "",                            // initScript
+    false,                          // exportJenkinsEnvVars
+    "60",                          // sshConnectTimeoutSeconds
+    false,                          // verificationStrategy
+    "600",                         // startTimeoutSeconds
+    "300",                         // initScriptTimeoutSeconds
+    "20",                          // instanceCap
+    "2",                           // numberOfOcpus
+    false,                          // autoImageUpdate
+    false,                          // stopOnIdle
+    tagList,                        // tags
+    "oci-builder",                 // instanceNamePrefix
+    null,                           // memoryInGBs
+    false,                          // doNotDisable
+    "30"                           // retryTimeoutMins
+)
+
+println("Successfully created BaremetalCloudAgentTemplate")
+
+// Create cloud instance
+def cloud = cloudClass.getDeclaredConstructor(String, String, String, String, int, List).newInstance(
+    config.name,
+    "oci-sct-user", // credentialsId (set Jenkins credential ID if available)
+    "20",        // instanceCapStr
+    "10",        // maxAsyncThreads
+    0,           // nextTemplateId
+    [tmpl]
+)
+
+println("Successfully created BaremetalCloud instance")
+
+// Try to set region if setter exists
+if (cloud.metaClass.getMetaMethod("setRegion", String)) {
+    cloud.setRegion(config.region)
+    println("Successfully set region: $${config.region}")
+}
+
+// clear old configuration
+jenkins.clouds.removeAll { it.name == "oci-compute-$${config.name}" }
+
+// Add the new cloud
+jenkins.clouds.add(cloud)
+jenkins.save()
+println("OCI cloud configured programmatically: " + config.name)

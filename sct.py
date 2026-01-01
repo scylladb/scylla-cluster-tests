@@ -126,6 +126,7 @@ from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_builder import GceBuilder
 from sdcm.utils.oci_region import OciRegion
+from sdcm.utils.oci_builder import OciBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
@@ -2210,6 +2211,8 @@ def configure_jenkins_builders(cloud_provider, regions):
             AwsBuilder.configure_in_all_region(regions=regions)
         case "gce":
             GceBuilder.configure_in_all_region(regions=regions)
+        case "oci":
+            OciBuilder.configure_in_all_region(regions=regions)
         case "azure":
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
 
