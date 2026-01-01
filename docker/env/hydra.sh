@@ -149,6 +149,8 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
     echo
 fi
 
+echo `whoami`
+
 # if running on Build server
 if [[ ${USER} == "jenkins" || ${USER} == "runner" ]]; then
     echo "Running on Build Server..."
@@ -332,7 +334,7 @@ if [[ -n "$RUNNER_IP" ]]; then
     echo "Syncing ${SCT_DIR} to the SCT runner instance..."
     if [ -z "$HYDRA_DRY_RUN" ]; then
         ssh-keygen -R "$RUNNER_IP" || true
-        rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ${SCT_DIR} ubuntu@${RUNNER_IP}:/home/ubuntu/
+        rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --exclude='.venv*'  --delete ${SCT_DIR} ubuntu@${RUNNER_IP}:/home/ubuntu/
     else
         echo "ssh-keygen -R \"$RUNNER_IP\" || true"
         echo "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ${SCT_DIR} ubuntu@${RUNNER_IP}:/home/ubuntu/"
@@ -356,7 +358,7 @@ if [[ -n "$RUNNER_IP" ]]; then
 
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
     HOST_NAME="ip-${RUNNER_IP//./-}"
-    USER_ID=1000:1000
+    USER_ID=1001:1001
     RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP}"
     DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
 fi

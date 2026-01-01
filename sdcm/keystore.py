@@ -105,6 +105,9 @@ class KeyStore:
     def get_azure_ssh_key_pair(self):
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
+    def get_oci_ssh_key_pair(self):
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
+
     def get_qa_ssh_keys(self):
         return [
             self.get_ec2_ssh_key_pair(),

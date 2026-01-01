@@ -2917,6 +2917,7 @@ class SCTConfiguration(dict):
         "aws": [sct_abs_path("defaults/aws_config.yaml")],
         "gce": [sct_abs_path("defaults/gce_config.yaml")],
         "azure": [sct_abs_path("defaults/azure_config.yaml")],
+        "oci": [sct_abs_path("defaults/oci_config.yaml")],
         "docker": [sct_abs_path("defaults/docker_config.yaml")],
         "baremetal": [sct_abs_path("defaults/baremetal_config.yaml")],
         "aws-siren": [sct_abs_path("defaults/aws_config.yaml")],

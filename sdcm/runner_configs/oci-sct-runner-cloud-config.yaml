@@ -1,0 +1,36 @@
+#cloud-config
+
+# Remove opc user early
+bootcmd:
+  - userdel -f -r opc 2>/dev/null || true
+  - groupdel opc || true
+
+users:
+  - name: ubuntu
+    uid: 1000
+    groups: [sudo, adm, docker]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+
+ssh_deletekeys: false
+disable_root: false
+
+packages:
+  - python3-pip
+
+runcmd:
+  # Get SSH keys from instance metadata and add to ubuntu user
+  - mkdir -p /home/ubuntu/.ssh
+  - chmod 700 /home/ubuntu/.ssh
+  # Fetch keys from OCI metadata service
+  - |
+    curl -H "Authorization: Bearer Oracle" -L http://169.254.169.254/opc/v2/instance/metadata/ssh_authorized_keys \
+      > /home/ubuntu/.ssh/authorized_keys 2>/dev/null || true
+  - chmod 600 /home/ubuntu/.ssh/authorized_keys
+  - chown -R ubuntu:ubuntu /home/ubuntu
+  # Install OCI CLI
+  - |
+    if ! command -v oci &>/dev/null; then
+      pip3 install oci-cli --break-system-packages
+    fi

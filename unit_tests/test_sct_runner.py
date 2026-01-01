@@ -22,6 +22,7 @@ from sdcm.sct_runner import (
     AwsSctRunner,
     GceSctRunner,
     AzureSctRunner,
+    OciSctRunner,
 )
 
 
@@ -59,31 +60,46 @@ class TestListSctRunners(unittest.TestCase):
             test_id="test-id-1",
         )
 
+        self.oci_runner = SctRunnerInfo(
+            sct_runner_class=OciSctRunner,
+            cloud_service_instance=None,
+            region_az="eastus-1",
+            instance=MagicMock(tags={"RunByUser": "user2"}),
+            instance_name="oci-runner-1",
+            public_ips=["9.10.11.15"],
+            test_id="test-id-1",
+        )
+
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
-    def test_list_sct_runners_no_filters(self, mock_azure, mock_gce, mock_aws):
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
+    def test_list_sct_runners_no_filters(self, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test listing all runners without filters."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         runners = list_sct_runners(verbose=False)
 
-        self.assertEqual(len(runners), 3)
+        self.assertEqual(len(runners), 4)
         self.assertIn(self.aws_runner, runners)
         self.assertIn(self.gce_runner, runners)
         self.assertIn(self.azure_runner, runners)
+        self.assertIn(self.oci_runner, runners)
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner._get_runner_user_tag")
-    def test_list_sct_runners_filter_by_user(self, mock_get_user_tag, mock_azure, mock_gce, mock_aws):
+    def test_list_sct_runners_filter_by_user(self, mock_get_user_tag, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test filtering runners by user."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         def side_effect(runner_info):
             if runner_info == self.aws_runner:
@@ -91,6 +107,8 @@ class TestListSctRunners(unittest.TestCase):
             elif runner_info == self.gce_runner:
                 return "user1"
             elif runner_info == self.azure_runner:
+                return "user2"
+            elif runner_info == self.oci_runner:
                 return "user2"
             return None
 
@@ -102,31 +120,37 @@ class TestListSctRunners(unittest.TestCase):
         self.assertIn(self.aws_runner, runners)
         self.assertIn(self.gce_runner, runners)
         self.assertNotIn(self.azure_runner, runners)
+        self.assertNotIn(self.oci_runner, runners)
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
-    def test_list_sct_runners_filter_by_test_id(self, mock_azure, mock_gce, mock_aws):
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
+    def test_list_sct_runners_filter_by_test_id(self, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test filtering runners by test_id."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         runners = list_sct_runners(test_id="test-id-1", verbose=False)
 
-        self.assertEqual(len(runners), 2)
+        self.assertEqual(len(runners), 3)
         self.assertIn(self.aws_runner, runners)
         self.assertNotIn(self.gce_runner, runners)
         self.assertIn(self.azure_runner, runners)
+        self.assertIn(self.oci_runner, runners)
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
-    def test_list_sct_runners_filter_by_ip(self, mock_azure, mock_gce, mock_aws):
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
+    def test_list_sct_runners_filter_by_ip(self, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test filtering runners by IP address."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         runners = list_sct_runners(test_runner_ip="5.6.7.8", verbose=False)
 
@@ -134,21 +158,26 @@ class TestListSctRunners(unittest.TestCase):
         self.assertNotIn(self.aws_runner, runners)
         self.assertIn(self.gce_runner, runners)
         self.assertNotIn(self.azure_runner, runners)
+        self.assertNotIn(self.oci_runner, runners)
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner._get_runner_user_tag")
-    def test_list_sct_runners_mixed_filters(self, mock_get_user_tag, mock_azure, mock_gce, mock_aws):
+    def test_list_sct_runners_mixed_filters(self, mock_get_user_tag, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test user and test_id filters."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         def side_effect(runner_info):
             if runner_info == self.aws_runner:
                 return "user1"
             elif runner_info == self.azure_runner:
+                return "user1"
+            elif runner_info == self.oci_runner:
                 return "user1"
             return "other_user"
 
@@ -156,19 +185,22 @@ class TestListSctRunners(unittest.TestCase):
 
         runners = list_sct_runners(user="user1", test_id="test-id-1", verbose=False)
 
-        self.assertEqual(len(runners), 2)
+        self.assertEqual(len(runners), 3)
         self.assertIn(self.aws_runner, runners)
         self.assertNotIn(self.gce_runner, runners)
         self.assertIn(self.azure_runner, runners)
+        self.assertIn(self.oci_runner, runners)
 
     @patch("sdcm.sct_runner.AwsSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.GceSctRunner.list_sct_runners")
     @patch("sdcm.sct_runner.AzureSctRunner.list_sct_runners")
-    def test_list_sct_runners_empty_results(self, mock_azure, mock_gce, mock_aws):
+    @patch("sdcm.sct_runner.OciSctRunner.list_sct_runners")
+    def test_list_sct_runners_empty_results(self, mock_oci, mock_azure, mock_gce, mock_aws):
         """Test no runners match filters."""
         mock_aws.return_value = [self.aws_runner]
         mock_gce.return_value = [self.gce_runner]
         mock_azure.return_value = [self.azure_runner]
+        mock_oci.return_value = [self.oci_runner]
 
         runners = list_sct_runners(test_id="non-existent-test-id", verbose=False)
 
