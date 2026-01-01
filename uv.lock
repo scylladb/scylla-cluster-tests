@@ -2734,6 +2734,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pre-commit-hooks"
+version = "6.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ruamel-yaml", marker = "sys_platform != 'win32'" },
+    { name = "tomli", marker = "python_full_version < '3.11' and sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/4d/93e63e48f8fd16d6c1e4cef5dabadcade4d1325c7fd6f29f075a4d2284f3/pre_commit_hooks-6.0.0.tar.gz", hash = "sha256:76d8370c006f5026cdd638a397a678d26dda735a3c88137e05885a020f824034", size = 28293, upload-time = "2025-08-09T19:25:04.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/46/eba9be9daa403fa94854ce16a458c29df9a01c6c047931c3d8be6016cd9a/pre_commit_hooks-6.0.0-py2.py3-none-any.whl", hash = "sha256:76161b76d321d2f8ee2a8e0b84c30ee8443e01376121fd1c90851e33e3bd7ee2", size = 41338, upload-time = "2025-08-09T19:25:03.513Z" },
+]
+
+[[package]]
 name = "prettytable"
 version = "3.10.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3738,6 +3751,24 @@ wheels = [
 ]
 
 [[package]]
+name = "ruamel-yaml"
+version = "0.19.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ruamel-yaml-clibz", marker = "platform_python_implementation == 'CPython' and sys_platform != 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0c/5d/8a1de57b5a11245c61c906d422cd1e66b6778e134a1c68823a451be5759c/ruamel_yaml-0.19.0.tar.gz", hash = "sha256:ff19233e1eb3e9301e7a3d437847713e361a80faace167639327efbe8c0e5f95", size = 142095, upload-time = "2025-12-31T16:47:31.837Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/3e/835d495068a4bb03419ce8c5464734ff6f3343df948e033cb5e5f81f7f08/ruamel_yaml-0.19.0-py3-none-any.whl", hash = "sha256:96ea8bafd9f3fdb0181ce3cc05e6ec02ce0a8788cbafa9b5a6e47c76fe26dfc6", size = 117777, upload-time = "2025-12-31T16:47:29.07Z" },
+]
+
+[[package]]
+name = "ruamel-yaml-clibz"
+version = "0.3.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/95/9bcc25e84703180c3941062796572e0fc73bd659086efdc4ef9b8af19e36/ruamel_yaml_clibz-0.3.4.tar.gz", hash = "sha256:e99077ac6aa4943af1000161a0cb793a379c5c8cd03ea8dd3803e0b58739b685", size = 231076, upload-time = "2025-12-31T17:11:09.341Z" }
+
+[[package]]
 name = "ruff"
 version = "0.14.6"
 source = { registry = "https://pypi.org/simple" }
@@ -3819,6 +3850,7 @@ dependencies = [
     { name = "parameterized", marker = "sys_platform != 'win32'" },
     { name = "paramiko", marker = "sys_platform != 'win32'" },
     { name = "pre-commit", marker = "sys_platform != 'win32'" },
+    { name = "pre-commit-hooks", marker = "sys_platform != 'win32'" },
     { name = "prettytable", marker = "sys_platform != 'win32'" },
     { name = "prometheus-client", marker = "sys_platform != 'win32'" },
     { name = "pycryptodome", marker = "sys_platform != 'win32'" },
@@ -3891,6 +3923,7 @@ requires-dist = [
     { name = "parameterized", specifier = "==0.8.1" },
     { name = "paramiko", specifier = "==4.0.0" },
     { name = "pre-commit", specifier = "==4.0.1" },
+    { name = "pre-commit-hooks", specifier = "==6.0.0" },
     { name = "prettytable", specifier = "==3.10.2" },
     { name = "prometheus-client", specifier = "==0.11.0" },
     { name = "pycryptodome", specifier = "==3.19.1" },
