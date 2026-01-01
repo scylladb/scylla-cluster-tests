@@ -27,6 +27,8 @@ def call(Map params, Integer test_duration, String region) {
 
     if ( params.backend.equals("azure") ) {
         region_zone_arg = "--region " + params.azure_region_name
+    } else if ( params.backend.equals("oci") )  {
+        region_zone_arg = "--region " + params.oci_region
     } else {
         region_zone_arg = "--region " + region
     }
@@ -36,7 +38,7 @@ def call(Map params, Integer test_duration, String region) {
     set -xe
     env
 
-    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" || "$cloud_provider" == "oci" ]]; then
         rm -fv sct_runner_ip
 
         export SCT_CLUSTER_BACKEND="${params.backend}"

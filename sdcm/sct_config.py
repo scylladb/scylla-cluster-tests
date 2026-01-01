@@ -255,6 +255,7 @@ class SCTConfiguration(dict):
         "k8s-gke",
         "k8s-local-kind",
         "xcloud",
+        "oci",
     ]
 
     config_options = [
