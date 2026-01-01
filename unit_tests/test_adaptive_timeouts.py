@@ -103,7 +103,11 @@ Token                  : (invoke with -T/--tokens to see all 256 tokens)
         r"nodetool info": Result(stdout=nodetool_info, exited=0),
         r"uptime": Result(stdout=" 10:00:00 up 1 day,  1:00,  1 user,  load average: 1.20, 2.30, 1.60", exited=0),
     }
-    return RemoteCmdRunnerBase.create_remoter("test-node-host")
+    remoter = RemoteCmdRunnerBase.create_remoter("test-node-host")
+    yield remoter
+    # Cleanup: stop the remoter to prevent any background threads
+    if hasattr(remoter, "stop"):
+        remoter.stop()
 
 
 @pytest.fixture
