@@ -2,9 +2,10 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.0.1
+    rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
+        language: system  # Override the language
         exclude: >
             (?x)^(
                 \.git/.*|
@@ -12,8 +13,10 @@ repos:
                 argus/.*
             )$
     -   id: end-of-file-fixer
+        language: system  # Override the language
         exclude: ^(\.git/.*|argus/.*)$
     -   id: check-yaml
+        language: system  # Override the language
         args:
         - --allow-multiple-documents
         exclude: >
@@ -26,14 +29,18 @@ repos:
                 sdcm/k8s_configs/eks/storageclass_gp3.yaml
             )$
     -   id: check-added-large-files
+        language: system  # Override the language
         exclude: >
             (?x)^(
                 sdcm/k8s_configs/monitoring/prometheus-operator/.*
             )$
     -   id: check-json
+        language: system  # Override the language
     -   id: detect-aws-credentials
+        language: system  # Override the language
         args: [--allow-missing-credentials]
     -   id: detect-private-key
+        language: system  # Override the language
         exclude: ^data_dir/ssl_conf/.*$
 
 -   repo: local

@@ -306,9 +306,9 @@ botocore==1.31.4 \
     #   awscli
     #   boto3
     #   s3transfer
-botocore-stubs==1.42.17 \
-    --hash=sha256:174c6fb6bb217fc45e017e37f40a56c8d60eb4e8123fb1595081ba95b3f15550 \
-    --hash=sha256:b58affbc979648c570822327d035e359279b5ea0d549ceb194be79aada552af2
+botocore-stubs==1.42.19 \
+    --hash=sha256:2fcae271af2a24cd46166246589b22c76b49ba30656b3b0c504b92a49fda1ca2 \
+    --hash=sha256:bdfc3ffe6487bcf9c8f66783ea370653ccd7c16950fa82a15f811e7e5ccaeeb0
     # via boto3-stubs
 cachetools==6.2.4 \
     --hash=sha256:69a7a52634fed8b8bf6e24a050fb60bff1c9bd8f6d24572b99c32d4e71e62a51 \
@@ -1629,9 +1629,13 @@ pluggy==1.6.0 \
     --hash=sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3 \
     --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
     # via pytest
-pre-commit==2.15.0 \
-    --hash=sha256:3c25add78dbdfb6a28a651780d5c311ac40dd17f160eb3954a0c59da40a505a7 \
-    --hash=sha256:a4ed01000afcb484d9eb8d504272e642c4c4099bbad3a6b27e519bd6a3e928a6
+pre-commit==4.0.1 \
+    --hash=sha256:80905ac375958c0444c65e9cebebd948b3cdb518f335a091a670a89d652139d2 \
+    --hash=sha256:efde913840816312445dc98787724647c65473daefe420785f885e8ed9a06878
+    # via -r requirements.in
+pre-commit-hooks==6.0.0 \
+    --hash=sha256:76161b76d321d2f8ee2a8e0b84c30ee8443e01376121fd1c90851e33e3bd7ee2 \
+    --hash=sha256:76d8370c006f5026cdd638a397a678d26dda735a3c88137e05885a020f824034
     # via -r requirements.in
 prettytable==3.10.2 \
     --hash=sha256:1cbfdeb4bcc73976a778a0fb33cb6d752e75396f16574dcb3e2d6332fd93c76a \
@@ -2161,6 +2165,13 @@ rsa==4.7.2 \
     # via
     #   awscli
     #   google-auth
+ruamel-yaml==0.19.0 \
+    --hash=sha256:96ea8bafd9f3fdb0181ce3cc05e6ec02ce0a8788cbafa9b5a6e47c76fe26dfc6 \
+    --hash=sha256:ff19233e1eb3e9301e7a3d437847713e361a80faace167639327efbe8c0e5f95
+    # via pre-commit-hooks
+ruamel-yaml-clibz==0.3.4 \
+    --hash=sha256:e99077ac6aa4943af1000161a0cb793a379c5c8cd03ea8dd3803e0b58739b685
+    # via ruamel-yaml
 ruff==0.14.6 \
     --hash=sha256:00169c0c8b85396516fdd9ce3446c7ca20c2a8f90a77aa945ba6b8f2bfe99e85 \
     --hash=sha256:0a8e7b9d73d8728b68f632aa8e824ef041d068d231d8dbc7808532d3629a6bef \
@@ -2297,9 +2308,7 @@ tenacity==8.0.1 \
 toml==0.10.2 \
     --hash=sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b \
     --hash=sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f
-    # via
-    #   autopep8
-    #   pre-commit
+    # via autopep8
 tomli==2.3.0 \
     --hash=sha256:00b5f5d95bbfc7d12f91ad8c593a1659b6387b43f054104cda404be6bda62456 \
     --hash=sha256:0a154a9ae14bfcf5d8917a59b51ffd5a3ac1fd149b71b47a3a104ca4edcfa845 \
@@ -2343,7 +2352,9 @@ tomli==2.3.0 \
     --hash=sha256:f85209946d1fe94416debbb88d00eb92ce9cd5266775424ff81bc959e001acaf \
     --hash=sha256:feb0dacc61170ed7ab602d3d972a58f14ee3ee60494292d384649a3dc38ef463 \
     --hash=sha256:ff72b71b5d10d22ecb084d345fc26f42b5143c5533db5e2eaba7d2d335358876
-    # via pytest
+    # via
+    #   pre-commit-hooks
+    #   pytest
 typepy==1.3.4 \
     --hash=sha256:89c1f66de6c6133209c43a94d23431d320ba03ef5db18f241091ea594035d9de \
     --hash=sha256:d5ed3e0c7f49521bff0603dd08cf8d453371cf68d65a29d3d0038552ccc46e2e
