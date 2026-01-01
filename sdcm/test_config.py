@@ -205,9 +205,9 @@ class TestConfig(metaclass=Singleton):
         if cls._tester_obj:
             billing_project = cls._tester_obj.params.get("billing_project")
             if billing_project:
-                tags["BillingProject"] = billing_project
+                tags["project"] = billing_project
         else:
-            tags["BillingProject"] = os.environ.get("SCT_BILLING_PROJECT", "")
+            tags["project"] = os.environ.get("SCT_BILLING_PROJECT", "")
         return tags
 
     @classmethod

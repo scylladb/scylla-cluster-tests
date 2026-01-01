@@ -392,7 +392,7 @@ def clean_resources(ctx, post_behavior, user, billing_project, test_id, logdir, 
     if user:
         user_param["RunByUser"] = user
     if billing_project:
-        user_param["BillingProject"] = billing_project
+        user_param["project"] = billing_project
     if user or test_id or billing_project:
         os.environ["SCT_REGION_NAME"] = os.environ.get("SCT_REGION_NAME", "")
         os.environ["SCT_GCE_DATACENTER"] = os.environ.get("SCT_GCE_DATACENTER", "")
@@ -490,7 +490,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     if user:
         params["RunByUser"] = user
     if billing_project:
-        params["BillingProject"] = billing_project
+        params["project"] = billing_project
     if test_id:
         params["TestId"] = test_id
     if all([not get_all, not get_all_running, not user, not test_id, not billing_project]):
@@ -503,9 +503,9 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         os.environ["SCT_AZURE_REGION_NAME"] = os.environ.get("SCT_AZURE_REGION_NAME", "")
 
     if get_all_running:
-        table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "BillingProject", "LaunchTime"]
+        table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "project", "LaunchTime"]
     else:
-        table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "BillingProject", "LaunchTime"]
+        table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "project", "LaunchTime"]
 
     def list_resources_on_aws():
         click.secho("Checking AWS EC2...", fg="green")
@@ -520,7 +520,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 name = tags.get("Name", "N/A")
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 aws_table.add_row(
                     [
                         name,
@@ -548,7 +548,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = aws_tags_to_dict(eip.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 aws_table.add_row(
                     [
                         eip["AllocationId"],
@@ -573,7 +573,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 name = tags.get("Name", "N/A")
                 aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
             click.echo(aws_table.get_string(title="SGs used on AWS"))
@@ -590,7 +590,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = aws_tags_to_dict(group.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 name = tags.get("Name", "N/A")
                 aws_table.add_row([name, group["GroupId"], test_id, run_by_user, billing_project])
             click.echo(aws_table.get_string(title="SGs used on AWS"))
@@ -617,7 +617,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                                 public_ips if get_all_running else instance.status,
                                 tags.get("TestId", "N/A") if tags else "N/A",
                                 tags.get("RunByUser", "N/A") if tags else "N/A",
-                                tags.get("BillingProject", "N/A") if tags else "N/A",
+                                tags.get("project", "N/A") if tags else "N/A",
                                 instance.creation_timestamp,
                             ]
                         )
@@ -640,7 +640,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                         tags.get("TestId", "N/A") if tags else "N/A",
                         cluster.region_name,
                         tags.get("RunByUser", "N/A") if tags else "N/A",
-                        tags.get("BillingProject", "N/A") if tags else "N/A",
+                        tags.get("project", "N/A") if tags else "N/A",
                         cluster.create_time,
                     ]
                 )
@@ -658,7 +658,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = aws_tags_to_dict(elb.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 _, _, _, region, _, name = elb["ResourceARN"].split(":")
                 aws_table.add_row(
                     [
@@ -683,7 +683,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = aws_tags_to_dict(stack.get("Tags"))
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project = tags.get("BillingProject", "N/A")
+                billing_project = tags.get("project", "N/A")
                 _, _, _, region, _, name = stack["ResourceARN"].split(":")
                 aws_table.add_row(
                     [
@@ -713,7 +713,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                         cluster.zone,
                         tags.get("TestId", "N/A") if tags else "N/A",
                         tags.get("RunByUser", "N/A") if tags else "N/A",
-                        tags.get("BillingProject", "N/A") if tags else "N/A",
+                        tags.get("project", "N/A") if tags else "N/A",
                         cluster.cluster_info["createTime"],
                     ]
                 )
@@ -752,7 +752,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                                 get_ip_address_of_container(container) if get_all_running else container.status,
                                 container.labels.get("TestId", "N/A"),
                                 container.labels.get("RunByUser", "N/A"),
-                                container.labels.get("BillingProject", "N/A"),
+                                container.labels.get("project", "N/A"),
                                 container.attrs.get("Created", "N/A"),
                             ]
                         )
@@ -771,7 +771,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                                     builder_name,
                                     image.labels.get("TestId", "N/A"),
                                     image.labels.get("RunByUser", "N/A"),
-                                    image.labels.get("BillingProject", "N/A"),
+                                    image.labels.get("project", "N/A"),
                                     image.attrs.get("Created", "N/A"),
                                 ]
                             )
@@ -787,8 +787,8 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         # Filter by user and billing_project using params dict values
         if params.get("RunByUser"):
             instances = [inst for inst in instances if inst.tags.get("RunByUser") == params["RunByUser"]]
-        if params.get("BillingProject"):
-            instances = [inst for inst in instances if inst.tags.get("BillingProject") == params["BillingProject"]]
+        if params.get("project"):
+            instances = [inst for inst in instances if inst.tags.get("BillingProject") == params["project"]]
         if instances:
             azure_table = PrettyTable(
                 ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "BillingProject", "LaunchTime"]
@@ -803,7 +803,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
                 tags = instance.tags
                 test_id = tags.get("TestId", "N/A")
                 run_by_user = tags.get("RunByUser", "N/A")
-                billing_project_value = tags.get("BillingProject", "N/A")
+                billing_project_value = tags.get("project", "N/A")
                 azure_table.add_row(
                     [
                         instance.name,

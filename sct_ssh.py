@@ -336,7 +336,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     if node_type:
         tags.update({"NodeType": node_type})
     if billing_project:
-        tags.update({"BillingProject": billing_project})
+        tags.update({"project": billing_project})
 
     backends = backends or ["aws", "gce"]
     aws_vms = []
