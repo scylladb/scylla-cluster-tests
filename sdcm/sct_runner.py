@@ -1332,7 +1332,7 @@ class OciSctRunner(SctRunner):
         )
 
     def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration | None = None):
-        availability_zone = availability_zone or params.get("availability_zone") if params else ""
+        availability_zone = availability_zone or params.get("availability_zone")
         assert availability_zone, "Availability zone is required for OCI"
         availability_zone = availability_zone.split(",")[0]  # in case multiple AZs are given, take the first one
 
