@@ -17,7 +17,7 @@ import pytest
 
 from sdcm import sct_config
 from sdcm.test_config import TestConfig
-from sdcm.utils.operator.multitenant_common import get_tenants
+from sdcm.utils.k8s_operator.multitenant_common import get_tenants
 
 
 class FakeTestBase:

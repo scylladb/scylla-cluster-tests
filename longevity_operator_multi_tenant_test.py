@@ -15,7 +15,7 @@
 
 from longevity_test import LongevityTest
 from sdcm.utils.parallel_object import ParallelObject
-from sdcm.utils.operator.multitenant_common import MultiTenantTestMixin
+from sdcm.utils.k8s_operator.multitenant_common import MultiTenantTestMixin
 
 
 class LongevityOperatorMultiTenantTest(MultiTenantTestMixin, LongevityTest):
