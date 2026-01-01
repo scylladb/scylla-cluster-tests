@@ -345,8 +345,13 @@ def fixture_docker_vector_store(request: pytest.FixtureRequest, docker_scylla, p
         destroy_vector_store_cluster(vector_store_cluster)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def fake_remoter():
+    """Ensure all tests use FakeRemoter instead of real SSH remoters.
+
+    This is autouse to prevent any test from accidentally creating real SSH
+    connections which could interfere with parallel test execution.
+    """
     RemoteCmdRunnerBase.set_default_remoter_class(FakeRemoter)
     return FakeRemoter
 
