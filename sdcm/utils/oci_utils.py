@@ -36,8 +36,6 @@ logging.getLogger("oci").setLevel(logging.WARNING)
 SUPPORTED_REGIONS = [
     "us-ashburn-1",
     "us-phoenix-1",
-    "eu-frankfurt-1",
-    "uk-london-1",
 ]
 
 
