@@ -124,6 +124,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_builder import GceBuilder
+from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
@@ -153,6 +154,7 @@ SUPPORTED_CLOUDS = (
     "aws",
     "gce",
     "azure",
+    "oci",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
@@ -2002,6 +2004,8 @@ def prepare_regions(cloud_provider, regions):
             region = AzureRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "gce":
             region = GceRegion(region_name=region)  # noqa: PLW2901
+        elif cloud_provider == "oci":
+            region = OciRegion(region_name=region)  # noqa: PLW2901
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()

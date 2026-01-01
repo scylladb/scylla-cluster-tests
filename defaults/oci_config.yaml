@@ -1,0 +1,4 @@
+# OCI Configuration Defaults
+# This file contains default settings for OCI backend deployments
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
