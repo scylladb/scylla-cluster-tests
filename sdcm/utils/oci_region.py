@@ -323,7 +323,7 @@ class OciRegion:
         for _ in range(self.SCT_SUBNETS_PER_AD):
             for ad in self.availability_domains:
                 ipv6_cidr = next(ipv6_iter) if ipv6_iter else None
-                self.create_subnet(ad=ad, ipv4_cidr=next(cidr_iter),  ipv6_cidr=ipv6_cidr, subnet_index=None)
+                self.create_subnet(ad=ad, ipv4_cidr=next(cidr_iter), ipv6_cidr=ipv6_cidr, subnet_index=None)
 
     def configure_network(self):
         # Ensure base resources exist
