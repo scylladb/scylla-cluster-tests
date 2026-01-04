@@ -51,6 +51,7 @@ from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
 from collections import OrderedDict
+from urllib.parse import urljoin
 
 import requests
 import boto3
@@ -64,6 +65,7 @@ from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as G
 from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
 from prettytable import PrettyTable
+from botocore.exceptions import ClientError
 
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
@@ -320,20 +322,82 @@ class S3Storage:
         grants.append(grantees)
         acl_obj.put(ACL="", AccessControlPolicy={"Grants": grants, "Owner": acl_obj.owner})
 
+    @retrying(n=3, sleep_time=10, message="Downloading file from S3")
     def download_file(self, link, dst_dir):
+        """Download file from S3 bucket or Argus proxy link.
+
+        Args:
+            link: URL to download (S3 direct link or Argus proxy link)
+            dst_dir: Destination directory for the downloaded file
+
+        Returns:
+            Full path to downloaded file
+
+        Raises:
+            RuntimeError: If the file download fails after retries
+        """
+
+        if not self.s3_host_name_regex.match(link):
+            # get the actual s3 link from Argus first
+            creds = KeyStore().get_argus_rest_credentials_per_provider()
+            headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
+
+            try:
+                response = requests.head(link, allow_redirects=True, headers=headers, timeout=30)
+                response.raise_for_status()
+
+                # Check if we got redirected properly
+                if response.history:
+                    redirect_location = response.history[-1].headers.get("location")
+                    if redirect_location:
+                        link = redirect_location
+                    else:
+                        raise RuntimeError(
+                            f"Argus redirect failed: no location header found. "
+                            f"Status: {response.status_code}, URL: {response.url}"
+                        )
+                else:
+                    raise RuntimeError(
+                        f"Argus communication failed: no redirect occurred. "
+                        f"This may indicate authentication issues or a Cloudflare access problem. "
+                        f"Status: {response.status_code}, URL: {response.url}"
+                    )
+
+                # remove query parameters from the link, we don't need them for S3 download
+                link = urljoin(link, urlparse(link).path)
+
+            except requests.exceptions.RequestException as exc:
+                raise RuntimeError(f"Failed to communicate with Argus to get S3 download link: {exc}") from exc
+
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
         file_name = os.path.basename(key_name)
+
+        if not file_name:
+            raise RuntimeError(f"Invalid S3 link: could not extract file name from {link}")
+
         try:
             LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
             self._bucket.download_file(
                 Key=key_name, Filename=os.path.join(dst_dir, file_name), Config=self.transfer_config
             )
             LOGGER.info("Downloaded finished")
-            return os.path.join(os.path.abspath(dst_dir), file_name)
+            downloaded_path = os.path.join(os.path.abspath(dst_dir), file_name)
 
-        except Exception as details:  # noqa: BLE001
-            LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
-            return ""
+            # Verify the file was actually downloaded
+            if not os.path.exists(downloaded_path):
+                raise RuntimeError(f"Download completed but file not found at {downloaded_path}")
+
+            return downloaded_path
+
+        except ClientError as details:
+            raise RuntimeError(
+                f"Failed to download file {key_name} from S3 bucket {self.bucket_name}: {details}"
+            ) from details
+        except RuntimeError:
+            # Re-raise RuntimeError without wrapping
+            raise
+        except Exception as details:
+            raise RuntimeError(f"Unexpected error downloading file {key_name}: {details}") from details
 
 
 def list_logs_by_test_id(test_id):
