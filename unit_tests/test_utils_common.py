@@ -121,6 +121,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         self.added_password_suffix = False
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
+        self.vector_store_cluster = None
 
     def start_nemesis(self):
         pass
