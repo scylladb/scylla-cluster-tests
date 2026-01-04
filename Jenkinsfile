@@ -103,6 +103,13 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
     stages {
+        stage("tag builder") {
+        steps {
+                script {
+                    tagBuilder()
+                }
+            }
+        }
         stage("precommit") {
             options {
                 timeout(time: 15, unit: 'MINUTES')

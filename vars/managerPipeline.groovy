@@ -194,6 +194,7 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         loadEnvFromString(params.extra_environment_variables)
+                        tagBuilder()
                         completed_stages = [:]
                     }
                     dir('scylla-cluster-tests') {
