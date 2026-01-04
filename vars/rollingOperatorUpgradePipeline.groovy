@@ -116,6 +116,7 @@ def call(Map pipelineParams) {
                         timeout(time: 10, unit: 'MINUTES') {
                             script {
                                 loadEnvFromString(params.extra_environment_variables)
+                                tagBuilder()
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
