@@ -4558,6 +4558,7 @@ class BaseScyllaCluster:
         self.nemesis_count = 0
         self.test_config = TestConfig()
         self._node_cycle = None
+        self.vector_store_cluster = None
         self.params = kwargs.get("params", {})
         force_gossip = (self.params.get("append_scylla_yaml") or {}).get("force_gossip_topology_changes", False)
         self.parallel_node_operations = False if force_gossip else self.params.get("parallel_node_operations") or False

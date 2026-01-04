@@ -36,6 +36,7 @@ from sdcm.utils.cloud_api_utils import (
 )
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
+from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
 from sdcm.test_config import TestConfig
 from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
@@ -473,6 +474,99 @@ class CloudManagerNode(CloudNode):
         return "manager"
 
 
+class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
+    """Set of Vector Store nodes on Scylla Cloud"""
+
+    def __init__(
+        self,
+        api_client: ScyllaCloudAPIClient,
+        account_id: int,
+        cluster_id: int,
+        dc_id: int,
+        parent_db_cluster,
+        params=None,
+        **kwargs,
+    ):
+        self.parent_db_cluster = parent_db_cluster
+        self._api_client = api_client
+        self._account_id = account_id
+        self._cluster_id = cluster_id
+        self._dc_id = dc_id
+        self.scylla_cluster = None
+
+        cluster_prefix = cluster.prepend_user_prefix(params.get("user_prefix") if params else None, "vs-set")
+
+        super().__init__(
+            cluster_prefix=cluster_prefix,
+            node_prefix="vs-node",
+            n_nodes=0,
+            params=params,
+            node_type="vector-store",
+            add_nodes=False,
+            **kwargs,
+        )
+
+    @property
+    def vs_nodes_data(self) -> list[dict]:
+        """Fetch Vector Search nodes data from Scylla Cloud API"""
+        vs_info = (
+            self._api_client.get_vector_search_nodes(
+                account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self._dc_id
+            )
+            or {}
+        )
+        return [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
+
+    def init_vs_nodes_from_cluster(self) -> None:
+        """Initialize CloudVSNode objects from Scylla Cloud API data"""
+        created_nodes = self.parent_db_cluster._init_nodes_from_data(
+            nodes_data=self.vs_nodes_data,
+            node_class=CloudVSNode,
+            node_prefix=self.node_prefix,
+            dc_idx=0,
+            rack=0,
+        )
+        self.nodes.extend(created_nodes)
+
+    def wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
+        """Wait for Vector Search nodes to become active"""
+        self.log.info("Waiting for Vector Search nodes to be ready")
+
+        def check_vs_nodes_status():
+            try:
+                all_nodes = self.vs_nodes_data
+                if not all_nodes:
+                    return False
+
+                active_count = sum(node.get("status", "").upper() == "ACTIVE" for node in all_nodes)
+                self.log.debug("VS nodes status: %d/%d active", active_count, len(all_nodes))
+                return active_count == len(all_nodes)
+            except Exception as e:  # noqa: BLE001
+                self.log.debug("Error checking VS nodes status: %s", e)
+                return False
+
+        wait.wait_for(
+            func=check_vs_nodes_status,
+            step=15,
+            text="Waiting for Vector Search nodes to be ready",
+            timeout=timeout,
+            throw_exc=True,
+        )
+        self.log.info("Vector Search nodes are ready")
+
+    def _reconfigure_vector_store_nodes(self):
+        # no-op override as Vector Store nodes are configured by managed Scylla Cloud infrastructure
+        pass
+
+    def configure_with_scylla_cluster(self, scylla_cluster) -> None:
+        # no-op override as Vector Store nodes are configured by managed Scylla Cloud infrastructure
+        self.scylla_cluster = scylla_cluster
+
+    def wait_for_init(self, timeout: int = 300):
+        # no-op override as Vector Store nodes readiness is checked via cloud API in Scylla Cloud cluster object
+        pass
+
+
 class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
     """Scylla DB cluster running on Scylla Cloud"""
 
@@ -510,7 +604,7 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._cluster_created = False
         self._pending_node_configs = []
         self._deploy_vs_nodes = int(params.get("n_vector_store_nodes")) > 0
-        self.vs_nodes = []
+        self.vector_store_cluster = None
         self.manager_node = None
 
         cluster_prefix = "db-cluster"
@@ -617,6 +711,23 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.info("Adding %s nodes to Scylla Cloud cluster", count)
         return self._create_cluster(count, dc_idx, rack, enable_auto_bootstrap, instance_type)
 
+    def _init_vector_store_cluster(self) -> None:
+        """Initialize Vector Store cluster object"""
+        self.log.info("Initializing Vector Store cluster")
+
+        self.vector_store_cluster = VectorStoreSetCloud(
+            api_client=self._api_client,
+            account_id=self._account_id,
+            cluster_id=self._cluster_id,
+            dc_id=self.dc_id,
+            parent_db_cluster=self,
+            params=self.params,
+        )
+        self.vector_store_cluster.wait_for_vs_nodes_ready()
+        self.vector_store_cluster.init_vs_nodes_from_cluster()
+
+        self.log.info("Vector Store cluster initialized with %s nodes", len(self.vector_store_cluster.nodes))
+
     def _create_cluster(
         self, count: int, dc_idx: int, rack: int, enable_auto_bootstrap: bool, instance_type: str | None
     ) -> list[CloudNode]:
@@ -630,8 +741,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.log.debug("Cluster creation initiated. Cluster ID: %s", self._cluster_id)
         self._wait_for_cluster_ready()
-        if self._deploy_vs_nodes:
-            self._wait_for_vs_nodes_ready()
 
         self.name = cluster_config["cluster_name"]
 
@@ -641,16 +750,18 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self._get_cluster_credentials()
 
         nodes = self._init_nodes_from_cluster(count, dc_idx, rack)
-        vs_nodes = self._init_vs_nodes_from_cluster() if self._deploy_vs_nodes else []
+        if self._deploy_vs_nodes:
+            self._init_vector_store_cluster()
 
         self._init_manager_node()
 
         self._cluster_created = True
+        vs_node_count = len(self.vector_store_cluster.nodes) if self.vector_store_cluster else 0
         self.log.info(
             "Successfully created cluster %s with %s DB nodes%s%s",
             self.name,
             len(nodes),
-            " and {} VS nodes".format(len(vs_nodes)) if vs_nodes else "",
+            f" and {vs_node_count} VS nodes" if vs_node_count else "",
             " and Manager node" if self.manager_node else "",
         )
 
@@ -696,22 +807,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             nodes_data=cluster_nodes[:count], node_class=CloudNode, dc_idx=dc_idx, rack=rack
         )
         self.nodes.extend(created_nodes)
-        return created_nodes
-
-    @property
-    def vs_nodes_data(self) -> list[dict]:
-        """Fetch and flatten Vector Search nodes data from Scylla Cloud API"""
-        vs_info = self._api_client.get_vector_search_nodes(
-            account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id
-        )
-        return [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
-
-    def _init_vs_nodes_from_cluster(self) -> list[CloudVSNode]:
-        """Decompose the created cluster VS nodes info into individual CloudVSNode objects"""
-        created_nodes = self._init_nodes_from_data(
-            nodes_data=self.vs_nodes_data, node_class=CloudVSNode, node_prefix="vs-node", dc_idx=0, rack=0
-        )
-        self.vs_nodes.extend(created_nodes)
         return created_nodes
 
     def _init_manager_node(self) -> None:
@@ -891,31 +986,6 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             )
             raise WaitForTimeoutError(enhanced_message) from e
 
-    def _wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
-        self.log.info("Waiting for Vector Search nodes to be ready")
-
-        def check_vs_nodes_status():
-            try:
-                all_nodes = self.vs_nodes_data
-                if not all_nodes:
-                    return False
-
-                active_count = sum(node.get("status", "").upper() == "ACTIVE" for node in all_nodes)
-                self.log.debug("VS nodes status: %d/%d active", active_count, len(all_nodes))
-                return active_count == len(all_nodes)
-            except Exception as e:  # noqa: BLE001
-                self.log.debug("Error checking Vector Search nodes status: %s", e)
-                return False
-
-        wait.wait_for(
-            func=check_vs_nodes_status,
-            step=15,
-            text="Waiting for Vector Search nodes to be ready",
-            timeout=timeout,
-            throw_exc=True,
-        )
-        self.log.info("Vector Search nodes are ready")
-
     def _wait_for_manager_node_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Manager node installation to complete")
         cluster_requests = self._api_client.get_cluster_requests(
@@ -1061,16 +1131,17 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
 
         self.nodes.extend(self._init_nodes_from_data(db_nodes, CloudNode))
         if vs_nodes:
-            self.vs_nodes.extend(self._init_nodes_from_data(self.vs_nodes_data, CloudVSNode, node_prefix="vs-node"))
+            self._init_vector_store_cluster()
 
         self._init_manager_node()
 
         self._cluster_created = True
+        vs_node_count = len(self.vector_store_cluster.nodes) if self.vector_store_cluster else 0
         self.log.info(
             "Successfully reused cluster '%s' with %s DB nodes%s%s",
             self.name,
             len(db_nodes),
-            f" and {len(vs_nodes)} VS nodes" if vs_nodes else "",
+            f" and {vs_node_count} VS nodes" if vs_node_count else "",
             " and Manager node" if self.manager_node else "",
         )
 
