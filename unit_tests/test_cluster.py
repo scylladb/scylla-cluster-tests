@@ -59,6 +59,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
         self.name = "dummy_db_cluster"
+        self.vector_store_cluster = None
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         for _ in range(count):

@@ -1286,7 +1286,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 else:
                     self.set_system_auth_rf(db_cluster=db_cluster)
 
-                if hasattr(db_cluster, "vector_store_cluster") and db_cluster.vector_store_cluster:
+                if db_cluster.vector_store_cluster:
                     db_cluster.vector_store_cluster.configure_with_scylla_cluster(db_cluster)
                     db_cluster.vector_store_cluster.wait_for_init()
 
@@ -3605,7 +3605,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         actions_per_cluster_type = get_post_behavior_actions(self.params)
         critical_events = get_testrun_status(self.test_config.test_id(), self.logdir, only_critical=True)
 
-        if self.db_cluster and getattr(self.db_cluster, "vector_store_cluster", None):
+        if self.db_cluster and self.db_cluster.vector_store_cluster:
             action = actions_per_cluster_type["vector_store_nodes"]["action"]
             self.log.info("Action for vector store nodes is %s", action)
             if (action == "destroy") or (action == "keep-on-failure" and not critical_events):
@@ -4399,17 +4399,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.db_cluster.fstrim_scylla_disks_on_nodes()
 
     def _get_vector_store_nodes(self):
-        if not self.db_cluster:
+        if not self.db_cluster or not self.db_cluster.vector_store_cluster:
             return None
-
-        if getattr(self.db_cluster, "vs_nodes", None):
-            return self.db_cluster.vs_nodes
-
-        vector_store_cluster = getattr(self.db_cluster, "vector_store_cluster", None)
-        if vector_store_cluster and getattr(vector_store_cluster, "nodes", None):
-            return vector_store_cluster.nodes
-
-        return None
+        return self.db_cluster.vector_store_cluster.nodes
 
     @silence()
     def collect_logs(self) -> None:
