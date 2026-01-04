@@ -72,7 +72,13 @@ def restore_monitoring_stack(test_id, date_time=None):  # noqa: PLR0911
     LOGGER.info("Restoring monitoring stack from archive %s", arch["file_path"])
     monitoring_stack_base_dir = tempfile.mkdtemp()
     LOGGER.info("Download file {} to directory {}".format(arch["link"], monitoring_stack_base_dir))
-    downloaded_monitoring_archive = S3Storage().download_file(arch["link"], dst_dir=monitoring_stack_base_dir)
+
+    try:
+        downloaded_monitoring_archive = S3Storage().download_file(arch["link"], dst_dir=monitoring_stack_base_dir)
+    except RuntimeError as exc:
+        LOGGER.error("Failed to download monitoring stack archive: %s", exc)
+        return False
+
     monitoring_data_arch = extract_monitoring_data_archive(downloaded_monitoring_archive, monitoring_stack_base_dir)
     monitoring_stack_arch = extract_monitoring_stack_archive(downloaded_monitoring_archive, monitoring_stack_base_dir)
 
