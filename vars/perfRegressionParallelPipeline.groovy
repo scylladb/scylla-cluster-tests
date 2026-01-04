@@ -173,6 +173,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     loadEnvFromString(params.extra_environment_variables)
+                                    tagBuilder()
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         dockerLogin(params)

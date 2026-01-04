@@ -126,6 +126,7 @@ def call() {
                steps {
                   script {
                       loadEnvFromString(params.extra_environment_variables)
+                      tagBuilder()
                   }
                   dir('scylla-cluster-tests') {
                       git(url: params.sct_repo,
