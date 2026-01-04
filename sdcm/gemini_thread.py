@@ -107,7 +107,7 @@ class GeminiStressThread(DockerBasedStressThread):
             "partition-key-buffer-reuse-size": 128,
             "statement-log-file-compression": "zstd",
             "io-worker-pool": 2048,  # Number of threads to perform IO operations (mainly Scylla reads/writes)
-            "max-errors-to-store": 1000,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
+            "max-errors-to-store": 30,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
