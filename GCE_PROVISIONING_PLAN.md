@@ -129,6 +129,63 @@ This document outlines the plan to implement a modern provisioning system for Go
    provisioner_factory.register_provisioner(backend="gce", provisioner_class=GceProvisioner)
    ```
 
+#### 1.3 Definition of Done - Phase 1
+
+**Code Completion Criteria**:
+- [ ] All provider classes implemented (`provisioner.py`, `instance_provider.py`, `network_provider.py`, `disk_provider.py`)
+- [ ] All utility functions and constants defined
+- [ ] GCE provisioner registered with factory
+- [ ] All methods in `Provisioner` interface implemented
+- [ ] Code passes linting (ruff, autopep8)
+- [ ] Type hints added to all new functions and classes
+
+**Unit Test Requirements**:
+- [ ] `test_gce_provisioner.py` created with >80% coverage
+- [ ] `test_gce_instance_provider.py` created
+- [ ] Mock GCE service (`fake_gce_service.py`) implemented
+- [ ] All provider methods have unit tests
+- [ ] Tests pass with `pytest unit_tests/provisioner/test_gce_*.py`
+
+**Manual Testing - Phase 1**:
+
+1. **Import Verification**:
+   ```python
+   # Test that provisioner can be imported
+   from sdcm.provision.gce.provisioner import GceProvisioner
+   from sdcm.provision import provisioner_factory
+   # Verify factory registration
+   assert 'gce' in provisioner_factory._classes
+   ```
+
+2. **Provisioner Instantiation**:
+   ```python
+   # Test creating provisioner instance
+   provisioner = GceProvisioner(
+       test_id="test-123",
+       region="us-east1",
+       availability_zone="b"
+   )
+   # Verify attributes are set correctly
+   assert provisioner.region == "us-east1"
+   assert provisioner.availability_zone == "b"
+   ```
+
+3. **Provider Classes Initialization**:
+   ```python
+   # Verify all internal providers are created
+   assert provisioner._vm_provider is not None
+   assert provisioner._network_provider is not None
+   assert provisioner._disk_provider is not None
+   ```
+
+**Success Criteria**:
+- All code complete and committed
+- All unit tests passing
+- No linting errors
+- Manual import and instantiation tests successful
+- Code review completed
+- Documentation strings added to all public methods
+
 ### Phase 2: Cluster Integration
 
 #### 2.1 Integration with cluster_gce.py
@@ -170,6 +227,101 @@ This document outlines the plan to implement a modern provisioning system for Go
    - Update cluster initialization to create provisioners
    - Follow Azure pattern for consistency
 
+#### 2.3 Definition of Done - Phase 2
+
+**Code Completion Criteria**:
+- [ ] `cluster_gce.py` updated with optional provisioner support
+- [ ] Both old and new code paths work simultaneously
+- [ ] No breaking changes to existing API
+- [ ] Region definition builder handles GCE
+- [ ] Code passes linting
+
+**Unit Test Requirements**:
+- [ ] Tests for provisioner-enabled cluster creation
+- [ ] Tests for backward compatibility (old path still works)
+- [ ] Tests verifying both paths produce same results
+- [ ] All existing GCE cluster tests still pass
+
+**Manual Testing - Phase 2**:
+
+1. **Test Old Path (Backward Compatibility)**:
+   ```python
+   # Verify existing cluster creation still works
+   from sdcm.cluster_gce import ScyllaGCECluster
+
+   cluster = ScyllaGCECluster(
+       gce_image="scylla-image",
+       gce_image_type="pd-ssd",
+       gce_image_size=50,
+       gce_network="default",
+       gce_service=(gce_service, info),
+       credentials=credentials,
+       # NO provisioners parameter - use old path
+       n_nodes=1
+   )
+   # Should create cluster using old inline provisioning
+   nodes = cluster.add_nodes(1)
+   assert len(nodes) == 1
+   assert nodes[0]._instance is not None
+   ```
+
+2. **Test New Path (With Provisioner)**:
+   ```python
+   # Test cluster creation with new provisioner
+   from sdcm.provision.gce.provisioner import GceProvisioner
+
+   provisioner = GceProvisioner(
+       test_id="test-123",
+       region="us-east1",
+       availability_zone="b"
+   )
+
+   cluster = ScyllaGCECluster(
+       gce_image="scylla-image",
+       # ... other params ...
+       provisioners=[provisioner],  # Use new path
+       n_nodes=1
+   )
+   nodes = cluster.add_nodes(1)
+   assert len(nodes) == 1
+   ```
+
+3. **Test Feature Parity**:
+   ```bash
+   # Run existing GCE test to verify no regression
+   pytest unit_tests/test_cluster_gce.py -v
+
+   # Verify spot instances work with provisioner
+   # Verify multiple disk types work
+   # Verify network tags applied correctly
+   # Verify labels/metadata set properly
+   ```
+
+4. **Integration Test - Real GCE**:
+   ```bash
+   # Create actual GCE cluster (small, short-lived)
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+     --backend gce \
+     --config test-cases/gce-simple-test.yaml \
+     n_db_nodes=1 \
+     test_duration=10
+
+   # Verify:
+   # - Cluster provisions successfully
+   # - Instance has correct disk configuration
+   # - Network and firewall rules work
+   # - Can SSH to nodes
+   # - Scylla starts successfully
+   ```
+
+**Success Criteria**:
+- All existing tests pass without modification
+- New provisioner path works correctly
+- Both paths tested and verified
+- No breaking changes detected
+- Integration test on real GCE successful
+- Cluster cleanup works properly
+
 ### Phase 3: Testing and Validation
 
 #### 3.1 Unit Tests
@@ -209,6 +361,120 @@ This document outlines the plan to implement a modern provisioning system for Go
 - Tag/label management
 - Instance termination and cleanup
 
+#### 3.3 Definition of Done - Phase 3
+
+**Code Completion Criteria**:
+- [ ] All unit tests written and passing
+- [ ] Integration tests written and passing
+- [ ] Test coverage >80% for new code
+- [ ] All test files properly documented
+
+**Unit Test Requirements**:
+- [ ] `test_gce_provisioner.py` - Complete coverage of GceProvisioner
+- [ ] `test_gce_instance_provider.py` - VM operations
+- [ ] `test_gce_network_provider.py` - Network operations
+- [ ] `test_gce_disk_provider.py` - Disk configurations
+- [ ] `fake_gce_service.py` - Mock service for all tests
+- [ ] Tests run in CI/CD pipeline
+
+**Manual Testing - Phase 3**:
+
+1. **Comprehensive Feature Testing**:
+   ```bash
+   # Test 1: Spot instance with fallback
+   # Create spot instance, simulate preemption, verify fallback to on-demand
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+     --backend gce \
+     instance_provision='spot' \
+     instance_provision_fallback_on_demand=true \
+     n_db_nodes=1 \
+     test_duration=15
+   ```
+
+2. **All Disk Types Test**:
+   ```bash
+   # Test 2: Verify all disk types work
+   # Config with pd-standard root, pd-ssd data, local-ssd
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+     --backend gce \
+     gce_image_type='pd-ssd' \
+     gce_n_local_ssd=2 \
+     n_db_nodes=1 \
+     test_duration=15
+   ```
+
+3. **Multi-Region Test**:
+   ```bash
+   # Test 3: Multiple regions/zones
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+     --backend gce \
+     gce_datacenter='us-east1 us-west1' \
+     n_db_nodes=3 \
+     test_duration=20
+   ```
+
+4. **Network and Labels Test**:
+   ```python
+   # Test 4: Verify network configuration and labels
+   # Create cluster, verify:
+   # - Firewall rules applied correctly
+   # - Network tags present
+   # - Labels/metadata set properly
+   # - SSH access works
+   provisioner = GceProvisioner(test_id="test-net", region="us-east1", availability_zone="b")
+   instance_def = InstanceDefinition(
+       name="test-instance",
+       image_id="scylla-image",
+       type="n2-standard-2",
+       user_name="ubuntu",
+       ssh_key=ssh_key,
+       tags={"TestId": "test-net", "NodeType": "scylla-db"}
+   )
+   instance = provisioner.get_or_create_instance(instance_def, PricingModel.ON_DEMAND)
+
+   # Verify labels
+   assert instance.tags["TestId"] == "test-net"
+
+   # Verify can SSH
+   result = instance.run_command("echo 'test'")
+   assert result.ok
+
+   # Cleanup
+   provisioner.cleanup()
+   ```
+
+5. **Stress Test - Resource Cleanup**:
+   ```python
+   # Test 5: Create and destroy multiple times
+   # Verify no resource leaks
+   for i in range(5):
+       provisioner = GceProvisioner(test_id=f"test-{i}", region="us-east1", availability_zone="b")
+       instances = provisioner.get_or_create_instances([...], PricingModel.ON_DEMAND)
+       # Use instances
+       time.sleep(30)
+       # Cleanup
+       provisioner.cleanup(wait=True)
+       # Verify all resources deleted (VMs, disks, IPs if applicable)
+   ```
+
+6. **Existing Test Suite**:
+   ```bash
+   # Test 6: Run full existing GCE test suite
+   pytest unit_tests/test_cluster_gce.py -v
+   pytest unit_tests/test_gce_*.py -v
+
+   # All should pass without modification
+   ```
+
+**Success Criteria**:
+- All unit tests passing (>80% coverage)
+- All integration tests passing
+- Manual tests 1-6 completed successfully
+- No resource leaks detected
+- Existing test suite passes without changes
+- Performance acceptable (provisioning time similar to old method)
+- Error handling verified (network errors, quota limits, etc.)
+
 ### Phase 4: Documentation and Cleanup
 
 #### 4.1 Documentation
@@ -240,6 +506,103 @@ This document outlines the plan to implement a modern provisioning system for Go
    - Ensure consistent patterns with Azure
    - Follow existing code style
    - Add type hints where missing
+
+#### 4.3 Definition of Done - Phase 4
+
+**Code Completion Criteria**:
+- [ ] All documentation files created/updated
+- [ ] Code review completed and feedback addressed
+- [ ] All docstrings complete
+- [ ] Type hints added everywhere
+- [ ] No TODO comments remaining
+
+**Documentation Requirements**:
+- [ ] `docs/provision_gce.md` created with comprehensive guide
+- [ ] `AGENTS.md` updated with GCE provisioning section
+- [ ] All classes have docstrings with examples
+- [ ] All public methods documented
+- [ ] Configuration options documented in comments
+- [ ] README updated if needed
+
+**Manual Testing - Phase 4**:
+
+1. **Documentation Verification**:
+   ```bash
+   # Test 1: Follow documentation to use provisioner
+   # A new developer should be able to:
+   # - Read docs/provision_gce.md
+   # - Create a simple test using GceProvisioner
+   # - Understand all configuration options
+   # - Successfully provision and cleanup
+   ```
+
+2. **Code Quality Check**:
+   ```bash
+   # Test 2: Run all quality tools
+   ruff check sdcm/provision/gce/
+   ruff format --check sdcm/provision/gce/
+   mypy sdcm/provision/gce/  # if type checking enabled
+
+   # All should pass with no errors
+   ```
+
+3. **Final Integration Test**:
+   ```bash
+   # Test 3: End-to-end realistic test
+   # Run a full longevity test using new provisioner
+   hydra run-test longevity_test.LongevityTest.test_custom_time \
+     --backend gce \
+     --config test-cases/longevity/longevity-gce-custom-d1-workload1-hybrid-raid.yaml \
+     use_gce_provisioner=true \
+     test_duration=60
+
+   # Verify:
+   # - All features work (spot, disks, network)
+   # - Performance is acceptable
+   # - Cleanup is complete
+   # - Logs are clean (no warnings about provisioner)
+   ```
+
+4. **Backward Compatibility Final Check**:
+   ```bash
+   # Test 4: Ensure old tests still work
+   # Run existing GCE tests without any changes
+   hydra run-test artifacts_test.ArtifactsTest.test_gce_image \
+     --backend gce
+
+   # Should complete successfully using old path
+   ```
+
+5. **Documentation Review**:
+   ```markdown
+   # Test 5: Review checklist
+   - [ ] All code examples in docs are runnable
+   - [ ] Configuration options match actual code
+   - [ ] Architecture diagrams accurate (if any)
+   - [ ] Links to related code are correct
+   - [ ] Examples cover common use cases
+   - [ ] Troubleshooting section added
+   ```
+
+**Success Criteria**:
+- All documentation complete and reviewed
+- Code quality tools pass
+- Final integration tests successful
+- Backward compatibility verified
+- No outstanding issues or TODOs
+- PR ready for final review and merge
+
+**Pre-Merge Checklist**:
+- [ ] All 4 phases completed
+- [ ] All DoD criteria met for each phase
+- [ ] All manual tests documented and passed
+- [ ] Code review approved
+- [ ] CI/CD pipeline passing
+- [ ] Documentation complete
+- [ ] No breaking changes
+- [ ] Feature complete (all cluster_gce.py features supported)
+- [ ] Performance validated
+- [ ] Security review completed (if applicable)
 
 ## Technical Considerations
 
