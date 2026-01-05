@@ -377,7 +377,7 @@ class ScyllaYaml(BaseModel):
     object_storage_endpoints: list[dict] = None
     rf_rack_valid_keyspaces: bool = None
 
-    vector_store_uri: str = None
+    vector_store_primary_uri: str = None
 
     def model_dump(
         self,
