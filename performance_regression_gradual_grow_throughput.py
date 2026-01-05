@@ -421,7 +421,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
-        if not self.exists():
+        if self.create_stats and not self.exists():
             self.log.debug("Create test statistics in ES")
             self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=False)
         total_summary = {}
@@ -475,7 +475,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
-        self.run_performance_analyzer(total_summary=total_summary)
+        if self.create_stats:
+            self.run_performance_analyzer(total_summary=total_summary)
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))

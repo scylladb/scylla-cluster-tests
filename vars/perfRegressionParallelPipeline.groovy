@@ -81,7 +81,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_email_title', '')}",
                    description: 'String added to test email subject',
                    name: 'test_email_title')
-            string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
+            string(defaultValue: "${pipelineParams.get('email_recipients', '')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
