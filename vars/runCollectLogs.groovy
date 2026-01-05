@@ -40,6 +40,6 @@ def call(Map params, String region){
     echo "end collect logs"
     """
 
-    collectBuilderLogs()
+    collectBuilderLogs(params)
     collectTestCoredumps()
 }
