@@ -7,7 +7,7 @@ This document outlines the plan to implement a modern provisioning system for Go
 
 ### Existing GCE Implementation
 - **Location**: `sdcm/cluster_gce.py`
-- **Approach**: Direct API calls using `google.cloud.compute_v1` 
+- **Approach**: Direct API calls using `google.cloud.compute_v1`
 - **Pattern**: Inline provisioning within cluster class methods
 - **Key files**:
   - `sdcm/cluster_gce.py` - Main cluster implementation with inline provisioning
@@ -258,7 +258,7 @@ This document outlines the plan to implement a modern provisioning system for Go
 ### 2. Differences from AWS/Azure
 
 **GCE Specifics**:
-1. **Labels vs Tags**: 
+1. **Labels vs Tags**:
    - GCE labels have stricter naming rules (lowercase, max 63 chars)
    - Need normalization function (already exists in cluster_gce.py)
 
@@ -402,7 +402,7 @@ The following features are deferred to future work and will be tracked in separa
 ## Risks and Mitigations
 
 ### Risk 1: Breaking existing tests
-**Mitigation**: 
+**Mitigation**:
 - Maintain backward compatibility
 - Create new tests before modifying existing code
 - Use feature flags if needed
@@ -453,7 +453,7 @@ Plan has been approved with the following requirements:
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: 2026-01-05  
-**Author**: GitHub Copilot Agent  
+**Document Version**: 1.1
+**Last Updated**: 2026-01-05
+**Author**: GitHub Copilot Agent
 **Status**: APPROVED - Ready for Implementation
