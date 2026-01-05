@@ -131,28 +131,32 @@ This document outlines the plan to implement a modern provisioning system for Go
 
 ### Phase 2: Cluster Integration
 
-#### 2.1 Refactor cluster_gce.py
+#### 2.1 Integration with cluster_gce.py
 
-**Approach**: Gradual refactoring to use new provisioner
+**Approach**: Add new provisioner support WITHOUT breaking existing code
 
 **Changes to `sdcm/cluster_gce.py`**:
 
-1. **Add provisioner initialization**:
-   - Create `GceProvisioner` instances for each region
+1. **Add optional provisioner initialization**:
+   - Create `GceProvisioner` instances for each region (optional parameter)
    - Pass to cluster constructor similar to Azure pattern
+   - **Default to None** to maintain backward compatibility
 
-2. **Refactor `_create_instances()` method**:
-   - Replace inline instance creation with provisioner calls
-   - Use `InstanceDefinition` for instance specifications
-   - Use `provision_instances_with_fallback()` pattern
+2. **Add alternative `_create_instances()` path**:
+   - If provisioner is provided, use new provisioner calls
+   - If provisioner is None, use existing inline instance creation
+   - Both paths must work and be tested
 
 3. **Update `GCECluster.__init__()`**:
-   - Accept `provisioners: List[GceProvisioner]` parameter
-   - Store provisioners for later use
+   - Accept **optional** `provisioners: List[GceProvisioner] = None` parameter
+   - Store provisioners if provided
+   - **Keep all existing parameters and defaults unchanged**
 
-4. **Maintain backward compatibility**:
-   - Keep existing method signatures
-   - Support both old and new initialization paths during transition
+4. **Strict backward compatibility**:
+   - All existing method signatures unchanged
+   - All existing initialization paths work without modification
+   - No deprecation warnings
+   - Existing tests pass without changes
 
 #### 2.2 Integration Points
 
@@ -226,10 +230,11 @@ This document outlines the plan to implement a modern provisioning system for Go
 
 #### 4.2 Cleanup
 
-1. **Remove/Refactor old code**:
-   - Mark deprecated methods in `cluster_gce.py`
-   - Gradually remove inline provisioning code
-   - Consolidate utility functions
+1. **Maintain backward compatibility**:
+   - **DO NOT** remove or deprecate existing methods in `cluster_gce.py`
+   - Keep all current functionality working
+   - New provisioner should coexist with existing code
+   - Tests using old API must continue to pass
 
 2. **Code review**:
    - Ensure consistent patterns with Azure
@@ -276,21 +281,21 @@ This document outlines the plan to implement a modern provisioning system for Go
 
 ### 3. Migration Strategy
 
-**Approach**: Phased migration
+**Approach**: Single-phase implementation with backward compatibility
 
-**Phase 1** (Current PR):
-- Create new provisioner infrastructure
-- Keep old cluster_gce.py working
-- Add tests for new provisioner
+**Implementation Strategy**:
+- Create new provisioner infrastructure in parallel to existing code
+- Keep ALL existing cluster_gce.py functionality working unchanged
+- New provisioner available as alternative API (not replacement)
+- Both old and new paths must work and be tested
+- No removal of existing code - coexistence model
+- Feature complete implementation before merge
 
-**Phase 2** (Follow-up):
-- Integrate provisioner with cluster_gce.py
-- Support both old and new paths
-- Update test initialization
-
-**Phase 3** (Future):
-- Remove old provisioning code
-- Full migration to new provisioner
+**Backward Compatibility Requirements**:
+1. All existing tests must pass without modification
+2. No changes to existing cluster_gce.py public API
+3. Existing initialization paths remain functional
+4. New provisioner is additive, not replacing existing code
 
 ## Resource Providers Architecture
 
@@ -358,11 +363,22 @@ GceProvisioner
 3. ✅ Integration tests pass for basic provisioning
 4. ✅ Spot instance provisioning works with fallback
 5. ✅ Multi-region provisioning works
-6. ✅ Disk configuration (local SSD, persistent) works
+6. ✅ **All disk types work** (pd-standard, pd-ssd, pd-balanced, local-ssd)
 7. ✅ Labels/tags are properly applied
 8. ✅ Instance cleanup works correctly
 9. ✅ Documentation is complete
-10. ✅ Backward compatibility maintained
+10. ✅ **Full backward compatibility maintained - no breaking changes**
+11. ✅ **All features from cluster_gce.py are supported**
+12. ✅ **Feature complete before merge** - all functionality working
+
+## Follow-Up Work (Separate Issues)
+
+The following features are deferred to future work and will be tracked in separate issues:
+
+1. **Capacity Reservation** - Similar to AWS implementation
+   - Create issue to track this work
+   - Not blocking for initial GCE provisioner merge
+   - Can be added in future enhancement
 
 ## Timeline Estimate
 
@@ -411,26 +427,33 @@ GceProvisioner
 
 ## Next Steps
 
-After approval of this plan:
+Plan has been approved with the following requirements:
+- ✅ Support all disk types (pd-standard, pd-ssd, pd-balanced, local-ssd)
+- ✅ Support all features currently in cluster_gce.py
+- ✅ No breaking changes in any phase
+- ✅ Implementation must be feature complete before merge
 
-1. Create feature branch: `feature/gce-provisioner`
+**Ready to Begin Implementation:**
+
+1. Create feature branch: `feature/gce-provisioner` ✓
 2. Start with Phase 1: Core provisioner infrastructure
 3. Implement provider classes one by one
 4. Add unit tests as we go
 5. Regular commits and progress updates
-6. Request review after Phase 1 complete
+6. Complete all phases before requesting merge
+7. Create separate issue for capacity reservation (follow-up work)
 
-## Questions for Stakeholders
+## Requirements (Based on Stakeholder Feedback)
 
-1. Should we support all disk types (pd-standard, pd-ssd, pd-balanced, local-ssd)?
-2. Are there any specific GCE features we must support in v1?
-3. Should we maintain full backward compatibility or can we make breaking changes to cluster_gce.py?
-4. What's the priority: complete feature parity or basic provisioning first?
-5. Should we implement capacity reservation like AWS?
+1. **Disk Types**: Support all disk types (pd-standard, pd-ssd, pd-balanced, local-ssd) ✓
+2. **GCE Features**: All features currently supported in `cluster_gce.py` must be supported ✓
+3. **Backward Compatibility**: No breaking changes in any phase - full backward compatibility required ✓
+4. **Implementation Priority**: Start with basic provisioning, but PR should not be merged until feature complete ✓
+5. **Capacity Reservation**: Deferred to follow-up work (separate issue to be created) ✓
 
 ---
 
-**Document Version**: 1.0  
+**Document Version**: 1.1  
 **Last Updated**: 2026-01-05  
 **Author**: GitHub Copilot Agent  
-**Status**: DRAFT - Awaiting Review
+**Status**: APPROVED - Ready for Implementation
