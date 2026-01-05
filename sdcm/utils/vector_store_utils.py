@@ -77,12 +77,12 @@ class VectorStoreClusterMixin:
         if not (self.scylla_cluster and (vector_uris := self.get_vector_store_uris())):
             return
 
-        vector_store_uri = vector_uris[0]
-        self.log.debug("Configuring Scylla nodes with vector_store_uri: %s", vector_store_uri)
+        vector_store_primary_uri = vector_uris[0]
+        self.log.debug("Configuring Scylla nodes with vector_store_primary_uri: %s", vector_store_primary_uri)
 
         for node in self.scylla_cluster.nodes:
             with node.remote_scylla_yaml() as scylla_yml:
-                scylla_yml.vector_store_uri = vector_store_uri
+                scylla_yml.vector_store_primary_uri = vector_store_primary_uri
             node.reload_config()
 
     def get_vector_store_uris(self) -> list[str]:
