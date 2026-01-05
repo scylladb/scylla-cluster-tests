@@ -64,9 +64,9 @@ user_prefix: 'perf-regression-predefined-steps'
 backtrace_decoding: true
 backtrace_stall_decoding: false
 
-store_perf_results: true
+store_perf_results: false
 use_mgmt: false
-email_recipients: ['scylla-perf-results@scylladb.com']
+email_recipients: ['']
 
 custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
