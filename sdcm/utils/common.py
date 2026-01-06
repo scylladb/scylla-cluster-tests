@@ -354,7 +354,6 @@ class S3Storage:
 
             try:
                 response = requests.head(link, allow_redirects=True, headers=headers, timeout=30)
-                response.raise_for_status()
 
                 # Check if we got redirected properly
                 if response.history:
