@@ -38,6 +38,28 @@ GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
 LOGGER = logging.getLogger(__name__)
 
 
+def gce_instance_name(node_prefix: str, dc_idx: int, node_index: int) -> str:
+    """Generate a GCE instance name.
+
+    This is the single source of truth for GCE instance naming convention.
+    Used by both cluster_gce.py and gce_region_definition_builder.py.
+
+    Args:
+        node_prefix: The node prefix (e.g., 'user-db-node-a1b2c3d4')
+        dc_idx: The datacenter index
+        node_index: The node index within the datacenter
+
+    Returns:
+        The lowercase instance name in format: {node_prefix}-{dc_idx}-{node_index}
+    """
+    name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
+    # Name must start with a lowercase letter followed by up to 63
+    # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
+    assert len(name) <= 63, f"Max length of instance name is 63, got {len(name)}: {name}"
+    return name
+
+
+
 def vmarch_to_gcp(arch: VmArch) -> str:
     """Convert VmArch enum to GCP architecture format.
 
@@ -85,6 +107,18 @@ def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict
     info = KeyStore().get_gcp_credentials()
     credentials = service_account.Credentials.from_service_account_info(info)
     return compute_v1.InstancesClient(credentials=credentials), info
+
+
+def get_gce_service_accounts() -> list[dict] | None:
+    """Get GCP service accounts for instance creation (needed for KMS/API access).
+
+    Returns:
+        List of service account dicts with 'email' and 'scopes' keys, or None if not available.
+    """
+    try:
+        return KeyStore().get_gcp_service_accounts()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def get_gce_compute_images_client() -> tuple[compute_v1.ImagesClient, dict]:
@@ -573,12 +607,16 @@ def create_instance(  # noqa: PLR0913
 
     instance.scheduling = compute_v1.Scheduling()
 
+    # Handle z3-highmem machine type special case
+    # z3-highmem instances have built-in local SSDs and require MIGRATE on host maintenance
+    # They cannot be spot instances because MIGRATE is incompatible with spot VMs
     if "z3-highmem" in machine_type:
         instance.scheduling.on_host_maintenance = "MIGRATE"
         instance.disks = [disk for disk in disks if "-data-local-ssd-" not in disk.device_name]
-
-    if spot:
+    elif spot:
         # Set the Spot VM setting
+        # Spot VMs require on_host_maintenance to be TERMINATE as they cannot live migrate
+        instance.scheduling.on_host_maintenance = "TERMINATE"
         instance.scheduling.provisioning_model = compute_v1.Scheduling.ProvisioningModel.SPOT.name
         instance.scheduling.instance_termination_action = instance_termination_action
 

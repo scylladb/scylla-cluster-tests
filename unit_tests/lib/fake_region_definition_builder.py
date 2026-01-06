@@ -45,6 +45,12 @@ class FakeDefinitionBuilder(DefinitionBuilder):
     SCT_PARAM_MAPPER = mapper
     REGION_MAP = "fake_region_name"
 
-    @staticmethod
-    def _get_ssh_key() -> SSHKey:
+    def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0) -> str:
+        """Generate instance name for fake backend testing.
+
+        Uses a simple format: {user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}
+        """
+        return f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
+
+    def _get_ssh_key(self) -> SSHKey:
         return SSHKey("fake-key", "", "")
