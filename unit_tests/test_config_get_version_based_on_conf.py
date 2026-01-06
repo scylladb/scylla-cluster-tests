@@ -37,19 +37,19 @@ def function_setup(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_docker_image, expected_outcome",
+    argnames="scylla_version, expected_docker_image, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", "scylladb/scylla-enterprise", ("2024.1", True), id="2024.1"),
+        pytest.param("2024.1", "scylladb/scylla-enterprise", "2024.1", True, id="2024.1"),
         # 2025.1 is considered opensource with recent changes to the mechanisms.
         # Issue gets much deeper and surfaced only lately. Given the culprit patch never made it to 2025.1
         # I think it is safe to remove the test, until https://github.com/scylladb/scylla-cluster-tests/issues/13093
         # pytest.param("2025.1", "scylladb/scylla", ("2025.1", True), id="2025.1"),
-        pytest.param("latest", "scylladb/scylla-nightly", (None, False), id="latest"),
-        pytest.param("master:latest", "scylladb/scylla-nightly", (None, False), id="master:latest"),
-        pytest.param("enterprise", "scylladb/scylla-enterprise-nightly", (None, True), id="enterprise"),
+        pytest.param("latest", "scylladb/scylla-nightly", None, False, id="latest"),
+        pytest.param("master:latest", "scylladb/scylla-nightly", None, False, id="master:latest"),
+        pytest.param("enterprise", "scylladb/scylla-enterprise-nightly", None, True, id="enterprise"),
     ],
 )
-def test_docker(scylla_version, expected_docker_image, expected_outcome, monkeypatch):
+def test_docker(scylla_version, expected_docker_image, expected_version, expected_is_enterprise, monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
     monkeypatch.setenv("SCT_USE_MGMT", "false")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
@@ -59,23 +59,22 @@ def test_docker(scylla_version, expected_docker_image, expected_outcome, monkeyp
     assert "docker_image" in conf.dump_config()
     assert conf.get("docker_image") == expected_docker_image
     _version, _is_enterprise = conf.get_version_based_on_conf()
-    if expected_outcome[0] is None:
-        assert _is_enterprise == expected_outcome[1]
-    else:
-        assert (_version, _is_enterprise) == expected_outcome
+    assert _is_enterprise == expected_is_enterprise
+    if expected_version is not None:
+        assert _version == expected_version
 
 
 @pytest.mark.parametrize(argnames="distro", argvalues=("ubuntu-xenial", "centos", "debian-jessie"))
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_outcome",
+    argnames="scylla_version, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", ("2024.1", True), id="2024.1"),
-        pytest.param("master:latest", (None, True), id="master"),
-        pytest.param("enterprise-2024.1:latest", (None, True), id="enterprise-2024.1"),
-        pytest.param("branch-2025.1:latest", (None, True), id="branch-2025.1"),
+        pytest.param("2024.1", "2024.1", True, id="2024.1"),
+        pytest.param("master:latest", None, True, id="master"),
+        pytest.param("enterprise-2024.1:latest", None, True, id="enterprise-2024.1"),
+        pytest.param("branch-2025.1:latest", None, True, id="branch-2025.1"),
     ],
 )
-def test_scylla_repo(scylla_version, expected_outcome, distro, monkeypatch):
+def test_scylla_repo(scylla_version, expected_version, expected_is_enterprise, distro, monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
     monkeypatch.setenv(
@@ -88,23 +87,23 @@ def test_scylla_repo(scylla_version, expected_outcome, distro, monkeypatch):
     conf.verify_configuration()
     _version, _is_enterprise = conf.get_version_based_on_conf()
 
-    if expected_outcome[0] is not None:
-        assert expected_outcome[0] in _version
-    assert _is_enterprise == expected_outcome[1]
+    assert _is_enterprise == expected_is_enterprise
+    if expected_version is not None:
+        assert expected_version in _version
 
 
 @pytest.mark.parametrize(
-    argnames="scylla_version, expected_outcome",
+    argnames="scylla_version, expected_version, expected_is_enterprise",
     argvalues=[
-        pytest.param("2024.1", ("2024.1", True), id="2024.1"),
-        pytest.param("2025.1", ("2025.1", True), id="2025.1"),
-        pytest.param("master:latest", (None, True), id="master"),
-        pytest.param("branch-2024.1:latest", (None, True), id="branch-2024.1"),
-        pytest.param("branch-2025.1:latest", (None, True), id="branch-2025.1"),
+        pytest.param("2024.1", "2024.1", True, id="2024.1"),
+        pytest.param("2025.1", "2025.1", True, id="2025.1"),
+        pytest.param("master:latest", None, True, id="master"),
+        pytest.param("branch-2024.1:latest", None, True, id="branch-2024.1"),
+        pytest.param("branch-2025.1:latest", None, True, id="branch-2025.1"),
     ],
 )
 @pytest.mark.parametrize(argnames="backend", argvalues=("aws", "gce", "azure"))
-def test_images(backend, scylla_version, expected_outcome, monkeypatch):
+def test_images(backend, scylla_version, expected_version, expected_is_enterprise, monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", backend)
     monkeypatch.setenv("SCT_SCYLLA_VERSION", scylla_version)
 
@@ -113,9 +112,9 @@ def test_images(backend, scylla_version, expected_outcome, monkeypatch):
 
     _version, _is_enterprise = conf.get_version_based_on_conf()
 
-    if expected_outcome[0] is not None:
-        assert expected_outcome[0] in _version
-    assert _is_enterprise == expected_outcome[1]
+    assert _is_enterprise == expected_is_enterprise
+    if expected_version is not None:
+        assert expected_version in _version
 
 
 def test_baremetal(monkeypatch):
