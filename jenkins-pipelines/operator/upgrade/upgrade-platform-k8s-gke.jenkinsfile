@@ -7,9 +7,10 @@ rollingOperatorUpgradePipeline(
     region: 'us-east1',
     availability_zone: 'c',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_platform_upgrade',
-    test_config: '''["test-cases/scylla-operator/kubernetes-platform-upgrade.yaml", "configurations/operator/k8s-upgrade-gke.yaml"]''',
+    test_config: '''["test-cases/scylla-operator/kubernetes-platform-upgrade.yaml", "configurations/operator/k8s-upgrade-gke.yaml", "configurations/tablets_disabled.yaml"]''',
     base_versions: '["2025.1.10"]',
     k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest',
     k8s_scylla_operator_chart_version: 'latest',
     k8s_version: '1.33',
+    scylla_mgmt_agent_version: '3.8.0',
 )
