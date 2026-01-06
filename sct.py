@@ -1959,8 +1959,6 @@ def create_runner_instance(
     restored_test_id="",
     address_pool=None,
 ):
-    if cloud_provider == "aws":
-        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
