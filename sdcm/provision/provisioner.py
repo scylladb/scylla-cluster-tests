@@ -35,7 +35,8 @@ class VmArch(Enum):
 class DataDisk:
     type: str
     size: int
-    iops: int
+    iops: int = 0
+    count: int = 1
 
 
 @dataclass
