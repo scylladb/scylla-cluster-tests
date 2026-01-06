@@ -24,18 +24,22 @@ def provider():
 @patch("sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command")
 def test_reboot_soft_success(mock_run_command, provider):
     provider._azure_service.compute.virtual_machines.instance_view.return_value.statuses = [
-        MagicMock(display_status="VM running")]
+        MagicMock(display_status="VM running")
+    ]
     provider.reboot("vm1", wait=True, hard=False)
     mock_run_command.assert_called_once_with("vm1", "reboot -f")
     provider._azure_service.compute.virtual_machines.begin_restart.assert_not_called()
 
 
-@patch("sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command", side_effect=Exception("fail"))
+@patch(
+    "sdcm.provision.azure.virtual_machine_provider.VirtualMachineProvider.run_command", side_effect=Exception("fail")
+)
 def test_reboot_fallback_to_sdk(mock_run_command, provider):
     mock_task = MagicMock()
     provider._azure_service.compute.virtual_machines.begin_restart.return_value = mock_task
     provider._azure_service.compute.virtual_machines.instance_view.return_value.statuses = [
-        MagicMock(display_status="VM running")]
+        MagicMock(display_status="VM running")
+    ]
     provider.reboot("vm1", wait=True, hard=True)
     provider._azure_service.compute.virtual_machines.begin_restart.assert_called_once_with("test-rg", vm_name="vm1")
     mock_task.wait.assert_called_once()
@@ -88,7 +92,12 @@ def test_reboot_integration(azure_vm):
     vm_name, resource_group, region, az, instance, provisioner = azure_vm
     provisioner.reboot_instance(vm_name, wait=True, hard=False)
 
-    @retrying(n=5, sleep_time=5, allowed_exceptions=(AssertionError, ), message="Waiting for node to come back up after reboot.")
+    @retrying(
+        n=5,
+        sleep_time=5,
+        allowed_exceptions=(AssertionError,),
+        message="Waiting for node to come back up after reboot.",
+    )
     def wait_for_node_up():
         statuses = provisioner._azure_service.compute.virtual_machines.instance_view(resource_group, vm_name).statuses
         assert any(s.display_status == "VM running" for s in statuses), "Node did not come back up after reboot."

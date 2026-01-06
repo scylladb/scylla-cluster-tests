@@ -38,7 +38,6 @@ def call(Map params, boolean build_image){
         copyAmiToRegions = params.region
     }
     byoParameterList = [
-        string(name: 'DEFAULT_PRODUCT', value: params.byo_default_product),
         string(name: 'DEFAULT_BRANCH', value: params.byo_default_branch),
         string(name: 'SCYLLA_REPO', value: "git@github.com:scylladb/${params.byo_default_product}.git"),
         string(name: 'SCYLLA_BRANCH', value: params.byo_default_branch),
@@ -48,25 +47,17 @@ def call(Map params, boolean build_image){
         string(name: 'MACHINE_IMAGE_REPO',
                value: "git@github.com:scylladb/${params.byo_default_product}-machine-image.git"),
         string(name: 'MACHINE_IMAGE_BRANCH', value: params.byo_default_branch),
-        // NOTE: SCT repo is used only for benchmarking which we disable here.
-        //       So, hardcode 'master' SCT version for all cases.
-        string(name: 'SCT_REPO', value: 'git@github.com:scylladb/scylla-cluster-tests.git'),
-        string(name: 'SCT_BRANCH', value: 'master'),
         string(name: 'RELENG_REPO', value: "git@github.com:scylladb/${params.byo_default_product}-pkg.git"),
         string(name: 'RELENG_BRANCH', value: params.byo_default_branch),
         //
-        booleanParam(name: 'BUILD_WITH_CMAKE', value: false),
         string(name: 'BUILD_MODE', value: 'release'),
-        booleanParam(name: 'CODE_COVERAGE', value: false),
         booleanParam(name: 'TEST_DEBUG_INFO', value: false),
-        // SPECIAL_CONFIGURE_PY_PARAMS = '' // TODO: add it's support?
         //
-        booleanParam(name: 'ENABLE_MICRO_BENCHMARKS', value: false),
-        booleanParam(name: 'ENABLE_TESTS', value: false),
         string(name: 'X86_NUM_OF_UNITTEST_REPEATS', value: '1'),
         string(name: 'INCLUDE_TESTS', value: ''),
         //
-        booleanParam(name: 'ENABLE_DTEST', value: false),
+        booleanParam(name: 'RUN_UNIT_TESTS', value: false),
+        booleanParam(name: 'RUN_DTEST', value: false),
         //
         booleanParam(name: 'CREATE_CENTOS_RPM', value: false),
         booleanParam(name: 'CREATE_UNIFIED_DEB', value:  true),
@@ -76,8 +67,7 @@ def call(Map params, boolean build_image){
         booleanParam(name: 'CREATE_GCE', value: (params.backend == 'gce' && build_image)),
         booleanParam(name: 'CREATE_AZURE', value: (params.backend == 'azure' && build_image)),
         //
-        string(name: 'ARCH', value: 'x86_64'),
-        string(name: 'TIMEOUT_PARAM', value: '4'), // reduced because dtests don't get run
+        booleanParam(name: 'BUILD_ARM', value: false), // TODO: https://github.com/scylladb/qa-tasks/issues/2011
         booleanParam(name: 'DEBUG_MAIL', value: true),
         booleanParam(name: 'DRY_RUN', value: false),
     ]

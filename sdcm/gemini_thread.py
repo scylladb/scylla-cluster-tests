@@ -63,20 +63,28 @@ class GeminiEventsPublisher(FileFollowerThread):
 class GeminiStressThread(DockerBasedStressThread):
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):
+    def __init__(
+        self,
+        test_cluster: BaseCluster | BaseScyllaCluster,
+        oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None,
+        loaders,
+        stress_cmd: str,
+        timeout=None,
+        params=None,
+    ):
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
         self.gemini_commands = []
         self.unique_id = uuid.uuid4()
         self.gemini_default_flags = {
-            "level": "info",
+            "level": "debug",
             "request-timeout": "3s",
             "connect-timeout": "60s",
             "consistency": "QUORUM",
-            "async-objects-stabilization-backoff": "10ms",
+            "async-objects-stabilization-backoff": "250ms",
             "async-objects-stabilization-attempts": 10,
-            "max-mutation-retries-backoff": "10ms",
+            "max-mutation-retries-backoff": "1s",
             "max-mutation-retries": 10,
             "dataset-size": "large",
             "oracle-host-selection-policy": "token-aware",
@@ -95,10 +103,8 @@ class GeminiStressThread(DockerBasedStressThread):
             "max-clustering-keys": 4,
             "min-clustering-keys": 2,
             "partition-key-distribution": "uniform",  # Distribution for hitting the partition
-            "token-range-slices": 10000,
-            "partition-key-buffer-reuse-size": 128,
-            "statement-log-file-compression": "zstd",
-            "max-errors-to-store": 1000,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
+            "partition-count": 5_000_000,
+            "max-errors-to-store": 30,  # Number of error to make gemini fail, after N error, gemini will stop immediately with error
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
@@ -148,14 +154,22 @@ class GeminiStressThread(DockerBasedStressThread):
 
         stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
-        cmd += " " + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if
-                              key not in stress_cmd) + " " + stress_cmd
+        cmd += (
+            " "
+            + " ".join(f"--{key}={value}" for key, value in self.gemini_default_flags.items() if key not in stress_cmd)
+            + " "
+            + stress_cmd
+        )
 
         self.gemini_commands.append(cmd)
         return cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        for file_name in [self.gemini_result_file, self.gemini_test_statements_file, self.gemini_oracle_statements_file]:
+        for file_name in [
+            self.gemini_result_file,
+            self.gemini_test_statements_file,
+            self.gemini_oracle_statements_file,
+        ]:
             loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
 
         docker = cleanup_context = RemoteDocker(
@@ -186,7 +200,11 @@ class GeminiStressThread(DockerBasedStressThread):
         except Exception:  # noqa: BLE001
             LOGGER.info("Failed to collect scylla-bench version information", exc_info=True)
 
-        with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+        with (
+            cleanup_context,
+            GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher,
+            GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event,
+        ):
             try:
                 publisher.event_id = gemini_stress_event.event_id
                 gemini_stress_event.log_file_name = log_file_name
@@ -217,9 +235,11 @@ class GeminiStressThread(DockerBasedStressThread):
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
             local_gemini_test_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+                docker.node.logdir, os.path.basename(self.gemini_test_statements_file)
+            )
             local_gemini_oracle_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file)
+            )
             docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
             docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
 
@@ -286,6 +306,6 @@ class GeminiStressThread(DockerBasedStressThread):
 
             split_idx = line.index(":")
             key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            value = line[split_idx + 1 :].split()[0]
             results[key] = int(value)
         return results
