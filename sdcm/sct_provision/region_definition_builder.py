@@ -83,7 +83,7 @@ class DefinitionBuilder(abc.ABC):
         user_prefix = self.params.get("user_prefix")
         common_tags = TestConfig.common_tags()
         node_type_short = "db" if "db" in node_type else node_type
-        short_test_id = TestConfig.test_id().split("-")[0]
+        short_test_id = self.test_config.test_id()[:8]
         name = f"{user_prefix}-{node_type_short}-node-{short_test_id}-{region}-{index}".lower()
         action = self.params.get(f"post_behavior_{node_type_short}_nodes")
         tags = common_tags | {
