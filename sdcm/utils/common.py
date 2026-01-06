@@ -340,7 +340,8 @@ class S3Storage:
 
         if not self.s3_host_name_regex.match(link):
             # get the actual s3 link from Argus first
-            creds = KeyStore().get_argus_rest_credentials_per_provider()
+            # we pick unknown, since we always want to reach here via cloudflare
+            creds = KeyStore().get_argus_rest_credentials_per_provider("unknown")
             headers = {"Authorization": f"token {creds['token']}", **creds["extra_headers"]}
 
             try:
