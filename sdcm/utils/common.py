@@ -267,6 +267,7 @@ class S3Storage:
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
     num_download_attempts = 5
+    s3_host_name_regex = re.compile(r"https?://([a-zA-Z0-9-]+\.s3\.amazonaws\.com)")
 
     def __init__(self, bucket=None):
         if bucket:
