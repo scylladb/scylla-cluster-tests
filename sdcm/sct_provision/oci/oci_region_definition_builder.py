@@ -62,6 +62,15 @@ class OciDefinitionBuilder(DefinitionBuilder):
     SCT_PARAM_MAPPER = mapper
     REGION_MAP = "oci_region_name"
 
+    def instance_name(self, user_prefix, node_type_short, short_test_id, region, index, dc_idx: int = 0) -> str:
+        """Generate instance name for the OCI backend.
+
+        Uses the same format as cluster_azure.py: {node_prefix}-{region}-{index}
+        where node_prefix = {user_prefix}-{node_type_short}-node-{short_test_id}
+        """
+        node_prefix = f"{user_prefix}-{node_type_short}-node-{short_test_id}"
+        return f"{node_prefix}-{region}-{index}".lower()
+
     def build_instance_definition(
         self, region: str, node_type: NodeTypeType, index: int, dc_idx: int = 0, instance_type: str = None
     ):
