@@ -22,7 +22,7 @@
                     },
                     "targets": [
                         {
-                            "expr": "avg(scylla_reactor_utilization{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"} ) by ([[by]])",
+                            "expr": "avg(scylla_reactor_utilization{cluster=\"$cluster\", dc=~\"$dc\"} ) by ([[by]])",
                             "intervalFactor": 1,
                             "legendFormat": "",
                             "refId": "A",
@@ -41,7 +41,7 @@
                     },
                     "targets": [
                         {
-                            "expr": "(sum(irate(scylla_transport_requests_served{cluster=~\"$cluster|$^\"}[60s])) or vector(0)) + (sum(irate(scylla_alternator_operation{cluster=~\"$cluster|$^\"}[60s])) or vector(0))",
+                            "expr": "(sum(irate(scylla_transport_requests_served{cluster=\"$cluster\"}[60s])) or vector(0)) + (sum(irate(scylla_alternator_operation{cluster=\"$cluster\"}[60s])) or vector(0))",
                             "interval": "",
                             "legendFormat": "Total Requests",
                             "refId": "A"
@@ -95,7 +95,7 @@
                     },
                     "targets": [
                         {
-                            "expr": "sum(rate(scylla_transport_requests_served{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]])",
+                            "expr": "sum(rate(scylla_transport_requests_served{cluster=\"$cluster\", dc=~\"$dc\"}[$__rate_interval])) by ([[by]])",
                             "intervalFactor": 1,
                             "legendFormat": "",
                             "metric": "",
@@ -1369,7 +1369,7 @@
                             "datasource": "prometheus",
                             "editorMode": "code",
                             "exemplar": false,
-                            "expr": "increase(vector_component_received_events_total{component_id=\"sct-runner\", dc=~\"$dc\", instance=~\"[[node]]\"}[10m])",
+                            "expr": "increase(vector_component_received_events_total{component_id=\"sct-runner\", dc=~\"$dc\"}[10m])",
                             "format": "time_series",
                             "instant": false,
                             "intervalFactor": 1,
@@ -1380,7 +1380,7 @@
                         {
                             "datasource": "prometheus",
                             "editorMode": "code",
-                            "expr": "increase(vector_component_discarded_events_total{component_id=\"sct-runner\", dc=~\"$dc\", instance=~\"[[node]]\"}[10m])",
+                            "expr": "increase(vector_component_discarded_events_total{component_id=\"sct-runner\", dc=~\"$dc\"}[10m])",
                             "format": "time_series",
                             "intervalFactor": 1,
                             "legendFormat": "Dropped {{instance}}",
