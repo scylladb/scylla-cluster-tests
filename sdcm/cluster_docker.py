@@ -650,6 +650,10 @@ class DockerMonitoringNode(cluster.BaseNode):
     def wait_for_cloud_init(self):
         pass
 
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        # backend does not use SSH, but LOCALRUNNER for commands execution
+        pass
+
     @staticmethod
     def is_docker() -> bool:
         return True
@@ -672,6 +676,10 @@ class DockerMonitoringNode(cluster.BaseNode):
 
     def _refresh_instance_state(self):
         return ["127.0.0.1"], ["127.0.0.1"]
+
+    def refresh_ip_address(self):
+        # IP is always localhost for local monitoring node
+        pass
 
     @cached_property
     def grafana_address(self):
@@ -722,7 +730,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):
             base_logdir=self.logdir,
             node_prefix=self.node_prefix,
             node_index=node_index,
-            ssh_login_info=dict(hostname=None, user=self.node_container_user, key_file=self.node_container_key_file),
+            ssh_login_info=None,
         )
         node.init()
         return node
