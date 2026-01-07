@@ -4073,7 +4073,10 @@ class SCTConfiguration(dict):
             tags = azure_utils.get_image_tags(images[0])
             scylla_version = tags.get("scylla_version")
             _is_enterprise = is_enterprise(scylla_version)
-        elif backend == "docker" or "k8s" in backend:
+        elif "k8s" in backend:
+            scylla_version = self.get("scylla_version")
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == "docker":
             docker_repo = self.get("docker_image")
             scylla_version = self.get("scylla_version")
             _is_enterprise = "enterprise" in docker_repo
