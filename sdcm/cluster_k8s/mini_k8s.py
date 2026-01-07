@@ -264,7 +264,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         # Example of kubectl command output:
         #   $ kubectl version --client --short
         #   Client Version: v1.18.5
-        return LOCALRUNNER.run("kubectl version --client --short").stdout.rsplit(None, 1)[-1][1:]
+        return LOCALRUNNER.run("kubectl version --client").stdout.rsplit(None, 1)[-1][1:]
 
     def docker_pull(self, image):
         self.log.info("Pull `%s' to docker environment", image)
