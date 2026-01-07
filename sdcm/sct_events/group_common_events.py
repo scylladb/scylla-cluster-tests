@@ -323,7 +323,11 @@ def ignore_scrub_invalid_errors():
 def ignore_compaction_stopped_exceptions():
     with ExitStack() as stack:
         stack.enter_context(
-            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="was stopped due to: user request")
+            EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=DatabaseLogEvent,
+                regex=r".*system_keyspace - update compaction history failed: seastar::gate_closed_exception.*",
+            )
         )
         yield
 
