@@ -98,6 +98,7 @@ from sdcm.sct_events.group_common_events import (
     decorate_with_context_if_issues_open,
     ignore_take_snapshot_failing,
     ignore_ipv6_failure_to_assign,
+    ignore_compaction_stopped_exceptions,
 )
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -4502,6 +4503,7 @@ class Nemesis(NemesisFlags):
             with (
                 ignore_stream_mutation_fragments_errors(),
                 ignore_raft_topology_cmd_failing(),
+                ignore_compaction_stopped_exceptions(),
                 self.node_allocator.run_nemesis(nemesis_label="DecommissionStreamingErr") as verification_node,
                 FailedDecommissionOperationMonitoring(
                     target_node=self.target_node, verification_node=verification_node, timeout=full_operations_timeout
