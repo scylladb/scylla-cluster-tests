@@ -2787,6 +2787,28 @@ class SCTConfiguration(dict):
         # 3) overwrite with environment variables
         merge_dicts_append_strings(self, env)
 
+        if not self.get("billing_project"):
+            if job_name := os.environ.get("JOB_NAME"):
+                release_folder = job_name.split("/")[0]
+                if release_folder.startswith(("scylla-", "scylladb-")):
+                    self["billing_project"] = release_folder.removeprefix("scylla-").removeprefix("scylladb-")
+                    self.log.info(f"Setting billing_project to '{release_folder}' from JOB_NAME: {job_name}")
+
+        if not self.get("billing_project"):
+            try:
+                result = LOCALRUNNER.run(
+                    "git rev-parse --abbrev-ref HEAD", ignore_status=True, verbose=False, timeout=5
+                )
+                branch_name = result.stdout.strip()
+                if branch_name.startswith("branch-"):
+                    self["billing_project"] = branch_name.removeprefix("branch-")
+                    self.log.info(f"Setting billing_project to '{branch_name}' from git branch name.")
+            except (OSError, RuntimeError, TimeoutError) as e:
+                self.log.warning(f"Could not get git branch name to set billing_project: {e}")
+
+        if not self.get("billing_project"):
+            self["billing_project"] = "no_billing_project"
+
         # 4) update events max severities
         add_severity_limit_rules(self.get("max_events_severities"))
         print_critical_events()
