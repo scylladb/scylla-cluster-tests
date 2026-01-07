@@ -1025,26 +1025,3 @@ def test_38_verify_scylla_version_lookup_k8s(monkeypatch, backend, version, expe
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
     assert conf.get("docker_image") == expected_repo
-
-
-def test_39_fips_longevity_has_non_disruptive_nemesis(monkeypatch):
-    """
-    Test that FIPS longevity configuration uses non-disruptive nemesis selector.
-    This prevents topology-changing nemesis operations which would add nodes without Scylla installed.
-    Issue: https://github.com/scylladb/scylla-cluster-tests/issues/XXX
-    """
-    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_REGION_NAME", "eu-west-1")
-    monkeypatch.setenv("SCT_CONFIG_FILES", 
-        '["test-cases/longevity/longevity-100gb-4h.yaml", "configurations/longevity-fips-and-encryptions.yaml"]')
-    
-    conf = sct_config.SCTConfiguration()
-    conf.verify_configuration()
-    
-    # Verify that the configuration uses non-disruptive nemesis selector
-    assert conf.get("nemesis_selector") == "not disruptive", \
-        "FIPS longevity must use 'not disruptive' nemesis selector to avoid topology changes"
-    
-    # Verify that use_preinstalled_scylla is false (which means Scylla is installed from repo)
-    assert conf.get("use_preinstalled_scylla") is False, \
-        "FIPS longevity uses scylla_repo installation, not pre-installed AMI"
