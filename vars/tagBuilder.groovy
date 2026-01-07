@@ -262,24 +262,27 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
             accessKeyVariable: 'AWS_ACCESS_KEY_ID',
             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
         ]]) {
-            def tagsArg = tags.collect { k, v -> "Key=${k},Value=${v}" }.join(' ')
+            def maxTagLength = 256
+            def tagsArg = tags.collect { k, v -> "Key=${k},Value=${normalizeValueLength(v, maxTagLength)}" }.join(' ')
             sh "aws ec2 create-tags --resources ${cloudInfo.instanceId} --tags ${tagsArg} --region ${cloudInfo.region}"
         }
     }
     else if (cloudInfo.provider == 'GCE') {
+        def maxLabelLength = 63
         tags = cleanTags(tags)
         def gce_project = "${params.gce_project ?: 'gcp-sct-project-1'}" - "gcp-"
         withGceCredentials(gce_project) { keyFilePath ->
             sh "gcloud auth activate-service-account --key-file='${keyFilePath}'"
-            def labelsArg = tags.collect { k, v -> "${k}=${v}" }.join(',')
+            def labelsArg = tags.collect { k, v -> "${k}=${normalizeValueLength(v, maxLabelLength)}" }.join(',')
             sh "gcloud compute instances add-labels ${cloudInfo.instanceId} --labels=${labelsArg} --zone=${cloudInfo.region} --quiet"
         }
     }
     else if (cloudInfo.provider == 'OCI') {
+        def maxTagLength = 256
         tags = cleanTags(tags)
         withCredentials([ociCredentials(credentialsId: 'oci-sct-user')]) {
             withEnv(["OCI_CLI_REGION=${cloudInfo.region}", "OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True"]) {
-                def jsonTag = tags.collect { k, v -> "\"${k}\": \"${v}\"" }.join(',')
+                def jsonTag = tags.collect { k, v -> "\"${k}\": \"${normalizeValueLength(v, maxTagLength)}\"" }.join(',')
                 def script = """
                     oci compute instance update --instance-id ${cloudInfo.instanceId} --freeform-tags '{${jsonTag}}' --force
                 """
@@ -287,4 +290,19 @@ def applyTagsWithCreds(Map cloudInfo, Map tags) {
             }
         }
     }
+}
+
+/**
+ * Trim tags to specified max length as cloud providers enforce different rules.
+**/
+def normalizeValueLength(String label, int maxLabelLength) {
+    def result = label
+
+    if (label != null && label.length() > maxLabelLength) {
+        def cuttingIndex = label.length() - maxLabelLength
+        // trimming at the start is preferable to the end as it is much less interesting, like "jenkins-..."
+        result = result.substring(cuttingIndex)
+    }
+
+    return result
 }
