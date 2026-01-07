@@ -1453,7 +1453,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             f"Got unexpected K8S data plane version(s): {data_plane_versions}"
         )
 
-        control_plane_versions = self.k8s_cluster.kubectl("version --short").stdout.splitlines()
+        control_plane_versions = self.k8s_cluster.kubectl("version").stdout.splitlines()
         # Output example:
         # Client Version: v1.20.4
         # Server Version: v1.19.13-gke.700
