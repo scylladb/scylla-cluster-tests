@@ -29,6 +29,7 @@ def createRunConfiguration(String backend) {
         configuration.scylla_version = 'latest'
         configuration.docker_image = 'scylladb/scylla-nightly'
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
+        configuration.availability_zone = 'a'
     } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
         configuration.test_config = "test-cases/scylla-operator/functional.yaml"
         configuration.test_name = "functional_tests/scylla_operator"
