@@ -7,10 +7,39 @@ import com.google.jenkins.plugins.credentials.oauth.GoogleOAuth2ScopeRequirement
 
 def call() {
     def cloudInfo = identifyCloud()
-    applyTagsWithCreds(cloudInfo, [RunByUser: "${getRunningUserId()}",
-                                   JenkinsJobTag: "${BUILD_TAG}",
-                                   NodeType: "builder",
-                                   keep_action: "terminate"] )
+    def tags = [RunByUser: "${getRunningUserId()}",
+                JenkinsJobTag: "${BUILD_TAG}",
+                NodeType: "builder",
+                keep_action: "terminate",
+                billing_project:"${GetBillingProjectTag()}"]
+    applyTagsWithCreds(cloudInfo, tags)
+}
+
+private String GetBillingProjectTag() {
+    // First, try to derive from the JOB_NAME
+    def jobName = env.JOB_NAME
+    if (jobName) {
+        def releaseFolder = jobName.split('/')[0]
+        if (releaseFolder == ~/^(scylla-|scylladb-)/) {
+            echo "Project tag '${part}' derived from JOB_NAME."
+            def prefix = ~/^(scylladb-|scylla-)/
+            return releaseFolder - prefix
+        }
+    }
+
+    // If not found in JOB_NAME, try the GIT_BRANCH
+    def gitBranch = env.GIT_BRANCH
+    if (gitBranch) {
+        // The GIT_BRANCH might be prefixed with 'origin/', remove it
+        def branchName = gitBranch.split('/').last()
+        if (branchName == ~/"branch-\d*\.\d*/) {
+            echo "Project tag '${branchName}' derived from GIT_BRANCH."
+            return branchName - ~/^branch-/
+        }
+    }
+
+    echo "No project tag could be derived."
+    return 'no_billing_project'
 }
 
 def getRunningUserId () {
