@@ -52,6 +52,7 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent))
         self.assertTrue(issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent))
         self.assertTrue(issubclass(DatabaseLogEvent.DISK_ERROR, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED, DatabaseLogEvent))
 
     def test_reactor_stalled_severity(self):
         event1 = DatabaseLogEvent.REACTOR_STALLED()
@@ -130,6 +131,28 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(expected_error_data["node"], disk_error_event.node)
         self.assertEqual(expected_error_data["line_number"], disk_error_event.line_number)
         self.assertEqual(expected_error_data["line"], disk_error_event.line)
+
+    def test_too_long_queue_accumulated_event(self):
+        too_long_queue_accumulated_error_event = DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED()
+
+        log_lines = """Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)
+                     2: N7seastar8internal21coroutine_traits_baseIvE12promise_typeE
+         """
+        expected_error_data = {
+            "line_number": 0,
+            "line": "Nov 25 18:47:00.491639 perf-latency-nemesis-ubuntu-db-node-68c324e8-1 scylla[6012]:  [shard 6:sl:d] seastar - Too long queue accumulated for sl:default (1049 tasks)",
+            "node": "perf-latency-nemesis-ubuntu-db-node-68c324e8-1",
+        }
+
+        for num, line in enumerate(log_lines.splitlines()):
+            if re.search(too_long_queue_accumulated_error_event.regex, line):
+                too_long_queue_accumulated_error_event.add_info(
+                    "perf-latency-nemesis-ubuntu-db-node-68c324e8-1", line, num
+                )
+
+        self.assertEqual(expected_error_data["node"], too_long_queue_accumulated_error_event.node)
+        self.assertEqual(expected_error_data["line_number"], too_long_queue_accumulated_error_event.line_number)
+        self.assertEqual(expected_error_data["line"], too_long_queue_accumulated_error_event.line)
 
 
 class TestFullScanEvent(unittest.TestCase):
