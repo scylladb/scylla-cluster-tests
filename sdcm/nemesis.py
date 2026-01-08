@@ -855,7 +855,7 @@ class Nemesis(NemesisFlags):
             self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
             cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
             cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
-            self.reboot_node(target_node=self.target_node, hard=True)
+            self.reboot_node(target_node=self.target_node, hard=True, ignore_raft_topology_errors=True)
             if random.choice([True, False]):
                 self.log.info("Waiting scylla services to start after node reboot")
                 self.target_node.wait_db_up()
@@ -894,7 +894,7 @@ class Nemesis(NemesisFlags):
     @target_all_nodes
     def disrupt_rolling_restart_cluster(self, random_order=False):
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
-            self.cluster.restart_scylla(random_order=random_order)
+            self.cluster.restart_scylla(random_order=random_order, ignore_raft_topology_errors=True)
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -958,7 +958,7 @@ class Nemesis(NemesisFlags):
             with node.remote_scylla_yaml() as scylla_yaml:
                 scylla_yaml.internode_compression = new_value
             self.log.info(f"Restarting node {node}")
-            node.restart_scylla_server()
+            node.restart_scylla_server(ignore_raft_topology_errors=True)
         self.actions_log.info("changed inter node compression")
 
     @decorate_with_context(ignore_ycsb_connection_refused)
@@ -3394,7 +3394,9 @@ class Nemesis(NemesisFlags):
                 tag=chosen_snapshot_tag,
             )
             with ignore_ycsb_connection_refused():
-                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+                self.cluster.restart_scylla(
+                    ignore_raft_topology_errors=True
+                )  # After schema restoration, you should restart the nodes
 
             # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
             # which will unblock schema restore into a different DC. For now, we can restore schema only within one DC.
@@ -4381,9 +4383,11 @@ class Nemesis(NemesisFlags):
     @decorate_with_context_if_issues_open(
         ignore_ipv6_failure_to_assign, issue_refs=["https://github.com/scylladb/scylladb/issues/20387"]
     )
-    def reboot_node(self, target_node, hard=True, verify_ssh=True):
+    def reboot_node(self, target_node, hard=True, verify_ssh=True, ignore_raft_topology_errors=False):
         with self.action_log_scope(f"Reboot {target_node.name} node. hard: {hard}"):
-            target_node.reboot(hard=hard, verify_ssh=verify_ssh)
+            target_node.reboot(
+                hard=hard, verify_ssh=verify_ssh, ignore_raft_topology_errors=ignore_raft_topology_errors
+            )
         if self.tester.params.get("print_kernel_callstack"):
             save_kallsyms_map(node=target_node)
 
@@ -4884,7 +4888,7 @@ class Nemesis(NemesisFlags):
                         }
                         is_restart_needed = True
                 if is_restart_needed:
-                    node.restart_scylla()
+                    node.restart_scylla(ignore_raft_topology_errors=True)
             self.actions_log.info("Reconfigured Scylla nodes to use AWS KMS")
 
         # Create table with encryption
@@ -5734,7 +5738,7 @@ class Nemesis(NemesisFlags):
                 raise UnsupportedNemesis("Non-system keyspace and table are not found. nemesis can't be run")
             ks_name, base_table_name = random.choice(ks_cfs).split(".")
             view_name = f"{base_table_name}_view"
-            self.target_node.stop_scylla()
+            self.target_node.stop_scylla(ignore_raft_topology_errors=True)
             with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
                 try:
                     create_materialized_view_for_random_column(session, ks_name, base_table_name, view_name)
@@ -6021,7 +6025,7 @@ class Nemesis(NemesisFlags):
                 self.switch_target_node(coordinator_node)
             self.log.debug("Coordinator node: %s, %s", coordinator_node, coordinator_node.name)
             with self.action_log_scope(f"Stop Scylla coordinator {coordinator_node.name} node"):
-                self.target_node.stop_scylla()
+                self.target_node.stop_scylla(ignore_raft_topology_errors=True)
             self.log.debug("Wait random timeout %s to new coordinator will be elected", election_wait_timeout)
             time.sleep(election_wait_timeout)
             with self.node_allocator.run_nemesis(nemesis_label="SearchCoordinator") as verification_node:
