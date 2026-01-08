@@ -5123,6 +5123,8 @@ class Nemesis(NemesisFlags):
         we don't monitor swap usage in /proc/$scylla_pid/status, just make sure
         no coredump, serious db error occur during the heavy load of memory.
 
+        The stress-ng process is pinned to Scylla's cgroup to ensure memory pressure
+        affects only Scylla and not SSH, monitoring, or cassandra-stress processes.
         """
         if self._is_it_on_kubernetes():
             self._k8s_disrupt_memory_stress()
@@ -5141,18 +5143,54 @@ class Nemesis(NemesisFlags):
         else:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
 
-        self.log.info("Try to allocate 90% total memory, the allocated memory will be swaped out")
+        # Get Scylla's PID to determine its memory usage
+        result = self.target_node.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True)
+        if not result.ok or not result.stdout.strip():
+            raise UnsupportedNemesis("Could not find Scylla process PID")
+        scylla_pid = result.stdout.strip()
+
+        # Get Scylla's actual memory usage (VmRSS from /proc/pid/status)
+        result = self.target_node.remoter.run(
+            f"awk '/VmRSS/{{print $2}}' /proc/{scylla_pid}/status",
+            ignore_status=True
+        )
+        if not result.ok or not result.stdout.strip():
+            raise UnsupportedNemesis("Could not get Scylla memory usage")
+        scylla_memory_kb = int(result.stdout.strip())
+
+        # Calculate stress amount: 90% of Scylla's current memory usage
+        stress_memory_kb = int(scylla_memory_kb * 0.9)
+
+        self.log.info(
+            f"Scylla using {scylla_memory_kb} KB RAM, will stress with {stress_memory_kb} KB "
+            f"(90% of Scylla's memory) within Scylla's cgroup"
+        )
+
+        # Get Scylla's systemd slice to pin stress-ng to the same cgroup
+        result = self.target_node.remoter.run(
+            "systemctl show scylla-server.service -p Slice --value 2>/dev/null || echo 'system.slice'",
+            ignore_status=True
+        )
+        scylla_slice = result.stdout.strip() or "system.slice"
+
         with (
             DbNodeLogger(
                 self.cluster.nodes,
                 "start memory stress",
                 target_node=self.target_node,
-                additional_info="allocate 90% of total memory",
+                additional_info=f"allocate {stress_memory_kb} KB in Scylla's cgroup ({scylla_slice})",
             ),
-            self.action_log_scope(f"Memory stress by allocating 90% memory on {self.target_node.name} node"),
+            self.action_log_scope(
+                f"Memory stress by allocating {stress_memory_kb} KB "
+                f"in Scylla's cgroup on {self.target_node.name} node"
+            ),
         ):
+            # Run stress-ng in Scylla's systemd slice to ensure it shares the same cgroup
+            # This pins stress-ng to Scylla's memory cgroup, preventing it from killing
+            # SSH, monitoring agents, or cassandra-stress processes
             self.target_node.remoter.run(
-                "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100"
+                f"sudo systemd-run --slice={scylla_slice} --scope "
+                f"stress-ng --vm-bytes {stress_memory_kb}k --vm-keep -m 1 -t 100"
             )
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
