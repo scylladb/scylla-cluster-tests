@@ -469,8 +469,8 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend,
     "xcloud_envs",
     type=str,
     multiple=True,
-    default=["lab", "staging"],
-    help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab and staging",
+    default=["lab", "staging", "prod"],
+    help="ScyllaDB Cloud environments to check (can be specified multiple times). Defaults to lab, staging, and prod",
 )
 @click.pass_context
 def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type, xcloud_envs):  # noqa: PLR0912, PLR0914, PLR0915

@@ -114,10 +114,13 @@ xcloud_vpc_peering:
 ## Listing cloud clusters
 
 ```bash
-# list using `list-resources` hydra command
+# list all environments using `list-resources` hydra command
 hydra list-resources -b xcloud --get-all
 
-# list using cleanup script in dry-run mode
+# list specific environment only
+hydra list-resources -b xcloud --get-all --xcloud-env lab
+
+# list all environments using cleanup script in dry-run mode
 ./docker/env/hydra.sh python -m utils.cloud_cleanup.xcloud.clean_xcloud --dry-run
 ```
 
@@ -140,7 +143,7 @@ Keep duration is automatically set based on test duration and is calculated as:
 
 **Executing cleanup script manually:**
 ```bash
-# dry-run mode to see what would be deleted
+# dry-run mode to see what would be deleted (checks all environments by default)
 ./docker/env/hydra.sh python -m utils.cloud_cleanup.xcloud.clean_xcloud --dry-run
 
 # cleanup of test clusters on specific environment

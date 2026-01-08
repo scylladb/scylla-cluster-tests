@@ -32,7 +32,7 @@ def call(Map pipelineParams) {
                    name: 'xcloud_provider')
 
             string(defaultValue: "${pipelineParams.get('xcloud_env', 'lab')}",
-                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab',
+                   description: 'Scylla Cloud environment (only used when backend=xcloud). Supported environments: lab, staging, prod',
                    name: 'xcloud_env')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",

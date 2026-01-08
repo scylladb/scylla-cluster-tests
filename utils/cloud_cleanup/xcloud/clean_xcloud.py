@@ -10,7 +10,7 @@ from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.keystore import KeyStore
 
 DRY_RUN = False
-ENVIRONMENTS = ["lab", "staging"]
+ENVIRONMENTS = ["lab", "staging", "prod"]
 
 KEEP_HOURS_PATTERN = re.compile(r"-keep-(\d+)h$")
 
