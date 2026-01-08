@@ -34,7 +34,7 @@ def get_scylla_images_private_galleries(
 ) -> list[GalleryImageVersion]:
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
-    tags_to_search = {"arch": arch.value}
+    tags_to_search = {"arch": arch.to_azure_format()}
     if len(version_bucket) == 1:
         return []
     # Branched version, like master:latest
@@ -54,7 +54,7 @@ def get_scylla_images_private_galleries(
         gallery_image_versions = azure_service.compute.gallery_image_versions.list_by_gallery_image(
             resource_group_name="SCYLLA-IMAGES",
             gallery_name="scylladb_dev",
-            gallery_image_name=branch,
+            gallery_image_name=f"{branch}-{arch.to_azure_format()}",
         )
         for image in gallery_image_versions:
             if image.location != region_name or image.tags.get("name", "").startswith("debug-"):
@@ -87,12 +87,13 @@ def get_scylla_images(
 ) -> list[GalleryImageVersion]:
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
-    tags_to_search = {"arch": arch.value}
+
     if output := get_scylla_images_private_galleries(
         scylla_version=scylla_version, region_name=region_name, arch=arch, azure_service=azure_service
     ):
         return output
 
+    tags_to_search = {"arch": arch.to_azure_format()}
     if len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0

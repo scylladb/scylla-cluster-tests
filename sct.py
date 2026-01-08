@@ -49,7 +49,7 @@ from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance
+from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
@@ -874,13 +874,13 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backen
 @click.option(
     "-a",
     "--arch",
-    type=click.Choice(AwsArchType.__args__),
-    default="x86_64",
+    type=VmArch,
+    default=VmArch.X86,
     help="architecture of the AMI (default: x86_64)",
 )
 @click.option("-o", "--output-format", type=str, default="table", help="")
 def list_images(  # noqa: PLR0912
-    cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType, output_format: str = "table"
+    cloud_provider: str, branch: str, version: str, regions: List[str], arch: VmArch, output_format: str = "table"
 ):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
@@ -918,7 +918,7 @@ def list_images(  # noqa: PLR0912
                     if arch:
                         #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
                         click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
-                    rows = get_gce_images_versioned(version=version)
+                    rows = get_gce_images_versioned(version=version, arch=None)
                     if output_format == "table":
                         click.echo(
                             create_pretty_table(rows=rows, field_names=version_fields).get_string(
@@ -931,7 +931,9 @@ def list_images(  # noqa: PLR0912
                 case "azure":
                     if arch:
                         click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
+                    azure_images = azure_utils.get_released_scylla_images(
+                        scylla_version=version, region_name=region, arch=None
+                    )
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.unique_id, "N/A"])
@@ -979,9 +981,7 @@ def list_images(  # noqa: PLR0912
                         gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
                         click.echo(gce_images_json)
                 case "azure":
-                    if arch:
-                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region, arch=arch)
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.id, "N/A"])
