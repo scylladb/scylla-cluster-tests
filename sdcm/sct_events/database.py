@@ -50,6 +50,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     RAFT_TOPOLOGY_SENDING_ERROR: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
     COMPACTION_STOPPED: Type[LogEventProtocol]
+    TOO_LONG_QUEUE_ACCUMULATED: Type[LogEventProtocol]
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     REACTOR_STALLED: Type[LogEventProtocol]
@@ -194,6 +195,10 @@ DatabaseLogEvent.add_subevent_type(
     severity=Severity.WARNING,
     regex=r"(^ERROR|!ERR).*rpc - client .*(connection dropped|fail to connect)",
 )
+DatabaseLogEvent.add_subevent_type(
+    "TOO_LONG_QUEUE_ACCUMULATED", severity=Severity.ERROR, regex="Too long queue accumulated"
+)
+
 DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR, regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR, regex="^(?!.*audit:).*backtrace")
 SYSTEM_ERROR_EVENTS = (
@@ -229,6 +234,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
     DatabaseLogEvent.RPC_CONNECTION(),
+    DatabaseLogEvent.TOO_LONG_QUEUE_ACCUMULATED(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
 )
