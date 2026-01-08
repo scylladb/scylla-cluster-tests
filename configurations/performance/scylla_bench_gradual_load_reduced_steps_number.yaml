@@ -6,5 +6,5 @@
 
 # Nuber of threads is adjusted based on the test results: https://github.com/scylladb/qa-tasks/issues/1862#issuecomment-3592963501
 perf_gradual_threads: {"read": 650, "write": 400, "mixed": 800}
-perf_gradual_throttle_steps: {"read": ['450000', '700000', 'unthrottled'], "mixed": ['300000', '450000', 'unthrottled'], "write": ['200000', 'unthrottled']}  # where every value is in ops
-perf_gradual_step_duration: {"read": '20m', "write": None, "mixed": '20m'} # None means until completion of the load
+perf_gradual_throttle_steps: {"read": ['450000', '700000', 'unthrottled'], "mixed": ['300000', '450000', 'unthrottled'], "write": ['200000', 'unthrottled'], "read_disk_only": ['250000', '300000', 'unthrottled']}  # where every value is in ops
+perf_gradual_step_duration: {"read": '20m', "write": None, "mixed": '20m', "read_disk_only": '20m'} # None means until completion of the load
