@@ -18,20 +18,25 @@ import sys
 import os
 import time
 import random
+import logging
 from enum import Enum
 from textwrap import dedent
 from typing import Optional, Tuple
 
-from audit import InfoEvent
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
-from sct_events import Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent
+
 from sdcm.remote.local_cmd_runner import LocalCmdRunner
 from sdcm.cluster import BaseNode
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.nemesis import CategoricalMonkey
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Mode(Enum):
@@ -65,9 +70,71 @@ def write_cql_result(res, path: str):
 
 
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
-REPLICATOR_URL = (
+REPLICATOR_URL_JAVA = (
     "https://mlitvk.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator-1.3.8-SNAPSHOT-jar-with-dependencies.jar"
 )
+REPLICATOR_URL_RUST = "https://abykov.s3.eu-north-1.amazonaws.com/scylla-cdc-replicator"
+REPLICATOR_URL_GOLANG = ""
+
+
+class Replicator:
+    @property
+    def setup_cmd(self) -> str: ...
+
+    def build_start_cmd(self, ks: str, table: str, source: str, destination: str, mode: Mode) -> str: ...
+
+    def setup(self, loader_node: BaseNode) -> None:
+        LOGGER.info("Getting replicator on loader node.")
+        res = loader_node.remoter.run(cmd=self.setup_cmd)
+        if res.exit_status != 0:
+            raise Exception("Could not obtain CDC replicator.")
+
+    def start(self, loader_node: BaseNode, ks: str, table: str, source: str, destination: str, mode: Mode = Mode.DELTA):
+        # We run the replicator in a tmux session so that remoter.run returns immediately
+        # (the replicator will run in the background). We redirect the output to a log file for later extraction.
+        replicator_script = dedent(
+            """
+            (cat >runreplicator.sh && chmod +x runreplicator.sh && tmux new-session -d -s 'replicator' ./runreplicator.sh) <<'EOF'
+            #!/bin/bash
+
+            {command} 2>&1 | tee cdc-replicator.log
+            EOF
+        """.format(command=self.build_start_cmd(ks, table, source, destination, mode))
+        )
+
+        LOGGER.info("Replicator script:\n{}".format(replicator_script))
+
+        LOGGER.info("Starting replicator.")
+        res = loader_node.remoter.run(cmd=replicator_script)
+        if res.exit_status != 0:
+            raise Exception("Could not start CDC replicator.")
+
+
+class JavaReplicator(Replicator):
+    url = REPLICATOR_URL_JAVA
+
+    @property
+    def setup_cmd(self):
+        return f"wget {self.url} -O replicator.jar"
+
+    def build_start_cmd(self, ks: str, table: str, source: str, destination: str, mode: Mode) -> str:
+        return dedent(
+            f"java -cp replicator.jar com.scylladb.cdc.replicator.Main -k {ks} -t {table} -s {source} -d {destination} \
+                -cl one -m {mode_str(mode)}"
+        )
+
+
+class RustReplicator(Replicator):
+    url = REPLICATOR_URL_RUST
+
+    @property
+    def setup_cmd(self):
+        return f"wget {self.url} -O cdc-replicator"
+
+    def build_start_cmd(self, ks: str, table: str, source: str, destination: str, mode: Mode) -> str:
+        return dedent(
+            f"chmod +x ./cdc-replicator && ./cdc-replicator --keyspace {ks} --table {table} --source {source} --destination {destination}"
+        )
 
 
 class CDCReplicationTest(ClusterTester):
@@ -75,11 +142,11 @@ class CDCReplicationTest(ClusterTester):
     TABLE_NAME = "table1"
     consistency_ok = None
 
-    def setUp(self) -> None:
-        super().setUp()
-        loader_node = self.loaders.nodes[0]
-        self.setup_tools(loader_node)
-        self.log.info("CDC Replication Test setup complete.")
+    # def setUp(self) -> None:
+    #     super().setUp()
+    #     loader_node = self.loaders.nodes[0]
+    #     self.setup_tools(loader_node)
+    #     self.log.info("CDC Replication Test setup complete.")
 
     @property
     def categorical_nemesis(self):
@@ -150,20 +217,24 @@ class CDCReplicationTest(ClusterTester):
 
     def test_replication_cs(self) -> None:
         self.log.info("Using cassandra-stress to generate workload.")
-        self.test_replication(False, Mode.DELTA)
+        self.test_replication(False, Mode.DELTA, replicator=JavaReplicator())
 
-    def test_replication_gemini(self, mode: Mode) -> None:
+    def test_replication_gemini(self, mode: Mode, replicator: Replicator) -> None:
         self.log.info("Using gemini to generate workload. Mode: {}".format(mode.name))
-        self.test_replication(True, mode)
+        self.test_replication(True, mode, replicator)
 
     def test_replication_gemini_delta(self) -> None:
-        self.test_replication_gemini(Mode.DELTA)
+        self.test_replication_gemini(Mode.DELTA, replicator=JavaReplicator())
 
     def test_replication_gemini_preimage(self) -> None:
-        self.test_replication_gemini(Mode.PREIMAGE)
+        self.test_replication_gemini(Mode.PREIMAGE, replicator=JavaReplicator())
 
     def test_replication_gemini_postimage(self) -> None:
-        self.test_replication_gemini(Mode.POSTIMAGE)
+        self.test_replication_gemini(Mode.POSTIMAGE, replicator=JavaReplicator())
+
+    def test_replication_gemini_rust_replicator(self) -> None:
+        self.log.info("Using gemini to generate workload with Rust CDC Replicator.")
+        self.test_replication_gemini(Mode.DELTA, replicator=RustReplicator())
 
     # In this test we run a sequence of ~30 minute rounds of replication;
     # after each round we stop generating workload and check consistency.
@@ -255,7 +326,8 @@ class CDCReplicationTest(ClusterTester):
             # or try to reproduce based on the logs in a smaller test.
             self.fail("Consistency check failed.")
 
-    def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
+    def test_replication(self, is_gemini_test: bool, mode: Mode, replicator: Replicator) -> None:
+        replicator.setup(self.loaders.nodes[0])
         assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
         master_node = self.db_cluster.nodes[0]
         replica_node = self.cs_db_cluster.nodes[0]
@@ -278,7 +350,10 @@ class CDCReplicationTest(ClusterTester):
         self.copy_master_schema_to_replica()
         # Wait for gemini/C-S to create keyspaces/tables/UTs
         time.sleep(30)
-        self.start_replicator(mode, master_node, replica_node)
+        # self.start_replicator(mode, master_node, replica_node)
+        replicator.start(
+            self.loaders.nodes[0], self.KS_NAME, self.TABLE_NAME, master_node.ip_address, replica_node.ip_address, mode
+        )
 
         self.log.info("Starting nemesis.")
         self.db_cluster.nemesis.append(self.categorical_nemesis)
@@ -443,7 +518,7 @@ class CDCReplicationTest(ClusterTester):
             params=self.params,
         ).run()
 
-    def setup_tools(self, loader_node: BaseNode) -> None:
+    def setup_tools(self, loader_node: BaseNode, replicator: Replicator) -> None:
         self.log.info("Installing tmux on loader node.")
         try:
             loader_node.install_package("tmux")
@@ -460,7 +535,7 @@ class CDCReplicationTest(ClusterTester):
             self.fail("Could not obtain scylla-migrate.")
 
         self.log.info("Getting replicator on loader node.")
-        res = loader_node.remoter.run(cmd=f"wget {REPLICATOR_URL} -O replicator.jar")
+        res = loader_node.remoter.run(cmd=f"wget {replicator} -O replicator.jar")
         if res.exit_status != 0:
             self.fail("Could not obtain CDC replicator.")
 
