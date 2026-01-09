@@ -8,7 +8,7 @@ longevityPipeline(
     xcloud_provider: 'gce',
     xcloud_env: 'staging',
     gce_datacenter: 'us-east1',
-    scylla_version: '2025.4.0~rc0-0.20251001.6969918d3151',
+    scylla_version: 'release:latest',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/vector-search/vector-search-sanity.yaml'
 )
