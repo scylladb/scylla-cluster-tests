@@ -3867,6 +3867,15 @@ Vector Store indexing threads (if not set, defaults to number of CPU cores on VS
 **type:** int
 
 
+## **cdc_replication_rounds_num** / SCT_CDC_REPLICATION_ROUNDS_NUM
+
+Number of rounds for cdc replication longevity tests
+
+**default:** 2
+
+**type:** int
+
+
 ## **download_from_s3** / SCT_DOWNLOAD_FROM_S3
 
 Destination-source map of dirs/buckets to download from S3 before starting the test
