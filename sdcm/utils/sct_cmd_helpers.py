@@ -21,6 +21,7 @@ import __main__
 
 from sdcm.cluster import TestConfig
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.oci_region import SUPPORTED_REGIONS as OCI_SUPPORTED_REGIONS
 from sdcm.utils.azure_region import region_name_to_location
 from sdcm.utils.common import (
     all_aws_regions,
@@ -36,6 +37,8 @@ def get_all_regions(cloud_provider: str) -> list[str] | None:
         regions = get_all_gce_regions()
     elif cloud_provider == "azure":
         regions = AzureService().all_regions
+    elif cloud_provider == "oci":
+        regions = OCI_SUPPORTED_REGIONS
     return regions
 
 

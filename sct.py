@@ -60,6 +60,7 @@ from sdcm.sct_runner import (
     AwsSctRunner,
     GceSctRunner,
     AzureSctRunner,
+    OciSctRunner,
     get_sct_runner,
     clean_sct_runners,
     update_sct_runner_tags,
@@ -124,6 +125,9 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.gce_builder import GceBuilder
+from sdcm.utils.azure_region import AzureRegion
+from sdcm.utils.oci_region import OciRegion
+from sdcm.utils.oci_builder import OciBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
@@ -153,6 +157,7 @@ SUPPORTED_CLOUDS = (
     "aws",
     "gce",
     "azure",
+    "oci",
 )
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
@@ -2002,6 +2007,8 @@ def prepare_regions(cloud_provider, regions):
             region = AzureRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "gce":
             region = GceRegion(region_name=region)  # noqa: PLW2901
+        elif cloud_provider == "oci":
+            region = OciRegion(region_name=region)  # noqa: PLW2901
         else:
             raise Exception(f"Unsupported Cloud provider: `{cloud_provider}")
         region.configure()
@@ -2022,7 +2029,7 @@ def configure_aws_peering(regions):
     help=f"Create an SCT runner image in the selected cloud region."
     f" If the requested region is not a source region"
     f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
-    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+    f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}, oci: {OciSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
     f" source region and then copied to the chosen one.",
 )
 @cloud_provider_option
@@ -2031,6 +2038,8 @@ def configure_aws_peering(regions):
 def create_runner_image(cloud_provider, region, availability_zone):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
+    elif cloud_provider == "oci":
+        assert availability_zone, "Availability zone is required for OCI"
     add_file_logger()
     os.environ.setdefault("SCT_CLUSTER_BACKEND", cloud_provider)
     sct_config = SCTConfiguration()
@@ -2203,6 +2212,8 @@ def configure_jenkins_builders(cloud_provider, regions):
             AwsBuilder.configure_in_all_region(regions=regions)
         case "gce":
             GceBuilder.configure_in_all_region(regions=regions)
+        case "oci":
+            OciBuilder.configure_in_all_region(regions=regions)
         case "azure":
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
 

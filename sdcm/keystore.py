@@ -15,9 +15,11 @@ import os
 import json
 import hashlib
 import threading
+import configparser
 from typing import BinaryIO
 from concurrent.futures.thread import ThreadPoolExecutor
 from collections import namedtuple
+from pathlib import Path
 
 import boto3
 import paramiko
@@ -104,6 +106,9 @@ class KeyStore:
     def get_azure_ssh_key_pair(self):
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
+    def get_oci_ssh_key_pair(self):
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
+
     def get_qa_ssh_keys(self):
         return [
             self.get_ec2_ssh_key_pair(),
@@ -125,6 +130,62 @@ class KeyStore:
     def get_azure_credentials(self):
         return self.get_json("azure.json")
 
+    def get_oci_credentials(self) -> dict:
+        """Get OCI credentials from S3 keystore or local ~/.oci/config file.
+
+        Returns a dict with keys: tenancy, user, fingerprint, key_content, region, compartment_id.
+        The key_content contains the PEM-encoded private key content.
+
+        Priority:
+        1. If SCT_OCI_CONFIG_PATH env var is set, use that file
+        2. If ~/.oci/config exists, parse it and read the key file
+        3. Fall back to S3 keystore oci.json
+        """
+        # Check for explicit config path override
+        local_config_path = os.environ.get("SCT_OCI_CONFIG_PATH")
+
+        if local_config_path and os.path.exists(local_config_path):
+            return self._parse_local_oci_config(local_config_path)
+
+        # Fall back to S3 keystore
+        return self.get_json("oci.json")
+
+    @staticmethod
+    def _parse_local_oci_config(config_path: str, profile: str = "DEFAULT") -> dict:
+        """Parse local OCI config file and return credentials dict.
+
+        Args:
+            config_path: Path to the OCI config file (typically ~/.oci/config)
+            profile: The profile section to read from the config file
+
+        Returns:
+            Dict with tenancy, user, fingerprint, key_content, region, compartment_id
+        """
+        config = configparser.ConfigParser()
+        config.read(config_path)
+
+        if profile not in config:
+            raise ValueError(f"Profile '{profile}' not found in OCI config file: {config_path}")
+
+        section = config[profile]
+
+        # Read the private key file content
+        key_file_path = os.path.expanduser(section.get("key_file", ""))
+        if not key_file_path or not os.path.exists(key_file_path):
+            raise ValueError(f"OCI key file not found: {key_file_path}")
+
+        with open(key_file_path, "r", encoding="utf-8") as key_file:
+            key_content = key_file.read()
+
+        return {
+            "tenancy": section.get("tenancy"),
+            "user": section.get("user"),
+            "fingerprint": section.get("fingerprint"),
+            "key_content": key_content,
+            "region": section.get("region"),
+            "compartment_id": section.get("compartment_id", section.get("tenancy")),  # default to tenancy if not set
+        }
+
     def get_azure_kms_config(self):
         return self.get_json("azure_kms_config.json")
 
@@ -144,6 +205,9 @@ class KeyStore:
         return self.get_json("argus_rest_credentials.json")
 
     def get_baremetal_config(self, config_name: str):
+        local_config_path = Path(f"{config_name}.json")
+        if local_config_path.exists():
+            return json.load(local_config_path.open("r", encoding="utf-8"))
         return self.get_json(f"{config_name}.json")
 
     def get_cloud_rest_credentials(self, environment: str = "lab"):

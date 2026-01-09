@@ -41,7 +41,11 @@ repos:
         args: [--allow-missing-credentials]
     -   id: detect-private-key
         language: system  # Override the language
-        exclude: ^data_dir/ssl_conf/.*$
+        exclude: >
+             (?x)^(
+                  unit_tests/test_oci_utils.py|
+                  data_dir/ssl_conf/.*
+             )$
 
 -   repo: local
     hooks:
