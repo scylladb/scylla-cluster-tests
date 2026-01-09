@@ -4272,9 +4272,6 @@ class SCTConfiguration(dict):
 
         # validate if selected Scylla version is supported
         supported_versions = [v["version"] for v in cloud_api_client.get_scylla_versions()["scyllaVersions"]]
-        # TODO: for now, Scylla Cloud uses 2025.4.0-RC7 for Vector Search clusters
-        # TODO: must be removed after Scylla 2025.4 is generally available in Scylla Cloud
-        supported_versions.append("2025.4.0~rc7-0.20251215.344f64870303")
         if (selected_version := self.get("scylla_version")) not in supported_versions:
             raise ValueError(
                 f"Selected Scylla version '{selected_version}' is not supported by cloud backend.\n"
