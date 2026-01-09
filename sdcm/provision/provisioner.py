@@ -21,11 +21,36 @@ from invoke import Result
 
 from sdcm.keystore import SSHKey
 from sdcm.provision.user_data import UserDataObject
+from sdcm.utils.aws_utils import AwsArchType
 
 
 class VmArch(Enum):
     X86 = "x86_64"
     ARM = "aarch64"
+
+    def to_aws_format(self) -> AwsArchType:
+        if self is VmArch.X86:
+            return "x86_64"
+        elif self is VmArch.ARM:
+            return "arm64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
+
+    def to_azure_format(self) -> str:
+        if self is VmArch.X86:
+            return "x64"
+        elif self is VmArch.ARM:
+            return "Arm64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
+
+    def to_gcp_format(self) -> str:
+        if self is VmArch.X86:
+            return "X86_64"
+        elif self is VmArch.ARM:
+            return "ARM64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
 
 
 @dataclass
