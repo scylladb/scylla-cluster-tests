@@ -1865,6 +1865,11 @@ class Nemesis(NemesisFlags):
 
     @target_all_nodes
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
+        if ComparableScyllaVersion(self.target_node.scylla_version) > "2025.3.99":
+            raise UnsupportedNemesis(
+                "Applicalbe only for 2025.3 and lower."
+                " See https://github.com/scylladb/scylla-cluster-tests/issues/12989"
+            )
         if all_nodes:
             nodes = self.cluster.data_nodes
             InfoEvent("Enospc test on {}".format([n.name for n in nodes])).publish()
