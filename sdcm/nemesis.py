@@ -953,12 +953,13 @@ class Nemesis(NemesisFlags):
             current = scylla_yaml.internode_compression
         new_value = get_internode_compression_new_value_randomly(current)
         self.actions_log.info(f"Changing inter node compression from {current} to {new_value}")
-        for node in self.cluster.nodes:
-            self.log.debug(f"Changing {node} inter node compression to {new_value}")
-            with node.remote_scylla_yaml() as scylla_yaml:
-                scylla_yaml.internode_compression = new_value
-            self.log.info(f"Restarting node {node}")
-            node.restart_scylla_server()
+        with ignore_raft_topology_cmd_failing():
+            for node in self.cluster.nodes:
+                self.log.debug(f"Changing {node} inter node compression to {new_value}")
+                with node.remote_scylla_yaml() as scylla_yaml:
+                    scylla_yaml.internode_compression = new_value
+                self.log.info(f"Restarting node {node}")
+                node.restart_scylla_server()
         self.actions_log.info("changed inter node compression")
 
     @decorate_with_context(ignore_ycsb_connection_refused)
@@ -4854,20 +4855,21 @@ class Nemesis(NemesisFlags):
             aws_kms = AwsKms(region_names=self.cluster.params.region_names)
             aws_kms.create_alias(kms_key_alias_name)
             self.actions_log.info("Reconfigure Scylla nodes to use AWS KMS")
-            for node in self.cluster.nodes:
-                is_restart_needed = False
-                with node.remote_scylla_yaml() as scylla_yml:
-                    if not scylla_yml.kms_hosts:
-                        scylla_yml.kms_hosts = {}
-                    if kms_host_name not in scylla_yml.kms_hosts:
-                        scylla_yml.kms_hosts[kms_host_name] = {
-                            "master_key": kms_key_alias_name,
-                            "aws_region": node.region,
-                            "aws_use_ec2_credentials": True,
-                        }
-                        is_restart_needed = True
-                if is_restart_needed:
-                    node.restart_scylla()
+            with ignore_raft_topology_cmd_failing():
+                for node in self.cluster.nodes:
+                    is_restart_needed = False
+                    with node.remote_scylla_yaml() as scylla_yml:
+                        if not scylla_yml.kms_hosts:
+                            scylla_yml.kms_hosts = {}
+                        if kms_host_name not in scylla_yml.kms_hosts:
+                            scylla_yml.kms_hosts[kms_host_name] = {
+                                "master_key": kms_key_alias_name,
+                                "aws_region": node.region,
+                                "aws_use_ec2_credentials": True,
+                            }
+                            is_restart_needed = True
+                    if is_restart_needed:
+                        node.restart_scylla()
             self.actions_log.info("Reconfigured Scylla nodes to use AWS KMS")
 
         # Create table with encryption
