@@ -37,7 +37,7 @@ import io
 import tempfile
 import ctypes
 import shlex
-from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable
+from typing import Iterable, List, Optional, Dict, Union, Literal, Any, Type, Callable, TYPE_CHECKING
 from urllib.parse import urlparse, urljoin
 from unittest.mock import Mock
 from textwrap import dedent
@@ -94,6 +94,8 @@ from sdcm.utils.gce_utils import (
     get_gce_storage_client,
 )
 
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger("utils")
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -2971,3 +2973,9 @@ def download_and_unpack_logs(test_id: str, log_type: str, download_to: str = Non
         raise ValueError(f"Failed to unpack logs {logs_file} for test_id {test_id}")
 
     return hdr_folder[test_id]
+
+
+def get_node_disk_usage(node: 'BaseNode') -> float:
+    """Returns disk usage percentage for a node"""
+    result = node.remoter.run("df --output=pcent /var/lib/scylla | sed 1d | sed 's/%//'")
+    return float(result.stdout.strip())
