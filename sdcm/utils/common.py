@@ -1594,7 +1594,9 @@ def find_equivalent_ami(
         search_regions = target_regions
 
     # Use all tags from the source AMI for matching, except "Name" and "arch"
-    matching_tags = [(key, value) for key, value in source_tags.items() if key not in ("Name", "arch")]
+    matching_tags = [
+        (key, value) for key, value in source_tags.items() if key not in ("Name", "arch", "creation_timestamp")
+    ]
 
     if not matching_tags:
         LOGGER.warning("Source AMI %s has no tags to match after filtering", ami_id)

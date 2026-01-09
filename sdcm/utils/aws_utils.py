@@ -35,6 +35,14 @@ LOGGER = logging.getLogger(__name__)
 AwsArchType = ArchitectureTypeType
 
 
+def aws_arch_to_vm_arch(arch: AwsArchType) -> "VmArch":
+    """Convert AwsArchType to VmArch enum."""
+    from sdcm.provision.provisioner import VmArch
+    if arch in ("arm64", "arm64_mac"):
+        return VmArch.ARM
+    return VmArch.X86
+
+
 class EksClusterCleanupMixin:
     short_cluster_name: str
     region_name: str
