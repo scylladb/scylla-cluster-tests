@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'test_add_remove_ldap_role_permission.AddRemoveLdapRolePermissionTest.test_add_remove_ldap_role_permission',
-    test_config: "test-cases/features/test_add_remove_ldap_role_permission.yaml"
+    test_config: 'test-cases/features/test_add_remove_ldap_role_permission.yaml'
 
 )

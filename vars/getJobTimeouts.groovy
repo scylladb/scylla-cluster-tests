@@ -1,6 +1,6 @@
 #!groovy
 
-List<Integer> call(Map params, String region){
+List<Integer> call(Map params, String region) {
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
@@ -27,7 +27,7 @@ List<Integer> call(Map params, String region){
     """
     def testData = sh(script: cmd, returnStdout: true).trim()
     println(testData)
-    if (params.stress_duration == "" || params.stress_duration == null) {
+    if (params.stress_duration == '' || params.stress_duration == null) {
         testData = testData =~ /test_duration: (\d+)/
         testDuration = testData[0][1].toInteger()
     } else {

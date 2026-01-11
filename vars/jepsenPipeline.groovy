@@ -1,7 +1,7 @@
 #!groovy
 
 def completed_stages = [:]
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region)
@@ -24,7 +24,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region', 'us-east1')}",
                description: 'Region value',
                name: 'region')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Availability zone',
                name: 'availability_zone')
 
@@ -89,7 +89,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -218,7 +218,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Collect log data") {
+            stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -250,7 +250,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Send email with result") {
+            stage('Send email with result') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {

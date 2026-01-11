@@ -1,13 +1,12 @@
 #!groovy
 
 def call() {
-
-    def builder = getJenkinsLabels("aws", "eu-west-1")
+    def builder = getJenkinsLabels('aws', 'eu-west-1')
 
     pipeline {
         agent {
             label {
-                   label builder.label
+                label builder.label
             }
         }
         environment {
@@ -15,13 +14,13 @@ def call() {
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
         }
         parameters {
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'folder name or path in jenkins jobs structure',
                name: 'jenkins_path')
-            string(defaultValue: "master",
+            string(defaultValue: 'master',
                description: 'sct branch',
                name: 'sct_branch')
-            string(defaultValue: "git@github.com:scylladb/scylla-cluster-tests.git",
+            string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
                description: 'sct repo link',
                name: 'sct_repo')
         }
@@ -31,7 +30,7 @@ def call() {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         triggers {
-            parameterizedCron (
+            parameterizedCron(
                 '''
                     H 01 * * 0 %jenkins_path="scylla-master/releng-testing"
                     H 01 * * 0 %jenkins_path="scylla-master"
