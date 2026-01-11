@@ -199,6 +199,11 @@ AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]*\)=.*/--env \1/p')
 # export all JENKINS_* env vars into the docker run
 JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]*\)=.*/--env \1/p')
 
+# export all GITHUB_* env vars into the docker run
+# for all kind of scripts/utility we are running in SCT CI
+GITHUB_OPTIONS=$(env | sed -n 's/^\(GITHUB_[^=]*\)=.*/--env \1/p')
+
+
 is_podman="$($tool --help | { grep -o podman || :; })"
 docker_common_args=()
 
@@ -277,6 +282,7 @@ function run_in_docker () {
         ${BUILD_OPTIONS} \
         ${JENKINS_OPTIONS} \
         ${AWS_OPTIONS} \
+        ${GITHUB_OPTIONS} \
         --env GIT_BRANCH \
         --env CHANGE_TARGET \
         --env PYTHONFAULTHANDLER=yes \

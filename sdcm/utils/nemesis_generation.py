@@ -118,7 +118,7 @@ class NemesisJobGenerator:
                             "backend": backend,
                             "region": self.BACKEND_TO_REGION.get(backend, "eu-west-1"),
                             "test_name": "longevity_test.LongevityTest.test_custom_time",
-                            "test_config": config_name,
+                            "test_config": json.dumps(config_name),
                             **additional_params,
                         }
                     }

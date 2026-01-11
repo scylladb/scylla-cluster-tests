@@ -5,6 +5,11 @@ inspection/Default.xml
 codestyles/Default.xml
 _linux/*
 
+# Node.js
+node_modules/
+package-lock.json
+package.json
+
 ####################################
 # Date: Tue Jun 27 07:47:59 CST 2017
 # From: https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
