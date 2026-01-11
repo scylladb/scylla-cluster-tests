@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import MagicMock
 from uuid import UUID
 
+from sdcm.cluster import TokenRingMember
 from sdcm.sct_events import Severity
 from sdcm.utils.health_checker import (
     check_node_status_in_gossip_and_nodetool_status,
@@ -24,6 +25,7 @@ from sdcm.utils.health_checker import (
     check_schema_agreement_in_gossip_and_peers,
     check_schema_version,
 )
+from sdcm.utils.raft import Group0Member, RaftFeature
 
 
 class Node:
@@ -231,9 +233,6 @@ class TestHealthChecker(unittest.TestCase):
 
     def test_check_group0_tokenring_consistency_with_none_values(self):
         """Test that check_group0_tokenring_consistency handles None values gracefully"""
-        from sdcm.cluster import TokenRingMember
-        from sdcm.utils.raft import Group0Member, RaftFeature
-        
         # Create a mock node with raft
         mock_node = MagicMock()
         mock_node.name = "test-node"
@@ -261,9 +260,6 @@ class TestHealthChecker(unittest.TestCase):
         
     def test_check_group0_tokenring_consistency_with_exception(self):
         """Test that check_group0_tokenring_consistency converts exceptions to events"""
-        from sdcm.cluster import TokenRingMember
-        from sdcm.utils.raft import Group0Member, RaftFeature
-        
         # Create a mock node with raft
         mock_node = MagicMock()
         mock_node.name = "test-node"
