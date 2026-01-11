@@ -1617,7 +1617,7 @@ def pre_commit():
         f"for c in $(git rev-list {target}..HEAD --no-merges); do git show -s --format='%B' $c > $c.commit_msg ; done; "
         "for f in *.commit_msg ; do echo linting $f ; pre-commit run --hook-stage commit-msg --commit-msg-filename $f; done'"
     )
-    result += os.system("pre-commit run -a --show-diff-on-failure")
+    result += os.system("scripts/run-pre-commit-on-branch.sh --show-diff-on-failure")
     result = 1 if result else 0
     sys.exit(result)
 

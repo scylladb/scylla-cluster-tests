@@ -91,6 +91,23 @@ repos:
         pass_filenames: false
         files: ^pyproject.toml$
 
+-   repo: local
+    hooks:
+    -   id: npm-groovy-lint-format
+        name: npm-groovy-lint-format
+        language: docker_image
+        entry: nvuillam/npm-groovy-lint:v16.1.1 --format --noserver --output txt --failon error
+        types: [groovy]
+        require_serial: true
+        files: \.(groovy|[Jj]enkinsfile)$
+    -   id: npm-groovy-lint-fix
+        name: npm-groovy-lint-fix
+        language: docker_image
+        entry: nvuillam/npm-groovy-lint:v16.1.1 --fix --noserver --output txt --failon error
+        types: [groovy]
+        require_serial: true
+        files: \.(groovy|[Jj]enkinsfile)$
+
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v9.22.0
   hooks:
