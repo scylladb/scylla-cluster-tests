@@ -43,7 +43,7 @@ Health checks take 2+ hours on 60-node clusters, running even for skipped nemesi
 
 **Configuration**:
 ```yaml
-health_check_skip_after_skipped_nemesis: true  # default: true
+nemesis_health_check_skip_after_skipped: true  # default: true
 ```
 
 **Testing**:
@@ -103,7 +103,7 @@ health_check_skip_after_skipped_nemesis: true  # default: true
 
 **Configuration**:
 ```yaml
-health_check_mode: 'status_only'  # full | status_only | majority_status | raft_only | sampled
+nemesis_health_check_mode: 'status_only'  # full | status_only | majority_status | raft_only | sampled
 ```
 
 **Important Notes on nodetool status**:
@@ -137,7 +137,7 @@ health_check_mode: 'status_only'  # full | status_only | majority_status | raft_
 
 **Configuration**:
 ```yaml
-health_check_sample_nodes_percentage: 50  # 0-100, default: 100
+nemesis_health_check_sample_nodes_percentage: 50  # 0-100, default: 100
 ```
 
 **Sampling Algorithm**:
@@ -174,7 +174,7 @@ health_check_sample_nodes_percentage: 50  # 0-100, default: 100
 
 **Configuration**:
 ```yaml
-health_check_exclude_running_nemesis: true  # default: true
+nemesis_health_check_exclude_running_nemesis: true  # default: true
 ```
 
 **Considerations**:
@@ -202,7 +202,7 @@ health_check_exclude_running_nemesis: true  # default: true
 
 **Configuration**:
 ```yaml
-health_check_parallel_workers: 10  # default: 5
+nemesis_health_check_parallel_workers: 10  # default: 5
 ```
 
 **Considerations**:
@@ -242,8 +242,8 @@ health_check_parallel_workers: 10  # default: 5
 
 ### TC1: Baseline Measurement
 ```yaml
-health_check_mode: 'full'
-health_check_sample_nodes_percentage: 100
+nemesis_health_check_mode: 'full'
+nemesis_health_check_sample_nodes_percentage: 100
 ```
 - Measure total time
 - Measure per-node time
@@ -252,7 +252,7 @@ health_check_sample_nodes_percentage: 100
 
 ### TC2: Status-Only Mode
 ```yaml
-health_check_mode: 'status_only'
+nemesis_health_check_mode: 'status_only'
 ```
 - Measure time for single `nodetool status` call
 - Verify all nodes detected
@@ -260,7 +260,7 @@ health_check_mode: 'status_only'
 
 ### TC3: Majority Status Mode
 ```yaml
-health_check_mode: 'majority_status'
+nemesis_health_check_mode: 'majority_status'
 ```
 - Measure time for majority validation
 - Test split-brain detection with simulated partition
@@ -268,7 +268,7 @@ health_check_mode: 'majority_status'
 
 ### TC4: Raft-Only Mode
 ```yaml
-health_check_mode: 'raft_only'
+nemesis_health_check_mode: 'raft_only'
 ```
 - Measure Raft group0 query time
 - Verify membership consistency
@@ -277,8 +277,8 @@ health_check_mode: 'raft_only'
 
 ### TC5: Sampling at 33%
 ```yaml
-health_check_mode: 'full'
-health_check_sample_nodes_percentage: 33
+nemesis_health_check_mode: 'full'
+nemesis_health_check_sample_nodes_percentage: 33
 ```
 - Verify ~10 nodes checked (1/3 of 30)
 - Verify at least 1 per DC
@@ -287,8 +287,8 @@ health_check_sample_nodes_percentage: 33
 
 ### TC6: Parallel Execution
 ```yaml
-health_check_mode: 'full'
-health_check_parallel_workers: 10
+nemesis_health_check_mode: 'full'
+nemesis_health_check_parallel_workers: 10
 ```
 - Measure total time with parallel execution
 - Monitor cluster CPU/network load
@@ -297,10 +297,10 @@ health_check_parallel_workers: 10
 
 ### TC7: Combined Optimizations
 ```yaml
-health_check_mode: 'majority_status'
-health_check_sample_nodes_percentage: 50
-health_check_parallel_workers: 10
-health_check_skip_after_skipped_nemesis: true
+nemesis_health_check_mode: 'majority_status'
+nemesis_health_check_sample_nodes_percentage: 50
+nemesis_health_check_parallel_workers: 10
+nemesis_health_check_skip_after_skipped: true
 ```
 - Test with mixed skipped/executed nemesis
 - Measure overall time savings
@@ -378,40 +378,40 @@ def measure_operation(operation_name):
 ### Small Clusters (<10 nodes)
 ```yaml
 cluster_health_check: true
-health_check_mode: 'full'
-health_check_skip_after_skipped_nemesis: true
+nemesis_health_check_mode: 'full'
+nemesis_health_check_skip_after_skipped: true
 ```
 **Rationale**: Full validation is fast enough, provides maximum confidence
 
 ### Medium Clusters (10-30 nodes)
 ```yaml
 cluster_health_check: true
-health_check_mode: 'majority_status'
-health_check_parallel_workers: 5
-health_check_skip_after_skipped_nemesis: true
-health_check_exclude_running_nemesis: true
+nemesis_health_check_mode: 'majority_status'
+nemesis_health_check_parallel_workers: 5
+nemesis_health_check_skip_after_skipped: true
+nemesis_health_check_exclude_running_nemesis: true
 ```
 **Rationale**: Balance between speed and split-brain detection
 
 ### Large Clusters (30-60 nodes)
 ```yaml
 cluster_health_check: true
-health_check_mode: 'majority_status'
-health_check_sample_nodes_percentage: 50
-health_check_parallel_workers: 10
-health_check_skip_after_skipped_nemesis: true
-health_check_exclude_running_nemesis: true
+nemesis_health_check_mode: 'majority_status'
+nemesis_health_check_sample_nodes_percentage: 50
+nemesis_health_check_parallel_workers: 10
+nemesis_health_check_skip_after_skipped: true
+nemesis_health_check_exclude_running_nemesis: true
 ```
 **Rationale**: Significant time savings while maintaining split-brain detection
 
 ### Very Large Clusters (60+ nodes)
 ```yaml
 cluster_health_check: true
-health_check_mode: 'status_only'
-health_check_sample_nodes_percentage: 20
-health_check_parallel_workers: 10
-health_check_skip_after_skipped_nemesis: true
-health_check_exclude_running_nemesis: true
+nemesis_health_check_mode: 'status_only'
+nemesis_health_check_sample_nodes_percentage: 20
+nemesis_health_check_parallel_workers: 10
+nemesis_health_check_skip_after_skipped: true
+nemesis_health_check_exclude_running_nemesis: true
 ```
 **Rationale**: Prioritize speed for stable large clusters
 **Note**: Reduced split-brain detection - consider periodic full checks
@@ -419,9 +419,9 @@ health_check_exclude_running_nemesis: true
 ### Critical Tests (Release validation, etc.)
 ```yaml
 cluster_health_check: true
-health_check_mode: 'full'
-health_check_parallel_workers: 10
-health_check_skip_after_skipped_nemesis: false  # Always validate
+nemesis_health_check_mode: 'full'
+nemesis_health_check_parallel_workers: 10
+nemesis_health_check_skip_after_skipped: false  # Always validate
 ```
 **Rationale**: Maximum validation confidence, moderate speed improvement
 
@@ -602,7 +602,7 @@ def check_cluster_health_with_majority(self, majority_percentage=60):
 
 4. **Should we add automatic mode selection based on cluster size?**
    ```yaml
-   health_check_mode: 'auto'  # Selects mode based on node count
+   nemesis_health_check_mode: 'auto'  # Selects mode based on node count
    ```
 
 5. **Should we track health check performance metrics?**
