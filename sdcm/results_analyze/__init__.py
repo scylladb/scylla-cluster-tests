@@ -461,22 +461,19 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
                     # Iterate through workloads in best result
                     for workload in best.get("hdr_summary_average", {}):
-                        # Initialize workload in diff dict
-                        diff = best["hdr_summary_diff"]
-                        diff[workload] = {}
-
                         # Check if workload exists in current result
                         current_hdr = current_result.get(nemesis, {}).get("hdr_summary_average", {})
                         if workload not in current_hdr:
                             LOGGER.info(
-                                "Workload '%s' not found in current_result['%s']['hdr_summary_average'], setting diff to N/A",
+                                "Workload '%s' not found in current_result['%s']['hdr_summary_average'], skipping diff calculation",
                                 workload,
                                 nemesis,
                             )
-                            # Set all percentiles to N/A for missing workload
-                            for perc in self.percentiles:
-                                diff[workload][perc] = "N/A"
                             continue
+
+                        # Initialize workload in diff dict
+                        diff = best["hdr_summary_diff"]
+                        diff[workload] = {}
 
                         # Calculate diff for each percentile
                         for perc in self.percentiles:
