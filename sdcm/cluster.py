@@ -3448,7 +3448,25 @@ class BaseNode(AutoSshContainerMixin):
             return []
 
         for member in result_json:
+<<<<<<< HEAD
             token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
+||||||| parent of 6def5eb97 (fix(health-check): handle exceptions and None values in check_group0_tokenring_consistency)
+            token_ring_members.append(TokenRingMember(host_id=member.get("value"), ip_address=member.get("key")))
+=======
+            host_id = member.get("value")
+            ip_address = member.get("key")
+            # Filter out members with None/null values to prevent downstream issues
+            if host_id is None or ip_address is None:
+                error_msg = f"Token ring member has null values: host_id={host_id}, ip_address={ip_address}"
+                self.log.warning(error_msg)
+                ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                    severity=Severity.ERROR,
+                    node=self.name,
+                    error=error_msg,
+                ).publish()
+                continue
+            token_ring_members.append(TokenRingMember(host_id=host_id, ip_address=ip_address))
+>>>>>>> 6def5eb97 (fix(health-check): handle exceptions and None values in check_group0_tokenring_consistency)
         return token_ring_members
 
     @retrying(n=360, sleep_time=10, allowed_exceptions=NodeNotReady, message="Waiting for native_transport")
