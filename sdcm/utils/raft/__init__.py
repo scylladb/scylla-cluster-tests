@@ -403,20 +403,63 @@ class RaftFeature(RaftFeatureOperations):
     def check_group0_tokenring_consistency(
         self, group0_members: list[Group0Member], tokenring_members: list[TokenRingMember]
     ) -> HealthEventsGenerator:
+        """Check group0 and token ring consistency.
+
+        This method generates health check events and never raises exceptions to avoid
+        breaking the nemesis thread. Any exceptions are caught and converted to health events.
+        """
         LOGGER.debug(
             "Check group0 and token ring consistency on node %s (host_id=%s)...", self._node.name, self._node.host_id
         )
-        token_ring_node_ids = [member.host_id for member in tokenring_members]
-        broken_hosts = self.search_inconsistent_host_ids()
-        for member in group0_members:
-            if member.host_id in token_ring_node_ids and member.host_id not in broken_hosts:
-                continue
+
+        try:
+            # Filter out any None values from tokenring_members
+            valid_tokenring_members = [
+                member for member in tokenring_members if member.host_id is not None and member.ip_address is not None
+            ]
+
+            if len(valid_tokenring_members) < len(tokenring_members):
+                filtered_count = len(tokenring_members) - len(valid_tokenring_members)
+                warning_message = (
+                    f"Node {self._node.name} has {filtered_count} token ring member(s) with null values "
+                    f"that were filtered out during health check"
+                )
+                LOGGER.warning(warning_message)
+                yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                    severity=Severity.WARNING,
+                    node=self._node.name,
+                    error=warning_message,
+                )
+
+            token_ring_node_ids = [member.host_id for member in valid_tokenring_members]
+            broken_hosts = self.search_inconsistent_host_ids()
+
+            for member in group0_members:
+                if member.host_id in token_ring_node_ids and member.host_id not in broken_hosts:
+                    continue
+                error_message = (
+                    f"Node {self._node.name} has group0 member with host_id {member.host_id} with "
+                    f"can_vote {member.voter} and "
+                    f"present in token ring {member.host_id in token_ring_node_ids}. "
+                    f"Inconsistency between group0: {group0_members} "
+                    f"and tokenring: {valid_tokenring_members}"
+                )
+                LOGGER.error(error_message)
+                yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                    severity=Severity.ERROR,
+                    node=self._node.name,
+                    error=error_message,
+                )
+
+            LOGGER.debug(
+                "Group0 and token-ring consistency check completed on node %s (host_id=%s)...",
+                self._node.name,
+                self._node.host_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # Never raise exceptions from health checks - convert to health events instead
             error_message = (
-                f"Node {self._node.name} has group0 member with host_id {member.host_id} with "
-                f"can_vote {member.voter} and "
-                f"presents in token ring {member.host_id in token_ring_node_ids}. "
-                f"Inconsistency between group0: {group0_members} "
-                f"and tokenring: {tokenring_members}"
+                f"Node {self._node.name} failed to check group0/token-ring consistency: {type(exc).__name__}: {exc}"
             )
             LOGGER.error(error_message)
             yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
@@ -424,9 +467,6 @@ class RaftFeature(RaftFeatureOperations):
                 node=self._node.name,
                 error=error_message,
             )
-        LOGGER.debug(
-            "Group0 and token-ring are consistent on node %s (host_id=%s)...", self._node.name, self._node.host_id
-        )
 
     def call_read_barrier(self):
         """Wait until the node applies all previously committed Raft entries
