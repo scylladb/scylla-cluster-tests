@@ -228,3 +228,59 @@ class TestHealthChecker(unittest.TestCase):
         self.assertEqual(mocked_sleep.call_count, attempts - 1, "Unexpected number of retries applied")
         self.assertIsInstance(err, str)
         self.assertTrue(err)
+
+    def test_check_group0_tokenring_consistency_with_none_values(self):
+        """Test that check_group0_tokenring_consistency handles None values gracefully"""
+        from sdcm.cluster import TokenRingMember
+        from sdcm.utils.raft import Group0Member, RaftFeature
+        
+        # Create a mock node with raft
+        mock_node = MagicMock()
+        mock_node.name = "test-node"
+        mock_node.host_id = "test-host-id"
+        
+        raft = RaftFeature(mock_node)
+        raft.search_inconsistent_host_ids = MagicMock(return_value=[])
+        
+        # Create test data with None values
+        group0_members = [
+            Group0Member(host_id="host-1", voter=True),
+            Group0Member(host_id="host-2", voter=True),
+        ]
+        tokenring_members = [
+            TokenRingMember(host_id="host-1", ip_address="127.0.0.1"),
+            TokenRingMember(host_id=None, ip_address="127.0.0.2"),  # This should be filtered
+            TokenRingMember(host_id="host-2", ip_address=None),  # This should be filtered
+        ]
+        
+        # Run the check - should not raise exceptions
+        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+        
+        # Should generate a warning event for filtered members
+        self.assertTrue(any(event.severity == Severity.WARNING for event in events))
+        
+    def test_check_group0_tokenring_consistency_with_exception(self):
+        """Test that check_group0_tokenring_consistency converts exceptions to events"""
+        from sdcm.cluster import TokenRingMember
+        from sdcm.utils.raft import Group0Member, RaftFeature
+        
+        # Create a mock node with raft
+        mock_node = MagicMock()
+        mock_node.name = "test-node"
+        mock_node.host_id = "test-host-id"
+        
+        raft = RaftFeature(mock_node)
+        # Make search_inconsistent_host_ids raise an exception
+        raft.search_inconsistent_host_ids = MagicMock(side_effect=Exception("Test exception"))
+        
+        # Create test data
+        group0_members = [Group0Member(host_id="host-1", voter=True)]
+        tokenring_members = [TokenRingMember(host_id="host-1", ip_address="127.0.0.1")]
+        
+        # Run the check - should not raise exceptions
+        events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
+        
+        # Should generate an error event instead of raising
+        self.assertTrue(len(events) > 0)
+        self.assertTrue(any(event.severity == Severity.ERROR for event in events))
+        self.assertTrue(any("Test exception" in event.error for event in events if hasattr(event, 'error')))
