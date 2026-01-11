@@ -8,7 +8,7 @@ longevityPipeline(
     region: 'eu-west-1',
     provision_type: 'on_demand',
     test_name: 'microbenchmarking_test.PerfSimpleQueryTest.test_perf_simple_query',
-    test_config: """[ 'test-cases/microbenchmarking/amazon_perf_simple_query_ARM.yaml', 'configurations/performance/perf_simple/perf_simple_write_option.yaml' ]""",
-    email_recipients: "scylla-perf-results@scylladb.com",
-    perf_extra_jobs_to_compare: """["simple_query_weekly_microbenchmark_enterprise","scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"]""",
+    test_config: '''[ "test-cases/microbenchmarking/amazon_perf_simple_query_ARM.yaml', "configurations/performance/perf_simple/perf_simple_write_option.yaml" ]''',
+    email_recipients: 'scylla-perf-results@scylladb.com',
+    perf_extra_jobs_to_compare: '''["simple_query_weekly_microbenchmark_enterprise","scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64"]''',
 )

@@ -1,12 +1,9 @@
 #!groovy
 
-
 def call() {
-
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, null /* oci placeholder */)
 
     pipeline {
-
         agent {
             label {
                 label builder.label
@@ -17,9 +14,9 @@ def call() {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
-		}
+        }
 
-         parameters {
+        parameters {
             separator(name: 'SCT_CONFIG', sectionHeader: 'SCT Repository Configuration')
             string(defaultValue: 'git@github.com:scylladb/scylla-cluster-tests.git',
                    description: 'sct git repo',
@@ -29,23 +26,23 @@ def call() {
                    description: 'sct git branch',
                    name: 'sct_branch')
             separator(name: 'TEST_CONFIG', sectionHeader: 'Test Configuration')
-            string(defaultValue: "longevity_test.LongevityTest.test_custom_time",
+            string(defaultValue: 'longevity_test.LongevityTest.test_custom_time',
                    description: '',
                    name: 'test_name')
-            string(defaultValue: "test-cases/longevity/longevity-100gb-4h.yaml",
+            string(defaultValue: 'test-cases/longevity/longevity-100gb-4h.yaml',
                    description: '',
                    name: 'test_config')
             separator(name: 'CLOUD_PROVIDER', sectionHeader: 'Cloud Provider Configuration')
-            string(defaultValue: "aws",
+            string(defaultValue: 'aws',
                description: 'aws|gce',
                name: 'backend')
-            string(defaultValue: "eu-west-1",
+            string(defaultValue: 'eu-west-1',
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
-            string(defaultValue: "us-east1",
+            string(defaultValue: 'us-east1',
                    description: 'GCE datacenter supported: us-east1',
                    name: 'gce_datacenter')
-            string(defaultValue: "a",
+            string(defaultValue: 'a',
                description: 'Availability zone',
                name: 'availability_zone')
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
@@ -57,11 +54,11 @@ def call() {
             string(defaultValue: '', description: 'cloud path for RPMs, s3:// or gs://', name: 'update_db_packages')
 
             string(defaultValue: '',
-                   description: "Which version to use for oracle cluster during gemini test",
-                   name: "oracle_scylla_version")
+                   description: 'Which version to use for oracle cluster during gemini test',
+                   name: 'oracle_scylla_version')
 
             string(defaultValue: '', description: 'run gemini with specific seed number',
-                   name: "gemini_seed")
+                   name: 'gemini_seed')
             separator(name: 'MANAGER_CONFIG', sectionHeader: 'Manager Configuration')
             string(defaultValue: '',
                    description: 'If empty - the default scylla manager agent repo will be taken',
@@ -75,26 +72,26 @@ def call() {
                    description: 'master_latest|3.2|3.1',
                    name: 'manager_version')
             separator(name: 'PROVISIONING', sectionHeader: 'Provisioning Configuration')
-            string(defaultValue: "spot",
+            string(defaultValue: 'spot',
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
-            string(defaultValue: "false",
+            string(defaultValue: 'false',
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
 
-            string(defaultValue: "private",
+            string(defaultValue: 'private',
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
             separator(name: 'POST_BEHAVIOR', sectionHeader: 'Post Behavior Configuration')
-            string(defaultValue: "destroy",
+            string(defaultValue: 'destroy',
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
 
-            string(defaultValue: "destroy",
+            string(defaultValue: 'destroy',
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_loader_nodes')
 
-            string(defaultValue: "destroy",
+            string(defaultValue: 'destroy',
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
 
@@ -102,10 +99,10 @@ def call() {
             string(defaultValue: '360',
                    description: 'timeout for jenkins job in minutes',
                    name: 'timeout')
-            string(defaultValue: "qa@scylladb.com",
+            string(defaultValue: 'qa@scylladb.com',
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-            text(defaultValue: "",
+            text(defaultValue: '',
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
@@ -117,25 +114,25 @@ def call() {
         options {
             timestamps()
             disableConcurrentBuilds()
-            timeout([time: params.timeout, unit: "MINUTES"])
+            timeout([time: params.timeout, unit: 'MINUTES'])
             buildDiscarder(logRotator(numToKeepStr: '5'))
         }
         stages {
             stage('Checkout') {
-               steps {
-                  script {
-                      loadEnvFromString(params.extra_environment_variables)
-                      tagBuilder()
-                  }
-                  dir('scylla-cluster-tests') {
-                      git(url: params.sct_repo,
+                steps {
+                    script {
+                        loadEnvFromString(params.extra_environment_variables)
+                        tagBuilder()
+                    }
+                    dir('scylla-cluster-tests') {
+                        git(url: params.sct_repo,
                             credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
                             branch: params.sct_branch)
 
-                      checkoutQaInternal(params)
-                  }
-                  dockerLogin(params)
-               }
+                        checkoutQaInternal(params)
+                    }
+                    dockerLogin(params)
+                }
             }
             stage('Create SCT Runner') {
                 steps {

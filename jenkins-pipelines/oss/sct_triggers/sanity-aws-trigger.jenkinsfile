@@ -4,5 +4,5 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 simpleTrigger([
- "longevity/longevity-100gb-4h-test",
+ 'longevity/longevity-100gb-4h-test',
 ])

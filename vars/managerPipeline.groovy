@@ -1,42 +1,40 @@
 #!groovy
 
 boolean jobEnabled (String jobName) {
-	echo "Checking if Job $jobName exists / enabled"
-	try {
-		if (Jenkins.instance.getItemByFullName(jobName).isBuildable()) {
-			echo "Job $jobName is enabled"
-			return true
-		} else {
-			echo "Job $jobName is disabled, Skipping"
-			return false
-		}
-	} catch (error) {
-		echo "Error: General error |$error| while checking if job |$jobName| enabled (job does not exist)"
-		return false
-	}
+    echo "Checking if Job $jobName exists / enabled"
+    try {
+        if (Jenkins.instance.getItemByFullName(jobName).isBuildable()) {
+            echo "Job $jobName is enabled"
+            return true
+        } else {
+            echo "Job $jobName is disabled, Skipping"
+            return false
+        }
+    } catch (error) {
+        echo "Error: General error |$error| while checking if job |$jobName| enabled (job does not exist)"
+        return false
+    }
 }
 
 def triggerJob(String jobToTrigger, def parameterList = [], boolean propagate = false, boolean wait = false) {
     if (jobEnabled(jobToTrigger)) {
         echo "Triggering '$jobToTrigger'"
         try {
-            jobResults=build job: jobToTrigger,
+            jobResults = build job: jobToTrigger,
                 parameters: parameterList,
                 propagate: propagate,  // if true, the triggering test will fail/pass based on the status of the triggered/downstream job/s
                 wait: wait  // if true, the triggering job will not end until the triggered/downstream job/s will end
-        } catch(Exception ex) {
+        } catch (Exception ex) {
             echo "Could not trigger jon $jobToTrigger due to"
             println(ex.toString())
         }
     }
 }
 
-
 def completed_stages = [:]
-def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0, 0, 0, 0, 0]
 
 def call(Map pipelineParams) {
-
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
 
     pipeline {
@@ -72,10 +70,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
-            string(defaultValue: "",
+            string(defaultValue: '',
                description: 'Availability zone',
                name: 'availability_zone')
-
 
             separator(name: 'SCYLLA_DB', sectionHeader: 'ScyllaDB Configuration Selection')
             string(defaultValue: '', description: 'AMI ID for ScyllaDB ', name: 'scylla_ami_id')
@@ -206,7 +203,7 @@ def call(Map pipelineParams) {
                         checkoutQaInternal(params)
                     }
                     dockerLogin(params)
-               }
+                }
             }
             stage('Create Argus Test Run') {
                 steps {
@@ -255,7 +252,7 @@ def call(Map pipelineParams) {
             }
             stage('Provision Resources') {
                 steps {
-                    catchError() {
+                    catchError {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
@@ -286,7 +283,6 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 timeout(time: testRunTimeout, unit: 'MINUTES') {
                                     dir('scylla-cluster-tests') {
-
                                         // handle params which can be a json list
                                         def region = initAwsRegionParam(params.region, builder.region)
                                         def datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
@@ -410,7 +406,7 @@ def call(Map pipelineParams) {
                             for (downstreamJobName in jobNamesToTrigger) {
                                 fullJobPath = currentJobDirectoryPath + '/' + downstreamJobName.trim()
                                 def repoParams = []
-                                if (downstreamJobName.contains("upgrade")) {
+                                if (downstreamJobName.contains('upgrade')) {
                                     repoParams = [
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_address', value: params.scylla_mgmt_address],
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
@@ -428,12 +424,12 @@ def call(Map pipelineParams) {
                                 triggerJob(fullJobPath, repoParams)
                             }
                         } else {
-                            echo "Job failed. Will not run downstream jobs."
+                            echo 'Job failed. Will not run downstream jobs.'
                         }
                     }
                 }
             }
-            stage("Collect log data") {
+            stage('Collect log data') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
@@ -465,7 +461,7 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage("Send email with result") {
+            stage('Send email with result') {
                 options {
                     timeout(time: 10, unit: 'MINUTES')
                 }

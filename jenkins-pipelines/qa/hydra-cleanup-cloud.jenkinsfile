@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 pipeline {
     agent {
         label {
-            label "aws-sct-builders-eu-west-1-v3-CI"
+            label 'aws-sct-builders-eu-west-1-v3-CI'
         }
     }
     environment {
@@ -49,45 +49,45 @@ pipeline {
         stage('Clean AWS') {
             steps {
                 catchError(stageResult: 'FAILURE') {
-                   timeout(time: 15, unit: 'MINUTES') {
+                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.aws.clean_aws ${params.dryRun ? '--dry-run' : ''}
                             ./docker/env/hydra.sh python -m sct clean-aws-kms-aliases ${params.dryRun ? '--dry-run' : ''}
                         """
-                   }
+                    }
                 }
             }
         }
         stage('Clean Azure') {
             steps {
                 catchError(stageResult: 'FAILURE') {
-                   timeout(time: 15, unit: 'MINUTES') {
+                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.azure.clean_azure ${params.dryRun ? '--dry-run' : ''}
                         """
-                   }
+                    }
                 }
             }
         }
         stage('Clean GCE') {
             steps {
                 catchError(stageResult: 'FAILURE') {
-                   timeout(time: 15, unit: 'MINUTES') {
+                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.gce.clean_gce ${params.dryRun ? '--dry-run' : ''}
                         """
-                   }
+                    }
                 }
             }
         }
         stage('Clean Scylla Cloud') {
             steps {
                 catchError(stageResult: 'FAILURE') {
-                   timeout(time: 15, unit: 'MINUTES') {
+                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.xcloud.clean_xcloud ${params.dryRun ? '--dry-run' : ''}
                         """
-                   }
+                    }
                 }
             }
         }

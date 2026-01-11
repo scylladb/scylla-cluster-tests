@@ -10,5 +10,5 @@ rollingUpgradePipeline(
     base_versions: '',
     linux_distro: 'ubuntu-jammy',
     test_name: 'upgrade_test.UpgradeTest.test_cluster_upgrade_latency_regression',
-    test_config: "test-cases/upgrades/rolling-upgrade-latency-regression.yaml",
+    test_config: 'test-cases/upgrades/rolling-upgrade-latency-regression.yaml',
 )

@@ -1,10 +1,10 @@
 #!groovy
 
-def call(String regionStr, String builder_region){
-    if (regionStr == "random"){
+def call(String regionStr, String builder_region) {
+    if (regionStr == 'random') {
         return builder_region
     }
-    else{
+    else {
         return groovy.json.JsonOutput.toJson(regionStr)
     }
 }

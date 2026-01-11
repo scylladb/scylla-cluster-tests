@@ -10,7 +10,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_GCE_PROJECT = "${params.gce_project}"
-            SCT_ENABLE_ARGUS_REPORT = "1"
+            SCT_ENABLE_ARGUS_REPORT = '1'
             SCT_BILLING_PROJECT = "${params.billing_project}"
         }
         parameters {
@@ -110,7 +110,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -136,8 +136,7 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
-
+                                             "SCT_TEST_ID=${UUID.randomUUID()}",]) {
                                         def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                         stage("Checkout (${instance_type})") {
                                             script {
@@ -305,7 +304,7 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                    }
+                                             }
                                 }
                             }
                         }

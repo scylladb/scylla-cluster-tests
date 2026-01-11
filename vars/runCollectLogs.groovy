@@ -1,9 +1,8 @@
 #! groovy
 
-
-def call(Map params, String region){
+def call(Map params, String region) {
     def current_region = initAwsRegionParam(params.region, region)
-    def current_gce_datacenter = ""
+    def current_gce_datacenter = ''
     if (params.gce_datacenter) {
         current_gce_datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
     }

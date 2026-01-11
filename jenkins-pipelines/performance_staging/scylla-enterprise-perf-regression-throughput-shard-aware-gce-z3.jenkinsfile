@@ -4,12 +4,12 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    backend: "gce",
+    backend: 'gce',
     gce_datacenter: 'us-central1',
-    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_name: 'performance_regression_test.PerformanceRegressionTest',
     test_config: '''["test-cases/performance/perf-regression.100threads.100M-keys-z3-enterprise.yaml", "configurations/disable_speculative_retry.yaml", "configurations/tablets_disabled.yaml"]''',
-    sub_tests: ["test_write", "test_read", "test_mixed"],
-    test_email_title: "throughput - shard-aware - z3",
+    sub_tests: ['test_write', 'test_read', 'test_mixed'],
+    test_email_title: 'throughput - shard-aware - z3',
     gce_project: 'gcp-local-ssd-latency',
-    perf_extra_jobs_to_compare: "scylla-enterprise/perf-regression/scylla-enterprise-pref-regression-throughput-shard-aware-gce-z3",
+    perf_extra_jobs_to_compare: 'scylla-enterprise/perf-regression/scylla-enterprise-pref-regression-throughput-shard-aware-gce-z3',
 )

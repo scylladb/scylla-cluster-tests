@@ -4,7 +4,7 @@ def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
     // for xcloud backend, use the underlying cloud provider
-    if ( params.backend.equals("xcloud") ) {
+    if ( params.backend.equals('xcloud') ) {
         cloud_provider = params.xcloud_provider
     }
 
@@ -13,8 +13,8 @@ def call(Map params, Integer test_duration, String region) {
 
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
     //       So, just pick up the first one for the SCT runner in such a case.
-    def availability_zone = ""
-    def availability_zone_arg = ""
+    def availability_zone = ''
+    def availability_zone_arg = ''
     if ( params.availability_zone.contains(',') ) {
         availability_zone = params.availability_zone[0]
     } else {
@@ -22,15 +22,15 @@ def call(Map params, Integer test_duration, String region) {
     }
 
     if ( availability_zone ) {
-        availability_zone_arg = "--availability-zone " + availability_zone
+        availability_zone_arg = '--availability-zone ' + availability_zone
     }
 
-    if ( params.backend.equals("azure") ) {
-        region_zone_arg = "--region " + params.azure_region_name
-    } else if ( params.backend.equals("oci") )  {
-        region_zone_arg = "--region " + params.oci_region
+    if ( params.backend.equals('azure') ) {
+        region_zone_arg = '--region ' + params.azure_region_name
+    } else if ( params.backend.equals('oci') )  {
+        region_zone_arg = '--region ' + params.oci_region
     } else {
-        region_zone_arg = "--region " + region
+        region_zone_arg = '--region ' + region
     }
 
     println(params)
