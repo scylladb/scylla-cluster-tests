@@ -238,6 +238,30 @@ Nemesis are chaos operations that test database resilience. Common types:
 4. Use cluster reuse for faster iteration
 5. Run pre-commit before commit, and after commit: `uv run sct.py pre-commit`
 
+### Code Quality Rules
+
+**Import Management:**
+- Always check for and remove unused imports before committing
+- Run `ruff check --select F401` to detect unused imports
+- Pre-commit hooks will flag unused imports automatically
+
+**Testing with Temporary Files:**
+- Always prefer pytest's `tmp_path` fixture over `tempfile` module context managers
+- The `tmp_path` fixture provides automatic cleanup and better integration with pytest
+- Example:
+  ```python
+  # Good - using tmp_path fixture
+  def test_something(tmp_path):
+      test_file = tmp_path / "test.txt"
+      test_file.write_text("content")
+
+  # Avoid - using tempfile module
+  import tempfile
+  def test_something():
+      with tempfile.TemporaryDirectory() as tmpdir:
+          # ...
+  ```
+
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
 
