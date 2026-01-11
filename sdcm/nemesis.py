@@ -40,6 +40,7 @@ from uuid import uuid4
 
 from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement
+import dateutil.parser
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
@@ -6230,6 +6231,115 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
     :return: Wrapped method.
     """
 
+    def count_error_events_for_nemesis(
+        nemesis: Nemesis, nemesis_event_id: str, start_time: float, end_time: float, target_node: str
+    ) -> tuple[dict[str, int], list[dict]]:
+        """
+        Count ERROR and CRITICAL events that occurred during this specific nemesis execution.
+
+        This function reads from the filtered ERROR.log and CRITICAL.log files, which already
+        respect event filters applied by the system.
+
+        Filters out:
+        - Events that occurred outside the nemesis time window
+        - Events that have during_nemesis context pointing to other nemeses
+
+        Returns:
+            tuple: (error_counts dict, event_details list)
+            - error_counts: {"ERROR": count, "CRITICAL": count}
+            - event_details: list of dicts with event information for error message
+        """
+        from sdcm.sct_events.continuous_event import ContinuousEventsRegistry  # noqa: PLC0415
+        from sdcm.sct_events.file_logger import get_events_logger  # noqa: PLC0415
+
+        error_counts = {"ERROR": 0, "CRITICAL": 0}
+        event_details = []
+
+        try:
+            events_logger = get_events_logger(_registry=nemesis.tester.events_processes_registry)
+
+            # Get other running nemeses to exclude their events
+            other_running_nemeses = set()
+            for running_event in ContinuousEventsRegistry().find_running_disruption_events():
+                if running_event.event_id != nemesis_event_id:
+                    other_running_nemeses.add(running_event.nemesis_name)
+
+            # Read from filtered error log files (these already respect filters)
+            for severity in ["ERROR", "CRITICAL"]:
+                log_file = events_logger.events_logs_by_severity.get(Severity[severity])
+                if not log_file or not log_file.exists():
+                    continue
+
+                with open(log_file, "r", encoding="utf-8") as fobj:
+                    for line in fobj:
+                        if not line.strip():
+                            continue
+
+                        # Parse the log line to extract timestamp and event info
+                        # Format: "timestamp: (EventType Severity.LEVEL) ...: message"
+                        try:
+                            # Extract timestamp from the log line
+                            timestamp_str = line.split(":", 1)[0].strip()
+
+                            try:
+                                event_time = dateutil.parser.parse(timestamp_str).timestamp()
+                            except (ValueError, dateutil.parser.ParserError):
+                                # If we can't parse timestamp, skip this event
+                                continue
+
+                            # Check if event occurred during this nemesis execution
+                            if event_time < start_time or event_time > end_time:
+                                continue
+
+                            # Extract event type/base from the message
+                            # Looking for pattern like "(EventType Severity.LEVEL)"
+                            event_base = "Unknown"
+                            if "(" in line and ")" in line:
+                                paren_content = line.split("(", 1)[1].split(")", 1)[0]
+                                if " " in paren_content:
+                                    event_base = paren_content.split(" ")[0]
+
+                            # Check if this event is attributed to another nemesis
+                            # Look for "during_nemesis=" in the log line
+                            if "during_nemesis=" in line:
+                                # Extract the nemesis name(s) from during_nemesis field
+                                during_part = line.split("during_nemesis=")[1].split()[0]
+                                # If this event is attributed to other running nemeses, skip it
+                                if during_part in other_running_nemeses:
+                                    continue
+
+                            # Count this event
+                            error_counts[severity] += 1
+
+                            # Collect event details for error message (limit to first 10 per severity)
+                            if len([e for e in event_details if e["severity"] == severity]) < 10:
+                                # Extract a brief message (first 150 chars after the event type)
+                                message_start = line.find("):")
+                                if message_start > 0:
+                                    brief_msg = line[message_start + 2 : message_start + 152].strip()
+                                    if len(line) > message_start + 152:
+                                        brief_msg += "..."
+                                else:
+                                    brief_msg = line[:150].strip() + ("..." if len(line) > 150 else "")
+
+                                event_details.append(
+                                    {
+                                        "severity": severity,
+                                        "base": event_base,
+                                        "message": brief_msg,
+                                        "timestamp": timestamp_str,
+                                    }
+                                )
+
+                        except Exception as exc:  # noqa: BLE001
+                            nemesis.log.debug(f"Failed to parse log line: {exc}")
+                            continue
+
+        except Exception as exc:  # noqa: BLE001
+            nemesis.log.warning(f"Failed to read filtered events logs: {exc}")
+
+        return error_counts, event_details
+
     def argus_create_nemesis_info(nemesis: Nemesis, class_name: str, method_name: str, start_time: int | float) -> bool:
         try:
             argus_client = nemesis.target_node.test_config.argus_client()
@@ -6298,7 +6408,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             args[0].log.debug(f"Data validator error: {err}")
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
+    def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
         method_name = method.__name__
         target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
         nemesis_run_info_key = f"{id(args[0])}--{method_name}"
@@ -6414,6 +6524,65 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                         )
                     args[0].log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
+
+                    # Check for error events during nemesis execution if configured
+                    if (
+                        args[0].cluster.params.get("nemesis_fail_on_error_events")
+                        and nemesis_event.severity != Severity.ERROR
+                    ):
+                        error_counts, event_details = count_error_events_for_nemesis(
+                            nemesis=args[0],
+                            nemesis_event_id=nemesis_event.event_id,
+                            start_time=start_time,
+                            end_time=end_time,
+                            target_node=str(args[0].target_node),
+                        )
+                        errors_during_nemesis = []
+                        for severity in ["ERROR", "CRITICAL"]:
+                            count = error_counts.get(severity, 0)
+                            if count > 0:
+                                errors_during_nemesis.append(f"{count} {severity} event(s)")
+
+                        if errors_during_nemesis:
+                            # Build detailed error message with event information
+                            error_msg = f"Nemesis failed due to {', '.join(errors_during_nemesis)} during execution"
+
+                            # Add details about the events (types and brief messages)
+                            if event_details:
+                                details_by_severity = {}
+                                for event in event_details:
+                                    sev = event["severity"]
+                                    if sev not in details_by_severity:
+                                        details_by_severity[sev] = []
+                                    details_by_severity[sev].append(event)
+
+                                event_info_lines = ["\n\nEvent Details:"]
+                                for sev in ["CRITICAL", "ERROR"]:
+                                    if sev in details_by_severity:
+                                        event_info_lines.append(f"\n{sev} Events:")
+                                        for i, event in enumerate(details_by_severity[sev], 1):
+                                            event_info_lines.append(
+                                                f"  {i}. [{event['timestamp']}] {event['base']}: {event['message']}"
+                                            )
+
+                                total_shown = len(event_details)
+                                total_events = sum(error_counts.values())
+                                if total_shown < total_events:
+                                    event_info_lines.append(
+                                        f"\n... and {total_events - total_shown} more event(s) not shown"
+                                    )
+
+                                event_details_str = "\n".join(event_info_lines)
+                                full_error_msg = error_msg + event_details_str
+                            else:
+                                full_error_msg = error_msg
+
+                            args[0].log.error(full_error_msg)
+                            nemesis_event.add_error([error_msg])  # Short message for nemesis event
+                            nemesis_event.full_traceback = full_error_msg  # Full details in traceback
+                            nemesis_event.severity = Severity.ERROR
+                            log_info.update({"error": error_msg, "full_traceback": full_error_msg})
+                            status = False
 
                     if nemesis_info:
                         argus_finalize_nemesis_info(

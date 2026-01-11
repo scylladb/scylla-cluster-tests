@@ -1122,6 +1122,15 @@ If true runs the nemesis only on non seed nodes
 **type:** boolean
 
 
+## **nemesis_fail_on_error_events** / SCT_NEMESIS_FAIL_ON_ERROR_EVENTS
+
+If true, nemesis will fail if ERROR or CRITICAL events occurred during its execution
+
+**default:** True
+
+**type:** boolean
+
+
 ## **stress_cmd** / SCT_STRESS_CMD
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
