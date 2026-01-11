@@ -441,7 +441,7 @@ class RaftFeature(RaftFeatureOperations):
                 error_message = (
                     f"Node {self._node.name} has group0 member with host_id {member.host_id} with "
                     f"can_vote {member.voter} and "
-                    f"presents in token ring {member.host_id in token_ring_node_ids}. "
+                    f"present in token ring {member.host_id in token_ring_node_ids}. "
                     f"Inconsistency between group0: {group0_members} "
                     f"and tokenring: {valid_tokenring_members}"
                 )

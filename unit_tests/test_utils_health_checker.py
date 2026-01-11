@@ -280,7 +280,8 @@ class TestHealthChecker(unittest.TestCase):
         # Run the check - should not raise exceptions
         events = list(raft.check_group0_tokenring_consistency(group0_members, tokenring_members))
         
-        # Should generate an error event instead of raising
-        self.assertTrue(len(events) > 0)
-        self.assertTrue(any(event.severity == Severity.ERROR for event in events))
-        self.assertTrue(any("Test exception" in event.error for event in events if hasattr(event, 'error')))
+        # Should generate exactly one error event instead of raising
+        self.assertEqual(len(events), 1)
+        error_event = events[0]
+        self.assertEqual(error_event.severity, Severity.ERROR)
+        self.assertIn("Test exception", error_event.error)
