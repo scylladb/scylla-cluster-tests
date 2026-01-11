@@ -118,7 +118,7 @@ health_check_mode: 'status_only'  # full | status_only | majority_status | raft_
 - Integration test: 10-node cluster with each mode, measure time
 - Manual test: Compare detection capabilities with simulated split-brain
 
-**Expected Impact**: 
+**Expected Impact**:
 - `status_only`: 98% reduction (120 min → 2 min) - **low split-brain detection**
 - `majority_status`: 87% reduction (120 min → 15 min) - **good split-brain detection**
 - `raft_only`: 97% reduction (120 min → 3 min) - **limited to Raft topology**
@@ -217,7 +217,7 @@ health_check_parallel_workers: 10  # default: 5
 - Integration test: 20+ node cluster, compare serial vs parallel time
 - Load test: Verify cluster can handle concurrent nodetool calls
 
-**Expected Impact**: 
+**Expected Impact**:
 - With 10 workers: 90% reduction (120 min → 12 min)
 - Combines with other optimizations for greater effect
 
@@ -354,11 +354,11 @@ def measure_operation(operation_name):
 
 4. **Test at scale**:
    - 10-node cluster
-   - 30-node cluster  
+   - 30-node cluster
    - 60-node cluster
    - Measure if Raft check scales linearly with cluster size
 
-**Hypothesis**: 
+**Hypothesis**:
 - Raft check **should** be fast (~1-3s) as it queries internal Raft state
 - If slower, likely due to:
   - Network latency to query node
@@ -458,21 +458,21 @@ Instead of validating every node against every other node, we can:
 def check_cluster_health_with_majority(self, majority_percentage=60):
     """
     Check cluster health using majority of nodes for split-brain detection.
-    
+
     Args:
         majority_percentage: Percentage of nodes to check (default 60%)
-    
+
     Returns:
         True if healthy, False if split-brain detected
     """
     # Sample majority of nodes, ensuring DC diversity
     sample_nodes = self._sample_nodes_by_majority(majority_percentage)
-    
+
     # Collect status from each sampled node
     status_reports = {}
     for node in sample_nodes:
         status_reports[node] = node.get_nodes_status()
-    
+
     # Cross-validate: all sampled nodes should agree
     if self._check_consensus(status_reports):
         LOGGER.info("Cluster health check passed (majority consensus)")
@@ -485,7 +485,7 @@ def check_cluster_health_with_majority(self, majority_percentage=60):
 
 **Testing**:
 - Simulate 2-partition split-brain
-- Simulate 3-partition split-brain  
+- Simulate 3-partition split-brain
 - Verify detection with various majority percentages (55%, 60%, 70%)
 
 ---
@@ -629,7 +629,7 @@ def check_cluster_health_with_majority(self, majority_percentage=60):
 def check_cluster_health(self):
     if not self.params.get("cluster_health_check"):
         return
-    
+
     for node in self.nodes:  # Sequential!
         node.check_node_health()  # Calls 5 expensive operations per node
 ```
@@ -641,7 +641,7 @@ def node_health_events(self):
     gossip_info = self.get_gossip_info()             # nodetool gossipinfo
     group0_members = self.raft.get_group0_members()  # Raft query
     tokenring_members = self.get_token_ring_members() # Token ring query
-    
+
     # Then 5 validation functions cross-reference all this data
     return itertools.chain(
         check_nodes_status(...),
