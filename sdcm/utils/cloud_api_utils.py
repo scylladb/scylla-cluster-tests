@@ -13,13 +13,14 @@
 
 import json
 import logging
+import re
 from decimal import Decimal, ROUND_UP
 from pathlib import Path
 
 
 LOGGER = logging.getLogger(__name__)
 
-CLOUD_KEEP_ALIVE_HOURS = 360  # 15 days
+CLOUD_KEEP_ALIVE_HOURS = 72  # 3 days
 CLOUD_KEEP_BUFFER_MINUTES = 125
 MAX_CLUSTER_NAME_LENGTH = 63  # Siren limit for cluster name length
 
@@ -64,6 +65,22 @@ def build_cloud_cluster_name(username: str, test_name: str, short_test_id: str, 
 
     LOGGER.debug("Generated cloud cluster name: '%s'", cluster_name)
     return cluster_name
+
+
+def apply_keep_tag_to_name(cluster_name: str, keep_hours: int) -> str:
+    """Apply keep tag to cluster name (adds if missing, replaces if exists)."""
+    keep_tag = f"keep-{keep_hours:03d}h"
+    keep_pattern = re.compile(r"keep-\d{3}h")
+
+    if keep_pattern.search(cluster_name):
+        new_name = keep_pattern.sub(keep_tag, cluster_name)
+    else:
+        # ensure room for keep tag that we add
+        base_name = cluster_name[: MAX_CLUSTER_NAME_LENGTH - len(keep_tag) - 1]
+        new_name = f"{base_name}-{keep_tag}"
+
+    LOGGER.debug("Updated cluster name keep tag: '%s' -> '%s'", cluster_name, new_name)
+    return new_name
 
 
 def get_cloud_rest_credentials_from_file(file_path: str) -> dict:
