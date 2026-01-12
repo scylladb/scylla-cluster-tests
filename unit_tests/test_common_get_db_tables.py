@@ -2,26 +2,51 @@
 Tests for get_db_tables function in sdcm.utils.common
 """
 
-import os
 import pytest
 from unittest.mock import MagicMock
 
 from sdcm.utils.common import get_db_tables
 
 
-@pytest.fixture
-def schema_content():
-    """Fixture to load test schema content from file."""
-    test_schema_path = os.path.join(os.path.dirname(__file__), "test_data", "schema_with_internals.log")
-    with open(test_schema_path, "r", encoding="utf-8") as file:
-        return file.read()
+class MockRow:
+    """Mock row object for system_schema query results."""
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+class MockResult:
+    """Mock result object with current_rows attribute."""
+
+    def __init__(self, rows):
+        self.current_rows = rows
 
 
 @pytest.fixture
-def mock_node(schema_content):
-    """Fixture for a mock node with run_cqlsh method."""
+def mock_node():
+    """Fixture for a mock node with parent_cluster and cql_connection_patient"""
     mock_node = MagicMock()
-    mock_node.run_cqlsh.return_value.stdout = schema_content
+    mock_node.parent_cluster = MagicMock()
+
+    def mock_execute(query):
+        """Mock session.execute() to return results based on query"""
+        if "system_schema.views" in query:
+            return MockResult([])
+        if "system_schema.tables" in query:
+            if "keyspace1" in query:
+                return MockResult([MockRow(table_name="standard1", flags={"compound"})])
+            if "feeds" in query:
+                return MockResult(
+                    [MockRow(table_name="table0", flags={"dense"}), MockRow(table_name="table1", flags={"compound"})]
+                )
+
+        return MockResult([])
+
+    # setup context manager for cql_connection_patient
+    mock_session = MagicMock()
+    mock_session.execute.side_effect = mock_execute
+    mock_node.parent_cluster.cql_connection_patient.return_value.__enter__.return_value = mock_session
+
     return mock_node
 
 
