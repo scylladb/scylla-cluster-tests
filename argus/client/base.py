@@ -5,6 +5,8 @@ from typing import Any, Type
 from uuid import UUID
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from argus.common.enums import TestStatus
 from argus.client.generic_result import GenericResultTable
@@ -33,11 +35,30 @@ class ArgusClient:
         FETCH_RESULTS = "/testrun/$type/$id/fetch_results"
         FINALIZE = "/testrun/$type/$id/finalize"
 
-    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
+    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
+                 timeout: int = 60, max_retries: int = 3) -> None:
         self._auth_token = auth_token
         self._base_url = base_url
         self._api_ver = api_version
+        self._timeout = timeout
         self.session = requests.Session()
+
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=max_retries,
+            connect=max_retries,
+            read=max_retries,
+            status=0,
+            backoff_factor=1,
+            status_forcelist=(),
+            allowed_methods=["GET"],
+        )
+
+        # Mount adapter with retry strategy for both http and https
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+
         if extra_headers:
             self.session.headers.update(extra_headers)
 
@@ -101,7 +122,8 @@ class ArgusClient:
         response = self.session.get(
             url=url,
             params=params,
-            headers=self.request_headers
+            headers=self.request_headers,
+            timeout=self._timeout
         )
         LOGGER.debug("GET Response: %s %s", response.status_code, response.url)
 
@@ -124,6 +146,7 @@ class ArgusClient:
             params=params,
             json=body,
             headers=self.request_headers,
+            timeout=self._timeout
         )
         LOGGER.debug("POST Response: %s %s", response.status_code, response.url)
 
