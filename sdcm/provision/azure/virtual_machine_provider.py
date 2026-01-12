@@ -91,6 +91,14 @@ class VirtualMachineProvider:
                 # Extract test_id from resource group name
                 test_id = self._resource_group_name.split(SCT_RESOURCE_GROUP_PREFIX)[-1][:36]
                 vault_info = self._kms_provider.get_or_create_keyvault_and_identity(test_id)
+                if vault_info is None:
+                    error_msg = (
+                        f"Failed to setup Azure KMS for VM {definition.name}. "
+                        "Key Vault creation failed, possibly due to concurrent modifications. "
+                        "Check logs for details."
+                    )
+                    LOGGER.error(error_msg)
+                    raise ProvisionError(error_msg)
                 params["identity"] = {
                     "type": "UserAssigned",
                     "user_assigned_identities": {vault_info["identity_id"]: {}},

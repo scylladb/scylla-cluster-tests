@@ -13,9 +13,10 @@
 import logging
 from dataclasses import dataclass
 
-from azure.core.exceptions import AzureError
+from azure.core.exceptions import AzureError, HttpResponseError
 from sdcm.utils.azure_utils import AzureService
 from sdcm.keystore import KeyStore
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,45 +66,66 @@ class AzureKmsProvider:
         key_number = (hash(test_id) % num_of_keys) + 1
         return f"{vault_uri}scylla-key-{key_number}"
 
+    @staticmethod
+    def _is_conflict_error(error: AzureError) -> bool:
+        """Check if the error is a ConflictError from Azure Key Vault."""
+        if isinstance(error, HttpResponseError):
+            # Check error code in the response
+            if hasattr(error, 'error') and hasattr(error.error, 'code'):
+                return error.error.code == 'ConflictError'
+            # Fallback: check message for ConflictError indication
+            error_msg = str(error)
+            return 'ConflictError' in error_msg or 'conflict occurred' in error_msg.lower()
+        return False
+
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(AzureError,), message="Retrying Key Vault setup due to conflict")
+    def _create_or_update_keyvault(self, vault_name: str):
+        """Create or update Azure Key Vault with retry logic for conflict errors."""
+        return self._azure_service.keyvault.vaults.begin_create_or_update(
+            resource_group_name=self._kms_config["resource_group"],
+            vault_name=vault_name,
+            parameters={
+                "location": self._region,
+                "properties": {
+                    "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                    "sku": {"name": "standard", "family": "A"},
+                    "enabled_for_disk_encryption": True,
+                    "enable_rbac_authorization": False,
+                    "access_policies": [
+                        {
+                            "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                            "object_id": self.managed_identity_config["principal_id"],
+                            "permissions": {
+                                "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
+                                "secrets": ["get"],
+                                "certificates": ["get"],
+                            },
+                        },
+                        {
+                            # SCT service principal
+                            "tenant_id": self._azure_service.azure_credentials["tenant_id"],
+                            "object_id": self.sct_service_principal_id,
+                            "permissions": {
+                                "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],
+                                "secrets": ["get"],
+                                "certificates": ["get"],
+                            },
+                        },
+                    ],
+                },
+            },
+        ).result()
+
     def get_or_create_keyvault_and_identity(self, test_id: str):
-        """Use fixed vault with keys"""
+        """Use fixed vault with keys.
+        
+        Returns dict with vault info on success, None on failure.
+        The vault creation is retried automatically if Azure returns a ConflictError
+        due to parallel operations on the same Key Vault.
+        """
         vault_name = self._get_vault_name(self._region)
         try:
-            vault = self._azure_service.keyvault.vaults.begin_create_or_update(
-                resource_group_name=self._kms_config["resource_group"],
-                vault_name=vault_name,
-                parameters={
-                    "location": self._region,
-                    "properties": {
-                        "tenant_id": self._azure_service.azure_credentials["tenant_id"],
-                        "sku": {"name": "standard", "family": "A"},
-                        "enabled_for_disk_encryption": True,
-                        "enable_rbac_authorization": False,
-                        "access_policies": [
-                            {
-                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
-                                "object_id": self.managed_identity_config["principal_id"],
-                                "permissions": {
-                                    "keys": ["get", "encrypt", "decrypt", "wrapKey", "unwrapKey"],
-                                    "secrets": ["get"],
-                                    "certificates": ["get"],
-                                },
-                            },
-                            {
-                                # SCT service principal
-                                "tenant_id": self._azure_service.azure_credentials["tenant_id"],
-                                "object_id": self.sct_service_principal_id,
-                                "permissions": {
-                                    "keys": ["create", "get", "list", "update", "import", "delete", "rotate"],
-                                    "secrets": ["get"],
-                                    "certificates": ["get"],
-                                },
-                            },
-                        ],
-                    },
-                },
-            ).result()
-
+            vault = self._create_or_update_keyvault(vault_name)
             vault_uri = vault.properties.vault_uri
 
             # Pick one key, if required create keys.
@@ -119,5 +141,5 @@ class AzureKmsProvider:
             vault_info = {"identity_id": self._get_managed_identity_id(), "vault_uri": vault_uri, "key_uri": key_uri}
             return vault_info
         except AzureError as e:
-            LOGGER.warning(f"Failed to setup Azure KMS: {e}")
+            LOGGER.error(f"Failed to setup Azure KMS after retries: {e}")
             return None
