@@ -29,7 +29,12 @@ from sdcm.exceptions import WaitForTimeoutError
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
-from sdcm.utils.cloud_api_utils import compute_cluster_exp_hours, build_cloud_cluster_name
+from sdcm.utils.cloud_api_utils import (
+    compute_cluster_exp_hours,
+    build_cloud_cluster_name,
+    apply_keep_tag_to_name,
+    CLOUD_KEEP_ALIVE_HOURS,
+)
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.test_config import TestConfig
@@ -261,15 +266,16 @@ class CloudNode(cluster.BaseNode):
     def _init_port_mapping(self):
         pass
 
-    # For cloud clusters, the keep duration is calculated and set during cluster creation.
-    # _set_keep_alive and _set_keep_duration methods in base classes are invoked after cluster
-    # creation, during nodes init, when it is already late to modify cluster details.
-    # The basic implementations of these methods remain here for backward compatibility.
     def _set_keep_alive(self) -> bool:
+        """Delegate to parent cluster to set keep-alive tag on cluster name."""
+        if self.parent_cluster:
+            return self.parent_cluster._set_keep_alive()
         return True
 
     def _set_keep_duration(self, duration_in_hours: int) -> None:
-        pass
+        """Delegate to parent cluster to set keep duration tag on cluster name."""
+        if self.parent_cluster:
+            self.parent_cluster._set_keep_duration(duration_in_hours)
 
     def restart(self):
         raise NotImplementedError(
@@ -634,6 +640,8 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         if self._deploy_vs_nodes:
             self._wait_for_vs_nodes_ready()
 
+        self.name = cluster_config["cluster_name"]
+
         if self.vpc_peering_enabled:
             self.setup_vpc_peering(self.dc_id)
 
@@ -957,6 +965,34 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         """Handle subsequent add_nodes calls using cluster resize operations"""
         self.log.info("Resizing cluster to add %s nodes", count)
         raise NotImplementedError("Not yet implemented in POC")
+
+    def update_cluster_name(self, new_name: str) -> None:
+        """Update the name of the cluster"""
+        if not self._cluster_id:
+            raise ScyllaCloudError("Cannot update cluster name: cluster ID is not set")
+
+        if len(new_name) > 63:
+            raise ValueError(f"Cluster name exceeds maximum length of 63 characters: {len(new_name)}")
+
+        self.log.info("Updating cluster name from '%s' to '%s'", self.name, new_name)
+        self._api_client.update_cluster_name(
+            account_id=self._account_id, cluster_id=self._cluster_id, new_name=new_name
+        )
+        self.name = new_name
+        self.log.info("Cluster name updated successfully to '%s'", new_name)
+
+    def _set_keep_alive(self) -> bool:
+        """Set keep-alive tag on the cluster name."""
+        new_name = apply_keep_tag_to_name(self.name, CLOUD_KEEP_ALIVE_HOURS)
+        if new_name != self.name:
+            self.update_cluster_name(new_name)
+        return True
+
+    def _set_keep_duration(self, duration_in_hours: int) -> None:
+        """Update the cluster name with the keep duration tag."""
+        new_name = apply_keep_tag_to_name(self.name, duration_in_hours)
+        if new_name != self.name:
+            self.update_cluster_name(new_name)
 
     def destroy(self):
         self.log.info("Destroying Scylla Cloud cluster %s", self.name)
