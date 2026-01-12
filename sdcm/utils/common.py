@@ -52,7 +52,6 @@ from collections import OrderedDict
 import requests
 import boto3
 from botocore.exceptions import ClientError
-from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
@@ -63,7 +62,6 @@ from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
 from prettytable import PrettyTable
 
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import create_proxy_argus_s3_url
@@ -1709,24 +1707,33 @@ def get_db_tables(keyspace_name, node, with_compact_storage=None):
     Return tables from keyspace based on their compact storage feature.
     Arguments:
         keyspace_name -- Keyspace name
-        node -- Node to run CQLSH commands
+        node -- Node to run CQL queries
         with_compact_storage -- If True, return tables with compact storage; if False, return tables without compact storage; if None, return all tables
     """
     output = []
     try:
-        schema_output = node.run_cqlsh("DESC SCHEMA WITH INTERNALS").stdout
-    except (UnexpectedExit, Libssh2_UnexpectedExit) as err:
-        LOGGER.error("Failed to describe schema: %s", err.result.stderr)
-        return output
+        with node.parent_cluster.cql_connection_patient(node) as session:
+            # get all MVs to exclude them
+            view_names = {
+                row.view_name
+                for row in session.execute(
+                    f"SELECT view_name FROM system_schema.views WHERE keyspace_name = '{keyspace_name}'"
+                ).current_rows
+            }
 
-    for match in CREATE_TABLE_REGEX.findall(schema_output):
-        element_keyspace, table_name, options = match
-        if element_keyspace != keyspace_name:
-            continue
+            # get all tables with their flags
+            tables_result = session.execute(
+                f"SELECT table_name, flags FROM system_schema.tables WHERE keyspace_name = '{keyspace_name}'"
+            )
+            for row in tables_result.current_rows:
+                if row.table_name not in view_names:
+                    flags = row.flags or set()
+                    has_compact_storage = "dense" in flags or "super" in flags or "compound" not in flags
+                    if with_compact_storage is None or has_compact_storage == with_compact_storage:
+                        output.append(row.table_name)
 
-        has_compact_storage = "COMPACT STORAGE" in options
-        if with_compact_storage is None or has_compact_storage == with_compact_storage:
-            output.append(table_name)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error("Failed to get tables from keyspace %s: %s", keyspace_name, exc)
 
     return output
 
