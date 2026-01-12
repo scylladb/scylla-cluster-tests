@@ -50,6 +50,7 @@ from sdcm.cluster import ClusterNodesNotReady
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import init_and_verify_sct_config
+from sdcm.sct_events.group_common_events import decorate_with_context, ignore_gossiper_unavailable_during_startup
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -3187,6 +3188,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if monitors := self.test_config.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
 
+    @decorate_with_context(
+        [
+            ignore_gossiper_unavailable_during_startup,
+        ]
+    )
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
 

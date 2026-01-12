@@ -563,6 +563,20 @@ def ignore_raft_transport_failing():
 
 
 @contextmanager
+def ignore_gossiper_unavailable_during_startup():
+    with ExitStack() as stack:
+        stack.enter_context(
+            EventsSeverityChangerFilter(
+                new_severity=Severity.ERROR,
+                event_class=DatabaseLogEvent,
+                regex=r".*can't get node status info: agent [HTTP 500] std::runtime_error (The gossiper is not ready yet)",
+                extra_time_to_expiration=30,
+            )
+        )
+        yield
+
+
+@contextmanager
 def ignore_take_snapshot_failing():
     with ExitStack() as stack:
         stack.enter_context(
