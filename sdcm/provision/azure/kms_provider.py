@@ -118,7 +118,7 @@ class AzureKmsProvider:
 
     def get_or_create_keyvault_and_identity(self, test_id: str):
         """Use fixed vault with keys.
-        
+
         Returns dict with vault info on success, None on failure.
         The vault creation is retried automatically if Azure returns a ConflictError
         due to parallel operations on the same Key Vault.
