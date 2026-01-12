@@ -965,6 +965,21 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
         self.log.info("Resizing cluster to add %s nodes", count)
         raise NotImplementedError("Not yet implemented in POC")
 
+    def update_cluster_name(self, new_name: str) -> None:
+        """Update the name of the cluster"""
+        if not self._cluster_id:
+            raise ScyllaCloudError("Cannot update cluster name: cluster ID is not set")
+
+        if len(new_name) > 63:
+            raise ValueError(f"Cluster name exceeds maximum length of 63 characters: {len(new_name)}")
+
+        self.log.info("Updating cluster name from '%s' to '%s'", self.name, new_name)
+        self._api_client.update_cluster_name(
+            account_id=self._account_id, cluster_id=self._cluster_id, new_name=new_name
+        )
+        self.name = new_name
+        self.log.info("Cluster name updated successfully to '%s'", new_name)
+
     def destroy(self):
         self.log.info("Destroying Scylla Cloud cluster %s", self.name)
 
