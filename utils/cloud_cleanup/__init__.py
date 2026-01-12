@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Literal, Callable
 
@@ -52,7 +52,7 @@ def should_keep(creation_time: datetime, keep_hours: int) -> bool:
         return True
     try:
         keep_date = creation_time + timedelta(hours=keep_hours)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         return now < keep_date
     except (TypeError, ValueError) as exc:
         LOGGER.info("error while defining if should keep: %s. Keeping.", exc)

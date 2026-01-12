@@ -91,5 +91,27 @@ pipeline {
                 }
             }
         }
+        stage('Clean K8s EKS') {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.k8s_eks.clean_eks ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+                }
+            }
+        }
+        stage('Clean K8s GKE') {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.k8s_gke.clean_gke ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+                }
+            }
+        }
     }
 }
