@@ -30,8 +30,10 @@ class ArgusSCTClient(ArgusClient):
         SUBMIT_JUNIT_REPORT = "/sct/$id/junit/submit"
         SUBMIT_EMAIL = "/testrun/report/email"
 
-    def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
-        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers)
+    def __init__(self, run_id: UUID, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
+                 timeout: int = 60, max_retries: int = 3) -> None:
+        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers,
+                         timeout=timeout, max_retries=max_retries)
         self.run_id = run_id
 
     def submit_sct_run(self, job_name: str, job_url: str, started_by: str, commit_id: str,

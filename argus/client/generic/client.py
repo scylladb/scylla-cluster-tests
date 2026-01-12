@@ -12,8 +12,10 @@ class ArgusGenericClient(ArgusClient):
     class Routes(ArgusClient.Routes):
         TRIGGER_JOBS = "/planning/plan/trigger"
 
-    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None) -> None:
-        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers)
+    def __init__(self, auth_token: str, base_url: str, api_version="v1", extra_headers: dict | None = None,
+                 timeout: int = 180, max_retries: int = 3) -> None:
+        super().__init__(auth_token, base_url, api_version, extra_headers=extra_headers,
+                         timeout=timeout, max_retries=max_retries)
 
     def submit_generic_run(self, build_id: str, run_id: str, started_by: str, build_url: str, sub_type: str = None, scylla_version: str | None = None):
         request_body = {
