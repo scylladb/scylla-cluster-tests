@@ -25,6 +25,7 @@ import requests
 
 from sdcm import cluster, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient, CloudProviderType
+from sdcm.exceptions import WaitForTimeoutError
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.cidr_pool import CidrPoolManager, CidrAllocationError
@@ -806,6 +807,55 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
             "vector_search": vs_config,
         }
 
+    def _get_cluster_diagnostic_info(self) -> tuple[str, str]:
+        """Gather diagnostic information about cluster state for error reporting"""
+        diagnostic_lines = []
+        cluster_status = "UNKNOWN"
+
+        try:
+            # DB cluster details
+            cluster_details = self._api_client.get_cluster_details(
+                account_id=self._account_id, cluster_id=self._cluster_id, enriched=True
+            )
+            cluster_status = cluster_details.get("status", "UNKNOWN")
+            error_code = cluster_details.get("errorCode", "")
+
+            diagnostic_lines.append("Nodes status:")
+            db_nodes = self._api_client.get_cluster_nodes(
+                account_id=self._account_id, cluster_id=self._cluster_id, enriched=True
+            )
+            for node in db_nodes or []:
+                node_id = node.get("id", "unknown")
+                node_status = node.get("status", "UNKNOWN")
+                status_symbol = "✓" if node_status == "ACTIVE" else "⚠"
+                diagnostic_lines.append(f"  {status_symbol} DB node {node_id}: {node_status}")
+
+            # VS nodes details
+            vs_nodes_data = (
+                self._api_client.get_vector_search_nodes(
+                    account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self.dc_id
+                )
+                or {}
+            )
+            for az in vs_nodes_data.get("availabilityZones"):
+                for node in az.get("nodes", []):
+                    node_id = node.get("id", "unknown")
+                    node_status = node.get("status", "UNKNOWN")
+                    symbol = "✓" if node_status == "ACTIVE" else "⚠"
+                    diagnostic_lines.append(f"  {symbol} VS node {node_id}: {node_status}")
+
+            if error_code:
+                diagnostic_lines.append(
+                    f"Siren error code: {error_code} "
+                    "(see https://cloud.docs.scylladb.com/stable/api-docs/api-error-codes.html)"
+                )
+            else:
+                diagnostic_lines.append("Siren error code: None")
+        except Exception as e:  # noqa: BLE001
+            diagnostic_lines.append(f"Error gathering diagnostic info: {e}")
+
+        return cluster_status, "\n" + "\n".join(diagnostic_lines)
+
     def _wait_for_cluster_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Scylla Cloud cluster to be ready")
 
@@ -822,10 +872,23 @@ class ScyllaCloudCluster(cluster.BaseScyllaCluster, cluster.BaseCluster):
                 self.log.debug("Error checking cluster status: %s", e)
                 return False
 
-        wait.wait_for(
-            func=check_cluster_status, step=15, text="Waiting for cluster to be ready", timeout=timeout, throw_exc=True
-        )
-        self.log.info("Scylla Cloud cluster is ready")
+        try:
+            wait.wait_for(
+                func=check_cluster_status,
+                step=15,
+                text="Waiting for cluster to be ready",
+                timeout=timeout,
+                throw_exc=True,
+            )
+            self.log.info("Scylla Cloud cluster is ready")
+        except WaitForTimeoutError as e:
+            # Gather diagnostic information and re-raise with enhanced message
+            cluster_status, diagnostic_info = self._get_cluster_diagnostic_info()
+            enhanced_message = (
+                f"cluster failed to become ready within {timeout} seconds (status: {cluster_status}){diagnostic_info}\n"
+                f"Original error: {e}"
+            )
+            raise WaitForTimeoutError(enhanced_message) from e
 
     def _wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
         self.log.info("Waiting for Vector Search nodes to be ready")

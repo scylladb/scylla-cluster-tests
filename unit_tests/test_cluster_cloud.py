@@ -1,9 +1,11 @@
 """Unit tests for cluster_cloud module."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import pytest
 
-from sdcm.cluster_cloud import xcloud_super_if_supported
+from sdcm.cluster_cloud import xcloud_super_if_supported, ScyllaCloudCluster
 from sdcm.utils.cloud_api_utils import build_cloud_cluster_name
+from sdcm.exceptions import WaitForTimeoutError
 
 
 class TestXCloudSuperIfSupportedDecorator:
@@ -171,3 +173,49 @@ class TestCloudClusterNaming:
         name = build_cloud_cluster_name("firstname.laastname", "very-long-test-name-to-be-truncated", "abc12345", 360)
         assert name.startswith("very-long-test-name-to-b-")
         assert len(name) <= 63
+
+
+class TestScyllaCloudClusterDiagnostics:
+    """Test suite for ScyllaCloudCluster diagnostics."""
+
+    @patch("sdcm.cluster_cloud.wait.wait_for")
+    def test_wait_for_cluster_ready_timeout_includes_diagnostics(self, mock_wait_for):
+        mock_cluster = MagicMock(spec=ScyllaCloudCluster)
+        mock_cluster._account_id, mock_cluster._cluster_id, mock_cluster.dc_id = 123, 456, 1
+        mock_cluster.log = MagicMock()
+
+        mock_api_client = MagicMock()
+        mock_cluster._api_client = mock_api_client
+
+        mock_api_client.get_cluster_details.return_value = {
+            "status": "BOOTSTRAP_ERROR",
+            "promProxyEnabled": False,
+            "errorCode": "081005",
+        }
+        mock_api_client.get_cluster_nodes.return_value = [
+            {"id": "12345", "status": "ACTIVE"},
+            {"id": "12346", "status": "ACTIVE"},
+            {"id": "12347", "status": "BOOTSTRAPPING"},
+        ]
+        mock_api_client.get_vector_search_nodes.return_value = {
+            "availabilityZones": [{"nodes": [{"id": "12348", "status": "ACTIVE"}]}]
+        }
+        mock_cluster._get_cluster_diagnostic_info = lambda: ScyllaCloudCluster._get_cluster_diagnostic_info(
+            mock_cluster
+        )
+        mock_wait_for.side_effect = WaitForTimeoutError("Wait for cluster ready: timeout - 600 seconds")
+
+        with pytest.raises(WaitForTimeoutError) as exc_info:
+            ScyllaCloudCluster._wait_for_cluster_ready(mock_cluster, timeout=600)
+        error_message = str(exc_info.value)
+        expected_messages = [
+            "cluster failed to become ready within 600 seconds (status: BOOTSTRAP_ERROR)",
+            "Nodes status:",
+            "✓ DB node 12345: ACTIVE",
+            "✓ DB node 12346: ACTIVE",
+            "⚠ DB node 12347: BOOTSTRAPPING",
+            "✓ VS node 12348: ACTIVE",
+            "Siren error code: 081005 (see https://cloud.docs.scylladb.com/stable/api-docs/api-error-codes.html)",
+            "Original error: Wait for cluster ready: timeout - 600 seconds",
+        ]
+        assert all(msg in error_message for msg in expected_messages)
