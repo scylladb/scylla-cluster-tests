@@ -236,10 +236,43 @@ Nemesis are chaos operations that test database resilience. Common types:
 2. Run unit tests locally: `uv run sct.py unit-tests`
 3. Test with docker backend first: `--backend docker`
 4. Use cluster reuse for faster iteration
-5. Run pre-commit before pushing: `uv run sct.py pre-commit`
+5. Run pre-commit before commit, and after commit: `uv run sct.py pre-commit`
 
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
+
+### Code Style Guidelines
+
+**IMPORTANT: Avoid inline imports at all cost**
+
+- All imports at the top of the file, NOT inside functions/methods
+- **Exception:** Only for hard-to-overcome cyclic dependencies (add comment above the import explaining why)
+
+**Import grouping standard:**
+1. Built-in modules (e.g., `import os`, `from typing import List`)
+2. Third-party modules (e.g., `import pytest`, `from boto3 import client`)
+3. Internal modules (e.g., `from sdcm.cluster import BaseNode`)
+
+Separate each group with a blank line.
+Within each group, sort imports alphabetically.
+
+### Unit Testing Guidelines
+
+**IMPORTANT: Use pytest style, NOT unittest.TestCase**
+
+All unit tests in `unit_tests/` should follow pytest conventions:
+
+**❌ DON'T:** `class TestMyFeature(unittest.TestCase)` with `setUp()` and `self.assertEqual()`
+
+**✅ DO:** Use pytest functions, fixtures, and simple `assert` statements
+
+**Key Principles:**
+
+1. **Use fixtures for setup/teardown** - `@pytest.fixture` to avoid code repetition, access via function parameters
+2. **Use parametrize for multiple test cases** - `@pytest.mark.parametrize("input,expected", [...])` for efficient variation testing
+3. **Scope fixtures appropriately** - Use `scope="module"` for expensive setup, `scope="function"` (default) for clean state
+4. **Use conftest.py for shared fixtures** - Place common fixtures in `unit_tests/conftest.py`, auto-discovered by pytest
+5. **Prefer simple assertions** - Use `assert x == y` not `self.assertEqual(x, y)`
 
 ## Environment Variables
 
