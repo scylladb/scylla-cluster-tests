@@ -775,7 +775,15 @@ class FakeImages:
 
     def list_by_resource_group(self, resource_group_name) -> List[Image]:
         with open(self.path / resource_group_name / "azure_images_list.json", encoding="utf-8") as file:
-            return [Image.deserialize(image) for image in json.load(file)]
+            return [self._make_image(image) for image in json.load(file)]
+
+    @staticmethod
+    def _make_image(data: dict) -> Image:
+        name = data.pop("name", None)
+        img = Image(**data)
+        img.name = name
+        data["name"] = name
+        return img
 
 
 class FakeGalleryImageVersions:
@@ -790,7 +798,7 @@ class FakeGalleryImageVersions:
                 self.path / resource_group_name / f"{gallery_name}_{gallery_image_name}_gallery_images_list.json",
                 encoding="utf-8",
             ) as file:
-                return [Image.deserialize(image) for image in json.load(file)]
+                return [FakeImages._make_image(image) for image in json.load(file)]
         except FileNotFoundError:
             raise ResourceNotFoundError("No gallery images found") from None
 
