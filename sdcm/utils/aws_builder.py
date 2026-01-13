@@ -126,6 +126,16 @@ class AwsBuilder:
     def get_launch_template_data(self, runner: AwsSctRunner) -> dict:
         wait_ami_available(self.region.client, runner.image.id)
         return dict(
+            TagSpecifications=[
+                {
+                    "ResourceType": "launch-template",
+                    "Tags": [
+                        {"Key": "Name", "Value": self.launch_template_name},
+                        {"Key": "RunByUser", "Value": "QA"},
+                        {"Key": "keep", "Value": "alive"},
+                    ],
+                }
+            ],
             LaunchTemplateData={
                 "BlockDeviceMappings": [
                     {
