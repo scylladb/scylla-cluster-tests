@@ -17,7 +17,12 @@ import logging
 
 import pytest
 
-from sdcm.provision.azure.utils import get_scylla_images
+from sdcm.provision.azure.utils import (
+    get_arch_from_azure_instance_type,
+    get_scylla_images,
+    get_scylla_images_private_galleries,
+)
+from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
 from unit_tests.unit.provisioner.fake_azure_service import FakeAzureService
 
@@ -29,8 +34,25 @@ def azure_service(test_data_dir):
 
 def test_can_get_scylla_images_based_on_branch(azure_service):
     images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
-    assert images[0].name == "2025.1208.222124"
+    assert images[0].name == "2026.0108.151759"
     assert len(images) == 1
+
+
+def test_can_get_scylla_images_based_on_branch_arm64(azure_service):
+    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service, arch=VmArch.ARM)
+    assert images[0].name == "2026.0108.145545"
+    assert len(images) == 1
+
+
+def test_private_gallery_falls_back_to_old_naming(azure_service):
+    images = get_scylla_images_private_galleries("2024.2:latest", "eastus", azure_service=azure_service)
+    assert len(images) == 1
+    assert images[0].name == "2024.1201.120000"
+
+
+def test_private_gallery_fallback_returns_empty_for_nonexistent_branch(azure_service):
+    images = get_scylla_images_private_galleries("nonexistent:latest", "eastus", azure_service=azure_service)
+    assert images == []
 
 
 def test_can_get_scylla_images_based_on_scylla_version(azure_service):
@@ -51,6 +73,24 @@ def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
     assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
 
 
+@pytest.mark.parametrize(
+    "instance_type,expected_arch",
+    [
+        ("Standard_D8ps_v5", VmArch.ARM),
+        ("Standard_D4ps_v5", VmArch.ARM),
+        ("Standard_E8ps_v5", VmArch.ARM),
+        ("Standard_D2pds_v5", VmArch.ARM),
+        ("Standard_L8s_v3", VmArch.X86),
+        ("Standard_D2_v4", VmArch.X86),
+        ("Standard_F4s_v2", VmArch.X86),
+        ("", VmArch.X86),
+        (None, VmArch.X86),
+    ],
+)
+def test_get_arch_from_azure_instance_type(instance_type, expected_arch):
+    assert get_arch_from_azure_instance_type(instance_type) == expected_arch
+
+
 def generate_images_json_file(test_data_dir):
     """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
@@ -62,7 +102,7 @@ def generate_images_json_file(test_data_dir):
         images_file.write(json.dumps(serialized_images, indent=2))
 
 
-def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev", image_name="master"):
+def generate_gallery_images_json_file(test_data_dir, gallery_name="scylladb_dev", image_name="master-x64"):
     """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
