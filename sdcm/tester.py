@@ -82,6 +82,7 @@ from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.gce.provisioner import GceProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.provision.helpers.certificate import (
@@ -1548,22 +1549,19 @@ class ClusterTester(unittest.TestCase):
         return nemesis_threads
 
     def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
-        if loader_info["n_nodes"] is None:
-            n_loader_nodes = self.params.get("n_loaders")
-            if isinstance(n_loader_nodes, int):
-                loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):
-                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
-            else:
-                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
-        if loader_info["type"] is None:
-            loader_info["type"] = self.params.get("gce_instance_type_loader")
-        if loader_info["disk_type"] is None:
-            loader_info["disk_type"] = self.params.get("gce_root_disk_type_loader")
-        if loader_info["disk_size"] is None:
-            loader_info["disk_size"] = self.params.get("root_disk_size_loader")
-        if loader_info["n_local_ssd"] is None:
-            loader_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_loader")
+        datacenters = self.params.gce_datacenters
+        test_id = str(TestConfig().test_id())
+        provisioners: List[GceProvisioner] = []
+        for datacenter in datacenters:
+            provisioners.append(
+                provisioner_factory.create_provisioner(
+                    backend="gce",
+                    test_id=test_id,
+                    region=datacenter,
+                    availability_zone=self.params.get("availability_zone"),
+                    network_name=self.params.get("gce_network"),
+                )
+            )
         if db_info["n_nodes"] is None:
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
@@ -1579,38 +1577,23 @@ class ClusterTester(unittest.TestCase):
             db_info["type"] = "custom-{}-{}-ext".format(cpu, int(mem) * 1024)
         if db_info["type"] is None:
             db_info["type"] = self.params.get("gce_instance_type_db")
-        if db_info["disk_type"] is None:
-            db_info["disk_type"] = self.params.get("gce_root_disk_type_db")
-        if db_info["disk_size"] is None:
-            db_info["disk_size"] = self.params.get("root_disk_size_db")
-        if db_info["n_local_ssd"] is None:
-            db_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_db")
-        if monitor_info["n_nodes"] is None:
-            monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
-        if monitor_info["type"] is None:
-            monitor_info["type"] = self.params.get("gce_instance_type_monitor")
-        if monitor_info["disk_type"] is None:
-            monitor_info["disk_type"] = self.params.get("gce_root_disk_type_monitor")
-        if monitor_info["disk_size"] is None:
-            monitor_info["disk_size"] = self.params.get("root_disk_size_monitor")
-        if monitor_info["n_local_ssd"] is None:
-            monitor_info["n_local_ssd"] = self.params.get("gce_n_local_ssd_disk_monitor")
-
+        if loader_info["n_nodes"] is None:
+            n_loader_nodes = self.params.get("n_loaders")
+            if isinstance(n_loader_nodes, int):  # legacy type
+                loader_info["n_nodes"] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+        gce_image = self.params.get("gce_image_db").strip()
         user_prefix = self.params.get("user_prefix")
-
-        gce_service = get_gce_compute_instances_client()
-        gce_datacenter = self.params.get("gce_datacenter").split()
-        TEST_LOG.info("Using GCE regions/datacenters: %s", gce_datacenter)
-
-        user_credentials = self.params.get("user_credentials_path")
-        self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
-
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
         cluster_additional_disks = {
             "pd-ssd": self.params.get("gce_pd_ssd_disk_size_db"),
             "pd-standard": self.params.get("gce_pd_standard_disk_size_db"),
         }
+        gce_service = get_gce_compute_instances_client()
 
-        service_accounts = KeyStore().get_gcp_service_accounts()
         db_type = self.params.get("db_type")
         common_params = dict(
             gce_image_username=self.params.get("gce_image_username"),
@@ -1618,7 +1601,8 @@ class ClusterTester(unittest.TestCase):
             credentials=self.credentials,
             user_prefix=user_prefix,
             params=self.params,
-            gce_datacenter=gce_datacenter,
+            gce_datacenter=datacenters,
+            gce_service=gce_service,
         )
         if db_type == "cloud_scylla":
             cloud_credentials = self.params.get("cloud_credentials_path")
@@ -1635,43 +1619,41 @@ class ClusterTester(unittest.TestCase):
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
             self.db_cluster = ScyllaGCECluster(
-                gce_image=self.params.get("gce_image_db").strip(),
-                gce_image_type=db_info["disk_type"],
-                gce_image_size=db_info["disk_size"],
-                gce_n_local_ssd=db_info["n_local_ssd"],
+                gce_image=gce_image,
+                gce_image_type=self.params.get("gce_root_disk_type_db"),
+                gce_image_size=db_info.get("disk_size") or self.params.get("root_disk_size_db"),
                 gce_instance_type=db_info["type"],
-                gce_service=gce_service,
+                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_db"),
                 n_nodes=db_info["n_nodes"],
                 add_disks=cluster_additional_disks,
-                service_accounts=service_accounts,
+                provisioners=provisioners,
                 **common_params,
             )
-
-        loader_additional_disks = {"pd-ssd": self.params.get("gce_pd_ssd_disk_size_loader")}
         self.loaders = LoaderSetGCE(
             gce_image=self.params.get("gce_image_loader"),
-            gce_image_type=loader_info["disk_type"],
-            gce_image_size=loader_info["disk_size"],
-            gce_n_local_ssd=loader_info["n_local_ssd"],
-            gce_instance_type=loader_info["type"],
-            gce_service=gce_service,
+            gce_image_type=self.params.get("gce_root_disk_type_loader"),
+            gce_image_size=loader_info.get("disk_size") or self.params.get("root_disk_size_loader"),
+            gce_instance_type=loader_info.get("type") or self.params.get("gce_instance_type_loader"),
+            gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
             n_nodes=loader_info["n_nodes"],
-            add_disks=loader_additional_disks,
+            provisioners=provisioners,
             **common_params,
         )
-
+        if monitor_info["n_nodes"] is None:
+            monitor_info["n_nodes"] = self.params.get("n_monitor_nodes")
         if monitor_info["n_nodes"] > 0:
-            monitor_additional_disks = {"pd-ssd": self.params.get("gce_pd_ssd_disk_size_monitor")}
+            gce_image_monitor = self.params.get("gce_image_monitor")
+            if not gce_image_monitor:
+                gce_image_monitor = self.params.get("gce_image")
             self.monitors = MonitorSetGCE(
-                gce_image=self.params.get("gce_image_monitor").strip(),
-                gce_image_type=monitor_info["disk_type"],
-                gce_image_size=monitor_info["disk_size"],
-                gce_n_local_ssd=monitor_info["n_local_ssd"],
-                gce_instance_type=monitor_info["type"],
-                gce_service=gce_service,
-                n_nodes=monitor_info["n_nodes"],
-                add_disks=monitor_additional_disks,
+                gce_image=gce_image_monitor,
+                gce_instance_type=monitor_info.get("type") or self.params.get("gce_instance_type_monitor"),
+                gce_image_size=monitor_info.get("disk_size") or self.params.get("root_disk_size_monitor"),
+                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                n_nodes=self.params.get("n_monitor_nodes"),
                 targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                provisioners=provisioners,
                 **common_params,
             )
         else:

@@ -394,6 +394,7 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
     Remove all instances with specific tags GCE
 
     :param tags_dict: key-value pairs used for filtering
+    :param dry_run: if True, only log what would be deleted without actually deleting
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
