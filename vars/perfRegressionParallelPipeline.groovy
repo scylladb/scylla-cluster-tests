@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def base_versions_list = []
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, params.oci_region_name)
 
     pipeline {
         agent none
@@ -31,9 +31,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-            string(defaultValue: "${pipelineParams.get('oci_region', 'us-ashburn-1')}",
+            string(defaultValue: "${pipelineParams.get('oci_region_name', 'us-ashburn-1')}",
                    description: 'Oracle Cloud Region',
-                   name: 'oci_region')
+                   name: 'oci_region_name')
             string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
@@ -45,6 +45,7 @@ def call(Map pipelineParams) {
                    name: 'scylla_version')
             string(defaultValue: '', description: 'GCE image for ScyllaDB ', name: 'gce_image_db')
             string(defaultValue: '', description: 'Azure image for ScyllaDB ', name: 'azure_image_db')
+            string(defaultValue: '', description: 'OCI image for ScyllaDB ', name: 'oci_image_db')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
                    name: 'base_versions')
@@ -355,11 +356,11 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 30, unit: 'MINUTES') {
-                                                            if (params_mapping[sub_test].backend == 'aws' || params_mapping[sub_test].backend == 'azure' || params_mapping[sub_test].backend == 'gce') {
+                                                            if (params_mapping[sub_test].backend == 'aws' || params_mapping[sub_test].backend == 'azure' || params_mapping[sub_test].backend == 'gce' || params_mapping[sub_test].backend == 'oci') {
                                                                 provisionResources(params_mapping[sub_test], builder.region)
                                                             } else {
                                                                 sh """
-                                                                    echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
+                                                                    echo 'Skipping because non-AWS/Azure/GCE/OCI backends are not supported'
                                                                 """
                                                             }
                                                         }

@@ -1,0 +1,45 @@
+test_duration: 60
+
+user_prefix: 'vp-oci-debug'
+use_preinstalled_scylla: true
+
+n_db_nodes: 3
+
+# NOTE: non-dense shapes may be 'spot'
+# instance_provision: 'spot'
+# oci_instance_type_db: "VM.Standard3.Flex:4:32" # non-ssd flexible shape with 4 CPU cores and 32GB RAM
+# data_volume_disk_num: 1
+# data_volume_disk_type: "balanced"
+# data_volume_disk_size: 100
+
+# NOTE: Dense shapes can be only 'on_demand'
+instance_provision: 'on_demand'
+oci_instance_type_db: "VM.DenseIO.E5.Flex:8" # <shape-name>:<ocpus>:<ram>:<nvmes>
+
+# NOTE: Quotas allow to create Dense shapes only in AZ/AD-1
+#       So use first one with simulated racks.
+availability_zone: "a"
+simulated_racks: 3
+
+n_loaders: 1
+
+n_monitor_nodes: 1
+
+nemesis_class_name: SisyphusMonkey
+nemesis_multiply_factor: 1
+nemesis_selector: "not disruptive"
+# TODO:
+# nemesis_selector: "SoftRebootNodeMonkey or HardRebootNodeMonkey"
+# nemesis_selector: "MultipleHardRebootNodeMonkey or DecommissionMonkey"
+# nemesis_selector: "NodeTerminateAndReplace or ClusterRollingRestart"
+# nemesis_selector: RestartThenRepairNodeMonkey
+
+nemesis_interval: 1
+
+round_robin: true
+stress_cmd:
+  - latte run --tag main-write --function write
+    --rate 50000 --duration 5m -P row_count=60_000_000
+    --threads 7 --connections 1 --concurrency 128
+    --request-timeout 5 --retry-number 2 --retry-interval '500ms,5s'
+    data_dir/latte/latte_cs_alike.rn
