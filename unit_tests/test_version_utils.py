@@ -796,7 +796,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing a full version tag with suffix."""
         version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertEqual(tag.base_version, "2024.2.5")
         self.assertEqual(tag.build, "0")
@@ -809,7 +809,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing a full version tag without suffix."""
         version_tag = "4.6.4-0.20220718.b60f14601"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertEqual(tag.base_version, "4.6.4")
         self.assertEqual(tag.build, "0")
@@ -822,7 +822,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing a dev version tag."""
         version_tag = "5.2.0-dev-0.20220829.67c91e8bcd61"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertEqual(tag.base_version, "5.2.0-dev")
         self.assertEqual(tag.build, "0")
@@ -834,7 +834,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing a release candidate version tag."""
         version_tag = "3.3.rc1-0.20200209.0d0c1d43188"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertEqual(tag.base_version, "3.3.rc1")
         self.assertEqual(tag.build, "0")
@@ -846,7 +846,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing an enterprise version tag."""
         version_tag = "2019.1.4-0.20191217.b59e92dbd"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertEqual(tag.base_version, "2019.1.4")
         self.assertEqual(tag.build, "0")
@@ -858,14 +858,14 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test that simple version strings don't match the full tag format."""
         version_tag = "5.2.1"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNone(tag)
 
     def test_parse_branch_version_returns_none(self):
         """Test that branch version strings don't match the full tag format."""
         version_tag = "master:latest"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         self.assertIsNone(tag)
 
     def test_parse_invalid_version_returns_none(self):
@@ -877,7 +877,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
             "2024.2.5",
             "not-a-version",
         ]
-        
+
         for version_tag in test_cases:
             tag = parse_scylla_version_tag(version_tag)
             self.assertIsNone(tag, f"Expected None for '{version_tag}', got {tag}")
@@ -886,11 +886,11 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test FullVersionTag class methods."""
         version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
         tag = FullVersionTag.parse(version_tag)
-        
+
         self.assertIsNotNone(tag)
         self.assertIsInstance(tag, FullVersionTag)
         self.assertTrue(tag.is_valid())
-        
+
         # Test that we can access as a namedtuple
         self.assertEqual(len(tag), 5)
         self.assertEqual(tag[0], "2024.2.5")
@@ -902,7 +902,7 @@ class TestFullVersionTagParsing(unittest.TestCase):
         """Test parsing a version tag with rc build."""
         version_tag = "4.5.rc3-rc3.20220101.abc123def"
         tag = parse_scylla_version_tag(version_tag)
-        
+
         # This should match as SCYLLA_VERSION_GROUPED_RE allows rc\d for build
         self.assertIsNotNone(tag)
         if tag:
