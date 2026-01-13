@@ -16,6 +16,8 @@ import threading
 import unittest
 from unittest.mock import MagicMock
 import logging
+from pathlib import Path
+
 import pytest
 
 from sdcm.sct_events import Severity
@@ -38,6 +40,11 @@ class FakeSCTConfiguration(SCTConfiguration):
 
 
 ClusterTester.__test__ = False
+
+
+@pytest.fixture(scope="session")
+def fixture_home_env():
+    return Path.home()
 
 
 class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
@@ -294,7 +301,7 @@ class SubtestsSuccessTest(ClusterTesterForTests):
         ),
     ],
 )
-def test_tester_subclass(pytester, test_class, results, outcomes):
+def test_tester_subclass(fixture_home_env, pytester, test_class, results, outcomes):
     # Create a pytest file with the test class. We cannot just use the class directly
     # because it would not be collected. If we made it collectable it would be run as part of standard test run as well.
     # Which we do not want, as it is intended only to be run with pytester
@@ -303,6 +310,12 @@ def test_tester_subclass(pytester, test_class, results, outcomes):
         from unit_tests.test_tester import {test_class.__name__}
         {test_class.__name__}.__test__ = True
     """)
+    # override HOME and USERPROFILE to point to real home, so any assumption about existing
+    # files won't need to be specifically recreated for the test
+    # in out case it was `user_credentials_path` location which is hard coded
+    pytester._monkeypatch.setenv("HOME", str(fixture_home_env))
+    pytester._monkeypatch.setenv("USERPROFILE", str(fixture_home_env))
+
     # cause of https://github.com/pytest-dev/pytest/issues/13905
     # we need to run with extra flag -q, so subtest summary output is shown
     result = pytester.runpytest_inprocess("-q")
