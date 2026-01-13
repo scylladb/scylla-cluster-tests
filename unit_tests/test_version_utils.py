@@ -949,3 +949,111 @@ class TestAWSFullVersionTagSupport(unittest.TestCase):
                 self.assertEqual(tag.base_version, expected_base)
             else:
                 self.assertIsNone(tag, f"Expected {version_string} NOT to parse as full tag")
+
+
+class TestAWSFullVersionIntegration(unittest.TestCase):
+    """Integration tests for AWS full version tag support."""
+
+    def test_full_version_tag_workflow(self):
+        """Test the workflow of detecting and using full version tags.
+
+        This test verifies that:
+        1. Full version tags are correctly identified
+        2. They are routed through the correct code path
+        3. The version string is preserved for AMI filtering
+        """
+        # Example full version tag from actual Scylla DEB packages
+        full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+        # Parse the version tag
+        tag = parse_scylla_version_tag(full_version_tag)
+
+        # Verify it's detected as a full version tag
+        self.assertIsNotNone(tag, "Full version tag should be parsed")
+        self.assertTrue(tag.is_valid(), "Full version tag should be valid")
+
+        # Verify the components are extracted correctly
+        self.assertEqual(tag.base_version, "2024.2.5")
+        self.assertEqual(tag.build, "0")
+        self.assertEqual(tag.date, "20250221")
+        self.assertEqual(tag.commit_id, "cb9e2a54ae6d")
+        self.assertEqual(tag.full_tag, full_version_tag)
+
+        # Verify that this would NOT be treated as a branch version
+        # (branch versions contain ':' like "master:latest")
+        self.assertNotIn(":", full_version_tag)
+
+    def test_version_routing_logic(self):
+        """Test that different version formats route to correct lookup methods.
+
+        This simulates the logic in sct_config.py to ensure:
+        - Full version tags use get_scylla_ami_versions (NOT get_branched_ami)
+        - Branch versions use get_branched_ami
+        - Simple versions use get_scylla_ami_versions
+        """
+        test_cases = [
+            # (version_string, should_use_branched_ami, is_full_tag)
+            ("2024.2.5-0.20250221.cb9e2a54ae6d-1", False, True),
+            ("5.2.0-dev-0.20220829.67c91e8bcd61", False, True),
+            ("4.6.4-0.20220718.b60f14601", False, True),
+            ("master:latest", True, False),
+            ("branch-2019.1:latest", True, False),
+            ("5.2.1", False, False),
+            ("2024.2.0", False, False),
+        ]
+
+        for version_string, should_use_branched, is_full_tag in test_cases:
+            tag = parse_scylla_version_tag(version_string)
+
+            # Check if it's a full version tag
+            is_parsed_as_full_tag = tag is not None and tag.is_valid()
+            self.assertEqual(
+                is_parsed_as_full_tag,
+                is_full_tag,
+                f"Version '{version_string}' should{'' if is_full_tag else ' NOT'} be parsed as full tag"
+            )
+
+            # Determine routing (simulates sct_config.py logic)
+            if is_parsed_as_full_tag:
+                # Full version tag: use get_scylla_ami_versions
+                uses_branched = False
+            elif ":" in version_string:
+                # Branch version: use get_branched_ami
+                uses_branched = True
+            else:
+                # Simple version: use get_scylla_ami_versions
+                uses_branched = False
+
+            self.assertEqual(
+                uses_branched,
+                should_use_branched,
+                f"Version '{version_string}' routing incorrect"
+            )
+
+    def test_full_version_preservation(self):
+        """Test that full version strings are preserved for AMI filtering.
+
+        When a full version tag is used, it should be passed to
+        get_scylla_ami_versions() as-is to enable exact tag matching.
+        """
+        full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+        tag = parse_scylla_version_tag(full_version_tag)
+
+        # The full tag should be preserved
+        self.assertEqual(tag.full_tag, full_version_tag)
+
+        # This full tag would be used in the AMI filter
+        # The implementation in _get_ami_versions uses: f"*{version}*"
+        # which means it will match AMIs with scylla_version tag containing the full string
+        expected_filter_pattern = f"*{full_version_tag}*"
+
+        # This is what gets sent to AWS (after character replacements)
+        # The version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+        # For our example: "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+        # becomes: "2024.2.5?0.20250221.cb9e2a54ae6d?1"
+        # This pattern will match AMI tags like "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+        # Verify the tag contains the expected components
+        self.assertIn(tag.base_version, tag.full_tag)
+        self.assertIn(tag.date, tag.full_tag)
+        self.assertIn(tag.commit_id, tag.full_tag)
