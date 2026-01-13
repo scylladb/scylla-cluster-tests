@@ -238,6 +238,40 @@ Nemesis are chaos operations that test database resilience. Common types:
 4. Use cluster reuse for faster iteration
 5. Run pre-commit before pushing: `uv run sct.py pre-commit`
 
+### Writing Unit Tests
+
+**Test Style:**
+- **ALWAYS** write tests in pytest style using standalone functions with plain `assert` statements
+- **NEVER** use `unittest.TestCase` classes for new tests
+- Use `@pytest.mark.parametrize` for data-driven tests
+
+**Good example (pytest style):**
+```python
+def test_parse_version():
+    """Test version parsing."""
+    result = parse_version("1.2.3")
+    assert result is not None
+    assert result.major == 1
+
+@pytest.mark.parametrize("version,expected", [
+    ("1.2.3", "1.2"),
+    ("2.0.0", "2.0"),
+])
+def test_version_formats(version, expected):
+    """Test different version formats."""
+    result = parse_version(version)
+    assert result.short_version == expected
+```
+
+**Bad example (unittest.TestCase - DO NOT USE):**
+```python
+class TestVersion(unittest.TestCase):  # ❌ Don't do this
+    def test_parse(self):
+        result = parse_version("1.2.3")
+        self.assertIsNotNone(result)  # ❌ Don't use self.assert*
+        self.assertEqual(result.major, 1)
+```
+
 ### Debugging SCT Tests
 - Check logs in `~/sct-results/latest/`
 
