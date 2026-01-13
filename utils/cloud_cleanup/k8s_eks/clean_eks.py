@@ -356,12 +356,13 @@ def clean_cloudformation_stacks(regions, keep_hours=DEFAULT_KEEP_HOURS, dry_run=
                         stack_details = cf_client.describe_stacks(StackName=stack_name)
                         tags_dict = {}
                         if stack_details.get("Stacks"):
-                            tags_dict = get_tags_dict_from_aws_tags(stack_details["Stacks"][0].get("Tags", []))
+                            tags_dict = get_tags_dict_from_aws_tags(
+                                stack_details["Stacks"][0].get("Tags", [])
+                            )
                     except Exception as exc:  # noqa: BLE001
                         LOGGER.debug("Failed to get stack details for %s: %s", stack_name, exc)
                         tags_dict = {}
 
-                    tags_dict = get_tags_dict_from_aws_tags(stack_details.get("Tags", []))
                     if ("CreatedBy", "SCT") not in tags_dict.items():
                         continue
                     # Check if stack should be kept
