@@ -83,6 +83,7 @@ from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
+from sdcm.utils.version_utils import parse_scylla_version_tag
 
 
 def _str(value: str) -> str:
@@ -3055,9 +3056,15 @@ class SCTConfiguration(dict):
                 for region in region_names:
                     aws_arch = get_arch_from_instance_type(self.get("instance_type_db"), region_name=region)
                     try:
-                        if ":" in scylla_version:
+                        # Check if this is a full version tag
+                        if parse_scylla_version_tag(scylla_version):
+                            # For full version tags, use regular AMI lookup (will match exact tag)
+                            ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
+                        elif ":" in scylla_version:
+                            # For branch versions like "master:latest"
                             ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
+                            # For simple versions like "5.2.1"
                             ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
