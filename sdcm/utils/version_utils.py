@@ -714,6 +714,91 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     return git_tag
 
 
+class FullVersionTag(namedtuple("FullVersionTag", ["base_version", "build", "date", "commit_id", "full_tag"])):
+    """Represents a parsed full version tag.
+
+    Full version tags have the structure:
+        <base_version>-<build>.<date>.<commit_id>[optional-suffix]
+
+    Examples:
+        - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+        - 5.2.0-dev-0.20220829.67c91e8bcd61
+        - 4.6.4-0.20220718.b60f14601-1
+
+    Attributes:
+        base_version: The version number (e.g., "2024.2.5", "5.2.0-dev")
+        build: The build number or release candidate (e.g., "0", "rc1")
+        date: The build date in YYYYMMDD format (e.g., "20250221")
+        commit_id: The git commit ID (e.g., "cb9e2a54ae6d")
+        full_tag: The complete original version tag string
+    """
+
+    @classmethod
+    def parse(cls, version_tag: str) -> Optional["FullVersionTag"]:
+        """Parse a full version tag string.
+
+        Args:
+            version_tag: Version tag string to parse
+
+        Returns:
+            FullVersionTag instance if the tag matches the expected format, None otherwise
+
+        Examples:
+            >>> tag = FullVersionTag.parse("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+            >>> tag.base_version
+            '2024.2.5'
+            >>> tag.build
+            '0'
+            >>> tag.date
+            '20250221'
+            >>> tag.commit_id
+            'cb9e2a54ae6d'
+        """
+        match = SCYLLA_VERSION_GROUPED_RE.match(version_tag)
+        if not match:
+            return None
+
+        groups = match.groupdict()
+        return cls(
+            base_version=groups.get("version"),
+            build=groups.get("build", ""),
+            date=groups.get("date"),
+            commit_id=groups.get("commit_id"),
+            full_tag=version_tag
+        )
+
+    def is_valid(self) -> bool:
+        """Check if this is a valid full version tag.
+
+        Returns:
+            True if all required components are present, False otherwise
+        """
+        return bool(self.base_version and self.date and self.commit_id)
+
+
+def parse_scylla_version_tag(version_tag: str) -> Optional[FullVersionTag]:
+    """Parse a Scylla version tag into its components.
+
+    This function parses full version tags that include build metadata like:
+    - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+    - 5.2.0-dev-0.20220829.67c91e8bcd61
+    - 4.6.4-0.20220718.b60f14601-1
+
+    Args:
+        version_tag: The version tag string to parse
+
+    Returns:
+        FullVersionTag instance if parsing succeeds, None if the tag doesn't match the format
+
+    Examples:
+        >>> tag = parse_scylla_version_tag("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+        >>> if tag:
+        ...     print(f"Base: {tag.base_version}, Commit: {tag.commit_id}")
+        Base: 2024.2.5, Commit: cb9e2a54ae6d
+    """
+    return FullVersionTag.parse(version_tag)
+
+
 class MethodVersionNotFound(Exception):
     pass
 
