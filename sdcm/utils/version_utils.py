@@ -14,6 +14,7 @@
 import re
 import os
 import logging
+from dataclasses import dataclass
 from enum import Enum, auto
 from string import Template
 from typing import List, Optional, Literal
@@ -714,6 +715,93 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     else:
         raise ValueError(f"Got wrong chart version: {chart_version}")
     return git_tag
+
+
+@dataclass(frozen=True)
+class FullVersionTag:
+    """Represents a parsed full version tag.
+
+    Full version tags have the structure:
+        <base_version>-<build>.<date>.<commit_id>[optional-suffix]
+
+    Examples:
+        - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+        - 5.2.0-dev-0.20220829.67c91e8bcd61
+        - 4.6.4-0.20220718.b60f14601-1
+
+    Attributes:
+        base_version (str): The version number (e.g., "2024.2.5", "5.2.0-dev")
+        build (str): The build number or release candidate (e.g., "0", "rc1")
+        date (str): The build date in YYYYMMDD format (e.g., "20250221")
+        commit_id (str): The git commit ID (e.g., "cb9e2a54ae6d")
+        full_tag (str): The complete original version tag string
+    """
+
+    base_version: str
+    build: str
+    date: str
+    commit_id: str
+    full_tag: str
+
+    @classmethod
+    def parse(cls, version_tag: str) -> Optional["FullVersionTag"]:
+        """Parse a full version tag string.
+
+        Args:
+            version_tag: Version tag string to parse
+
+        Returns:
+            FullVersionTag instance if the tag matches the expected format, None otherwise
+
+        Examples:
+            >>> tag = FullVersionTag.parse("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+            >>> tag.base_version
+            '2024.2.5'
+            >>> tag.build
+            '0'
+            >>> tag.date
+            '20250221'
+            >>> tag.commit_id
+            'cb9e2a54ae6d'
+        """
+        match = SCYLLA_VERSION_GROUPED_RE.match(version_tag)
+        if not match:
+            return None
+
+        groups = match.groupdict()
+        if not bool(groups.get("version") and groups.get("date") and groups.get("commit_id")):
+            return None
+
+        return cls(
+            base_version=groups.get("version"),
+            build=groups.get("build", ""),
+            date=groups.get("date"),
+            commit_id=groups.get("commit_id"),
+            full_tag=version_tag,
+        )
+
+
+def parse_scylla_version_tag(version_tag: str) -> Optional[FullVersionTag]:
+    """Parse a Scylla version tag into its components.
+
+    This function parses full version tags that include build metadata like:
+    - 2024.2.5-0.20250221.cb9e2a54ae6d-1
+    - 5.2.0-dev-0.20220829.67c91e8bcd61
+    - 4.6.4-0.20220718.b60f14601-1
+
+    Args:
+        version_tag: The version tag string to parse
+
+    Returns:
+        FullVersionTag instance if parsing succeeds, None if the tag doesn't match the format
+
+    Examples:
+        >>> tag = parse_scylla_version_tag("2024.2.5-0.20250221.cb9e2a54ae6d-1")
+        >>> if tag:
+        ...     print(f"Base: {tag.base_version}, Commit: {tag.commit_id}")
+        Base: 2024.2.5, Commit: cb9e2a54ae6d
+    """
+    return FullVersionTag.parse(version_tag)
 
 
 class MethodVersionNotFound(Exception):
