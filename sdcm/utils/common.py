@@ -1256,6 +1256,7 @@ def filter_k8s_clusters_by_tags(
     return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != "NodeType"}, instances=clusters)
 
 
+<<<<<<< HEAD
 @lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
@@ -1263,10 +1264,54 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", vers
 
     if version and version != "all":
         scylla_version_filter = f"*{version.replace('enterprise-', '')}-*"
+||||||| parent of 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+def _get_ami_versions(
+    region_name: str,
+    arch: AwsArchType,
+    version: str,
+    version_tag_name: str,
+    extra_filters: list | None = None,
+    version_processor_fn: Callable | None = None,
+) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    version_filter = "*"
+    if version and version != "all":
+        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+=======
+def _get_ami_versions(
+    region_name: str,
+    arch: AwsArchType,
+    version: str,
+    version_tag_name: str,
+    extra_filters: list | None = None,
+    version_processor_fn: Callable | None = None,
+) -> list[EC2Image]:
+    """Get AMI versions with configurable filters."""
+    # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
+    from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
+>>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
 
+<<<<<<< HEAD
         if len(version.split(".")) < 3:
             # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
             scylla_version_filter = f"*{version.replace('enterprise-', '')}*"
+||||||| parent of 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+    version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+=======
+    version_filter = "*"
+
+    if version and version != "all":
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        if parse_scylla_version_tag(version):
+            # For full version tags, use exact matching (no wildcards)
+            version_filter = f"{version}*"
+            extra_filters = []
+        else:
+            # For simple versions or other formats, use the existing logic
+            version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+            # Apply wildcard replacement for simple versions
+            version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+>>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
 
     scylla_version_filter = scylla_version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
