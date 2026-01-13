@@ -25,6 +25,14 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     ARGUS_VERSION_RE,
     VERSION_NOT_FOUND_ERROR,
+<<<<<<< HEAD
+||||||| parent of 48c5898cd (feature(version-utils): implement Phase 1 - core version parsing)
+    get_scylla_docker_repo_from_version,
+=======
+    get_scylla_docker_repo_from_version,
+    parse_scylla_version_tag,
+    FullVersionTag,
+>>>>>>> 48c5898cd (feature(version-utils): implement Phase 1 - core version parsing)
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"
@@ -766,3 +774,180 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
     expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
     actual_repo = get_branched_repo(scylla_version, distro)
     assert actual_repo == expected_template.format(expected_repo)
+<<<<<<< HEAD
+||||||| parent of 48c5898cd (feature(version-utils): implement Phase 1 - core version parsing)
+
+
+@pytest.mark.parametrize(
+    "version, expected_repo",
+    (
+        ("6.2.2", "scylladb/scylla"),
+        ("6.2.3", "scylladb/scylla"),
+        ("6.2.4", "scylladb/scylla"),
+        ("6.2.66", "scylladb/scylla"),
+        ("2024.1.1", "scylladb/scylla-enterprise"),
+        ("2024.2.13", "scylladb/scylla-enterprise"),
+        ("2024.2.14", "scylladb/scylla-enterprise"),
+        ("enterprise", "scylladb/scylla-enterprise-nightly"),
+        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
+        ("2024.5.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
+        ("2024.99.99-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
+        ("2025.1.0", "scylladb/scylla"),
+        ("2025.2.99", "scylladb/scylla"),
+        ("2025.4.0", "scylladb/scylla"),
+        ("2026.1.0", "scylladb/scylla"),
+        ("2025.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly"),
+        ("2026.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly"),
+        ("master:latest", "scylladb/scylla-nightly"),
+    ),
+)
+def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
+    assert get_scylla_docker_repo_from_version(version) == expected_repo
+=======
+
+
+@pytest.mark.parametrize(
+    "version, expected_repo",
+    (
+        ("6.2.2", "scylladb/scylla"),
+        ("6.2.3", "scylladb/scylla"),
+        ("6.2.4", "scylladb/scylla"),
+        ("6.2.66", "scylladb/scylla"),
+        ("2024.1.1", "scylladb/scylla-enterprise"),
+        ("2024.2.13", "scylladb/scylla-enterprise"),
+        ("2024.2.14", "scylladb/scylla-enterprise"),
+        ("enterprise", "scylladb/scylla-enterprise-nightly"),
+        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
+        ("2024.5.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
+        ("2024.99.99-dev-0.20251217.55f4a2b75472", "scylladb/scylla-enterprise-nightly"),
+        ("2025.1.0", "scylladb/scylla"),
+        ("2025.2.99", "scylladb/scylla"),
+        ("2025.4.0", "scylladb/scylla"),
+        ("2026.1.0", "scylladb/scylla"),
+        ("2025.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly"),
+        ("2026.1.0-dev-0.20251217.55f4a2b75472", "scylladb/scylla-nightly"),
+        ("master:latest", "scylladb/scylla-nightly"),
+    ),
+)
+def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
+    assert get_scylla_docker_repo_from_version(version) == expected_repo
+
+
+def test_parse_full_version_tag_with_suffix():
+    """Test parsing a full version tag with suffix."""
+    version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "2024.2.5"
+    assert tag.build == "0"
+    assert tag.date == "20250221"
+    assert tag.commit_id == "cb9e2a54ae6d"
+    assert tag.full_tag == version_tag
+
+
+def test_parse_full_version_tag_without_suffix():
+    """Test parsing a full version tag without suffix."""
+    version_tag = "4.6.4-0.20220718.b60f14601"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "4.6.4"
+    assert tag.build == "0"
+    assert tag.date == "20220718"
+    assert tag.commit_id == "b60f14601"
+    assert tag.full_tag == version_tag
+
+
+def test_parse_dev_version_tag():
+    """Test parsing a dev version tag."""
+    version_tag = "5.2.0~dev-0.20220829.67c91e8bcd61"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "5.2.0~dev"
+    assert tag.build == "0"
+    assert tag.date == "20220829"
+    assert tag.commit_id == "67c91e8bcd61"
+
+
+def test_parse_rc_version_tag():
+    """Test parsing a release candidate version tag."""
+    version_tag = "3.3.rc1-0.20200209.0d0c1d43188"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "3.3.rc1"
+    assert tag.build == "0"
+    assert tag.date == "20200209"
+    assert tag.commit_id == "0d0c1d43188"
+
+
+def test_parse_enterprise_version_tag():
+    """Test parsing an enterprise version tag."""
+    version_tag = "2019.1.4-0.20191217.b59e92dbd"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "2019.1.4"
+    assert tag.build == "0"
+    assert tag.date == "20191217"
+    assert tag.commit_id == "b59e92dbd"
+
+
+def test_parse_simple_version_returns_none():
+    """Test that simple version strings don't match the full tag format."""
+    version_tag = "5.2.1"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is None
+
+
+def test_parse_branch_version_returns_none():
+    """Test that branch version strings don't match the full tag format."""
+    version_tag = "master:latest"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is None
+
+
+def test_parse_invalid_version_returns_none():
+    """Test that invalid version strings return None."""
+    test_cases = [
+        "",
+        "invalid",
+        "1.2.3",
+        "2024.2.5",
+        "not-a-version",
+    ]
+
+    for version_tag in test_cases:
+        tag = parse_scylla_version_tag(version_tag)
+        assert tag is None, f"Expected None for '{version_tag}', got {tag}"
+
+
+def test_full_version_tag_class_methods():
+    """Test FullVersionTag class methods."""
+    version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = FullVersionTag.parse(version_tag)
+
+    assert tag is not None
+    assert isinstance(tag, FullVersionTag)
+
+    # Test that we can access fields
+    assert tag.base_version == "2024.2.5"
+    assert tag.build == "0"
+    assert tag.date == "20250221"
+    assert tag.commit_id == "cb9e2a54ae6d"
+
+
+def test_full_version_tag_with_rc_build():
+    """Test parsing a version tag with rc build."""
+    version_tag = "4.5.rc3-rc3.20220101.abc123def"
+    tag = parse_scylla_version_tag(version_tag)
+
+    # This should match as SCYLLA_VERSION_GROUPED_RE allows rc\d for build
+    assert tag is not None
+    if tag:
+        assert tag.build == "rc3"
+>>>>>>> 48c5898cd (feature(version-utils): implement Phase 1 - core version parsing)
