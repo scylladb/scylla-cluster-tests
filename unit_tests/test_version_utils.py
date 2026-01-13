@@ -914,8 +914,6 @@ class TestAWSFullVersionTagSupport(unittest.TestCase):
 
     def test_full_version_tag_detection(self):
         """Test that full version tags are correctly detected."""
-        from sdcm.utils.version_utils import parse_scylla_version_tag
-
         # Full version tag should be detected
         full_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
         tag = parse_scylla_version_tag(full_tag)
@@ -934,8 +932,6 @@ class TestAWSFullVersionTagSupport(unittest.TestCase):
 
     def test_version_string_formats(self):
         """Test different version string formats for AWS."""
-        from sdcm.utils.version_utils import parse_scylla_version_tag
-
         test_cases = [
             # (version_string, should_parse_as_full_tag, expected_base_version)
             ("2024.2.5-0.20250221.cb9e2a54ae6d-1", True, "2024.2.5"),
