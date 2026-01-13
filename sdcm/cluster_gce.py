@@ -625,7 +625,11 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+            self.log.info("Found instances to be reused from test [%s] = %s", self.test_config.REUSE_CLUSTER, instances)
+        elif instances := self._get_instances(instance_dc):
+            self.log.info("Found provisioned instances = %s", instances)
         else:
+            self.log.info("Found no provisioned instances. Provision them.")
             instances = self._create_instances(count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
 
         self.log.debug("instances: %s", instances)
