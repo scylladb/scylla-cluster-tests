@@ -29,6 +29,28 @@ from sdcm.utils.version_utils import (
 
 LOGGER = logging.getLogger(__name__)
 
+# Regex to detect ARM architecture from Azure instance type name.
+# Azure ARM instances have a 'p' immediately after the vCPU digit(s),
+# e.g. Standard_D8ps_v5, Standard_E4ps_v5, Standard_D2pds_v5
+_AZURE_ARM_RE = re.compile(r"^Standard_[A-Z]+\d+p")
+
+
+def get_arch_from_azure_instance_type(instance_type: str) -> VmArch:
+    """Detect CPU architecture from Azure instance type name.
+
+    Azure ARM instances use a 'p' suffix after the vCPU count digit(s)
+    to denote Ampere Altra (ARM64) processors.
+
+    Examples:
+        Standard_D8ps_v5  -> ARM (has 'p' after '8')
+        Standard_L8s_v3   -> X86 (no 'p' after '8')
+        Standard_E4ps_v5  -> ARM
+        Standard_D2pds_v5 -> ARM
+    """
+    if instance_type and _AZURE_ARM_RE.match(instance_type):
+        return VmArch.ARM
+    return VmArch.X86
+
 
 def vmarch_to_azure(arch: VmArch) -> str:
     """Convert VmArch enum to Azure architecture format.
@@ -80,11 +102,25 @@ def get_scylla_images_private_galleries(
     unparsable_scylla_versions = []
 
     with suppress(AzureResourceNotFoundError):
-        gallery_image_versions = azure_service.compute.gallery_image_versions.list_by_gallery_image(
-            resource_group_name="SCYLLA-IMAGES",
-            gallery_name="scylladb_dev",
-            gallery_image_name=branch,
-        )
+        try:
+            gallery_image_versions = list(
+                azure_service.compute.gallery_image_versions.list_by_gallery_image(
+                    resource_group_name="SCYLLA-IMAGES",
+                    gallery_name="scylladb_dev",
+                    gallery_image_name=f"{branch}-{vmarch_to_azure(arch)}",
+                )
+            )
+        except AzureResourceNotFoundError:
+            gallery_image_versions = []
+
+        if not gallery_image_versions:
+            gallery_image_versions = list(
+                azure_service.compute.gallery_image_versions.list_by_gallery_image(
+                    resource_group_name="SCYLLA-IMAGES",
+                    gallery_name="scylladb_dev",
+                    gallery_image_name=branch,
+                )
+            )
         for image in gallery_image_versions:
             if image.location != region_name or image.tags.get("name", "").startswith("debug-"):
                 continue
@@ -114,8 +150,6 @@ def get_scylla_images_private_galleries(
 def get_scylla_images(
     scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
-    if arch != VmArch.X86:
-        LOGGER.warning("--arch option not implemented currently for Azure machine images.")
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {"arch": arch.value}

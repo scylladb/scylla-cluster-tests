@@ -3450,35 +3450,49 @@ class SCTConfiguration(dict):
                 self["gce_image_db"] = gce_image.self_link
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
                 scylla_azure_images = []
+<<<<<<< HEAD
                 if isinstance(self.get("azure_region_name"), list):
                     azure_region_names = self.get("azure_region_name")
                 else:
                     azure_region_names = [self.get("azure_region_name")]
+||||||| parent of b30872832 (fix(azure): support arch-aware private gallery image lookup with fallback)
+                azure_region_names = self.get("azure_region_name")
+=======
+                azure_region_names = self.get("azure_region_name")
+                azure_arch = azure_utils.get_arch_from_azure_instance_type(self.get("azure_instance_type_db"))
+>>>>>>> b30872832 (fix(azure): support arch-aware private gallery image lookup with fallback)
 
                 for region in azure_region_names:
                     try:
-                        # Check if this is a full version tag
                         if parse_scylla_version_tag(scylla_version):
-                            # Full version tag: use get_scylla_images for exact matching
                             azure_image = azure_utils.get_scylla_images(
-                                scylla_version=scylla_version, region_name=region
+                                scylla_version=scylla_version, region_name=region, arch=azure_arch
                             )[0]
                         elif ":" in scylla_version:
-                            # Branch version: use get_scylla_images
                             azure_image = azure_utils.get_scylla_images(
-                                scylla_version=scylla_version, region_name=region
+                                scylla_version=scylla_version, region_name=region, arch=azure_arch
                             )[0]
                         else:
-                            # Simple version: use get_released_scylla_images
+                            if azure_arch != azure_utils.VmArch.X86:
+                                raise ValueError(
+                                    f"Azure released images (community gallery) do not support "
+                                    f"arch={azure_arch.value}. Use a branch version "
+                                    f"(e.g. 'master:latest') for ARM instances."
+                                )
                             azure_image = azure_utils.get_released_scylla_images(
-                                scylla_version=scylla_version, region_name=region
+                                scylla_version=scylla_version, region_name=region, arch=azure_arch
                             )[0]
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Azure Image for scylla_version='{scylla_version}' not found in {region}"
+                            f" (arch={azure_arch.value})"
                         ) from ex
                     self.log.debug(
-                        "Found Azure Image %s for scylla_version='%s' in %s", azure_image.name, scylla_version, region
+                        "Found Azure Image %s for scylla_version='%s' in %s (arch=%s)",
+                        azure_image.name,
+                        scylla_version,
+                        region,
+                        azure_arch.value,
                     )
                     scylla_azure_images.append(azure_image)
                 self["azure_image_db"] = " ".join(
