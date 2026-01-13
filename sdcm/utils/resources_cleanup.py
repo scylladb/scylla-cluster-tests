@@ -18,6 +18,7 @@ import time
 import ipaddress
 from typing import Optional
 from unittest.mock import MagicMock
+from collections import defaultdict
 
 from botocore.exceptions import ClientError
 import boto3
@@ -56,6 +57,10 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     get_gce_compute_instances_client,
+)
+from sdcm.utils.oci_utils import (
+    OciService,
+    list_instances_oci,
 )
 
 
@@ -128,6 +133,8 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
         clean_resources_docker(tags_dict, dry_run=dry_run)
     if cluster_backend in ("xcloud",):
         clean_clusters_scylla_cloud(tags_dict, config, dry_run=dry_run)
+    if cluster_backend in ("oci", ""):
+        clean_instances_oci(tags_dict, dry_run=dry_run)
     return True
 
 
@@ -166,6 +173,37 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
             delete_image(image)
         except Exception:  # noqa: BLE001
             LOGGER.error("Failed to delete image tag(s) %s on host `%s'", image.tags, image.client.info()["Name"])
+
+
+def clean_instances_oci(tags_dict: dict, dry_run=False):
+    """Remove all instances with specific tags in OCI."""
+    if not tags_dict:
+        LOGGER.error("tags_dict not provided (can't clean all instances)")
+        return
+
+    all_instances = list_instances_oci(tags_dict=tags_dict, verbose=False)
+    if not all_instances:
+        LOGGER.info("There are no instances to remove in OCI")
+        return
+
+    instances_by_region = defaultdict(list)
+    for instance in all_instances:
+        instances_by_region[instance.region].append(instance)
+    for region, instances in instances_by_region.items():
+        compute_client = OciService().get_compute_client(region=region)
+        for instance in instances:
+            display_name = instance.display_name
+            instance_id = instance.id
+            LOGGER.info(
+                "Going to terminate OCI instance '%s' [name=%s] in region %s", instance_id, display_name, region
+            )
+            if dry_run:
+                continue
+            try:
+                compute_client.terminate_instance(instance_id)
+                LOGGER.info("Terminated OCI instance %s (id: %s)", display_name, instance_id)
+            except Exception as e:  # noqa: BLE001
+                LOGGER.error("Failed to terminate OCI instance %s (id: %s): %s", display_name, instance_id, e)
 
 
 def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):

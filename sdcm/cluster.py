@@ -652,22 +652,23 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
-        backend = self.parent_cluster.cluster_backend
+        backend, instance_type, params = self.parent_cluster.cluster_backend, None, self.parent_cluster.params
         if backend in ("aws", "aws-siren"):
             if self._is_zero_token_node:
-                return self.parent_cluster.params.get("zero_token_instance_type_db") or self.parent_cluster.params.get(
-                    "instance_type_db"
-                )
-            return self.parent_cluster.params.get("instance_type_db")
-        elif backend == "azure":
-            return self.parent_cluster.params.get("azure_instance_type_db")
+                instance_type = params.get("zero_token_instance_type_db") or params.get("instance_type_db")
+            else:
+                instance_type = params.get("instance_type_db")
         elif backend in ("gce", "gce-siren"):
-            return self.parent_cluster.params.get("gce_instance_type_db")
+            instance_type = params.get("gce_instance_type_db")
+        elif backend == "azure":
+            instance_type = params.get("azure_instance_type_db")
+        elif backend == "oci":
+            instance_type = params.get("oci_instance_type_db")
         elif backend == "docker":
-            return "docker"
+            instance_type = "docker"
         else:
-            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' fordb instance type.")
-            return None
+            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' for db instance type.")
+        return instance_type
 
     @property
     def _proposed_scylla_yaml_properties(self) -> dict:
@@ -3590,10 +3591,19 @@ class BaseNode(AutoSshContainerMixin):
         self.wait_native_transport()
 
     def disable_firewall(self) -> None:
-        self.remoter.sudo("systemctl stop iptables", ignore_status=True)
-        self.remoter.sudo("systemctl disable iptables", ignore_status=True)
-        self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
-        self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("systemctl stop iptables", ignore_status=True)
+            self.remoter.sudo("systemctl disable iptables", ignore_status=True)
+            self.remoter.sudo("systemctl stop firewalld", ignore_status=True)
+            self.remoter.sudo("systemctl disable firewalld", ignore_status=True)
+
+        # For Ubuntu/Debian, specially on OCI where iptables rules might be persistent
+        elif self.distro.is_debian_like:
+            self.remoter.sudo("iptables -F", ignore_status=True)
+            self.remoter.sudo("iptables -P INPUT ACCEPT", ignore_status=True)
+            self.remoter.sudo("iptables -P FORWARD ACCEPT", ignore_status=True)
+            self.remoter.sudo("iptables -P OUTPUT ACCEPT", ignore_status=True)
+            self.remoter.sudo("netfilter-persistent flush", ignore_status=True)
 
     def upgrade_ssh_packages(self) -> None:
         """
@@ -5534,7 +5544,7 @@ class BaseScyllaCluster:
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # noqa: PLR0912, PLR0914
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
-        if node.distro.is_rhel_like:
+        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
             node.disable_firewall()
             node.upgrade_ssh_packages()
 
@@ -6380,7 +6390,7 @@ class BaseMonitorSet:
         node.log.info("TestConfig in BaseMonitorSet")
         node.wait_ssh_up()
 
-        if node.distro.is_rhel_like:
+        if node.distro.is_rhel_like or self.params.get("cluster_backend") == "oci":
             node.disable_firewall()
             node.upgrade_ssh_packages()
 

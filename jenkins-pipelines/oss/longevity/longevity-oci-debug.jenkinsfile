@@ -1,0 +1,10 @@
+#!groovy
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'oci',
+    oci_region_name: 'us-ashburn-1',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/oci-debug.yaml',
+)
