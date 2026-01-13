@@ -79,6 +79,7 @@ from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.version_utils import parse_scylla_version_tag
 from sdcm.keystore import KeyStore
 from sdcm.utils.gce_utils import (
     GkeCleaner,
@@ -1104,8 +1105,6 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
-    from sdcm.utils.version_utils import parse_scylla_version_tag
-
     version_filter = "*"
     if version and version != "all":
         # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
