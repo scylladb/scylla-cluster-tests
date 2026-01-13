@@ -59,7 +59,6 @@ def gce_instance_name(node_prefix: str, dc_idx: int, node_index: int) -> str:
     return name
 
 
-
 def vmarch_to_gcp(arch: VmArch) -> str:
     """Convert VmArch enum to GCP architecture format.
 

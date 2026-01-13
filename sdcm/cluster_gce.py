@@ -482,6 +482,8 @@ class GCECluster(cluster.BaseCluster):
             instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+        elif instances := self._get_instances(instance_dc):
+            self.log.info("Found provisioned instances = %s", instances)
         else:
             self.log.info("Found no provisioned instances. Provision them.")
             provisioned_vms = self._create_instances(
