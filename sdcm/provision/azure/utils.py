@@ -34,7 +34,7 @@ def get_scylla_images_private_galleries(
 ) -> list[GalleryImageVersion]:
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
-    tags_to_search = {"arch": arch.to_azure_format()}
+    tags_to_search = {"arch": arch.value}
     if len(version_bucket) == 1:
         return []
     # Branched version, like master:latest
@@ -93,7 +93,7 @@ def get_scylla_images(
     ):
         return output
 
-    tags_to_search = {"arch": arch.to_azure_format()}
+    tags_to_search = {"arch": arch.value}
     if len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0
