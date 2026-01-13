@@ -115,8 +115,8 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self.params.get("cluster_backend")
 
     @property
-    def _cloud_provider(self) -> Literal["aws", "gce", "azure", None]:
-        for provider in ["aws", "gce", "azure"]:
+    def _cloud_provider(self) -> Literal["aws", "gce", "azure", "oci", None]:
+        for provider in ("aws", "gce", "azure", "oci"):
             if provider in self._cluster_backend:
                 return provider
         if self._cluster_backend == "k8s-eks":
@@ -133,6 +133,8 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
             regions = self.params.get("gce_datacenter")
         elif self._cloud_provider == "azure":
             regions = self.params.get("region_name")
+        elif self._cloud_provider == "oci":
+            regions = self.params.get("oci_region_name")
         else:
             regions = []
         if isinstance(regions, list):

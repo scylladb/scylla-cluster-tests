@@ -24,6 +24,8 @@ def createRunConfiguration(String backend) {
         configuration.gce_datacenter = "us-east1"
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
+    } else if (backend == 'oci') {
+        configuration.oci_region_name = 'us-ashburn-1'
     } else if (backend.contains('docker')) {
         // use latest version of nightly image for docker backend, until we get rid off rebuilding docker image for SCT
         configuration.scylla_version = 'latest'
@@ -206,7 +208,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     script {
                         def curr_params = createRunConfiguration('docker')
-                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, null /* oci placeholder */)
+                        def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name)
                         dockerLogin(params)
                         withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                             dir('scylla-cluster-tests') {
@@ -273,7 +275,7 @@ pipeline {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
-                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, null /* oci placeholder */, curr_params)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name, curr_params.oci_region_name, curr_params)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null

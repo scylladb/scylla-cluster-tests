@@ -76,6 +76,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
+from sdcm.utils.oci_utils import list_instances_oci
 from sdcm.utils.common import (
     S3Storage,
     aws_tags_to_dict,
@@ -306,7 +307,7 @@ def provision_resources(backend, test_name: str, config: str):
         if backend == "aws":
             layout = SCTProvisionLayout(params=params)
             layout.provision()
-        elif backend == "azure":
+        elif backend in ("azure", "oci"):
             provision_sct_resources(params=params, test_config=test_config)
         elif backend == "xcloud":
             cloud_provider = params.get("xcloud_provider").lower()
@@ -851,6 +852,41 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
         else:
             click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
+    def list_resources_on_oci():
+        click.secho("Checking OCI instances...", fg="green")
+        oci_instances = list_instances_oci(tags_dict=params, running=get_all_running, verbose=verbose)
+        if oci_instances:
+            oci_table = PrettyTable(table_header)
+            oci_table.align = "l"
+            oci_table.sortby = "LaunchTime"
+            for instance in oci_instances:
+                tags = instance.freeform_tags or {}
+                name = instance.display_name
+                region_az = f"{instance.region}-{instance.availability_domain}"
+
+                # Instance state in OCI is capitalized (RUNNING, STOPPED, TERMINATED)
+                state = instance.lifecycle_state
+
+                test_id = tags.get("SCT_TEST_ID") or tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                billing_project = tags.get("billing_project", "N/A")
+                launch_time = instance.time_created.strftime("%Y-%m-%d %H:%M:%S")
+
+                oci_table.add_row(
+                    [
+                        name,
+                        region_az,
+                        instance.public_ip_address if get_all_running else state,
+                        test_id,
+                        run_by_user,
+                        billing_project,
+                        launch_time,
+                    ]
+                )
+            click.echo(oci_table.get_string(title="Instances used on OCI"))
+        else:
+            click.secho("Nothing found for selected filters in OCI!", fg="yellow")
+
     def list_resources_on_xcloud():
         """List ScyllaDB Cloud clusters across specified environments"""
         # Use environments from command line option
@@ -942,6 +978,7 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
     backend_listing_map = {
         "aws": list_resources_on_aws,
         "gce": list_resources_on_gce,
+        "oci": list_resources_on_oci,
         "k8s-gke": list_resources_on_gke,
         "k8s-eks": list_resources_on_eks,
         "docker": list_resources_on_docker,

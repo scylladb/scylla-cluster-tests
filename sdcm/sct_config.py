@@ -57,6 +57,7 @@ from sdcm.utils.common import (
     convert_name_to_ami_if_needed,
     get_sct_root_path,
 )
+from sdcm.utils import oci_utils
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
     ARGUS_VERSION_RE,
@@ -271,7 +272,7 @@ class SCTConfiguration(dict):
             name="cluster_backend",
             env="SCT_CLUSTER_BACKEND",
             type=str,
-            help="backend that will be used, aws/gce/azure/docker/xcloud",
+            help="backend that will be used, aws/gce/azure/oci/docker/xcloud",
             appendable=False,
         ),
         dict(
@@ -1287,6 +1288,76 @@ class SCTConfiguration(dict):
         dict(name="azure_image_monitor", env="SCT_AZURE_IMAGE_MONITOR", type=str, help=""),
         dict(name="azure_image_loader", env="SCT_AZURE_IMAGE_LOADER", type=str, help=""),
         dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str, help=""),
+        # Oracle Cloud options (oci)
+        dict(
+            name="oci_region_name",
+            env="SCT_OCI_REGION_NAME",
+            type=str_or_list_or_eval,
+            help="Oracle Cloud region to use",
+            appendable=False,
+        ),
+        dict(
+            name="oci_instance_type_loader",
+            env="SCT_OCI_INSTANCE_TYPE_LOADER",
+            type=str,
+            help=(
+                "Oracle Cloud instance shape to use for loader node(s). "
+                "Usage of flex shapes allows setting of the ocpus, memory. "
+                "Format is following: <shape-name>:<ocpus>:<ram>"
+            ),
+        ),
+        dict(
+            name="oci_instance_type_monitor",
+            env="SCT_OCI_INSTANCE_TYPE_MONITOR",
+            type=str,
+            help=(
+                "Oracle Cloud instance shape to use for monitor node. "
+                "Usage of flex shapes allows setting of the ocpus, memory. "
+                "Format is following: <shape-name>:<ocpus>:<ram>"
+            ),
+        ),
+        dict(
+            name="oci_instance_type_db",
+            env="SCT_OCI_INSTANCE_TYPE_DB",
+            type=str,
+            help=(
+                "Oracle Cloud instance shape to use for DB node(s). "
+                "Usage of flex shapes allows setting of the ocpus, memory and nvme disks. "
+                "Format is following: <shape-name>:<ocpus>:<ram>:<nvmes> . "
+                "For DenseIO shapes it makes sense to specify only 'ocpus' part, "
+                "because ram and amount of NVMe disks will be fixed based on the OCPUs count."
+            ),
+        ),
+        dict(
+            name="oci_instance_type_db_oracle",
+            env="SCT_OCI_INSTANCE_TYPE_DB_ORACLE",
+            type=str,
+            help="Oracle Cloud instance shape to use for 'oracle' (2nd ref cluster) ScylladbDB cluster",
+        ),
+        dict(
+            name="oci_image_db",
+            env="SCT_OCI_IMAGE_DB",
+            type=str,
+            help="Oracle Cloud image to use for DB node(s)",
+        ),
+        dict(
+            name="oci_image_monitor",
+            env="SCT_OCI_IMAGE_MONITOR",
+            type=str,
+            help="Oracle Cloud image to use for the monitor node. Empty value results into latest ubuntu image",
+        ),
+        dict(
+            name="oci_image_loader",
+            env="SCT_OCI_IMAGE_LOADER",
+            type=str,
+            help="Oracle Cloud image to use for the loader node(s). Empty value results into latest ubuntu image",
+        ),
+        dict(
+            name="oci_image_username",
+            env="SCT_OCI_IMAGE_USERNAME",
+            type=str,
+            help="Username used in the Oracle Cloud images utilized by the DB node(s)",
+        ),
         # k8s-eks options
         dict(name="eks_service_ipv4_cidr", env="SCT_EKS_SERVICE_IPV4_CIDR", type=str, help=""),
         dict(name="eks_vpc_cni_version", env="SCT_EKS_VPC_CNI_VERSION", type=str, help=""),
@@ -2851,6 +2922,15 @@ class SCTConfiguration(dict):
             "azure_instance_type_monitor",
             "azure_region_name",
         ],
+        "oci": [
+            "user_prefix",
+            "oci_image_db",
+            "oci_image_username",
+            "oci_instance_type_db",
+            "oci_instance_type_loader",
+            "oci_instance_type_monitor",
+            "oci_region_name",
+        ],
         "docker": ["user_credentials_path", "scylla_version"],
         "baremetal": ["s3_baremetal_config", "db_nodes_private_ip", "db_nodes_public_ip", "user_credentials_path"],
         "aws-siren": [
@@ -3247,6 +3327,28 @@ class SCTConfiguration(dict):
                 self["azure_image_db"] = " ".join(
                     getattr(image, "id", None) or getattr(image, "unique_id", None) for image in scylla_azure_images
                 )
+            elif not self.get("oci_image_db") and self.get("cluster_backend") == "oci":
+                scylla_oci_images = []
+                if isinstance(self.get("oci_region_name"), list):
+                    oci_region_names = self.get("oci_region_name")
+                else:
+                    oci_region_names = [self.get("oci_region_name")]
+
+                for region in oci_region_names:
+                    try:
+                        oci_image = oci_utils.get_scylla_images(scylla_version, region)[0]
+                    except Exception as ex:  # noqa: BLE001
+                        raise ValueError(
+                            f"Oracle Image for scylla_version='{scylla_version}' not found in {region}"
+                        ) from ex
+                    self.log.debug(
+                        "Found Oracle Image %s for scylla_version='%s' in %s",
+                        oci_image.display_name,
+                        scylla_version,
+                        region,
+                    )
+                    scylla_oci_images.append(oci_image)
+                self["oci_image_db"] = " ".join(getattr(image, "id", None) for image in scylla_oci_images)
             elif self.get("cluster_backend") == "xcloud" and ":" in scylla_version:
                 self._resolve_xcloud_version_tag(self.get("scylla_version"))
             elif not self.get("scylla_repo"):
@@ -4002,6 +4104,14 @@ class SCTConfiguration(dict):
                             assert azure_check_instance_type_available(instance_type, region), (
                                 f"Instance type [{instance_type}] not supported in region [{region}]"
                             )
+                case "oci":
+                    if oci_region_names := self.get("oci_region_name"):
+                        if not isinstance(oci_region_names, list):
+                            oci_region_names = [self.get("oci_region_name")]
+                        for region in self.get("oci_region_name"):
+                            assert oci_utils.is_shape_available(instance_type, region), (
+                                f"Instance type [{instance_type}] not supported in region [{region}]"
+                            )
                 case _:
                     raise ValueError(f"Unsupported backend [{backend}] for using nemesis_grow_shrink_instance_type")
 
@@ -4019,6 +4129,8 @@ class SCTConfiguration(dict):
             options_must_exist += ["gce_image_db"]
         elif backend == "azure":
             options_must_exist += ["azure_image_db"]
+        elif backend == "oci":
+            options_must_exist += ["oci_image_db"]
         elif backend == "docker":
             options_must_exist += ["docker_image"]
         elif backend == "baremetal":
@@ -4113,6 +4225,14 @@ class SCTConfiguration(dict):
                     logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
                 self["user_data_format_version"] = tags.get("user_data_format_version", "2")
 
+        if backend == "oci":
+            oci_image_db = self.get("oci_image_db").split()
+            for image in oci_image_db:
+                tags = oci_utils.get_image_tags(image, "scylla")
+                if "user_data_format_version" not in tags.keys():
+                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                self["user_data_format_version"] = tags.get("user_data_format_version", "3")
+
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
         repos_to_validate = []
@@ -4199,6 +4319,18 @@ class SCTConfiguration(dict):
                 resource_id_label="image name",
             )
             _is_enterprise = is_enterprise(scylla_version)
+        elif backend == "oci":
+            images = self.get("oci_image_db").split()
+            tags = oci_utils.get_image_tags(images[0], "scylla")
+            scylla_version = self._require_scylla_version_tag(
+                tags=tags,
+                resource_label="Oracle image",
+                resource_id=images[0],
+                tag_keys=("scylla_version",),
+                resource_type="image",
+                resource_id_label="image name",
+            )
+            _is_enterprise = True
         elif "k8s" in backend:
             scylla_version = self.get("scylla_version")
             _is_enterprise = is_enterprise(scylla_version)
@@ -4349,8 +4481,8 @@ class SCTConfiguration(dict):
         if dev_num == 0:
             return
 
-        if backend not in ["aws", "k8s-eks"]:
-            raise ValueError("Data volume configuration is supported only for aws, k8s-eks")
+        if backend not in ("aws", "k8s-eks", "oci"):
+            raise ValueError("Data volume configuration is supported only for 'aws', 'k8s-eks' and 'oci'")
 
         if not self.get("data_volume_disk_size") or not self.get("data_volume_disk_type"):
             raise ValueError("Data volume configuration requires: data_volume_disk_type, data_volume_disk_size")

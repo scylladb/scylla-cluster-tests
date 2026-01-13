@@ -1,4 +1,33 @@
 # OCI Configuration Defaults
 # This file contains default settings for OCI backend deployments
 
-user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+user_credentials_path: "~/.ssh/scylla_test_id_ed25519"
+use_preinstalled_scylla: true
+backup_bucket_backend: 's3'
+
+instance_provision: "spot"
+oci_region_name:
+  - us-ashburn-1
+
+oci_instance_type_loader: "VM.Standard3.Flex:4"
+oci_image_loader: ""  # NOTE: Code will automatically take latest ubuntu:24.04
+ami_loader_user: 'ubuntu'
+
+oci_instance_type_monitor: "VM.Standard.E4.Flex:4"
+oci_image_monitor: ""  # NOTE: Code will automatically take latest ubuntu:24.04
+ami_monitor_user: 'ubuntu'
+
+availability_zone: "a"
+root_disk_size_monitor: 50 # GB, remove this field if default disk size should be used
+root_disk_size_db: 30
+root_disk_size_loader: 20
+oci_image_username: "scyllaadm"
+
+# NOTE: PD disk types for OCI if non-dense shapes are used:
+#       - "lower_cost" -> 0 VPUs/GB
+#       - "balanced" or "gp2" or "gp3" -> 10 VPUs/GB
+#       - "higher_performance" or "io1" or "io2" -> 20 VPUs/GB
+#       - "ultra" -> 30 VPUs/GB
+data_volume_disk_num: 0
+data_volume_disk_type: "higher_performance"
+data_volume_disk_size: 500

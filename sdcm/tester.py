@@ -65,6 +65,7 @@ from sdcm.cluster import (
     MINUTE_IN_SEC,
 )
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
+from sdcm.cluster_oci import ScyllaOciCluster, LoaderSetOci, MonitorSetOci
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -83,6 +84,7 @@ from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.oci.provisioner import OciProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.provision.helpers.certificate import (
@@ -1166,6 +1168,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             )
         elif cluster_backend == "azure":
             self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1)
+        elif cluster_backend == "oci":
+            regions = self.params.get("oci_region_name")
+            if isinstance(regions, str):
+                regions = [regions]
+            self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1 or len(regions) > 1)
 
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
@@ -1718,6 +1725,88 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 root_disk_size=self.params.get("azure_root_disk_type_monitor"),
                 provisioners=provisioners,
                 n_nodes=self.params.get("n_monitor_nodes"),
+                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                user_name=self.params.get("ami_monitor_user"),
+                **common_params,
+            )
+        else:
+            self.monitors = NoMonitorSet()
+
+    def get_cluster_oci(self, loader_info, db_info, monitor_info):
+        regions = self.params.get("oci_region_name")
+        test_id = str(TestConfig().test_id())
+        provisioners: List[OciProvisioner] = []
+        for region in regions:
+            provisioners.append(
+                provisioner_factory.create_provisioner(
+                    backend="oci",
+                    test_id=test_id,
+                    region=region,
+                    availability_zone=self.params.get("availability_zone"),
+                )
+            )
+        if db_info["n_nodes"] is None:
+            n_db_nodes = self.params.get("n_db_nodes")
+            if isinstance(n_db_nodes, int):  # legacy type
+                db_info["n_nodes"] = [n_db_nodes]
+            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
+                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
+        db_info["type"] = self.params.get("oci_instance_type_db")
+        if loader_info["n_nodes"] is None:
+            n_loader_nodes = self.params.get("n_loaders")
+            if isinstance(n_loader_nodes, int):  # legacy type
+                loader_info["n_nodes"] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
+        oci_image = self.params.get("oci_image_db").strip()
+        user_prefix = self.params.get("user_prefix")
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get("user_credentials_path")))
+
+        common_params = dict(
+            credentials=self.credentials,
+            user_prefix=user_prefix,
+            params=self.params,
+            region_names=regions,
+        )
+        self.db_cluster = ScyllaOciCluster(
+            image_id=oci_image,
+            root_disk_size=db_info["disk_size"],
+            instance_type=db_info["type"],
+            provisioners=provisioners,
+            n_nodes=db_info["n_nodes"],
+            user_name=self.params.get("oci_image_username"),
+            **common_params,
+        )
+        self.loaders = LoaderSetOci(
+            image_id=self.params.get("oci_image_loader"),
+            root_disk_size=loader_info["disk_size"],
+            instance_type=self.params.get("oci_instance_type_loader"),
+            provisioners=provisioners,
+            n_nodes=loader_info["n_nodes"],
+            user_name=self.params.get("ami_loader_user"),
+            **common_params,
+        )
+
+        if monitor_info["n_nodes"] is None:
+            n_monitor_nodes = self.params.get("n_monitor_nodes")
+            if isinstance(n_monitor_nodes, int):  # legacy type
+                monitor_info["n_nodes"] = [n_monitor_nodes]
+            elif isinstance(n_monitor_nodes, str):  # latest type to support multiple datacenters
+                monitor_info["n_nodes"] = [int(n) for n in n_monitor_nodes.split()]
+            else:
+                self.fail("Unsupported parameter type: {}".format(type(n_monitor_nodes)))
+
+        if any(x > 0 for x in monitor_info["n_nodes"]):
+            self.monitors = MonitorSetOci(
+                image_id=self.params.get("oci_image_monitor"),
+                root_disk_size=monitor_info["disk_size"],
+                instance_type=self.params.get("oci_instance_type_monitor"),
+                provisioners=provisioners,
+                n_nodes=monitor_info["n_nodes"],
                 targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
                 user_name=self.params.get("ami_monitor_user"),
                 **common_params,
@@ -2548,6 +2637,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.get_cluster_k8s_eks(n_k8s_clusters=len(self.params.region_names))
         elif cluster_backend == "azure":
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
+        elif cluster_backend == "oci":
+            self.get_cluster_oci(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
         elif cluster_backend == "xcloud":
             self.get_cluster_cloud(loader_info=loader_info, db_info=db_info, monitor_info=monitor_info)
 
@@ -4723,9 +4814,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         elif backend in ("gce", "gce-siren", "k8s-gke"):
             scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
             region_name = self.params.get("gce_datacenter")
-        elif backend in ("azure"):
+        elif backend in ("azure",):
             scylla_instance_type = self.params.get("azure_instance_type_db") or "Unknown"
             region_name = self.params.get("azure_region_name")
+        elif backend in ("oci",):
+            scylla_instance_type = self.params.get("oci_instance_type_db") or "Unknown"
+            region_name = self.params.get("oci_region_name")
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
             region_name = "N/A"

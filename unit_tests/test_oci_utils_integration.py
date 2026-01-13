@@ -24,10 +24,6 @@ import pytest
 from sdcm.keystore import KeyStore
 from sdcm.utils.oci_utils import (
     get_availability_domains,
-    get_oci_compartment_id,
-    get_oci_compute_client,
-    get_oci_identity_client,
-    get_oci_network_client,
     get_ubuntu_image_ocid,
     list_instances_oci,
     OciService,
@@ -78,38 +74,24 @@ def test_get_oci_credentials():
 @pytest.mark.integration
 def test_get_compute_client():
     """Test creating a compute client."""
-    client, config = get_oci_compute_client()
-
-    assert client is not None
-    assert "region" in config
+    service = OciService()
+    assert service.get_compute_client() is not None
+    assert "region" in service.config
 
 
 @pytest.mark.integration
 def test_get_compute_client_with_region():
     """Test creating a compute client for a specific region."""
-    client, config = get_oci_compute_client(region="us-phoenix-1")
-
-    assert client is not None
-    assert config["region"] == "us-phoenix-1"
-
-
-# --- Tests for OCI Identity Client ---
-
-
-@pytest.mark.integration
-def test_get_identity_client():
-    """Test creating an identity client."""
-    client, config = get_oci_identity_client()
-
-    assert client is not None
+    service = OciService()
+    compute_client = service.get_compute_client(region="us-phoenix-1")
+    assert compute_client is not None
+    assert compute_client.base_client.config.get("region") == "us-phoenix-1"
 
 
 @pytest.mark.integration
 def test_list_availability_domains():
     """Test listing availability domains."""
-    compartment_id = get_oci_compartment_id()
-    ads = get_availability_domains(compartment_id)
-
+    ads = get_availability_domains(OciService().compartment_id)
     assert isinstance(ads, list)
     assert len(ads) > 0
 
@@ -121,10 +103,8 @@ def test_list_availability_domains():
 @pytest.mark.integration
 def test_resolve_availability_domain():
     """Test resolving availability domain from short name."""
-    compartment_id = get_oci_compartment_id()
-
     # Should be able to resolve AD-1
-    ad = resolve_availability_domain(compartment_id, "AD-1")
+    ad = resolve_availability_domain(OciService().compartment_id, "AD-1")
     assert "-AD-1" in ad.upper()
 
 
@@ -134,19 +114,15 @@ def test_resolve_availability_domain():
 @pytest.mark.integration
 def test_get_ubuntu_image_ocid():
     """Test getting Ubuntu image OCID."""
-    compartment_id = get_oci_compartment_id()
-    image_id = get_ubuntu_image_ocid(compartment_id, version="24.04")
-
+    image_id = get_ubuntu_image_ocid(OciService().compartment_id, version="24.04")
     assert image_id.startswith("ocid1.image.")
 
 
 @pytest.mark.integration
 def test_get_ubuntu_image_different_version():
     """Test getting Ubuntu image with different version."""
-    compartment_id = get_oci_compartment_id()
-
     # Test with 22.04 LTS
-    image_id = get_ubuntu_image_ocid(compartment_id, version="22.04")
+    image_id = get_ubuntu_image_ocid(OciService().compartment_id, version="22.04")
     assert image_id.startswith("ocid1.image.")
 
 
@@ -162,7 +138,6 @@ def test_list_instances_empty():
         region_name="us-ashburn-1",
         verbose=False,
     )
-
     assert isinstance(instances, list)
 
 
@@ -171,19 +146,7 @@ def test_list_instances_all_regions():
     """Test listing instances across all supported regions."""
     # This tests that we can connect to all supported regions
     instances = list_instances_oci(verbose=True)
-
     assert isinstance(instances, list)
-
-
-# --- Tests for OCI Network Client ---
-
-
-@pytest.mark.integration
-def test_get_network_client():
-    """Test creating a network client."""
-    client, config = get_oci_network_client()
-
-    assert client is not None
 
 
 # --- Tests for OciService ---
@@ -194,7 +157,7 @@ def test_oci_service_clients():
     """Test that OciService can create clients."""
 
     # Clear singleton cache for clean test
-    OciService._instances = {}
+    OciService()._instances = {}
 
     service = OciService()
 
@@ -214,3 +177,9 @@ def test_oci_service_clients():
 
     network_client = service.get_network_client()
     assert network_client is not None
+
+    object_storage_client = service.get_object_storage_client()
+    assert object_storage_client is not None
+
+    work_request_client = service.get_work_request_client()
+    assert work_request_client is not None

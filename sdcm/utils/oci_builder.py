@@ -15,15 +15,14 @@ import logging
 from functools import cached_property
 from typing import Optional
 from string import Template
-from ipaddress import ip_network
 from pathlib import Path
 
 import click
 import requests
 
-from sdcm.utils.oci_region import OciRegion
-from sdcm.sct_runner import OciSctRunner
 from sdcm.keystore import KeyStore
+from sdcm.sct_runner import OciSctRunner
+from sdcm.utils.oci_region import OciRegion
 from sdcm.utils.sct_cmd_helpers import get_all_regions
 
 LOGGER = logging.getLogger(__name__)
@@ -101,23 +100,13 @@ class OciBuilder:
         _ = self.region.vcn
         _ = self.region.internet_gateway
 
-        # Use runner's full availability domain for subnet lookup
-        full_ad = self.runner._full_availability_domain
-
         # Get or create subnet
-        subnet = self.region.subnet(ad=full_ad)
+        subnet = self.region.subnet(public=True)
         if not subnet:
-            click.secho(f"{self.region.region_name}: creating subnet for {full_ad}")
-
-            region_index = self.region._region_index()
-            vcn_cidr = ip_network(self.region.SCT_VCN_CIDR_TMPL.format(region_index))
-            ad_index = self.region.availability_domains.index(full_ad)
-            subnet_cidr = list(vcn_cidr.subnets(prefixlen_diff=8))[ad_index]
-            self.region.create_subnet(ad=full_ad, ipv4_cidr=subnet_cidr)
-            subnet = self.region.subnet(ad=full_ad)
-
+            click.secho(f"{self.region.region_name}: creating a public subnet")
+            subnet = self.region.create_subnet(public=True)
         if not subnet:
-            raise ValueError(f"Unable to create or find subnet in {full_ad}")
+            raise ValueError(f"Unable to create or find a public subnet in {self.region.region_name}")
 
         return {
             "image_id": image_id,

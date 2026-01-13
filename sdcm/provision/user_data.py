@@ -13,6 +13,8 @@
 
 import abc
 from dataclasses import dataclass, field
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 from textwrap import dedent
 from typing import List, Dict
 
@@ -121,3 +123,26 @@ class UserDataBuilder:
             if smi_json := user_data_object.scylla_machine_image_json:
                 return smi_json
         return ""
+
+    def build_mime_multipart_user_data(self) -> str:
+        smi_json = self.get_scylla_machine_image_json()
+        yaml_content = self.build_user_data_yaml()
+
+        if not smi_json:
+            return yaml_content
+
+        msg = MIMEMultipart()
+
+        # Scylla JSON
+        part = MIMEBase("x-scylla", "json")
+        part.set_payload(smi_json)
+        part.add_header("Content-Disposition", 'attachment; filename="scylla_machine_image.json"')
+        msg.attach(part)
+
+        # Cloud config
+        part = MIMEBase("text", "cloud-config")
+        part.set_payload(yaml_content)
+        part.add_header("Content-Disposition", 'attachment; filename="cloud-config.txt"')
+        msg.attach(part)
+
+        return msg.as_string()
