@@ -1088,11 +1088,22 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
-    version_filter = "*"
-    if version and version != "all":
-        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+    # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
+    from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
 
-    version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+    version_filter = "*"
+
+    if version and version != "all":
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        if parse_scylla_version_tag(version):
+            # For full version tags, use exact matching (no wildcards)
+            version_filter = f"{version}*"
+            extra_filters = []
+        else:
+            # For simple versions or other formats, use the existing logic
+            version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+            # Apply wildcard replacement for simple versions
+            version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
 
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
