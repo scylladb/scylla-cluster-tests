@@ -1104,9 +1104,18 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
+    from sdcm.utils.version_utils import parse_scylla_version_tag
+
     version_filter = "*"
     if version and version != "all":
-        version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        full_version_tag = parse_scylla_version_tag(version)
+        if full_version_tag and full_version_tag.is_valid():
+            # For full version tags, use the complete tag as the filter
+            version_filter = f"*{version}*"
+        else:
+            # For simple versions or other formats, use the existing logic
+            version_filter = version_processor_fn(version) if version_processor_fn else f"*{version}*"
 
     version_filter = version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
 

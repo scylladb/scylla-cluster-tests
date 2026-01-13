@@ -907,3 +907,49 @@ class TestFullVersionTagParsing(unittest.TestCase):
         self.assertIsNotNone(tag)
         if tag:
             self.assertEqual(tag.build, "rc3")
+
+
+class TestAWSFullVersionTagSupport(unittest.TestCase):
+    """Test AWS AMI lookup with full version tags."""
+
+    def test_full_version_tag_detection(self):
+        """Test that full version tags are correctly detected."""
+        from sdcm.utils.version_utils import parse_scylla_version_tag
+
+        # Full version tag should be detected
+        full_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+        tag = parse_scylla_version_tag(full_tag)
+        self.assertIsNotNone(tag)
+        self.assertTrue(tag.is_valid())
+
+        # Simple version should not be detected as full tag
+        simple_version = "5.2.1"
+        tag = parse_scylla_version_tag(simple_version)
+        self.assertIsNone(tag)
+
+        # Branch version should not be detected as full tag
+        branch_version = "master:latest"
+        tag = parse_scylla_version_tag(branch_version)
+        self.assertIsNone(tag)
+
+    def test_version_string_formats(self):
+        """Test different version string formats for AWS."""
+        from sdcm.utils.version_utils import parse_scylla_version_tag
+
+        test_cases = [
+            # (version_string, should_parse_as_full_tag, expected_base_version)
+            ("2024.2.5-0.20250221.cb9e2a54ae6d-1", True, "2024.2.5"),
+            ("5.2.0-dev-0.20220829.67c91e8bcd61", True, "5.2.0-dev"),
+            ("4.6.4-0.20220718.b60f14601", True, "4.6.4"),
+            ("5.2.1", False, None),
+            ("master:latest", False, None),
+            ("branch-2019.1:latest", False, None),
+        ]
+
+        for version_string, should_parse, expected_base in test_cases:
+            tag = parse_scylla_version_tag(version_string)
+            if should_parse:
+                self.assertIsNotNone(tag, f"Expected {version_string} to parse as full tag")
+                self.assertEqual(tag.base_version, expected_base)
+            else:
+                self.assertIsNone(tag, f"Expected {version_string} NOT to parse as full tag")
