@@ -21,36 +21,10 @@ from sdcm.utils.oci_utils import (
     filter_oci_by_tags,
     get_ubuntu_image_ocid,
     list_instances_oci,
-    oci_tags_to_dict,
     OciService,
     resolve_availability_domain,
     wait_for_instance_state,
 )
-
-
-# --- Tests for oci_tags_to_dict ---
-
-
-def test_oci_tags_to_dict_with_tags():
-    """Test with valid freeform tags."""
-    tags = {"NodeType": "sct-runner", "TestId": "test-123"}
-    result = oci_tags_to_dict(tags)
-    assert result == tags
-
-
-def test_oci_tags_to_dict_with_none():
-    """Test with None tags."""
-    result = oci_tags_to_dict(None)
-    assert result == {}
-
-
-def test_oci_tags_to_dict_with_empty_dict():
-    """Test with empty dict."""
-    result = oci_tags_to_dict({})
-    assert result == {}
-
-
-# --- Tests for filter_oci_by_tags ---
 
 
 @pytest.fixture
@@ -144,7 +118,6 @@ def test_resolve_availability_domain_single_ad_region(mock_get_ads):
     """Test resolving in a region with single AD."""
     mock_get_ads.return_value = ["Uocm:EU-FRANKFURT-1-AD-1"]
 
-    # Should return the only AD regardless of input
     result = resolve_availability_domain("compartment-id", "AD-2")
     assert result == "Uocm:EU-FRANKFURT-1-AD-1"
 
@@ -164,7 +137,7 @@ def test_resolve_availability_domain_not_found(mock_get_ads):
 # --- Tests for get_ubuntu_image_ocid ---
 
 
-@patch("sdcm.utils.oci_utils.get_oci_compute_client")
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid(mock_page_iterator, mock_get_client):
     """Test getting Ubuntu image OCID."""
@@ -173,7 +146,7 @@ def test_get_ubuntu_image_ocid(mock_page_iterator, mock_get_client):
     mock_image.id = "ocid1.image.oc1..ubuntu2404"
     mock_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
     mock_page_iterator.return_value = iter([mock_image])
-    mock_get_client.return_value = (mock_client, {})
+    mock_get_client.return_value = mock_client
 
     result = get_ubuntu_image_ocid("compartment-id", region="us-ashburn-1")
 
@@ -181,7 +154,7 @@ def test_get_ubuntu_image_ocid(mock_page_iterator, mock_get_client):
     mock_page_iterator.assert_called_once()
 
 
-@patch("sdcm.utils.oci_utils.get_oci_compute_client")
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
     """Test that ARM images are filtered out."""
@@ -193,7 +166,7 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
     mock_amd64_image.id = "ocid1.image.oc1..ubuntu2404-amd64"
     mock_amd64_image.display_name = "Canonical-Ubuntu-24.04-2024.01.01-0"
     mock_page_iterator.return_value = iter([mock_arm_image, mock_amd64_image])
-    mock_get_client.return_value = (mock_client, {})
+    mock_get_client.return_value = mock_client
 
     result = get_ubuntu_image_ocid("compartment-id")
 
@@ -201,13 +174,13 @@ def test_get_ubuntu_image_ocid_filters_arm(mock_page_iterator, mock_get_client):
     mock_page_iterator.assert_called_once()
 
 
-@patch("sdcm.utils.oci_utils.get_oci_compute_client")
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
     """Test when no matching image is found."""
     mock_client = MagicMock()
     mock_page_iterator.return_value = iter([])
-    mock_get_client.return_value = (mock_client, {})
+    mock_get_client.return_value = mock_client
     with pytest.raises(ValueError, match="No Ubuntu"):
         get_ubuntu_image_ocid("compartment-id")
     mock_page_iterator.assert_called_once()
@@ -217,7 +190,7 @@ def test_get_ubuntu_image_ocid_not_found(mock_page_iterator, mock_get_client):
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compartment_id")
-@patch("sdcm.utils.oci_utils.get_oci_compute_client")
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_list_instances_oci_single_region(mock_page_iterator, mock_get_client, mock_get_compartment):
     """Test listing instances in a single region."""
@@ -226,7 +199,7 @@ def test_list_instances_oci_single_region(mock_page_iterator, mock_get_client, m
     mock_instance = MagicMock()
     mock_instance.freeform_tags = {"NodeType": "sct-runner"}
     mock_instance.lifecycle_state = "RUNNING"
-    mock_get_client.return_value = (mock_client, {})
+    mock_get_client.return_value = mock_client
     mock_page_iterator.return_value = iter([mock_instance])
 
     result = list_instances_oci(region_name="us-ashburn-1", verbose=False)
@@ -237,7 +210,7 @@ def test_list_instances_oci_single_region(mock_page_iterator, mock_get_client, m
 
 
 @patch("sdcm.utils.oci_utils.get_oci_compartment_id")
-@patch("sdcm.utils.oci_utils.get_oci_compute_client")
+@patch("sdcm.utils.oci_utils.OciService.get_compute_client")
 @patch("oci.pagination.list_call_get_all_results_generator")
 def test_list_instances_oci_with_tag_filter(mock_page_iterator, mock_get_client, mock_get_compartment):
     """Test listing instances with tag filter."""
@@ -249,7 +222,7 @@ def test_list_instances_oci_with_tag_filter(mock_page_iterator, mock_get_client,
     mock_instance2 = MagicMock()
     mock_instance2.defined_tags = {"sct": {"NodeType": "db-node"}}
     mock_instance2.lifecycle_state = "RUNNING"
-    mock_get_client.return_value = (mock_client, {})
+    mock_get_client.return_value = mock_client
     mock_page_iterator.return_value = iter([mock_instance1, mock_instance2])
 
     result = list_instances_oci(
@@ -263,15 +236,11 @@ def test_list_instances_oci_with_tag_filter(mock_page_iterator, mock_get_client,
     mock_page_iterator.assert_called_once()
 
 
-# --- Tests for wait_for_instance_state ---
-
-
 def test_wait_for_instance_state_running():
     """Test waiting for instance to become RUNNING."""
     mock_client = MagicMock()
     mock_instance = MagicMock()
     mock_instance.lifecycle_state = "RUNNING"
-
     mock_client.get_instance.return_value.data = mock_instance
 
     result = wait_for_instance_state(mock_client, "instance-id", "RUNNING", timeout=10)
@@ -285,7 +254,6 @@ def test_wait_for_instance_state_timeout():
     mock_client = MagicMock()
     mock_instance = MagicMock()
     mock_instance.lifecycle_state = "PROVISIONING"
-
     mock_client.get_instance.return_value.data = mock_instance
 
     with pytest.raises(TimeoutError):
@@ -297,14 +265,10 @@ def test_wait_for_instance_state_unexpected_termination():
     mock_client = MagicMock()
     mock_instance = MagicMock()
     mock_instance.lifecycle_state = "TERMINATED"
-
     mock_client.get_instance.return_value.data = mock_instance
 
     with pytest.raises(RuntimeError, match="terminated unexpectedly"):
         wait_for_instance_state(mock_client, "instance-id", "RUNNING", timeout=10)
-
-
-# --- Tests for OciService ---
 
 
 @patch("sdcm.utils.oci_utils.KeyStore")
