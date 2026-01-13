@@ -3892,3 +3892,12 @@ Whether or not to send email using argus instead of SCT.
 **default:** N/A
 
 **type:** bool
+
+
+## **cdc_replication_rounds_num** / SCT_CDC_REPLICATION_ROUNDS_NUM
+
+Number of rounds for cdc replication longevity tests
+
+**default:** 2
+
+**type:** int
