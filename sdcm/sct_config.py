@@ -3666,12 +3666,23 @@ class SCTConfiguration(dict):
         elif backend == "gce":
             images = self.get("gce_image_db").split()
             tags = get_gce_image_tags(images[0])
-            scylla_version = tags.get("scylla_version").replace("-", ".")
+            scylla_version = tags.get("scylla_version")
+            if not scylla_version:
+                raise ValueError(
+                    f"GCE image '{images[0]}' does not have 'scylla_version' tag. "
+                    f"This image may not be a valid Scylla image. Please check the image name and ensure it is tagged correctly."
+                )
+            scylla_version = scylla_version.replace("-", ".")
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "azure":
             images = self.get("azure_image_db").split()
             tags = azure_utils.get_image_tags(images[0])
             scylla_version = tags.get("scylla_version")
+            if not scylla_version:
+                raise ValueError(
+                    f"Azure image '{images[0]}' does not have 'scylla_version' tag. "
+                    f"This image may not be a valid Scylla image. Please check the image name and ensure it is tagged correctly."
+                )
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "docker" or "k8s" in backend:
             docker_repo = self.get("docker_image")
