@@ -104,8 +104,9 @@ def get_latest_branches_from_s3(bucket="downloads.scylladb.com", limit=3):
             "oss": oss_branches_sorted,
             "enterprise": enterprise_branches_sorted,
         }
-    except (boto3.exceptions.Boto3Error, Exception):  # noqa: BLE001
-        # Fallback to hardcoded values if S3 access fails
+    except (boto3.exceptions.Boto3Error, KeyError, ValueError):
+        # Fallback to hardcoded values if S3 access fails or parsing errors occur
+        # Using fallback ensures tests remain functional even if S3 is temporarily unavailable
         return {
             "oss": ["master", "branch-2025.3", "branch-2025.2"],
             "enterprise": ["enterprise", "enterprise-2024.1"],
@@ -799,7 +800,6 @@ def _generate_test_params_for_get_branched_repo():
 
     # Add tests for OSS branches with centos
     for branch in branches["oss"]:
-        branch_id = branch.replace("branch-", "")
         test_params.append((f"{branch}:latest", "centos", f"unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"))
 
     # Add tests for one OSS branch with ubuntu and debian
@@ -826,9 +826,6 @@ def _generate_test_params_for_get_branched_repo():
 
     # Add tests for Enterprise branches with centos
     for branch in branches["enterprise"]:
-        branch_id = branch.replace("enterprise-", "")
-        if branch_id == "":  # Handle "enterprise" branch
-            branch_id = branch
         test_params.append(
             (f"{branch}:latest", "centos", f"unstable/scylla-enterprise/{branch}/rpm/centos/latest/scylla.repo")
         )
