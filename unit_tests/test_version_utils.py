@@ -70,6 +70,7 @@ class TestVersionUtils(unittest.TestCase):
         self.assertRaisesRegex(ValueError, msg_error, get_branch_version, BROKEN_URL)
 
     def test_05_is_enterprise(self):
+        self.assertEqual(is_enterprise(None), False)
         self.assertEqual(is_enterprise("2019.1.1"), True)
         self.assertEqual(is_enterprise("2018"), True)
         self.assertEqual(is_enterprise("3.1"), False)
