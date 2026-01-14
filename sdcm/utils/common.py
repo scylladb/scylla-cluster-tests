@@ -1651,6 +1651,7 @@ def get_ami_tags(ami_id, region_name):
     :param region_name: the region to look AMIs in
     :return: dict of tags
     :raises ValueError: if AMI does not exist
+    :raises ClientError: if there's an AWS API error (auth, throttling, etc.)
     """
     def _check_ami_not_found_error(exc: ClientError):
         """Helper to check if the error is AMI not found and raise appropriate ValueError."""
@@ -1661,6 +1662,7 @@ def get_ami_tags(ami_id, region_name):
                 f"Please check that the AMI ID is correct and available in the specified region."
             ) from exc
 
+    last_error = None
     try:
         scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
         new_test_image = scylla_images_ec2_resource.Image(ami_id)
@@ -1671,7 +1673,8 @@ def get_ami_tags(ami_id, region_name):
             return res
     except ClientError as exc:
         _check_ami_not_found_error(exc)
-        # For other errors, try fallback
+        # For other errors, save and try fallback
+        last_error = exc
         LOGGER.debug("Failed to load AMI %s in region %s with scylla images credentials: %s", ami_id, region_name, exc)
     
     try:
@@ -1684,9 +1687,16 @@ def get_ami_tags(ami_id, region_name):
             return res
     except ClientError as exc:
         _check_ami_not_found_error(exc)
+        # Both attempts failed with non-NotFound errors, re-raise the last one
+        last_error = exc
         LOGGER.warning("Failed to load AMI %s in region %s: %s", ami_id, region_name, exc)
     
-    # If we get here, AMI exists but has no tags
+    # If we get here and have an error, it means both attempts failed with non-NotFound errors
+    # Re-raise the original AWS error instead of returning {} which would cause misleading "missing tag" error
+    if last_error:
+        raise last_error
+    
+    # AMI exists but has no tags
     return {}
 
 
