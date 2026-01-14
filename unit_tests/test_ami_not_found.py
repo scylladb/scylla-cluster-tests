@@ -18,13 +18,16 @@ from botocore.exceptions import ClientError
 from sdcm.utils.common import get_ami_tags
 from sdcm.utils.version_utils import is_enterprise
 
+# Constants for AWS operation names
+AWS_DESCRIBE_IMAGES_OPERATION = "DescribeImages"
+
 
 @pytest.fixture
 def ami_not_found_error():
     """Create a ClientError for AMI not found."""
     return ClientError(
         error_response={"Error": {"Code": "InvalidAMIID.NotFound", "Message": "The image id does not exist"}},
-        operation_name="DescribeImages"
+        operation_name=AWS_DESCRIBE_IMAGES_OPERATION
     )
 
 
@@ -33,7 +36,7 @@ def ami_permission_error():
     """Create a ClientError for permission denied."""
     return ClientError(
         error_response={"Error": {"Code": "UnauthorizedOperation", "Message": "You are not authorized"}},
-        operation_name="DescribeImages"
+        operation_name=AWS_DESCRIBE_IMAGES_OPERATION
     )
 
 
