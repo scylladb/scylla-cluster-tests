@@ -3756,7 +3756,7 @@ class SCTConfiguration(dict):
             scylla_version = get_branch_version(scylla_repo, full_version=True)
             _is_enterprise = is_enterprise(scylla_version)
         elif self.get("db_type") == "cloud_scylla":
-            _is_enterpise = True
+            _is_enterprise = True
         elif backend == "aws":
             amis = self.get("ami_id_db_scylla").split()
             region_name = self.region_names[0]
