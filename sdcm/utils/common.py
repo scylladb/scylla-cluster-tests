@@ -1692,7 +1692,7 @@ def get_ami_tags(ami_id, region_name):
         LOGGER.warning("Failed to load AMI %s in region %s: %s", ami_id, region_name, exc)
     
     # If we get here and have an error, it means both attempts failed with non-NotFound errors
-    # Re-raise the original AWS error instead of returning {} which would cause misleading "missing tag" error
+    # Re-raise the last AWS error instead of returning {} which would cause misleading "missing tag" error
     if last_error:
         raise last_error
     
