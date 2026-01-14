@@ -1772,6 +1772,7 @@ def get_ami_tags(ami_id, region_name):
     :raises ValueError: if AMI does not exist
     :raises ClientError: if there's an AWS API error (auth, throttling, etc.)
     """
+
     def _check_ami_not_found_error(exc: ClientError):
         """Helper to check if the error is AMI not found and raise appropriate ValueError."""
         error_code = exc.response.get("Error", {}).get("Code", "")
@@ -1795,7 +1796,7 @@ def get_ami_tags(ami_id, region_name):
         # For other errors, save and try fallback
         last_error = exc
         LOGGER.debug("Failed to load AMI %s in region %s with scylla images credentials: %s", ami_id, region_name, exc)
-    
+
     try:
         ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
         test_image = ec2_resource.Image(ami_id)
@@ -1809,22 +1810,27 @@ def get_ami_tags(ami_id, region_name):
         # Both attempts failed with non-NotFound errors, re-raise the last one
         last_error = exc
         LOGGER.warning("Failed to load AMI %s in region %s: %s", ami_id, region_name, exc)
-    
+
     # If we get here and have an error, it means both attempts failed with non-NotFound errors
     # Re-raise the last AWS error instead of returning {} which would cause misleading "missing tag" error
     if last_error:
         raise last_error
-    
+
     # AMI exists but has no tags
     return {}
 
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 def get_db_tables(session, keyspace_name, node, with_compact_storage=True):
 ||||||| parent of 395cd6489 (refactor(aws-provision): extract AMI not found error check into helper function)
 def get_db_tables(keyspace_name, node, with_compact_storage=None):
 =======
 
+||||||| parent of eab393e9e (fix(precommit): fixed precommit hooks)
+
+=======
+>>>>>>> eab393e9e (fix(precommit): fixed precommit hooks)
 def get_db_tables(keyspace_name, node, with_compact_storage=None):
 >>>>>>> 395cd6489 (refactor(aws-provision): extract AMI not found error check into helper function)
     """
