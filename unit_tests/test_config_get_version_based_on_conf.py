@@ -12,6 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 
 import logging
+import unittest.mock
 import pytest
 
 from sdcm import sct_config
@@ -154,3 +155,50 @@ def test_unified_package(monkeypatch):
 
     assert "5.5.0" in _version
     assert not _is_enterprise
+
+
+def test_aws_ami_missing_scylla_version_tag(monkeypatch):
+    """Test that missing scylla_version tag in AWS AMI raises clear ValueError."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-notags")
+
+    # Mock get_ami_tags to return empty dict (AMI exists but has no tags)
+    with unittest.mock.patch("sdcm.sct_config.get_ami_tags", return_value={}):
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        with pytest.raises(
+            ValueError, match=r"AMI 'ami-notags' .* does not have 'scylla_version' or 'ScyllaVersion' tag"
+        ):
+            conf.get_version_based_on_conf()
+
+
+def test_gce_image_missing_scylla_version_tag(monkeypatch):
+    """Test that missing scylla_version tag in GCE image raises clear ValueError."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+    monkeypatch.setenv("SCT_GCE_IMAGE_DB", "projects/test/global/images/scylla-test")
+
+    # Mock get_gce_image_tags to return empty dict
+    with unittest.mock.patch("sdcm.sct_config.get_gce_image_tags", return_value={}):
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        with pytest.raises(ValueError, match=r"GCE image .* does not have 'scylla_version' tag"):
+            conf.get_version_based_on_conf()
+
+
+def test_azure_image_missing_scylla_version_tag(monkeypatch):
+    """Test that missing scylla_version tag in Azure image raises clear ValueError."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+    monkeypatch.setenv(
+        "SCT_AZURE_IMAGE_DB",
+        "/subscriptions/test/resourceGroups/test/providers/Microsoft.Compute/images/scylla-test",
+    )
+
+    # Mock get_image_tags to return empty dict
+    with unittest.mock.patch("sdcm.sct_config.azure_utils.get_image_tags", return_value={}):
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        with pytest.raises(ValueError, match=r"Azure image .* does not have 'scylla_version' tag"):
+            conf.get_version_based_on_conf()
