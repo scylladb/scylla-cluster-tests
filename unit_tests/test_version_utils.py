@@ -3,7 +3,10 @@ from __future__ import absolute_import
 import os
 import unittest
 
+import boto3
 import pytest
+from botocore import UNSIGNED
+from botocore.client import Config
 
 import sdcm
 from sdcm.utils.version_utils import (
@@ -41,6 +44,68 @@ RPM_URL = (
 )
 
 BROKEN_URL = "https://www.google.com"
+
+
+def get_latest_branches_from_s3(bucket="downloads.scylladb.com", limit=3):
+    """
+    Dynamically discover the latest available branches from S3.
+
+    :param bucket: S3 bucket name
+    :param limit: Number of latest branches to return for each product type
+    :return: dict with 'oss' and 'enterprise' lists of branch names
+    """
+    try:
+        # Create S3 client without credentials for public bucket
+        s3_client = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+
+        # Get OSS branches
+        oss_branches = []
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix="unstable/scylla/", Delimiter="/")
+        for prefix in response.get("CommonPrefixes", []):
+            branch_path = prefix["Prefix"]
+            # Extract branch name: "unstable/scylla/branch-2025.3/" -> "branch-2025.3"
+            branch_name = branch_path.replace("unstable/scylla/", "").rstrip("/")
+            if branch_name.startswith("branch-") or branch_name == "master":
+                oss_branches.append(branch_name)
+
+        # Sort OSS branches (master should be included, and branch-X.Y sorted by version)
+        oss_branches_sorted = []
+        if "master" in oss_branches:
+            oss_branches_sorted.append("master")
+        # Sort branch-X.Y by version number
+        branch_versions = [b for b in oss_branches if b.startswith("branch-")]
+        branch_versions.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("branch-", "").split(".")], reverse=True)
+        oss_branches_sorted.extend(branch_versions[:limit])
+
+        # Get Enterprise branches
+        enterprise_branches = []
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix="unstable/scylla-enterprise/", Delimiter="/")
+        for prefix in response.get("CommonPrefixes", []):
+            branch_path = prefix["Prefix"]
+            # Extract branch name: "unstable/scylla-enterprise/enterprise-2024.1/" -> "enterprise-2024.1"
+            branch_name = branch_path.replace("unstable/scylla-enterprise/", "").rstrip("/")
+            if branch_name.startswith("enterprise-") or branch_name == "enterprise":
+                enterprise_branches.append(branch_name)
+
+        # Sort Enterprise branches (enterprise should be included, and enterprise-X.Y sorted by version)
+        enterprise_branches_sorted = []
+        if "enterprise" in enterprise_branches:
+            enterprise_branches_sorted.append("enterprise")
+        # Sort enterprise-X.Y by version number
+        ent_versions = [b for b in enterprise_branches if b.startswith("enterprise-")]
+        ent_versions.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("enterprise-", "").split(".")], reverse=True)
+        enterprise_branches_sorted.extend(ent_versions[:limit])
+
+        return {
+            "oss": oss_branches_sorted,
+            "enterprise": enterprise_branches_sorted,
+        }
+    except Exception as e:
+        # Fallback to hardcoded values if S3 access fails
+        return {
+            "oss": ["master", "branch-2025.3", "branch-2025.2"],
+            "enterprise": ["enterprise", "enterprise-2024.1"],
+        }
 
 
 class TestVersionUtils(unittest.TestCase):
@@ -715,45 +780,78 @@ def test_comparable_scylla_operator_versions_to_str(version_string_input, versio
     assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
 
 
+def _generate_test_params_for_get_branched_repo():
+    """
+    Generate test parameters dynamically based on available branches in S3.
+
+    This function discovers the latest 3 OSS and Enterprise branches from S3 and creates
+    test parameters for various distribution types (centos, ubuntu, debian).
+
+    Returns:
+        list: Test parameters as tuples of (scylla_version, distro, expected_repo)
+    """
+    branches = get_latest_branches_from_s3()
+    test_params = []
+
+    # Add tests for OSS branches with centos
+    for branch in branches["oss"]:
+        branch_id = branch.replace("branch-", "")
+        test_params.append((
+            f"{branch}:latest",
+            "centos",
+            f"unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"
+        ))
+
+    # Add tests for one OSS branch with ubuntu and debian
+    if branches["oss"]:
+        for branch in branches["oss"]:
+            if branch.startswith("branch-"):
+                branch_id = branch.replace("branch-", "")
+                test_params.append((
+                    f"{branch}:latest",
+                    "ubuntu",
+                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
+                ))
+                test_params.append((
+                    f"{branch}:latest",
+                    "debian",
+                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
+                ))
+                # Test multiple distros only for the first branch
+                break
+
+    # Add tests for Enterprise branches with centos
+    for branch in branches["enterprise"]:
+        branch_id = branch.replace("enterprise-", "")
+        if branch_id == "":  # Handle "enterprise" branch
+            branch_id = branch
+        test_params.append((
+            f"{branch}:latest",
+            "centos",
+            f"unstable/scylla-enterprise/{branch}/rpm/centos/latest/scylla.repo"
+        ))
+
+    # Add tests for one Enterprise branch with ubuntu and debian
+    if branches["enterprise"]:
+        for branch in branches["enterprise"]:
+            if branch.startswith("enterprise-"):
+                branch_id = branch.replace("enterprise-", "")
+                test_params.append((
+                    f"{branch}:latest",
+                    "ubuntu",
+                    f"unstable/scylla-enterprise/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
+                ))
+                # Test multiple distros only for the first enterprise branch
+                break
+
+    return test_params
+
+
 @pytest.mark.need_network
 @pytest.mark.integration
 @pytest.mark.parametrize(
     "scylla_version,distro,expected_repo",
-    (
-        ("master:latest", "centos", "unstable/scylla/master/rpm/centos/latest/scylla.repo"),
-        ("branch-2025.3:latest", "centos", "unstable/scylla/branch-2025.3/rpm/centos/latest/scylla.repo"),
-        (
-            "branch-2025.3:latest",
-            "ubuntu",
-            "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list",
-        ),
-        (
-            "branch-2025.3:latest",
-            "debian",
-            "unstable/scylla/branch-2025.3/deb/unified/latest/scylladb-2025.3/scylla.list",
-        ),
-        ("branch-2025.2:latest", "centos", "unstable/scylla/branch-2025.2/rpm/centos/latest/scylla.repo"),
-        ("branch-2025.1:latest", "centos", "unstable/scylla/branch-2025.1/rpm/centos/latest/scylla.repo"),
-        ("branch-6.2:latest", "centos", "unstable/scylla/branch-6.2/rpm/centos/latest/scylla.repo"),
-        ("branch-6.1:latest", "centos", "unstable/scylla/branch-6.1/rpm/centos/latest/scylla.repo"),
-        ("branch-6.0:latest", "centos", "unstable/scylla/branch-6.0/rpm/centos/latest/scylla.repo"),
-        ("enterprise:latest", "centos", "unstable/scylla-enterprise/enterprise/rpm/centos/latest/scylla.repo"),
-        (
-            "enterprise-2024.2:latest",
-            "centos",
-            "unstable/scylla-enterprise/enterprise-2024.2/rpm/centos/latest/scylla.repo",
-        ),
-        (
-            "enterprise-2024.2:latest",
-            "ubuntu",
-            "unstable/scylla-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list",
-        ),
-        (
-            "enterprise-2024.1:latest",
-            "debian",
-            "unstable/scylla-enterprise/enterprise-2024.1/deb/unified/latest/scylladb-2024.1/scylla.list",
-        ),
-    ),
+    _generate_test_params_for_get_branched_repo(),
 )
 def test_get_branched_repo(scylla_version, distro, expected_repo):
     expected_template = "https://s3.amazonaws.com/downloads.scylladb.com/{}"
