@@ -19,6 +19,15 @@ from sdcm.utils.common import get_ami_tags
 from sdcm.utils.version_utils import is_enterprise
 
 
+@pytest.fixture
+def ami_not_found_error():
+    """Create a ClientError for AMI not found."""
+    return ClientError(
+        error_response={"Error": {"Code": "InvalidAMIID.NotFound", "Message": "The image id does not exist"}},
+        operation_name="DescribeImages"
+    )
+
+
 class TestAMINotFound:
     """Test suite for handling non-existent AMI errors."""
 
@@ -38,13 +47,10 @@ class TestAMINotFound:
         assert is_enterprise("6.0.0") is False
         assert is_enterprise("master:latest") is False
 
-    def test_get_ami_tags_not_found_error(self):
+    def test_get_ami_tags_not_found_error(self, ami_not_found_error):
         """Test that get_ami_tags raises clear error when AMI doesn't exist."""
         mock_image = unittest.mock.MagicMock()
-        mock_image.reload.side_effect = ClientError(
-            error_response={"Error": {"Code": "InvalidAMIID.NotFound", "Message": "The image id '[ami-12345]' does not exist"}},
-            operation_name="DescribeImages"
-        )
+        mock_image.reload.side_effect = ami_not_found_error
         
         with unittest.mock.patch("sdcm.utils.common.get_scylla_images_ec2_resource") as mock_scylla_resource, \
              unittest.mock.patch("sdcm.utils.common.boto3") as mock_boto3:
@@ -98,3 +104,4 @@ class TestAMINotFound:
             tags = get_ami_tags("ami-notags", "us-east-1")
             
             assert tags == {}
+
