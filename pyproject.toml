@@ -61,7 +61,7 @@ dependencies = [
     "requests==2.32.4",
     "scylla-driver==3.29.7",
     "sortedcontainers==2.4.0",
-    "ssh2-python>=1.1.2.post1",
+    "ssh2-python>=1.1.2.post1; sys_platform != 'darwin'",
     "tcconfig==0.29.1",
     "tenacity==9.0.0",
 ]

@@ -90,9 +90,9 @@ from sdcm.remote import (
     NETWORK_EXCEPTIONS,
     shell_script_cmd,
     RetryableNetworkException,
+    Libssh2_UnexpectedExit,
 )
 from sdcm.remote.agent_cmd_runner import AgentCmdRunner
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt

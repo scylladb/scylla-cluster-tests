@@ -41,8 +41,7 @@ from sdcm.paths import (
 from sdcm.provision import provisioner_factory
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import ProvisionerError
-from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner, Libssh2_UnexpectedExit, Libssh2_Failure
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
@@ -72,7 +71,6 @@ from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.localhost import LocalHost
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.utils.aws_ssm_runner import SSMCommandRunner
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2_Failure
 
 LOGGER = logging.getLogger(__name__)
 

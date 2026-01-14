@@ -146,7 +146,16 @@ class RemoteCmdRunnerBase(CommandRunner, RetryMixin):
     def set_default_ssh_transport(cls, ssh_transport: str):
         remoter_class = cls.remoter_classes.get(ssh_transport, None)
         if remoter_class is None:
-            raise ValueError(f'There is not remoter class with ssh_transport marker "{ssh_transport}"')
+            import sys
+            error_msg = f'There is no remoter class with ssh_transport marker "{ssh_transport}"'
+            if ssh_transport == "libssh2" and sys.platform == "darwin":
+                error_msg += (
+                    "\n\nNote: The 'libssh2' SSH transport is not available on macOS due to "
+                    "ssh2-python build issues. Please use 'fabric' instead:\n"
+                    "  export SSH_TRANSPORT=fabric\n"
+                    "Or change 'ssh_transport: fabric' in defaults/test_default.yaml"
+                )
+            raise ValueError(error_msg)
         RemoteCmdRunnerBase.default_remoter_class = remoter_class
 
     @staticmethod

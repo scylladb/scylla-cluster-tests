@@ -20,6 +20,27 @@ Before you begin, ensure you have the following installed on your system:
 - Git
 - Basic system development tools (build-essential, or equivalent for your distro)
 
+### MacOS-Specific Notes
+
+**Important:** On macOS, the `ssh2-python` library (which provides the high-performance `libssh2` SSH transport) is **not installed by default** due to architecture compatibility issues, particularly on Apple Silicon (M1/M2/M3) Macs. The library has build issues related to OpenSSL linking and x86_64/arm64 architecture mismatches.
+
+**Workaround:** SCT will automatically use the `fabric` SSH transport (based on Paramiko) instead. To ensure this works correctly:
+
+1. **Verify your SSH transport configuration:**
+   ```bash
+   # By default, SCT is configured to use 'libssh2' in defaults/test_default.yaml
+   # On macOS, you should explicitly set it to use 'fabric' instead:
+   export SSH_TRANSPORT=fabric
+   ```
+
+2. **Alternative: Change default configuration:**
+   Edit `defaults/test_default.yaml` and change:
+   ```yaml
+   ssh_transport: 'fabric'  # instead of 'libssh2'
+   ```
+
+**Note:** The `fabric` transport is fully functional and suitable for local development and testing on macOS. The performance difference is negligible for typical development workflows.
+
 ## Installation
 
 ### 1. Install uv

@@ -176,6 +176,9 @@ SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/t
 ```
 
 ## [Install local development environment](docs/install-local-env.md)
+
+**Note for macOS Users:** If you're using macOS (especially Apple Silicon), please read the [MacOS-Specific Notes](docs/install-local-env.md#macos-specific-notes) in the installation guide for important information about SSH transport configuration.
+
 ## [Frequently Asked Questions (FAQ)](docs/faq.md)
 ## [Contribution instructions](docs/contrib.md)
 

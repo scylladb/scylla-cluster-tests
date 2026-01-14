@@ -1,5 +1,30 @@
 # FAQ
 
+## MacOS: Failed to build ssh2-python when running "uv sync"
+
+**Problem:** On macOS, especially Apple Silicon (M1/M2/M3), you may encounter build errors when running `uv sync`:
+```
+Failed to build `ssh2-python==1.2.0.post1`
+ld: warning: ignoring file '/opt/homebrew/opt/openssl/lib/libcrypto.dylib': 
+found architecture 'arm64', required architecture 'x86_64'
+```
+
+**Root Cause:** The `ssh2-python` library has architecture compatibility issues on macOS, particularly with cross-compilation between x86_64 and arm64 architectures, and OpenSSL linking problems.
+
+**Solution:** 
+1. The `ssh2-python` dependency is now **optional on macOS** (it will be skipped during installation)
+2. SCT will use the `fabric` SSH transport (based on Paramiko) instead, which is fully functional
+3. Ensure you set the SSH transport to `fabric`:
+   ```bash
+   export SSH_TRANSPORT=fabric
+   ```
+   Or edit `defaults/test_default.yaml`:
+   ```yaml
+   ssh_transport: 'fabric'  # instead of 'libssh2'
+   ```
+
+For more details, see the [MacOS-Specific Notes](./install-local-env.md#macos-specific-notes) in the installation guide.
+
 ## Reusing already running Cluster
 
 See: [reuse_cluster](./reuse_cluster.md)

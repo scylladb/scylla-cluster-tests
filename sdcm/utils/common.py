@@ -63,7 +63,7 @@ from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
 from prettytable import PrettyTable
 
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote import Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import create_proxy_argus_s3_url
