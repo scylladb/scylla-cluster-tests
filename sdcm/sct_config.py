@@ -16,6 +16,7 @@ Handling Scylla-cluster-test configuration loading
 """
 
 import os
+import random
 import re
 import ast
 import json
@@ -2492,6 +2493,13 @@ class SCTConfiguration(dict):
             type=bool,
             help="Whether or not to send email using argus instead of SCT.",
         ),
+        dict(
+            name="c_s_driver_version",
+            env="SCT_C_S_DRIVER_VERSION",
+            type=str,
+            choices=("3", "4", "random"),
+            help="cassandra-stress driver version to use: 3|4|random",
+        ),
     ]
 
     required_params = [
@@ -3082,6 +3090,86 @@ class SCTConfiguration(dict):
                     "Config of zero token nodes is not equal config of data nodes for multi dc"
                 )
 
+<<<<<<< HEAD
+||||||| parent of a05f8105f (feature(c-s): Enable c-s java 4x driver support)
+        # 21 validate performance throughput parameters
+        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
+            for workload, params in performance_throughput_params.items():
+                if not isinstance(params, list):
+                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+=======
+        # 21 validate performance throughput parameters
+        if performance_throughput_params := self.get("perf_gradual_throttle_steps"):
+            for workload, params in performance_throughput_params.items():
+                if not isinstance(params, list):
+                    raise ValueError(f"perf_gradual_throttle_steps for {workload} should be a list")
+
+                if not (gradual_threads := self.get("perf_gradual_threads")):
+                    raise ValueError("perf_gradual_threads should be defined for performance throughput test")
+
+                if workload not in gradual_threads:
+                    raise ValueError(
+                        f"Gradual threads for '{workload}' test is not defined in 'perf_gradual_threads' parameter"
+                    )
+
+                if not isinstance(gradual_threads[workload], list | int):
+                    raise ValueError(f"perf_gradual_threads for {workload} should be a list or integer")
+
+                if isinstance(gradual_threads[workload], int):
+                    gradual_threads[workload] = [gradual_threads[workload]]
+
+                for thread_count in gradual_threads[workload]:
+                    if not isinstance(thread_count, int):
+                        raise ValueError(
+                            f"Invalid thread count type for '{workload}': {thread_count} "
+                            f"(type: {type(thread_count).__name__})"
+                        )
+
+                # The value of perf_gradual_threads[load] must be either:
+                #   - a single-element list (applied to all throttle steps) or integer
+                #   - a list with the same length as perf_gradual_throttle_steps[workload] (one thread count per step).
+                if len(gradual_threads[workload]) > 1 and len(gradual_threads[workload]) != len(params):
+                    raise ValueError(
+                        f"perf_gradual_threads for {workload} should be a single-element, integer or list, "
+                        f"or a list with the same length as perf_gradual_throttle_steps for {workload}"
+                    )
+
+        if self.get("c_s_driver_version") == "random":
+            self["c_s_driver_version"] = random.choice(["4", "3"])
+            self.log.debug("Using random cassandra-stress driver version: %s", self["c_s_driver_version"])
+
+>>>>>>> a05f8105f (feature(c-s): Enable c-s java 4x driver support)
     def load_docker_images_defaults(self):
         docker_images_dir = pathlib.Path(sct_abs_path("defaults/docker_images"))
         if docker_images_dir.is_dir():
