@@ -19,8 +19,8 @@ import pytest
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import (
     InstanceDefinition,
-    provisioner_factory,
     ProvisionerError,
+    provisioner_factory,
 )
 from sdcm.provision.user_data import UserDataObject
 

@@ -11,11 +11,12 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
-import uuid
-import time
-import random
-import pytest
 import logging
+import random
+import time
+import uuid
+
+import pytest
 
 pytestmark = [
     pytest.mark.usefixtures("events"),

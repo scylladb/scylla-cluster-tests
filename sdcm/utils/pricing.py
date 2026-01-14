@@ -2,11 +2,12 @@ import json
 from datetime import datetime, timedelta
 from functools import lru_cache
 from logging import getLogger
+
 import boto3
 import requests
 from mypy_boto3_pricing import PricingClient
-from sdcm.utils.cloud_monitor.common import InstanceLifecycle
 
+from sdcm.utils.cloud_monitor.common import InstanceLifecycle
 
 LOGGER = getLogger(__name__)
 

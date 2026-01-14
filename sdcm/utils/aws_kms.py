@@ -14,8 +14,8 @@
 import datetime
 import logging
 
-import botocore
 import boto3
+import botocore
 
 from sdcm.utils.common import list_instances_aws
 

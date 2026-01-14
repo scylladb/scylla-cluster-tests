@@ -15,12 +15,11 @@ import os
 import pickle
 import tempfile
 import unittest
-from typing import Optional, Type, Protocol, runtime_checkable
+from typing import Optional, Protocol, Type, runtime_checkable
 from unittest.mock import patch
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
-
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import BaseFilter, LogEvent, LogEventProtocol, SctEvent, SctEventTypesRegistry
 
 Y = None  # define a global name for pickle.
 

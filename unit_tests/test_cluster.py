@@ -28,8 +28,9 @@ import pytest
 from invoke import Result
 
 from sdcm import sct_config
-from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
+from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.filters import DbEventsFilter
@@ -43,7 +44,6 @@ from sdcm.utils.common import (
 from sdcm.utils.distro import Distro
 from sdcm.utils.nemesis_utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
-from sdcm.remote import LocalCmdRunner
 from unit_tests.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode

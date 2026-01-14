@@ -13,17 +13,17 @@
 import logging
 import os
 import time
-from datetime import datetime, timedelta
-from typing import List, Dict, Tuple
 from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple
 
-from botocore.exceptions import ClientError
 import boto3
+from botocore.exceptions import ClientError
 
 from sdcm.exceptions import CapacityReservationError
 from sdcm.utils.common import all_aws_regions
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.get_username import get_username
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
 

@@ -11,14 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import json
 import atexit
+import json
 import logging
+import os
 from typing import Iterable
 
 from sdcm.remote import LOCALRUNNER
-
 
 LOGGER = logging.getLogger(__name__)
 

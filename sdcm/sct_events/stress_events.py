@@ -10,9 +10,9 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from typing import Any, Optional, List, Protocol
+from typing import Any, List, Optional, Protocol
 
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
 

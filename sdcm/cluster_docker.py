@@ -11,19 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
-import logging
-from typing import Optional, Union, Dict
 from functools import cached_property
-
+from typing import Dict, Optional, Union
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.docker_cmd_runner import DockerCmdRunner
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException, get_docker_bridge_gateway
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.nemesis_utils.node_allocator import mark_new_nodes_as_running_nemesis
 from sdcm.utils.net import get_my_public_ip

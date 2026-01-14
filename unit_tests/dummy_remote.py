@@ -12,13 +12,13 @@
 # Copyright (c) 2020 ScyllaDB
 
 
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
 
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.remote import LocalCmdRunner
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.utils.common import get_data_dir_path
 
 

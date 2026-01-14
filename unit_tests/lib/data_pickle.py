@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, Any, Dict
-import json
 import enum
+import json
+from typing import Any, Dict, Optional
 
 
 class DefaultValue:

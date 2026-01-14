@@ -1,6 +1,5 @@
 from sdcm.utils.decorators import _find_hdr_tags
 
-
 HDR_TAGS1 = ["foohdr1", "foohdr2"]
 HDR_TAGS2 = ["barhdr1", "barhdr2"]
 

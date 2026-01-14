@@ -1,7 +1,9 @@
-from copy import deepcopy
 import logging
+from copy import deepcopy
 from typing import TypedDict
+
 import yaml
+
 from sdcm.cluster import BaseNode
 from sdcm.remote.remote_file import remote_file
 from sdcm.sct_events import Severity

@@ -1,12 +1,11 @@
 import logging
 import traceback
-
 from dataclasses import dataclass
 from enum import Enum
 from typing import TypeVar
 
-from sdcm.wait import wait_for
 from sdcm.exceptions import KillNemesis
+from sdcm.wait import wait_for
 
 LOGGER = logging.getLogger(__name__)
 BaseNode = TypeVar("BaseNode")

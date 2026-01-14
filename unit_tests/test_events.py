@@ -11,33 +11,32 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
-import unittest
 import multiprocessing
-from pathlib import Path
+import time
+import unittest
 from datetime import datetime
+from pathlib import Path
 from unittest import mock
 
 import pytest
 from parameterized import parameterized
 
-from sdcm.exceptions import UnsupportedNemesis, KillNemesis
+from sdcm.exceptions import KillNemesis, UnsupportedNemesis
 from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events.nodetool import NodetoolEvent
-from sdcm.utils.decorators import timeout
-from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
-from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import YcsbStressEvent, CassandraStressLogEvent
-from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.file_logger import get_logger_event_summary
-from sdcm.sct_events.event_counter import EventCounterContextManager
-from sdcm.sct_events.setup import enable_default_filters
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events import Severity
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.event_counter import EventCounterContextManager
+from sdcm.sct_events.file_logger import get_logger_event_summary
+from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import CassandraStressLogEvent, YcsbStressEvent
+from sdcm.sct_events.nemesis import DisruptionEvent
+from sdcm.sct_events.nodetool import NodetoolEvent
+from sdcm.sct_events.setup import enable_default_filters
+from sdcm.sct_events.system import CoreDumpEvent, SoftTimeoutEvent, TestFrameworkEvent
 from sdcm.utils.context_managers import environment
-
+from sdcm.utils.decorators import timeout
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 LOGGER = logging.getLogger(__name__)

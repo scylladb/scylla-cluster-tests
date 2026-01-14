@@ -12,9 +12,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2025 ScyllaDB
-from itertools import cycle
 from contextlib import ExitStack, contextmanager
+from itertools import cycle
+from threading import Thread
 from time import sleep, time
+
 from longevity_test import LongevityTest
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, BaseNode
 from sdcm.db_stats import PrometheusDBStats
@@ -30,7 +32,6 @@ from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.decorators import retrying
 from sdcm.utils.nemesis_utils.indexes import create_index, verify_query_by_index_works, wait_for_index_to_be_built
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
-from threading import Thread
 
 
 @contextmanager

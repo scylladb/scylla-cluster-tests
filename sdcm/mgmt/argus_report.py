@@ -4,7 +4,7 @@ from docker.errors import InvalidArgument
 
 from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import ManagerBackupReadResult, ManagerBackupBenchmarkResult, submit_results_to_argus
+from sdcm.argus_results import ManagerBackupBenchmarkResult, ManagerBackupReadResult, submit_results_to_argus
 from sdcm.mgmt.cli import BackupTask, ManagerCluster
 from sdcm.mgmt.common import get_backup_size
 

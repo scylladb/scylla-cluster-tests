@@ -15,15 +15,15 @@
 Wait functions appropriate for tests that have high timing variance.
 """
 
-import time
 import logging
+import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from typing import TypeVar, cast
-from collections.abc import Callable
 
 import tenacity
 
-from sdcm.exceptions import WaitForTimeoutError, ExitByEventError
+from sdcm.exceptions import ExitByEventError, WaitForTimeoutError
 
 LOGGER = logging.getLogger("sdcm.wait")
 

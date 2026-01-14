@@ -1,26 +1,22 @@
-import logging
 import contextlib
+import logging
+import re
 import time
 import traceback
-import re
-
-from typing import Iterable, Callable
 from functools import partial
 from json import loads
+from typing import Callable, Iterable
 
+from sdcm.cluster import BaseMonitorSet, BaseNode, BaseScyllaCluster, NodeSetupFailed
+from sdcm.exceptions import BootstrapStreamErrorFailure, ExitByEventError, RaftTopologyCoordinatorNotFound
+from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.exceptions import BootstrapStreamErrorFailure, ExitByEventError
-from sdcm.utils.action_logger import ActionLogger
-from sdcm.wait import wait_for
-
 from sdcm.sct_events.group_common_events import decorate_with_context, ignore_ycsb_connection_refused
+from sdcm.utils.action_logger import ActionLogger
+from sdcm.utils.decorators import retrying
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.raft import get_node_status_from_system_by
-from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
-from sdcm.exceptions import RaftTopologyCoordinatorNotFound
-from sdcm.rest.storage_service_client import StorageServiceClient
-from sdcm.utils.decorators import retrying
-
+from sdcm.wait import wait_for
 
 LOGGER = logging.getLogger(__name__)
 UUID_REGEX = re.compile(r"([0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12})")

@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
-import logging
 import datetime
+import logging
 import threading
-from typing import Optional
+import time
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
+from typing import Optional
 
-import requests
 import prometheus_client
+import requests
 
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
-from sdcm.utils.decorators import retrying, log_run_info
+from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.net import get_my_ip
 
 START = "start"

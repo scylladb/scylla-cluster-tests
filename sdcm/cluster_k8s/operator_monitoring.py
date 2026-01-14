@@ -11,15 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import threading
 import logging
+import threading
 from typing import Iterable
 
-from sdcm.utils.file import File
-from sdcm.utils.decorators import timeout
 from sdcm.sct_events.operator import (
     SCYLLA_OPERATOR_EVENT_PATTERNS,
 )
+from sdcm.utils.decorators import timeout
+from sdcm.utils.file import File
 
 
 class ScyllaOperatorLogMonitoring(threading.Thread):

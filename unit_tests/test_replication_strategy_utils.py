@@ -1,12 +1,13 @@
 from collections import namedtuple
+
 import pytest
 
 from sdcm.utils.replication_strategy_utils import (
-    temporary_replication_strategy_setter,
-    SimpleReplicationStrategy,
+    LocalReplicationStrategy,
     NetworkTopologyReplicationStrategy,
     ReplicationStrategy,
-    LocalReplicationStrategy,
+    SimpleReplicationStrategy,
+    temporary_replication_strategy_setter,
 )
 
 

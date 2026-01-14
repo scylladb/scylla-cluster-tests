@@ -11,9 +11,9 @@
 #
 # Copyright (c) 2025 ScyllaDB
 
+import os
 import unittest
 from unittest.mock import patch
-import os
 
 from click.testing import CliRunner
 
