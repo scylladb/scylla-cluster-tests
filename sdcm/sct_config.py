@@ -3756,22 +3756,44 @@ class SCTConfiguration(dict):
             scylla_version = get_branch_version(scylla_repo, full_version=True)
             _is_enterprise = is_enterprise(scylla_version)
         elif self.get("db_type") == "cloud_scylla":
-            _is_enterpise = True
+            _is_enterprise = True
         elif backend == "aws":
             amis = self.get("ami_id_db_scylla").split()
             region_name = self.region_names[0]
             tags = get_ami_tags(ami_id=amis[0], region_name=region_name)
-            scylla_version = tags.get("scylla_version") or tags.get("ScyllaVersion")
+            scylla_version = self._require_scylla_version_tag(
+                tags=tags,
+                resource_label="AMI",
+                resource_id=amis[0],
+                tag_keys=("scylla_version", "ScyllaVersion"),
+                region_name=region_name,
+                resource_type="AMI",
+                resource_id_label="AMI ID",
+            )
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "gce":
             images = self.get("gce_image_db").split()
             tags = get_gce_image_tags(images[0])
-            scylla_version = tags.get("scylla_version").replace("-", ".")
+            scylla_version = self._require_scylla_version_tag(
+                tags=tags,
+                resource_label="GCE image",
+                resource_id=images[0],
+                tag_keys=("scylla_version",),
+                resource_type="image",
+                resource_id_label="image name",
+            ).replace("-", ".")
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "azure":
             images = self.get("azure_image_db").split()
             tags = azure_utils.get_image_tags(images[0])
-            scylla_version = tags.get("scylla_version")
+            scylla_version = self._require_scylla_version_tag(
+                tags=tags,
+                resource_label="Azure image",
+                resource_id=images[0],
+                tag_keys=("scylla_version",),
+                resource_type="image",
+                resource_id_label="image name",
+            )
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "docker" or "k8s" in backend:
             docker_repo = self.get("docker_image")
@@ -3782,6 +3804,29 @@ class SCTConfiguration(dict):
         self.update_argus_with_version(scylla_version, "scylla-server-target")
 
         return scylla_version, _is_enterprise
+
+    @staticmethod
+    def _require_scylla_version_tag(
+        *,
+        tags: dict,
+        resource_label: str,
+        resource_id: str,
+        tag_keys: tuple[str, ...],
+        resource_type: str,
+        resource_id_label: str,
+        region_name: str | None = None,
+    ) -> str:
+        for key in tag_keys:
+            value = tags.get(key)
+            if value:
+                return value
+        tag_list = " or ".join(f"'{key}'" for key in tag_keys)
+        location = f" in region '{region_name}'" if region_name else ""
+        raise ValueError(
+            f"{resource_label} '{resource_id}'{location} does not have {tag_list} tag. "
+            f"This {resource_type} may not be a valid Scylla {resource_type}. "
+            f"Please check the {resource_id_label} and ensure it is tagged correctly."
+        )
 
     def update_argus_with_version(self, scylla_version: str, package_name: str):
         try:
