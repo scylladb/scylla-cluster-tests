@@ -74,7 +74,9 @@ def get_latest_branches_from_s3(bucket="downloads.scylladb.com", limit=3):
             oss_branches_sorted.append("master")
         # Sort branch-X.Y by version number
         branch_versions = [b for b in oss_branches if b.startswith("branch-")]
-        branch_versions.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("branch-", "").split(".")], reverse=True)
+        branch_versions.sort(
+            key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("branch-", "").split(".")], reverse=True
+        )
         oss_branches_sorted.extend(branch_versions[:limit])
 
         # Get Enterprise branches
@@ -93,14 +95,16 @@ def get_latest_branches_from_s3(bucket="downloads.scylladb.com", limit=3):
             enterprise_branches_sorted.append("enterprise")
         # Sort enterprise-X.Y by version number
         ent_versions = [b for b in enterprise_branches if b.startswith("enterprise-")]
-        ent_versions.sort(key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("enterprise-", "").split(".")], reverse=True)
+        ent_versions.sort(
+            key=lambda x: [int(p) if p.isdigit() else p for p in x.replace("enterprise-", "").split(".")], reverse=True
+        )
         enterprise_branches_sorted.extend(ent_versions[:limit])
 
         return {
             "oss": oss_branches_sorted,
             "enterprise": enterprise_branches_sorted,
         }
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, Exception):  # noqa: BLE001
         # Fallback to hardcoded values if S3 access fails
         return {
             "oss": ["master", "branch-2025.3", "branch-2025.2"],
@@ -796,27 +800,27 @@ def _generate_test_params_for_get_branched_repo():
     # Add tests for OSS branches with centos
     for branch in branches["oss"]:
         branch_id = branch.replace("branch-", "")
-        test_params.append((
-            f"{branch}:latest",
-            "centos",
-            f"unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"
-        ))
+        test_params.append((f"{branch}:latest", "centos", f"unstable/scylla/{branch}/rpm/centos/latest/scylla.repo"))
 
     # Add tests for one OSS branch with ubuntu and debian
     if branches["oss"]:
         for branch in branches["oss"]:
             if branch.startswith("branch-"):
                 branch_id = branch.replace("branch-", "")
-                test_params.append((
-                    f"{branch}:latest",
-                    "ubuntu",
-                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
-                ))
-                test_params.append((
-                    f"{branch}:latest",
-                    "debian",
-                    f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
-                ))
+                test_params.append(
+                    (
+                        f"{branch}:latest",
+                        "ubuntu",
+                        f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list",
+                    )
+                )
+                test_params.append(
+                    (
+                        f"{branch}:latest",
+                        "debian",
+                        f"unstable/scylla/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list",
+                    )
+                )
                 # Test multiple distros only for the first branch
                 break
 
@@ -825,22 +829,22 @@ def _generate_test_params_for_get_branched_repo():
         branch_id = branch.replace("enterprise-", "")
         if branch_id == "":  # Handle "enterprise" branch
             branch_id = branch
-        test_params.append((
-            f"{branch}:latest",
-            "centos",
-            f"unstable/scylla-enterprise/{branch}/rpm/centos/latest/scylla.repo"
-        ))
+        test_params.append(
+            (f"{branch}:latest", "centos", f"unstable/scylla-enterprise/{branch}/rpm/centos/latest/scylla.repo")
+        )
 
     # Add tests for one Enterprise branch with ubuntu and debian
     if branches["enterprise"]:
         for branch in branches["enterprise"]:
             if branch.startswith("enterprise-"):
                 branch_id = branch.replace("enterprise-", "")
-                test_params.append((
-                    f"{branch}:latest",
-                    "ubuntu",
-                    f"unstable/scylla-enterprise/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list"
-                ))
+                test_params.append(
+                    (
+                        f"{branch}:latest",
+                        "ubuntu",
+                        f"unstable/scylla-enterprise/{branch}/deb/unified/latest/scylladb-{branch_id}/scylla.list",
+                    )
+                )
                 # Test multiple distros only for the first enterprise branch
                 break
 
