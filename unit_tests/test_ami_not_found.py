@@ -1,0 +1,100 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2025 ScyllaDB
+
+import unittest.mock
+import pytest
+from botocore.exceptions import ClientError
+
+from sdcm.utils.common import get_ami_tags
+from sdcm.utils.version_utils import is_enterprise
+
+
+class TestAMINotFound:
+    """Test suite for handling non-existent AMI errors."""
+
+    def test_is_enterprise_with_none(self):
+        """Test that is_enterprise handles None input gracefully."""
+        assert is_enterprise(None) is False
+
+    def test_is_enterprise_with_valid_enterprise_version(self):
+        """Test that is_enterprise correctly identifies enterprise versions."""
+        assert is_enterprise("2024.1") is True
+        assert is_enterprise("2023.1.1") is True
+        assert is_enterprise("2022.2.0") is True
+
+    def test_is_enterprise_with_valid_oss_version(self):
+        """Test that is_enterprise correctly identifies non-enterprise versions."""
+        assert is_enterprise("5.4.1") is False
+        assert is_enterprise("6.0.0") is False
+        assert is_enterprise("master:latest") is False
+
+    def test_get_ami_tags_not_found_error(self):
+        """Test that get_ami_tags raises clear error when AMI doesn't exist."""
+        mock_image = unittest.mock.MagicMock()
+        mock_image.reload.side_effect = ClientError(
+            error_response={"Error": {"Code": "InvalidAMIID.NotFound", "Message": "The image id '[ami-12345]' does not exist"}},
+            operation_name="DescribeImages"
+        )
+        
+        with unittest.mock.patch("sdcm.utils.common.get_scylla_images_ec2_resource") as mock_scylla_resource, \
+             unittest.mock.patch("sdcm.utils.common.boto3") as mock_boto3:
+            
+            mock_scylla_resource.return_value.Image.return_value = mock_image
+            mock_boto3.resource.return_value.Image.return_value = mock_image
+            
+            # Clear the cache first
+            get_ami_tags.cache_clear()
+            
+            with pytest.raises(ValueError, match=r"AMI 'ami-12345' does not exist in region 'us-east-1'"):
+                get_ami_tags("ami-12345", "us-east-1")
+
+    def test_get_ami_tags_with_valid_ami(self):
+        """Test that get_ami_tags works correctly with a valid AMI."""
+        mock_image = unittest.mock.MagicMock()
+        mock_image.meta.data = {"ImageId": "ami-valid"}
+        mock_image.tags = [
+            {"Key": "scylla_version", "Value": "5.4.1"},
+            {"Key": "Name", "Value": "Test AMI"}
+        ]
+        mock_image.owner_id = "123456789"
+        
+        with unittest.mock.patch("sdcm.utils.common.get_scylla_images_ec2_resource") as mock_scylla_resource:
+            mock_scylla_resource.return_value.Image.return_value = mock_image
+            
+            # Clear the cache first
+            get_ami_tags.cache_clear()
+            
+            tags = get_ami_tags("ami-valid", "us-east-1")
+            
+            assert tags["scylla_version"] == "5.4.1"
+            assert tags["Name"] == "Test AMI"
+            assert tags["owner_id"] == "123456789"
+
+    def test_get_ami_tags_with_no_tags(self):
+        """Test that get_ami_tags returns empty dict when AMI has no tags."""
+        mock_image = unittest.mock.MagicMock()
+        mock_image.meta.data = {"ImageId": "ami-notags"}
+        mock_image.tags = None
+        
+        with unittest.mock.patch("sdcm.utils.common.get_scylla_images_ec2_resource") as mock_scylla_resource, \
+             unittest.mock.patch("sdcm.utils.common.boto3") as mock_boto3:
+            
+            mock_scylla_resource.return_value.Image.return_value = mock_image
+            mock_boto3.resource.return_value.Image.return_value = mock_image
+            
+            # Clear the cache first
+            get_ami_tags.cache_clear()
+            
+            tags = get_ami_tags("ami-notags", "us-east-1")
+            
+            assert tags == {}
