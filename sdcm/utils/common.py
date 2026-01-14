@@ -1656,6 +1656,15 @@ def get_ami_tags(ami_id, region_name):
     :return: dict of tags
     :raises ValueError: if AMI does not exist
     """
+    def _check_ami_not_found_error(exc: ClientError):
+        """Helper to check if the error is AMI not found and raise appropriate ValueError."""
+        error_code = exc.response.get("Error", {}).get("Code", "")
+        if error_code == "InvalidAMIID.NotFound":
+            raise ValueError(
+                f"AMI '{ami_id}' does not exist in region '{region_name}'. "
+                f"Please check that the AMI ID is correct and available in the specified region."
+            ) from exc
+
     try:
         scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
         new_test_image = scylla_images_ec2_resource.Image(ami_id)
@@ -1665,12 +1674,7 @@ def get_ami_tags(ami_id, region_name):
             res["owner_id"] = new_test_image.owner_id
             return res
     except ClientError as exc:
-        error_code = exc.response.get("Error", {}).get("Code", "")
-        if error_code == "InvalidAMIID.NotFound":
-            raise ValueError(
-                f"AMI '{ami_id}' does not exist in region '{region_name}'. "
-                f"Please check that the AMI ID is correct and available in the specified region."
-            ) from exc
+        _check_ami_not_found_error(exc)
         # For other errors, try fallback
         LOGGER.debug("Failed to load AMI %s in region %s with scylla images credentials: %s", ami_id, region_name, exc)
     
@@ -1683,16 +1687,12 @@ def get_ami_tags(ami_id, region_name):
             res["owner_id"] = test_image.owner_id
             return res
     except ClientError as exc:
-        error_code = exc.response.get("Error", {}).get("Code", "")
-        if error_code == "InvalidAMIID.NotFound":
-            raise ValueError(
-                f"AMI '{ami_id}' does not exist in region '{region_name}'. "
-                f"Please check that the AMI ID is correct and available in the specified region."
-            ) from exc
+        _check_ami_not_found_error(exc)
         LOGGER.warning("Failed to load AMI %s in region %s: %s", ami_id, region_name, exc)
     
     # If we get here, AMI exists but has no tags
     return {}
+
 
 
 def get_db_tables(keyspace_name, node, with_compact_storage=None):
