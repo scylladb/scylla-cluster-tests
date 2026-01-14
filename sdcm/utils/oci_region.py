@@ -39,6 +39,10 @@ from oci.core.models import (
     PortRange,
     TcpOptions,
 )
+from oci.identity.models import (
+    CreateTagNamespaceDetails,
+    CreateTagDetails,
+)
 
 from sdcm.utils.get_username import get_username
 from sdcm.utils.oci_utils import (
@@ -49,6 +53,26 @@ from sdcm.utils.oci_utils import (
     get_oci_identity_client,
     get_oci_network_client,
 )
+
+# Tag namespace and keys used by SCT on OCI
+TAG_NAMESPACE = "sct"
+SCT_TAG_KEYS = [
+    "Name",
+    "Version",
+    "TestId",
+    "TestName",
+    "NodeType",
+    "keep",
+    "keep_action",
+    "UserName",
+    "bastion",
+    "launch_time",
+    "RunByUser",
+    "RestoredTestId",
+    "CreatedBy",
+    "JenkinsJobTag",
+    "version",
+]
 
 
 LOGGER = logging.getLogger(__name__)
@@ -325,6 +349,112 @@ class OciRegion:
                 ipv6_cidr = next(ipv6_iter) if ipv6_iter else None
                 self.create_subnet(ad=ad, ipv4_cidr=next(cidr_iter), ipv6_cidr=ipv6_cidr, subnet_index=None)
 
+    def setup_defined_tags(self):
+        """Set up OCI defined tags required by SCT.
+
+        Creates the tag namespace and tag key definitions if they don't already exist.
+        This allows SCT to use defined tags for resource tagging on OCI.
+
+        Note: Tag operations (CREATE, UPDATE, DELETE) must be performed in the home region.
+        """
+        try:
+            # Get the home region for tag operations
+            # Tag namespace and tag operations must be done in the home region
+            home_region = self._get_home_region()
+            LOGGER.info("Using home region '%s' for tag operations", home_region)
+
+            # Create identity client for home region if needed
+            if self.region_name == home_region:
+                home_identity_client = self.identity_client
+            else:
+                home_identity_client, _ = get_oci_identity_client(region=home_region)
+
+            # 1. Get or create the tag namespace
+            LOGGER.info("Checking for tag namespace '%s'...", TAG_NAMESPACE)
+            all_namespaces = oci.pagination.list_call_get_all_results(
+                home_identity_client.list_tag_namespaces, self.compartment_id
+            ).data
+            namespace_summary = next((ns for ns in all_namespaces if ns.name == TAG_NAMESPACE), None)
+
+            if namespace_summary:
+                LOGGER.info("Tag namespace '%s' already exists.", TAG_NAMESPACE)
+                namespace_id = namespace_summary.id
+            else:
+                LOGGER.info("Creating tag namespace '%s' in compartment '%s'...", TAG_NAMESPACE, self.compartment_id)
+                namespace_details = CreateTagNamespaceDetails(
+                    compartment_id=self.compartment_id,
+                    name=TAG_NAMESPACE,
+                    description="Tag namespace for scylla-cluster-tests",
+                )
+                namespace = home_identity_client.create_tag_namespace(namespace_details).data
+                namespace_id = namespace.id
+                LOGGER.info("Tag namespace '%s' created.", TAG_NAMESPACE)
+
+            # 2. Get existing tags in the namespace
+            existing_tags = oci.pagination.list_call_get_all_results(home_identity_client.list_tags, namespace_id).data
+            existing_tag_names = {tag.name for tag in existing_tags}
+
+            # 3. Create tag keys that don't exist
+            for tag_key in SCT_TAG_KEYS:
+                if tag_key in existing_tag_names:
+                    LOGGER.debug("Tag definition for '%s' already exists in namespace '%s'.", tag_key, TAG_NAMESPACE)
+                else:
+                    try:
+                        LOGGER.info("Creating tag definition for '%s' in namespace '%s'...", tag_key, TAG_NAMESPACE)
+                        tag_details = CreateTagDetails(
+                            name=tag_key,
+                            description=f"SCT tag for {tag_key}",
+                        )
+                        home_identity_client.create_tag(namespace_id, tag_details)
+                        LOGGER.info("Tag definition for '%s' created.", tag_key)
+                    except oci.exceptions.ServiceError as tag_exc:
+                        if tag_exc.code == "TagDefinitionAlreadyExists":
+                            LOGGER.debug("Tag definition for '%s' already exists (caught during creation).", tag_key)
+                        else:
+                            raise
+
+            LOGGER.info(
+                "All defined tags for namespace '%s' are set up in compartment '%s'.",
+                TAG_NAMESPACE,
+                self.compartment_id,
+            )
+
+        except oci.exceptions.ServiceError as exc:
+            LOGGER.error("OCI API error while setting up tags: %s - %s", exc.code, exc.message)
+            if exc.code == "NotAllowed" and "home region" in exc.message:
+                LOGGER.error("Tag operations must be performed in the home region.")
+            LOGGER.error("Please ensure you have permissions to manage tags in the specified compartment.")
+            raise
+        except Exception as exc:
+            LOGGER.error("An unexpected error occurred while setting up tags: %s", exc)
+            raise
+
+    def _get_home_region(self) -> str:
+        """Get the home region for the tenancy.
+
+        Returns:
+            The home region name (e.g., 'us-ashburn-1')
+        """
+        try:
+            # List all region subscriptions to find the home region
+            region_subscriptions = self.identity_client.list_region_subscriptions(self._config["tenancy"]).data
+
+            for region_sub in region_subscriptions:
+                if region_sub.is_home_region:
+                    LOGGER.debug("Found home region: %s", region_sub.region_name)
+                    return region_sub.region_name
+
+            # Fallback: if no home region found, use the first region
+            if region_subscriptions:
+                LOGGER.warning("No home region found, using first region: %s", region_subscriptions[0].region_name)
+                return region_subscriptions[0].region_name
+
+            raise ValueError("No region subscriptions found for tenancy")
+
+        except Exception as exc:
+            LOGGER.error("Failed to determine home region: %s", exc)
+            raise
+
     def configure_network(self):
         # Ensure base resources exist
         _ = self.vcn
@@ -335,6 +465,7 @@ class OciRegion:
     def configure(self):
         """Configure all required resources for SCT in this OCI region."""
         LOGGER.info("Configuring '%s' region...", self.region_name)
+        self.setup_defined_tags()
         self.configure_network()
         LOGGER.info("Region configured successfully.")
 
