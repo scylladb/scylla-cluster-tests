@@ -14,7 +14,7 @@
 """Unit tests for K8s cluster cleanup functionality."""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -83,7 +83,7 @@ def test_clean_eks_clusters(
     mock_eks_client.list_clusters.return_value = {"clusters": ["test-cluster"]}
 
     # Setup mock cluster with specified age and metadata
-    mock_eks_cluster.create_time = datetime.utcnow() - timedelta(hours=cluster_age_hours)
+    mock_eks_cluster.create_time = datetime.now(timezone.utc) - timedelta(hours=cluster_age_hours)
     mock_eks_cluster.metadata = {"items": metadata_items}
 
     # Run cleanup
@@ -113,7 +113,7 @@ def test_clean_eks_clusters(
 def test_clean_gke_clusters(mock_gke_cleaner, cluster_age_hours, resource_labels, dry_run, should_destroy):
     """Test GKE cluster cleanup with various scenarios."""
     # Calculate cluster creation time
-    cluster_time = datetime.utcnow() - timedelta(hours=cluster_age_hours)
+    cluster_time = datetime.now(timezone.utc) - timedelta(hours=cluster_age_hours)
 
     # Setup mock cluster
     mock_cluster = MagicMock()

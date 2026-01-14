@@ -23,9 +23,7 @@ This script cleans GKE clusters and associated resources based on their age and 
 
 import argparse
 import os
-from datetime import datetime
-
-from pytz import utc
+from datetime import datetime, timezone
 
 from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_utils import GkeCleaner, SUPPORTED_PROJECTS
@@ -47,8 +45,8 @@ def get_cluster_creation_time(cluster):
         create_time_str = getattr(cluster, "body", {}).get("createTime", "")
 
     if create_time_str:
-        return datetime.fromisoformat(create_time_str.replace("Z", "+00:00")).astimezone(utc).replace(tzinfo=None)
-    return datetime.utcnow()
+        return datetime.fromisoformat(create_time_str.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def get_cluster_tags(cluster) -> dict:
