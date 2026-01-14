@@ -28,6 +28,15 @@ def ami_not_found_error():
     )
 
 
+@pytest.fixture
+def ami_permission_error():
+    """Create a ClientError for permission denied."""
+    return ClientError(
+        error_response={"Error": {"Code": "UnauthorizedOperation", "Message": "You are not authorized"}},
+        operation_name="DescribeImages"
+    )
+
+
 class TestAMINotFound:
     """Test suite for handling non-existent AMI errors."""
 
@@ -63,6 +72,26 @@ class TestAMINotFound:
             
             with pytest.raises(ValueError, match=r"AMI 'ami-12345' does not exist in region 'us-east-1'"):
                 get_ami_tags("ami-12345", "us-east-1")
+
+    def test_get_ami_tags_permission_error_reraises(self, ami_permission_error):
+        """Test that get_ami_tags re-raises AWS errors like permission denied instead of returning empty dict."""
+        mock_image = unittest.mock.MagicMock()
+        mock_image.reload.side_effect = ami_permission_error
+        
+        with unittest.mock.patch("sdcm.utils.common.get_scylla_images_ec2_resource") as mock_scylla_resource, \
+             unittest.mock.patch("sdcm.utils.common.boto3") as mock_boto3:
+            
+            mock_scylla_resource.return_value.Image.return_value = mock_image
+            mock_boto3.resource.return_value.Image.return_value = mock_image
+            
+            # Clear the cache first
+            get_ami_tags.cache_clear()
+            
+            # Should re-raise the ClientError, not return {} which would cause misleading "missing tag" error
+            with pytest.raises(ClientError) as exc_info:
+                get_ami_tags("ami-12345", "us-east-1")
+            
+            assert exc_info.value.response["Error"]["Code"] == "UnauthorizedOperation"
 
     def test_get_ami_tags_with_valid_ami(self):
         """Test that get_ami_tags works correctly with a valid AMI."""
@@ -104,4 +133,57 @@ class TestAMINotFound:
             tags = get_ami_tags("ami-notags", "us-east-1")
             
             assert tags == {}
+
+
+class TestSCTConfigVersionValidation:
+    """Test suite for version tag validation in sct_config.py get_version_based_on_conf."""
+
+    def test_aws_ami_missing_scylla_version_tag(self, monkeypatch):
+        """Test that missing scylla_version tag in AWS AMI raises clear ValueError."""
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+        monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-notags")
+        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+        
+        # Mock get_ami_tags to return empty dict (AMI exists but has no tags)
+        with unittest.mock.patch("sdcm.sct_config.get_ami_tags", return_value={}):
+            from sdcm import sct_config
+            
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+            
+            with pytest.raises(ValueError, match=r"AMI 'ami-notags' .* does not have 'scylla_version' or 'ScyllaVersion' tag"):
+                conf.get_version_based_on_conf()
+
+    def test_gce_image_missing_scylla_version_tag(self, monkeypatch):
+        """Test that missing scylla_version tag in GCE image raises clear ValueError."""
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "gce")
+        monkeypatch.setenv("SCT_GCE_IMAGE_DB", "projects/test/global/images/scylla-test")
+        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+        
+        # Mock get_gce_image_tags to return empty dict
+        with unittest.mock.patch("sdcm.sct_config.get_gce_image_tags", return_value={}):
+            from sdcm import sct_config
+            
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+            
+            with pytest.raises(ValueError, match=r"GCE image .* does not have 'scylla_version' tag"):
+                conf.get_version_based_on_conf()
+
+    def test_azure_image_missing_scylla_version_tag(self, monkeypatch):
+        """Test that missing scylla_version tag in Azure image raises clear ValueError."""
+        monkeypatch.setenv("SCT_CLUSTER_BACKEND", "azure")
+        monkeypatch.setenv("SCT_AZURE_IMAGE_DB", "/subscriptions/test/resourceGroups/test/providers/Microsoft.Compute/images/scylla-test")
+        monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+        
+        # Mock get_image_tags to return empty dict
+        with unittest.mock.patch("sdcm.provision.azure.utils.get_image_tags", return_value={}):
+            from sdcm import sct_config
+            
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+            
+            with pytest.raises(ValueError, match=r"Azure image .* does not have 'scylla_version' tag"):
+                conf.get_version_based_on_conf()
+
 
