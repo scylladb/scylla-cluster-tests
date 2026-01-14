@@ -450,6 +450,8 @@ def is_enterprise(scylla_version):
     :param scylla_version: scylla version string
     :return: True if this version string passed is a scylla enterprise version
     """
+    if scylla_version is None:
+        return False
     return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
 
 
