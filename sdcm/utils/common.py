@@ -1650,24 +1650,58 @@ def get_ami_tags(ami_id, region_name):
     :param ami_id:
     :param region_name: the region to look AMIs in
     :return: dict of tags
+    :raises ValueError: if AMI does not exist
+    :raises ClientError: if there's an AWS API error (auth, throttling, etc.)
     """
-    scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
-    new_test_image = scylla_images_ec2_resource.Image(ami_id)
-    new_test_image.reload()
-    if new_test_image and new_test_image.meta.data and new_test_image.tags:
-        res = {i["Key"]: i["Value"] for i in new_test_image.tags}
-        res["owner_id"] = new_test_image.owner_id
-        return res
-    else:
-        ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
-        test_image = ec2_resource.Image(ami_id)
-        test_image.reload()
-        if test_image and test_image.meta.data and test_image.tags:
-            res = {i["Key"]: i["Value"] for i in test_image.tags}
-            res["owner_id"] = test_image.owner_id
+
+    def _check_ami_not_found_error(exc: ClientError):
+        """Helper to check if the error is AMI not found and raise appropriate ValueError."""
+        error_code = exc.response.get("Error", {}).get("Code", "")
+        if error_code == "InvalidAMIID.NotFound":
+            raise ValueError(
+                f"AMI '{ami_id}' does not exist in region '{region_name}'. "
+                f"Please check that the AMI ID is correct and available in the specified region."
+            ) from exc
+
+    def _load_ami_tags(ec2_resource: EC2ServiceResource):
+        """Helper to load AMI tags from an EC2 resource."""
+        image = ec2_resource.Image(ami_id)
+        image.reload()
+        if image and image.meta.data and image.tags:
+            res = {i["Key"]: i["Value"] for i in image.tags}
+            res["owner_id"] = image.owner_id
             return res
-        else:
-            return {}
+        return None
+
+    last_error = None
+
+    # First attempt: Try with Scylla images credentials (can access private Scylla AMIs)
+    try:
+        scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
+        if result := _load_ami_tags(scylla_images_ec2_resource):
+            return result
+    except ClientError as exc:
+        _check_ami_not_found_error(exc)
+        last_error = exc
+        LOGGER.debug("Failed to load AMI %s in region %s with scylla images credentials: %s", ami_id, region_name, exc)
+
+    # Second attempt: Try with default AWS credentials
+    try:
+        ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
+        if result := _load_ami_tags(ec2_resource):
+            return result
+    except ClientError as exc:
+        _check_ami_not_found_error(exc)
+        last_error = exc
+        LOGGER.warning("Failed to load AMI %s in region %s: %s", ami_id, region_name, exc)
+
+    # If we get here and have an error, it means both attempts failed with non-NotFound errors
+    # Re-raise the last AWS error instead of returning {} which would cause misleading "missing tag" error
+    if last_error:
+        raise last_error
+
+    # AMI exists but has no tags
+    return {}
 
 
 def get_db_tables(keyspace_name, node, with_compact_storage=None):
