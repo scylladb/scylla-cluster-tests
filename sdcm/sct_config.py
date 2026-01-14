@@ -4074,6 +4074,11 @@ class SCTConfiguration(dict):
             region_name = self.region_names[0]
             tags = get_ami_tags(ami_id=amis[0], region_name=region_name)
             scylla_version = tags.get("scylla_version") or tags.get("ScyllaVersion")
+            if not scylla_version:
+                raise ValueError(
+                    f"AMI '{amis[0]}' in region '{region_name}' does not have 'scylla_version' or 'ScyllaVersion' tag. "
+                    f"This AMI may not be a valid Scylla AMI. Please check the AMI ID and ensure it is tagged correctly."
+                )
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == "gce":
             images = self.get("gce_image_db").split()
