@@ -1,8 +1,8 @@
-import unittest
-import time
+import concurrent.futures
 import logging
 import random
-import concurrent.futures
+import time
+import unittest
 
 import pytest
 

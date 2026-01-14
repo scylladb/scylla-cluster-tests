@@ -1,14 +1,14 @@
 #!/usr/bin/python3
-import sys
-import dnslib.server
-import dnslib
-import random
 import _thread
-import urllib.request
-import time
+import random
 import socket
+import sys
+import time
+import urllib.request
 
-from dnslib import DNSRecord, RCODE
+import dnslib
+import dnslib.server
+from dnslib import RCODE, DNSRecord
 
 # The list of live nodes, all of them supposedly answering HTTP requests on
 # alternator_port. One of these nodes will be returned at random from every

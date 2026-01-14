@@ -3,8 +3,9 @@ Tests for get_db_tables function in sdcm.utils.common
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from sdcm.utils.common import get_db_tables
 

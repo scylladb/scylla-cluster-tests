@@ -1,7 +1,7 @@
+import json
 import logging
 from contextlib import contextmanager
-from typing import Dict, Optional, Any, Iterator
-import json
+from typing import Any, Dict, Iterator, Optional
 
 
 class ActionLogger:

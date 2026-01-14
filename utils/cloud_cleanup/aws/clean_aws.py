@@ -2,10 +2,11 @@
 
 import argparse
 import datetime
-import os
-import time
 import logging
+import os
 import sys
+import time
+
 import boto3
 import pytz
 

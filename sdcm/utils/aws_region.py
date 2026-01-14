@@ -12,8 +12,8 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
+from functools import cache, cached_property
 from ipaddress import ip_network
-from functools import cached_property, cache
 
 import boto3
 import botocore

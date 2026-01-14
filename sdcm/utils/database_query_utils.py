@@ -25,7 +25,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.health import PartitionRowsValidationEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import PageFetcher
-from sdcm.utils.decorators import retrying, optional_stage
+from sdcm.utils.decorators import optional_stage, retrying
 
 LOGGER = logging.getLogger(__name__)
 

@@ -16,13 +16,13 @@ import json
 import logging
 import re
 import sys
-from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
 from enum import Enum
-from jinja2 import Environment, FileSystemLoader
+from pathlib import Path
+from typing import List
 
+from jinja2 import Environment, FileSystemLoader
 
 LOGGER = logging.getLogger(__name__)
 

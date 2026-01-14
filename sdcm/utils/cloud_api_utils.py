@@ -13,9 +13,8 @@
 
 import json
 import logging
-from decimal import Decimal, ROUND_UP
+from decimal import ROUND_UP, Decimal
 from pathlib import Path
-
 
 LOGGER = logging.getLogger(__name__)
 

@@ -12,6 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 
 import logging
+
 import pytest
 
 from sdcm import sct_config

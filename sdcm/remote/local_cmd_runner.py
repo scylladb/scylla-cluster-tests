@@ -11,16 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
-import os
-import time
 import getpass
+import os
 import socket
+import time
+from typing import List, Optional
+
 from fabric import Connection
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from invoke.watchers import StreamWatcher
+
 from sdcm.utils.decorators import retrying
+
 from .base import CommandRunner, RetryableNetworkException
 
 

@@ -3,12 +3,10 @@ import multiprocessing
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
 from unittest.mock import MagicMock
 
 from argus.client.sct.client import ArgusSCTClient
-
-
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.sct_events import Severity
@@ -16,14 +14,13 @@ from sdcm.sct_events.argus import enable_argus_posting, start_posting_argus_even
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.argus import ArgusError, get_argus_client
 from sdcm.utils.ci_tools import get_job_name
-from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username
 from sdcm.utils.ldap import LdapServerNotReady
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.sct_agent_installer import generate_agent_api_key, save_agent_api_key, load_agent_api_key
-
+from sdcm.utils.net import get_my_ip
+from sdcm.utils.sct_agent_installer import generate_agent_api_key, load_agent_api_key, save_agent_api_key
 
 LOGGER = logging.getLogger(__name__)
 

@@ -16,12 +16,12 @@ from pathlib import Path
 import requests
 
 from sdcm import cluster
-from sdcm.wait import wait_for
-from sdcm.remote import LOCALRUNNER
-from sdcm.utils.git import clone_repo
-from sdcm.utils.common import get_sct_root_path
-from sdcm.utils.remote_logger import DockerComposeLogger
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
+from sdcm.remote import LOCALRUNNER
+from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.git import clone_repo
+from sdcm.utils.remote_logger import DockerComposeLogger
+from sdcm.wait import wait_for
 
 # TODO: write/think more about the consumers
 

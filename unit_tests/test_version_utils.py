@@ -7,25 +7,25 @@ import pytest
 
 import sdcm
 from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
+    SCYLLA_VERSION_GROUPED_RE,
+    VERSION_NOT_FOUND_ERROR,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
     assume_version,
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_branched_repo,
     get_git_tag_from_helm_chart_version,
+    get_scylla_docker_repo_from_version,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
     is_enterprise,
     scylla_versions,
-    ComparableScyllaOperatorVersion,
-    ComparableScyllaVersion,
-    MethodVersionNotFound,
-    RepositoryDetails,
-    ScyllaFileType,
-    SCYLLA_VERSION_GROUPED_RE,
-    ARGUS_VERSION_RE,
-    VERSION_NOT_FOUND_ERROR,
-    get_scylla_docker_repo_from_version,
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"

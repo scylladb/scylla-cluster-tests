@@ -11,31 +11,30 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import datetime
-import time
+import json
+import logging
 import os
 import platform
-import logging
-import json
+import re
+import time
 import urllib.parse
-
-from textwrap import dedent
-from math import sqrt
-from typing import Optional
-from functools import cached_property
 from collections import defaultdict
+from functools import cached_property
+from math import sqrt
+from textwrap import dedent
+from typing import Optional
 
-import yaml
 import requests
+import yaml
 
 from sdcm.es import ES
-from sdcm.test_config import TestConfig
-from sdcm.utils.common import normalize_ipv6_url, get_ami_tags
-from sdcm.utils.git import get_git_commit_id
-from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
+from sdcm.test_config import TestConfig
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.common import get_ami_tags, normalize_ipv6_url
+from sdcm.utils.decorators import retrying
+from sdcm.utils.git import get_git_commit_id
 
 LOGGER = logging.getLogger(__name__)
 

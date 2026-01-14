@@ -3,17 +3,18 @@ This module tests core responsibilities of NemesisNodeAllocator entity -
 nodes selection, release; state management and thread safety.
 """
 
+import random
 import threading
 import time
+
 import pytest
-import random
 
 from sdcm.cluster import BaseNode
 from sdcm.utils.nemesis_utils import NEMESIS_TARGET_POOLS
 from sdcm.utils.nemesis_utils.node_allocator import (
-    NemesisNodeAllocator,
-    NemesisNodeAllocationError,
     AllNodesRunNemesisError,
+    NemesisNodeAllocationError,
+    NemesisNodeAllocator,
 )
 
 

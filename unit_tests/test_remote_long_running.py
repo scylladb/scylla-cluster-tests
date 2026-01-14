@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.libssh2_client import UnexpectedExit
+from sdcm.remote.remote_long_running import run_long_running_cmd
 
 
 @pytest.fixture(scope="function", autouse=True)

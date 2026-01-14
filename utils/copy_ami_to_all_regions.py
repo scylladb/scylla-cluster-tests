@@ -1,8 +1,9 @@
+import json
 import os
 import sys
-import click
+
 import boto3
-import json
+import click
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sdcm.sct_config import SCTConfiguration

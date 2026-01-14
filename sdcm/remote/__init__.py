@@ -11,12 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+from .base import FailuresWatcher, RetryableNetworkException, SSHConnectTimeoutError, shell_script_cmd
 from .local_cmd_runner import LocalCmdRunner
+from .remote_base import RemoteCmdRunnerBase
 from .remote_cmd_runner import RemoteCmdRunner
 from .remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
-from .remote_base import RemoteCmdRunnerBase
-from .base import FailuresWatcher, RetryableNetworkException, SSHConnectTimeoutError, shell_script_cmd
-
 
 __all__ = (
     "LocalCmdRunner",

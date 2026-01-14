@@ -13,16 +13,16 @@
 import json
 import logging
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import NamedTuple
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.test_config import TestConfig
-from sdcm.utils.parallel_object import ParallelObject
+from sdcm.utils.decorators import retrying
 from sdcm.utils.git import clone_repo
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.decorators import retrying
+from sdcm.utils.parallel_object import ParallelObject
 
 LOGGER = logging.getLogger(__name__)
 ES_INDEX = "node_benchmarks"

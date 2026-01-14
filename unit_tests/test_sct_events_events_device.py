@@ -12,15 +12,15 @@
 # Copyright (c) 2020 ScyllaDB
 
 import ctypes
+import multiprocessing
 import shutil
 import tempfile
-import unittest
 import threading
-import multiprocessing
+import unittest
 
-from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.events_device import EventsDevice, start_events_main_device, get_events_main_device
+from sdcm.sct_events.events_device import EventsDevice, get_events_main_device, start_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.wait import wait_for
 
 

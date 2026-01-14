@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from json import JSONEncoder
 from typing import Any, Type
 

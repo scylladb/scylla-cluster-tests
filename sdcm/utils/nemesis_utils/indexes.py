@@ -18,11 +18,11 @@ import time
 from cassandra.query import SimpleStatement
 
 from sdcm.cluster import BaseNode
+from sdcm.exceptions import UnsupportedNemesis
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.system import InfoEvent
-from sdcm.exceptions import UnsupportedNemesis
 from sdcm.utils.cql_utils import cql_quote_if_needed, cql_unquote_if_needed
 
 LOGGER = logging.getLogger(__name__)

@@ -14,8 +14,8 @@
 # Copyright (c) 2022 ScyllaDB
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils.parallel_object import ParallelObject
 from sdcm.utils.k8s_operator.multitenant_common import MultiTenantTestMixin
+from sdcm.utils.parallel_object import ParallelObject
 
 
 class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, PerformanceRegressionTest):

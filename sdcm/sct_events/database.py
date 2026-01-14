@@ -11,15 +11,14 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import logging
+import re
 from functools import partial
-from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
+from typing import Callable, Generic, List, Match, NamedTuple, Optional, Pattern, Tuple, Type
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, EventPeriod
-
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import EventPeriod, InformationalEvent, LogEvent, LogEventProtocol, SctEvent, T_log_event
+from sdcm.sct_events.continuous_event import ContinuousEvent, ContinuousEventsRegistry
 from sdcm.sct_events.system import TestFrameworkEvent
 
 TOLERABLE_REACTOR_STALL: int = 500  # ms

@@ -14,10 +14,9 @@ import abc
 import os
 import tempfile
 from abc import abstractmethod
-
-from datetime import datetime, timedelta
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime, timedelta
 
 import jinja2
 import pytz
@@ -27,7 +26,7 @@ from sdcm.utils.cloud_monitor.resources import CLOUD_PROVIDERS
 from sdcm.utils.cloud_monitor.resources.capacity_reservations import CapacityReservation
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
-from sdcm.utils.cloud_monitor.resources.xcloud import XCloudResources, XCloudCluster
+from sdcm.utils.cloud_monitor.resources.xcloud import XCloudCluster, XCloudResources
 
 
 class BaseReport:

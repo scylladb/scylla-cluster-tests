@@ -1,16 +1,17 @@
 import sys
 from datetime import datetime
 from logging import getLogger
+
 from sdcm.send_email import Email
-from sdcm.utils.cloud_monitor.resources.capacity_reservations import get_active_capacity_reservations
-from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.report import (
     BaseReport,
-    GeneralReport,
     DetailedReport,
-    QAonlyInstancesTimeDistributionReport,
+    GeneralReport,
     NonQaInstancesTimeDistributionReport,
+    QAonlyInstancesTimeDistributionReport,
 )
+from sdcm.utils.cloud_monitor.resources.capacity_reservations import get_active_capacity_reservations
+from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 from sdcm.utils.cloud_monitor.resources.xcloud import XCloudResources
 

@@ -11,17 +11,16 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import os
 import logging
+import os
 from typing import Optional
 
 import click
 
 import __main__
-
 from sdcm.cluster import TestConfig
-from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import region_name_to_location
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import (
     all_aws_regions,
     get_all_gce_regions,

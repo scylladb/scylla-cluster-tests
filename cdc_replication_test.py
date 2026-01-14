@@ -13,11 +13,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import os
+import random
 import shutil
 import sys
-import os
 import time
-import random
 from enum import Enum
 from textwrap import dedent
 from typing import Optional, Tuple
@@ -26,10 +26,10 @@ from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
 
 from sdcm import cluster
-from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.nemesis import CategoricalMonkey
 from sdcm.stress_thread import get_timeout_from_stress_cmd
+from sdcm.tester import ClusterTester
 
 
 class Mode(Enum):
