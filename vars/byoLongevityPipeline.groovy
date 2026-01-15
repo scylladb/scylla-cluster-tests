@@ -3,7 +3,7 @@
 
 def call() {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, null /* oci placeholder */)
 
     pipeline {
 
