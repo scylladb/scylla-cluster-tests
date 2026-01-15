@@ -348,10 +348,10 @@ class GceProvisioner(Provisioner):
 
         if gce_instance.network_interfaces:
             interface = gce_instance.network_interfaces[0]
-            private_ip = interface.network_ip
+            private_ip = interface.network_i_p
 
             if interface.access_configs:
-                public_ip = interface.access_configs[0].nat_ip
+                public_ip = interface.access_configs[0].nat_i_p
 
         # Get machine type (extract simple name from full URL)
         instance_type = gce_instance.machine_type.split("/")[-1]
