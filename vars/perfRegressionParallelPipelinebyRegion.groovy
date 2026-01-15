@@ -212,7 +212,7 @@ def call(Map pipelineParams) {
                                         error "Image name is empty. Please check the hydra.sh command output."
                                     }
 
-                                    image_name = new groovy.json.JsonSlurper().parseText(image_name_json).keySet()[0]
+                                    image_name = new groovy.json.JsonSlurperClassic().parseText(image_name_json).keySet()[0]
                                     println("Image name: $image_name")
                                  }
 

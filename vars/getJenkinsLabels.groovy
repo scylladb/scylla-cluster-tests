@@ -1,5 +1,5 @@
 #!groovy
-import groovy.json.JsonSlurper
+import groovy.json.JsonSlurperClassic
 
 def call(String backend, String region=null, String datacenter=null, String location=null, Map overrides=null) {
     if (!(params instanceof Map)) {
@@ -16,13 +16,13 @@ def call(String backend, String region=null, String datacenter=null, String loca
     }
 
     try {
-        regionList = new JsonSlurper().parseText(region)
+        regionList = new JsonSlurperClassic().parseText(region)
         region = regionList[0]
     } catch(Exception) {
 
     }
     try {
-        datacenterList = new JsonSlurper().parseText(datacenter)
+        datacenterList = new JsonSlurperClassic().parseText(datacenter)
         datacenter = datacenterList[0]
     } catch(Exception) {
 
