@@ -9,6 +9,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+            SCT_BILLING_PROJECT = "${params.billing_project}"
         }
 
         parameters {
@@ -17,6 +18,9 @@ def call(Map pipelineParams) {
             string(name: 'new_scylla_repo', defaultValue: 'https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list', description: 'New Scylla repo')
             booleanParam(name: 'use_job_throttling', defaultValue: true, description: 'if true, use job throttling to limit the number of concurrent builds')
             string(name: 'labels_selector', defaultValue: '', description: 'This parameter is used for trigger with Scylla master version only. It points how to trigger the test: daily, weekly ot once in 3 weeks. Expected values: master-3weeks OR master-weekly OR master-daily')
+            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+                   description: 'Billing project for the test run',
+                   name: 'billing_project')
         }
         triggers {
             parameterizedCron (
