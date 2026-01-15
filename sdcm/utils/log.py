@@ -193,6 +193,7 @@ def configure_logging(
             "invoke": {"level": "CRITICAL"},
             "anyconfig": {"level": "ERROR"},
             "urllib3.connectionpool": {"level": "INFO"},
+            "cloud_detect.providers": {"level": "ERROR"},
             "argus": {"handlers": ["argus"], "level": "DEBUG", "propagate": False},
             "action_logger": {"handlers": ["actions"], "level": "INFO", "propagate": False},
             "sdcm.argus_test_run": {"handlers": ["argus"], "level": "DEBUG", "propagate": False},
