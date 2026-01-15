@@ -18,6 +18,7 @@ from enum import Enum
 from typing import List, Dict
 
 from invoke import Result
+from mypy_boto3_ec2.literals import ArchitectureTypeType
 
 from sdcm.keystore import SSHKey
 from sdcm.provision.user_data import UserDataObject
@@ -26,6 +27,30 @@ from sdcm.provision.user_data import UserDataObject
 class VmArch(Enum):
     X86 = "x86_64"
     ARM = "aarch64"
+
+    def to_aws_format(self) -> ArchitectureTypeType:
+        if self is VmArch.X86:
+            return "x86_64"
+        elif self is VmArch.ARM:
+            return "arm64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
+
+    def to_azure_format(self) -> str:
+        if self is VmArch.X86:
+            return "x64"
+        elif self is VmArch.ARM:
+            return "Arm64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
+
+    def to_gcp_format(self) -> str:
+        if self is VmArch.X86:
+            return "X86_64"
+        elif self is VmArch.ARM:
+            return "ARM64"
+        else:
+            raise ValueError(f"Unsupported architecture: {self}")
 
 
 @dataclass

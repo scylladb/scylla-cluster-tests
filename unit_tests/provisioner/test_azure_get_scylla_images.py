@@ -21,6 +21,7 @@ import pytest
 from sdcm.provision.azure.utils import get_scylla_images
 from sdcm.utils.azure_utils import AzureService
 from unit_tests.provisioner.fake_azure_service import FakeAzureService
+from sdcm.provision.provisioner import VmArch
 
 
 @pytest.fixture
@@ -30,7 +31,13 @@ def azure_service():
 
 def test_can_get_scylla_images_based_on_branch(azure_service):
     images = get_scylla_images("master:latest", "eastus", azure_service=azure_service)
-    assert images[0].name == "2025.1208.222124"
+    assert images[0].name == "2026.0108.151759"
+    assert len(images) == 1
+
+
+def test_can_get_scylla_images_based_on_branch_arm64(azure_service):
+    images = get_scylla_images("master:latest", "eastus", azure_service=azure_service, arch=VmArch.ARM)
+    assert images[0].name == "2026.0108.145545"
     assert len(images) == 1
 
 
@@ -65,7 +72,7 @@ def generate_images_json_file():
         images_file.write(json.dumps(serialized_images, indent=2))
 
 
-def generate_gallery_images_json_file(gallery_name="scylladb_dev", image_name="master"):
+def generate_gallery_images_json_file(gallery_name="scylladb_dev", image_name="master-x86"):
     """generates azure_images_list.json based on real Azure images for unit tests purposes."""
     resource_group = "SCYLLA-IMAGES"
     images = AzureService().compute.gallery_image_versions.list_by_gallery_image(
