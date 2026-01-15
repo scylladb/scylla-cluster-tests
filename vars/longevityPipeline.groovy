@@ -335,7 +335,7 @@ def call(Map pipelineParams) {
                                     if (params.backend == 'xcloud') {
                                         echo "Scylla Cloud backend selected: provisioning loader nodes only on ${params.xcloud_provider} cloud provider"
                                     }
-                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure') {
+                                    if (params.backend == 'xcloud' || params.backend == 'aws' || params.backend == 'azure' || params.backend == 'gce') {
                                         provisionResources(params, builder.region)
                                     } else if (params.backend.contains('docker')) {
                                         sh """
@@ -343,7 +343,7 @@ def call(Map pipelineParams) {
                                         """
                                     } else {
                                         sh """
-                                            echo 'Skipping because non-AWS/Azure backends are not supported'
+                                            echo 'Skipping because non-AWS/Azure/GCE backends are not supported'
                                         """
                                     }
                                     completed_stages['provision_resources'] = true
