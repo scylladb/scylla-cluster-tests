@@ -1,5 +1,5 @@
 #!groovy
-import groovy.json.JsonSlurper
+import groovy.json.JsonSlurperClassic
 
 def call(Map params, boolean build_image){
     if (! (params.byo_scylla_repo && params.byo_scylla_branch) ) {
@@ -32,7 +32,7 @@ def call(Map params, boolean build_image){
     }
 
     try {
-        copyAmiToRegions = new JsonSlurper().parseText(params.region)
+        copyAmiToRegions = new JsonSlurperClassic().parseText(params.region)
         copyAmiToRegions = copyAmiToRegions.join(",").replace(" ", "")
     } catch(Exception) {
         copyAmiToRegions = params.region
