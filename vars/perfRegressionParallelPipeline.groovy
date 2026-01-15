@@ -1,5 +1,5 @@
 #!groovy
-import groovy.json.JsonSlurper
+import groovy.json.JsonSlurperClassic
 
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 def base_versions_list = []
@@ -239,7 +239,7 @@ def call(Map pipelineParams) {
                         def tasks = [:]
                         def sub_tests
                         if (params.sub_tests) {
-                            sub_tests = new JsonSlurper().parseText(params.sub_tests)
+                            sub_tests = new JsonSlurperClassic().parseText(params.sub_tests)
                         } else {
                             sub_tests = [params.test_name]
                         }
