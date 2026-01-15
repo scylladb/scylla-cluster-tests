@@ -6260,6 +6260,75 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
     :return: Wrapped method.
     """
 
+    def count_error_events_for_nemesis(
+        nemesis: Nemesis, nemesis_event_id: str, start_time: float, end_time: float, target_node: str
+    ) -> dict[str, int]:
+        """
+        Count ERROR and CRITICAL events that occurred during this specific nemesis execution.
+
+        Filters out:
+        - Events that occurred outside the nemesis time window
+        - Events that have during_nemesis context pointing to other nemeses
+        - Events from nodes targeted by other running nemeses (optional based on node attribute)
+
+        Returns a dict with counts: {"ERROR": count, "CRITICAL": count}
+        """
+        from sdcm.sct_events.events_device import get_events_main_device  # noqa: PLC0415
+        from sdcm.sct_events.continuous_event import ContinuousEventsRegistry  # noqa: PLC0415
+
+        error_counts = {"ERROR": 0, "CRITICAL": 0}
+
+        try:
+            raw_events_log = get_events_main_device(_registry=nemesis.tester.events_processes_registry).raw_events_log
+            if not raw_events_log.exists():
+                return error_counts
+
+            # Get other running nemeses to exclude their events
+            other_running_nemeses = set()
+            for running_event in ContinuousEventsRegistry().find_running_disruption_events():
+                if running_event.event_id != nemesis_event_id:
+                    other_running_nemeses.add(running_event.nemesis_name)
+
+            with open(raw_events_log, "r", encoding="utf-8") as fobj:
+                for line in fobj:
+                    if not line.strip():
+                        continue
+                    try:
+                        event_data = json.loads(line)
+
+                        # Check severity
+                        if event_data.get("severity") not in ["ERROR", "CRITICAL"]:
+                            continue
+
+                        # Check timestamp - only events during this nemesis execution
+                        event_time = event_data.get("event_timestamp")
+                        if not event_time or event_time < start_time or event_time > end_time:
+                            continue
+
+                        # Check if event has during_nemesis context pointing to another nemesis
+                        subcontext = event_data.get("subcontext", [])
+                        if subcontext:
+                            # If event has nemesis context, check if it's from another nemesis
+                            event_nemesis_names = [
+                                ctx.get("nemesis_name") for ctx in subcontext if ctx.get("nemesis_name")
+                            ]
+                            if event_nemesis_names and all(
+                                name in other_running_nemeses for name in event_nemesis_names
+                            ):
+                                # Event is attributed to other running nemeses, skip it
+                                continue
+
+                        # Count this event
+                        error_counts[event_data["severity"]] += 1
+
+                    except (json.JSONDecodeError, KeyError, ValueError) as exc:
+                        nemesis.log.debug(f"Failed to parse event line: {exc}")
+                        continue
+        except Exception as exc:  # noqa: BLE001
+            nemesis.log.warning(f"Failed to read raw events log: {exc}")
+
+        return error_counts
+
     def argus_create_nemesis_info(nemesis: Nemesis, class_name: str, method_name: str, start_time: int | float) -> bool:
         try:
             argus_client = nemesis.target_node.test_config.argus_client()
@@ -6328,7 +6397,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
             args[0].log.debug(f"Data validator error: {err}")
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # noqa: PLR0914, PLR0915
+    def wrapper(*args, **kwargs):  # noqa: PLR0912, PLR0914, PLR0915
         method_name = method.__name__
         target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
         nemesis_run_info_key = f"{id(args[0])}--{method_name}"
@@ -6444,6 +6513,32 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # noqa: PLR0915
                         )
                     args[0].log.info(f"log_info: {log_info}")
                     nemesis_event.duration = time_elapsed
+
+                    # Check for error events during nemesis execution if configured
+                    if (
+                        args[0].cluster.params.get("nemesis_fail_on_error_events")
+                        and nemesis_event.severity != Severity.ERROR
+                    ):
+                        error_counts = count_error_events_for_nemesis(
+                            nemesis=args[0],
+                            nemesis_event_id=nemesis_event.event_id,
+                            start_time=start_time,
+                            end_time=end_time,
+                            target_node=str(args[0].target_node),
+                        )
+                        errors_during_nemesis = []
+                        for severity in ["ERROR", "CRITICAL"]:
+                            count = error_counts.get(severity, 0)
+                            if count > 0:
+                                errors_during_nemesis.append(f"{count} {severity} event(s)")
+
+                        if errors_during_nemesis:
+                            error_msg = f"Nemesis failed due to {', '.join(errors_during_nemesis)} during execution"
+                            args[0].log.error(error_msg)
+                            nemesis_event.add_error([error_msg])
+                            nemesis_event.severity = Severity.ERROR
+                            log_info.update({"error": error_msg})
+                            status = False
 
                     if nemesis_info:
                         argus_finalize_nemesis_info(
