@@ -152,7 +152,7 @@ fi
 echo `whoami`
 
 # if running on Build server
-if [[ ${USER} == "jenkins" || ${USER} == "runner" ]]; then
+if [[ -n "$JENKINS_URL" || -n "$BUILD_TAG" || -n "$GITHUB_ACTIONS" ]]; then
     echo "Running on Build Server..."
     HOST_NAME=`hostname`
 else
