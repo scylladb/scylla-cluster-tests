@@ -3101,13 +3101,23 @@ class SCTConfiguration(dict):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
                 self._replace_docker_image_latest_tag()
             elif not self.get("ami_id_db_scylla") and self.get("cluster_backend") == "aws":
+                # Import here to avoid circular dependency
+                from sdcm.utils.version_utils import parse_scylla_version_tag
+
                 ami_list = []
                 for region in region_names:
                     aws_arch = get_arch_from_instance_type(self.get("instance_type_db"), region_name=region)
                     try:
-                        if ":" in scylla_version:
+                        # Check if this is a full version tag
+                        full_version_tag = parse_scylla_version_tag(scylla_version)
+                        if full_version_tag and full_version_tag.is_valid():
+                            # For full version tags, use regular AMI lookup (will match exact tag)
+                            ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
+                        elif ":" in scylla_version:
+                            # For branch versions like "master:latest"
                             ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
+                            # For simple versions like "5.2.1"
                             ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
                     except Exception as ex:  # noqa: BLE001
                         raise ValueError(

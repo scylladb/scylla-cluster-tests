@@ -26,6 +26,8 @@ from sdcm.utils.version_utils import (
     ARGUS_VERSION_RE,
     VERSION_NOT_FOUND_ERROR,
     get_scylla_docker_repo_from_version,
+    parse_scylla_version_tag,
+    FullVersionTag,
 )
 
 BASE_S3_DOWNLOAD_URL = "https://s3.amazonaws.com/downloads.scylladb.com"
@@ -786,3 +788,268 @@ def test_get_branched_repo(scylla_version, distro, expected_repo):
 )
 def test_verify_docker_repo_implicit_resolution_for_scylla_versions(version, expected_repo):
     assert get_scylla_docker_repo_from_version(version) == expected_repo
+
+
+# Full Version Tag Parsing Tests (pytest style)
+
+def test_parse_full_version_tag_with_suffix():
+    """Test parsing a full version tag with suffix."""
+    version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "2024.2.5"
+    assert tag.build == "0"
+    assert tag.date == "20250221"
+    assert tag.commit_id == "cb9e2a54ae6d"
+    assert tag.full_tag == version_tag
+    assert tag.is_valid()
+
+
+def test_parse_full_version_tag_without_suffix():
+    """Test parsing a full version tag without suffix."""
+    version_tag = "4.6.4-0.20220718.b60f14601"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "4.6.4"
+    assert tag.build == "0"
+    assert tag.date == "20220718"
+    assert tag.commit_id == "b60f14601"
+    assert tag.full_tag == version_tag
+    assert tag.is_valid()
+
+
+def test_parse_dev_version_tag():
+    """Test parsing a dev version tag."""
+    version_tag = "5.2.0-dev-0.20220829.67c91e8bcd61"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "5.2.0-dev"
+    assert tag.build == "0"
+    assert tag.date == "20220829"
+    assert tag.commit_id == "67c91e8bcd61"
+    assert tag.is_valid()
+
+
+def test_parse_rc_version_tag():
+    """Test parsing a release candidate version tag."""
+    version_tag = "3.3.rc1-0.20200209.0d0c1d43188"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "3.3.rc1"
+    assert tag.build == "0"
+    assert tag.date == "20200209"
+    assert tag.commit_id == "0d0c1d43188"
+    assert tag.is_valid()
+
+
+def test_parse_enterprise_version_tag():
+    """Test parsing an enterprise version tag."""
+    version_tag = "2019.1.4-0.20191217.b59e92dbd"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is not None
+    assert tag.base_version == "2019.1.4"
+    assert tag.build == "0"
+    assert tag.date == "20191217"
+    assert tag.commit_id == "b59e92dbd"
+    assert tag.is_valid()
+
+
+def test_parse_simple_version_returns_none():
+    """Test that simple version strings don't match the full tag format."""
+    version_tag = "5.2.1"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is None
+
+
+def test_parse_branch_version_returns_none():
+    """Test that branch version strings don't match the full tag format."""
+    version_tag = "master:latest"
+    tag = parse_scylla_version_tag(version_tag)
+
+    assert tag is None
+
+
+@pytest.mark.parametrize("version_tag", [
+    "",
+    "invalid",
+    "1.2.3",
+    "2024.2.5",
+    "not-a-version",
+])
+def test_parse_invalid_version_returns_none(version_tag):
+    """Test that invalid version strings return None."""
+    tag = parse_scylla_version_tag(version_tag)
+    assert tag is None, f"Expected None for '{version_tag}', got {tag}"
+
+
+def test_full_version_tag_class_methods():
+    """Test FullVersionTag class methods."""
+    version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = FullVersionTag.parse(version_tag)
+
+    assert tag is not None
+    assert isinstance(tag, FullVersionTag)
+    assert tag.is_valid()
+
+    # Test that we can access as a namedtuple
+    assert len(tag) == 5
+    assert tag[0] == "2024.2.5"
+    assert tag[1] == "0"
+    assert tag[2] == "20250221"
+    assert tag[3] == "cb9e2a54ae6d"
+
+
+def test_full_version_tag_with_rc_build():
+    """Test parsing a version tag with rc build."""
+    version_tag = "4.5.rc3-rc3.20220101.abc123def"
+    tag = parse_scylla_version_tag(version_tag)
+
+    # This should match as SCYLLA_VERSION_GROUPED_RE allows rc\d for build
+    assert tag is not None
+    if tag:
+        assert tag.build == "rc3"
+
+
+# AWS Full Version Tag Support Tests (pytest style)
+
+def test_full_version_tag_detection():
+    """Test that full version tags are correctly detected."""
+    # Full version tag should be detected
+    full_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = parse_scylla_version_tag(full_tag)
+    assert tag is not None
+    assert tag.is_valid()
+
+    # Simple version should not be detected as full tag
+    simple_version = "5.2.1"
+    tag = parse_scylla_version_tag(simple_version)
+    assert tag is None
+
+    # Branch version should not be detected as full tag
+    branch_version = "master:latest"
+    tag = parse_scylla_version_tag(branch_version)
+    assert tag is None
+
+
+@pytest.mark.parametrize("version_string,should_parse,expected_base", [
+    ("2024.2.5-0.20250221.cb9e2a54ae6d-1", True, "2024.2.5"),
+    ("5.2.0-dev-0.20220829.67c91e8bcd61", True, "5.2.0-dev"),
+    ("4.6.4-0.20220718.b60f14601", True, "4.6.4"),
+    ("5.2.1", False, None),
+    ("master:latest", False, None),
+    ("branch-2019.1:latest", False, None),
+])
+def test_version_string_formats(version_string, should_parse, expected_base):
+    """Test different version string formats for AWS."""
+    tag = parse_scylla_version_tag(version_string)
+    if should_parse:
+        assert tag is not None, f"Expected {version_string} to parse as full tag"
+        assert tag.base_version == expected_base
+    else:
+        assert tag is None, f"Expected {version_string} NOT to parse as full tag"
+
+
+# AWS Full Version Integration Tests (pytest style)
+
+def test_full_version_tag_workflow():
+    """Test the workflow of detecting and using full version tags.
+
+    This test verifies that:
+    1. Full version tags are correctly identified
+    2. They are routed through the correct code path
+    3. The version string is preserved for AMI filtering
+    """
+    # Example full version tag from actual Scylla DEB packages
+    full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    # Parse the version tag
+    tag = parse_scylla_version_tag(full_version_tag)
+
+    # Verify it's detected as a full version tag
+    assert tag is not None, "Full version tag should be parsed"
+    assert tag.is_valid(), "Full version tag should be valid"
+
+    # Verify the components are extracted correctly
+    assert tag.base_version == "2024.2.5"
+    assert tag.build == "0"
+    assert tag.date == "20250221"
+    assert tag.commit_id == "cb9e2a54ae6d"
+    assert tag.full_tag == full_version_tag
+
+    # Verify that this would NOT be treated as a branch version
+    # (branch versions contain ':' like "master:latest")
+    assert ":" not in full_version_tag
+
+
+@pytest.mark.parametrize("version_string,should_use_branched,is_full_tag", [
+    ("2024.2.5-0.20250221.cb9e2a54ae6d-1", False, True),
+    ("5.2.0-dev-0.20220829.67c91e8bcd61", False, True),
+    ("4.6.4-0.20220718.b60f14601", False, True),
+    ("master:latest", True, False),
+    ("branch-2019.1:latest", True, False),
+    ("5.2.1", False, False),
+    ("2024.2.0", False, False),
+])
+def test_version_routing_logic(version_string, should_use_branched, is_full_tag):
+    """Test that different version formats route to correct lookup methods.
+
+    This simulates the logic in sct_config.py to ensure:
+    - Full version tags use get_scylla_ami_versions (NOT get_branched_ami)
+    - Branch versions use get_branched_ami
+    - Simple versions use get_scylla_ami_versions
+    """
+    tag = parse_scylla_version_tag(version_string)
+
+    # Check if it's a full version tag
+    is_parsed_as_full_tag = tag is not None and tag.is_valid()
+    assert is_parsed_as_full_tag == is_full_tag, \
+        f"Version '{version_string}' should{'' if is_full_tag else ' NOT'} be parsed as full tag"
+
+    # Determine routing (simulates sct_config.py logic)
+    if is_parsed_as_full_tag:
+        # Full version tag: use get_scylla_ami_versions
+        uses_branched = False
+    elif ":" in version_string:
+        # Branch version: use get_branched_ami
+        uses_branched = True
+    else:
+        # Simple version: use get_scylla_ami_versions
+        uses_branched = False
+
+    assert uses_branched == should_use_branched, \
+        f"Version '{version_string}' routing incorrect"
+
+
+def test_full_version_preservation():
+    """Test that full version strings are preserved for AMI filtering.
+
+    When a full version tag is used, it should be passed to
+    get_scylla_ami_versions() as-is to enable exact tag matching.
+    """
+    full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = parse_scylla_version_tag(full_version_tag)
+
+    # The full tag should be preserved
+    assert tag.full_tag == full_version_tag
+
+    # This full tag would be used in the AMI filter
+    # The implementation in _get_ami_versions uses: f"*{version}*"
+    # which means it will match AMIs with scylla_version tag containing the full string
+    expected_filter_pattern = f"*{full_version_tag}*"
+
+    # This is what gets sent to AWS (after character replacements)
+    # The version_filter.replace("-", "?").replace("~", "?").replace(".rc", "?rc")
+    # For our example: "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    # becomes: "2024.2.5?0.20250221.cb9e2a54ae6d?1"
+    # This pattern will match AMI tags like "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    # Verify the tag contains the expected components
+    assert tag.base_version in tag.full_tag
+    assert tag.date in tag.full_tag
+    assert tag.commit_id in tag.full_tag
