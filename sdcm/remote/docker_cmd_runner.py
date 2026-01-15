@@ -160,7 +160,7 @@ class DockerCmdRunner(CommandRunner):
             if src_path.is_dir():
                 for file_path in src_path.rglob("*"):
                     if file_path.is_file():
-                        tar.add(str(file_path), arcname=str(file_path.relative_to(src_path.parent)))
+                        tar.add(str(file_path), arcname=str(file_path.relative_to(src_path)))
             else:
                 arcname = Path(dst).name if not dst.endswith("/") else src_path.name
                 tar.add(str(src_path), arcname=arcname)
