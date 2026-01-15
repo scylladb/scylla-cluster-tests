@@ -6,7 +6,7 @@ def completed_stages = [:]
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name, null /* oci placeholder */)
 
     // since this is a boolean param, we need to handle its default value upfront, we can't do it in the parameters section
     // we'll keep it as boolean to simplify its usage later on
