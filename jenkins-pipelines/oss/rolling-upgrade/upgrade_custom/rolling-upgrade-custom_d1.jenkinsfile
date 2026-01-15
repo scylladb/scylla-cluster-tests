@@ -8,5 +8,5 @@ rollingUpgradePipeline(
     linux_distro: 'ubuntu-focal',
     base_versions: '',
     test_name: 'upgrade_test.UpgradeCustomTest.test_custom_profile_rolling_upgrade',
-    test_config: "test-cases/upgrades/customer-profile/rolling-upgrade-custom-d1.yaml",
+    test_config: 'test-cases/upgrades/customer-profile/rolling-upgrade-custom-d1.yaml',
 )

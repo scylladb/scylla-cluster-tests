@@ -94,7 +94,7 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
-            stage("Preparation") {
+            stage('Preparation') {
                 // NOTE: this stage is a workaround for the following Jenkins bug:
                 // https://issues.jenkins-ci.org/browse/JENKINS-41929
                 when { expression { env.BUILD_NUMBER == '1' } }
@@ -168,10 +168,9 @@ def call(Map pipelineParams) {
 
                             def phase = "${base_version} -> ${new_version}"
                             if (run_params.test_name.contains('platform_upgrade')) {
-                                phase = "platform-upgrade"
+                                phase = 'platform-upgrade'
                             }
                             tasks["Scylla Operator upgrade - ${phase}"] = {
-
                                 stage("${phase} - Running test") {
                                     catchError(stageResult: 'FAILURE') {
                                         script {
@@ -179,7 +178,7 @@ def call(Map pipelineParams) {
                                                 dir('scylla-cluster-tests') {
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
                                                         checkout scm
-                                                        runSctTest(run_params, builder.region, functional_test=false, pipelineParams)
+                                                        runSctTest(run_params, builder.region, functional_test = false, pipelineParams)
                                                     }
                                                 }
                                             }

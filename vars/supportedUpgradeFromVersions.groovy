@@ -16,7 +16,7 @@ def call(List base_versions_list, String linux_distro, String new_scylla_repo, S
         if (last_line.matches("Base\\sVersions:\\s*[\\d\\w\\W]*")) {
             return last_line.replaceAll('Base Versions: ', '').split(' ')
         } else {
-            println("Did not find a valid base versions string!")
+            println('Did not find a valid base versions string!')
             throw new Exception("Didn't get valid base versions automatically!")
         }
     }
