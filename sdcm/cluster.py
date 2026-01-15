@@ -3555,7 +3555,16 @@ class BaseNode(AutoSshContainerMixin):
             return []
 
         for member in result_json:
-            token_ring_members.append(TokenRingMember(host_id=member.get("value"), ip_address=member.get("key")))
+            host_id = member.get("value")
+            ip_address = member.get("key")
+            # Filter out members with None/null values to prevent downstream issues
+            if host_id is None or ip_address is None:
+                self.log.warning(
+                    "Skipping token ring member with null values: host_id=%s, ip_address=%s",
+                    host_id, ip_address
+                )
+                continue
+            token_ring_members.append(TokenRingMember(host_id=host_id, ip_address=ip_address))
         return token_ring_members
 
     @retrying(n=360, sleep_time=10, allowed_exceptions=NodeNotReady, message="Waiting for native_transport")
