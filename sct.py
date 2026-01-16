@@ -70,6 +70,8 @@ from sdcm.sct_runner import (
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import argus_offline_collect_events, create_proxy_argus_s3_url, get_argus_client
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -321,9 +323,42 @@ def provision_resources(backend, test_name: str, config: str):
                     params.update({"cluster_backend": original_backend, "xcloud_provisioning_mode": False})
         else:
             raise ValueError(f"backend {backend} is not supported")
-    except Exception:
+    except Exception as exc:
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         test_config.init_argus_client(params)
+        
+        # Create and submit error event to Argus
+        error_event = TestFrameworkEvent(
+            source="provision_resources",
+            source_method="provision",
+            message=f"Failed to provision {backend} resources",
+            exception=exc,
+            severity=Severity.CRITICAL,
+        )
+        
+        # Convert event to RawEventPayload format and submit to Argus
+        from argus.common.sct_types import RawEventPayload
+        event_payload: RawEventPayload = {
+            "run_id": str(test_config.test_id()),
+            "severity": error_event.severity.name,
+            "ts": error_event.timestamp,
+            "message": str(error_event),
+            "event_type": error_event.__class__.__name__,
+            "received_timestamp": None,
+            "nemesis_name": None,
+            "duration": None,
+            "node": None,
+            "target_node": None,
+            "known_issue": None,
+            "nemesis_status": None,
+        }
+        
+        try:
+            test_config.argus_client().submit_event(event_payload)
+            LOGGER.info("Error event submitted to Argus successfully")
+        except Exception as argus_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
+        
         test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
         sys.exit(1)
 
