@@ -17,7 +17,13 @@ from typing import List
 
 import boto3
 from botocore.response import StreamingBody
-from ssh2.session import Session
+
+try:
+    from ssh2.session import Session
+    _SSH2_AVAILABLE = True
+except ImportError:
+    _SSH2_AVAILABLE = False
+    Session = None
 
 from sdcm.keystore import KeyStore
 
@@ -53,7 +59,18 @@ def upload_remote_files_directly_to_s3(
     max_size_gb: int = 80,
     public_read_acl: bool = False,
 ):
-    """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link."""
+    """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link.
+    
+    Note: This function requires ssh2-python which is not available on macOS.
+    If ssh2-python is not installed, this function will log a warning and return an empty string.
+    """
+    if not _SSH2_AVAILABLE:
+        LOGGER.warning(
+            "ssh2-python is not available (not supported on macOS). "
+            "Cannot upload %s directly to S3. Use alternative upload methods.",
+            files
+        )
+        return ""
 
     def get_dir_size_kb(session, files):
         channel = session.open_session()

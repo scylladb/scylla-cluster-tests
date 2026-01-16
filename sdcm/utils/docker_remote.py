@@ -7,7 +7,7 @@ from pathlib import Path
 from invoke.exceptions import UnexpectedExit
 
 from sdcm.cluster import BaseNode
-from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote import Libssh2_UnexpectedExit
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.utils.net import resolve_ip_to_dns

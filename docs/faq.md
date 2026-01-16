@@ -1,5 +1,75 @@
 # FAQ
 
+## MacOS: Failed to build ssh2-python when running "uv sync"
+
+**Problem:** On macOS, especially Apple Silicon (M1/M2/M3), you may encounter build errors when running `uv sync`:
+```
+Failed to build `ssh2-python==1.2.0.post1`
+ld: warning: ignoring file '/opt/homebrew/opt/openssl/lib/libcrypto.dylib': 
+found architecture 'arm64', required architecture 'x86_64'
+```
+
+**Root Cause:** The `ssh2-python` library has architecture compatibility issues on macOS, particularly with cross-compilation between x86_64 and arm64 architectures, and OpenSSL linking problems.
+
+**Solution 1: Use Fabric Transport (Recommended)**
+1. The `ssh2-python` dependency is now **optional on macOS** (it will be skipped during installation)
+2. SCT will use the `fabric` SSH transport (based on Paramiko) instead, which is fully functional
+3. Ensure you set the SSH transport to `fabric`:
+   ```bash
+   export SSH_TRANSPORT=fabric
+   ```
+   Or edit `defaults/test_default.yaml`:
+   ```yaml
+   ssh_transport: 'fabric'  # instead of 'libssh2'
+   ```
+
+**Solution 2: Build ssh2-python with Correct Architecture (Advanced)**
+
+If you need the `libssh2` transport on macOS, you can build `ssh2-python` with the correct architecture by setting environment variables:
+
+1. **Install dependencies via Homebrew:**
+   ```bash
+   brew install openssl@3 libssh2
+   ```
+
+2. **Set environment variables** (add these to your `~/.zshrc` for persistence):
+   ```bash
+   # For Apple Silicon (M1/M2/M3)
+   export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib -L/opt/homebrew/opt/libssh2/lib"
+   export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include -I/opt/homebrew/opt/libssh2/include"
+   export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/libssh2/lib/pkgconfig"
+   
+   # For Intel Macs, use /usr/local instead of /opt/homebrew:
+   # export LDFLAGS="-L/usr/local/opt/openssl@3/lib -L/usr/local/opt/libssh2/lib"
+   # export CPPFLAGS="-I/usr/local/opt/openssl@3/include -I/usr/local/opt/libssh2/include"
+   # export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig:/usr/local/opt/libssh2/lib/pkgconfig"
+   ```
+
+3. **Use system libssh2** (recommended):
+   ```bash
+   export SYSTEM_LIBSSH2=1
+   ```
+
+4. **Remove the platform marker from pyproject.toml:**
+   
+   Edit `pyproject.toml` and change:
+   ```python
+   "ssh2-python>=1.1.2.post1; sys_platform != 'darwin'",
+   ```
+   to:
+   ```python
+   "ssh2-python>=1.1.2.post1",
+   ```
+
+5. **Install dependencies:**
+   ```bash
+   uv sync
+   ```
+
+**Note:** This approach requires more setup and may still have compatibility issues. Solution 1 (using Fabric) is simpler and recommended for most users.
+
+For more details, see the [MacOS-Specific Notes](./install-local-env.md#macos-specific-notes) in the installation guide.
+
 ## Reusing already running Cluster
 
 See: [reuse_cluster](./reuse_cluster.md)
