@@ -37,6 +37,7 @@ from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
 from argus.common.enums import TestStatus
+from argus.common.sct_types import RawEventPayload
 
 import sct_ssh
 import sct_scan_issues
@@ -287,9 +288,33 @@ def provision_resources(backend, test_name: str, config: str):
             provision_sct_resources(params=params, test_config=test_config)
         else:
             raise ValueError(f"backend {backend} is not supported")
-    except Exception:
+    except Exception as exc:
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         test_config.init_argus_client(params)
+
+        # Create and submit error event to Argus
+        error_message = f"Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+        event_payload: RawEventPayload = {
+            "run_id": str(test_config.test_id()),
+            "severity": "CRITICAL",
+            "ts": time.time(),
+            "message": error_message,
+            "event_type": "TestFrameworkEvent",
+            "received_timestamp": None,
+            "nemesis_name": None,
+            "duration": None,
+            "node": None,
+            "target_node": None,
+            "known_issue": None,
+            "nemesis_status": None,
+        }
+
+        try:
+            test_config.argus_client().submit_event(event_payload)
+            LOGGER.info("Error event submitted to Argus successfully")
+        except Exception as argus_exc:  # noqa: BLE001
+            LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
+
         test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
         sys.exit(1)
 
