@@ -16,8 +16,6 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
-from argus.common.sct_types import RawEventPayload
-
 
 def test_provision_resources_sends_error_event_to_argus():
     """Test that provision_resources sends error event to Argus on failure."""
