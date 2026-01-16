@@ -75,6 +75,7 @@
 - SlaReplaceUsingDropDuringLoad
 - SnapshotOperations
 - SoftRebootNodeMonkey
+- SplitMergeTabletsWithAlter
 - SslHotReloadingNemesis
 - StartStopCleanupCompaction
 - StartStopMajorCompaction
