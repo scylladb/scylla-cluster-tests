@@ -13,19 +13,22 @@
 
 """Unit test to verify provision_resources sends error events to Argus."""
 
+import os
 from unittest.mock import MagicMock, patch
-import pytest
+from click.testing import CliRunner
 
 
 def test_provision_resources_sends_error_event_to_argus():
     """Test that provision_resources sends error event to Argus on failure."""
-    
+
     # Mock the necessary components
-    with patch('sct.create_sct_configuration') as mock_config, \
-         patch('sct.get_test_config') as mock_test_config, \
-         patch('sct.LocalHost'), \
-         patch('sct.SCTProvisionLayout') as mock_layout:
-        
+    with (
+        patch("sct.create_sct_configuration") as mock_config,
+        patch("sct.get_test_config") as mock_test_config,
+        patch("sct.LocalHost"),
+        patch("sct.SCTProvisionLayout") as mock_layout,
+        patch("sct.add_file_logger"),
+    ):
         # Setup mocks
         mock_params = MagicMock()
         mock_params.get.side_effect = lambda key, default=None: {
@@ -34,50 +37,45 @@ def test_provision_resources_sends_error_event_to_argus():
             "agent": {"enabled": False},
         }.get(key, default)
         mock_config.return_value = mock_params
-        
+
         test_config_instance = MagicMock()
         test_config_instance.test_id.return_value = "test-id-12345"
         mock_argus_client = MagicMock()
         test_config_instance.argus_client.return_value = mock_argus_client
         mock_test_config.return_value = test_config_instance
-        
+
         # Make provision fail with an exception
         provision_error = Exception("InsufficientInstanceCapacity: Not enough instances available")
         mock_layout.return_value.provision.side_effect = provision_error
-        
-        # Import and call provision_resources which should trigger the error path
-        import sys
-        import os
-        
+
         # Set environment variables
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        
-        # We need to catch the sys.exit(1) call
-        with pytest.raises(SystemExit) as exc_info:
-            # Import the function here to get the patched version
-            from sct import provision_resources
-            provision_resources(backend="aws", test_name="test", config=None)
-        
-        # Verify sys.exit(1) was called
-        assert exc_info.value.code == 1
-        
+
+        # Use Click's CliRunner to invoke the command
+        from sct import provision_resources  # noqa: PLC0415
+
+        runner = CliRunner()
+        result = runner.invoke(provision_resources, ["--backend", "aws", "--test-name", "test"])
+
+        # Verify command exited with error code 1
+        assert result.exit_code == 1
+
         # Verify argus_client was initialized
         test_config_instance.init_argus_client.assert_called_once_with(mock_params)
-        
+
         # Verify submit_event was called
         assert mock_argus_client.submit_event.called
-        
+
         # Get the event payload that was submitted
         call_args = mock_argus_client.submit_event.call_args
-        event_payload = call_args[0][0] if call_args[0] else call_args[1].get('event_payload')
-        
+        event_payload = call_args[0][0] if call_args[0] else call_args[1].get("event_payload")
+
         # Verify the event payload structure
         assert event_payload is not None
         assert event_payload["run_id"] == "test-id-12345"
         assert event_payload["severity"] == "CRITICAL"
         assert event_payload["event_type"] == "TestFrameworkEvent"
         assert "Failed to provision aws resources" in event_payload["message"]
-        assert "provision_resources" in event_payload["message"]
-        
+
         # Verify TEST_ERROR status was set
         mock_argus_client.set_sct_run_status.assert_called_once()

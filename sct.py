@@ -325,7 +325,7 @@ def provision_resources(backend, test_name: str, config: str):
     except Exception as exc:
         LOGGER.error("Unable to provision resources - aborting the test...", exc_info=True)
         test_config.init_argus_client(params)
-        
+
         # Create and submit error event to Argus
         error_message = f"Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
         event_payload: RawEventPayload = {
@@ -342,13 +342,13 @@ def provision_resources(backend, test_name: str, config: str):
             "known_issue": None,
             "nemesis_status": None,
         }
-        
+
         try:
             test_config.argus_client().submit_event(event_payload)
             LOGGER.info("Error event submitted to Argus successfully")
         except Exception as argus_exc:  # noqa: BLE001
             LOGGER.warning("Failed to submit error event to Argus: %s", argus_exc)
-        
+
         test_config.argus_client().set_sct_run_status(TestStatus.TEST_ERROR)
         sys.exit(1)
 
