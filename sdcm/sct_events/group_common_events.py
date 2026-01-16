@@ -14,7 +14,7 @@ from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
 
-from sdcm.cluster import TestConfig
+from sdcm.test_config import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
