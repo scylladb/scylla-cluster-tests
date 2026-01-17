@@ -506,16 +506,21 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
             **kwargs,
         )
 
-    @property
-    def vs_nodes_data(self) -> list[dict]:
-        """Fetch Vector Search nodes data from Scylla Cloud API"""
-        vs_info = (
+    def _get_vs_info(self) -> dict:
+        """Fetch Vector Search info"""
+        return (
             self._api_client.get_vector_search_nodes(
                 account_id=self._account_id, cluster_id=self._cluster_id, dc_id=self._dc_id
             )
             or {}
         )
-        return [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
+
+    @property
+    def vs_nodes_data(self) -> list[dict]:
+        """Fetch active Vector Search nodes data"""
+        vs_info = self._get_vs_info()
+        all_nodes = [node for az in (vs_info.get("availabilityZones") or []) for node in az.get("nodes", [])]
+        return [node for node in all_nodes if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")]
 
     def init_vs_nodes_from_cluster(self) -> None:
         """Initialize CloudVSNode objects from Scylla Cloud API data"""
@@ -529,18 +534,38 @@ class VectorStoreSetCloud(VectorStoreClusterMixin, cluster.BaseCluster):
         self.nodes.extend(created_nodes)
 
     def wait_for_vs_nodes_ready(self, timeout: int = 600) -> None:
-        """Wait for Vector Search nodes to become active"""
+        """Wait for Vector Search nodes to become active in all AZs"""
         self.log.info("Waiting for Vector Search nodes to be ready")
+
+        expected_nodes_per_az = int(self.parent_db_cluster.params.get("n_vector_store_nodes"))
 
         def check_vs_nodes_status():
             try:
-                all_nodes = self.vs_nodes_data
-                if not all_nodes:
+                vs_info = self._get_vs_info()
+                availability_zones = vs_info.get("availabilityZones") or []
+
+                if not availability_zones:
+                    self.log.debug("No availability zones found yet")
                     return False
 
+                all_nodes = [
+                    node
+                    for az in availability_zones
+                    for node in az.get("nodes", [])
+                    if node.get("status", "").upper() not in ("DELETED", "PENDING_DELETE")
+                ]
                 active_count = sum(node.get("status", "").upper() == "ACTIVE" for node in all_nodes)
-                self.log.debug("VS nodes status: %d/%d active", active_count, len(all_nodes))
-                return active_count == len(all_nodes)
+                expected_total_nodes = expected_nodes_per_az * len(availability_zones)
+                self.log.debug(
+                    "VS nodes status: %d/%d active (expected %d nodes across %d AZs)",
+                    active_count,
+                    len(all_nodes),
+                    expected_total_nodes,
+                    len(availability_zones),
+                )
+
+                return len(all_nodes) == expected_total_nodes and active_count == expected_total_nodes
+
             except Exception as e:  # noqa: BLE001
                 self.log.debug("Error checking VS nodes status: %s", e)
                 return False
