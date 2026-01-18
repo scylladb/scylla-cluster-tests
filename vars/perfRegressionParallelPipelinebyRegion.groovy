@@ -18,7 +18,10 @@ def call(Map pipelineParams) {
             string(name: 'new_scylla_repo', defaultValue: 'https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list', description: 'New Scylla repo')
             booleanParam(name: 'use_job_throttling', defaultValue: true, description: 'if true, use job throttling to limit the number of concurrent builds')
             string(name: 'labels_selector', defaultValue: '', description: 'This parameter is used for trigger with Scylla master version only. It points how to trigger the test: daily, weekly ot once in 3 weeks. Expected values: master-3weeks OR master-weekly OR master-daily')
-            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
+            string(defaultValue: "",
                    description: 'Billing project for the test run',
                    name: 'billing_project')
         }
@@ -282,7 +285,9 @@ def call(Map pipelineParams) {
                                             string(name: 'new_scylla_repo', value: rolling_upgrade_test ? params.new_scylla_repo : null),
                                             booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
-                                            string(name: 'region', value: region)
+                                            string(name: 'region', value: region),
+                                            string(name: 'requested_by_user', value: params.requested_by_user),
+                                            string(name: 'billing_project', value: params.billing_project)
                                         ]
                                     }
                                 }
