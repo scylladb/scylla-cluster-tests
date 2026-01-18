@@ -23,7 +23,7 @@ def test_provision_resources_sends_error_event_to_argus():
 
     # Mock the necessary components
     with (
-        patch("sct.create_sct_configuration") as mock_config,
+        patch("sct.init_and_verify_sct_config") as mock_config,
         patch("sct.get_test_config") as mock_test_config,
         patch("sct.LocalHost"),
         patch("sct.SCTProvisionLayout") as mock_layout,
@@ -33,6 +33,7 @@ def test_provision_resources_sends_error_event_to_argus():
         mock_params = MagicMock()
         mock_params.get.side_effect = lambda key, default=None: {
             "user_prefix": "test",
+            "test_id": "test-id-12345",
             "logs_transport": "none",
             "agent": {"enabled": False},
         }.get(key, default)
