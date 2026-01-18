@@ -21,7 +21,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
-            string(defaultValue: "${pipelineParams.get('billing_project', '')}",
+            string(defaultValue: "",
                    description: 'Billing project for the test run',
                    name: 'billing_project')
         }
@@ -303,6 +303,7 @@ def call(Map pipelineParams) {
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region),
                                             string(name: 'requested_by_user', value: params.requested_by_user)
+                                            string(name: 'billing_project', value: params.billing_project)
                                         ]
                                     }
                                 }
