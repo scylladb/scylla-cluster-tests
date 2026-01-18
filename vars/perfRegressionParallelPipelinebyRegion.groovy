@@ -302,7 +302,7 @@ def call(Map pipelineParams) {
                                             booleanParam(name: 'use_job_throttling', value: params.use_job_throttling),
                                             string(name: 'sub_tests', value: groovy.json.JsonOutput.toJson(sub_tests)),
                                             string(name: 'region', value: region),
-                                            string(name: 'requested_by_user', value: params.requested_by_user)
+                                            string(name: 'requested_by_user', value: params.requested_by_user),
                                             string(name: 'billing_project', value: params.billing_project)
                                         ]
                                     }
