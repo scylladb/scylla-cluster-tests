@@ -3158,9 +3158,14 @@ class SCTConfiguration(dict):
                 self["ami_id_db_scylla"] = " ".join(ami.image_id for ami in ami_list)
             elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":
                 try:
-                    if ":" in scylla_version:
+                    if parse_scylla_version_tag(scylla_version):
+                        # For full version tags, use regular GCE image lookup (will match exact tag)
+                        gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
+                    elif ":" in scylla_version:
+                        # For branch versions like "master:latest"
                         gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
                     else:
+                        # For simple versions like "5.2.1"
                         # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
                         gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
                 except Exception as ex:  # noqa: BLE001
