@@ -49,8 +49,8 @@ from sdcm.provision.provisioner import VmInstance
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
-from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
+from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
+from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import (
     AwsSctRunner,
@@ -269,12 +269,13 @@ def provision_resources(backend, test_name: str, config: str):
         os.environ["SCT_CLUSTER_BACKEND"] = backend
 
     add_file_logger()
-
-    params = create_sct_configuration(test_name=test_name)
+    params = init_and_verify_sct_config()
     test_config = get_test_config()
-    test_id = test_config.test_id()
+    test_config.set_test_name(test_name)
+    test_id = params.get("test_id")
     if not test_id or test_id == "None":
         raise ValueError("No test_id was provided. Aborting provisioning.")
+    test_config.set_test_id(test_id)
     localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
 
     if params.get("logs_transport") == "syslog-ng":
@@ -312,7 +313,10 @@ def provision_resources(backend, test_name: str, config: str):
         test_config.init_argus_client(params)
 
         # Create and submit error event to Argus
-        error_message = f"Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+        error_message = (
+            f"(TestFrameworkEvent Severity.CRITICAL) "
+            f"Failed to provision {backend} resources: {type(exc).__name__}: {exc}"
+        )
         event_payload: RawEventPayload = {
             "run_id": str(test_config.test_id()),
             "severity": "CRITICAL",
