@@ -312,8 +312,8 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             timeout(time: collectLogsTimeout, unit: 'MINUTES') {
                                                                 dir('scylla-cluster-tests') {
-                                                                    runCollectLogs(params_mapping[base_version], builder.region)
                                                                     completed_stages[base_version]['collect_logs'] = true
+                                                                    runCollectLogs(params_mapping[base_version], builder.region)
                                                                 }
                                                             }
                                                         }
@@ -382,6 +382,19 @@ def call(Map pipelineParams) {
                                                     echo "'send_email' stage is completed: $send_email"
                                                     echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                                                 """
+                                                if (!completed_stages[base_version]['collect_logs']) {
+                                                    catchError {
+                                                        script {
+                                                            wrap([$class: 'BuildUser']) {
+                                                                dir('scylla-cluster-tests') {
+                                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                                                        runCollectLogs(params_mapping[base_version], builder.region)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                                 if (!completed_stages[base_version]['clean_resources']) {
                                                     catchError {
                                                         script {
