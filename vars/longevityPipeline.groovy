@@ -376,8 +376,8 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: collectLogsTimeout, unit: 'MINUTES') {
-                                        runCollectLogs(params, builder.region)
                                         completed_stages['collect_logs'] = true
+                                        runCollectLogs(params, builder.region)
                                     }
                                 }
                             }
@@ -465,6 +465,19 @@ def call(Map pipelineParams) {
                         echo "'send_email' stage is completed: $send_email"
                         echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                     """
+                    if (!completed_stages['collect_logs']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                            runCollectLogs(params, builder.region)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (!completed_stages['clean_resources']) {
                         catchError {
                             script {
