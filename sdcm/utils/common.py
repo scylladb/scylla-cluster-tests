@@ -1357,18 +1357,31 @@ def get_scylla_gce_images_versions(
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
+    filters = "(family eq 'scylla(-enterprise)?')"
     if version and version != "all":
-        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
-        if "rc" not in version and len(version.split(".")) < 3:
-            filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+        # Check if this is a full version tag (e.g., 2024.2.5-0.20250221.cb9e2a54ae6d-1)
+        if parse_scylla_version_tag(version):
+            # For full version tags, use the complete tag for exact matching
+            # GCE labels require dots to be replaced with dashes
+            normalized_version = version.replace(".", "-").replace("~", "-")
+            filters += f"(labels.scylla_version eq '{normalized_version}')"
         else:
             filters += "')"
+
+            filters += "(labels.environment eq 'production')"
+            # For simple versions, use the existing wildcard logic
+            filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
+            if "rc" not in version and len(version.split(".")) < 3:
+                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+            else:
+                filters += "')"
+
     if arch:
         if arch != VmArch.X86:
             #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
             LOGGER.warning("--arch option not implemented currently for GCE machine images.")
         filters += f" (architecture eq {vmarch_to_gcp(arch)})"
+
     images_client, _ = get_gce_compute_images_client()
     return sorted(
         images_client.list(ListImagesRequest(filter=filters, project=project)),

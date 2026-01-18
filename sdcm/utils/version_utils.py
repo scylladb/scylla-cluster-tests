@@ -79,7 +79,9 @@ SEMVER_REGEX = re.compile(
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 ARGUS_VERSION_RE = re.compile(r"((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)")
-SCYLLA_VERSION_GROUPED_RE = re.compile(r"(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)")
+SCYLLA_VERSION_GROUPED_RE = re.compile(
+    r"(?P<version>[\w.~]+(?:-(?:dev|enterprise))?)-(?:(?P<build>0|rc\d+)\.)?(?P<date>[\d]{8})\.(?P<commit_id>[a-f0-9]+)"
+)
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r"Feature (.*)_SSTABLE_FORMAT is enabled")
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r"(.*)_SSTABLE_FORMAT")
 PRIMARY_XML_REGEX = re.compile(r'="(.*?primary.xml.(gz|zst)?)".*')
@@ -747,7 +749,7 @@ class FullVersionTag:
 
         return cls(
             base_version=groups.get("version"),
-            build=groups.get("build", ""),
+            build=groups.get("build") or "",
             date=groups.get("date"),
             commit_id=groups.get("commit_id"),
             full_tag=version_tag,

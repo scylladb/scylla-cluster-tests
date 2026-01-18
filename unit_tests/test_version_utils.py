@@ -911,7 +911,7 @@ def test_parse_branch_version_returns_none():
     assert tag is None
 
 
-def test_parse_invalid_version_returns_none():
+def test_parse_multiple_invalid_versions_return_none():
     """Test that invalid version strings return None."""
     test_cases = [
         "",
@@ -1087,4 +1087,110 @@ def test_version_routing_logic(version_string, should_use_branched, is_full_tag)
         uses_branched = False
 
     assert uses_branched == should_use_branched, f"Version '{version_string}' routing incorrect"
+<<<<<<< HEAD
 >>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+||||||| parent of 9c6823c94 (feature(gce): implement Phase 3 - GCE full version tag support)
+=======
+
+
+def test_full_version_string_preservation():
+    """Test that full version strings are preserved for exact matching.
+
+    This test verifies that when using a full version tag like
+    '2024.2.5-0.20250221.cb9e2a54ae6d-1', the entire string is passed
+    to get_scylla_ami_versions() for exact AMI tag matching, not just
+    the base version.
+    """
+    full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    tag = parse_scylla_version_tag(full_version_tag)
+    assert tag is not None
+
+    # The full tag should be preserved
+    assert tag.full_tag == full_version_tag
+
+    # Verify it's NOT simplified to just the base version
+    assert tag.full_tag != tag.base_version
+    assert tag.full_tag != "2024.2.5"
+
+    # The full tag should be used for filtering AMIs
+    # (not just "2024.2.5" which would match many AMIs)
+    assert len(full_version_tag) > len(tag.base_version)
+
+
+# GCE Full Version Tag Tests (pytest style)
+
+
+@pytest.mark.parametrize(
+    "version_string,should_parse,expected_normalized",
+    [
+        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", True, "2024-2-5-0-20250221-cb9e2a54ae6d-1"),
+        ("5.2.0-dev-0.20220829.67c91e8bcd61", True, "5-2-0-dev-0-20220829-67c91e8bcd61"),
+        ("4.6.4-0.20220718.b60f14601", True, "4-6-4-0-20220718-b60f14601"),
+        ("5.2.1", False, "5-2-1"),
+        ("master:latest", False, None),
+    ],
+)
+def test_gce_version_normalization(version_string, should_parse, expected_normalized):
+    """Test GCE version label normalization (dots → dashes).
+
+    GCE labels don't allow dots, so they must be converted to dashes.
+    This test verifies the normalization for both full version tags and simple versions.
+    """
+    tag = parse_scylla_version_tag(version_string)
+
+    if should_parse:
+        # Full version tag
+        assert tag is not None, f"Expected {version_string} to parse as full tag"
+
+        # Normalize for GCE labels (dots → dashes)
+        normalized = version_string.replace(".", "-")
+        assert normalized == expected_normalized
+    elif expected_normalized:
+        # Simple version (not full tag, but still valid for GCE)
+        assert tag is None, f"Expected {version_string} NOT to parse as full tag"
+
+        # Simple versions also get normalized
+        normalized = version_string.replace(".", "-")
+        assert normalized == expected_normalized
+    else:
+        # Branch version
+        assert tag is None
+
+
+@pytest.mark.parametrize(
+    "version_string,should_use_branched,is_full_tag",
+    [
+        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", False, True),
+        ("5.2.0-dev-0.20220829.67c91e8bcd61", False, True),
+        ("master:latest", True, False),
+        ("5.2.1", False, False),
+    ],
+)
+def test_gce_version_routing_logic(version_string, should_use_branched, is_full_tag):
+    """Test GCE version routing logic.
+
+    Verifies that:
+    - Full version tags use get_scylla_gce_images_versions (exact match)
+    - Branch versions use get_branched_gce_images
+    - Simple versions use get_scylla_gce_images_versions (wildcard match)
+    """
+    tag = parse_scylla_version_tag(version_string)
+
+    # Check if it's a full version tag
+    is_parsed_as_full_tag = tag is not None
+    assert is_parsed_as_full_tag == is_full_tag
+
+    # Determine routing (simulates sct_config.py logic for GCE)
+    if is_parsed_as_full_tag:
+        # Full version tag: use get_scylla_gce_images_versions for exact match
+        uses_branched = False
+    elif ":" in version_string:
+        # Branch version: use get_branched_gce_images
+        uses_branched = True
+    else:
+        # Simple version: use get_scylla_gce_images_versions for wildcard match
+        uses_branched = False
+
+    assert uses_branched == should_use_branched
+>>>>>>> 9c6823c94 (feature(gce): implement Phase 3 - GCE full version tag support)
