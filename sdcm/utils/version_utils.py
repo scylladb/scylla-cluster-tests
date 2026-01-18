@@ -32,7 +32,7 @@ from botocore.client import Config
 from sdcm.utils.repo_parser import Parser
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.common import DEFAULT_AWS_REGION
+from sdcm.utils.aws_utils import DEFAULT_AWS_REGION
 from sdcm.utils.parallel_object import ParallelObject
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
