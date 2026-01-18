@@ -78,6 +78,7 @@ from sdcm.utils.aws_utils import (
     get_ssm_ami,
     get_by_owner_ami,
     vmarch_to_aws,
+    DEFAULT_AWS_REGION,
 )
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -98,10 +99,9 @@ from sdcm.utils.gce_utils import (
     get_gce_compute_regions_client,
     get_gce_storage_client,
 )
-
+from sdcm.utils.version_utils import parse_scylla_version_tag
 
 LOGGER = logging.getLogger("utils")
-DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
@@ -1287,9 +1287,15 @@ def _get_ami_versions(
     version_processor_fn: Callable | None = None,
 ) -> list[EC2Image]:
     """Get AMI versions with configurable filters."""
+<<<<<<< HEAD
     # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
     from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
 >>>>>>> 2fd7bef3f (feature(aws): implement Phase 2 - AWS full version tag support)
+||||||| parent of 5082e61bc (refactor(utils): resolve circular dependency between common and version_utils)
+    # Import here to avoid circular dependency (common.py exports DEFAULT_AWS_REGION which version_utils.py needs)
+    from sdcm.utils.version_utils import parse_scylla_version_tag  # noqa: PLC0415
+=======
+>>>>>>> 5082e61bc (refactor(utils): resolve circular dependency between common and version_utils)
 
 <<<<<<< HEAD
         if len(version.split(".")) < 3:
