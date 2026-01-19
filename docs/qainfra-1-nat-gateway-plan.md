@@ -75,26 +75,19 @@ def create_cloud_nat_gateway(self, router_name: str, nat_name: str, static_ip: s
     # Configure for subnet/region
 ```
 
-#### 1.3 Configuration Parameters
-**File**: `sdcm/sct_config.py`
-
-Add new configuration options:
-- `gce_use_nat_gateway`: Boolean to enable NAT gateway
-- `gce_nat_gateway_name`: Name for the NAT gateway
-- `gce_nat_static_ip_name`: Name for the static IP
-
-#### 1.4 Update GCE Region Setup
+#### 1.3 Update GCE Region Setup
 **File**: `sdcm/utils/gce_region.py`
 
-Modify region initialization to:
-1. Check if NAT gateway should be created
-2. Reserve static IP
-3. Create Cloud Router
-4. Create Cloud NAT with static IP
-5. Log the static IP for Argus configuration
+Modify region initialization to automatically set up NAT gateway:
+1. Reserve static IP (automatically named, e.g., `sct-nat-{region}`)
+2. Create Cloud Router (automatically named, e.g., `sct-router-{region}`)
+3. Create Cloud NAT with static IP (automatically named, e.g., `sct-nat-{region}`)
+4. Log the static IP for Argus configuration
 
-#### 1.5 Cleanup Implementation
-Ensure NAT gateway and static IP are cleaned up when resources are torn down.
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
+
+#### 1.4 Cleanup Implementation
+Ensure NAT gateway, Cloud Router, and static IP are cleaned up when resources are torn down.
 
 ### Phase 2: Azure NAT Gateway Implementation (2-3 days)
 
@@ -132,25 +125,18 @@ def associate_nat_gateway(self, subnet_name: str, nat_gateway_id: str):
     # Link NAT gateway to subnet
 ```
 
-#### 2.4 Configuration Parameters
-**File**: `sdcm/sct_config.py`
-
-Add new configuration options:
-- `azure_use_nat_gateway`: Boolean to enable NAT gateway
-- `azure_nat_gateway_name`: Name for the NAT gateway
-- `azure_nat_public_ip_name`: Name for the static public IP
-
-#### 2.5 Update Azure Region Setup
+#### 2.4 Update Azure Region Setup
 **File**: `sdcm/utils/azure_region.py`
 
-Modify region initialization to:
-1. Check if NAT gateway should be created
-2. Create static public IP
-3. Create NAT Gateway
-4. Associate NAT Gateway with subnets
-5. Log the static IP for Argus configuration
+Modify region initialization to automatically set up NAT gateway:
+1. Create static public IP (automatically named, e.g., `sct-nat-ip-{region}`)
+2. Create NAT Gateway (automatically named, e.g., `sct-nat-{region}`)
+3. Associate NAT Gateway with subnets
+4. Log the static IP for Argus configuration
 
-#### 2.6 Cleanup Implementation
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
+
+#### 2.5 Cleanup Implementation
 Ensure NAT gateway and public IP are cleaned up when resources are torn down.
 
 ### Phase 3: OCI NAT Gateway Implementation (2-3 days)
@@ -189,25 +175,18 @@ def update_route_table_for_nat(self, route_table_id: str, nat_gateway_id: str):
     # Update route table
 ```
 
-#### 3.4 Configuration Parameters
-**File**: `sdcm/sct_config.py`
-
-Add new configuration options:
-- `oci_use_nat_gateway`: Boolean to enable NAT gateway
-- `oci_nat_gateway_name`: Name for the NAT gateway
-- `oci_nat_public_ip_name`: Name for the reserved public IP
-
-#### 3.5 Update OCI Region Setup
+#### 3.4 Update OCI Region Setup
 **File**: `sdcm/utils/oci_region.py` or `sdcm/utils/oci_utils.py`
 
-Modify region initialization to:
-1. Check if NAT gateway should be created
-2. Create reserved public IP
-3. Create NAT Gateway
-4. Update route tables to use NAT gateway
-5. Log the static IP for Argus configuration
+Modify region initialization to automatically set up NAT gateway:
+1. Create reserved public IP (automatically named, e.g., `sct-nat-ip-{region}`)
+2. Create NAT Gateway (automatically named, e.g., `sct-nat-{region}`)
+3. Update route tables to use NAT gateway
+4. Log the static IP for Argus configuration
 
-#### 3.6 Cleanup Implementation
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
+
+#### 3.5 Cleanup Implementation
 Ensure NAT gateway and reserved public IP are cleaned up when resources are torn down.
 
 ### Phase 4: Argus Configuration (1 day)
@@ -312,51 +291,18 @@ Test VMs (in subnet) → Route Table → NAT Gateway (with reserved public IP) �
 
 ## Configuration Examples
 
-### GCP Configuration (defaults/gce_config.yaml)
-```yaml
-# NAT Gateway Configuration
-gce_use_nat_gateway: true
-gce_nat_gateway_name: "sct-cloud-nat"
-gce_nat_static_ip_name: "sct-nat-ip"
-gce_cloud_router_name: "sct-cloud-router"
-```
+### Implementation Note
 
-### Azure Configuration (defaults/azure_config.yaml)
-```yaml
-# NAT Gateway Configuration
-azure_use_nat_gateway: true
-azure_nat_gateway_name: "sct-nat-gateway"
-azure_nat_public_ip_name: "sct-nat-public-ip"
-azure_nat_idle_timeout: 4  # minutes
-```
+NAT gateway configuration is **automatic** and built into the region setup code. There are no user-facing configuration options for enabling/disabling NAT gateways.
 
-### OCI Configuration (defaults/oci_config.yaml)
-```yaml
-# NAT Gateway Configuration
-oci_use_nat_gateway: true
-oci_nat_gateway_name: "sct-nat-gateway"
-oci_nat_public_ip_name: "sct-nat-public-ip"
-oci_nat_block_traffic: false
-```
+The following resources are created automatically per region:
+- **GCP**: Static IP (`sct-nat-{region}`), Cloud Router (`sct-router-{region}`), Cloud NAT
+- **Azure**: Public IP (`sct-nat-ip-{region}`), NAT Gateway (`sct-nat-{region}`)
+- **OCI**: Reserved Public IP (`sct-nat-ip-{region}`), NAT Gateway (`sct-nat-{region}`)
 
-### Test Configuration Example
-```yaml
-cluster_backend: gce
-gce_use_nat_gateway: true
-# ... other GCE config
+### Static IP Documentation
 
-# OR
-
-cluster_backend: azure
-azure_use_nat_gateway: true
-# ... other Azure config
-
-# OR
-
-cluster_backend: oci
-oci_use_nat_gateway: true
-# ... other OCI config
-```
+After implementation, static IPs will be logged during region initialization and documented in `docs/argus-nat-gateway-ips.md` for Argus team configuration.
 
 ## Cost Considerations
 
@@ -449,19 +395,16 @@ oci_use_nat_gateway: true
 - `docs/nat-gateway-architecture.md` (architecture diagrams)
 
 ### Modified Files
-- `sdcm/utils/gce_region.py` - Add NAT gateway integration
-- `sdcm/utils/azure_region.py` - Add NAT gateway integration
-- `sdcm/utils/oci_region.py` or `sdcm/utils/oci_utils.py` - Add NAT gateway integration
-- `sdcm/sct_config.py` - Add configuration parameters
-- `defaults/gce_config.yaml` - Add defaults
-- `defaults/azure_config.yaml` - Add defaults
-- `defaults/oci_config.yaml` - Add defaults
-- `README.md` - Update with NAT gateway info
+- `sdcm/utils/gce_region.py` - Add automatic NAT gateway setup
+- `sdcm/utils/azure_region.py` - Add automatic NAT gateway setup
+- `sdcm/utils/oci_region.py` or `sdcm/utils/oci_utils.py` - Add automatic NAT gateway setup
+- `README.md` - Update with NAT gateway info (if needed)
 
 ## References
 
 - [GCP Cloud NAT Documentation](https://cloud.google.com/nat/docs/overview)
 - [Azure NAT Gateway Documentation](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview)
+- [OCI NAT Gateway Documentation](https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/NATgateway.htm)
 - [Argus Documentation](https://github.com/scylladb/argus) (if public)
 - Related Jira: QAINFRA-1
 
