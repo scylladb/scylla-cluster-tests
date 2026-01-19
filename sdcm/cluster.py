@@ -6454,66 +6454,132 @@ class BaseMonitorSet:
 
         node.update_repo_cache()
 
-        if node.distro.is_rhel_like:
-            node.install_epel()
-            node.install_package(package_name="unzip wget python3 python3-pip")
-            # get-docker.sh doesn't support Rocky, thus docker should be installed from repo via dnf install
-            if node.distro.is_rocky:
-                install_docker_cmd = dedent("""
-                    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-                    dnf install -y docker-ce docker-ce-cli containerd.io
-                """)
-            elif node.distro.is_rhel9:
-                # TODO: Temporary workaround for RHEL9 installation issue https://github.com/moby/moby/issues/49169
-                # Install packages manually hardcoding the OS version ($releasever) in /etc/yum.repos.d/docker-ce.repo
-                # After issue resolution, we can return the previous approach with installation script
-                install_docker_cmd = dedent("""
-                    dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-                    sed -i \"s/\\$releasever/9/g\" /etc/yum.repos.d/docker-ce.repo
-                    dnf install -y docker-ce docker-ce-cli containerd.io
-                """)
-            else:
-                install_docker_cmd = dedent("""
-                    curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
-                    sh get-docker.sh
-                """)
-            prereqs_script = dedent(f"""
-                python3 -m pip install --upgrade pip
-                python3 -m pip install pyyaml
-                {install_docker_cmd}
+        prereqs_script = dedent("""
+            # Function to wait for apt locks to be released
+            wait_for_apt_lock() {
+                echo "Waiting for apt locks to be released..."
+                local max_attempts=60
+                local attempt=0
+                while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend /var/cache/apt/archives/lock >/dev/null 2>&1; do
+                    if [ $attempt -ge $max_attempts ]; then
+                        echo "Timeout waiting for apt lock after $max_attempts attempts"
+                        exit 1
+                    fi
+                    echo "Apt is locked by another process, waiting... (attempt $((attempt+1))/$max_attempts)"
+                    sleep 10
+                    attempt=$((attempt+1))
+                done
+                echo "Apt locks are free, proceeding..."
+            }
+
+            # Function to install Docker and Python basics on Debian/Ubuntu
+            install_debian() {
+                echo "Detected Debian/Ubuntu system..."
+
+                # 1. Wait for apt lock and update existing list of packages
+                wait_for_apt_lock
+                apt-get update
+
+                # 2. Install Docker prerequisites and basic Python
+                apt-get install -y \\
+                    ca-certificates \\
+                    curl \\
+                    gnupg \\
+                    lsb-release \\
+                    python3 \\
+                    python3-pip \\
+                    unzip \\
+                    wget
+
+                # 3. Add Docker official GPG key
+                # Detect distro first for proper URL
+                DISTRO=$(lsb_release -is | tr "[:upper:]" "[:lower:]")
+                mkdir -p /etc/apt/keyrings
+                rm -f /etc/apt/keyrings/docker.gpg
+                curl -fsSL https://download.docker.com/linux/$DISTRO/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+                # 4. Set up the repository
+                CODENAME=$(lsb_release -cs)
+                ARCH=$(dpkg --print-architecture)
+                echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$DISTRO $CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+                # 5. Update package index again
+                wait_for_apt_lock
+                apt-get update
+
+                # 6. Install Docker Engine
+                apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            }
+
+            # Function to install Docker and Python basics on CentOS/RHEL/Fedora
+            install_centos() {
+                echo "Detected CentOS/RHEL system..."
+
+                # 1. Install yum-utils and basic Python
+                yum install -y yum-utils python3 python3-pip unzip wget
+
+                # 2. Add the Docker repository
+                yum-config-manager \\
+                    --add-repo \\
+                    https://download.docker.com/linux/centos/docker-ce.repo
+
+                # 3. Install Docker Engine
+                yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            }
+
+            # Function to manage Pip and install libraries
+            install_python_libs() {
+                echo "Configuring Python environment..."
+
+                # Base pip command
+                PIP_CMD="pip3 install"
+                PIP_ARGS=""
+
+                # Check if current pip supports/requires --break-system-packages
+                if pip3 install --help | grep -q "break-system-packages"; then
+                    echo "PEP 668 detected: Enabling --break-system-packages flag."
+                    PIP_ARGS="--break-system-packages"
+                fi
+
+                # Install libraries (skip pip upgrade to avoid conflicts with system pip)
+                echo "Installing pyyaml and psutil..."
+                $PIP_CMD $PIP_ARGS pyyaml psutil
+
+                if [ $? -eq 0 ]; then
+                    echo "Python libraries installed successfully."
+                else
+                    echo "Failed to install Python libraries."
+                    exit 1
+                fi
+            }
+
+            # Function to start and enable Docker service
+            start_docker() {
+                echo "Starting Docker service..."
                 systemctl start docker
-            """)
-        elif node.distro.is_ubuntu:
-            node.install_package(
-                package_name="software-properties-common python3 python3-dev python3-setuptools unzip wget python3-pip"
-            )
-            pip_break_system_packages = "--break-system-packages" if node.distro.is_ubuntu24 else ""
-            prereqs_script = dedent(f"""
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-                sudo apt-get update
-                sudo apt-get install -y docker.io
-                python3 -m pip install pyyaml {pip_break_system_packages}
-                python3 -m pip install -I -U psutil {pip_break_system_packages}
-                systemctl start docker
-            """)
-        elif node.distro.is_debian:
-            node.install_package(
-                package_name="apt-transport-https ca-certificates curl software-properties-common gnupg2"
-            )
-            node.remoter.sudo(
-                'bash -ce "curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -"', retry=3
-            )
-            node.remoter.sudo(
-                cmd='add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"'
-            )
-            node.remoter.sudo(cmd="apt update")
-            node.install_package("docker-ce python3 python3-setuptools wget unzip python3-pip")
-            prereqs_script = dedent("""
-                cat /etc/debian_version
-            """)
-        else:
-            raise ValueError("Unsupported Distribution type: {}".format(str(node.distro)))
+                systemctl enable docker
+
+                echo "--------------------------------------------------"
+                echo "Installation Complete!"
+                echo "Docker version: $(docker --version)"
+                echo "Pip version: $(pip3 --version)"
+                echo "--------------------------------------------------"
+            }
+
+            # Main execution logic
+            if [ -f /etc/debian_version ]; then
+                install_debian
+                install_python_libs
+                start_docker
+            elif [ -f /etc/redhat-release ]; then
+                install_centos
+                install_python_libs
+                start_docker
+            else
+                echo "Unsupported Operating System. This script supports Debian/Ubuntu or CentOS/RHEL."
+                exit 1
+            fi
+        """)
 
         node_exporter_setup = NodeExporterSetup()
         node_exporter_setup.install(node)
