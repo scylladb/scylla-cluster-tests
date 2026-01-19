@@ -468,6 +468,9 @@ class Stats:
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
     def update(self, data: dict) -> None:
+        # Skip update if create_stats is False (when store_perf_results is disabled)
+        if not getattr(self, "create_stats", True):
+            return
         if not self.elasticsearch:
             LOGGER.error("Failed to update test stats: ES connection is not created (doc_id=%s)", self._test_id)
             return
