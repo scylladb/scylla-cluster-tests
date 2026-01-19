@@ -312,9 +312,9 @@ def clean_capacity_reservations(region_name):
     now = datetime.datetime.now(datetime.timezone.utc)
 
     for cr in response["CapacityReservations"]:
-        test_id = next((tag["Value"] for tag in cr.get("Tags", []) if tag["Key"] == "test_id"), "N/A")
+        test_id = next((tag["Value"] for tag in cr.get("Tags", []) if tag["Key"] == "TestId"), "N/A")
         print(
-            "found capacity reservation %s started at %s. instance type: %s, count: %s, available: %s, test_id: %s"
+            "found capacity reservation %s started at %s. instance type: %s, count: %s, available: %s, TestId: %s"
             % (
                 cr["CapacityReservationId"],
                 cr["StartDate"],
