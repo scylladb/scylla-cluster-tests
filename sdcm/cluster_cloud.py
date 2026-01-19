@@ -39,7 +39,7 @@ from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.utils.vector_store_utils import VectorStoreClusterMixin
 from sdcm.test_config import TestConfig
-from sdcm.remote import RemoteCmdRunner, shell_script_cmd
+from sdcm.remote import RemoteLibSSH2CmdRunner, shell_script_cmd
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.common.utils import (
     configure_backoff_timeout,
@@ -325,8 +325,7 @@ class CloudNode(cluster.BaseNode):
         localhost = TestConfig().tester_obj().localhost
         if localhost.xcloud_connect_supported(self.parent_cluster.params):
             ssh_login_info = self._get_ssh_address(localhost)
-            # hardcode the fabric implementation for now, as it the only one we support right now
-            self.remoter = RemoteCmdRunner(**ssh_login_info)
+            self.remoter = RemoteLibSSH2CmdRunner(**ssh_login_info)
             self.log.debug(self.remoter.ssh_debug_cmd())
         else:
             self.log.warning(f"XCloud connectivity is not supported, {self.node_type} SSH remoter is not initialized")
