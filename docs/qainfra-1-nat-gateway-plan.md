@@ -88,48 +88,81 @@ Modify region initialization to automatically set up NAT gateway:
 
 ### Phase 2: Azure NAT Gateway Implementation (2-3 days)
 
-#### 2.1 Create Static Public IP
+#### 2.1 Create Dedicated NAT Gateway Resource Group
 **File**: `sdcm/utils/azure_region.py` or new `sdcm/provision/azure/nat_gateway.py`
 
 ```python
-def create_static_public_ip(self, name: str, resource_group: str) -> str:
-    """Create static public IP address for NAT gateway."""
+def create_nat_gateway_resource_group(self, region: str) -> str:
+    """Create dedicated resource group for NAT gateway infrastructure."""
+    # Create resource group named: sct-nat-gateway-{region}
+    # This resource group is separate from test resource groups
+    # Tag with permanent infrastructure markers
+    # Return resource group name
+```
+
+**Architecture Note**: NAT gateway resources must reside in a **dedicated resource group** separate from test resource groups. This allows:
+- Permanent infrastructure that persists across test runs
+- Cross-resource-group subnet association
+- Simplified cost tracking and management
+
+#### 2.2 Create Static Public IP
+**File**: `sdcm/utils/azure_region.py` or new `sdcm/provision/azure/nat_gateway.py`
+
+```python
+def create_static_public_ip(self, name: str, nat_resource_group: str) -> str:
+    """Create static public IP address for NAT gateway in dedicated resource group."""
     # Use Azure Network Management Client
-    # Create Public IP with Static allocation
+    # Create Public IP with Static allocation in NAT gateway resource group
     # Tag with SCT identifiers
     # Return IP address
 ```
 
-#### 2.2 Create NAT Gateway
+#### 2.3 Create NAT Gateway
 **File**: `sdcm/utils/azure_region.py` or `sdcm/provision/azure/nat_gateway.py`
 
 ```python
-def create_nat_gateway(self, name: str, resource_group: str, public_ip_id: str):
-    """Create Azure NAT Gateway with static public IP."""
-    # Create NAT Gateway resource
+def create_nat_gateway(self, name: str, nat_resource_group: str, public_ip_id: str):
+    """Create Azure NAT Gateway with static public IP in dedicated resource group."""
+    # Create NAT Gateway resource in NAT gateway resource group
     # Associate with public IP
     # Configure idle timeout
-    # Return NAT Gateway resource
+    # Return NAT Gateway resource ID
 ```
 
-#### 2.3 Associate NAT Gateway with Subnet
+#### 2.4 Associate NAT Gateway with Test Subnets (Cross-Resource-Group)
 **File**: `sdcm/provision/azure/subnet_provider.py`
 
 ```python
-def associate_nat_gateway(self, subnet_name: str, nat_gateway_id: str):
-    """Associate NAT gateway with subnet."""
-    # Update subnet configuration
-    # Link NAT gateway to subnet
+def associate_nat_gateway_cross_rg(self, subnet_name: str, test_resource_group: str, 
+                                     nat_gateway_id: str):
+    """Associate NAT gateway with subnet across different resource groups.
+    
+    The NAT gateway resides in its own resource group (sct-nat-gateway-{region}),
+    while test VNets and subnets are in test-specific resource groups.
+    Azure allows cross-resource-group NAT gateway association.
+    """
+    # Get subnet in test resource group
+    # Update subnet configuration to reference NAT gateway ID
+    # NAT gateway ID contains full resource path including its resource group
+    # Azure validates permissions and completes cross-RG association
 ```
 
-#### 2.4 Update Azure Region Setup
+#### 2.5 Update Azure Region Setup
 **File**: `sdcm/utils/azure_region.py`
 
 Modify region initialization to automatically set up NAT gateway:
-1. Create static public IP (automatically named, e.g., `sct-nat-ip-{region}`)
-2. Create NAT Gateway (automatically named, e.g., `sct-nat-{region}`)
-3. Associate NAT Gateway with subnets
-4. Log the static IP for Argus configuration
+1. Create or verify dedicated NAT gateway resource group exists (e.g., `sct-nat-gateway-{region}`)
+2. Create static public IP in NAT resource group (e.g., `sct-nat-ip-{region}`)
+3. Create NAT Gateway in NAT resource group (e.g., `sct-nat-{region}`)
+4. When creating test VNets/subnets, associate them with NAT gateway via resource ID
+5. Log the static IP for Argus configuration
+
+**Key Implementation Details**:
+- NAT gateway resource group: `sct-nat-gateway-{region}` (permanent)
+- Test resource groups: `sct-test-{test-id}` (ephemeral)
+- NAT gateway association uses full resource ID, enabling cross-RG linking
+- Test VNets can reference NAT gateway even in different resource group
+- No special permissions needed beyond standard Azure network operations
 
 **Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option. This is a **one-time setup** - once created, NAT gateways remain as permanent infrastructure (no cleanup needed).
 
@@ -250,18 +283,32 @@ Test VMs → Cloud Router → Cloud NAT (with static IP) → Internet → Argus
 
 **Architecture**:
 ```
-Test VMs (in subnet) → NAT Gateway (with static public IP) → Internet → Argus
+[Dedicated NAT RG: sct-nat-gateway-{region}]
+    ├── NAT Gateway (sct-nat-{region})
+    └── Static Public IP (sct-nat-ip-{region})
+            ↓
+[Test RG: sct-test-{test-id}]
+    └── Test VNet
+        └── Test Subnet (references NAT Gateway via resource ID)
+            └── Test VMs → NAT Gateway → Internet → Argus
 ```
 
+**Resource Organization**:
+- **NAT Gateway Resource Group**: `sct-nat-gateway-{region}` (permanent, shared)
+- **Test Resource Groups**: `sct-test-{test-id}` (ephemeral, per-test)
+- **Cross-RG Association**: Subnets in test RGs reference NAT gateway via full resource ID
+
 **Resources needed**:
-- Public IP Address (Static allocation, per region)
-- NAT Gateway resource
-- Subnet association
-- IAM permissions: `Microsoft.Network/natGateways/*`, `Microsoft.Network/publicIPAddresses/*`
+- Dedicated Resource Group for NAT infrastructure (per region)
+- Public IP Address (Static allocation, in NAT RG)
+- NAT Gateway resource (in NAT RG)
+- Cross-resource-group subnet association capability
+- IAM permissions: `Microsoft.Network/natGateways/*`, `Microsoft.Network/publicIPAddresses/*`, `Microsoft.Resources/resourceGroups/*`
 
 **API Reference**:
 - [Azure NAT Gateway](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview)
 - [Public IP Addresses](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses)
+- [Cross-Resource-Group Networking](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq)
 
 ### OCI NAT Gateway
 
@@ -353,11 +400,12 @@ After implementation, static IPs will be logged during region initialization and
 | Argus whitelist delays | Medium | Medium | Coordinate with Argus team (@k0machi, @soyacz) early |
 | NAT gateway quota limits | High | Low | Request quota increase if needed |
 | Existing tests break | High | Low | Gradual rollout per region |
+| Azure cross-RG permissions | Medium | Low | Ensure service principal has permissions across resource groups |
 
 ## Success Criteria
 
 - [x] GCP NAT gateway deployed with static IP in test region
-- [x] Azure NAT gateway deployed with static IP in test region
+- [x] Azure NAT gateway deployed in dedicated resource group with cross-RG subnet association
 - [x] OCI NAT gateway deployed with static IP in test region
 - [x] Static IPs documented and provided to Argus team
 - [x] Argus load balancer configured with static IPs
@@ -387,18 +435,19 @@ After implementation, static IPs will be logged during region initialization and
 
 ### New Files
 - `sdcm/provision/gce/nat_gateway.py` (~200 lines)
-- `sdcm/provision/azure/nat_gateway.py` (~250 lines)
+- `sdcm/provision/azure/nat_gateway.py` (~300 lines - includes cross-RG handling)
 - `sdcm/provision/oci/nat_gateway.py` (~200 lines)
 - `unit_tests/test_gce_nat_gateway.py` (~150 lines)
-- `unit_tests/test_azure_nat_gateway.py` (~150 lines)
+- `unit_tests/test_azure_nat_gateway.py` (~200 lines - includes cross-RG tests)
 - `unit_tests/test_oci_nat_gateway.py` (~150 lines)
 - `docs/argus-nat-gateway-ips.md` (documentation)
 - `docs/nat-gateway-architecture.md` (architecture diagrams)
 
 ### Modified Files
 - `sdcm/utils/gce_region.py` - Add automatic NAT gateway setup
-- `sdcm/utils/azure_region.py` - Add automatic NAT gateway setup
+- `sdcm/utils/azure_region.py` - Add automatic NAT gateway setup with dedicated resource group
 - `sdcm/utils/oci_region.py` or `sdcm/utils/oci_utils.py` - Add automatic NAT gateway setup
+- `sdcm/provision/azure/subnet_provider.py` - Add cross-resource-group NAT gateway association
 - `README.md` - Update with NAT gateway info (if needed)
 
 ## References
