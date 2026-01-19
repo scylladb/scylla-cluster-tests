@@ -69,7 +69,7 @@ class SCTCapacityReservation:
         test_id = params.get("test_id")
         ec2 = boto3.client("ec2", region_name=params.region_names[0])
         reservations = ec2.describe_capacity_reservations(
-            Filters=[{"Name": "tag:test_id", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
+            Filters=[{"Name": "tag:TestId", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
         )
         result = {}
         availability_zone = params.get("availability_zone")
@@ -263,7 +263,7 @@ class SCTCapacityReservation:
             ec2 = boto3.client("ec2", region_name=region)
             try:
                 reservations = ec2.describe_capacity_reservations(
-                    Filters=[{"Name": "tag:test_id", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
+                    Filters=[{"Name": "tag:TestId", "Values": [test_id]}, {"Name": "state", "Values": ["active"]}]
                 )
                 if not reservations["CapacityReservations"]:
                     LOGGER.info("There are no CRs to remove in region %s.", region)
