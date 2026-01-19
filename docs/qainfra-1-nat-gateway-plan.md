@@ -84,10 +84,7 @@ Modify region initialization to automatically set up NAT gateway:
 3. Create Cloud NAT with static IP (automatically named, e.g., `sct-nat-{region}`)
 4. Log the static IP for Argus configuration
 
-**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
-
-#### 1.4 Cleanup Implementation
-Ensure NAT gateway, Cloud Router, and static IP are cleaned up when resources are torn down.
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option. This is a **one-time setup** - once created, NAT gateways remain as permanent infrastructure (no cleanup needed).
 
 ### Phase 2: Azure NAT Gateway Implementation (2-3 days)
 
@@ -134,10 +131,7 @@ Modify region initialization to automatically set up NAT gateway:
 3. Associate NAT Gateway with subnets
 4. Log the static IP for Argus configuration
 
-**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
-
-#### 2.5 Cleanup Implementation
-Ensure NAT gateway and public IP are cleaned up when resources are torn down.
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option. This is a **one-time setup** - once created, NAT gateways remain as permanent infrastructure (no cleanup needed).
 
 ### Phase 3: OCI NAT Gateway Implementation (2-3 days)
 
@@ -184,10 +178,7 @@ Modify region initialization to automatically set up NAT gateway:
 3. Update route tables to use NAT gateway
 4. Log the static IP for Argus configuration
 
-**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option.
-
-#### 3.5 Cleanup Implementation
-Ensure NAT gateway and reserved public IP are cleaned up when resources are torn down.
+**Note**: NAT gateway setup is automatic infrastructure configuration, not a per-test option. This is a **one-time setup** - once created, NAT gateways remain as permanent infrastructure (no cleanup needed).
 
 ### Phase 4: Argus Configuration (1 day)
 
@@ -327,10 +318,20 @@ After implementation, static IPs will be logged during region initialization and
 
 **Estimated monthly cost per region**: ~$35-50
 
-### Mitigation
-- Use NAT gateway only in regions actively running tests
-- Cleanup NAT gateways when not in use
-- Monitor data transfer costs
+### Scope
+- NAT gateways will be created in **all supported regions** for each cloud provider where SCT runners execute tests
+- This ensures consistent Argus connectivity across all test environments
+- Total costs scale with number of active regions (estimated: 3-5 regions per cloud provider)
+
+### Cost Tracking
+- **Resource Tagging**: All NAT gateway resources should be tagged with:
+  - `Project: scylla-cluster-tests`
+  - `Component: nat-gateway`
+  - `Purpose: argus-connectivity`
+  - `ManagedBy: sct-automation`
+- **Cost Monitoring**: Set up cloud provider cost alerts for NAT gateway resources
+- **Monthly Reporting**: Include NAT gateway costs in SCT infrastructure cost reports
+- **Budget Allocation**: Estimated total: $500-750/month across all regions and providers
 
 ## Timeline
 
@@ -348,10 +349,10 @@ After implementation, static IPs will be logged during region initialization and
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|-----------|------------|
 | IP exhaustion in region | High | Low | Plan IP address allocation carefully |
-| Additional cloud costs | Medium | High | Monitor costs, cleanup unused resources |
-| Argus whitelist delays | Medium | Medium | Coordinate with Argus team early |
+| Additional cloud costs | Medium | High | Implement cost tracking and monitoring (see Cost Tracking section) |
+| Argus whitelist delays | Medium | Medium | Coordinate with Argus team (@k0machi, @soyacz) early |
 | NAT gateway quota limits | High | Low | Request quota increase if needed |
-| Existing tests break | High | Low | Feature flag, gradual rollout |
+| Existing tests break | High | Low | Gradual rollout per region |
 
 ## Success Criteria
 
@@ -371,16 +372,16 @@ After implementation, static IPs will be logged during region initialization and
 ## Open Questions
 
 1. **Regions**: Which GCP/Azure/OCI regions need NAT gateways?
-   - Answer: Start with primary test regions (e.g., us-east1 for GCP, eastus for Azure, us-ashburn-1 for OCI)
+   - Answer: **All supported regions** where SCT runners execute tests to ensure consistent Argus connectivity
 
 2. **Failover**: Do we need NAT gateways in backup regions?
-   - Answer: Not initially, can add later if needed
+   - Answer: Yes, NAT gateways needed in all regions where tests run
 
 3. **Monitoring**: What metrics should we track?
-   - Answer: NAT gateway utilization, data transfer, connection count
+   - Answer: NAT gateway utilization, data transfer, connection count, costs per region
 
 4. **Argus Contact**: Who on the Argus team handles load balancer configuration?
-   - Answer: Need to identify contact before Phase 3
+   - Answer: **@k0machi** and **@soyacz** (Argus team contacts for load balancer whitelist configuration)
 
 ## Implementation Files
 
