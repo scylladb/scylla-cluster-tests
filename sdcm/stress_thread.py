@@ -402,7 +402,10 @@ class CassandraStressThread(DockerBasedStressThread):
         try:
             prefix, *_ = stress_cmd.split("cassandra-stress", maxsplit=1)
             reporter = CassandraStressVersionReporter(
-                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client()
+                runner=cmd_runner,
+                command_prefix=prefix,
+                argus_client=loader.parent_cluster.test_config.argus_client(),
+                is_driver_4x=self.is_driver_4x,
             )
             reporter.report()
         except Exception:  # noqa: BLE001
