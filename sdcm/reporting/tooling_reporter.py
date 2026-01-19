@@ -89,12 +89,23 @@ class PythonDriverReporter(ToolReporterBase):
 class CassandraStressVersionReporter(ToolReporterBase):
     TOOL_NAME = "cassandra-stress"
 
+    def __init__(
+        self,
+        runner: CommandRunner,
+        command_prefix: str = None,
+        argus_client: ArgusSCTClient = None,
+        is_driver_4x: bool = False,
+    ) -> None:
+        super().__init__(runner, command_prefix, argus_client)
+        self.is_driver_4x = is_driver_4x
+
     def _collect_version_info(self) -> None:
         output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} version")
         LOGGER.info("%s: Collected cassandra-stress output:\n%s", self, output.stdout)
         field_map = {
             "Version": "cassandra-stress",
             "scylla-java-driver": "scylla-java-driver",
+            "scylla-java-driver-4x": "scylla-java-driver-4x",
         }
         result = {}
         for line in output.stdout.splitlines():
@@ -107,7 +118,13 @@ class CassandraStressVersionReporter(ToolReporterBase):
                 continue
         LOGGER.info("Result:\n%s", result)
         self.version = f"{result.get('cassandra-stress', '#FAILED_CHECK_LOGS')}"
-        if driver_version := result.get("scylla-java-driver"):
+        # Report the driver version that is actually being used based on is_driver_4x flag
+        if self.is_driver_4x and (driver_version := result.get("scylla-java-driver-4x")):
+            self.additional_data = f"java-driver-4x: {driver_version}"
+            CassandraStressJavaDriverVersionReporter(
+                driver_version=driver_version, command_prefix=None, runner=None, argus_client=self.argus_client
+            ).report()
+        elif not self.is_driver_4x and (driver_version := result.get("scylla-java-driver")):
             self.additional_data = f"java-driver: {driver_version}"
             CassandraStressJavaDriverVersionReporter(
                 driver_version=driver_version, command_prefix=None, runner=None, argus_client=self.argus_client
