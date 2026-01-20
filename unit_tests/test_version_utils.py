@@ -1282,4 +1282,62 @@ def test_azure_full_version_string_preservation():
     # The full tag should be used for filtering Azure images
     # (not just "2024.2.5" which would match many images)
     assert len(full_version_tag) > len(tag.base_version)
+<<<<<<< HEAD
 >>>>>>> 13d934745 (feature(azure): implement Phase 4 - Azure full version tag support)
+||||||| parent of a9daa416e (feature(docker): implement Phase 5 - Docker full version tag support)
+=======
+
+
+# Docker version detection tests
+def test_docker_version_detection():
+    """Test that full version tags are correctly detected for Docker repo selection."""
+
+    # Full version tags should go to nightly repos
+    full_version = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    repo = get_scylla_docker_repo_from_version(full_version)
+    assert repo == "scylladb/scylla-enterprise-nightly", f"Full version tag {full_version} should use nightly repo"
+
+    # Full version tags with ~dev should also go to nightly repos
+    full_version_dev = "2026.1.0~dev-0.20260119.4cde34f6f20b"
+    repo_dev = get_scylla_docker_repo_from_version(full_version_dev)
+    assert repo_dev == "scylladb/scylla-nightly", f"Full version tag {full_version_dev} should use nightly repo"
+
+
+@pytest.mark.parametrize(
+    "version,expected_repo",
+    [
+        # Full version tags → nightly repos
+        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", "scylladb/scylla-enterprise-nightly"),
+        ("2026.1.0~dev-0.20260119.4cde34f6f20b", "scylladb/scylla-nightly"),
+        ("5.2.0-dev-0.20220829.67c91e8bcd61", "scylladb/scylla-nightly"),
+        ("2023.1.0-0.20230815.a1b2c3d4e5f6", "scylladb/scylla-enterprise-nightly"),
+        # Branch/latest versions
+        ("latest", "scylladb/scylla-nightly"),
+        ("master:latest", "scylladb/scylla-nightly"),
+        ("enterprise:latest", "scylladb/scylla-enterprise-nightly"),
+        # Simple versions
+        ("5.2.1", "scylladb/scylla"),  # Release version
+        ("2024.2.0", "scylladb/scylla-enterprise"),  # Release version
+    ],
+)
+def test_docker_version_routing_logic(version, expected_repo):
+    """Test Docker repo selection for various version formats."""
+    repo = get_scylla_docker_repo_from_version(version)
+    assert repo == expected_repo, f"Version '{version}' should route to '{expected_repo}', got '{repo}'"
+
+
+def test_docker_full_version_string_preservation():
+    """Test that full version tags are preserved for Docker image lookup."""
+    full_version = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    # Verify that the full version tag is recognized
+    parsed = parse_scylla_version_tag(full_version)
+    assert parsed is not None, f"Expected {full_version} to be recognized as full tag"
+
+    # Verify the full tag is preserved
+    assert parsed.full_tag == full_version, "Full version tag should be preserved for Docker image matching"
+
+    # Verify Docker repo selection uses the full tag correctly
+    repo = get_scylla_docker_repo_from_version(full_version)
+    assert "nightly" in repo, "Full version tags should use nightly repos"
+>>>>>>> a9daa416e (feature(docker): implement Phase 5 - Docker full version tag support)
