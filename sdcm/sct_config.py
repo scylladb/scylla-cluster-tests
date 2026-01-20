@@ -2791,8 +2791,11 @@ class SCTConfiguration(dict):
             if job_name := os.environ.get("JOB_NAME"):
                 release_folder = job_name.split("/")[0]
                 if release_folder.startswith(("scylla-", "scylladb-")):
-                    self["billing_project"] = release_folder.removeprefix("scylla-").removeprefix("scylladb-")
-                    self.log.info(f"Setting billing_project to '{release_folder}' from JOB_NAME: {job_name}")
+                    billing_project_value = release_folder.removeprefix("scylla-").removeprefix("scylladb-")
+                    # Don't set billing_project to "staging"
+                    if billing_project_value != "staging":
+                        self["billing_project"] = billing_project_value
+                        self.log.info(f"Setting billing_project to '{release_folder}' from JOB_NAME: {job_name}")
 
         if not self.get("billing_project"):
             try:
