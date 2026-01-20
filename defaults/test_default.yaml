@@ -71,7 +71,6 @@ update_db_packages: ''
 
 logs_transport: "vector"
 
-store_perf_results: false
 email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
