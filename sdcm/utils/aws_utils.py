@@ -29,11 +29,33 @@ from sdcm.utils.decorators import retrying
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
+from sdcm.provision.provisioner import VmArch
 
 if TYPE_CHECKING:
     from sdcm.utils.aws_region import AwsRegion
+
 LOGGER = logging.getLogger(__name__)
 AwsArchType = ArchitectureTypeType
+
+
+def vmarch_to_aws(arch: VmArch) -> ArchitectureTypeType:
+    """Convert VmArch enum to AWS architecture format.
+
+    Args:
+        arch: VmArch enum value
+
+    Returns:
+        AWS architecture type (x86_64 or arm64)
+
+    Raises:
+        ValueError: If architecture is not supported
+    """
+    if arch is VmArch.X86:
+        return "x86_64"
+    elif arch is VmArch.ARM:
+        return "arm64"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
 
 
 class EksClusterCleanupMixin:

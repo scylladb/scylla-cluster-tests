@@ -27,6 +27,9 @@ class VmArch(Enum):
     X86 = "x86_64"
     ARM = "aarch64"
 
+    def __str__(self):
+        return self.value
+
 
 @dataclass
 class DataDisk:
