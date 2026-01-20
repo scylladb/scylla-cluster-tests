@@ -102,7 +102,9 @@ class SoftTimeoutEvent(TestFrameworkEvent):
         if still_running:
             message = f"operation '{operation}' exceeded soft-timeout of {soft_timeout}s and is still in progress"
         else:
-            message = f"operation '{operation}' is finished and took {duration:.1f}s (soft timeout was set to {soft_timeout}s)"
+            message = f"operation '{operation}' is finished and took {duration:.1f}s (soft timeout was set to {
+                soft_timeout
+            }s)"
         super().__init__(source="SoftTimeout", severity=Severity.ERROR, trace=sys._getframe().f_back, message=message)
 
 
@@ -112,18 +114,6 @@ class HardTimeoutEvent(TestFrameworkEvent):
         super().__init__(
             source="HardTimeout", severity=Severity.CRITICAL, trace=sys._getframe().f_back, message=message
         )
-
-
-class ElasticsearchEvent(InformationalEvent):
-    def __init__(self, doc_id: str, error: str):
-        super().__init__(severity=Severity.ERROR)
-
-        self.doc_id = doc_id
-        self.error = error
-
-    @property
-    def msgfmt(self) -> str:
-        return super().msgfmt + ": doc_id={0.doc_id} error={0.error}"
 
 
 class SpotTerminationEvent(InformationalEvent):

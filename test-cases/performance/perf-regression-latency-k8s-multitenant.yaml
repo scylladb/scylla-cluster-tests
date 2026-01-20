@@ -27,7 +27,6 @@ backtrace_stall_decoding: false
 
 round_robin: true
 
-store_perf_results: true
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
 

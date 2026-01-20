@@ -37,7 +37,6 @@ space_node_threshold: 644245094
 backtrace_decoding: true
 backtrace_stall_decoding: false
 
-store_perf_results: true
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
 
