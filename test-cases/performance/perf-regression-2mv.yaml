@@ -23,5 +23,6 @@ store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
 backtrace_decoding: true
 backtrace_stall_decoding: false
+argus_email_report_template: email_report_performance.yaml
 
 adaptive_timeout_store_metrics: false
