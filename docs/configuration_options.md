@@ -1047,7 +1047,7 @@ Nemesis sleep interval to use if None provided specifically in the test
 
 **default:** 5
 
-**type:** int
+**type:** int_or_list
 
 
 ## **nemesis_sequence_sleep_between_ops** / SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
