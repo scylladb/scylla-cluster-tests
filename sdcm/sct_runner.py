@@ -424,7 +424,7 @@ class SctRunner(ABC):
             )
             return None
 
-        tags = TestConfig.common_tags()
+        tags = TestConfig.common_tags(self.params)
         tags.update(
             {
                 "TestId": test_id,
@@ -633,7 +633,7 @@ class AwsSctRunner(SctRunner):
                         NetworkInterfaceId=interface.id,
                     )
                     aws_region.resource.create_tags(
-                        Resources=[eip_allocation_id], Tags=tags_as_ec2_tags(TestConfig().common_tags())
+                        Resources=[eip_allocation_id], Tags=tags_as_ec2_tags(TestConfig().common_tags(self.params))
                     )
                     break
 
