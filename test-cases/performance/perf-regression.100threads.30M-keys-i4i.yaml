@@ -41,6 +41,7 @@ backtrace_stall_decoding: false
 store_perf_results: true
 use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
+argus_email_report_template: email_report_performance.yaml
 
 custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
