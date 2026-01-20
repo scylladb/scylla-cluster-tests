@@ -211,6 +211,9 @@ class ComparableScyllaVersion:
         #       So, make empty 'pre-release' prevail over any defined one.
         return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or "xyz")
 
+    def isReleaseVersion(self):
+        return self.v_build == "" and self.v_pre_release == ""
+
     def __hash__(self):
         return hash(self.as_comparable())
 
