@@ -1,2 +1,3 @@
 instance_type_db: 'c7i.large'
 user_prefix: 'perf-microbenchmarking-amazon-x86'
+argus_email_report_template: email_report_performance.yaml
