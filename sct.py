@@ -44,7 +44,7 @@ import sct_scan_issues
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance
+from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
@@ -124,7 +124,6 @@ from sdcm.send_email import (
     send_perf_email,
 )
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -814,14 +813,22 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 @click.option(
     "-a",
     "--arch",
-    type=click.Choice(AwsArchType.__args__),
-    default="x86_64",
-    help="architecture of the AMI (default: x86_64)",
+    type=click.Choice([str(v) for v in VmArch]),
+    default=str(VmArch.X86),
+    show_choices=True,
+    show_default=True,
+    help="architecture of the AMI",
 )
-def list_images(cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType):
+def list_images(  # noqa: PLR0912, PLR0914
+    cloud_provider: str, branch: str, version: str, regions: List[str], arch: str
+):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
+
+    # Convert arch string to VmArch enum using built-in enum value constructor
+    arch_enum = VmArch(arch)
+
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
     #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
@@ -846,9 +853,6 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                         )
                     )
                 case "gce":
-                    if arch:
-                        #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-                        click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
                     rows = get_gce_images_versioned(version=version)
 
                     click.echo(
@@ -857,9 +861,9 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                         )
                     )
                 case "azure":
-                    if arch:
-                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
+                    azure_images = azure_utils.get_released_scylla_images(
+                        scylla_version=version, region_name=region, arch=arch_enum
+                    )
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.unique_id, "N/A"])
@@ -892,9 +896,9 @@ def list_images(cloud_provider: str, branch: str, version: str, regions: List[st
                         )
                     )
                 case "azure":
-                    if arch:
-                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                    azure_images = azure_utils.get_scylla_images(
+                        scylla_version=branch, region_name=region, arch=arch_enum
+                    )
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.id, "N/A"])
