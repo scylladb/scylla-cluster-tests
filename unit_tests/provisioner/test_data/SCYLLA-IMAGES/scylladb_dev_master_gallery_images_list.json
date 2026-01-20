@@ -1,0 +1,153 @@
+[
+  {
+    "tags": {
+      "arch": "x86_64",
+      "branch": "master",
+      "build_mode": "release",
+      "build_tag": "",
+      "creation_timestamp": "2025-12-08T19-37-41",
+      "environment": "debug",
+      "operating_system": "ubuntu24.04",
+      "scylla_build_sha_id": "",
+      "scylla_machine_image_version": "2026.1.0-",
+      "scylla_python3_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
+      "user_data_format_version": "3"
+    },
+    "location": "eastus",
+    "properties": {
+      "publishingProfile": {
+        "targetRegions": [
+          {
+            "name": "East US",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          },
+          {
+            "name": "East US 2",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          }
+        ],
+        "replicaCount": 1,
+        "excludeFromLatest": false,
+        "storageAccountType": "Standard_LRS",
+        "replicationMode": "Full"
+      },
+      "storageProfile": {
+        "source": {
+          "virtualMachineId": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/virtualMachines/pkrvm1zxtnltn4v"
+        },
+        "osDiskImage": {
+          "hostCaching": "ReadWrite",
+          "source": {}
+        }
+      },
+      "safetyProfile": {
+        "allowDeletionOfReplicatedLocations": false
+      }
+    },
+    "name": "2025.1208.213757"
+  },
+  {
+    "tags": {
+      "arch": "x86_64",
+      "branch": "master",
+      "build_mode": "release",
+      "build_tag": "",
+      "creation_timestamp": "2025-12-08T20-21-19",
+      "environment": "debug",
+      "operating_system": "ubuntu24.04",
+      "scylla_build_sha_id": "",
+      "scylla_machine_image_version": "2026.1.0-",
+      "scylla_python3_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
+      "user_data_format_version": "3"
+    },
+    "location": "eastus",
+    "properties": {
+      "publishingProfile": {
+        "targetRegions": [
+          {
+            "name": "East US",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          },
+          {
+            "name": "East US 2",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          }
+        ],
+        "replicaCount": 1,
+        "excludeFromLatest": false,
+        "storageAccountType": "Standard_LRS",
+        "replicationMode": "Full"
+      },
+      "storageProfile": {
+        "source": {
+          "virtualMachineId": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/virtualMachines/pkrvm3z04mrpgui"
+        },
+        "osDiskImage": {
+          "hostCaching": "ReadWrite",
+          "source": {}
+        }
+      },
+      "safetyProfile": {
+        "allowDeletionOfReplicatedLocations": false
+      }
+    },
+    "name": "2025.1208.222124"
+  },
+  {
+    "tags": {
+      "arch": "x86_64",
+      "branch": "master",
+      "build_mode": "release",
+      "build_tag": "",
+      "creation_timestamp": "2025-12-08T20-45-29",
+      "environment": "debug",
+      "name": "debug-scylla-2026.1.0-x86_64-2025-12-08T22-45-34",
+      "operating_system": "ubuntu24.04",
+      "scylla_build_sha_id": "",
+      "scylla_machine_image_version": "2026.1.0-",
+      "scylla_python3_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
+      "user_data_format_version": "3"
+    },
+    "location": "eastus",
+    "properties": {
+      "publishingProfile": {
+        "targetRegions": [
+          {
+            "name": "East US",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          },
+          {
+            "name": "East US 2",
+            "regionalReplicaCount": 1,
+            "storageAccountType": "Standard_LRS"
+          }
+        ],
+        "replicaCount": 1,
+        "excludeFromLatest": false,
+        "storageAccountType": "Standard_LRS",
+        "replicationMode": "Full"
+      },
+      "storageProfile": {
+        "source": {
+          "virtualMachineId": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/virtualMachines/pkrvmbu7izkpsno"
+        },
+        "osDiskImage": {
+          "hostCaching": "ReadWrite",
+          "source": {}
+        }
+      },
+      "safetyProfile": {
+        "allowDeletionOfReplicatedLocations": false
+      }
+    },
+    "name": "2025.1208.224534"
+  }
+]
