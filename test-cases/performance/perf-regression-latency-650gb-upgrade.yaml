@@ -32,6 +32,7 @@ use_prepared_loaders: true
 use_hdrhistogram: true
 use_placement_group: true
 email_subject_postfix: 'latency during upgrades'
+argus_email_report_template: email_report_performance.yaml
 
 cluster_health_check: false
 
