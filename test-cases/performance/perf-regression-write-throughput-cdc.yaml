@@ -20,6 +20,7 @@ experimental_features:
   - cdc
 
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com ']
+argus_email_report_template: email_report_performance.yaml
 backtrace_decoding: false
 
 adaptive_timeout_store_metrics: false

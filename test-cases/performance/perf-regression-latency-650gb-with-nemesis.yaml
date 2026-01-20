@@ -37,5 +37,6 @@ email_subject_postfix: 'latency during operations'
 parallel_node_operations: false  # doing this to align the measurement
 cluster_health_check: false
 hinted_handoff: 'enabled'
+argus_email_report_template: email_report_performance.yaml
 
 adaptive_timeout_store_metrics: false
