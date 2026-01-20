@@ -2120,7 +2120,8 @@ class Nemesis(NemesisFlags):
         timeout = HOUR_IN_SEC * 3
         if not self.cluster.params.get("use_mgmt") and not self.cluster.params.get("use_cloud_manager"):
             if ignore_down_hosts:
-                nodes = self.cluster.get_nodes_up_and_normal(self.target_node)
+                with self.node_allocator.run_nemesis(nemesis_label="Repair") as verification_node:
+                    nodes = self.cluster.get_nodes_up_and_normal(verification_node)
             else:
                 nodes = self.cluster.data_nodes
 
