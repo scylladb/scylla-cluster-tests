@@ -284,9 +284,10 @@ class ConfigurationTests(unittest.TestCase):
 
     @pytest.mark.integration
     def test_13_scylla_version_ami_branch_latest(self):
+        latest_branch = ".".join(get_latest_scylla_release(product="scylla").split(".")[0:2])
         os.environ.pop("SCT_AMI_ID_DB_SCYLLA", None)
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_SCYLLA_VERSION"] = "branch-5.2:latest"
+        os.environ["SCT_SCYLLA_VERSION"] = f"branch-{latest_branch}:latest"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/multi_region_dc_test_case.yaml"
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -456,11 +457,11 @@ class ConfigurationTests(unittest.TestCase):
     @pytest.mark.integration
     def test_13_bool(self):
         os.environ["SCT_CLUSTER_BACKEND"] = "aws"
-        os.environ["SCT_STORE_PERF_RESULTS"] = "False"
+        os.environ["SCT_USE_PREINSTALLED_SCYLLA"] = "False"
         os.environ["SCT_CONFIG_FILES"] = "internal_test_data/multi_region_dc_test_case.yaml"
         conf = sct_config.SCTConfiguration()
 
-        self.assertEqual(conf["store_perf_results"], False)
+        self.assertEqual(conf["use_preinstalled_scylla"], False)
 
     @pytest.mark.integration
     def test_14_aws_siren_from_env(self):
@@ -668,7 +669,8 @@ class ConfigurationTests(unittest.TestCase):
                 continue
             if "siren" in backend:
                 continue
-
+            if backend == "xcloud":
+                os.environ["SCT_XCLOUD_PROVIDER"] = "aws"
             os.environ["SCT_CLUSTER_BACKEND"] = backend
             os.environ["SCT_CONFIG_FILES"] = "internal_test_data/minimal_test_case.yaml"
 
