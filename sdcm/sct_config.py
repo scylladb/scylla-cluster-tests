@@ -2174,13 +2174,6 @@ class SCTConfiguration(dict):
             help="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB)",
         ),
         dict(
-            name="store_perf_results",
-            env="SCT_STORE_PERF_RESULTS",
-            type=boolean,
-            help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
-                Intended to be used in performance testing""",
-        ),
-        dict(
             name="append_scylla_setup_args",
             env="SCT_APPEND_SCYLLA_SETUP_ARGS",
             type=str,
@@ -2511,12 +2504,6 @@ class SCTConfiguration(dict):
                        after hw perf tests detect node with hw results not in margin with average
                     If stop_on_hw_perf_failure is False, then sct performance test will be run
                        even after hw perf tests detect node with hw results not in margin with average""",
-        ),
-        dict(
-            name="custom_es_index",
-            env="SCT_CUSTOM_ES_INDEX",
-            type=str,
-            help="""Use custom ES index for storing test results""",
         ),
         dict(
             name="simulated_regions",

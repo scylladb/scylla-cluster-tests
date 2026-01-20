@@ -71,7 +71,6 @@ update_db_packages: ''
 
 logs_transport: "vector"
 
-store_perf_results: false
 email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
@@ -225,7 +224,6 @@ use_hdrhistogram: false
 
 stop_on_hw_perf_failure: false
 
-custom_es_index: ''
 
 run_fullscan: []
 

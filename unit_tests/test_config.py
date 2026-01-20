@@ -488,11 +488,11 @@ def test_config_dupes():
 @pytest.mark.integration
 def test_13_bool(monkeypatch):
     monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
-    monkeypatch.setenv("SCT_STORE_PERF_RESULTS", "False")
+    monkeypatch.setenv("SCT_USE_PREINSTALLED_SCYLLA", "False")
     monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/multi_region_dc_test_case.yaml")
     conf = sct_config.SCTConfiguration()
 
-    assert conf["store_perf_results"] is False
+    assert conf["use_preinstalled_scylla"] is False
 
 
 @pytest.mark.integration

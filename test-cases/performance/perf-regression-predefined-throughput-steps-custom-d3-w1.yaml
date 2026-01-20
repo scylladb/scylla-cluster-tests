@@ -10,12 +10,10 @@ gce_instance_type_loader: 'e2-highcpu-8'
 use_preinstalled_scylla: true
 use_prepared_loaders: false
 backtrace_decoding: false
-store_perf_results: false
 use_mgmt: false
 email_recipients: ['qa@scylladb.com']
 argus_email_report_template: email_report_performance.yaml
 user_prefix: 'perf-rgrsn-prdfnd-steps-cstm-d3w1'
-custom_es_index: 'performancestatsv2'
 use_hdrhistogram: true
 adaptive_timeout_store_metrics: false
 

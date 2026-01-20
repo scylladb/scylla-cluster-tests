@@ -23,7 +23,6 @@ pre_create_schema: True
 round_robin: 'true'
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 
-store_perf_results: true
 
 backtrace_decoding: true
 backtrace_stall_decoding: false

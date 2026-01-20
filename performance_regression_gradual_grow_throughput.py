@@ -11,7 +11,6 @@ from performance_regression_test import PerformanceRegressionTest
 from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent, InfoEvent
-from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
@@ -301,13 +300,12 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.latency_results_file,
             latency_results,
         )
-        if latency_results and self.create_stats:
+        if latency_results:
             latency_results[step]["step"] = step
             latency_results[step] = calculate_latency(latency_results[step])
             latency_results = analyze_hdr_percentiles(latency_results)
             pathlib.Path(self.latency_results_file).unlink()
             self.log.debug("collected latency values are: %s", latency_results)
-            self.update({"latency_during_ops": latency_results})
             return latency_results
         return {step: {"step": step, "legend": "", "cycles": []}}
 
@@ -421,9 +419,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             # Wait for 4 minutes after warmup to let for all background processes to finish
             time.sleep(240)
 
-        if self.create_stats and not self.exists():
-            self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=False)
         total_summary = {}
 
         sequential_steps = self.get_sequential_throttle_steps(workload)
@@ -452,7 +447,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
             self.log.debug("All c-s commands results collected and saved in Argus")
 
             calculate_result = self._calculate_average_max_latency(results)
-            self.update_test_details()
             summary_result = self.check_latency_during_steps(step=current_throttle_step)
             summary_result[current_throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
             total_summary.update(summary_result)
@@ -475,8 +469,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
                 self.wait_for_no_tablets_splits()
 
         self.save_total_summary_in_file(total_summary)
-        if self.create_stats:
-            self.run_performance_analyzer(total_summary=total_summary)
 
     def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
@@ -487,29 +479,6 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):
         filename = f"{self.logdir}/result_gradual_increase.log"
         with open(filename, "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
-
-    def run_performance_analyzer(self, total_summary):
-        perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
-            es_index=self._test_index, email_recipients=self.params.get("email_recipients")
-        )
-        # Keep next 2 lines for debug purpose
-        self.log.debug("es_index: %s", self._test_index)
-        self.log.debug("total_summary: %s", total_summary)
-        is_gce = bool(self.params.get("cluster_backend") == "gce")
-        try:
-            perf_analyzer.check_regression(
-                test_id=self._test_id,
-                data=total_summary,
-                is_gce=is_gce,
-                email_subject_postfix=self.params.get("email_subject_postfix"),
-            )
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message="Failed to check regression",
-                source=self.__class__.__name__,
-                source_method="check_regression",
-                exception=exc,
-            ).publish_or_dump()
 
     def _calculate_average_max_latency(self, results):
         status = defaultdict(float).fromkeys(results[0].keys(), 0.0)

@@ -23,10 +23,6 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
     Test Scylla performance regression with cassandra-stress using custom user profiles.
     """
 
-    def setUp(self):
-        super().setUp()
-        self.create_stats = False
-
     def _clean_keyspace(self, cs_profile):
         with open(cs_profile, encoding="utf-8") as fdr:
             key_space = [line.split(":")[-1].strip() for line in fdr.readlines() if line.startswith("keyspace:")]
@@ -51,9 +47,6 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
                 for cmd in [line.lstrip("#").strip() for line in cont if line.find("cassandra-stress") > 0]:
                     stress_cmd = cmd.format(profile_dst, duration)
                     self.log.debug("Stress cmd: {}".format(stress_cmd))
-                    self.create_test_stats()
                     stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=2, profile=cs_profile)
                     self.get_stress_results(queue=stress_queue)
-                    self.update_test_details(scylla_conf=True)
-                    self.check_regression()
                     self._clean_keyspace(cs_profile)
