@@ -38,5 +38,6 @@ cluster_health_check: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.5'
 hinted_handoff: 'enabled'
+argus_email_report_template: email_report_performance.yaml
 
 adaptive_timeout_store_metrics: false

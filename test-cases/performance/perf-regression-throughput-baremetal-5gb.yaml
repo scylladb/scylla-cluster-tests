@@ -45,6 +45,7 @@ backtrace_decoding: false
 
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
+argus_email_report_template: email_report_performance.yaml
 
 email_subject_postfix: 'disk and cache'
 custom_es_index: 'performancestatsv2'

@@ -48,6 +48,7 @@ nemesis_add_node_cnt: 0
 use_preinstalled_scylla: true
 
 user_prefix: 'perf-regression-predefined-steps'
+argus_email_report_template: email_report_performance.yaml
 
 backtrace_decoding: false
 
