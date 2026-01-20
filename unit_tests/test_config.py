@@ -1026,3 +1026,37 @@ def test_38_verify_scylla_version_lookup_k8s(monkeypatch, backend, version, expe
     conf.verify_configuration()
     assert "docker_image" in conf.dump_config()
     assert conf.get("docker_image") == expected_repo
+
+
+def test_39_billing_project_from_job_name(monkeypatch):
+    """Test that billing_project is set correctly from JOB_NAME."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with scylla-5.2 prefix
+    monkeypatch.setenv("JOB_NAME", "scylla-5.2/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.2"
+
+    # Test with scylladb-5.4 prefix
+    monkeypatch.setenv("JOB_NAME", "scylladb-5.4/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    assert conf.get("billing_project") == "5.4"
+
+
+def test_39_billing_project_staging_not_set(monkeypatch):
+    """Test that billing_project is NOT set to 'staging'."""
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "docker")
+    monkeypatch.setenv("SCT_CONFIG_FILES", "unit_tests/test_configs/minimal_test_case.yaml")
+
+    # Test with staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylla-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
+
+    # Test with scylladb-staging folder - should not set billing_project
+    monkeypatch.setenv("JOB_NAME", "scylladb-staging/longevity/test")
+    conf = sct_config.SCTConfiguration()
+    # billing_project should not be set to "staging"
+    assert conf.get("billing_project") != "staging"
