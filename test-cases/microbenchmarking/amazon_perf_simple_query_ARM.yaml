@@ -15,5 +15,3 @@ instance_provision: "spot"
 instance_provision_fallback_on_demand: true
 
 email_recipients: ['scylla-perf-results@scylladb.com']
-custom_es_index: 'microbenchmarkingtest'
-store_perf_results: true

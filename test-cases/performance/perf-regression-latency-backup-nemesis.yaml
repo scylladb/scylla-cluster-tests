@@ -32,7 +32,6 @@ backtrace_decoding: true
 backtrace_stall_decoding: false
 argus_email_report_template: email_report_performance.yaml
 
-store_perf_results: false
 use_prepared_loaders: false
 use_placement_group: true
 use_capacity_reservation: false

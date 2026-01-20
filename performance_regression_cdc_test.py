@@ -31,7 +31,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self._workload_cdc(write_cmd, stress_num=2, test_name="test_write", sub_type="cdc_enabled")
 
         self.wait_no_compactions_running()
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
 
     def test_write_with_cdc_preimage(self):
         write_cmd = self.params.get("stress_cmd_w")
@@ -44,8 +43,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         self._workload_cdc(write_cmd, stress_num=2, test_name="test_write", sub_type="cdc_preimage_enabled")
 
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
-
     def test_write_with_cdc_postimage(self):
         write_cmd = self.params.get("stress_cmd_w")
 
@@ -57,14 +54,11 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         self._workload_cdc(write_cmd, stress_num=2, test_name="test_write", sub_type="cdc_preimage_enabled")
 
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
-
     def test_write_throughput(self):
         self.cdc_workflow()
 
     def test_write_latency(self):
         self.cdc_workflow()
-        self.update_test_details()
 
     def test_mixed_throughput(self):
         self.cdc_workflow(use_cdclog_reader=True)
@@ -135,8 +129,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
 
-        self.check_regression_with_baseline(subtest_baseline="cdc_disabled")
-
     def _workload_cdc(
         self,
         stress_cmd,
@@ -149,9 +141,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         enable_batching=True,
     ):
         cdc_stress_queue = None
-
-        if save_stats:
-            self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True, append_sub_test_to_name=False)
 
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num, stats_aggregate_cmds=False)
 
@@ -170,7 +159,6 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
             self.log.debug(cdc_stress_results)
 
         if save_stats:
-            self.update_test_details(scylla_conf=True)
             stat_results = PP.pformat(self._stats["results"])
             self.log.debug("Results %s: \n%s", test_name, stat_results)
             self.display_results(results, test_name=test_name)

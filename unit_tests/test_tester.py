@@ -103,7 +103,6 @@ class ClusterTesterForTests(ClusterTester, EventsUtilsMixin):
 
     def tearDown(self):
         self.monitors = MagicMock()
-        self.create_stats = False
         super().tearDown()
 
     @property

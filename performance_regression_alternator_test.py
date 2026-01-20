@@ -98,10 +98,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if debug_message:
             self.log.debug(debug_message)
 
-        if save_stats:
-            self.create_test_stats(
-                test_name=test_name, sub_type=sub_type, doc_id_with_timestamp=True, append_sub_test_to_name=False
-            )
         self.log.info(f"Starting stress cmd: {stress_cmd}")
         stress_queue = self.run_stress_thread(
             stress_cmd=stress_cmd,
@@ -119,8 +115,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             raise
         self.log.info(f"Completed stress cmd: {stress_cmd}")
         self.build_histogram(self.params["workload_name"], hdr_tags=self.hdr_tags)
-        if save_stats:
-            self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
@@ -141,7 +135,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         if prepare_write_cmd:
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare
-            self.create_test_stats(sub_type="write-prepare", doc_id_with_timestamp=True)
             stress_queue = []
             params = {"prefix": "preload-"}
             for stress_type in ["dynamodb", "scylla"]:
@@ -182,7 +175,6 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                 self.get_stress_results(queue=stress, store_results=False)
             self.log.debug("Loaders completed.")
             self.build_histogram("<unused>", hdr_tags=["_tag_"])
-            self.update_test_details()
         else:
             self.log.warning("No prepare command defined in YAML!")
 
