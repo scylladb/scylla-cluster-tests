@@ -28,12 +28,35 @@ from oci.exceptions import ServiceError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.metaclasses import Singleton
+from sdcm.provision.provisioner import VmArch
 
 
 LOGGER = logging.getLogger(__name__)
 
 # Suppress verbose OCI SDK logging
 logging.getLogger("oci").setLevel(logging.WARNING)
+
+
+def vmarch_to_oci(arch: VmArch) -> str:
+    """Convert VmArch enum to OCI architecture format.
+
+    Args:
+        arch: VmArch enum value
+
+    Returns:
+        OCI architecture string (x86_64 or aarch64)
+
+    Raises:
+        ValueError: If architecture is not supported
+    """
+
+    if arch is VmArch.X86:
+        return "x86_64"
+    elif arch is VmArch.ARM:
+        return "aarch64"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
+
 
 # Supported OCI regions for SCT
 SUPPORTED_REGIONS = [

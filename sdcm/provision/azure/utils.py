@@ -29,6 +29,26 @@ from sdcm.utils.version_utils import (
 LOGGER = logging.getLogger(__name__)
 
 
+def vmarch_to_azure(arch: VmArch) -> str:
+    """Convert VmArch enum to Azure architecture format.
+
+    Args:
+        arch: VmArch enum value
+
+    Returns:
+        Azure architecture string (x64 or Arm64)
+
+    Raises:
+        ValueError: If architecture is not supported
+    """
+    if arch is VmArch.X86:
+        return "x64"
+    elif arch is VmArch.ARM:
+        return "Arm64"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
+
+
 def get_scylla_images_private_galleries(
     scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
@@ -85,6 +105,8 @@ def get_scylla_images_private_galleries(
 def get_scylla_images(
     scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
+    if arch != VmArch.X86:
+        LOGGER.warning("--arch option not implemented currently for Azure machine images.")
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {"arch": arch.value}
@@ -147,6 +169,8 @@ def get_scylla_images(
 def get_released_scylla_images(
     scylla_version: str, region_name: str, arch: VmArch = VmArch.X86, azure_service: AzureService = AzureService()
 ) -> list[CommunityGalleryImageVersion]:
+    if arch != VmArch.X86:
+        LOGGER.warning("--arch option not implemented currently for Azure machine images.")
     branch_version = ".".join(scylla_version.split(".")[:2])
     if is_enterprise(branch_version) and ComparableScyllaVersion(branch_version) < "2025.1.0":
         gallery_image_name = f"scylla-enterprise-{branch_version}"
