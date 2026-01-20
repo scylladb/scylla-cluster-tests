@@ -45,7 +45,7 @@ from sdcm.cluster_cloud import extract_short_test_id_from_name
 from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
-from sdcm.provision.provisioner import VmInstance
+from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
@@ -126,7 +126,6 @@ from sdcm.send_email import (
     send_perf_email,
 )
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -956,17 +955,23 @@ def list_resources(ctx, user, billing_project, test_id, get_all, get_all_running
 @click.option(
     "-a",
     "--arch",
-    type=click.Choice(AwsArchType.__args__),
-    default="x86_64",
-    help="architecture of the AMI (default: x86_64)",
+    type=click.Choice([str(v) for v in VmArch]),
+    default=str(VmArch.X86),
+    show_choices=True,
+    show_default=True,
+    help="architecture of the AMI",
 )
 @click.option("-o", "--output-format", type=str, default="table", help="")
-def list_images(  # noqa: PLR0912
-    cloud_provider: str, branch: str, version: str, regions: List[str], arch: AwsArchType, output_format: str = "table"
+def list_images(  # noqa: PLR0912, PLR0914
+    cloud_provider: str, branch: str, version: str, regions: List[str], arch: str, output_format: str = "table"
 ):
     if len(regions) == 0:
         regions = [NemesisJobGenerator.BACKEND_TO_REGION[cloud_provider]]
     add_file_logger()
+
+    # Convert arch string to VmArch enum using built-in enum value constructor
+    arch_enum = VmArch(arch)
+
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
     #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
@@ -984,7 +989,7 @@ def list_images(  # noqa: PLR0912
         if version is not None:
             match cloud_provider:
                 case "aws":
-                    rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
+                    rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
                     if output_format == "table":
                         click.echo(
                             create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
@@ -997,10 +1002,7 @@ def list_images(  # noqa: PLR0912
                         )
                         click.echo(ami_images_json)
                 case "gce":
-                    if arch:
-                        #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-                        click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
-                    rows = get_gce_images_versioned(version=version)
+                    rows = get_gce_images_versioned(version=version, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
                             create_pretty_table(rows=rows, field_names=version_fields).get_string(
@@ -1011,9 +1013,9 @@ def list_images(  # noqa: PLR0912
                         gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(gce_images_json)
                 case "azure":
-                    if arch:
-                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
+                    azure_images = azure_utils.get_released_scylla_images(
+                        scylla_version=version, region_name=region, arch=arch_enum
+                    )
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.unique_id, "N/A"])
@@ -1037,7 +1039,7 @@ def list_images(  # noqa: PLR0912
 
             match cloud_provider:
                 case "aws":
-                    ami_images = get_ami_images(branch=branch, region=region, arch=arch)
+                    ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
                             create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
@@ -1050,7 +1052,7 @@ def list_images(  # noqa: PLR0912
                         )
                         click.echo(ami_images_json)
                 case "gce":
-                    gce_images = get_gce_images(branch=branch, arch=arch)
+                    gce_images = get_gce_images(branch=branch, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
                             create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
@@ -1061,9 +1063,9 @@ def list_images(  # noqa: PLR0912
                         gce_images_json = images_dict_in_json_format(rows=gce_images, field_names=branch_fields)
                         click.echo(gce_images_json)
                 case "azure":
-                    if arch:
-                        click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                    azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                    azure_images = azure_utils.get_scylla_images(
+                        scylla_version=branch, region_name=region, arch=arch_enum
+                    )
                     rows = []
                     for image in azure_images:
                         rows.append(["Azure", image.name, image.id, "N/A"])
