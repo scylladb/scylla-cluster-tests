@@ -2890,11 +2890,19 @@ class SCTConfiguration(dict):
 
                 for region in azure_region_names:
                     try:
-                        if ":" in scylla_version:
+                        # Check if this is a full version tag
+                        if parse_scylla_version_tag(scylla_version):
+                            # Full version tag: use get_scylla_images for exact matching
+                            azure_image = azure_utils.get_scylla_images(
+                                scylla_version=scylla_version, region_name=region
+                            )[0]
+                        elif ":" in scylla_version:
+                            # Branch version: use get_scylla_images
                             azure_image = azure_utils.get_scylla_images(
                                 scylla_version=scylla_version, region_name=region
                             )[0]
                         else:
+                            # Simple version: use get_released_scylla_images
                             azure_image = azure_utils.get_released_scylla_images(
                                 scylla_version=scylla_version, region_name=region
                             )[0]
