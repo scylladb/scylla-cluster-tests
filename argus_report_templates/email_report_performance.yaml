@@ -1,0 +1,12 @@
+title: "#auto"
+sections:
+  - header
+  - main
+  - cloud
+  - packages
+  - logs
+  - nemesis
+  - events
+  - generic_results
+  - screenshots
+attachments: []

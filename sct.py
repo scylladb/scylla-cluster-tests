@@ -1815,13 +1815,15 @@ def send_email(  # noqa: PLR0914, PLR0912
     if sct_config.get("enable_argus_email_report"):
         LOGGER.info("Sending email for test %s...", test_id)
         client = init_argus_client(os.environ.get("SCT_TEST_ID"))
+        run = client.get_run()
+        title_template_data = {**dict(sct_config), **run}
 
         template = sct_config.get("argus_email_report_template")
         if not template:
             LOGGER.error("Argus Email Report is enabled but the template file is not defined.")
             sys.exit(1)
 
-        p = Path(f"./defaults/{template}")
+        p = Path(f"./argus_report_templates/{template}")
         if not p.exists():
             LOGGER.error("Argus Email Report is enabled but the template does not exist.")
             sys.exit(1)
@@ -1829,7 +1831,11 @@ def send_email(  # noqa: PLR0914, PLR0912
         with p.open() as f:
             template = yaml.safe_load(f)
 
-        client.send_email(recipients=email_recipients, sections=template["sections"])
+        title: str = (
+            template["title"] if ("{" not in template["title"]) else template["title"].format(title_template_data)
+        )
+        LOGGER.info("Sending email to %s with title %s and sections: %s", email_recipients, title, template)
+        client.send_email(recipients=email_recipients, title=title, sections=template["sections"])
         return
 
     if not logdir:
