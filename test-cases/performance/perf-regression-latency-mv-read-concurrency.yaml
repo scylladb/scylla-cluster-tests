@@ -29,3 +29,4 @@ use_hdrhistogram: true
 custom_es_index: 'mv-overloading-latency-read'
 
 adaptive_timeout_store_metrics: false
+argus_email_report_template: email_report_performance.yaml
