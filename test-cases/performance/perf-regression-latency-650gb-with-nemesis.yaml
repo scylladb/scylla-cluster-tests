@@ -36,5 +36,6 @@ use_hdrhistogram: true
 use_placement_group: true
 use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
+argus_email_report_template: email_report_performance.yaml
 
 adaptive_timeout_store_metrics: false

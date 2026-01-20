@@ -27,6 +27,7 @@ ami_id_db_scylla_desc: 'VERSION_DESC'
 round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
 backtrace_decoding: false
+argus_email_report_template: email_report_performance.yaml
 print_kernel_callstack: true
 
 store_perf_results: true
