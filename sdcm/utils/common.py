@@ -1499,7 +1499,7 @@ def get_ami_images(branch: str, region: str, arch: VmArch) -> list:
                 tags.get("Name"),
                 tags.get("build-id", tags.get("build_id", r"N\A"))[:6],
                 tags.get("arch"),
-                tags.get("ScyllaVersion"),
+                tags.get("scylla_version"),
                 ami.owner_id,
             ]
         )
@@ -1511,6 +1511,15 @@ def get_ec2_image_name_tag(ami: EC2Image) -> str:
     if ami.tags:
         for tag in ami.tags:
             if tag["Key"] == "Name":
+                return tag["Value"]
+    return ""
+
+
+def get_ec2_image_version_tag(ami: EC2Image) -> str:
+    """Get the scylla_version tag from an EC2 AMI."""
+    if ami.tags:
+        for tag in ami.tags:
+            if tag["Key"] == "scylla_version":
                 return tag["Value"]
     return ""
 
@@ -1577,14 +1586,14 @@ def convert_name_to_ami_if_needed(
 
 def get_ami_images_versioned(region_name: str, arch: VmArch, version: str) -> list[list[str]]:
     return [
-        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
+        ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami), get_ec2_image_version_tag(ami)]
         for ami in get_scylla_ami_versions(region_name=region_name, arch=vmarch_to_aws(arch), version=version)
     ]
 
 
 def get_gce_images_versioned(version: str = None, arch: VmArch = None) -> list[list[str]]:
     return [
-        ["GCE", image.name, image.self_link, image.creation_timestamp]
+        ["GCE", image.name, image.self_link, image.creation_timestamp, image.labels.get("scylla_version", "")]
         for image in get_scylla_gce_images_versions(version=version, arch=arch)
     ]
 
