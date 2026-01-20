@@ -46,7 +46,6 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
                 self.log.warning("No prepare command defined in YAML for the '%s' cluster", db_cluster_name)
                 return
             self.log.info("Running preload command for the '%s' cluster", db_cluster_name)
-            tenant.create_test_stats(sub_type="write-prepare", doc_id_with_timestamp=True)
             stress_queue, params = (
                 [],
                 {
@@ -69,8 +68,6 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
                 stress_queue.append(tenant.run_stress_thread(**params))
             for stress in stress_queue:
                 tenant.get_stress_results(queue=stress, store_results=False)
-
-            tenant.update_test_details()
 
         self.log.info("Running preload operation in parallel on all the DB clusters")
         object_set = ParallelObject(

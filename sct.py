@@ -49,7 +49,6 @@ from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance, VmArch
 from sdcm.remote import LOCALRUNNER
 from sdcm.nemesis import SisyphusMonkey
-from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.sct_provision.instances_provider import provision_sct_resources
@@ -126,13 +125,11 @@ from sdcm.send_email import (
     get_running_instances_for_email_report,
     read_email_data_from_file,
     build_reporter,
-    send_perf_email,
 )
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
-from sdcm.utils.es_index import create_index, get_mapping
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
@@ -1336,32 +1333,6 @@ def update_conf_docs():
     click.secho(f"docs written into {markdown_file}")
 
 
-@cli.command("perf-regression-report", help="Generate and send performance regression report")
-@click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
-@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-@click.option("--es-index", default="performancestatsv2", help="Elastic Search index")
-@click.option("--extra-jobs-to-compare", default=None, type=str, multiple=True, help="Extra jobs to compare")
-def perf_regression_report(es_id, emails, es_index, extra_jobs_to_compare):
-    add_file_logger()
-    emails = emails.split(",")
-    if not emails:
-        LOGGER.warning("No email recipients. Email will not be sent")
-        sys.exit(1)
-    results_analyzer = PerformanceResultsAnalyzer(es_index=es_index, email_recipients=emails, logger=LOGGER)
-    results_analyzer.check_regression(es_id, extra_jobs_to_compare=extra_jobs_to_compare)
-
-    logdir = Path(get_test_config().logdir())
-    email_results_file = logdir / "email_data.json"
-    test_results = read_email_data_from_file(email_results_file)
-    if not test_results:
-        LOGGER.error("Test Results file not found")
-        sys.exit(1)
-    LOGGER.info("Email will be sent to next recipients: %s", emails)
-    start_time = format_timestamp(time.time())
-    logs = list_logs_by_test_id(test_results.get("test_id", es_id.split("_")[0]))
-    send_perf_email(results_analyzer, test_results, logs, emails, logdir, start_time)
-
-
 @click.group(help="Group of commands for investigating testrun")
 def investigate():
     pass
@@ -1898,12 +1869,6 @@ def send_email(  # noqa: PLR0914, PLR0912
                     "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
                 }
             )
-    elif any(["email_body" in value for value in test_results.values()]):
-        # figure out it's a perf tests with multiple emails in single file
-        # based on the structure of file
-        logs = list_logs_by_test_id(test_results.get("test_id", test_id))
-        reporter = BaseResultsAnalyzer(es_index=test_id, email_recipients=email_recipients)
-        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
     else:
         LOGGER.warning("failed to figure out what what to send out")
         sys.exit(1)
@@ -2177,23 +2142,6 @@ def clean_runner_instances(runner_ip, test_status, backend, user, billing_projec
         dry_run=dry_run,
         force=force,
     )
-
-
-@cli.command("create-es-index", help="Create ElasticSearch index with mapping ")
-@click.option("-n", "--name", envvar="SCT_ES_INDEX_NAME", required=True, help="ES index name")
-@click.option(
-    "-f",
-    "--mapping-file",
-    envvar="SCT_MAPPING_FILEPATH",
-    type=click.Path(exists=True),
-    required=True,
-    help="Full path to es index mapping file",
-)
-def create_es_index(name: str, mapping_file: str) -> None:
-    add_file_logger()
-
-    mapping_data = get_mapping(mapping_file)
-    create_index(index_name=name, mappings=mapping_data)
 
 
 @cli.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")

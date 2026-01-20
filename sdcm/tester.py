@@ -34,7 +34,6 @@ from functools import partial, wraps, cache
 import threading
 import signal
 import json
-
 import botocore
 import yaml
 import pytest
@@ -48,7 +47,7 @@ from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
 from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.common.enums import TestStatus
-from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
+from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, wait
 from sdcm.cloud_api_client import ScyllaCloudAPIClient
 from sdcm.cluster import (
     BaseCluster,
@@ -92,7 +91,6 @@ from sdcm.provision.helpers.certificate import (
     CA_CERT_FILE,
     SCYLLA_SSL_CONF_DIR,
 )
-from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -145,11 +143,6 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.nemesis_utils.node_allocator import NemesisNodeAllocator
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.results_analyze import (
-    PerformanceResultsAnalyzer,
-    SpecifiedStatsPerformanceAnalyzer,
-    LatencyDuringOperationsPerformanceAnalyzer,
-)
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import (
@@ -201,7 +194,6 @@ from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
-from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.hdrhistogram import (
     make_hdrhistogram_summary,
     make_hdrhistogram_summary_by_interval,
@@ -380,7 +372,7 @@ class ClusterInformation(NamedTuple):
     schema_versions: List[SchemaVersion]
 
 
-class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
+class ClusterTester(unittest.TestCase):
     log = None
     actions_log = None
     localhost = None
@@ -397,6 +389,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def __init__(self, methodName="runTest"):
         self.result = None
         super().__init__(methodName=methodName)
+        # Initialize test_config (was previously done in TestStatsMixin which was removed)
+        self.test_config = TestConfig()
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get("stress_duration")
@@ -1061,7 +1055,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self.test_config.set_intra_node_comm_public(self.params.get("intra_node_comm_public"))
 
         # for saving test details in DB
-        self.create_stats = self.params.get(key="store_perf_results")
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
@@ -1238,11 +1231,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
             for future in as_completed(futures):
                 future.result()
-
-        if self.create_stats:
-            self.create_test_stats()
-            # sync test_start_time with ES
-            self.start_time = self.get_test_start_time()
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
@@ -2540,10 +2528,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
-        if self.create_stats:
-            self.update_stress_cmd_details(
-                stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds
-            )
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         cs_thread = CassandraStressThread(
             loader_set=self.loaders,
@@ -2589,10 +2573,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
-        if self.create_stats:
-            self.update_stress_cmd_details(
-                stress_cmd, prefix, stresser="cassandra-stress", aggregate=stats_aggregate_cmds
-            )
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         cs_thread = CqlStressCassandraStressThread(
             loader_set=self.loaders,
@@ -2624,8 +2604,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = ScyllaBenchThread(
             stress_cmd,
             loader_set=self.loaders,
@@ -2648,8 +2626,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if not self.params.get("stop_test_on_stress_failure"):
             stop_test_on_failure = False
 
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, stresser="cassandra-harry", aggregate=stats_aggregate_cmds)
         harry_thread = CassandraHarryThread(
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
@@ -2667,9 +2643,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self, stress_cmd, duration=None, stress_num=1, prefix="", round_robin=False, stats_aggregate_cmds=True, **_
     ):
         timeout = self.get_duration(duration)
-
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ycsb", aggregate=stats_aggregate_cmds)
 
         return YcsbStressThread(
             loader_set=self.loaders,
@@ -2703,9 +2676,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="latte", aggregate=stats_aggregate_cmds)
-
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return LatteStressThread(
             loader_set=self.loaders,
@@ -2722,9 +2692,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         self, stress_cmd, duration=None, stress_num=1, prefix="", round_robin=False, stats_aggregate_cmds=True, **_
     ):
         timeout = self.get_duration(duration)
-
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="hydra-kcl", aggregate=stats_aggregate_cmds)
 
         return KclStressThread(
             loader_set=self.loaders,
@@ -2748,9 +2715,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         **_,
     ):
         timeout = self.get_duration(duration)
-
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="nosqlbench", aggregate=stats_aggregate_cmds)
 
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return NoSQLBenchStressThread(
@@ -2782,9 +2746,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     ):
         timeout = self.get_duration(duration)
 
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="ndbench", aggregate=stats_aggregate_cmds)
-
         return NdBenchStressThread(
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
@@ -2809,8 +2770,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     ):
         timeout = self.get_duration(duration)
 
-        if self.create_stats:
-            self.update_stress_cmd_details(stress_cmd, prefix, stresser="cdcreader", aggregate=stats_aggregate_cmds)
         return CDCLogReaderThread(
             loader_set=self.loaders,
             termination_event=self.db_cluster.nemesis_termination_event,
@@ -2834,8 +2793,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             cmd = re.sub(r"\s--warmup\s+\d+[mhd]\s", f" --warmup {int(self._stress_duration * 0.2)}m ", cmd)
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
-        if self.create_stats:
-            self.update_stress_cmd_details(cmd, stresser="gemini", aggregate=False)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=self.cs_db_cluster,
@@ -2875,8 +2832,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         """
         results, errors = thread_pool.parse_results()
         if results:
-            if self.create_stats:
-                self.update_stress_results(results)
+            pass
         else:
             self.log.warning("There is no stress results, probably stress thread has failed.")
 
@@ -2900,23 +2856,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
         results = queue.parse_results()[0]
-        if store_results and self.create_stats:
-            self.update_stress_results(results)
         return results
 
     def get_stress_results_bench(self, queue):
         results = queue.get_stress_results_bench()
-        if self.create_stats:
-            self.update_stress_results(results)
         return results
 
     def verify_cdclog_reader_results(self, cdcreadstessors_queue, update_es=False):
         results = cdcreadstessors_queue.get_results()
         if not results:
             self.log.warning("There are no cdclog_reader results")
-        if self.create_stats and update_es:
-            self.log.debug(results)
-            self.update_stress_results(results)
 
         return results
 
@@ -2935,11 +2884,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             result = queue.verify_gemini_results(results)
             stats.update(result)
 
-        if self.create_stats:
-            self.update_stress_results(results, calculate_stats=False)
-            self.update(
-                {"status": stats["status"], "test_details": {"status": stats["status"]}, "errors": stats["errors"]}
-            )
         return stats
 
     @staticmethod
@@ -3676,19 +3620,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             self.collect_logs()
         self.collect_ssl_conf()
         self.clean_resources()
-        if self.create_stats:
-            self.update_test_with_errors()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
+        time.sleep(1)  # Sleep is needed to let events from save_email_data being processed
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         with silence(parent=self, name="Cleaning up SSL config directory"):
             cleanup_ssl_config()
-
-        try:
-            ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
-        except Exception:  # noqa: BLE001
-            pass
 
         self.log.info("Test ID: {}".format(self.test_config.test_id()))
 
@@ -3835,9 +3773,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         if s3_link:
             self.log.info(s3_link)
             self.argus_collect_logs({"sct_job_log": s3_link})
-
-            if self.create_stats:
-                self.update({"test_details": {"log_files": {"job_log": s3_link}}})
 
     @silence()
     def stop_event_device(self):
@@ -4013,156 +3948,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2**10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', current size is: '{used}'"
-
-    def check_latency_during_ops(self, hdr_tags: list[str]):
-        start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
-        end_time = time.time()
-        analyzer = LatencyDuringOperationsPerformanceAnalyzer
-        results_analyzer = analyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get("email_recipients"),
-            events=get_events_grouped_by_category(_registry=self.events_processes_registry),
-        )
-        with open(self.latency_results_file, encoding="utf-8") as file:
-            latency_results = json.load(file)
-        self.log.debug(
-            "latency_results were loaded from file %s and its result is %s", self.latency_results_file, latency_results
-        )
-        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
-        if latency_results and self.create_stats:
-            workload = self._test_index.split("-")[-1]
-            histogram_total_data = self.get_hdrhistogram(
-                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-            )
-            histogram_data_by_interval = self.get_hdrhistogram_by_interval(
-                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time
-            )
-            latency_results["summary"] = {"hdr_summary": histogram_total_data, "hdr": histogram_data_by_interval}
-            latency_results = calculate_latency(latency_results)
-            latency_results = analyze_hdr_percentiles(latency_results)
-            with open(self.latency_results_file, "w", encoding="utf-8") as file:
-                json.dump(latency_results, file)
-            self.log.debug("collected latency values are: %s", latency_results)
-            self.update({"latency_during_ops": latency_results})
-            self.update_test_details()
-            try:
-                results_analyzer.check_regression(
-                    test_id=self._test_id,
-                    data=latency_results,
-                    node_benchmarks=benchmarks_results,
-                    email_subject_postfix=self.params.get("email_subject_postfix"),
-                )
-            except Exception as exc:  # noqa: BLE001
-                TestFrameworkEvent(
-                    message="Failed to check regression",
-                    trace=sys._getframe().f_back,
-                    source=self.__class__.__name__,
-                    source_method="check_regression",
-                    exception=exc,
-                ).publish_or_dump()
-
-    def check_regression(self):
-        results_analyzer = PerformanceResultsAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get("email_recipients"),
-            events=get_events_grouped_by_category(
-                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
-            ),
-        )
-        is_gce = bool(self.params.get("cluster_backend") == "gce")
-        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
-        try:
-            results_analyzer.check_regression(
-                self._test_id,
-                is_gce,
-                email_subject_postfix=self.params.get("email_subject_postfix"),
-                use_wide_query=True,
-                node_benchmarks=benchmarks_results,
-                extra_jobs_to_compare=self.params.get("perf_extra_jobs_to_compare"),
-            )
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message="Failed to check regression",
-                trace=sys._getframe().f_back,
-                source=self.__class__.__name__,
-                source_method="check_regression",
-                exception=exc,
-            ).publish_or_dump()
-
-    def check_regression_with_baseline(self, subtest_baseline):
-        results_analyzer = PerformanceResultsAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get("email_recipients"),
-            events=get_events_grouped_by_category(
-                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
-            ),
-        )
-        is_gce = bool(self.params.get("cluster_backend") == "gce")
-        try:
-            results_analyzer.check_regression_with_subtest_baseline(
-                self._test_id,
-                base_test_id=self.test_config.test_id(),
-                subtest_baseline=subtest_baseline,
-                is_gce=is_gce,
-                extra_jobs_to_compare=self.params.get("perf_extra_jobs_to_compare"),
-            )
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message="Failed to check regression",
-                trace=sys._getframe().f_back,
-                source=self.__class__.__name__,
-                source_method="check_regression",
-                exception=exc,
-            ).publish_or_dump()
-
-    def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
-        results_analyzer = PerformanceResultsAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get("email_recipients"),
-            events=get_events_grouped_by_category(
-                _registry=self.events_processes_registry, limit=self.params.get("events_limit_in_email")
-            ),
-        )
-        if email_subject is None:
-            email_subject = (
-                "Performance Regression Compare Results - {test.test_name} - "
-                "{test.software.scylla_server_any.version.as_string}"
-            )
-            email_postfix = self.params.get("email_subject_postfix")
-            if email_postfix:
-                email_subject += " - " + email_postfix
-        try:
-            return results_analyzer.check_regression_multi_baseline(
-                self._create_test_id(doc_id_with_timestamp=False),
-                metrics=metrics,
-                subtests_info=subtests_info,
-                subject=email_subject,
-            )
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message="Failed to check regression",
-                trace=sys._getframe().f_back,
-                source=self.__class__.__name__,
-                source_method="check_regression",
-                exception=exc,
-            ).publish_or_dump()
-
-    def check_specified_stats_regression(self, stats):
-        perf_analyzer = SpecifiedStatsPerformanceAnalyzer(
-            es_index=self._test_index,
-            email_recipients=self.params.get("email_recipients"),
-            events=get_events_grouped_by_category(_registry=self.events_processes_registry),
-        )
-        try:
-            perf_analyzer.check_regression(self._test_id, stats)
-        except Exception as exc:  # noqa: BLE001
-            TestFrameworkEvent(
-                message="Failed to check regression",
-                trace=sys._getframe().f_back,
-                source=self.__class__.__name__,
-                source_method="check_regression",
-                exception=exc,
-            ).publish_or_dump()
 
     @property
     def is_compaction_running(self):
@@ -4342,16 +4127,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                     self.log.warning("There are no logs for %s uploaded", cluster["name"])
         self.argus_collect_logs(logs_dict)
 
-        if self.create_stats:
-            with silence(parent=self, name="Publish log links"):
-                self.update(
-                    {
-                        "test_details": {
-                            "log_files": logs_dict,
-                        },
-                    }
-                )
-
         self.log.info(
             "Logs collected. Run command `hydra investigate show-logs %s' to get links", self.test_config.test_id()
         )
@@ -4449,9 +4224,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
 
     def get_nemesises_stats(self):
         nemesis_stats = {}
-        if self.create_stats:
-            nemesis_stats = self.get_doc_data(key="nemesis")
-        elif self.db_cluster:
+        if self.db_cluster:
             for nem in self.db_cluster.nemesis:
                 nemesis_stats.update(nem.stats)
         else:

@@ -43,7 +43,6 @@ use_mgmt: false
 email_recipients: ['scylla-perf-results@scylladb.com']
 argus_email_report_template: email_report_performance.yaml
 
-store_perf_results: false
 
 enable_argus: false
 

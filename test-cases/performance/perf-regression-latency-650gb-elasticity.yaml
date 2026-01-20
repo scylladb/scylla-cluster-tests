@@ -29,7 +29,6 @@ backtrace_decoding: true
 backtrace_stall_decoding: false
 argus_email_report_template: email_report_performance.yaml
 
-store_perf_results: false
 email_recipients: ["scylla-perf-results@scylladb.com"]
 use_prepared_loaders: false
 use_hdrhistogram: true
