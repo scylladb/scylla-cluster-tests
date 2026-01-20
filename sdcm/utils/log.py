@@ -14,6 +14,8 @@ def setup_stdout_logger(log_level=logging.INFO):
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.addHandler(logging.StreamHandler(sys.stdout))
+    # Suppress noisy cloud_detect.providers INFO logs
+    logging.getLogger("cloud_detect.providers").setLevel(logging.ERROR)
     return root_logger
 
 
