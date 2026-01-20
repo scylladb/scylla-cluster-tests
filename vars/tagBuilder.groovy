@@ -20,10 +20,14 @@ private String GetBillingProjectTag() {
     def jobName = env.JOB_NAME
     if (jobName) {
         def releaseFolder = jobName.split('/')[0]
-        if (releaseFolder == ~/^(scylla-|scylladb-)/) {
-            echo "Project tag '${part}' derived from JOB_NAME."
+        if (releaseFolder =~ /^(scylla-|scylladb-)/) {
             def prefix = ~/^(scylladb-|scylla-)/
-            return releaseFolder - prefix
+            def billingProjectValue = releaseFolder - prefix
+            // Don't set billing_project to "staging"
+            if (billingProjectValue != "staging") {
+                echo "Project tag '${billingProjectValue}' derived from JOB_NAME."
+                return billingProjectValue
+            }
         }
     }
 
