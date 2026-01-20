@@ -24,6 +24,7 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     is_enterprise,
     ComparableScyllaVersion,
+    parse_scylla_version_tag,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -55,17 +56,25 @@ def get_scylla_images_private_galleries(
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {"arch": arch.value}
-    if len(version_bucket) == 1:
+
+    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
+    if parse_scylla_version_tag(scylla_version):
+        # For full version tags, use exact matching with normalized version
+        # Azure tags use ~ separator which gets normalized to - for matching
+        tags_to_search["scylla_version"] = scylla_version
+        branch = "master"
+    elif len(version_bucket) == 1:
         return []
-    # Branched version, like master:latest
-    branch, build_id = version_bucket
-    tags_to_search["branch"] = branch
-    if build_id == "latest":
-        only_latest = True
-    elif build_id == "all":
-        pass
     else:
-        tags_to_search["build-id"] = build_id
+        # Branched version, like master:latest
+        branch, build_id = version_bucket
+        tags_to_search["branch"] = branch
+        if build_id == "latest":
+            only_latest = True
+        elif build_id == "all":
+            pass
+        else:
+            tags_to_search["build-id"] = build_id
 
     output = []
     unparsable_scylla_versions = []
@@ -82,7 +91,7 @@ def get_scylla_images_private_galleries(
             image.tags["scylla_version"] = image.tags.get("scylla_version", image.tags.get("ScyllaVersion"))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
-                actual_value = image.tags.get(tag_name).replace("~", "-")
+                actual_value = image.tags.get(tag_name)
                 if callable(expected_value):
                     if not expected_value(actual_value):
                         break
@@ -115,7 +124,12 @@ def get_scylla_images(
     ):
         return output
 
-    if len(version_bucket) == 1:
+    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
+    if parse_scylla_version_tag(scylla_version):
+        # For full version tags, use exact matching with normalized version
+        # Azure tags use ~ separator which gets normalized to - for matching
+        tags_to_search["scylla_version"] = scylla_version
+    elif len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0
             tags_to_search["scylla_version"] = (
