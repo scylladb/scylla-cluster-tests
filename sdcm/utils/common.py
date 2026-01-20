@@ -68,6 +68,7 @@ from prettytable import PrettyTable
 from botocore.exceptions import ClientError
 
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.provision.provisioner import VmArch
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.aws_utils import (
@@ -76,6 +77,7 @@ from sdcm.utils.aws_utils import (
     get_scylla_images_ec2_resource,
     get_ssm_ami,
     get_by_owner_ami,
+    vmarch_to_aws,
 )
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -85,6 +87,7 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.gce_utils import (
     GkeCleaner,
     gce_public_addresses,
+    vmarch_to_gcp,
 )
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
@@ -1295,7 +1298,9 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = "x86_64", vers
 
 
 @lru_cache
-def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GceImage]:
+def get_scylla_gce_images_versions(
+    project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None, arch: VmArch = None
+) -> list[GceImage]:
     # Server-side resource filtering described in Google SDK reference docs:
     #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
@@ -1308,6 +1313,11 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
             filters += "')"
+    if arch:
+        if arch != VmArch.X86:
+            #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+            LOGGER.warning("--arch option not implemented currently for GCE machine images.")
+        filters += f" (architecture eq {vmarch_to_gcp(arch)})"
     images_client, _ = get_gce_compute_images_client()
     return sorted(
         images_client.list(ListImagesRequest(filter=filters, project=project)),
@@ -1565,7 +1575,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     return images[:1]
 
 
-def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
+def get_ami_images(branch: str, region: str, arch: VmArch) -> list:
     """
     Retrieve the AMI images data.
     The data points retrieved are: ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
@@ -1573,7 +1583,7 @@ def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
     rows = []
 
     try:
-        amis = get_branched_ami(scylla_version=branch, region_name=region, arch=arch)
+        amis = get_branched_ami(scylla_version=branch, region_name=region, arch=vmarch_to_aws(arch))
     except AssertionError:
         return rows
 
@@ -1664,21 +1674,21 @@ def convert_name_to_ami_if_needed(
     return ami_id_param
 
 
-def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) -> list[list[str]]:
+def get_ami_images_versioned(region_name: str, arch: VmArch, version: str) -> list[list[str]]:
     return [
         ["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
-        for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)
+        for ami in get_scylla_ami_versions(region_name=region_name, arch=vmarch_to_aws(arch), version=version)
     ]
 
 
-def get_gce_images_versioned(version: str = None) -> list[list[str]]:
+def get_gce_images_versioned(version: str = None, arch: VmArch = None) -> list[list[str]]:
     return [
         ["GCE", image.name, image.self_link, image.creation_timestamp]
-        for image in get_scylla_gce_images_versions(version=version)
+        for image in get_scylla_gce_images_versions(version=version, arch=arch)
     ]
 
 
-def get_gce_images(branch: str, arch: AwsArchType) -> list:
+def get_gce_images(branch: str, arch: VmArch) -> list:
     """
     Retrieve the GCE images data.
     The data points retrieved are: ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
@@ -1716,7 +1726,7 @@ def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str
 
 
 def get_branched_gce_images(
-    scylla_version: str, project: str = SCYLLA_GCE_IMAGES_PROJECT, arch: AwsArchType = None
+    scylla_version: str, project: str = SCYLLA_GCE_IMAGES_PROJECT, arch: VmArch = None
 ) -> list[GceImage]:
     branch, build_id = scylla_version.split(":", 1)
 
@@ -1735,7 +1745,7 @@ def get_branched_gce_images(
         filters += f"(name eq .+-build-{build_id})"  # use BUILD_ID from an image name for now
 
     if arch:
-        filters += f"(labels.arch eq {arch.replace('_', '-')})"
+        filters += f" (architecture eq {vmarch_to_gcp(arch)})"
 
     LOGGER.info("Looking for GCE images match [%s]", scylla_version)
     images_client, _ = get_gce_compute_images_client()

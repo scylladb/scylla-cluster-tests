@@ -30,12 +30,33 @@ from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
-
+from sdcm.provision.provisioner import VmArch
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
 
 LOGGER = logging.getLogger(__name__)
+
+
+def vmarch_to_gcp(arch: VmArch) -> str:
+    """Convert VmArch enum to GCP architecture format.
+
+    Args:
+        arch: VmArch enum value
+
+    Returns:
+        GCP architecture string (X86_64 or ARM64)
+
+    Raises:
+        ValueError: If architecture is not supported
+    """
+    if arch is VmArch.X86:
+        return "X86_64"
+    elif arch is VmArch.ARM:
+        return "ARM64"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
+
 
 # The keys are the region name, the value is the available zones, which will be used for random.choice()
 SUPPORTED_REGIONS = {
