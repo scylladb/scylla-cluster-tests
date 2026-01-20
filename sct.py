@@ -132,7 +132,7 @@ from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
-from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
+from sdcm.utils.version_utils import get_s3_scylla_repos_mapping, parse_scylla_version_tag
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
@@ -1014,12 +1014,39 @@ def list_images(  # noqa: PLR0912, PLR0914
                         gce_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields)
                         click.echo(gce_images_json)
                 case "azure":
-                    azure_images = azure_utils.get_released_scylla_images(
-                        scylla_version=version, region_name=region, arch=arch_enum
-                    )
-                    rows = []
-                    for image in azure_images:
-                        rows.append(["Azure", image.name, image.unique_id, "N/A"])
+                    # Check if this is a full version tag (e.g., "2026.1.0~dev-0.20260124.edda66886e94")
+                    if parse_scylla_version_tag(version):
+                        # Full version tag: use get_scylla_images for exact matching in private galleries
+                        azure_images = azure_utils.get_scylla_images(
+                            scylla_version=version, region_name=region, arch=arch_enum
+                        )
+                        rows = []
+                        for image in azure_images:
+                            rows.append(
+                                [
+                                    "Azure",
+                                    image.name,
+                                    image.id,
+                                    "N/A",
+                                    image.tags.get("scylla_version", "N/A"),
+                                ]
+                            )
+                    else:
+                        # Simple version: use get_released_scylla_images for community gallery
+                        azure_images = azure_utils.get_released_scylla_images(
+                            scylla_version=version, region_name=region, arch=arch_enum
+                        )
+                        rows = []
+                        for image in azure_images:
+                            rows.append(
+                                [
+                                    "Azure",
+                                    image.name,
+                                    image.unique_id,
+                                    "N/A",
+                                    image.artifact_tags.get("scylla_version", "N/A"),
+                                ]
+                            )
 
                     if output_format == "table":
                         click.echo(

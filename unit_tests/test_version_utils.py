@@ -1185,4 +1185,93 @@ def test_gce_version_routing_logic(version_string, should_use_branched, is_full_
         uses_branched = False
 
     assert uses_branched == should_use_branched
+<<<<<<< HEAD
 >>>>>>> 9c6823c94 (feature(gce): implement Phase 3 - GCE full version tag support)
+||||||| parent of 13d934745 (feature(azure): implement Phase 4 - Azure full version tag support)
+=======
+
+
+# Azure Full Version Tag Tests (pytest style)
+
+
+def test_azure_version_detection():
+    """Test that Azure full version tags are correctly detected."""
+    # Full version tag should be detected
+    full_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+    tag = parse_scylla_version_tag(full_tag)
+    assert tag is not None
+
+    # Simple version should not be detected as full tag
+    simple_version = "5.2.1"
+    tag = parse_scylla_version_tag(simple_version)
+    assert tag is None
+
+    # Branch version should not be detected as full tag
+    branch_version = "master:latest"
+    tag = parse_scylla_version_tag(branch_version)
+    assert tag is None
+
+
+@pytest.mark.parametrize(
+    "version_string,should_use_released,is_full_tag",
+    [
+        ("2024.2.5-0.20250221.cb9e2a54ae6d-1", False, True),
+        ("5.2.0-dev-0.20220829.67c91e8bcd61", False, True),
+        ("4.6.4-0.20220718.b60f14601", False, True),
+        ("master:latest", False, False),
+        ("branch-2019.1:latest", False, False),
+        ("5.2.1", True, False),
+        ("2024.2.0", True, False),
+    ],
+)
+def test_azure_version_routing_logic(version_string, should_use_released, is_full_tag):
+    """Test Azure version routing logic.
+
+    Verifies that:
+    - Full version tags use get_scylla_images (exact match)
+    - Branch versions use get_scylla_images
+    - Simple versions use get_released_scylla_images
+    """
+    tag = parse_scylla_version_tag(version_string)
+
+    # Check if it's a full version tag
+    is_parsed_as_full_tag = tag is not None
+    assert is_parsed_as_full_tag == is_full_tag
+
+    # Determine routing (simulates sct_config.py logic for Azure)
+    if is_parsed_as_full_tag:
+        # Full version tag: use get_scylla_images for exact match
+        uses_released = False
+    elif ":" in version_string:
+        # Branch version: use get_scylla_images
+        uses_released = False
+    else:
+        # Simple version: use get_released_scylla_images
+        uses_released = True
+
+    assert uses_released == should_use_released
+
+
+def test_azure_full_version_string_preservation():
+    """Test that full version strings are preserved for Azure tag matching.
+
+    Azure uses tilde (~) separators which are normalized to dashes (-)
+    for matching. This test verifies that the full version string is
+    used for exact tag matching.
+    """
+    full_version_tag = "2024.2.5-0.20250221.cb9e2a54ae6d-1"
+
+    tag = parse_scylla_version_tag(full_version_tag)
+    assert tag is not None
+
+    # The full tag should be preserved
+    assert tag.full_tag == full_version_tag
+
+    # Verify it's NOT simplified to just the base version
+    assert tag.full_tag != tag.base_version
+    assert tag.full_tag != "2024.2.5"
+
+    # The full tag should be used for filtering Azure images
+    # (not just "2024.2.5" which would match many images)
+    assert len(full_version_tag) > len(tag.base_version)
+>>>>>>> 13d934745 (feature(azure): implement Phase 4 - Azure full version tag support)
