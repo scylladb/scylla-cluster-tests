@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import logging
 import multiprocessing
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, TYPE_CHECKING
 from unittest.mock import MagicMock
 
 from argus.client.sct.client import ArgusSCTClient
@@ -23,6 +25,8 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.ldap import LdapServerNotReady
 from sdcm.utils.metaclasses import Singleton
 
+if TYPE_CHECKING:
+    from sdcm.sct_config import SCTConfiguration
 
 LOGGER = logging.getLogger(__name__)
 
@@ -171,7 +175,7 @@ class TestConfig(metaclass=Singleton):
         cls.MIXED_CLUSTER = val
 
     @classmethod
-    def common_tags(cls) -> Dict[str, str]:
+    def common_tags(cls, params: "SCTConfiguration | None" = None) -> Dict[str, str]:
         job_name = os.environ.get("JOB_NAME")
         tags = dict(
             RunByUser=get_username(),
@@ -190,8 +194,13 @@ class TestConfig(metaclass=Singleton):
             billing_project = cls._tester_obj.params.get("billing_project")
             if billing_project:
                 tags["billing_project"] = billing_project
-        else:
-            tags["billing_project"] = os.environ.get("SCT_BILLING_PROJECT", "")
+        elif params:
+            billing_project = params.get("billing_project")
+            if billing_project:
+                tags["billing_project"] = billing_project
+        # If configuration creation fails, fall back to environment variable
+        elif billing_project := os.environ.get("SCT_BILLING_PROJECT"):
+            tags["billing_project"] = billing_project
         return tags
 
     @classmethod
