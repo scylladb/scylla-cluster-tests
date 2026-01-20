@@ -520,6 +520,11 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
     """
     Get scylla docker repo based scylla version.
 
+    Supports various version formats:
+    - Simple versions: "5.2.1", "2024.2.0"
+    - Branch versions: "latest", "master:latest", "enterprise:latest"
+    - Full version tags: "2024.2.5-0.20250221.cb9e2a54ae6d-1", "2026.1.0~dev-0.20260119.4cde34f6f20b"
+
     :param scylla_version: scylla version string
     :param docker_image: docker image name
 
@@ -531,6 +536,22 @@ def get_scylla_docker_repo_from_version(scylla_version: str):  # noqa: PLR0911
         return "scylladb/scylla-nightly"
     elif scylla_version in ("enterprise", "enterprise:latest"):
         return "scylladb/scylla-enterprise-nightly"
+
+    # Check if this is a full version tag (e.g., "2024.2.5-0.20250221.cb9e2a54ae6d-1")
+    # Full version tags are always non-release versions and go to nightly repos
+    if full_version_tag := parse_scylla_version_tag(scylla_version):
+        # Extract base version to determine enterprise vs non-enterprise
+        base_version = full_version_tag.base_version
+        try:
+            comparable_version = ComparableScyllaVersion(base_version)
+            if comparable_version <= "6.2.99" or comparable_version >= "2025.1.0~dev":
+                return "scylladb/scylla-nightly"
+            elif "6.2.99" < comparable_version < "2025.1.0~dev":
+                return "scylladb/scylla-enterprise-nightly"
+        except ValueError:
+            # If we can't parse the base version, default to scylla-nightly
+            return "scylladb/scylla-nightly"
+
     # should be a semver then, but fail fast if not
     try:
         comparable_version = ComparableScyllaVersion(scylla_version)
