@@ -886,6 +886,32 @@ def test_23_2_nemesis_include_selector_list(monkeypatch):
     assert conf["nemesis_selector"] == ["config_changes and topology_changes", "topology_changes", "disruptive"]
 
 
+@pytest.mark.parametrize("nemesis_interval", [5, [5, 10, 15]])
+def test_24_1_nemesis_interval_set_as_env(monkeypatch, nemesis_interval):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv("SCT_NEMESIS_INTERVAL", f"{nemesis_interval}")
+    monkeypatch.setenv(
+        "SCT_CONFIG_FILES",
+        '["unit_tests/test_configs/minimal_test_case.yaml"]',
+    )
+    conf = sct_config.SCTConfiguration()
+    if isinstance(nemesis_interval, int):
+        nemesis_interval = [nemesis_interval]
+    assert conf["nemesis_interval"] == nemesis_interval
+
+
+def test_24_2_nemesis_interval_list_int_yaml(monkeypatch):
+    monkeypatch.setenv("SCT_CLUSTER_BACKEND", "aws")
+    monkeypatch.setenv("SCT_AMI_ID_DB_SCYLLA", "ami-dummy")
+    monkeypatch.setenv(
+        "SCT_CONFIG_FILES",
+        '["unit_tests/test_configs/minimal_test_case.yaml", "unit_tests/test_configs/nemesis_interval_list_int.yaml"]',
+    )
+    conf = sct_config.SCTConfiguration()
+    assert conf["nemesis_interval"] == [100, 500]
+
+
 def test_26_run_fullscan_params_validtion_positive(monkeypatch):
     monkeypatch.setenv(
         "SCT_CONFIG_FILES",
