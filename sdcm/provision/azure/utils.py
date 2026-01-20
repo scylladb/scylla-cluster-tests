@@ -24,6 +24,7 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     is_enterprise,
     ComparableScyllaVersion,
+    parse_scylla_version_tag,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -57,7 +58,12 @@ def get_scylla_images(
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {"arch": arch.value}
-    if len(version_bucket) == 1:
+
+    if parse_scylla_version_tag(scylla_version):
+        # For full version tags, use exact matching with normalized version
+        # Azure tags use ~ separator which gets normalized to - for matching
+        tags_to_search["scylla_version"] = scylla_version
+    elif len(version_bucket) == 1:
         if "." in scylla_version:
             # Plain version, like 4.5.0
             tags_to_search["scylla_version"] = (
