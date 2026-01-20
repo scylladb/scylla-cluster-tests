@@ -975,13 +975,21 @@ def list_images(  # noqa: PLR0912, PLR0914
     # Convert arch string to VmArch enum using built-in enum value constructor
     arch_enum = VmArch(arch)
 
-    version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
-    version_fields_with_tag_name = version_fields + ["NameTag"]
-    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
-    branch_specific_fields = ["BuildId", "Arch", "ScyllaVersion"]
-    account_field = ["OwnerId"]
-    branch_fields = version_fields + branch_specific_fields
-    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields + account_field
+    version_fields = ["Backend", "Name", "ImageId", "CreationDate", "ScyllaVersion"]
+    version_fields_aws = ["Backend", "Name", "ImageId", "CreationDate", "NameTag", "ScyllaVersion"]
+
+    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    branch_fields_aws = [
+        "Backend",
+        "Name",
+        "ImageId",
+        "CreationDate",
+        "NameTag",
+        "BuildId",
+        "Arch",
+        "ScyllaVersion",
+        "OwnerId",
+    ]
     if version and branch:
         click.echo("Use --version or --branch, not both.")
         return
@@ -995,14 +1003,12 @@ def list_images(  # noqa: PLR0912, PLR0914
                     rows = get_ami_images_versioned(region_name=region, arch=arch_enum, version=version)
                     if output_format == "table":
                         click.echo(
-                            create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
+                            create_pretty_table(rows=rows, field_names=version_fields_aws).get_string(
                                 title=f"AWS Machine Images by Version in region {region}"
                             )
                         )
                     elif output_format == "text":
-                        ami_images_json = images_dict_in_json_format(
-                            rows=rows, field_names=version_fields_with_tag_name
-                        )
+                        ami_images_json = images_dict_in_json_format(rows=rows, field_names=version_fields_aws)
                         click.echo(ami_images_json)
                 case "gce":
                     rows = get_gce_images_versioned(version=version, arch=arch_enum)
@@ -1072,14 +1078,12 @@ def list_images(  # noqa: PLR0912, PLR0914
                     ami_images = get_ami_images(branch=branch, region=region, arch=arch_enum)
                     if output_format == "table":
                         click.echo(
-                            create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
+                            create_pretty_table(rows=ami_images, field_names=branch_fields_aws).get_string(
                                 title=f"AMI Machine Images for {branch} in region {region}"
                             )
                         )
                     elif output_format == "text":
-                        ami_images_json = images_dict_in_json_format(
-                            rows=ami_images, field_names=branch_fields_with_tag_name
-                        )
+                        ami_images_json = images_dict_in_json_format(rows=ami_images, field_names=branch_fields_aws)
                         click.echo(ami_images_json)
                 case "gce":
                     gce_images = get_gce_images(branch=branch, arch=arch_enum)
@@ -1098,7 +1102,7 @@ def list_images(  # noqa: PLR0912, PLR0914
                     )
                     rows = []
                     for image in azure_images:
-                        rows.append(["Azure", image.name, image.id, "N/A"])
+                        rows.append(["Azure", image.name, image.id, "N/A", image.tags.get("scylla_version", "N/A")])
 
                     if output_format == "table":
                         click.echo(
