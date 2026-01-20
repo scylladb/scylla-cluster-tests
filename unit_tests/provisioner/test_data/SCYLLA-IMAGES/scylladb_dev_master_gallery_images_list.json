@@ -11,7 +11,7 @@
       "scylla_build_sha_id": "",
       "scylla_machine_image_version": "2026.1.0-",
       "scylla_python3_version": "2026.1.0-2026.1",
-      "scylla_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
       "user_data_format_version": "3"
     },
     "location": "eastus",
@@ -61,7 +61,7 @@
       "scylla_build_sha_id": "",
       "scylla_machine_image_version": "2026.1.0-",
       "scylla_python3_version": "2026.1.0-2026.1",
-      "scylla_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
       "user_data_format_version": "3"
     },
     "location": "eastus",
@@ -112,7 +112,7 @@
       "scylla_build_sha_id": "",
       "scylla_machine_image_version": "2026.1.0-",
       "scylla_python3_version": "2026.1.0-2026.1",
-      "scylla_version": "2026.1.0-2026.1",
+      "scylla_version": "2026.1.0-0.20251208.abcd1234ef56",
       "user_data_format_version": "3"
     },
     "location": "eastus",
