@@ -18,8 +18,8 @@ n_loaders: 2
 instance_type_db: 'i8ge.2xlarge'
 
 
-nemesis_class_name: 'GrowShrinkClusterNemesis:1 SisyphusMonkey:1'
-nemesis_selector: ["","schema_changes and not disruptive"]
+nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
+nemesis_selector: ["GrowShrinkClusterNemesis","schema_changes and not disruptive"]
 nemesis_interval: 10
 
 round_robin: true
