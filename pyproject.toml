@@ -79,6 +79,11 @@ package = false
 # gimme-aws-creds does not work on Windows for Python 3.9+
 environments = ["sys_platform != 'win32'"]
 
+[tool.uv.sources]
+ssh2-python = [
+    { url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version == '3.14'" },
+]
+
 [tool.ruff]
 lint.select = [
     "BLE",

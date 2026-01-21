@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.10, <3.15"
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32')",
     "python_full_version == '3.13.*' and sys_platform != 'win32'",
     "python_full_version >= '3.11' and python_full_version < '3.13' and sys_platform != 'win32'",
     "python_full_version < '3.11' and sys_platform != 'win32'",
@@ -15,6 +16,7 @@ supported-markers = [
 name = "aenum"
 version = "3.1.16"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/7a/61ed58e8be9e30c3fe518899cc78c284896d246d51381bab59b5db11e1f3/aenum-3.1.16.tar.gz", hash = "sha256:bfaf9589bdb418ee3a986d85750c7318d9d2839c1b1a1d6fe8fc53ec201cf140", size = 137693, upload-time = "2026-01-12T22:34:38.819Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/52/6ad8f63ec8da1bf40f96996d25d5b650fdd38f5975f8c813732c47388f18/aenum-3.1.16-py3-none-any.whl", hash = "sha256:9035092855a98e41b66e3d0998bd7b96280e85ceb3a04cc035636138a1943eaf", size = 165627, upload-time = "2025-04-25T03:17:58.89Z" },
 ]
@@ -2516,7 +2518,8 @@ name = "networkx"
 version = "3.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32')",
     "python_full_version == '3.13.*' and sys_platform != 'win32'",
     "python_full_version >= '3.11' and python_full_version < '3.13' and sys_platform != 'win32'",
 ]
@@ -3893,7 +3896,8 @@ dependencies = [
     { name = "requests", marker = "sys_platform != 'win32'" },
     { name = "scylla-driver", marker = "sys_platform != 'win32'" },
     { name = "sortedcontainers", marker = "sys_platform != 'win32'" },
-    { name = "ssh2-python", marker = "sys_platform != 'win32'" },
+    { name = "ssh2-python", version = "1.2.0.post1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "ssh2-python", version = "1.2.0.post1+0.gc92aa3e.dirty", source = { url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl" }, marker = "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "tcconfig", marker = "sys_platform != 'win32'" },
     { name = "tenacity", marker = "sys_platform != 'win32'" },
 ]
@@ -3967,7 +3971,8 @@ requires-dist = [
     { name = "requests", specifier = "==2.32.4" },
     { name = "scylla-driver", specifier = "==3.29.7" },
     { name = "sortedcontainers", specifier = "==2.4.0" },
-    { name = "ssh2-python", specifier = ">=1.1.2.post1" },
+    { name = "ssh2-python", marker = "python_full_version != '3.14.*' or platform_machine != 'arm64' or sys_platform != 'darwin'", specifier = ">=1.1.2.post1" },
+    { name = "ssh2-python", marker = "python_full_version == '3.14.*' and platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl" },
     { name = "tcconfig", specifier = "==0.29.1" },
     { name = "tenacity", specifier = "==9.0.0" },
 ]
@@ -4020,8 +4025,8 @@ name = "secretstorage"
 version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "sys_platform != 'win32'" },
-    { name = "jeepney", marker = "sys_platform != 'win32'" },
+    { name = "cryptography", marker = "(python_full_version < '3.14' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
+    { name = "jeepney", marker = "(python_full_version < '3.14' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/31/9f/11ef35cf1027c1339552ea7bfe6aaa74a8516d8b5caf6e7d338daf54fd80/secretstorage-3.4.0.tar.gz", hash = "sha256:c46e216d6815aff8a8a18706a2fbfd8d53fcbb0dce99301881687a1b0289ef7c", size = 19748, upload-time = "2025-09-09T16:42:13.859Z" }
 wheels = [
@@ -4117,6 +4122,12 @@ wheels = [
 name = "ssh2-python"
 version = "1.2.0.post1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32')",
+    "python_full_version == '3.13.*' and sys_platform != 'win32'",
+    "python_full_version >= '3.11' and python_full_version < '3.13' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform != 'win32'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/e3/ab/8105fdee39bee50e505c9c97e117353e19ab18c250307ec29a7dee46e46c/ssh2_python-1.2.0.post1.tar.gz", hash = "sha256:f981465ace35f96e0935b36091b61d17689d9e0e4f29b33a50882b92c45ddcbd", size = 2242329, upload-time = "2025-10-12T13:21:17.877Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/59/20a8c6598ca4b6c15a160d0ad661b0d1ef2a9841ad73295c61db1dc33d00/ssh2_python-1.2.0.post1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f7f79e5a2c804ebe65eb7daaeb5d9b127539037c09f2ec145e46dad0f2121acb", size = 5159582, upload-time = "2025-10-12T13:21:38.984Z" },
@@ -4136,6 +4147,17 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/80/e4/9436676cee8592978a646c9adcbe4412f69d1cd750bef9d4f2c795979220/ssh2_python-1.2.0.post1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4a2f49996543b21af7e94b4296695ef5a3da59394f07c4e1178172533a3a46ee", size = 5266355, upload-time = "2025-10-12T13:21:12.775Z" },
     { url = "https://files.pythonhosted.org/packages/bb/04/ecc0b69cc2adce9048cdc500b84ffc93e87185a31e726140ffed6deb6061/ssh2_python-1.2.0.post1-pp311-pypy311_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:444190e9c92e8429a3aefd7fb40190ae1f1c3c766b53c5a1bbddcf7e08d7ca6a", size = 3323498, upload-time = "2025-10-12T13:21:50.239Z" },
     { url = "https://files.pythonhosted.org/packages/14/81/8c7cea6395b1ce03aaced3682c1170c0b0e407e5040dfdb6a5c6fa66131b/ssh2_python-1.2.0.post1-pp311-pypy311_pp73-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:841a8f4117dd075e1ae50f20933097d0e0e8873451a8c52546f5e69c4b0582d6", size = 2970478, upload-time = "2025-10-12T13:21:16.546Z" },
+]
+
+[[package]]
+name = "ssh2-python"
+version = "1.2.0.post1+0.gc92aa3e.dirty"
+source = { url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+wheels = [
+    { url = "https://roy-rpms.s3.us-east-1.amazonaws.com/ssh2_python-1.2.0.post1%2B0.gc92aa3e.dirty-cp314-cp314-macosx_26_0_arm64.whl", hash = "sha256:12d93fbf1af1da608ccacbdbda96899aeeb2314c031f9a538ca91cf4b0913307" },
 ]
 
 [[package]]
