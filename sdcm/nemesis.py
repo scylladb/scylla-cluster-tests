@@ -864,6 +864,10 @@ class NemesisRunner:
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
             self.cluster.restart_scylla(random_order=random_order)
 
+    @target_all_nodes
+    def disrupt_rolling_restart_cluster_random(self):
+        self.disrupt_rolling_restart_cluster(random_order=True)
+
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
         If prepare_saslauthd is enabled, saslauthd and ldap environment will be prepared for
@@ -7121,7 +7125,7 @@ class ClusterRollingRestart(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
-        self.runner.disrupt_rolling_restart_cluster(random_order=False)
+        self.runner.disrupt_rolling_restart_cluster()
 
 
 @target_all_nodes
@@ -7141,7 +7145,7 @@ class ClusterRollingRestartRandomOrder(NemesisBaseClass):
     free_tier_set = True
 
     def disrupt(self):
-        self.runner.disrupt_rolling_restart_cluster(random_order=True)
+        self.runner.disrupt_rolling_restart_cluster_random()
 
 
 class SwitchBetweenPasswordAuthAndSaslauthdAuth(NemesisBaseClass):
@@ -7250,6 +7254,7 @@ class ScyllaOperatorBasicOperationsMonkey(NemesisRunner):
             [
                 "OperatorNodetoolFlushAndReshard",
                 "ClusterRollingRestartRandomOrder",
+                "ClusterRollingRestart",
                 "GrowShrinkClusterNemesis",
                 "AddRemoveRackNemesis",
                 "StopStartMonkey",
