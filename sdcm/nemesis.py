@@ -43,7 +43,6 @@ from cassandra.query import SimpleStatement
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
-from sdcm.mgmt.cli import BackupTask
 from sdcm.nemesis_registry import NemesisRegistry
 from sdcm.utils.action_logger import get_action_logger
 
@@ -3169,32 +3168,7 @@ class NemesisRunner:
     def disrupt_toggle_table_gc_mode(self):
         self.toggle_table_gc_mode()
 
-    def _run_manager_backup(
-        self, mgr_cluster, object_storage_upload_mode: ObjectStorageUploadMode, timeout: int
-    ) -> BackupTask:
-        with self.action_log_scope("Scylla Manager backup"):
-            task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
-        return task
-
-    def _manager_backup_and_report(self, method: ObjectStorageUploadMode, label) -> BackupTask:
-        """
-        Run a backup using Scylla Manager and report the result to Argus.
-
-        :param method: The transfer mode for object storage (e.g., RCLONE or NATIVE).
-        :param label: A label for reporting.
-        :return: BackupTask object representing the backup operation.
-        """
-        timeout = int(timedelta(hours=14).total_seconds())
-        manager_tool = self.get_manager_tool()
-        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
-        decorated = latency_calculator_decorator(legend="Scylla-Manager Backup", cycle_name=label)(
-            self._run_manager_backup
-        )
-        task = decorated(mgr_cluster, method, timeout)
-        report_manager_backup_results_to_argus(self.tester.monitors, self.tester.test_config, label, task, mgr_cluster)
-        return task
-
-    def disrupt_manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label):
+    def manager_backup(self, object_storage_upload_mode: ObjectStorageUploadMode, label: str):
         """
         Perform a Manager backup as a nemesis.
         Deletes created snapshot at end.
@@ -3205,12 +3179,24 @@ class NemesisRunner:
 
         time_postfix = datetime.datetime.now().strftime("_%m%d_%H%M")
         label_with_time = f"{label}{time_postfix}"
-        task = self._manager_backup_and_report(object_storage_upload_mode, label_with_time)
+        timeout = int(timedelta(hours=14).total_seconds())
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
+        mgr_cluster = self.tester.ensure_and_get_cluster(manager_tool)
+        with self.action_log_scope("Scylla Manager backup"):
+            task = run_manager_backup(mgr_cluster, self.tester.locations, object_storage_upload_mode, timeout)
+        report_manager_backup_results_to_argus(
+            self.tester.monitors, self.tester.test_config, label_with_time, task, mgr_cluster
+        )
         with self.action_log_scope("Delete Manager backup snapshot"):
             task.delete_backup_snapshot()
 
-    def get_manager_tool(self):
-        return mgmt.get_scylla_manager_tool(manager_node=self.tester.monitors.nodes[0])
+    @latency_calculator_decorator(legend="Scylla Manager Backup", cycle_name="native_backup")
+    def disrupt_manager_backup_native(self):
+        self.manager_backup(ObjectStorageUploadMode.NATIVE, label="native_backup")
+
+    @latency_calculator_decorator(legend="Scylla Manager Backup", cycle_name="rclone_backup")
+    def disrupt_manager_backup_rclone(self):
+        self.manager_backup(ObjectStorageUploadMode.RCLONE, label="rclone_backup")
 
     def disrupt_mgmt_backup_specific_keyspaces(self):
         self._mgmt_backup(backup_specific_tables=True)
@@ -7350,7 +7336,7 @@ class ManagerRcloneBackup(NemesisRunner):
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.RCLONE, label="rclone_backup")
+        self.disrupt_manager_backup_rclone()
 
 
 class ManagerNativeBackup(NemesisRunner):
@@ -7359,7 +7345,7 @@ class ManagerNativeBackup(NemesisRunner):
     supports_high_disk_utilization = False
 
     def call_next_nemesis(self):
-        self.disrupt_manager_backup(object_storage_upload_mode=ObjectStorageUploadMode.NATIVE, label="native_backup")
+        self.disrupt_manager_backup_native()
 
 
 @target_data_nodes
