@@ -7014,16 +7014,15 @@ class MgmtRestore(Nemesis):
 
 
 class MgmtRepair(Nemesis):
+    # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
     manager_operation = True
     disruptive = False
     kubernetes = True
     limited = True
 
     def disrupt(self):
-        self.log.info("disrupt_mgmt_repair_cli Nemesis begin")
         self.disrupt_mgmt_repair_cli()
-        self.log.info("disrupt_mgmt_repair_cli Nemesis end")
-        # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
 
 
 class MgmtCorruptThenRepair(Nemesis):
