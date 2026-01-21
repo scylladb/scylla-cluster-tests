@@ -1142,6 +1142,11 @@ class Nemesis(NemesisFlags):
         self.run_repair()
 
     def disrupt_destroy_data_then_rebuild(self):
+        if is_tablets_feature_enabled(self.target_node):
+            raise UnsupportedNemesis(
+                "Rebuild is not supported with tablets. Skipping nemesis (scylladb/scylladb#17575)"
+            )
+
         self._destroy_data_and_restart_scylla()
         # try to save the node
         with self.action_log_scope(f"Rebuild after destroy data on {self.target_node.name} node"):
@@ -4600,6 +4605,12 @@ class Nemesis(NemesisFlags):
         """
         Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
         """
+
+        if is_tablets_feature_enabled(self.target_node):
+            raise UnsupportedNemesis(
+                "Rebuild is not supported with tablets. Skipping nemesis (scylladb/scylladb#17575)"
+            )
+
         with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_rebuild_streaming()
 
