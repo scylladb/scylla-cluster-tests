@@ -864,7 +864,6 @@ class NemesisRunner:
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
             self.cluster.restart_scylla(random_order=random_order)
 
-    @target_all_nodes
     def disrupt_rolling_restart_cluster_random(self):
         self.disrupt_rolling_restart_cluster(random_order=True)
 
@@ -6944,16 +6943,15 @@ class MgmtRestore(NemesisBaseClass):
 
 @target_data_nodes
 class MgmtRepair(NemesisBaseClass):
+    # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
     manager_operation = True
     disruptive = False
     kubernetes = True
     limited = True
 
     def disrupt(self):
-        self.runner.log.info("disrupt_mgmt_repair_cli Nemesis begin")
         self.runner.disrupt_mgmt_repair_cli()
-        self.runner.log.info("disrupt_mgmt_repair_cli Nemesis end")
-        # For Manager APIs test, use: self.runner.disrupt_mgmt_repair_api()
 
 
 @target_data_nodes
