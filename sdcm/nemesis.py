@@ -7336,6 +7336,8 @@ class RepairStreamingErrMonkey(NemesisBaseClass):
 
 
 class ManagerRcloneBackup(NemesisRunner):
+    """Not run as part of Sisyphus for now, due to region specific requirements"""
+
     manager_operation = True
     disruptive = False
     supports_high_disk_utilization = False
@@ -7345,6 +7347,8 @@ class ManagerRcloneBackup(NemesisRunner):
 
 
 class ManagerNativeBackup(NemesisRunner):
+    """Not run as part of Sisyphus for now, due to region specific requirements"""
+
     manager_operation = True
     disruptive = False
     supports_high_disk_utilization = False
