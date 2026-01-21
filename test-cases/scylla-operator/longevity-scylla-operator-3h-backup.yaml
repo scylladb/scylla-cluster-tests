@@ -8,7 +8,8 @@ n_loaders: 2
 
 k8s_minio_storage_size: 300Gi
 
-nemesis_class_name: 'MgmtBackup'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'MgmtBackup'
 
 user_prefix: 'longevity-scylla-operator-3h'
 
