@@ -1000,6 +1000,7 @@ class LoaderLogCollector(LogCollector):
             name="test.crt",
             command="test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}".format("test.crt"),
         ),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
@@ -1101,6 +1102,7 @@ class BaseSCTLogCollector(LogCollector):
         FileLog(name="result_gradual_increase.log"),
         FileLog(name="partition_range_scan_diff_*.log", search_locally=True),
         FileLog(name="junit.xml", search_locally=True),
+        FileLog(name="cdc-replicator.log", search_locally=True),
     ]
     cluster_log_type = "sct-runner-events"
     cluster_dir_prefix = "sct-runner-events"
