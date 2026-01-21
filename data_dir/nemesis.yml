@@ -500,10 +500,10 @@ disrupt_manager_backup_native:
   disruptive: false
   enospc: false
   free_tier_set: false
-  has_steady_run: false
   kubernetes: false
   limited: false
   manager_operation: true
+  modify_table: false
   networking: false
   schema_changes: false
   sla: false
@@ -1328,6 +1328,22 @@ disrupt_rolling_config_change_internode_compression:
   topology_changes: false
   zero_node_changes: false
 disrupt_rolling_restart_cluster:
+  config_changes: false
+  delete_rows: false
+  disruptive: true
+  enospc: false
+  free_tier_set: true
+  kubernetes: true
+  limited: false
+  manager_operation: false
+  modify_table: false
+  networking: false
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: true
+  topology_changes: false
+  zero_node_changes: false
+disrupt_rolling_restart_cluster_random:
   config_changes: false
   delete_rows: false
   disruptive: true

@@ -898,6 +898,10 @@ class Nemesis(NemesisFlags):
         with self.action_log_scope(f"Rolling restart cluster. random order: {random_order}"):
             self.cluster.restart_scylla(random_order=random_order)
 
+    @target_all_nodes
+    def disrupt_rolling_restart_cluster_random(self):
+        self.disrupt_rolling_restart_cluster(random_order=True)
+
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
         If prepare_saslauthd is enabled, saslauthd and ldap environment will be prepared for
@@ -7199,7 +7203,7 @@ class ClusterRollingRestart(Nemesis):
     free_tier_set = True
 
     def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random_order=False)
+        self.disrupt_rolling_restart_cluster()
 
 
 class RollingRestartConfigChangeInternodeCompression(Nemesis):
@@ -7217,7 +7221,7 @@ class ClusterRollingRestartRandomOrder(Nemesis):
     free_tier_set = True
 
     def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random_order=True)
+        self.disrupt_rolling_restart_cluster_random()
 
 
 class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
@@ -7319,6 +7323,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             [
                 "disrupt_nodetool_flush_and_reshard_on_kubernetes",
                 "disrupt_rolling_restart_cluster",
+                "disrupt_rolling_restart_random",
                 "disrupt_grow_shrink_cluster",
                 "disrupt_grow_shrink_new_rack",
                 "disrupt_stop_start_scylla_server",
