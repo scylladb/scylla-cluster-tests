@@ -945,10 +945,6 @@ class Nemesis(NemesisFlags):
             values_to_toggle = list(filter(lambda value: value != current_compression, values))
             return random.choice(values_to_toggle)
 
-        if self._is_it_on_kubernetes():
-            # NOTE: on K8S update of 'scylla.yaml' and 'cassandra-rackdc.properties' files is done
-            #       via update of the single reused place and serial restart of Scylla pods.
-            raise UnsupportedNemesis("This logic will be covered by an operator functional test. Skipping.")
         with self.target_node.remote_scylla_yaml() as scylla_yaml:
             current = scylla_yaml.internode_compression
         new_value = get_internode_compression_new_value_randomly(current)
@@ -963,11 +959,6 @@ class Nemesis(NemesisFlags):
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_restart_with_resharding(self):
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis(
-                "Not supported on K8S. Run 'disrupt_nodetool_flush_and_reshard_on_kubernetes' instead"
-            )
-
         # If tablets in use, skipping resharding since it is not supported.
         if is_tablets_feature_enabled(self.target_node):
             if SkipPerIssues("https://github.com/scylladb/scylladb/issues/16739", params=self.tester.params):
@@ -1669,10 +1660,6 @@ class Nemesis(NemesisFlags):
             states = [val["state"] for dc in status.values() for ip, val in dc.items() if ip == node_ip]
             return states[0] if states else None
 
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis(
-                'Use "disrupt_terminate_kubernetes_host_then_replace_scylla_node" instead this one for K8S'
-            )
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         old_node_ip = self.target_node.ip_address
         host_id = self.target_node.host_id
@@ -1915,9 +1902,6 @@ class Nemesis(NemesisFlags):
             raise UnsupportedNemesis("Disabled due to https://github.com/scylladb/scylla-enterprise/issues/3736")
 
         node = self.target_node
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("Skipping nemesis for kubernetes")
-
         result = node.remoter.run("cat /proc/mounts")
         if "/var/lib/scylla" not in result.stdout:
             raise UnsupportedNemesis("Scylla doesn't use an individual storage, skip end of quota test")
@@ -4056,8 +4040,6 @@ class Nemesis(NemesisFlags):
                 "Skipping this nemesis due the replace node option that supported by Cloud "
                 "is tested by CloudReplaceNonResponsiveNode nemesis"
             )
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("On K8S nodes get removed differently. Skipping.")
 
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
@@ -4224,8 +4206,6 @@ class Nemesis(NemesisFlags):
         """
         Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
         """
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = "RejectNodeExporterNetwork"
 
         self._install_iptables()
@@ -4252,8 +4232,6 @@ class Nemesis(NemesisFlags):
         """
         Generates random firewall rule to drop/reject packets for thrift connections, port 9100
         """
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = "RejectThriftNetwork"
 
         self._install_iptables()
@@ -4617,11 +4595,6 @@ class Nemesis(NemesisFlags):
         Stop decommission in middle to trigger some streaming fails, then rebuild the data on the node.
         If the node is decommissioned unexpectedly, need to re-add a new node to cluster.
         """
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis(
-                "This nemesis logic is not compatible with K8S approach for handling Scylla member's decommissioning."
-            )
-
         with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_decommission_streaming()
 
@@ -5355,8 +5328,6 @@ class Nemesis(NemesisFlags):
                 network_replication.apply(node, keyspace)
 
     def disrupt_add_remove_dc(self) -> None:
-        if self._is_it_on_kubernetes():
-            raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
         if self.cluster.test_config.MULTI_REGION:
             raise UnsupportedNemesis(
                 "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)"
@@ -7220,7 +7191,6 @@ class SnapshotOperations(Nemesis):
 
 class NodeRestartWithResharding(Nemesis):
     disruptive = True
-    kubernetes = True
     topology_changes = True
     config_changes = True
 
