@@ -1061,7 +1061,7 @@ disrupt_restart_with_resharding:
   enospc: false
   free_tier_set: false
   has_steady_run: false
-  kubernetes: true
+  kubernetes: false
   limited: false
   manager_operation: false
   networking: false
