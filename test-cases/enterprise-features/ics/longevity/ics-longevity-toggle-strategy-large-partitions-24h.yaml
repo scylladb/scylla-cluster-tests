@@ -1,7 +1,8 @@
 test_duration: 1600
 
 compaction_strategy: 'IncrementalCompactionStrategy'
-nemesis_class_name: 'ToggleTableIcsMonkey'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'ToggleTableIcsMonkey'
 nemesis_interval: 30
 user_prefix: 'ics-longevity-toggle-strategy-large-partitions-1d'
 

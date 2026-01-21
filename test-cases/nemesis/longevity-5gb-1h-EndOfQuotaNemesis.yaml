@@ -17,7 +17,8 @@ azure_instance_type_db: 'Standard_L8s_v3'
 instance_type_loader: 'c6i.large'
 azure_instance_type_loader: 'Standard_F2s_v2'
 
-nemesis_class_name: 'EndOfQuotaNemesis'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: 'EndOfQuotaNemesis'
 nemesis_interval: 3
 
 gce_n_local_ssd_disk_db: 1
