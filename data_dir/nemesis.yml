@@ -494,7 +494,23 @@ disrupt_major_compaction:
   supports_high_disk_utilization: true
   topology_changes: false
   zero_node_changes: false
-disrupt_manager_backup:
+disrupt_manager_backup_native:
+  config_changes: false
+  delete_rows: false
+  disruptive: false
+  enospc: false
+  free_tier_set: false
+  has_steady_run: false
+  kubernetes: false
+  limited: false
+  manager_operation: true
+  networking: false
+  schema_changes: false
+  sla: false
+  supports_high_disk_utilization: false
+  topology_changes: false
+  zero_node_changes: false
+disrupt_manager_backup_rclone:
   config_changes: false
   delete_rows: false
   disruptive: false
