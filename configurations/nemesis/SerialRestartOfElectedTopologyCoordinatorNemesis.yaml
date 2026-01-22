@@ -1,2 +1,3 @@
-nemesis_class_name: 'SerialRestartOfElectedTopologyCoordinatorNemesis'
+nemesis_class_name: "SisyphusMonkey"
+nemesis_selector: 'SerialRestartOfElectedTopologyCoordinatorNemesis'
 user_prefix: 'longevity-5gb-1h-SerialRestartOfElectedTopologyCoordinatorNemesis'
